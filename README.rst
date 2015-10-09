@@ -2,9 +2,11 @@
 .. This file should be written using restructured text conventions
 .. default-role:: math
 
-.. image:: ./files/logo.pdf
+.. image:: ./files/logo.png
+
 
 Draft - ongoing work
+
 
 About
 -----
