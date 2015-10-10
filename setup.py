@@ -72,7 +72,7 @@ setup(
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
     # data files that need to be installed
-    package_data={},  # we will need conf files and stuff
+    package_data={'oggm': ['params.cfg']},
 
     # Old
     data_files=[],

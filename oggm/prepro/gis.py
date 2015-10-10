@@ -1,0 +1,468 @@
+""" Handling of the local glacier map and masks. Defines the first two tasks
+to be realized by any OGGM pre-processing workflow:
+
+    - define_glacier_region: prepares a local directory, map and DEM
+    for each glacier.
+    - glacier_masks: computes the glacier grids and masks for each divide
+
+References::
+
+    Kienholz, C., Rich, J. L., Arendt, a. a., and Hock, R. (2014).
+        A new method for deriving glacier centerlines applied to glaciers in
+        Alaska and northwest Canada. The Cryosphere, 8(2), 503-519.
+        doi:10.5194/tc-8-503-2014
+
+    Pfeffer, W. T., Arendt, A. a., Bliss, A., Bolch, T., Cogley, J. G.,
+        Gardner, A. S., ... Sharp, M. J. (2014). The Randolph Glacier Inventory:
+        a globally complete inventory of glaciers. Journal of Glaciology,
+        60(221), 537-552. http://doi.org/10.3189/2014JoG13J176
+"""
+from __future__ import absolute_import, division, unicode_literals
+
+# Built ins
+import os
+import logging
+from functools import partial
+# External libs
+import osr
+import salem
+import gdal
+import pyproj
+import numpy as np
+import shapely.ops
+import geopandas as gpd
+import skimage.draw as skdraw
+import shapely.geometry as shpg
+import scipy.signal
+from scipy.ndimage.measurements import label
+# Locals
+import oggm.conf as cfg
+
+# Module logger
+log = logging.getLogger(__name__)
+
+# Variable needed later
+label_struct = np.ones((3, 3))
+
+
+def _gaussian_blur(in_array, size):
+    """Applies a Gaussian filter to a 2d array.
+
+    Parameters
+    ----------
+    in_array : numpy.array
+        The array to smooth.
+    size : int
+        The half size of the smoothing window.
+
+    Returns
+    -------
+    a smoothed numpy.array
+    """
+
+    # expand in_array to fit edge of kernel
+    padded_array = np.pad(in_array, size, 'symmetric')
+
+    # build kernel
+    x, y = np.mgrid[-size:size + 1, -size:size + 1]
+    g = np.exp(-(x**2 / float(size) + y**2 / float(size)))
+    g = (g / g.sum()).astype(in_array.dtype)
+
+    # do the Gaussian blur
+    return scipy.signal.fftconvolve(padded_array, g, mode='valid')
+
+
+def _interp_polygon(polygon, dx):
+    """Interpolates an irregular polygon to a regular step dx.
+
+    Interior geometries are also interpolated if they are longer then 3*dx,
+    otherwise they are ignored.
+
+    Parameters
+    ----------
+    polygon: The shapely.geometry.Polygon instance to interpolate
+    dx : the step (float)
+
+    Returns
+    -------
+    an interpolated shapely.geometry.Polygon class instance.
+    """
+
+    # remove last (duplex) point to build a LineString from the LinearRing
+    line = shpg.LineString(np.asarray(polygon.exterior.xy).T)
+
+    e_line = []
+    for distance in np.arange(0.0, line.length, dx):
+        e_line.append(*line.interpolate(distance).coords)
+    e_line = shpg.LinearRing(e_line)
+
+    i_lines = []
+    for ipoly in polygon.interiors:
+        line = shpg.LineString(np.asarray(ipoly.xy).T)
+        if line.length < 3*dx:
+            continue
+        i_points = []
+        for distance in np.arange(0.0, line.length, dx):
+            i_points.append(*line.interpolate(distance).coords)
+        i_lines.append(shpg.LinearRing(i_points))
+
+    return shpg.Polygon(e_line, i_lines)
+
+
+def _polygon_to_pix(polygon):
+    """Transforms polygon coordinates to integer pixel coordinates. It makes
+    the geometry easier to handle and reduces the number of points.
+
+    Parameters
+    ----------
+    polygon: the shapely.geometry.Polygon instance to transform.
+
+    Returns
+    -------
+    a shapely.geometry.Polygon class instance.
+    """
+
+    project = lambda x, y: (np.rint(x).astype(np.int64),
+                            np.rint(y).astype(np.int64))
+
+    poly_pix = shapely.ops.transform(project, polygon)
+
+    # simple trick to correct invalid polys:
+    tmp = poly_pix.buffer(0)
+
+    # sometimes the glacier gets cut out in parts
+    if tmp.type == 'MultiPolygon':
+        # If only small arms are cut out, remove them
+        area = np.array([_tmp.area for _tmp in tmp])
+        _tokeep = np.asscalar(np.argmax(area))
+        tmp = tmp[_tokeep]
+
+        # check that the other parts really are small,
+        # otherwise replace tmp with something better
+        area = area / area[_tokeep]
+        for _a in area:
+            if _a != 1 and _a > 0.05:
+                # these are extremely thin glaciers
+                # eg. RGI40-11.01381 RGI40-11.01697 params.d1 = 5. and d2 = 8.
+                # make them bigger until its ok
+                for b in np.arange(0., 1., 0.01):
+                    tmp = shapely.ops.transform(project, polygon.buffer(b))
+                    tmp = tmp.buffer(0)
+                    if tmp.type == 'MultiPolygon':
+                        continue
+                    if tmp.is_valid:
+                        break
+                if b == 0.99:
+                    raise RuntimeError('This glacier geometry is crazy.')
+
+    if not tmp.is_valid:
+        raise RuntimeError('This glacier geometry is crazy.')
+
+    return tmp
+
+
+def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
+    """Compute mask and geometries for each glacier divide.
+
+    Is called by glacier masks.
+
+    Parameters
+    ----------
+    glacierdir: conf.GlacierDir instance
+    div_id: id of the divide to process
+    dem: 2D array of the topography
+    smoothed_dem: 2D array of the smoothed topography
+    """
+
+    outlines_file = glacierdir.get_filepath('outlines', div_id=div_id)
+    geometry = gpd.GeoDataFrame.from_file(outlines_file).geometry[0]
+
+    # Interpolate shape to a regular path
+    glacier_poly_hr = _interp_polygon(geometry, glacierdir.grid.dx)
+
+    # Transform geometry into grid coordinates
+    # It has to be in pix center coordinates because of how skimage works
+    def proj(x, y):
+        grid = glacierdir.grid.center_grid
+        return grid.transform(x, y, crs=grid.proj)
+    glacier_poly_hr = shapely.ops.transform(proj, glacier_poly_hr)
+
+    # simple trick to correct invalid polys:
+    # http://stackoverflow.com/questions/20833344/
+    # fix-invalid-polygon-python-shapely
+    glacier_poly_hr = glacier_poly_hr.buffer(0)
+    if not glacier_poly_hr.is_valid:
+        raise RuntimeError('This glacier geometry is crazy.')
+
+    # Rounded nearest pix
+    glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
+
+    # Compute the glacier mask (currently: center pixels + touched)
+    nx, ny = glacierdir.grid.nx, glacierdir.grid.ny
+    glacier_mask = np.zeros((ny, nx), dtype=np.uint8)
+    glacier_ext = np.zeros((ny, nx), dtype=np.uint8)
+    (x, y) = glacier_poly_pix.exterior.xy
+    glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 1
+    for gint in glacier_poly_pix.interiors:
+        x, y = gint.xy
+        glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 0
+        glacier_mask[y, x] = 0  # on the nunataks, no
+    ext_yx = tuple(reversed(glacier_poly_pix.exterior.xy))
+    glacier_mask[ext_yx] = 1
+    glacier_ext[ext_yx] = 1
+
+    # Because of the 0 values at nunataks boundaries, some "Ice Islands"
+    # can happen within nunataks (e.g.: RGI40-11.00062)
+    # See if we can filter them out easily
+    regions, nregions = label(glacier_mask, structure=label_struct)
+    if nregions > 1:
+        log.debug('%s: we had to cut an island in the mask', glacierdir.rgi_id)
+        # Check the size of those
+        region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
+        am = np.argmax(region_sizes)
+        # Check not a strange glacier
+        sr = region_sizes.pop(am)
+        for ss in region_sizes:
+            assert (ss / sr) < 0.1
+        glacier_mask[:] = 0
+        glacier_mask[np.where(regions == (am+1))] = 1
+
+    # write out the grids in the netcdf file
+    nc = glacierdir.create_netcdf_file('grids', div_id=div_id)
+
+    v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
+    v.units = 'm'
+    v.long_name = 'DEM topography'
+    v[:] = dem
+
+    v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
+    v.units = 'm'
+    v.long_name = 'DEM topography smoothed' \
+                  ' with radius: {:.1} m'.format(cfg.params['smooth_window'])
+    v[:] = smoothed_dem
+
+    v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier mask'
+    v[:] = glacier_mask
+
+    v = nc.createVariable('glacier_ext', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier external boundaries'
+    v[:] = glacier_ext
+
+    nc.close()
+
+    geometries = dict()
+    geometries['polygon_hr'] = glacier_poly_hr
+    geometries['polygon_pix'] = glacier_poly_pix
+    geometries['polygon_area'] = geometry.area
+    glacierdir.write_pickle(geometries, 'geometries', div_id=div_id)
+
+
+def define_glacier_region(glacierdir, entity):
+    """Very first task: define the glacier's regional map.
+
+    Creates the local glacier grid (Transverse Mercator), transforms the DEM
+    as well as the RGI Lon-Lat shape into it.
+
+    NOT multiprocessable.
+
+    Parameters
+    ----------
+    glacierdir: conf.GlacierDir object
+    entity : a geopandas entity of the glacier geometry to process
+
+    I/O
+    ---
+    Creates the working directory and the divides subdirectories. Generates
+    three files::
+        - glacier_grid.p: a salem.Grid object pickle
+        - dem.tif: the local topography
+        - outlines,shp: the RGI outlines in projection coordinates
+    """
+
+    log.info('%s: creating glacier region', glacierdir.rgi_id)
+
+    # choose a spatial resolution with respect to the glacier area
+    dxmethod = cfg.params['grid_dx_method']
+    area = glacierdir.glacier_area
+    if dxmethod == 'linear':
+        dx = np.rint(cfg.params['d1'] * area + cfg.params['d2'])
+    elif dxmethod == 'square':
+        dx = np.rint(cfg.params['d1'] * np.sqrt(area) + cfg.params['d2'])
+    else:
+        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
+    dx = np.clip(dx, cfg.params['d2'], cfg.params['dmax'])
+
+    log.debug('%s: area %.2f km, dx=%.1f', glacierdir.rgi_id, area, dx)
+
+    # Make a local glacier map
+    cenlon = np.float(entity['CENLON'])
+    proj_params = dict(name='tmerc', lat_0=0., lon_0=cenlon,
+                       k=0.9996, x_0=0, y_0=0, datum='WGS84')
+    proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
+                "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
+    proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
+    proj_out = pyproj.Proj(proj4_str, preserve_units=True)
+    project = partial(pyproj.transform, proj_in, proj_out)
+    geometry = shapely.ops.transform(project, entity['geometry'])
+    xx, yy = geometry.exterior.xy
+
+    # save it to disk
+    entity['geometry'] = geometry
+    towrite = gpd.GeoDataFrame(entity).T
+    towrite.crs = proj4_str
+    towrite.to_file(glacierdir.get_filepath('outlines'))
+
+    # Open SRTM
+    srtm = gdal.Open(cfg.input['srtm_file'])
+    geo_t = srtm.GetGeoTransform()
+
+    # GDAL proj
+    gproj = osr.SpatialReference()
+    gproj.SetProjCS('Local transverse Mercator')
+    gproj.SetWellKnownGeogCS("WGS84")
+    gproj.SetTM(np.float(0), cenlon,
+                np.float(0.9996), np.float(0), np.float(0))
+    wgs84 = osr.SpatialReference()
+    wgs84.ImportFromEPSG(4326)
+
+    # Corners, incl. a buffer of N pix
+    ulx = np.min(xx) - cfg.params['border'] * dx
+    lrx = np.max(xx) + cfg.params['border'] * dx
+    uly = np.max(yy) + cfg.params['border'] * dx
+    lry = np.min(yy) - cfg.params['border'] * dx
+
+    # Create an in-memory raster
+    mem_drv = gdal.GetDriverByName('MEM')
+
+    # GDALDataset Create (char *pszName, int nXSize, int nYSize,
+    #                     int nBands, GDALDataType eType)
+    nx = np.int((lrx - ulx) / dx)
+    ny = np.int((uly - lry) / dx)
+    dest = mem_drv.Create('', nx, ny, 1, gdal.GDT_Float32)
+
+    # Calculate the new geotransform
+    new_geo = (ulx, dx, geo_t[2], uly, geo_t[4], -dx)
+
+    # Set the geotransform
+    dest.SetGeoTransform(new_geo)
+    dest.SetProjection(gproj.ExportToWkt())
+
+    # Perform the projection/resampling
+    res = gdal.ReprojectImage(srtm, dest,
+                              wgs84.ExportToWkt(), gproj.ExportToWkt(),
+                              gdal.GRA_Bilinear)
+
+    # Let's save it as a GeoTIFF.
+    driver = gdal.GetDriverByName("GTiff")
+    tmp = driver.CreateCopy(glacierdir.get_filepath('dem'), dest, 0)
+    tmp = None # without this, GDAL is getting crazy in python3
+    dest = None # the memfree above is necessary, this one is to be sure...
+
+    # Glacier grid
+    ul_corner = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
+    glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
+                              ul_corner=ul_corner)
+    glacierdir.write_pickle(glacier_grid, 'glacier_grid')
+
+    # Looks in the database if the glacier has divides.
+    gdf = cfg.input['divides_gdf']
+    if glacierdir.rgi_id in gdf.index.values:
+        divdf = [g for g in gdf.loc[glacierdir.rgi_id].geometry]
+        log.debug('%s: number of divides: %d', glacierdir.rgi_id, len(divdf))
+
+        # Reproject the shape
+        def proj(lon, lat):
+            return salem.transform_proj(salem.wgs84, glacierdir.grid.proj,
+                                        lon, lat)
+        divdf = [shapely.ops.transform(proj, g) for g in divdf]
+
+        # Write the directories and the files
+        for i, g in enumerate(divdf):
+            _dir = os.path.join(glacierdir.dir, 'divide_{0:0=2d}'.format(i+1))
+            if not os.path.exists(_dir):
+                os.makedirs(_dir)
+            # File
+            entity['geometry'] = g
+            towrite = gpd.GeoDataFrame(entity).T
+            towrite.crs = proj4_str
+            towrite.to_file(os.path.join(_dir, glacierdir.fnames['outlines']))
+    else:
+        # Make a single directory and link the files
+        log.debug('%s: number of divides: %d', glacierdir.rgi_id, 1)
+        _dir = os.path.join(glacierdir.dir, 'divide_01')
+        if not os.path.exists(_dir):
+            os.makedirs(_dir)
+        linkname = os.path.join(_dir, glacierdir.fnames['outlines'])
+        sourcename = glacierdir.get_filepath('outlines')
+        os.link(sourcename, linkname)
+
+
+def glacier_masks(glacierdir):
+    """Computes the gridded glacier geometries.
+
+    Parameters
+    ----------
+    glacierdir: GlacierDir
+        GlacierDir object
+
+    I/O
+    ---
+    Generates two files::
+        - grids.nc: netCDF4 file containing gridded variables
+                    (glacier masks, topography...)
+        - geometries.p: dictionary container of the glacier Shapely geometries
+                        (in grid coordinates)
+    """
+
+    log.info('%s: creating glacier masks', glacierdir.rgi_id)
+
+    # open srtm tif-file:
+    srtm_ds = gdal.Open(glacierdir.get_filepath('dem'))
+    dem = srtm_ds.ReadAsArray().astype(float)
+    assert np.min(dem) > 0.  # for missing data, use GDAL again
+
+    nx = srtm_ds.RasterXSize
+    ny = srtm_ds.RasterYSize
+    assert nx == glacierdir.grid.nx
+    assert ny == glacierdir.grid.ny
+
+    geot = srtm_ds.GetGeoTransform()
+    x0 = geot[0]  # UL corner
+    y0 = geot[3]  # UL corner
+    dx = geot[1]
+    dy = geot[5]  # Negative
+    assert dx == -dy
+    assert dx == glacierdir.grid.dx
+    assert y0 == glacierdir.grid.corner_grid.y0
+    assert x0 == glacierdir.grid.corner_grid.x0
+    srtm_ds = None  # to be sure...
+
+    # Smooth SRTM?
+    if cfg.params['smooth_window'] > 0.:
+        gsize = np.rint(cfg.params['smooth_window'] / dx)
+        smoothed_dem = _gaussian_blur(dem, np.int(gsize))
+    else:
+        smoothed_dem = dem.copy()
+
+    # Make entity masks
+    log.debug('%s: glacier mask, divide %d', glacierdir.rgi_id, 0)
+    _mask_per_divide(glacierdir, 0, dem, smoothed_dem)
+
+    # Glacier divides
+    nd = glacierdir.n_divides
+    if nd == 1:
+        # Optim: just make links
+        linkname = glacierdir.get_filepath('grids', div_id=1)
+        sourcename = glacierdir.get_filepath('grids')
+        os.link(sourcename, linkname)
+        linkname = glacierdir.get_filepath('geometries', div_id=1)
+        sourcename = glacierdir.get_filepath('geometries')
+        os.link(sourcename, linkname)
+    else:
+        # Loop over divides
+        for i in glacierdir.divide_ids:
+            log.debug('%s: glacier mask, divide %d', glacierdir.rgi_id, i)
+            _mask_per_divide(glacierdir, i, dem, smoothed_dem)
