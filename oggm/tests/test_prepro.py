@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, unicode_literals
+from __future__ import absolute_import, division
 
 import unittest
 import os
@@ -202,8 +202,8 @@ class TestCenterlines(unittest.TestCase):
         cfg.params['border'] = 2
         cfg.input['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
 
-        hef_file = get_demo_file('baltoro_wgs84.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        b_file = get_demo_file('baltoro_wgs84.shp')
+        rgidf = gpd.GeoDataFrame.from_file(b_file)
 
         kienholz_file = get_demo_file('centerlines_baltoro_wgs84.shp')
         kdf = gpd.read_file(kienholz_file)

@@ -6,7 +6,7 @@ Copyright: OGGM developers, 2014-2015
 
 License: GPLv3+
 """
-from __future__ import absolute_import, division, unicode_literals
+from __future__ import absolute_import, division
 
 from os import path
 from os import makedirs

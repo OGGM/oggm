@@ -9,6 +9,6 @@ scikit-image
 joblib
 netCDF4
 shapely
-geopandas
+gdal
 rasterio
 configobj
