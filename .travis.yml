@@ -1,0 +1,43 @@
+language: python
+sudo: false
+cache:
+  directories:
+    - ~/.cache/pip
+env:
+  global:
+    - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
+    - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
+    - NUMPY=numpy
+addons:
+  apt:
+    packages:
+      # copied those from scipy
+      - libatlas-dev
+      - libatlas-base-dev
+      - liblapack-dev
+      - gfortran
+      # copied those from rasterio
+      - libgdal1h
+      - gdal-bin
+      - libgdal-dev
+python:
+  - "2.7"
+  - "3.4"
+before_install:
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - pip install -U pip
+  - pip install wheel
+install:
+  - "pip wheel -r requirements.txt"
+  - "pip install -r requirements.txt"
+  - "pip install git+https://github.com/fmaussion/motionless.git"
+  - "pip install git+https://github.com/fmaussion/salem.git"
+  - "pip install git+https://github.com/fmaussion/cleo.git"
+  - "pip install coveralls"
+  - "pip install nose"
+  - "pip install -e ."
+script: 
+  - nosetests --with-coverage --cover-package oggm --logging-level=INFO
+after_success:
+  - coveralls
