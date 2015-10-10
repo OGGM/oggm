@@ -1,0 +1,12 @@
+six
+numpy
+scipy
+pyproj
+pandas
+matplotlib
+Pillow
+joblib
+netCDF4
+shapely
+geopandas
+rasterio

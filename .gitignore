@@ -1,0 +1,12 @@
+# PyCharm stuffs
+.idea/
+
+# coverage stuffs
+.coverage
+
+# Notebook stuffs
+examples/*checkpoints
+
+# Tests stuffs
+oggm/tests/result_images
+result_images
