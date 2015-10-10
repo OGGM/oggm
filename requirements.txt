@@ -5,10 +5,8 @@ pyproj
 pandas
 matplotlib
 Pillow
-scikit-image
 joblib
 netCDF4
 shapely
-gdal
 rasterio
 configobj
