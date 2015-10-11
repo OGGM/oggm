@@ -69,6 +69,7 @@ def initialize(file=None):
     input['data_dir'] = cp['input_data_dir']
     output['working_dir'] = cp['working_dir']
     params['grid_dx_method'] = cp['grid_dx_method']
+    params['topo_interp'] = cp['topo_interp']
 
     log.info('Input data directory: %s', input['data_dir'])
     log.info('Working directory: %s', output['working_dir'])
@@ -88,11 +89,12 @@ def initialize(file=None):
     k = 'temp_local_gradient_bounds'
     params[k] = [float(vk) for vk in cp.as_list(k)]
 
+    # Delete non-floats
     for k in ['input_data_dir', 'working_dir', 'grid_dx_method',
               'multiprocessing', 'processes', 'use_divides',
-              'temp_use_local_gradient', 'temp_local_gradient_bounds']:
+              'temp_use_local_gradient', 'temp_local_gradient_bounds',
+              'topo_interp']:
         del cp[k]
-
     # Other params are floats
     for k in cp:
         params[k] = cp.as_float(k)

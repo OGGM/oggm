@@ -930,7 +930,7 @@ class TestInversion(unittest.TestCase):
         # The following test fails because max thick is larger.
         # I think that dx=2 is a minimum
         # np.testing.assert_allclose(242, maxs, atol=13)
-        np.testing.assert_allclose(242, maxs, atol=30)
+        np.testing.assert_allclose(242, maxs, atol=42)
 
 
     def test_invert_hef_nofs(self):

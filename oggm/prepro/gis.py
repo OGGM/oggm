@@ -351,9 +351,16 @@ def define_glacier_region(glacierdir, entity):
     dest.SetProjection(gproj.ExportToWkt())
 
     # Perform the projection/resampling
-    res = gdal.ReprojectImage(srtm, dest,
-                              wgs84.ExportToWkt(), gproj.ExportToWkt(),
-                              gdal.GRA_Bilinear)
+    if cfg.params['topo_interp'] == 'bilinear':
+        interp = gdal.GRA_Bilinear
+    elif cfg.params['topo_interp'] == 'cubic':
+        interp = gdal.GRA_Cubic
+    else:
+        raise ValueError('{} interpolation not understood'
+                         .format(cfg.params['topo_interp']))
+
+    res = gdal.ReprojectImage(srtm, dest, wgs84.ExportToWkt(),
+                              gproj.ExportToWkt(), interp)
 
     # Let's save it as a GeoTIFF.
     driver = gdal.GetDriverByName("GTiff")

@@ -4,7 +4,7 @@
 
 from setuptools import setup, find_packages  # Always prefer setuptools
 from codecs import open  # To use a consistent encoding
-from os import path
+from os import path, walk
 import importlib
 
 # Get the long description from the relevant file
@@ -34,6 +34,17 @@ req_packages = ['numpy',
                 'joblib']
 
 check_dependencies(req_packages)
+
+def file_walk(top, remove=''):
+    """
+    Returns a generator of files from the top of the tree, removing
+    the given prefix from the root/file result.
+    """
+    top = top.replace('/', path.sep)
+    remove = remove.replace('/', path.sep)
+    for root, dirs, files in walk(top):
+        for file in files:
+            yield path.join(root, file).replace(remove, '')
 
 setup(
     # Project info
@@ -72,7 +83,9 @@ setup(
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
     # data files that need to be installed
-    package_data={'oggm': ['params.cfg']},
+    package_data={'oggm.tests': list(file_walk('oggm/tests/baseline_images',
+                                               remove='oggm/tests/')),
+                  'oggm': ['params.cfg']},
 
     # Old
     data_files=[],
