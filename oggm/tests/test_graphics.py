@@ -114,6 +114,7 @@ def test_googlemap():
 @image_comparison(baseline_images=['test_centerlines',
                                    'test_flowlines',
                                    'test_downstream',
+                                   'test_downstream_cls',
                                    ],
                   extensions=['png'])
 def test_centerlines():
@@ -122,6 +123,7 @@ def test_centerlines():
     graphics.plot_centerlines(gdir)
     graphics.plot_centerlines(gdir, use_flowlines=True)
     graphics.plot_centerlines(gdir, add_downstream=True, use_flowlines=True)
+    graphics.plot_centerlines(gdir, add_downstream=True)
 
 
 @image_comparison(baseline_images=['test_width',
