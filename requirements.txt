@@ -3,7 +3,7 @@ numpy
 scipy
 pyproj
 pandas
-matplotlib
+matplotlib==1.4.3
 Pillow
 joblib
 netCDF4
