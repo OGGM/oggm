@@ -22,6 +22,7 @@ from __future__ import absolute_import, division
 # Built ins
 import os
 import logging
+from shutil import copyfile
 from functools import partial
 # External libs
 import osr
@@ -404,7 +405,13 @@ def define_glacier_region(glacierdir, entity):
             os.makedirs(_dir)
         linkname = os.path.join(_dir, glacierdir.fnames['outlines'])
         sourcename = glacierdir.get_filepath('outlines')
-        os.link(sourcename, linkname)
+        # TODO: temporary suboptimal solution
+        try:
+            # we are on UNIX
+            os.link(sourcename, linkname)
+        except AttributeError:
+            # we are on windows
+            copyfile(sourcename, linkname)
 
 
 def glacier_masks(glacierdir):
@@ -464,10 +471,22 @@ def glacier_masks(glacierdir):
         # Optim: just make links
         linkname = glacierdir.get_filepath('grids', div_id=1)
         sourcename = glacierdir.get_filepath('grids')
-        os.link(sourcename, linkname)
+        # TODO: temporary suboptimal solution
+        try:
+            # we are on UNIX
+            os.link(sourcename, linkname)
+        except AttributeError:
+            # we are on windows
+            copyfile(sourcename, linkname)
         linkname = glacierdir.get_filepath('geometries', div_id=1)
         sourcename = glacierdir.get_filepath('geometries')
-        os.link(sourcename, linkname)
+        # TODO: temporary suboptimal solution
+        try:
+            # we are on UNIX
+            os.link(sourcename, linkname)
+        except AttributeError:
+            # we are on windows
+            copyfile(sourcename, linkname)
     else:
         # Loop over divides
         for i in glacierdir.divide_ids:

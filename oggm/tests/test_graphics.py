@@ -3,9 +3,12 @@ from __future__ import division
 from nose.tools import assert_true
 
 import os
+import sys
 import copy
 import shutil
 import warnings
+from six.moves.urllib.request import urlopen
+from six.moves.urllib.error import URLError
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,6 +35,11 @@ logging.getLogger("Fiona").setLevel(logging.WARNING)
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S',
             level=logging.DEBUG)
+
+# For windows
+suffix = ''
+if 'win' in sys.platform:
+    suffix = '_win'
 
 
 def init_hef(reset=False):
@@ -103,18 +111,30 @@ def init_hef(reset=False):
     return gdir
 
 
-@image_comparison(baseline_images=['test_googlestatic'],
+def internet_on():
+    """Not so recommended it seems"""
+    try:
+        _ = urlopen('http://www.google.com', timeout=1)
+        return True
+    except URLError:
+        pass
+    return False
+
+
+@image_comparison(baseline_images=['test_googlestatic' + suffix],
                   extensions=['png'])
 def test_googlemap():
-
+    if not internet_on():
+        print('Internet is off, couldnt test for googlemaps')
+        return
     gdir = init_hef()
     graphics.plot_googlemap(gdir)
 
 
-@image_comparison(baseline_images=['test_centerlines',
-                                   'test_flowlines',
-                                   'test_downstream',
-                                   'test_downstream_cls',
+@image_comparison(baseline_images=['test_centerlines' + suffix,
+                                   'test_flowlines' + suffix,
+                                   'test_downstream' + suffix,
+                                   'test_downstream_cls' + suffix,
                                    ],
                   extensions=['png'])
 def test_centerlines():
@@ -126,8 +146,8 @@ def test_centerlines():
     graphics.plot_centerlines(gdir, add_downstream=True)
 
 
-@image_comparison(baseline_images=['test_width',
-                                   'test_width_corrected'
+@image_comparison(baseline_images=['test_width' + suffix,
+                                   'test_width_corrected' + suffix
                                    ],
                   extensions=['png'])
 def test_width():
@@ -139,7 +159,7 @@ def test_width():
 
 
 
-@image_comparison(baseline_images=['test_inversion'
+@image_comparison(baseline_images=['test_inversion' + suffix
                                    ],
                   extensions=['png'])
 def test_inversion():
