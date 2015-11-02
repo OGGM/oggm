@@ -61,7 +61,7 @@ def initialize(file=None):
     homedir = os.path.expanduser("~")
 
     if cp['input_data_dir'] == '~':
-        cp['input_data_dir'] = os.path.join(homedir, 'Dropbox', 'OGGM')
+        cp['input_data_dir'] = ''
 
     if cp['working_dir'] == '~':
         cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
