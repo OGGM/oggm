@@ -29,8 +29,8 @@ before_install:
   - pip install -U pip
   - pip install wheel
 install:
-  - pip wheel -r requirements.txt
-  - pip install -r requirements.txt
+  - travis_wait pip wheel -r requirements.txt
+  - travis_wait pip install -r requirements.txt
   - pip wheel scikit-image
   - pip install scikit-image
   - pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
