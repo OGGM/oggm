@@ -35,7 +35,6 @@ def plot_googlemap(glacierdir, ax=None):
 
     # TODO: center grid or corner grid???
     crs = glacierdir.grid.center_grid
-    geom = glacierdir.read_pickle('geometries')
 
     dofig = False
     if ax is None:
@@ -43,28 +42,17 @@ def plot_googlemap(glacierdir, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    g = geom['polygon_hr']
-    gm = salem.GoogleVisibleMap(np.array(g.exterior.xy[0]),
-                                np.array(g.exterior.xy[1]),
-                                src=crs)
+    s = salem.utils.read_shapefile(glacierdir.get_filepath('outlines'))
+    gm = salem.GoogleVisibleMap(np.array(s.geometry[0].exterior.xy[0]),
+                                np.array(s.geometry[0].exterior.xy[1]),
+                                src=s.crs)
+
     img = gm.get_vardata()
     cmap = cleo.Map(gm.grid, countries=False, nx=gm.grid.nx)
     cmap.set_lonlat_countours(0.02)
     cmap.set_rgb(img)
 
-    # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
-    for i in glacierdir.divide_ids:
-        geom = glacierdir.read_pickle('geometries', div_id=i)
-
-        # Plot boundaries
-        poly_pix = geom['polygon_pix']
-
-        cmap.set_geometry(poly_pix, crs=crs, fc='white',
-                         alpha=0.3, zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            cmap.set_geometry(l, crs=crs,
-                              color='black', linewidth=0.5)
+    cmap.set_shapefile(glacierdir.get_filepath('outlines'))
 
     cmap.plot(ax)
     ax.set_title(glacierdir.rgi_id)

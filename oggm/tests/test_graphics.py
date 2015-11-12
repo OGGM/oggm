@@ -21,20 +21,12 @@ from oggm.prepro import gis, centerlines, geometry, climate, inversion
 import oggm.conf as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
-import logging
-from xml.dom import minidom
-import salem
 import pandas as pd
 import geopandas as gpd
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
 testdir = os.path.join(current_dir, 'tmp')
-
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            level=logging.DEBUG)
 
 # For windows
 suffix = ''
@@ -57,8 +49,8 @@ def init_hef(reset=False):
     # Init
     cfg.initialize()
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
-    cfg.input['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
+    cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.params['border'] = 40
 
     # loop because for some reason indexing wont work

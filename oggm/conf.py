@@ -11,9 +11,10 @@ from six.moves import range
 
 import sys
 import os
-from configobj import ConfigObj, ConfigObjError
 import logging
 from collections import OrderedDict
+
+from configobj import ConfigObj, ConfigObjError
 import geopandas as gpd
 import pandas as pd
 import pickle
@@ -21,31 +22,33 @@ import glob
 import netCDF4
 import shutil
 import numpy as np
-
 from salem import lazy_property
+
+# Fiona is a spammer
+logging.getLogger("Fiona").setLevel(logging.WARNING)
+
+# Defaults
+logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
 
 # Local logger
 log = logging.getLogger(__name__)
 
 # Globals definition to assist the IDE auto-completion
+is_initialized = False
 params = OrderedDict()
-input = OrderedDict()
-output = OrderedDict()
-use_divides = False
+paths = OrderedDict()
 use_mp = False
 nproc = -1
-temp_use_local_gradient = False
 
 def initialize(file=None):
     """Read the parameter configfile"""
 
+    global is_initialized
     global params
-    global input
-    global output
+    global paths
     global use_mp
-    global use_divides
     global nproc
-    global temp_use_local_gradient
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -60,59 +63,68 @@ def initialize(file=None):
 
     homedir = os.path.expanduser("~")
 
-    if cp['input_data_dir'] == '~':
-        cp['input_data_dir'] = ''
-
     if cp['working_dir'] == '~':
         cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
 
-    input['data_dir'] = cp['input_data_dir']
-    output['working_dir'] = cp['working_dir']
-    params['grid_dx_method'] = cp['grid_dx_method']
-    params['topo_interp'] = cp['topo_interp']
+    paths['working_dir'] = cp['working_dir']
 
-    log.info('Input data directory: %s', input['data_dir'])
-    log.info('Working directory: %s', output['working_dir'])
+    paths['srtm_file'] = cp['srtm_file']
+    paths['histalp_file'] = cp['histalp_file']
+    paths['wgms_rgi_links'] = cp['wgms_rgi_links']
+    paths['glathida_rgi_links'] = cp['glathida_rgi_links']
 
-    # Divides
-    use_divides = cp.as_bool('use_divides')
+    log.info('Working directory: %s', paths['working_dir'])
 
     # Multiprocessing pool
     use_mp = cp.as_bool('multiprocessing')
     nproc = cp.as_int('processes')
     if nproc == -1:
         nproc = None
+    if use_mp:
+        log.info('Multiprocessing run')
+    else:
+        log.info('No multiprocessing')
+
+    # Some non-trivial params
+    params['grid_dx_method'] = cp['grid_dx_method']
+    params['topo_interp'] = cp['topo_interp']
+    params['use_divides'] = cp.as_bool('use_divides')
 
     # Climate
-    temp_use_local_gradient = cp.as_bool('temp_use_local_gradient')
-
+    params['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     k = 'temp_local_gradient_bounds'
     params[k] = [float(vk) for vk in cp.as_list(k)]
 
     # Delete non-floats
-    for k in ['input_data_dir', 'working_dir', 'grid_dx_method',
+    for k in ['working_dir', 'srtm_file', 'histalp_file', 'wgms_rgi_links',
+              'glathida_rgi_links', 'grid_dx_method',
               'multiprocessing', 'processes', 'use_divides',
               'temp_use_local_gradient', 'temp_local_gradient_bounds',
               'topo_interp']:
         del cp[k]
+
     # Other params are floats
     for k in cp:
         params[k] = cp.as_float(k)
 
-    data_dir = input['data_dir']
-    input['srtm_file'] = os.path.join(data_dir, 'GIS', 'srtm_90m_v4_alps.tif')
-    input['histalp_file'] = os.path.join(data_dir, 'CLIMATE' ,
-                                         'histalp_merged.nc')
+    # Empty defaults
+    set_divides_db()
+    is_initialized = True
 
 
-def set_divides_db(path):
+def set_divides_db(path=None):
 
     # Read divides database
-    if use_divides:
-        input['divides_gdf'] = gpd.GeoDataFrame.from_file(path).set_index('RGIID')
+    if params['use_divides'] and path is not None:
+        params['divides_gdf'] = gpd.GeoDataFrame.from_file(path).set_index('RGIID')
     else:
-        input['divides_gdf'] = gpd.GeoDataFrame()
+        params['divides_gdf'] = gpd.GeoDataFrame()
 
+def reset_working_dir():
+    """To use with caution"""
+    if os.path.exists(paths['working_dir']):
+        shutil.rmtree(paths['working_dir'])
+    os.makedirs(paths['working_dir'])
 
 class GlacierDir(object):
     """A glacier directory is a simple class to help access the working files.
@@ -139,7 +151,7 @@ class GlacierDir(object):
         """
 
         if base_dir is None:
-            base_dir = os.path.join(output['working_dir'], 'per_glacier')
+            base_dir = os.path.join(paths['working_dir'], 'per_glacier')
 
         self.rgi_id = entity.RGIID
         self.glims_id = entity.GLIMSID

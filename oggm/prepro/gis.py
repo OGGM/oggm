@@ -317,7 +317,7 @@ def define_glacier_region(glacierdir, entity):
     towrite.to_file(glacierdir.get_filepath('outlines'))
 
     # Open SRTM
-    srtm = gdal.Open(cfg.input['srtm_file'])
+    srtm = gdal.Open(cfg.paths['srtm_file'])
     geo_t = srtm.GetGeoTransform()
 
     # GDAL proj
@@ -376,7 +376,7 @@ def define_glacier_region(glacierdir, entity):
     glacierdir.write_pickle(glacier_grid, 'glacier_grid')
 
     # Looks in the database if the glacier has divides.
-    gdf = cfg.input['divides_gdf']
+    gdf = cfg.params['divides_gdf']
     if glacierdir.rgi_id in gdf.index.values:
         divdf = [g for g in gdf.loc[glacierdir.rgi_id].geometry]
         log.debug('%s: number of divides: %d', glacierdir.rgi_id, len(divdf))
