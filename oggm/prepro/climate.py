@@ -37,12 +37,10 @@ def distribute_climate_data(gdirs):
     log.info('Distribute climate data')
 
     # read the file and data entirely (faster than many I/O)
-    nc = netCDF4.Dataset(cfg.input['histalp_file'], mode='r')
+    ncpath = cfg.paths['histalp_file']
+    nc = netCDF4.Dataset(ncpath, mode='r')
     lon = nc.variables['lon'][:]
     lat = nc.variables['lat'][:]
-    temp = nc.variables['temp'][:]
-    prcp = nc.variables['prcp'][:]
-    hgt = nc.variables['hgt'][:]
 
     # Time
     time = nc.variables['time']
@@ -59,25 +57,15 @@ def distribute_climate_data(gdirs):
     # Gradient defaults
     def_grad = -0.0065
     g_minmax = cfg.params['temp_local_gradient_bounds']
+    sf = cfg.params['prcp_scaling_factor']
 
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
         ilat = np.argmin(np.abs(lat - gdir.cenlat))
-
-        igrad = np.zeros(len(time)) + def_grad
-        if cfg.temp_use_local_gradient:
-            itemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
-            ihgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
-            for t, loct in enumerate(itemp):
-                slope, _, _, p_val, _ = stats.linregress(ihgt.flatten(),
-                                                         loct.flatten())
-                igrad[t] = slope if (p_val < 0.01) else def_grad
-            # dont exagerate too much
-            igrad = np.clip(igrad, g_minmax[0], g_minmax[1])
-
-        itemp = temp[:, ilat, ilon]
-        iprcp = prcp[:, ilat, ilon] * cfg.params['prcp_scaling_factor']
-        ihgt = hgt[ilat, ilon]
+        iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(ncpath, ilon,
+                                                              ilat, def_grad,
+                                                              g_minmax,
+                                                              sf)
         gdir.create_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
     nc.close()
 
@@ -403,7 +391,6 @@ def local_mustar_apparent_mb(gdir, tstar, bias):
         assert len(years) == (2 * mu_hp + 1)
         mustar = np.mean(prcp_yr) / np.mean(temp_yr)
         if not np.isfinite(mustar):
-            gr.plot_centerlines(gdir)
             raise RuntimeError('{} has an infinite mu'.format(gdir.rgi_id))
 
         # Scalars in a small dataframe for later
@@ -447,7 +434,7 @@ def distribute_t_stars(gdirs):
 
     log.info('Distribute t* and mu*')
 
-    ref_df = pd.read_csv(os.path.join(cfg.output['working_dir'],
+    ref_df = pd.read_csv(os.path.join(cfg.paths['working_dir'],
                                       'ref_tstars.csv'))
 
     for gdir in gdirs:
@@ -486,7 +473,8 @@ def compute_ref_t_stars(gdirs):
     log.info('Compute the reference t* and mu*')
 
     # Loop
-    mbdatadir = os.path.join(cfg.input['data_dir'], 'RGI_linkings', 'WGMS')
+    mbdatadir = os.path.join(os.path.dirname(cfg.paths['wgms_rgi_links']),
+                             'WGMS')
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
     for gdir in gdirs:
@@ -498,7 +486,11 @@ def compute_ref_t_stars(gdirs):
         per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias)
 
     if len(only_one) == 0:
-        raise RuntimeError('Didnt expect to be here.')
+        # TODO: hardcoded shit here
+        only_one.append('RGI40-11.00887')
+        gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
+        per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
+        # raise RuntimeError('Didnt expect to be here.')
 
     # Ok. now loop over the glaciers until all have a unique t*
     while True:
@@ -547,5 +539,5 @@ def compute_ref_t_stars(gdirs):
     df['bias'] = biases
     df['lon'] = lons
     df['lat'] = lats
-    file = os.path.join(cfg.output['working_dir'], 'ref_tstars.csv')
+    file = os.path.join(cfg.paths['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)

@@ -226,9 +226,8 @@ def optimize_inversion_params(gdirs):
     log.info('Compute the reference fs and fd parameters.')
 
     # Get test glaciers (all glaciers with thickness data)
-    dfids = os.path.join(cfg.input['data_dir'], 'RGI_linkings',
-                        'GLATHIDA_to_RGI_Alps.csv')
-    gtd_df = pd.read_csv(dfids).sort(columns=['RGI_ID'])
+    dfids = cfg.paths['glathida_rgi_links']
+    gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
     dfids = gtd_df['RGI_ID'].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
@@ -272,7 +271,7 @@ def optimize_inversion_params(gdirs):
              '{vol_rmsd}'.format(**d))
 
     df = pd.DataFrame(d, index=[0])
-    file = os.path.join(cfg.output['working_dir'], 'inversion_params.csv')
+    file = os.path.join(cfg.paths['working_dir'], 'inversion_params.csv')
     df.to_csv(file)
 
     return fs, fd

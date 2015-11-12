@@ -60,12 +60,7 @@ class TestGIS(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
-
-        logging.getLogger("Fiona").setLevel(logging.WARNING)
-        logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)
+        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
         self.rm_dir()
@@ -126,13 +121,8 @@ class TestCenterlines(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
         cfg.params['border'] = 10
-
-        logging.getLogger("Fiona").setLevel(logging.WARNING)
-        logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)
 
     def tearDown(self):
         self.rm_dir()
@@ -203,7 +193,7 @@ class TestCenterlines(unittest.TestCase):
     def test_baltoro_centerlines(self):
 
         cfg.params['border'] = 2
-        cfg.input['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
+        cfg.paths['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
         rgidf = gpd.GeoDataFrame.from_file(b_file)
@@ -278,13 +268,8 @@ class TestGeometry(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
         cfg.params['border'] = 10
-
-        logging.getLogger("Fiona").setLevel(logging.WARNING)
-        logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)
 
     def tearDown(self):
         self.rm_dir()
@@ -434,14 +419,9 @@ class TestClimate(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.input['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.params['border'] = 10
-
-        logging.getLogger("Fiona").setLevel(logging.WARNING)
-        logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)
 
     def tearDown(self):
         self.rm_dir()
@@ -783,14 +763,9 @@ class TestInversion(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.input['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.input['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.params['border'] = 10
-
-        logging.getLogger("Fiona").setLevel(logging.WARNING)
-        logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)
 
     def tearDown(self):
         self.rm_dir()

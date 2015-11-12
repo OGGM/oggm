@@ -11,15 +11,22 @@ from six.moves.urllib.request import urlretrieve
 import os
 import shutil
 import zipfile
+import sys
 
 # External libs
 import numpy as np
+import netCDF4
+import scipy.stats as stats
+from joblib import Memory
 
 # Locals
 from oggm import cache_dir
 
 # Globals
 gh_zip = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
+
+# Joblib
+memory = Memory(cachedir=cache_dir, verbose=0)
 
 gaussian_kernel = dict()
 gaussian_kernel[9] = np.array([1.33830625e-04, 4.43186162e-03,
@@ -60,7 +67,7 @@ def _download_demo_files():
             zf.extractall(odir)
 
     out = dict()
-    sdir = os.path.join(cache_dir, 'oggm-sample-data-master', 'test-files')
+    sdir = os.path.join(cache_dir, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
@@ -75,6 +82,59 @@ def get_demo_file(fname):
         return d[fname]
     else:
         return None
+
+
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+
+    Credits: http://code.activestate.com/recipes/577058/
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
+
+
+def haversine(lon1, lat1, lon2, lat2):
+    """
+    Calculate the great circle distance between one point
+    on the earth and an array of points (specified in decimal degrees)
+    """
+
+    # convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
+
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    c = 2 * np.arcsin(np.sqrt(a))
+    r = 6371000 # Radius of earth in meters
+    return c * r
 
 
 def interp_nans(array):
@@ -136,3 +196,37 @@ def nicenumber(number, binsize, lower=False):
         return e * binsize
     else:
         return (e+1) * binsize
+
+@memory.cache
+def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
+                        prcp_scaling_factor):
+    """Prevent to re-compute a timeserie if it was done before.
+
+    TODO: dirty solution, should be replaced by proper input.
+    """
+
+    # read the file and data
+    nc = netCDF4.Dataset(ncpath, mode='r')
+    temp = nc.variables['temp']
+    prcp = nc.variables['prcp']
+    hgt = nc.variables['hgt']
+
+    igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
+
+    ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
+    itemp = ttemp[:, 1, 1]
+    thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
+    ihgt = hgt[1, 1]
+    thgt = thgt.flatten()
+    iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+
+    # Now the gradient
+    for t, loct in enumerate(ttemp):
+        slope, _, _, p_val, _ = stats.linregress(thgt,
+                                                 loct.flatten())
+        igrad[t] = slope if (p_val < 0.01) else default_grad
+
+    # dont exagerate too much
+    igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
+
+    return iprcp, itemp, igrad, ihgt
