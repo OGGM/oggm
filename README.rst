@@ -39,7 +39,7 @@ OGGM has several dependencies. See
 `INSTALL.rst <./docs/INSTALL.rst>`_ 
 for more information.
 
-If you use the code we strongly recommend to contact us (see below) since the code base is very likely to evolve greatly in teh near future.
+If you use the code we strongly recommend to contact us (see below) since the code base is very likely to evolve greatly in the near future.
 
 
 About
