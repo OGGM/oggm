@@ -10,7 +10,7 @@ system.
 
 For building stuffs::
 
-    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran
+    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev
 
 For matplolib to work on python2::
 
@@ -111,7 +111,7 @@ Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-vir
 
 Install further stuffs::
 
-    $ pip install pyproj Pillow geopandas netcdf4 scikit-image configobj
+    $ pip install pyproj Pillow geopandas netcdf4 scikit-image configobj joblib
 
 And the external libraries::
 

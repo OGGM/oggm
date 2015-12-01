@@ -1,6 +1,6 @@
 six
-numpy==1.10.1
-scipy==0.16.1
+numpy
+scipy
 pyproj
 pandas
 matplotlib

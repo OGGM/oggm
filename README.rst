@@ -4,26 +4,27 @@
 
 .. image:: ./files/logo.png
 
-Ongoing work. The model is based on `Marzeion et al., (2012) <http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html>`_ and contains several improvements to account e.g. for glacier geometry and ice dynamics.
+Ongoing work. The model is based on `Marzeion et al., (2012) <http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html>`_
+and implements several improvements to account e.g. for glacier geometry and ice dynamics.
 
 Example
 -------
 
 We use the `Hintereisferner <http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef>`_ as benchmark:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic_1.5.0.png
 
 We first define a local grid and compute the centerlines (automatically, `Kienholz et al., (2014) <http://www.the-cryosphere.net/8/503/2014/tc-8-503-2014.html>`_) as well as the downstream flowlines:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls_1.5.0.png
 
 The glacier is then represented as several flowlines of varying width:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected_1.5.0.png
 
 Finally, following an inversion algorithm based on mass-balance (`Marzeion et al., (2012) <http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html>`_) and ice-flow dynamics (`Farinotti et al., (2009) <http://www.igsoc.org/journal/55/191/>`_), we derive the ice thickness of the glacier:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion_1.5.0.png
 
 
 Installation
@@ -35,11 +36,13 @@ To work with OGGM we recommend to clone the repository:
 
    $ git clone git@github.com:OGGM/oggm.git
 
-OGGM has several dependencies. See 
-`INSTALL.rst <./docs/INSTALL.rst>`_ 
+OGGM has several dependencies, some of them are unfortunately not always
+trivial to install (GDAL, Fiona). See `INSTALL.rst <./docs/INSTALL.rst>`_
 for more information.
 
-If you use the code we strongly recommend to contact us (see below) since the code base is very likely to evolve greatly in the near future.
+If you use the code we strongly recommend to contact us (adress below) since
+the code base is likely to evolve in the near future, with probable
+backwards incompatible changes.
 
 
 About

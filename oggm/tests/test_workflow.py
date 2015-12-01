@@ -1,3 +1,5 @@
+from __future__ import division
+
 import os
 import logging
 import shutil
@@ -74,7 +76,10 @@ def up_to_inversion():
 
     # Tests
     dfids = cfg.paths['glathida_rgi_links']
-    gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
+    try:
+        gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
+    except AttributeError:
+        gtd_df = pd.read_csv(dfids).sort(columns=['RGI_ID'])
     dfids = gtd_df['RGI_ID'].values
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
 
