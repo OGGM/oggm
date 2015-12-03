@@ -1,0 +1,12 @@
+six
+numpy==1.9.3
+scipy
+pyproj
+pandas==0.16.2
+matplotlib==1.4.3
+Pillow
+joblib
+netCDF4
+shapely
+rasterio
+configobj

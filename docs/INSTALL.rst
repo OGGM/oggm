@@ -1,13 +1,19 @@
 Install OGGM on your system
 ===========================
 
-OGGM relies on several python packages. All of them are easy to install and
-do not require external libraries, with the exception of GDAL. 
+OGGM relies on several scientific python packages. Most of them are easy to
+install and do not require external libraries. GDAL and its python bindings
+are usually less trivial to install.
 
-Due to GDAL problems with conda
-(see this `issue <https://github.com/OGGM/oggm/issues/1>`_ ), we currently
-recommend to follow the installation with vitualenv
-described `here <./install_virtualenv.rst>`_.
+For most users we recommend to install the packages using
+`conda <http://conda.pydata.org/docs/using/index.html>`_:
+
+`OGGM Install checklist with conda <./install_conda.rst>`_
+
+Linux users and/or users with experience with *pip* can
+follow the `install instructions for linux and virtualenv <
+./install_virtualenv.rst>`_.
+
 
 OGGM Dependencies
 -----------------
@@ -32,10 +38,10 @@ I/O:
     - netcdf4
 
 GIS and geometrical tools:
-    - geopandas
+    - gdal
     - shapely
     - pyproj
-    - gdal
+    - geopandas
 
 Other libraries:
     - `salem <https://github.com/fmaussion/salem>`_

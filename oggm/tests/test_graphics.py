@@ -28,13 +28,15 @@ import geopandas as gpd
 current_dir = os.path.dirname(os.path.abspath(__file__))
 testdir = os.path.join(current_dir, 'tmp')
 
-# For windows
-suffix = ''
-if 'win' in sys.platform:
-    suffix = '_win'
+suffix = '_' + mpl.__version__
+
+# TODO: temporary: for conda installs
+import osgeo.gdal
+if osgeo.gdal.__version__ == '1.11.2':
+    suffix += '_conda'
 
 
-def init_hef(reset=False):
+def init_hef(reset=True):
 
     # test directory
     if not os.path.exists(testdir):
