@@ -57,6 +57,9 @@ About
 
     .. image:: https://travis-ci.org/OGGM/oggm.svg?branch=master
         :target: https://travis-ci.org/OGGM/oggm
+        
+    .. image:: https://ci.appveyor.com/api/projects/status/alealh9rxmqgd3nm/branch/master?svg=true
+        :target: https://ci.appveyor.com/project/fmaussion/oggm
     
 :License:
     GNU GPLv3
@@ -74,3 +77,4 @@ About
     .. image:: http://acinn.uibk.ac.at/sites/all/themes/imgi/images/acinn_logo.png
     
     .. image:: http://www.uni-bremen.de/fileadmin/images/logo-uni-bremen-EXZELLENT.png
+        :align: right
