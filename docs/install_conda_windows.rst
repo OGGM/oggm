@@ -1,6 +1,10 @@
 Install checklist on a Windows system with Anaconda
 ===================================================
 
+**NOTE**: as of 04.12.2015 the method below is known to work well but the
+standard method (`OGGM Install checklist with conda <./install_conda.rst>`_)
+is the one we use for testing and is a bit easier.
+
 
 1. Install Anaconda
 -------------------

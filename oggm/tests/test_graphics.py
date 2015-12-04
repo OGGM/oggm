@@ -32,7 +32,7 @@ suffix = '_' + mpl.__version__
 
 # TODO: temporary: for conda installs
 import osgeo.gdal
-if osgeo.gdal.__version__ == '1.11.2':
+if osgeo.gdal.__version__ in ['1.11.2', '1.11.1']:
     suffix += '_conda'
 
 
