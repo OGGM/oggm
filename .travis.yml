@@ -1,5 +1,9 @@
 language: python
 sudo: false
+# blacklist
+branches:
+  except:
+    - appveyor
 cache:
   directories:
     - ~/.cache/pip
