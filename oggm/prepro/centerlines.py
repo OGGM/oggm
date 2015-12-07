@@ -33,6 +33,7 @@ import scipy.signal
 # Locals
 import oggm.conf as cfg
 from salem import lazy_property
+from oggm.utils import tuple2int
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -452,9 +453,9 @@ def compute_centerlines(gdir, div_id=None):
     nc.close()
 
     # Find for local maximas on the outline
+    x, y = tuple2int(poly_pix.exterior.xy)
     ext_yx = tuple(reversed(poly_pix.exterior.xy))
-    ext_yx = (ext_yx[0][:-1], ext_yx[1][:-1])  # last point is first point
-    zoutline = topo[ext_yx]
+    zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
     # Size of the half window to use to look for local maximas
     maxorder = np.rint(cfg.params['localmax_window'] / gdir.grid.dx)
@@ -495,12 +496,12 @@ def compute_centerlines(gdir, div_id=None):
     costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
 
     # Terminus
-    t_coord = np.asarray(ext_yx)[:, np.argmin(zoutline)]
+    t_coord = np.asarray(ext_yx)[:, np.argmin(zoutline)].astype(np.int64)
 
     # Compute the routes
     lines = []
     for h in heads:
-        h_coord = np.asarray(h.xy)[::-1]
+        h_coord = np.asarray(h.xy)[::-1].astype(np.int64)
         indices, _ = route_through_array(costgrid, h_coord, t_coord)
         lines.append(shpg.LineString(np.array(indices)[:, [1, 0]]))
     log.debug('%s: computed the routes', gdir.rgi_id)
@@ -562,8 +563,8 @@ def compute_downstream_lines(gdir):
         topo = nc.variables['topo_smoothed'][:]
 
     # Variables we gonna need
-    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
-                               np.arange(0, gdir.grid.ny, 1))
+    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
+                               np.arange(0, gdir.grid.ny, 1, dtype=np.int64))
     _h = [topo[:, 0], topo[0, :], topo[:, -1], topo[-1, :]]
     _x = [xmesh[:, 0], xmesh[0, :], xmesh[:, -1], xmesh[-1, :]]
     _y = [ymesh[:, 0], ymesh[0, :], ymesh[:, -1], ymesh[-1, :]]
@@ -574,8 +575,8 @@ def compute_downstream_lines(gdir):
     div_ids = list(gdir.divide_ids)
     for div_id in div_ids:
         head = gdir.read_pickle('centerlines', div_id=div_id)[-1].tail
-        heigts.append(topo[head.y, head.x])
-        heads.append((head.y, head.x))
+        heigts.append(topo[int(head.y), int(head.x)])
+        heads.append((int(head.y), int(head.x)))
 
     # Now the lowest first
     aso = np.argsort(heigts)

@@ -1,12 +1,9 @@
 from __future__ import division
 
-from nose.tools import assert_true
+import warnings
+warnings.filterwarnings("once", category=DeprecationWarning)
 
 import os
-import sys
-import copy
-import shutil
-import warnings
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
 
