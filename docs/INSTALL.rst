@@ -38,6 +38,7 @@ I/O:
 
 GIS and geometrical tools:
     - gdal
+    - rasterio
     - shapely
     - pyproj
     - geopandas

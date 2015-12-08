@@ -111,7 +111,7 @@ Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-vir
 
 Install further stuffs::
 
-    $ pip install pyproj Pillow geopandas netcdf4 scikit-image configobj joblib
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib
 
 And the external libraries::
 

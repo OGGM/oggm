@@ -35,6 +35,7 @@ from salem import lazy_property
 import oggm.conf as cfg
 from oggm import utils
 import oggm.prepro.centerlines
+from oggm.utils import tuple2int
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -467,7 +468,7 @@ def catchment_area(gdir, div_id=None):
     cost_factor = 0.  # Make it cheap
     dic_catch = dict()
     for i, cl in enumerate(cls):
-        x, y = cl.line.xy
+        x, y = tuple2int(cl.line.xy)
         costgrid[y, x] *= cost_factor
         for x, y in [(int(x), int(y)) for x, y in cl.line.coords]:
             assert (y, x) not in dic_catch
@@ -477,11 +478,11 @@ def catchment_area(gdir, div_id=None):
     computed = np.where(mask == 1, 0, np.nan)
 
     # Coords of Terminus
-    endcoords = np.array(cls[0].tail.coords[0])[::-1]
+    endcoords = np.array(cls[0].tail.coords[0])[::-1].astype(np.int64)
 
     # Start with all the paths at the boundaries, they are more likely
     # to cover much of the glacier
-    for headx, heady in glacier_pix.exterior.coords:
+    for headx, heady in tuple2int(glacier_pix.exterior.coords):
         indices, _ = route_through_array(costgrid, np.array([heady, headx]),
                                          endcoords)
         inds = np.array(indices).T
@@ -498,7 +499,7 @@ def catchment_area(gdir, div_id=None):
         not_computed = np.where(computed == 0)
         if len(not_computed[0]) == 0:  # All points computed !!
             break
-        headcoords = np.array([not_computed[0][0], not_computed[1][0]])
+        headcoords = np.array([not_computed[0][0], not_computed[1][0]]).astype(np.int64)
         indices, _ = route_through_array(costgrid, headcoords, endcoords)
         inds = np.array(indices).T
         computed[inds[0], inds[1]] = 1
@@ -678,8 +679,8 @@ def catchment_width_geom(gdir, div_id=None):
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
-            i0 = np.clip(fid-jpix, jpix/2, n-jpix/2)
-            i1 = np.clip(fid+jpix+1, jpix/2, n-jpix/2)
+            i0 = np.clip(fid-jpix, jpix/2, n-jpix/2).astype(np.int64)
+            i1 = np.clip(fid+jpix+1, jpix/2, n-jpix/2).astype(np.int64)
             widths[i0:i1] = np.NaN
 
         valid = np.where(np.isfinite(widths))

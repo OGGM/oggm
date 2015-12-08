@@ -25,9 +25,9 @@ import logging
 from shutil import copyfile
 from functools import partial
 # External libs
-import osr
+from osgeo import osr
 import salem
-import gdal
+from osgeo import gdal
 import pyproj
 import numpy as np
 import shapely.ops
@@ -38,11 +38,12 @@ import scipy.signal
 from scipy.ndimage.measurements import label
 # Locals
 import oggm.conf as cfg
+from oggm.utils import tuple2int
 
 # Module logger
 log = logging.getLogger(__name__)
 
-# Variable needed later
+# Needed later
 label_struct = np.ones((3, 3))
 
 
@@ -205,12 +206,12 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     (x, y) = glacier_poly_pix.exterior.xy
     glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 1
     for gint in glacier_poly_pix.interiors:
-        x, y = gint.xy
-        glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 0
+        x, y = tuple2int(gint.xy)
+        glacier_mask[skdraw.polygon(y, x)] = 0
         glacier_mask[y, x] = 0  # on the nunataks, no
-    ext_yx = tuple(reversed(glacier_poly_pix.exterior.xy))
-    glacier_mask[ext_yx] = 1
-    glacier_ext[ext_yx] = 1
+    x, y = tuple2int(glacier_poly_pix.exterior.xy)
+    glacier_mask[y, x] = 1
+    glacier_ext[y, x] = 1
 
     # Because of the 0 values at nunataks boundaries, some "Ice Islands"
     # can happen within nunataks (e.g.: RGI40-11.00062)

@@ -1,27 +1,26 @@
 from __future__ import absolute_import, division
 
+import warnings
+warnings.filterwarnings("once", category=DeprecationWarning) # , module=r'.*oggm.*'
+
 import unittest
 import os
-import sys
-import pickle
 
 import shapely.geometry as shpg
 import numpy as np
 import shutil
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import netCDF4
-import multiprocessing as mp
 
 # Local imports
 from oggm.prepro import gis, centerlines, geometry, climate, inversion
 import oggm.conf as cfg
 from oggm.utils import get_demo_file
 from oggm import utils
-import logging
 from xml.dom import minidom
 import salem
+from oggm.utils import tuple2int
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -106,7 +105,6 @@ class TestGIS(unittest.TestCase):
         area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
         np.testing.assert_allclose(area,gdir.glacier_area, rtol=1e-1)
         nc.close()
-
 
 class TestCenterlines(unittest.TestCase):
 
@@ -211,8 +209,8 @@ class TestCenterlines(unittest.TestCase):
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         cls = gdir.read_pickle('centerlines', div_id=1)
         for cl in cls:
-            ext_yx = tuple(reversed(cl.line.xy))
-            my_mask[ext_yx] = 1
+            x, y = tuple2int(cl.line.xy)
+            my_mask[y, x] = 1
 
         # Transform
         kien_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
@@ -240,8 +238,8 @@ class TestCenterlines(unittest.TestCase):
 
             kgm = transform(project, kgm)
 
-            ext_yx = tuple(reversed(kgm.xy))
-            kien_mask[ext_yx] = 1
+            x, y = tuple2int(kgm.xy)
+            kien_mask[y, x] = 1
 
         # We test the Heidke Skill score of our predictions
         rest = kien_mask + 2 * my_mask

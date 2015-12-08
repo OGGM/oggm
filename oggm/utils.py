@@ -12,6 +12,7 @@ import os
 import shutil
 import zipfile
 import sys
+from functools import partial
 
 # External libs
 import numpy as np
@@ -41,6 +42,8 @@ gaussian_kernel[7] = np.array([1.78435052e-04, 1.51942011e-02,
 gaussian_kernel[5] = np.array([2.63865083e-04, 1.06450772e-01,
                                7.86570726e-01, 1.06450772e-01,
                                2.63865083e-04])
+
+tuple2int = partial(np.array, dtype=np.int64)
 
 
 def empty_cache():  # pragma: no cover
