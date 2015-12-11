@@ -23,7 +23,7 @@ import geopandas as gpd
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
-testdir = os.path.join(current_dir, 'tmp')
+testdir_base = os.path.join(current_dir, 'tmp')
 
 suffix = '_' + mpl.__version__
 
@@ -33,9 +33,10 @@ if osgeo.gdal.__version__ in ['1.11.2', '1.11.1']:
     suffix += '_conda'
 
 
-def init_hef(reset=True):
+def init_hef(reset=True, border=40):
 
     # test directory
+    testdir = testdir_base + '_b{}'.format(border)
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -50,7 +51,7 @@ def init_hef(reset=True):
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
     cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
     cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.params['border'] = 40
+    cfg.params['border'] = border
 
     # loop because for some reason indexing wont work
     hef_file = get_demo_file('Hintereisferner.shp')
