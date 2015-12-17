@@ -1,10 +1,6 @@
 OGGM install checklist with conda
 =================================
 
-As of today the default conda version of Fiona is broken
-(see: https://github.com/ioos/conda-recipes/issues/623 ). The
-workaround described below should work fine (tested on Mac, linux and Windows)
-but it is a temporary solution as it relies on older package versions.
 
 Prerequisites
 -------------
@@ -42,20 +38,9 @@ it::
 Packages
 --------
 
-When installing the packages the versions of GDAL and numpy have to be set
-to certain versions from the *ioos* channel.
+We install the packages from the ioos channel:
 
-**ON LINUX AND MAC OS X**::
-
-    conda install -c https://conda.anaconda.org/ioos geopandas pandas matplotlib Pillow joblib netCDF4 rasterio scikit-image configobj nose pyproj numpy=1.9.3 gdal=1.11.2
-
-
-**ON WINDOWS**::
-
-    conda install -c https://conda.anaconda.org/ioos geopandas pandas matplotlib Pillow joblib netCDF4 rasterio scikit-image configobj nose pyproj numpy=1.9.3 gdal=1.11.1
-    conda install --force --yes --quiet fiona=1.5.1
-
-**All platforms:**
+    conda install -c ioos geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy
 
 After success, install the following packages from Fabien Maussion's github::
 
@@ -67,8 +52,7 @@ After success, install the following packages from Fabien Maussion's github::
 OGGM
 ----
 
-
-We recommend to clone the git repository (or your fork if you want
+We recommend to clone the git repository (or a fork if you want
 to participate to the development)::
 
    git clone git@github.com:OGGM/oggm.git
