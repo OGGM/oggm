@@ -33,10 +33,11 @@ n = 3.  # Glen's law's exponent
 twothirds = 2./3.
 fourthirds = 4./3.
 
-class ParabolicFlowline(oggm.prepro.geometry.InversionFlowline):
+
+class ModelFlowline(oggm.prepro.geometry.InversionFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h, bed_shape):
+    def __init__(self, line, dx, map_dx, surface_h, bed_h):
         """ Instanciate.
 
         Parameters
@@ -47,32 +48,17 @@ class ParabolicFlowline(oggm.prepro.geometry.InversionFlowline):
         ----------
         #TODO: document properties
         """
-        super(ParabolicFlowline, self).__init__(line, dx, surface_h)
+        super(ModelFlowline, self).__init__(line, dx, surface_h)
 
         self._thick = (surface_h - bed_h).clip(0.)
         self.map_dx = map_dx
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
-        self.bed_shape = bed_shape
-        self._sqrt_bed = np.sqrt(bed_shape)
-
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
-    def widths_m(self):
-        """Compute the widths out of H and shape"""
-        return np.sqrt(4*self.thick/self.bed_shape)
 
     @oggm.prepro.geometry.InversionFlowline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
         return self.widths_m / self.map_dx
-
-    @property
-    def section(self):
-        return twothirds * self.widths_m * self.thick
-
-    @section.setter
-    def section(self, val):
-        self._thick = (0.75 * val * self._sqrt_bed)**twothirds
 
     @property
     def thick(self):
@@ -81,7 +67,7 @@ class ParabolicFlowline(oggm.prepro.geometry.InversionFlowline):
 
     @thick.setter
     def thick(self, value):
-        self._thick = np.clip(value, 0., np.max(value))
+        self._thick = value.clip(0)
 
     @oggm.prepro.geometry.InversionFlowline.surface_h.getter
     def surface_h(self):
@@ -112,7 +98,41 @@ class ParabolicFlowline(oggm.prepro.geometry.InversionFlowline):
         return self.area_m2 * 1e-6
 
 
-class VerticalWallFlowline(oggm.prepro.geometry.InversionFlowline):
+class ParabolicFlowline(ModelFlowline):
+    """A more advanced Flowline."""
+
+    def __init__(self, line, dx, map_dx, surface_h, bed_h, bed_shape):
+        """ Instanciate.
+
+        Parameters
+        ----------
+        line: Shapely LineString
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+        super(ParabolicFlowline, self).__init__(line, dx, map_dx,
+                                                surface_h, bed_h)
+
+        self.bed_shape = bed_shape
+        self._sqrt_bed = np.sqrt(bed_shape)
+
+    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    def widths_m(self):
+        """Compute the widths out of H and shape"""
+        return np.sqrt(4*self.thick/self.bed_shape)
+
+    @property
+    def section(self):
+        return twothirds * self.widths_m * self.thick
+
+    @section.setter
+    def section(self, val):
+        self.thick = (0.75 * val * self._sqrt_bed)**twothirds
+
+
+class VerticalWallFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
     def __init__(self, line, dx, map_dx, surface_h, bed_h, widths):
@@ -126,12 +146,9 @@ class VerticalWallFlowline(oggm.prepro.geometry.InversionFlowline):
         ----------
         #TODO: document properties
         """
-        super(VerticalWallFlowline, self).__init__(line, dx, surface_h)
+        super(VerticalWallFlowline, self).__init__(line, dx, map_dx,
+                                                   surface_h, bed_h)
 
-        self._thick = (surface_h - bed_h).clip(0.)
-        self.map_dx = map_dx
-        self.dx_meter = map_dx * self.dx
-        self.bed_h = bed_h
         self._widths = widths
 
     @oggm.prepro.geometry.InversionFlowline.widths.getter
@@ -145,46 +162,136 @@ class VerticalWallFlowline(oggm.prepro.geometry.InversionFlowline):
 
     @section.setter
     def section(self, val):
-        th = val / self.widths_m
-        self._thick = th
-
-    @property
-    def thick(self):
-        """Needed for overriding later"""
-        return self._thick
-
-    @thick.setter
-    def thick(self, value):
-        self._thick = np.clip(value, 0., np.max(value))
-
-    @oggm.prepro.geometry.InversionFlowline.surface_h.getter
-    def surface_h(self):
-        return self._thick + self.bed_h
-
-    @property
-    def length_m(self):
-        pok = np.where(self.thick == 0.)[0]
-        if len(pok) == 0:
-            return 0.
-        else:
-            return (pok[0]-0.5) * self.dx_meter
-
-    @property
-    def volume_m3(self):
-        return np.sum(self.section * self.dx_meter)
-
-    @property
-    def volume_km3(self):
-        return self.volume_m3 * 1e-9
+        self.thick = val / self.widths_m
 
     @property
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
 
+
+class TrapezoidalFlowline(ModelFlowline):
+    """A more advanced Flowline."""
+
+    def __init__(self, line, dx, map_dx, surface_h, bed_h, widths, lambdas):
+        """ Instanciate.
+
+        Parameters
+        ----------
+        line: Shapely LineString
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+        super(TrapezoidalFlowline, self).__init__(line, dx, map_dx,
+                                                   surface_h, bed_h)
+
+        self._w0_m = widths * self.map_dx - lambdas * self.thick
+        self._lambdas = lambdas
+
+    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    def widths_m(self):
+        """Compute the widths out of H and shape"""
+        return self._w0_m + self._lambdas * self.thick
+
     @property
-    def area_km2(self):
-        return self.area_m2 * 1e-6
+    def section(self):
+        return (self.widths_m + self._w0_m) / 2 * self.thick
+
+    @section.setter
+    def section(self, val):
+        b = 2 * self._w0_m
+        a = 2 * self._lambdas
+        self.thick = (np.sqrt(b**2 + 4 * a * val) - b) / a
+
+    @property
+    def area_m2(self):
+        widths = np.where(self.thick > 0., self.widths_m, 0.)
+        return np.sum(widths * self.dx_meter)
+
+
+class MixedFlowline(ModelFlowline):
+    """A more advanced Flowline."""
+
+    def __init__(self, line, dx, map_dx, surface_h, bed_h, bed_shape,
+                 min_shape=0.0015, lambdas=0.2):
+        """ Instanciate.
+
+        Parameters
+        ----------
+        line: Shapely LineString
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+        self._dot = False
+        super(MixedFlowline, self).__init__(line, dx, map_dx,
+                                                surface_h.copy(), bed_h.copy())
+
+        self.bed_shape = bed_shape
+        self._sqrt_bed = np.sqrt(bed_shape)
+
+        # Where we will have to use the other
+        #TODO: add these parameters to configfile
+        totest = bed_shape.copy()
+        if self.flows_to is None:
+            totest[-np.floor(len(totest)/3.).astype(np.int64):] = min_shape + 1
+        pt = np.nonzero(totest < min_shape)
+
+        # correct bed_h
+        for_assert = self.section.copy()
+        for_later = self.widths_m[pt]
+
+        sec = self.section[pt]
+        b = - 2 * self.widths_m[pt]
+        det = b ** 2 - 4 * lambdas * 2 * sec
+        h = (- b - np.sqrt(det)) / (2 * lambdas)
+        assert np.alltrue(h >= 0)
+        self.bed_h[pt] = surface_h[pt] - h.clip(0)
+        self._thick[pt] = h.clip(0)
+        assert np.allclose(surface_h, self.surface_h)
+
+        _w0_m = for_later - lambdas * self.thick[pt]
+        assert np.alltrue(_w0_m >= 0)
+
+        self._w0_m = _w0_m
+        self._lambdas = lambdas
+        self._pt = pt
+        self._dot = len(pt[0]) > 0
+        assert np.allclose(self.thick[pt], h.clip(0))
+
+        assert np.allclose(for_assert, self.section)
+
+    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    def widths_m(self):
+        """Compute the widths out of H and shape"""
+        out = np.sqrt(4*self.thick/self.bed_shape)
+        if self._dot:
+            out[self._pt] = self._w0_m + self._lambdas * self.thick[self._pt]
+        return out
+
+    @property
+    def section(self):
+        out = twothirds * self.widths_m * self.thick
+        if self._dot:
+            out[self._pt] = (self.widths_m[self._pt] + self._w0_m) / 2 * self.thick[self._pt]
+        return out
+
+    @section.setter
+    def section(self, val):
+        out = (0.75 * val * self._sqrt_bed)**twothirds
+        if self._dot:
+            b = 2 * self._w0_m
+            a = 2 * self._lambdas
+            out[self._pt] = (np.sqrt(b**2 + 4 * a * val[self._pt]) - b) / a
+        self.thick = out
+
+    @property
+    def area_m2(self):
+        widths = np.where(self.thick > 0., self.widths_m, 0.)
+        return np.sum(widths * self.dx_meter)
 
 
 class FlowlineModel(object):
@@ -269,17 +376,31 @@ class FlowlineModel(object):
         """Advance one step."""
         raise NotImplementedError
 
-    def advance_until(self, y1):
+    def run_until(self, y1):
 
         t = (y1-self.y0) * sec_in_year
         while self.t < t:
             self.step(dt=t-self.t)
 
-    def backwards_until(self, y1):
-        # not working
-        t = (y1-self.y0) * sec_in_year
-        while self.t > t:
-            self.backstep(t-self.t)
+    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
+
+        ite = 0
+        was_close_zero = 0
+        close_rate = 0
+        while (close_rate <= 3) and (ite <= max_ite) and (was_close_zero < 5):
+            ite += 1
+            v_bef = self.volume_m3
+            self.run_until(self.yr + ystep)
+            v_af = self.volume_m3
+            t_rate = np.abs(v_af - v_bef) / v_bef
+            if np.isclose(v_bef, 0.):
+                t_rate = 1
+                was_close_zero += 1
+            if t_rate <= rate:
+                close_rate += 1
+
+        if ite > max_ite:
+            raise RuntimeError('Rate stuff did not work as expected')
 
 
 class FluxBasedModel(FlowlineModel):
@@ -550,7 +671,7 @@ class KarthausModel(FlowlineModel):
         self.t += dt
 
 
-def init_present_time_glacier(gdir):
+def init_present_time_glacier(gdir, min_shape=0.0015, lambdas=0.2):
     """First task after inversion. Merges the data from the various
     preprocessing tasks into a stand-alone dataset ready for run.
 
@@ -605,6 +726,11 @@ def init_present_time_glacier(gdir):
 
     # Extend the flowlines with the downstream lines, make a new object
     # out of these
+
+    #TODO: add this choice to config
+    from functools import partial
+    flobject = partial(MixedFlowline, min_shape=min_shape, lambdas=lambdas)
+
     new_fls = []
     flows_to_ids = []
     major_id = None
@@ -613,7 +739,7 @@ def init_present_time_glacier(gdir):
             bed_h = fl.surface_h - inv['thick']
             # Interpolate shapes
             shape = utils.interp_nans(inv['shape'])
-            nfl = ParabolicFlowline(fl.line, fl.dx, map_dx, fl.surface_h,
+            nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
                                     bed_h, shape)
             flows_to_ids.append(fls_list.index(fl.flows_to))
             new_fls.append(nfl)
@@ -639,7 +765,7 @@ def init_present_time_glacier(gdir):
         # Take the median of the last 30%
         ashape = np.median(shape[-np.floor(len(shape)/3.).astype(np.int64):])
         shape = np.append(shape, np.ones(len(bed_h)-len(shape))*ashape)
-        nfl = ParabolicFlowline(long_line, fl.dx, map_dx, hgts, bed_h, shape)
+        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, shape)
 
         if major_id is None:
             flid = -1
@@ -669,7 +795,8 @@ def init_present_time_glacier(gdir):
 
 
 def find_inital_glacier(final_model, firstguess_mb, y0, y1,
-                        rtol=0.1, atol=100, max_ite=100):
+                        rtol=0.1, atol=100, max_ite=100,
+                        init_bias=0., equi_rate=0.001):
     """ Iterative search for a plausible starting time glacier"""
 
     # Objective
@@ -679,7 +806,7 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
     prev_model = copy.deepcopy(final_model)
     prev_fls = copy.deepcopy(prev_model.fls)
     prev_model.reset_y0(y0)
-    prev_model.advance_until(y1)
+    prev_model.run_until(y1)
     prev_area = prev_model.area_m2
 
     # Just in case we already hit the correct starting state
@@ -704,33 +831,36 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
     # Loop until 100 iterations
     c = 0
-    mb_bias = 0.
+    mb_bias = init_bias
 
     mb = copy.deepcopy(firstguess_mb)
-    mb.add_bias = sign_mb * mb_bias
+    mb.set_bias(sign_mb * mb_bias)
     grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb,
                                 y0, final_model.fs, final_model.fd,
                                 min_dt=final_model.min_dt,
                                 max_dt=final_model.max_dt)
-    bias_step = 100.
+    bias_step = 50.
     reduce_step = 10.
     while True and (c < max_ite):
         c += 1
 
         # Grow
         mb_bias += bias_step
-        mb.add_bias = sign_mb * mb_bias
+        mb.set_bias(sign_mb * mb_bias)
+        log.debug('find_inital_glacier, ite: %d. New bias: %.0f', c,
+                  sign_mb * mb_bias)
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
-        grow_model.advance_until(100.)
-        log.debug('find_inital_glacier, ite: %d. New bias: %.0f', c, mb_bias)
+        grow_model.run_until_equilibrium(rate=equi_rate)
+        log.debug('find_inital_glacier, ite: %d. Grew for: %d years', c,
+                  grow_model.yr)
 
         # Shrink
         new_fls = copy.deepcopy(grow_model.fls)
         new_model = copy.deepcopy(final_model)
         new_model.reset_flowlines(copy.deepcopy(new_fls))
         new_model.reset_y0(y0)
-        new_model.advance_until(y1)
+        new_model.run_until(y1)
         new_area = new_model.area_m2
 
         # Maybe we done?
@@ -756,11 +886,10 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
         # Ok. We went too far. Reduce the bias step but keep previous state
         mb_bias -= bias_step
         bias_step -= reduce_step
-        log.debug('find_inital_glacier, ite: %d. Went too far. '
-                  'New bias-step: %.0f', c, bias_step)
+        log.debug('find_inital_glacier, ite: %d. Went too far.', c)
         if bias_step <= 0:
-            bias_step = 100.
-            reduce_step -= 2
+            bias_step = 50.
+            reduce_step -= 5
             if reduce_step <= 0:
                 break
 
