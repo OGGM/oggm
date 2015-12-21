@@ -4,6 +4,7 @@ sudo: false
 branches:
   except:
     - appveyor
+    - docs
 cache:
   directories:
     - ~/.cache/pip

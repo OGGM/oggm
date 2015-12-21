@@ -27,6 +27,7 @@ Documentation
 
    examples
    installing-oggm
+   api
 
 
 Get in touch
