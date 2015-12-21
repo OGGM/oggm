@@ -17,6 +17,21 @@ import sys
 import os
 import shlex
 
+
+# Mock the modules which are just too hard to install (all)
+from mock import Mock as MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+            return Mock()
+
+MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
+                'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
+                'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
+                'cleo', 'motionless', 'rasterio']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
 import oggm
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -109,7 +124,6 @@ def findsource(object):
 import inspect
 inspect.findsource = findsource
 
-
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -129,7 +143,7 @@ extensions = [
     'sphinx.ext.viewcode',
 ]
 
-extlinks = {'issue': ('https://github.com/xray/xray/issues/%s', 'GH')}
+extlinks = {'issue': ('https://github.com/OGGM/oggm/%s', 'GH')}
 
 autosummary_generate = True
 

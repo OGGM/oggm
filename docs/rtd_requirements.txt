@@ -2,4 +2,5 @@
 sphinx==1.2.3
 # only the dependencies required to build xray's docs which are not already
 # available in RTD's system site-packages
+mock
 numpydoc==0.5
