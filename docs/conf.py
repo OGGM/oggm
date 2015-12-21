@@ -17,6 +17,8 @@ import sys
 import os
 import shlex
 
+import oggm
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -32,12 +34,21 @@ import shlex
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
+    'numpydoc',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
 ]
+
+extlinks = {'issue': ('https://github.com/xray/xray/issues/%s', 'GH')}
+
+autosummary_generate = True
+
+numpydoc_class_members_toctree = True
+numpydoc_show_class_members = False
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
