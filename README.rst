@@ -1,48 +1,65 @@
-.. -*- rst -*- -*- restructuredtext -*-
-.. This file should be written using restructured text conventions
-.. default-role:: math
-
 .. image:: ./files/logo.png
 
-Ongoing work. The model is based on `Marzeion et al., (2012) <http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html>`_
-and implements several improvements to account e.g. for glacier geometry and ice dynamics.
+|
+
+
+The model builds upon `Marzeion et al., (2012)`_ and intends to become a
+global scale, modular, and open source model for glacier dynamics. The model
+accounts for glacier geometry (including contributory branches) and includes
+a simple (yet explicit) ice dynamics module. It can simulate past and
+future mass-balance, volume and geometry of any glacier in a fully
+automated workflow. We rely exclusively on publicly available data for
+calibration and validation.
+
+The project is currently in intense development. `Get in touch`_ with us if
+you want to contribute.
+
+.. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
+
 
 Example
 -------
 
-We use the `Hintereisferner <http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef>`_ as benchmark:
+We use the `Hintereisferner`_ as benchmark:
 
 .. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic_1.5.0.png
+   :width: 200 px
 
-We first define a local grid and compute the centerlines (automatically, `Kienholz et al., (2014) <http://www.the-cryosphere.net/8/503/2014/tc-8-503-2014.html>`_) as well as the downstream flowlines:
+We first define a local grid and compute the centerlines (`Kienholz et al., 2014`_) as well as the downstream flowlines:
 
 .. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls_1.5.0.png
+   :width: 200 px
 
 The glacier is then represented as several flowlines of varying width:
 
 .. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected_1.5.0.png
+   :width: 200 px
 
-Finally, following an inversion algorithm based on mass-balance (`Marzeion et al., (2012) <http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html>`_) and ice-flow dynamics (`Farinotti et al., (2009) <http://www.igsoc.org/journal/55/191/>`_), we derive the ice thickness of the glacier:
+Finally, following an inversion algorithm based on mass-balance (`Marzeion et al., 2012`_) and ice-flow dynamics (`Farinotti et al., 2009`_), we derive the ice thickness of the glacier:
 
 .. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion_1.5.0.png
+   :width: 200 px
+
+.. _Hintereisferner: http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef
+.. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
+.. _Kienholz et al., 2014 : http://www.the-cryosphere.net/8/503/2014/tc-8-503-2014.html
+.. _Farinotti et al., 2009 : http://www.igsoc.org/journal/55/191/
 
 
-Installation
+Installation, documentation
+---------------------------
+
+A documentation draft is hosted on ReadTheDocs: http://oggm.readthedocs.org
+
+
+Get in touch
 ------------
 
-OGGM is compatible with Python 2.7 and Python 3+.
+- To ask questions or discuss OGGM, send us an `e-mail`_.
+- Report bugs, share your ideas or view the source code `on GitHub`_.
 
-To work with OGGM we recommend to clone the repository:
-
-   $ git clone git@github.com:OGGM/oggm.git
-
-OGGM has several dependencies, some of them are unfortunately not always
-trivial to install (GDAL, Fiona). See `INSTALL.rst <./docs/INSTALL.rst>`_
-for more information.
-
-If you use the code we strongly recommend to contact us (adress below) since
-the code base is likely to evolve in the near future, with probable
-backwards incompatible changes.
+.. _e-mail: fabien.maussion@uibk.ac.at
+.. _on GitHub: https://github.com/OGGM/oggm
 
 
 About
