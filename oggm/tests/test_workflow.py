@@ -11,6 +11,8 @@ import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from nose.plugins.attrib import attr
+
 # Locals
 import oggm.conf as cfg
 from oggm import workflow
@@ -114,6 +116,8 @@ def up_to_inversion():
 
 class TestBasic(unittest.TestCase):
 
+    # This is to make tests go faster with: nosetests -a '!slow'
+    @attr('slow')
     def test_first_shot(self):
 
         df = up_to_inversion()

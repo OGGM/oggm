@@ -1,3 +1,6 @@
+*.py[cod]
+__pycache__
+
 # PyCharm stuffs
 .idea/
 
@@ -6,7 +9,23 @@
 
 # Notebook stuffs
 examples/*checkpoints
+.ipynb_checkpoints
 
 # Tests stuffs
 oggm/tests/result_images
 result_images
+
+# Packages
+*.egg
+*.egg-info
+eggs
+
+# specific
+*.html
+docs/_build
+docs/generated
+docs/_static
+docs/_sources
+docs/_images
+docs/.doctrees
+oggm/version.py

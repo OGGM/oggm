@@ -1,5 +1,7 @@
 from __future__ import division
 
+import unittest
+
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 
@@ -9,8 +11,11 @@ from six.moves.urllib.error import URLError
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.testing.decorators import image_comparison
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+try:
+    from matplotlib.testing.decorators import image_comparison
+    has_dec = True
+except ImportError:
+    has_dec = False
 import matplotlib as mpl
 
 # Local imports
@@ -29,11 +34,18 @@ suffix = '_' + mpl.__version__
 
 # TODO: temporary: for conda installs
 import osgeo.gdal
+skip_conda = False
 if osgeo.gdal.__version__ >= '1.11':
     suffix += '_conda'
+    skip_conda = True
 
+import socket
+if socket.gethostname() == 'flappi':
+    skip_test = False
+else:
+    skip_test = True
 
-def init_hef(reset=True, border=40):
+def init_hef(reset=False, border=40):
 
     # test directory
     testdir = testdir_base + '_b{}'.format(border)
@@ -100,6 +112,15 @@ def init_hef(reset=True, border=40):
                                                      write=True)
     d = dict(fs=fs, fd=fd)
     gdir.write_pickle(d, 'flowline_params')
+
+    # Only for larger glacier we will go further
+    if border < 60:
+        return gdir
+
+    from oggm.models import flowline
+    flowline.init_present_time_glacier(gdir)
+    flowline.find_inital_glacier(gdir)
+
     return gdir
 
 
@@ -116,9 +137,10 @@ def internet_on():
 @image_comparison(baseline_images=['test_googlestatic' + suffix],
                   extensions=['png'])
 def test_googlemap():
+
     if not internet_on():
-        print('Internet is off, couldnt test for googlemaps')
-        return
+        raise unittest.skip('Internet is off, couldnt test for googlemaps')
+
     gdir = init_hef()
     graphics.plot_googlemap(gdir)
 
@@ -130,6 +152,9 @@ def test_googlemap():
                                    ],
                   extensions=['png'])
 def test_centerlines():
+
+    if not has_dec:
+        raise unittest.skip('No mpl testing framework')
 
     gdir = init_hef()
     graphics.plot_centerlines(gdir)
@@ -144,6 +169,9 @@ def test_centerlines():
                   extensions=['png'])
 def test_width():
 
+    if not has_dec:
+        raise unittest.skip('No mpl testing framework')
+
     gdir = init_hef()
     graphics.plot_catchment_width(gdir)
     graphics.plot_catchment_width(gdir, corrected=True)
@@ -151,12 +179,31 @@ def test_width():
 
 
 
-@image_comparison(baseline_images=['test_inversion' + suffix
-                                   ],
+@image_comparison(baseline_images=['test_inversion' + suffix],
                   extensions=['png'])
 def test_inversion():
+
+    if not has_dec:
+        raise unittest.skip('No mpl testing framework')
+
     gdir = init_hef()
     graphics.plot_inversion(gdir)
+
+
+@image_comparison(baseline_images=['test_initial_glacier' + suffix],
+                  extensions=['png'])
+def test_initial_glacier():
+
+    if not has_dec:
+        raise unittest.skip('No mpl testing framework')
+
+    if skip_conda:
+        raise unittest.SkipTest('On conda this wont work')
+
+    gdir = init_hef(border=80)
+
+    past_model = gdir.read_pickle('past_model')
+    graphics.plot_modeloutput(gdir, past_model)
 
 if __name__ == '__main__':
     import nose
