@@ -1,54 +1,72 @@
 from __future__ import division
-
-import unittest
-
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
+
+import unittest
+import nose
 
 import os
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
-
+import pandas as pd
+import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
-try:
-    from matplotlib.testing.decorators import image_comparison
-    has_dec = True
-except ImportError:
-    has_dec = False
-import matplotlib as mpl
 
 # Local imports
 from oggm.prepro import gis, centerlines, geometry, climate, inversion
 import oggm.conf as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
-import pandas as pd
-import geopandas as gpd
+from oggm.models import flowline
+from oggm.tests import HAS_NEW_GDAL, requires_fabiens_laptop, is_slow
 
 # Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
-testdir_base = os.path.join(current_dir, 'tmp')
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
 
+# Because mpl was broken on conda
+# https://github.com/matplotlib/matplotlib/issues/5487
+try:
+    from matplotlib.testing.decorators import image_comparison
+    HAS_MPL_TEST = True
+except ImportError:
+    HAS_MPL_TEST = False
+
+def requires_mpltest(test):
+    # Decorator
+    msg = 'requires matplotlib.testing.decorators'
+    return test if HAS_MPL_TEST else unittest.skip(msg)(test)
+
+import matplotlib as mpl
 suffix = '_' + mpl.__version__
-
-# TODO: temporary: for conda installs
-import osgeo.gdal
-skip_conda = False
-if osgeo.gdal.__version__ >= '1.11':
+if HAS_NEW_GDAL:
     suffix += '_conda'
-    skip_conda = True
 
-import socket
-if socket.gethostname() == 'flappi':
-    skip_test = False
-else:
-    skip_test = True
+def internet_on():
+    # Not so recommended it seems
+    try:
+        _ = urlopen('http://www.google.com', timeout=1)
+        return True
+    except URLError:
+        pass
+    return False
+
+HAS_INTERNET = internet_on()
+
+def requires_internet(test):
+    # Decorator
+    msg = 'requires internet'
+    return test if HAS_INTERNET else unittest.skip(msg)(test)
+
+# ----------------------------------------------------------
+# Lets go
+
 
 def init_hef(reset=False, border=40):
 
     # test directory
-    testdir = testdir_base + '_b{}'.format(border)
+    testdir = TESTDIR_BASE + '_border{}'.format(border)
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -113,33 +131,15 @@ def init_hef(reset=False, border=40):
     d = dict(fs=fs, fd=fd)
     gdir.write_pickle(d, 'flowline_params')
 
-    # Only for larger glacier we will go further
-    if border < 60:
-        return gdir
-
-    from oggm.models import flowline
-    flowline.init_present_time_glacier(gdir)
-    flowline.find_inital_glacier(gdir)
-
     return gdir
 
-
-def internet_on():
-    """Not so recommended it seems"""
-    try:
-        _ = urlopen('http://www.google.com', timeout=1)
-        return True
-    except URLError:
-        pass
-    return False
 
 
 @image_comparison(baseline_images=['test_googlestatic' + suffix],
                   extensions=['png'])
+@requires_internet
+@requires_mpltest
 def test_googlemap():
-
-    if not internet_on():
-        raise unittest.skip('Internet is off, couldnt test for googlemaps')
 
     gdir = init_hef()
     graphics.plot_googlemap(gdir)
@@ -151,10 +151,8 @@ def test_googlemap():
                                    'test_downstream_cls' + suffix,
                                    ],
                   extensions=['png'])
+@requires_mpltest
 def test_centerlines():
-
-    if not has_dec:
-        raise unittest.skip('No mpl testing framework')
 
     gdir = init_hef()
     graphics.plot_centerlines(gdir)
@@ -167,24 +165,18 @@ def test_centerlines():
                                    'test_width_corrected' + suffix
                                    ],
                   extensions=['png'])
+@requires_mpltest
 def test_width():
-
-    if not has_dec:
-        raise unittest.skip('No mpl testing framework')
 
     gdir = init_hef()
     graphics.plot_catchment_width(gdir)
     graphics.plot_catchment_width(gdir, corrected=True)
 
 
-
-
 @image_comparison(baseline_images=['test_inversion' + suffix],
                   extensions=['png'])
+@requires_mpltest
 def test_inversion():
-
-    if not has_dec:
-        raise unittest.skip('No mpl testing framework')
 
     gdir = init_hef()
     graphics.plot_inversion(gdir)
@@ -192,21 +184,18 @@ def test_inversion():
 
 @image_comparison(baseline_images=['test_initial_glacier' + suffix],
                   extensions=['png'])
-def test_initial_glacier():
-
-    if not has_dec:
-        raise unittest.skip('No mpl testing framework')
-
-    if skip_conda:
-        raise unittest.SkipTest('On conda this wont work')
+@is_slow
+@requires_mpltest
+@requires_fabiens_laptop
+def test_initial_glacier():  # pragma: no cover
 
     gdir = init_hef(border=80)
-
+    flowline.init_present_time_glacier(gdir)
+    flowline.find_inital_glacier(gdir, init_bias=150)
     past_model = gdir.read_pickle('past_model')
     graphics.plot_modeloutput(gdir, past_model)
 
-if __name__ == '__main__':
-    import nose
+if __name__ == '__main__':  # pragma: no cover
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning,
                                 message=r'.*guessing baseline image.*')

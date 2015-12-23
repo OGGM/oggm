@@ -21,6 +21,7 @@ from oggm import utils
 from xml.dom import minidom
 import salem
 from oggm.utils import tuple2int
+from oggm.tests import is_slow
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -72,7 +73,6 @@ class TestGIS(unittest.TestCase):
         os.makedirs(self.testdir)
 
     def test_define_region(self):
-        """Very basic test to see if the transform went well"""
 
         hef_file = get_demo_file('Hintereisferner.shp')
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
@@ -87,11 +87,8 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
 
     def test_glacier_masks(self):
-        """Again, easy test.
 
-        The GIS was double checked externally with IDL.
-        """
-
+        # The GIS was double checked externally with IDL.
         hef_file = get_demo_file('Hintereisferner.shp')
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
 
@@ -188,6 +185,7 @@ class TestCenterlines(unittest.TestCase):
             centerlines.compute_centerlines(gdir)
             centerlines.compute_downstream_lines(gdir)
 
+    @is_slow
     def test_baltoro_centerlines(self):
 
         cfg.params['border'] = 2

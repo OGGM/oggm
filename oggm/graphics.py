@@ -249,7 +249,8 @@ def plot_inversion(glacierdir, ax=None):
     if dofig:
         plt.tight_layout()
 
-def plot_modeloutput(glacierdir, model, ax=None):
+
+def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
     """Plots the result of the model output."""
 
     dofig = False

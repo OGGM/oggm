@@ -21,6 +21,7 @@ result_images
 eggs
 
 # specific
+oggm/tests/tmp_*
 *.html
 docs/_build
 docs/generated

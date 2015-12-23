@@ -24,8 +24,9 @@ import shutil
 import numpy as np
 from salem import lazy_property
 
-# Fiona is a spammer
+# Fiona and shapely are spammers
 logging.getLogger("Fiona").setLevel(logging.WARNING)
+logging.getLogger("shapely").setLevel(logging.WARNING)
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
