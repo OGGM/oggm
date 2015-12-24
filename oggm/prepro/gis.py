@@ -230,7 +230,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
         glacier_mask[np.where(regions == (am+1))] = 1
 
     # write out the grids in the netcdf file
-    nc = glacierdir.create_netcdf_file('grids', div_id=div_id)
+    nc = glacierdir.create_netcdf_file('gridded_data', div_id=div_id)
 
     v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
@@ -240,7 +240,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
     v.long_name = 'DEM topography smoothed' \
-                  ' with radius: {:.1} m'.format(cfg.params['smooth_window'])
+                  ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window'])
     v[:] = smoothed_dem
 
     v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
@@ -262,7 +262,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     glacierdir.write_pickle(geometries, 'geometries', div_id=div_id)
 
 
-def define_glacier_region(glacierdir, entity):
+def define_glacier_region(gdir, entity):
     """Very first task: define the glacier's regional map.
 
     Creates the local glacier grid (Transverse Mercator), transforms the DEM
@@ -272,7 +272,7 @@ def define_glacier_region(glacierdir, entity):
 
     Parameters
     ----------
-    glacierdir: conf.GlacierDir object
+    gdir: oggm.utils.GlacierDir
     entity : a geopandas entity of the glacier geometry to process
 
     I/O
@@ -284,20 +284,20 @@ def define_glacier_region(glacierdir, entity):
         - outlines,shp: the RGI outlines in projection coordinates
     """
 
-    log.info('%s: creating glacier region', glacierdir.rgi_id)
+    log.info('%s: creating glacier region', gdir.rgi_id)
 
     # choose a spatial resolution with respect to the glacier area
-    dxmethod = cfg.params['grid_dx_method']
-    area = glacierdir.glacier_area
+    dxmethod = cfg.PARAMS['grid_dx_method']
+    area = gdir.rgi_area_km2
     if dxmethod == 'linear':
-        dx = np.rint(cfg.params['d1'] * area + cfg.params['d2'])
+        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
     elif dxmethod == 'square':
-        dx = np.rint(cfg.params['d1'] * np.sqrt(area) + cfg.params['d2'])
+        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
     else:
         raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
-    dx = np.clip(dx, cfg.params['d2'], cfg.params['dmax'])
+    dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
-    log.debug('%s: area %.2f km, dx=%.1f', glacierdir.rgi_id, area, dx)
+    log.debug('%s: area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Make a local glacier map
     cenlon = np.float(entity['CENLON'])
@@ -315,10 +315,10 @@ def define_glacier_region(glacierdir, entity):
     entity['geometry'] = geometry
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
-    towrite.to_file(glacierdir.get_filepath('outlines'))
+    towrite.to_file(gdir.get_filepath('outlines'))
 
     # Open SRTM
-    srtm = gdal.Open(cfg.paths['srtm_file'])
+    srtm = gdal.Open(cfg.PATHS['srtm_file'])
     geo_t = srtm.GetGeoTransform()
 
     # GDAL proj
@@ -331,10 +331,10 @@ def define_glacier_region(glacierdir, entity):
     wgs84.ImportFromEPSG(4326)
 
     # Corners, incl. a buffer of N pix
-    ulx = np.min(xx) - cfg.params['border'] * dx
-    lrx = np.max(xx) + cfg.params['border'] * dx
-    uly = np.max(yy) + cfg.params['border'] * dx
-    lry = np.min(yy) - cfg.params['border'] * dx
+    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
+    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
+    uly = np.max(yy) + cfg.PARAMS['border'] * dx
+    lry = np.min(yy) - cfg.PARAMS['border'] * dx
 
     # Create an in-memory raster
     mem_drv = gdal.GetDriverByName('MEM')
@@ -353,20 +353,20 @@ def define_glacier_region(glacierdir, entity):
     dest.SetProjection(gproj.ExportToWkt())
 
     # Perform the projection/resampling
-    if cfg.params['topo_interp'] == 'bilinear':
+    if cfg.PARAMS['topo_interp'] == 'bilinear':
         interp = gdal.GRA_Bilinear
-    elif cfg.params['topo_interp'] == 'cubic':
+    elif cfg.PARAMS['topo_interp'] == 'cubic':
         interp = gdal.GRA_Cubic
     else:
         raise ValueError('{} interpolation not understood'
-                         .format(cfg.params['topo_interp']))
+                         .format(cfg.PARAMS['topo_interp']))
 
     res = gdal.ReprojectImage(srtm, dest, wgs84.ExportToWkt(),
                               gproj.ExportToWkt(), interp)
 
     # Let's save it as a GeoTIFF.
     driver = gdal.GetDriverByName("GTiff")
-    tmp = driver.CreateCopy(glacierdir.get_filepath('dem'), dest, 0)
+    tmp = driver.CreateCopy(gdir.get_filepath('dem'), dest, 0)
     tmp = None # without this, GDAL is getting crazy in python3
     dest = None # the memfree above is necessary, this one is to be sure...
 
@@ -374,38 +374,38 @@ def define_glacier_region(glacierdir, entity):
     ul_corner = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
                               ul_corner=ul_corner)
-    glacierdir.write_pickle(glacier_grid, 'glacier_grid')
+    gdir.write_pickle(glacier_grid, 'glacier_grid')
 
     # Looks in the database if the glacier has divides.
-    gdf = cfg.params['divides_gdf']
-    if glacierdir.rgi_id in gdf.index.values:
-        divdf = [g for g in gdf.loc[glacierdir.rgi_id].geometry]
-        log.debug('%s: number of divides: %d', glacierdir.rgi_id, len(divdf))
+    gdf = cfg.PARAMS['divides_gdf']
+    if gdir.rgi_id in gdf.index.values:
+        divdf = [g for g in gdf.loc[gdir.rgi_id].geometry]
+        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divdf))
 
         # Reproject the shape
         def proj(lon, lat):
-            return salem.transform_proj(salem.wgs84, glacierdir.grid.proj,
+            return salem.transform_proj(salem.wgs84, gdir.grid.proj,
                                         lon, lat)
         divdf = [shapely.ops.transform(proj, g) for g in divdf]
 
         # Write the directories and the files
         for i, g in enumerate(divdf):
-            _dir = os.path.join(glacierdir.dir, 'divide_{0:0=2d}'.format(i+1))
+            _dir = os.path.join(gdir.dir, 'divide_{0:0=2d}'.format(i + 1))
             if not os.path.exists(_dir):
                 os.makedirs(_dir)
             # File
             entity['geometry'] = g
             towrite = gpd.GeoDataFrame(entity).T
             towrite.crs = proj4_str
-            towrite.to_file(os.path.join(_dir, glacierdir.fnames['outlines']))
+            towrite.to_file(os.path.join(_dir, cfg.BASENAMES['outlines']))
     else:
         # Make a single directory and link the files
-        log.debug('%s: number of divides: %d', glacierdir.rgi_id, 1)
-        _dir = os.path.join(glacierdir.dir, 'divide_01')
+        log.debug('%s: number of divides: %d', gdir.rgi_id, 1)
+        _dir = os.path.join(gdir.dir, 'divide_01')
         if not os.path.exists(_dir):
             os.makedirs(_dir)
-        linkname = os.path.join(_dir, glacierdir.fnames['outlines'])
-        sourcename = glacierdir.get_filepath('outlines')
+        linkname = os.path.join(_dir, cfg.BASENAMES['outlines'])
+        sourcename = gdir.get_filepath('outlines')
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -456,8 +456,8 @@ def glacier_masks(glacierdir):
     srtm_ds = None  # to be sure...
 
     # Smooth SRTM?
-    if cfg.params['smooth_window'] > 0.:
-        gsize = np.rint(cfg.params['smooth_window'] / dx)
+    if cfg.PARAMS['smooth_window'] > 0.:
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = _gaussian_blur(dem, np.int(gsize))
     else:
         smoothed_dem = dem.copy()
@@ -470,8 +470,8 @@ def glacier_masks(glacierdir):
     nd = glacierdir.n_divides
     if nd == 1:
         # Optim: just make links
-        linkname = glacierdir.get_filepath('grids', div_id=1)
-        sourcename = glacierdir.get_filepath('grids')
+        linkname = glacierdir.get_filepath('gridded_data', div_id=1)
+        sourcename = glacierdir.get_filepath('gridded_data')
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX

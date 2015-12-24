@@ -389,7 +389,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
     glacier. Filter them out."""
 
     # altitude range threshold (if range over the line > threshold, filter it)
-    alt_range_th = cfg.params['width_alt_range_thres']
+    alt_range_th = cfg.PARAMS['width_alt_range_thres']
 
     while True:
         out_width = widths.copy()
@@ -452,7 +452,7 @@ def catchment_area(gdir, div_id=None):
     cls = gdir.read_pickle('centerlines', div_id=div_id)
     geoms = gdir.read_pickle('geometries', div_id=div_id)
     glacier_pix = geoms['polygon_pix']
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_id))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
     costgrid = nc.variables['cost_grid'][:]
     mask = nc.variables['glacier_mask'][:]
     nc.close()
@@ -556,12 +556,12 @@ def initialize_flowlines(gdir, div_id=None):
     cls = gdir.read_pickle('centerlines', div_id=div_id)
 
     # Initialise the flowlines
-    dx = cfg.params['flowline_dx']
-    lid = int(cfg.params['flowline_junction_pix'])
+    dx = cfg.PARAMS['flowline_dx']
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_id))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
     topo = nc.variables['topo_smoothed'][:]
     nc.close()
     # Bilinear interpolation
@@ -572,7 +572,7 @@ def initialize_flowlines(gdir, div_id=None):
     interpolator = RegularGridInterpolator(xy, topo)
 
     # Smooth window
-    sw = cfg.params['flowline_height_smooth']
+    sw = cfg.PARAMS['flowline_height_smooth']
 
     for ic, cl in enumerate(cls):
         points = _line_interpol(cl.line, dx)
@@ -633,7 +633,7 @@ def catchment_width_geom(gdir, div_id=None):
     # Topography is to filter the lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_id))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
     topo = nc.variables['topo'][:]
     mask_ext = nc.variables['glacier_ext'][:]
     mask_glacier = nc.variables['glacier_mask'][:]
@@ -643,7 +643,7 @@ def catchment_width_geom(gdir, div_id=None):
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
-    jpix = int(cfg.params['flowline_junction_pix'])
+    jpix = int(cfg.PARAMS['flowline_junction_pix'])
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -729,7 +729,7 @@ def catchment_width_correction(gdir, div_id=None):
 
         # Final correction - because of the raster, the gridded area of the
         # glacier is not that of the actual geometry. correct for that
-        fac = gdir.glacier_area / (area * gdir.grid.dx**2 * 10**-6)
+        fac = gdir.rgi_area_km2 / (area * gdir.grid.dx**2 * 10**-6)
         log.debug('%s: corrected widths with a factor %.2f', gdir.rgi_id, fac)
         for i in gdir.divide_ids:
             fls = divides[i-1]
@@ -745,14 +745,14 @@ def catchment_width_correction(gdir, div_id=None):
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_id))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
     topo = nc.variables['topo'][:]
     ext = nc.variables['glacier_ext'][:]
     nc.close()
     topo[np.where(ext==1)] = np.NaN
 
     # Param
-    nmin = int(cfg.params['min_n_per_bin'])
+    nmin = int(cfg.PARAMS['min_n_per_bin'])
 
     # Per flowline (important so that later, the indices can be moved)
     catchment_heights = []

@@ -248,7 +248,7 @@ class TestInitFlowline(unittest.TestCase):
 
         np.testing.assert_allclose(0.573, vol)
         np.testing.assert_allclose(7350.0, fls[-1].length_m)
-        np.testing.assert_allclose(gdir.glacier_area, area)
+        np.testing.assert_allclose(gdir.rgi_area_km2, area)
 
         if do_plot:  # pragma: no cover
             plt.plot(fls[-1].bed_h)
@@ -948,7 +948,7 @@ class TestHEF(unittest.TestCase):
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, self.gdir.glacier_area)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
 
         model.run_until(50.)
         self.assertFalse(model.dt_warning)
@@ -977,7 +977,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.glacier_area)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -1000,7 +1000,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.glacier_area)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)

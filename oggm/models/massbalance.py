@@ -48,7 +48,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         t_star = df['t_star'][0]
 
         # Climate period
-        mu_hp = int(cfg.params['mu_star_halfperiod'])
+        mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         yr = [t_star-mu_hp, t_star+mu_hp]
 
         fls = gdir.read_pickle('model_flowlines')
@@ -85,15 +85,15 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         # Climate period
         if use_tstar:
             t_star = df['t_star'][0]
-            mu_hp = int(cfg.params['mu_star_halfperiod'])
+            mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
             yr_range = [t_star-mu_hp, t_star+mu_hp]
         else:
             yr_range = [1983, 2003]
 
         # Parameters
-        self.temp_all_solid = cfg.params['temp_all_solid']
-        self.temp_all_liq = cfg.params['temp_all_liq']
-        self.temp_melt = cfg.params['temp_melt']
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
@@ -214,9 +214,9 @@ class HistalpMassBalanceModel(MassBalanceModel):
         self.mu_star = df['mu_star'][0]
 
         # Parameters
-        self.temp_all_solid = cfg.params['temp_all_solid']
-        self.temp_all_liq = cfg.params['temp_all_liq']
-        self.temp_melt = cfg.params['temp_melt']
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')

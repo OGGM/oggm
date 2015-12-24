@@ -1,6 +1,4 @@
-"""
-OGGM
-====
+""" OGGM package.
 
 Copyright: OGGM developers, 2014-2015
 
@@ -12,6 +10,6 @@ from os import path
 from os import makedirs
 
 # Path to the cache directory
-cache_dir = path.join(path.expanduser('~'), '.oggm')
-if not path.exists(cache_dir):
-    makedirs(cache_dir)  # pragma: no cover
+CACHE_DIR = path.join(path.expanduser('~'), '.oggm')
+if not path.exists(CACHE_DIR):
+    makedirs(CACHE_DIR)  # pragma: no cover

@@ -37,7 +37,7 @@ def distribute_climate_data(gdirs):
     log.info('Distribute climate data')
 
     # read the file and data entirely (faster than many I/O)
-    ncpath = cfg.paths['histalp_file']
+    ncpath = cfg.PATHS['histalp_file']
     nc = netCDF4.Dataset(ncpath, mode='r')
     lon = nc.variables['lon'][:]
     lat = nc.variables['lat'][:]
@@ -56,8 +56,8 @@ def distribute_climate_data(gdirs):
 
     # Gradient defaults
     def_grad = -0.0065
-    g_minmax = cfg.params['temp_local_gradient_bounds']
-    sf = cfg.params['prcp_scaling_factor']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    sf = cfg.PARAMS['prcp_scaling_factor']
 
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
@@ -101,9 +101,9 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
         return mb_climate_on_height(gdir, heights, time_range=[t0, t1])
 
     # Parameters
-    temp_all_solid = cfg.params['temp_all_solid']
-    temp_all_liq = cfg.params['temp_all_liq']
-    temp_melt = cfg.params['temp_melt']
+    temp_all_solid = cfg.PARAMS['temp_all_solid']
+    temp_all_liq = cfg.PARAMS['temp_all_liq']
+    temp_melt = cfg.PARAMS['temp_melt']
 
     # Read file
     nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
@@ -270,7 +270,7 @@ def mu_candidates(gdir, div_id=None):
             mu_candidates(gdir, div_id=i)
         return
 
-    mu_hp = int(cfg.params['mu_star_halfperiod'])
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
 
     years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
                                                            div_id=div_id)
@@ -382,7 +382,7 @@ def local_mustar_apparent_mb(gdir, tstar, bias):
     """
 
     # Climate period
-    mu_hp = int(cfg.params['mu_star_halfperiod'])
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
     yr = [tstar-mu_hp, tstar+mu_hp]
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
@@ -438,7 +438,7 @@ def distribute_t_stars(gdirs):
 
     log.info('Distribute t* and mu*')
 
-    ref_df = pd.read_csv(os.path.join(cfg.paths['working_dir'],
+    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
                                       'ref_tstars.csv'))
 
     for gdir in gdirs:
@@ -477,7 +477,7 @@ def compute_ref_t_stars(gdirs):
     log.info('Compute the reference t* and mu*')
 
     # Loop
-    mbdatadir = os.path.join(os.path.dirname(cfg.paths['wgms_rgi_links']),
+    mbdatadir = os.path.join(os.path.dirname(cfg.PATHS['wgms_rgi_links']),
                              'WGMS')
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
@@ -543,5 +543,5 @@ def compute_ref_t_stars(gdirs):
     df['bias'] = biases
     df['lon'] = lons
     df['lat'] = lats
-    file = os.path.join(cfg.paths['working_dir'], 'ref_tstars.csv')
+    file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)

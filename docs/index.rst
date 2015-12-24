@@ -23,11 +23,12 @@ Documentation
 -------------
 
 .. toctree::
-   :maxdepth: 1
+    :maxdepth: 1
 
-   examples
-   installing-oggm
-   api
+    examples
+    installing-oggm
+    glacierdir-gen.rst
+    api
 
 
 Get in touch

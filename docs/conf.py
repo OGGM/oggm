@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # OGGM documentation build configuration file, created by
@@ -15,23 +14,37 @@
 
 import sys
 import os
-import shlex
+import shutil
 
+# If we are on a proper oggm install, we should be able to import all modules
+try:
+    import oggm
+    import oggm.prepro.gis
+    import oggm.prepro.centerlines
+    import oggm.prepro.climate
+    import oggm.prepro.geometry
+    import oggm.prepro.inversion
+    import oggm.models.massbalance
+    import oggm.models.flowline
+except ImportError:
+    # Mock the modules which are just too hard to install (all)
+    try:
+        from unittest.mock import MagicMock
+    except ImportError:
+        from mock import Mock as MagicMock
 
-# Mock the modules which are just too hard to install (all)
-from mock import Mock as MagicMock
+    class Mock(MagicMock):
+        @classmethod
+        def __getattr__(cls, name):
+                return Mock()
 
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-            return Mock()
+    MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
+                    'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
+                    'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
+                    'cleo', 'motionless', 'rasterio', 'osgeo']
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
-MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
-                'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
-                'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
-                'cleo', 'motionless', 'rasterio']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
-
+# import oggm so that the modules can be documented
 import oggm
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -50,10 +63,12 @@ from inspect import getsourcefile, getfile, getmodule,\
 
 def findsource(object):
     """Return the entire source file and starting line number for an object.
+
     The argument may be a module, class, method, function, traceback, frame,
     or code object.  The source code is returned as a list of all the lines
     in the file and the line number indexes a line in that list.  An IOError
     is raised if the source code cannot be retrieved.
+
     FIXED version with which we monkeypatch the stdlib to work around a bug."""
 
     file = getsourcefile(object) or getfile(object)
@@ -135,6 +150,8 @@ inspect.findsource = findsource
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.extlinks',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
@@ -409,3 +426,28 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+
+# -- OGGM Stuffs ----------------------------------------------------
+
+def write_gdir_doc():
+
+    origfile = os.path.join(os.path.dirname(__file__), 'glacierdir.txt')
+    filename = os.path.join(os.path.dirname(__file__), 'glacierdir-gen.rst')
+
+    shutil.copyfile(origfile, filename)
+
+    from oggm.conf import BASENAMES
+
+    cnt = ['    ']
+    for k in sorted(BASENAMES.keys()):
+        cnt += [BASENAMES.info_str(k)]
+    cnt = '\n'.join(cnt)
+
+    file = open(filename, 'a')
+    try:
+        file.write(cnt)
+    finally:
+        file.close()
+
+write_gdir_doc()

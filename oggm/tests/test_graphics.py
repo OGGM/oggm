@@ -1,5 +1,8 @@
 from __future__ import division
 import warnings
+
+import oggm.utils
+
 warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
@@ -73,21 +76,21 @@ def init_hef(reset=False, border=40):
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897')):
         reset = True
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897',
-                                       'flowline_params.p')):
+                                       'flowline_params.pkl')):
         reset = True
 
     # Init
     cfg.initialize()
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-    cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.params['border'] = border
+    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = border
 
     # loop because for some reason indexing wont work
     hef_file = get_demo_file('Hintereisferner.shp')
     rgidf = gpd.GeoDataFrame.from_file(hef_file)
     for index, entity in rgidf.iterrows():
-        gdir = cfg.GlacierDir(entity, base_dir=testdir, reset=reset)
+        gdir = oggm.utils.GlacierDir(entity, base_dir=testdir, reset=reset)
 
     if not reset:
         return gdir

@@ -71,7 +71,7 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
     if use_flowlines:
         filename = 'inversion_flowlines'
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('grids'))
+    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
@@ -147,7 +147,7 @@ def plot_catchment_width(glacierdir, ax=None, corrected=False):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('grids'))
+    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
@@ -201,7 +201,7 @@ def plot_inversion(glacierdir, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('grids'))
+    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
@@ -259,7 +259,7 @@ def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('grids'))
+    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 

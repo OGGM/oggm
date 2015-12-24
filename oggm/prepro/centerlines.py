@@ -403,8 +403,8 @@ def _make_costgrid(mask, ext, z):
     dmax = np.nanmax(dis)
     zmax = np.nanmax(z)
     zmin = np.nanmin(z)
-    cost = ((dmax - dis) / dmax * cfg.params['f1']) ** cfg.params['a'] + \
-           ((z - zmin) / (zmax - zmin) * cfg.params['f2']) ** cfg.params['b']
+    cost = ((dmax - dis) / dmax * cfg.PARAMS['f1']) ** cfg.PARAMS['a'] + \
+           ((z - zmin) / (zmax - zmin) * cfg.PARAMS['f2']) ** cfg.PARAMS['b']
 
     # This is new: we make the cost to go over boundaries
     # arbitrary high to avoid the lines to jump over adjacent boundaries
@@ -442,7 +442,7 @@ def compute_centerlines(gdir, div_id=None):
 
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
-    grids_file = gdir.get_filepath('grids', div_id=div_id)
+    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
     nc = netCDF4.Dataset(grids_file)
 
     # Variables
@@ -458,7 +458,7 @@ def compute_centerlines(gdir, div_id=None):
     zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
     # Size of the half window to use to look for local maximas
-    maxorder = np.rint(cfg.params['localmax_window'] / gdir.grid.dx)
+    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
     maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
@@ -477,11 +477,11 @@ def compute_centerlines(gdir, div_id=None):
                                               heads[1, :])]
 
     # get radius of the buffer according to Kienholz eq. (1)
-    radius = cfg.params['q1'] * geom['polygon_area'] + cfg.params['q2']
-    radius = np.clip(radius, 0, cfg.params['rmax'])
+    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
+    radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
     radius /= gdir.grid.dx # in raster coordinates
     # Plus our criteria, quite usefull to remove short lines:
-    radius += cfg.params['flowline_junction_pix'] * cfg.params['flowline_dx']
+    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
     log.debug('%s: radius in raster coordinates: %.2f',
               gdir.rgi_id, radius)
 
@@ -507,9 +507,9 @@ def compute_centerlines(gdir, div_id=None):
     log.debug('%s: computed the routes', gdir.rgi_id)
 
     # Filter the shortest lines out
-    radius = cfg.params['flowline_junction_pix'] * cfg.params['flowline_dx']
-    radius += 6 * cfg.params['flowline_dx']
-    olines, _ = _filter_lines(lines, heads, cfg.params['kbuffer'], radius)
+    radius = cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
+    radius += 6 * cfg.PARAMS['flowline_dx']
+    olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
     log.debug('%s: number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
@@ -559,7 +559,7 @@ def compute_downstream_lines(gdir):
 
     log.info('%s: downstream lines', gdir.rgi_id)
 
-    with netCDF4.Dataset(gdir.get_filepath('grids', div_id=0)) as nc:
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
         topo = nc.variables['topo_smoothed'][:]
 
     # Variables we gonna need
@@ -612,7 +612,7 @@ def compute_downstream_lines(gdir):
 
     # If we have divides, there is just one route and we have to interrupt
     # It at the glacier boundary
-    with netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_ids[a])) as nc:
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_ids[a])) as nc:
         mask = nc.variables['glacier_mask'][:]
         ext = nc.variables['glacier_ext'][:]
     mask[np.where(ext==1)] = 0

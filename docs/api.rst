@@ -10,6 +10,6 @@ Classes
 =======
 
 .. autosummary::
-   :toctree: generated/
+    :toctree: generated/
 
-   oggm.conf.GlacierDir
+    utils.GlacierDir

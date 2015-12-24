@@ -34,7 +34,7 @@ def up_to_inversion():
     """Run the tasks you want."""
 
     # test directory
-    testdir = os.path.join(CURRENT_DIR, 'tmp')
+    testdir = os.path.join(CURRENT_DIR, 'tmp_workflow')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
     clean_dir(testdir)
@@ -43,21 +43,21 @@ def up_to_inversion():
     cfg.initialize()
 
     # Prevent multiprocessing
-    cfg.use_mp = False
+    cfg.USE_MP = False
 
     # Working dir
-    cfg.paths['working_dir'] = testdir
+    cfg.PATHS['working_dir'] = testdir
 
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['srtm_file'] = get_demo_file('srtm_oeztal.tif')
+    cfg.PATHS['srtm_file'] = get_demo_file('srtm_oeztal.tif')
 
     # Set up the paths and other stuffs
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
+    cfg.PATHS['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
 
     # Get test glaciers (all glaciers with MB or Thickness data)
-    cfg.paths['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
-    cfg.paths['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
+    cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
+    cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oeztal.shp')
@@ -77,7 +77,7 @@ def up_to_inversion():
     fs, fd = inversion.optimize_inversion_params(gdirs)
 
     # Tests
-    dfids = cfg.paths['glathida_rgi_links']
+    dfids = cfg.PATHS['glathida_rgi_links']
     try:
         gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
     except AttributeError:

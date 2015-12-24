@@ -152,12 +152,12 @@ def inversion_parabolic_point_slope(gdir,
     a3 = fs / fd
 
     # sometimes the width is small and the flux is big. crop this too
-    max_ratio = cfg.params['max_thick_to_width_ratio']
-    max_shape = cfg.params['max_shape_param']
+    max_ratio = cfg.PARAMS['max_thick_to_width_ratio']
+    max_shape = cfg.PARAMS['max_shape_param']
     # sigma of the smoothing window after inversion
-    sec_smooth = cfg.params['section_smoothing']
+    sec_smooth = cfg.PARAMS['section_smoothing']
     # Clip the slope, in degrees
-    clip_angle = cfg.params['min_slope']
+    clip_angle = cfg.PARAMS['min_slope']
 
     out_volume = 0.
     for div in gdir.divide_ids:
@@ -217,7 +217,7 @@ def inversion_parabolic_point_slope(gdir,
         if write:
             gdir.write_pickle(cls, 'inversion_output', div_id=div)
 
-    return out_volume, gdir.glacier_area * 1e6
+    return out_volume, gdir.rgi_area_km2 * 1e6
 
 
 def optimize_inversion_params(gdirs):
@@ -226,7 +226,7 @@ def optimize_inversion_params(gdirs):
     log.info('Compute the reference fs and fd parameters.')
 
     # Get test glaciers (all glaciers with thickness data)
-    dfids = cfg.paths['glathida_rgi_links']
+    dfids = cfg.PATHS['glathida_rgi_links']
     try:
         gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
     except AttributeError:
@@ -274,7 +274,7 @@ def optimize_inversion_params(gdirs):
              '{vol_rmsd}'.format(**d))
 
     df = pd.DataFrame(d, index=[0])
-    file = os.path.join(cfg.paths['working_dir'], 'inversion_params.csv')
+    file = os.path.join(cfg.PATHS['working_dir'], 'inversion_params.csv')
     df.to_csv(file)
 
     return fs, fd

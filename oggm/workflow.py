@@ -12,6 +12,7 @@ import multiprocessing as mp
 
 # Locals
 import oggm.conf as cfg
+import oggm.utils
 from oggm.prepro import gis
 from oggm.prepro import centerlines
 from oggm.prepro import geometry
@@ -29,15 +30,15 @@ def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
 
     global  mppool
-    if cfg.use_mp:
-        mppool = mp.Pool(cfg.nproc)
+    if cfg.USE_MP:
+        mppool = mp.Pool(cfg.NPROC)
 
 
 def execute_task(task, gdirs):
     """Execute any taks on gdirs. If you asked for multiprocessing,
     it will do it."""
 
-    if cfg.use_mp:
+    if cfg.USE_MP:
         if mppool is None:
             _init_pool()
         poolargs = gdirs
@@ -56,7 +57,7 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
     gdirs = []
     for _, entity in rgidf.iterrows():
-        gdir = cfg.GlacierDir(entity, reset=reset)
+        gdir = oggm.utils.GlacierDir(entity, reset=reset)
         if not os.path.exists(gdir.get_filepath('dem')):
             gis.define_glacier_region(gdir, entity)
         gdirs.append(gdir)
@@ -121,7 +122,7 @@ def climate_tasks(gdirs):
     climate.distribute_climate_data(gdirs)
 
     # Get ref glaciers (all glaciers with MB)
-    dfids = cfg.paths['wgms_rgi_links']
+    dfids = cfg.PATHS['wgms_rgi_links']
     dfids = pd.read_csv(dfids)['RGI_ID'].values
 
     ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]

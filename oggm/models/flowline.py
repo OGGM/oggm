@@ -617,7 +617,7 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
         major_div = int(text_file.read())
 
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=0))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
     topo = nc.variables['topo_smoothed'][:]
     nc.close()
 
@@ -629,7 +629,7 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
     interpolator = RegularGridInterpolator(xy, topo)
 
     # Smooth window
-    sw = cfg.params['flowline_height_smooth']
+    sw = cfg.PARAMS['flowline_height_smooth']
 
     # Map
     map_dx = gdir.grid.dx
