@@ -382,25 +382,23 @@ class FlowlineModel(object):
         while self.t < t:
             self.step(dt=t-self.t)
 
-    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
+    def run_until_equilibrium(self, rate=0.0005, ystep=5, max_ite=200):
 
         ite = 0
         was_close_zero = 0
-        close_rate = 0
-        while (close_rate <= 3) and (ite <= max_ite) and (was_close_zero < 5):
+        t_rate = 1
+        while (t_rate > rate) and (ite <= max_ite) and (was_close_zero < 5):
             ite += 1
             v_bef = self.volume_m3
             self.run_until(self.yr + ystep)
             v_af = self.volume_m3
             t_rate = np.abs(v_af - v_bef) / v_bef
-            if np.isclose(v_bef, 0.):
+            if np.isclose(v_bef, 0., atol=1):
                 t_rate = 1
                 was_close_zero += 1
-            if t_rate <= rate:
-                close_rate += 1
 
         if ite > max_ite:
-            raise RuntimeError('Rate stuff did not work as expected')
+            raise RuntimeError('Did not find equilibrium as expected')
 
 
 class FluxBasedModel(FlowlineModel):
@@ -514,79 +512,6 @@ class FluxBasedModel(FlowlineModel):
         # Next step
         self.t += dt
 
-    def backstep(self, dt=-sec_in_month):
-        """Backwards one step."""
-
-        # This is to guarantee a precise arrival on a specific date if asked
-        min_dt = dt if dt > -self.min_dt else -self.min_dt
-        max_dt = -self.max_dt
-        dt = np.clip(dt, max_dt, min_dt)
-
-        # Loop over tributaries to determine the flux rate
-        flxs = []
-        aflxs = []
-        for fl in self.fls:
-
-            dx = fl.dx_meter
-
-            # Mass balance and "add" to section
-            widths = fl.widths_m
-            mb = self.mb.get_mb(fl.surface_h, self.yr)
-
-            is_no_zero = (fl.thick[1:] > 0) | (fl.thick[:-1] > 0)
-            is_no_zero = np.hstack([True, is_no_zero])
-            widths = np.where(is_no_zero, widths, 0.)
-            mb = dt * mb * widths
-            fl.section = fl.section + mb
-
-            # Staggered gradient
-            sh = fl.surface_h
-            slope_stag = np.zeros(fl.nx+1)
-            slope_stag[1:-1] = (sh[0:-1] - sh[1:]) / dx
-            slope_stag[-1] = slope_stag[-2]
-
-            # Staggered thick
-            thick = fl.thick
-            thick_stag = np.zeros(fl.nx+1)
-            thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
-            thick_stag[[0, -1]] = thick[[0, -1]]
-
-            # Staggered velocity (Deformation + Sliding)
-            rhogh = (rho*g*slope_stag)**n
-            u_stag = (thick_stag**(n+1)) * self.fd * rhogh + \
-                     (thick_stag**(n-1)) * self.fs * rhogh
-
-            # Staggered section
-            section = fl.section
-            section_stag = np.zeros(fl.nx+1)
-            section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
-            section_stag[[0, -1]] = section[[0, -1]]
-
-            # Staggered flux rate
-            flx_stag = u_stag * section_stag / dx
-            flxs.append(flx_stag)
-            aflxs.append(np.zeros(fl.nx))
-
-        # A second loop for the mass exchange
-        for fl, flx_stag, aflx, trib in zip(self.fls, flxs, aflxs,
-                                                 self._trib):
-
-            # Update section with flowing and mass balance
-            new_section = fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt
-                          # + aflx*dt
-
-            # Keep positive values only and store
-            fl.section = new_section.clip(0)
-
-            # Add the last flux to the tributary
-            # this is ok because the lines are sorted in order
-            # if trib[0] is not None:
-            #     aflxs[trib[0]][trib[1]:trib[2]] += flx_stag[-1].clip(0) * \
-            #                                        trib[3]
-
-        # Next step
-        self.t += dt
-
 
 class KarthausModel(FlowlineModel):
     """The actual model"""
@@ -671,7 +596,7 @@ class KarthausModel(FlowlineModel):
         self.t += dt
 
 
-def init_present_time_glacier(gdir, min_shape=0.0015, lambdas=0.2):
+def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
     """First task after inversion. Merges the data from the various
     preprocessing tasks into a stand-alone dataset ready for run.
 
@@ -684,6 +609,7 @@ def init_present_time_glacier(gdir, min_shape=0.0015, lambdas=0.2):
 
     I/O
     ---
+     - new file: model_flowlines.p
     """
 
     fn = gdir.get_filepath('major_divide', div_id=0)
@@ -794,9 +720,9 @@ def init_present_time_glacier(gdir, min_shape=0.0015, lambdas=0.2):
     gdir.write_pickle(fls, 'model_flowlines')
 
 
-def find_inital_glacier(final_model, firstguess_mb, y0, y1,
-                        rtol=0.1, atol=100, max_ite=100,
-                        init_bias=0., equi_rate=0.001):
+def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
+                         rtol=0.01, atol=10, max_ite=100,
+                         init_bias=0., equi_rate=0.0005):
     """ Iterative search for a plausible starting time glacier"""
 
     # Objective
@@ -814,24 +740,26 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
         log.info('find_inital_glacier, ite: %d. Converged with a final error '
-                 'of %.2f', 0,
+                 'of %.3f', 0,
                  utils.rel_err(orig_area, prev_area))
         return model
 
     if prev_area < orig_area:
         sign_mb = 1.
-        log.debug('find_inital_glacier, ite: %d. Glacier would be too '
-                  'small of %.2f. Continue', 0,
+        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+                  'small of %.3f. Continue', 0,
                   utils.rel_err(orig_area, prev_area))
     else:
-        log.debug('find_inital_glacier, ite: %d. Glacier would be too '
-                  'big of %.2f. Continue', 0,
+        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+                  'big of %.3f. Continue', 0,
                   utils.rel_err(orig_area, prev_area))
         sign_mb = -1.
 
     # Loop until 100 iterations
     c = 0
-    mb_bias = init_bias
+    bias_step = 50.
+    mb_bias = init_bias - bias_step
+    reduce_step = 5.
 
     mb = copy.deepcopy(firstguess_mb)
     mb.set_bias(sign_mb * mb_bias)
@@ -839,20 +767,18 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
                                 y0, final_model.fs, final_model.fd,
                                 min_dt=final_model.min_dt,
                                 max_dt=final_model.max_dt)
-    bias_step = 50.
-    reduce_step = 10.
     while True and (c < max_ite):
         c += 1
 
         # Grow
         mb_bias += bias_step
         mb.set_bias(sign_mb * mb_bias)
-        log.debug('find_inital_glacier, ite: %d. New bias: %.0f', c,
+        log.info('find_inital_glacier, ite: %d. New bias: %.0f', c,
                   sign_mb * mb_bias)
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
-        log.debug('find_inital_glacier, ite: %d. Grew for: %d years', c,
+        log.info('find_inital_glacier, ite: %d. Grew for: %d years', c,
                   grow_model.yr)
 
         # Shrink
@@ -868,7 +794,7 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
             new_model.reset_flowlines(new_fls)
             new_model.reset_y0(y0)
             log.info('find_inital_glacier, ite: %d. Converged with a '
-                     'final error of %.2f', c,
+                     'final error of %.3f', c,
                      utils.rel_err(orig_area, new_area))
             return new_model
 
@@ -879,23 +805,50 @@ def find_inital_glacier(final_model, firstguess_mb, y0, y1,
             # Reset the previous state and continue
             prev_fls = new_fls
 
-            log.debug('find_inital_glacier, ite: %d. Error of %.2f. Continue', c,
+            log.info('find_inital_glacier, ite: %d. Error of %.3f. '
+                      'Continue', c,
                       utils.rel_err(orig_area, new_area))
             continue
 
         # Ok. We went too far. Reduce the bias step but keep previous state
         mb_bias -= bias_step
-        bias_step -= reduce_step
-        log.debug('find_inital_glacier, ite: %d. Went too far.', c)
-        if bias_step <= 0:
-            bias_step = 50.
-            reduce_step -= 5
-            if reduce_step <= 0:
-                break
+        bias_step /= reduce_step
+        log.info('find_inital_glacier, ite: %d. Went too far.', c)
+        if bias_step < 0.1:
+            break
 
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
+def find_inital_glacier(gdir, div_id=None, init_bias=0., rtol=0.005):
+    """Search for the glacier in year 1847
 
+    Parameters
+    ----------
+    gdir: GlacierDir object
+    div_id: the divide ID to process (should be left to None)
 
+    I/O
+    ---
+    New file::
+        - past_model.p: a ModelFlowline object
+    """
 
+    d = gdir.read_pickle('flowline_params')
+    fs = d['fs']
+    fd = d['fd']
+
+    y0 = 1847
+    y1 = 2003
+
+    mb = mbmods.HistalpMassBalanceModel(gdir)
+    fls = gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb, 0., fs, fd)
+    vol_ref = model.volume_km3
+
+    mb = mbmods.BackwardsMassBalanceModel(gdir)
+    past_model = _find_inital_glacier(model, mb, y0, y1, rtol=rtol,
+                                      init_bias=init_bias)
+
+    # Write the data
+    gdir.write_pickle(past_model, 'past_model')

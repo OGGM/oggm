@@ -4,17 +4,15 @@ from six.moves import zip
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 
+import logging
+logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
+
 import unittest
 import os
 import copy
 import pickle
-import logging
-
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.getLogger("shapely").setLevel(logging.WARNING)
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            level=logging.DEBUG)
+from nose.plugins.attrib import attr
 
 import shapely.geometry as shpg
 import numpy as np
@@ -29,7 +27,7 @@ import multiprocessing as mp
 from oggm.tests.test_graphics import init_hef
 from oggm.models import flowline
 from oggm.models import massbalance
-from oggm import graphics as gr
+from oggm.tests import is_slow, ON_FABIENS_LAPTOP, requires_working_conda
 from oggm import utils
 
 # Globals
@@ -45,7 +43,7 @@ sec_in_month = 31*24*3600
 sec_in_day = 24*3600
 sec_in_hour = 3600
 
-dom_border = 80
+DOM_BORDER = 80
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
@@ -211,7 +209,7 @@ class TestInitFlowline(unittest.TestCase):
 
     def test_init_present_time_glacier(self):
 
-        gdir = init_hef(reset=False, border=dom_border)
+        gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -267,7 +265,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_tstar_mb(self):
 
-        gdir = init_hef(reset=False, border=dom_border)
+        gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
         mb_mod = massbalance.TstarMassBalanceModel(gdir)
@@ -303,7 +301,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_backwards_mb(self):
 
-        gdir = init_hef(reset=False, border=dom_border)
+        gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
         mb_mod_ref = massbalance.TstarMassBalanceModel(gdir)
@@ -357,7 +355,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_histalp_mb(self):
 
-        gdir = init_hef(reset=False, border=dom_border)
+        gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
         mb_mod = massbalance.TodayMassBalanceModel(gdir)
@@ -438,12 +436,13 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(surface_h[0], 'r')
             plt.plot(surface_h[1], 'b')
             plt.show()
-
-    def test_change_rate(self):
+            
+    @requires_working_conda
+    def test_equilibrium(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
 
-        years = []
+        vols = []
         for model in models:
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
@@ -452,9 +451,20 @@ class TestIdealisedCases(unittest.TestCase):
                           fixed_dt=14*sec_in_day)
 
             model.run_until_equilibrium()
-            years.append(model.yr)
+            vols.append(model.volume_km3)
 
-        np.testing.assert_allclose(years, [460, 460], atol=30)
+        ref_vols = []
+        for model in models:
+            fls = dummy_constant_bed()
+            mb = ConstantBalanceModel(2600.)
+
+            model = model(fls, mb, 0., self.fs, self.fd,
+                          fixed_dt=14*sec_in_day)
+
+            model.run_until(600)
+            ref_vols.append(model.volume_km3)
+
+        np.testing.assert_allclose(ref_vols, vols, atol=0.005)
 
 
     def test_adaptive_ts(self):
@@ -846,17 +856,18 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         y0 = 0.
         y1 = 150.
+        rtol = 0.02
 
         mb = ConstantBalanceModel(self.ela+50.)
         model = flowline.FluxBasedModel(self.glacier, mb, y0,
                                         self.fs, self.fd)
 
-        past_model = flowline.find_inital_glacier(model, mb, y0, y1, rtol=0.02)
+        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 > past_model.area_m2)
         np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
-                                   rtol=0.02)
+                                   rtol=rtol)
 
         if do_plot:  # pragma: no cover
             plt.plot(self.glacier[-1].surface_h, 'k', label='ref')
@@ -870,12 +881,12 @@ class TestBackwardsIdealized(unittest.TestCase):
         model = flowline.FluxBasedModel(self.glacier, mb, y0,
                                         self.fs, self.fd)
 
-        past_model = flowline.find_inital_glacier(model, mb, y0, y1, rtol=0.02)
+        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
         np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
-                                   rtol=0.02)
+                                   rtol=rtol)
 
         if do_plot:  # pragma: no cover
             plt.plot(self.glacier[-1].surface_h, 'k', label='ref')
@@ -885,6 +896,16 @@ class TestBackwardsIdealized(unittest.TestCase):
             plt.legend(loc='best')
             plt.show()
 
+        mb = ConstantBalanceModel(self.ela)
+        model = flowline.FluxBasedModel(self.glacier, mb, y0,
+                                        self.fs, self.fd)
+
+        # Hit the correct one
+        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
+        past_model.run_until(y1)
+        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+                                   rtol=rtol)
+
     def test_fails(self):
 
         y0 = 0.
@@ -893,7 +914,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         mb = ConstantBalanceModel(self.ela-150.)
         model = flowline.FluxBasedModel(self.glacier, mb, y0,
                                         self.fs, self.fd)
-        self.assertRaises(RuntimeError, flowline.find_inital_glacier, model,
+        self.assertRaises(RuntimeError, flowline._find_inital_glacier, model,
                           mb, y0, y1, rtol=0.02, max_ite=5)
 
 
@@ -901,7 +922,7 @@ class TestHEF(unittest.TestCase):
 
     def setUp(self):
 
-        self.gdir = init_hef(reset=False, border=dom_border)
+        self.gdir = init_hef(border=DOM_BORDER)
 
         d = self.gdir.read_pickle('flowline_params')
         self.fs = d['fs']
@@ -910,6 +931,7 @@ class TestHEF(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @requires_working_conda
     def test_equilibrium(self):
 
         #TODO: equilibrium test only working with parabolic bed
@@ -939,7 +961,7 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
-
+    @is_slow
     def test_commitment(self):
 
         flowline.init_present_time_glacier(self.gdir, min_shape=0.,
@@ -999,30 +1021,31 @@ class TestHEF(unittest.TestCase):
             plt.legend(loc='best')
             plt.show()
 
+    @is_slow
     def test_find_t0(self):
 
-        flowline.init_present_time_glacier(self.gdir, min_shape=0.0012,
-                                           lambdas=0.2)
+        # init bias 130, min_shape=0.0015
+        # init bias 160, min_shape=0.001
+        # init bias 150, min_shape=0.0012
+
+        flowline.init_present_time_glacier(self.gdir)
         glacier = self.gdir.read_pickle('model_flowlines')
         df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
+        df.columns = ['Leclercq']
 
-        y0 = 1950
-        y1 = 2003
-        rtol = 0.01
+        vol_ref = flowline.FlowlineModel(glacier, None, None,
+                                         None, None).volume_km3
 
-        df = df.loc[y0:]
+        init_bias = 100.  # 100 so that "went too far" comes once on travis
+        rtol = 0.005
+        if ON_FABIENS_LAPTOP:
+            init_bias = 150
+            rtol = 0.005
+        flowline.find_inital_glacier(self.gdir, init_bias=init_bias, rtol=rtol)
 
-        mb = massbalance.HistalpMassBalanceModel(self.gdir)
-        fls = self.gdir.read_pickle('model_flowlines')
-        model = flowline.FluxBasedModel(fls, mb, 0.,
-                                        self.fs,
-                                        self.fd)
+        past_model = self.gdir.read_pickle('past_model')
 
-        mb = massbalance.BackwardsMassBalanceModel(self.gdir)
-        past_model = flowline.find_inital_glacier(model, mb, y0, y1,
-                                                  rtol=rtol,
-                                                  init_bias=70.,
-                                                  equi_rate=0.003)
+        vol_start = past_model.volume_km3
         bef_fls = copy.deepcopy(past_model.fls)
 
         mylen = []
@@ -1032,16 +1055,27 @@ class TestHEF(unittest.TestCase):
         df['oggm'] = mylen
         df = df-df.iloc[-1]
 
-        # TODO: the following does not work on travis. No clue why
-        # np.testing.assert_allclose(df.iloc[0].oggm, df.iloc[0].dl, atol=250)
+        vol_end = past_model.volume_km3
+        np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)
+
+        rmsd = utils.rmsd(df.Leclercq, df.oggm)
+
+        if ON_FABIENS_LAPTOP:
+            self.assertTrue(rmsd < 500.)
+
+        self.assertTrue(rmsd < 1000.)
 
         if do_plot:  # pragma: no cover
             df.plot()
+            plt.ylabel('Glacier length (relative to 2003)')
             plt.show()
             fig = plt.figure()
-            plt.plot(glacier[-1].surface_h, 'k', label='ref')
-            plt.plot(bef_fls[-1].surface_h, 'b', label='start')
-            plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
+            lab = 'ref (vol={:.2f}km3)'.format(vol_ref)
+            plt.plot(glacier[-1].surface_h, 'k', label=lab)
+            lab = 'oggm start (vol={:.2f}km3)'.format(vol_start)
+            plt.plot(bef_fls[-1].surface_h, 'b', label=lab)
+            lab = 'oggm end (vol={:.2f}km3)'.format(vol_end)
+            plt.plot(past_model.fls[-1].surface_h, 'r', label=lab)
 
             plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
             plt.legend(loc='best')

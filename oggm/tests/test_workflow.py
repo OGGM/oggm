@@ -11,29 +11,30 @@ import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from nose.plugins.attrib import attr
+
 # Locals
 import oggm.conf as cfg
 from oggm import workflow
 from oggm.prepro import inversion
 from oggm.utils import get_demo_file
 from oggm.utils import rmsd
-
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            level=logging.DEBUG)
+from oggm.tests import is_slow
 
 # Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def clean_dir(testdir):
     shutil.rmtree(testdir)
     os.makedirs(testdir)
 
+
 def up_to_inversion():
     """Run the tasks you want."""
 
     # test directory
-    testdir = os.path.join(current_dir, 'tmp')
+    testdir = os.path.join(CURRENT_DIR, 'tmp')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
     clean_dir(testdir)
@@ -111,9 +112,9 @@ def up_to_inversion():
 
     return df
 
-
 class TestBasic(unittest.TestCase):
 
+    @is_slow
     def test_first_shot(self):
 
         df = up_to_inversion()

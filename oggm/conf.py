@@ -24,8 +24,9 @@ import shutil
 import numpy as np
 from salem import lazy_property
 
-# Fiona is a spammer
+# Fiona and shapely are spammers
 logging.getLogger("Fiona").setLevel(logging.WARNING)
+logging.getLogger("shapely").setLevel(logging.WARNING)
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -200,7 +201,7 @@ class GlacierDir(object):
         fnames['major_divide'] = 'major_divide.txt'
         fnames['model_flowlines'] = 'model_flowlines.p'
         fnames['flowline_params'] = 'flowline_params.p'
-        fnames['t0_glacier'] = 't0_glacier.p'
+        fnames['past_model'] = 'past_model.p'
         self.fnames = fnames
 
     @lazy_property

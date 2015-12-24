@@ -6,6 +6,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib import cm as colormap
 import matplotlib.colors as colors
+import warnings
 
 from descartes import PolygonPatch
 import shapely.geometry as shpg
@@ -245,5 +246,71 @@ def plot_inversion(glacierdir, ax=None):
     cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Glacier thickness [m]')
     ax.set_title(glacierdir.rgi_id)
+    if dofig:
+        plt.tight_layout()
+
+
+def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
+    """Plots the result of the model output."""
+
+    dofig = False
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        dofig = True
+
+    nc = netCDF4.Dataset(glacierdir.get_filepath('grids'))
+    topo = nc.variables['topo'][:]
+    nc.close()
+
+    geom = glacierdir.read_pickle('geometries', div_id=0)
+    poly_pix = geom['polygon_pix']
+
+    ds = salem.GeoDataset(glacierdir.grid)
+    mlines = shpg.GeometryCollection([l.line for l in model.fls] + [poly_pix])
+    ml = mlines.bounds
+    corners = ((ml[0], ml[1]), (ml[2], ml[3]))
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",category=RuntimeWarning)
+        ds.set_subset(corners=corners, margin=10, crs=glacierdir.grid)
+
+    mp = cleo.Map(ds.grid, countries=False, nx=glacierdir.grid.nx)
+    mp.set_lonlat_countours(0.02)
+    mp.set_topography(topo, crs=glacierdir.grid)
+
+    # TODO: center grid or corner grid???
+    crs = glacierdir.grid.center_grid
+    mp.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
+    for l in poly_pix.interiors:
+        mp.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+    toplot_th = np.array([])
+    toplot_lines = []
+
+    # plot Centerlines
+    cls = model.fls
+    for l in cls:
+        mp.set_geometry(l.line, crs=crs, color='gray',
+                          linewidth=1.2, zorder=50)
+        toplot_th = np.append(toplot_th, l.thick)
+        for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
+            l = shpg.LineString([shpg.Point(cur + wi/2. * n1),
+                                 shpg.Point(cur + wi/2. * n2)])
+            toplot_lines.append(l)
+
+
+    cm = plt.cm.get_cmap('YlOrRd')
+    dl = cleo.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0)
+    colors = dl.to_rgb()
+    for l, c in zip(toplot_lines, colors):
+        mp.set_geometry(l, crs=crs, color=c,
+                          linewidth=3, zorder=50)
+    mp.plot(ax)
+    cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
+    cb.set_label('Glacier thickness [m]')
+    tit = ' -- year: {:d}'.format(np.int64(model.yr))
+    ax.set_title(glacierdir.rgi_id + tit)
+
     if dofig:
         plt.tight_layout()
