@@ -4,26 +4,25 @@ import warnings
 
 import oggm.utils
 
-warnings.filterwarnings("once", category=DeprecationWarning) # , module=r'.*oggm.*'
+warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
+import shutil
 
 import shapely.geometry as shpg
 import numpy as np
-import shutil
 import pandas as pd
 import geopandas as gpd
 import netCDF4
+import salem
 
 # Local imports
-from oggm.prepro import gis, centerlines, geometry, climate, inversion
-import oggm.conf as cfg
-from oggm.utils import get_demo_file
+from oggm.core.preprocessing import gis, geometry, climate, inversion
+from oggm.core.preprocessing import centerlines
+import oggm.cfg as cfg
 from oggm import utils
-from xml.dom import minidom
-import salem
-from oggm.utils import tuple2int
+from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow
 
 # Globals
@@ -32,6 +31,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 def read_svgcoords(svg_file):
     """Get the vertices coordinates out of a SVG file"""
+
+    from xml.dom import minidom
     doc = minidom.parse(svg_file)
     coords = [path.getAttribute('d') for path
                     in doc.getElementsByTagName('path')]
@@ -82,8 +83,8 @@ class TestGIS(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
@@ -97,14 +98,15 @@ class TestGIS(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
 
         nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
         area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
         np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
         nc.close()
+
 
 class TestCenterlines(unittest.TestCase):
 
@@ -145,9 +147,9 @@ class TestCenterlines(unittest.TestCase):
         radius = 25
 
         _heads, _ = centerlines._filter_heads(heads, heads_height, radius,
-                                            polygon)
+                                              polygon)
         _headsi, _ = centerlines._filter_heads(heads[::-1], heads_height[
-                                                          ::-1], radius, polygon)
+                                                            ::-1], radius, polygon)
 
         self.assertEqual(_heads, _headsi[::-1])
         self.assertEqual(_heads, [heads[h] for h in [2,5,6,7]])
@@ -159,8 +161,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
 
@@ -182,8 +184,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             centerlines.compute_downstream_lines(gdir)
@@ -202,8 +204,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
 
@@ -287,8 +289,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.catchment_area(gdir)
@@ -317,8 +319,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -346,8 +348,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -361,8 +363,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -440,8 +442,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
@@ -466,8 +468,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
@@ -529,8 +531,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
@@ -614,8 +616,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -652,8 +654,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -691,8 +693,8 @@ class TestClimate(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
@@ -709,7 +711,7 @@ class TestClimate(unittest.TestCase):
         t_star = t_star[-1]
         bias = bias[-1]
 
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_ref = gdir.read_pickle('mu_candidates', div_id=0).loc[t_star]
@@ -783,8 +785,8 @@ class TestInversion(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = oggm.utils.GlacierDir(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
@@ -798,7 +800,7 @@ class TestInversion(unittest.TestCase):
         t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -887,7 +889,7 @@ class TestInversion(unittest.TestCase):
         t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
         inversion.prepare_for_inversion(gdir)
         v, _ = inversion.inversion_parabolic_point_slope(gdir,
                                                          fs=fs,
@@ -923,7 +925,7 @@ class TestInversion(unittest.TestCase):
         # # loop because for some reason indexing wont work
         # for index, entity in rgidf.iterrows():
         #     gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-        # gis.define_glacier_region(gdir, entity)
+        # gis.define_glacier_region(gdir, entity=entity)
         # gis.glacier_masks(gdir)
         # centerlines.compute_centerlines(gdir)
         # geometry.initialize_flowlines(gdir)

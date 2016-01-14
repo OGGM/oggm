@@ -1,8 +1,8 @@
 """ Compute the centerlines according to Kienholz et al (2014) - with
-modifications. There is only one task (compute_centerlines).
+modifications.
 
-The output is a list of Centerline objects, stored as a list in a pickle
-(centerlines.p). The order of the list is important since the lines are
+The output is a list of Centerline objects, stored as a list in a pickle.
+The order of the list is important since the lines are
 sorted per order (hydrological flow level), from the lower orders (upstream)
 to the higher orders (downstream). Several tools later on rely on this order
 so don't mess with it.
@@ -31,9 +31,10 @@ import netCDF4
 import shapely.geometry as shpg
 import scipy.signal
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from salem import lazy_property
 from oggm.utils import tuple2int
+from oggm import entity_task, divide_task
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -366,11 +367,11 @@ def _line_order(line):
 
     Parameters
     ----------
-    line: Centerline instance
+    line: a Centerline instance
 
     Returns
     -------
-    The lines order
+    The line;s order
     """
 
     if len(line.inflows) == 0:
@@ -413,33 +414,18 @@ def _make_costgrid(mask, ext, z):
     return np.where(mask, cost, np.Inf)
 
 
+@entity_task(writes=['centerlines', 'gridded_data'])
+@divide_task(add_0=False)
 def compute_centerlines(gdir, div_id=None):
-    """Compute the centerlines from a pre-processed directory.
+    """Compute the centerlines following Kienholz et al., (2014).
 
-    It follows quite closely Kienholz et al. (2014).
-
-    Modified Strahler number
+    They are then sorted according to the modified Strahler number:
     http://en.wikipedia.org/wiki/Strahler_number
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    Generates::
-        - centerlines.p: list of centerline instances as pickle
-    Updates::
-        - grids.nc with the costgrid
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: centerlines, divide %d', gdir.rgi_id, i)
-            compute_centerlines(gdir, div_id=i)
-        return
-
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
     grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
@@ -520,7 +506,7 @@ def compute_centerlines(gdir, div_id=None):
     for cl in olines:
         cl.order = _line_order(cl)
 
-    # And sort them per order !!! several tools downstream rely on this
+    # And sort them per order !!! several downstream tasks  rely on this
     cls = []
     for i in np.argsort([cl.order for cl in olines]):
         cls.append(olines[i])
@@ -541,20 +527,22 @@ def compute_centerlines(gdir, div_id=None):
     nc.close()
 
 
+@entity_task(writes=['downstream_line', 'major_divide'])
 def compute_downstream_lines(gdir):
     """Compute the lines continuing the glacier (one per divide).
 
     The idea is simple: starting from the glacier tail, compute all the routes
-    to all local minimas found at the domain edge. The cheapest is the One.
+    to all local minimas found at the domain edge. The cheapest is "the One".
+
+    The task also determines the so-called "major flowline" which is the
+    only line flowing out of the domain. The other ones are flowing into the
+    branch. The rest of the job (merging all centerlines + downstreams into
+    one single glacier is realized by
+    :py:func:`~oggm.tasks.init_present_time_glacier`).
 
     Parameters
     ----------
-    gdir: GlacierDir object
-
-    I/O
-    ---
-    Generates::
-        - downstream_line.p: line instance as pickle
+    gdir : oggm.GlacierDirectory
     """
 
     log.info('%s: downstream lines', gdir.rgi_id)
@@ -606,13 +594,17 @@ def compute_downstream_lines(gdir):
             raise RuntimeError('Downstream line not found')
 
     # Write the data
+    fn = gdir.get_filepath('major_divide', div_id=0)
+    with open(fn, 'w') as text_file:
+        text_file.write('{}'.format(div_ids[major_id]))
     gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
     if len(div_ids) == 1:
         return
 
     # If we have divides, there is just one route and we have to interrupt
     # It at the glacier boundary
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_ids[a])) as nc:
+    fpath = gdir.get_filepath('gridded_data', div_id=div_ids[a])
+    with netCDF4.Dataset(fpath) as nc:
         mask = nc.variables['glacier_mask'][:]
         ext = nc.variables['glacier_ext'][:]
     mask[np.where(ext==1)] = 0
@@ -624,6 +616,3 @@ def compute_downstream_lines(gdir):
         lids = [l for l in lids if mask[l[0], l[1]] == 0][0:-1]
         line = shpg.LineString(np.array(lids)[:, [1, 0]])
         gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
-    fn = gdir.get_filepath('major_divide', div_id=0)
-    with open(fn, 'w') as text_file:
-        text_file.write('{}'.format(div_ids[major_id]))

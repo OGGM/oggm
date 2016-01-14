@@ -12,7 +12,6 @@ from descartes import PolygonPatch
 import shapely.geometry as shpg
 import glob
 import os
-import pickle
 import numpy as np
 import netCDF4
 import salem
@@ -21,7 +20,7 @@ import salem
 import cleo
 
 # Local imports
-import oggm.conf as cfg
+import oggm.cfg as cfg
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):

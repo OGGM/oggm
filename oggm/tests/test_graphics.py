@@ -1,9 +1,12 @@
 from __future__ import division
+
 import warnings
 
 import oggm.utils
 
 warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning,
+                        message=r'.*guessing baseline image.*')
 
 import unittest
 import nose
@@ -13,15 +16,14 @@ from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
 import pandas as pd
 import geopandas as gpd
-import numpy as np
-import matplotlib.pyplot as plt
 
 # Local imports
-from oggm.prepro import gis, centerlines, geometry, climate, inversion
-import oggm.conf as cfg
+from oggm.core.preprocessing import gis, geometry, climate, inversion
+from oggm.core.preprocessing import centerlines
+import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
-from oggm.models import flowline
+from oggm.core.models import flowline
 from oggm.tests import HAS_NEW_GDAL, requires_fabiens_laptop, is_slow
 
 # Globals
@@ -62,6 +64,12 @@ def requires_internet(test):
     msg = 'requires internet'
     return test if HAS_INTERNET else unittest.skip(msg)(test)
 
+
+def requires_mpl15(test):
+    # Decorator
+    msg = 'requires mpl V 1.5+'
+    return test if mpl.__version__ >= '1.5' else unittest.skip(msg)(test)
+
 # ----------------------------------------------------------
 # Lets go
 
@@ -76,7 +84,7 @@ def init_hef(reset=False, border=40):
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897')):
         reset = True
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897',
-                                       'flowline_params.pkl')):
+                                       'inversion_params.pkl')):
         reset = True
 
     # Init
@@ -90,12 +98,12 @@ def init_hef(reset=False, border=40):
     hef_file = get_demo_file('Hintereisferner.shp')
     rgidf = gpd.GeoDataFrame.from_file(hef_file)
     for index, entity in rgidf.iterrows():
-        gdir = oggm.utils.GlacierDir(entity, base_dir=testdir, reset=reset)
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
 
     if not reset:
         return gdir
 
-    gis.define_glacier_region(gdir, entity)
+    gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
     centerlines.compute_downstream_lines(gdir)
@@ -108,7 +116,7 @@ def init_hef(reset=False, border=40):
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
     mbdf = pd.read_csv(hef_file).set_index('YEAR')
     t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-    climate.local_mustar_apparent_mb(gdir, t_star[-1], bias[-1])
+    climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1])
 
     inversion.prepare_for_inversion(gdir)
     ref_v = 0.573 * 1e9
@@ -132,7 +140,7 @@ def init_hef(reset=False, border=40):
                                                      fd=fd,
                                                      write=True)
     d = dict(fs=fs, fd=fd)
-    gdir.write_pickle(d, 'flowline_params')
+    gdir.write_pickle(d, 'inversion_params')
 
     return gdir
 
@@ -194,12 +202,41 @@ def test_initial_glacier():  # pragma: no cover
 
     gdir = init_hef(border=80)
     flowline.init_present_time_glacier(gdir)
-    flowline.find_inital_glacier(gdir, init_bias=150)
+    flowline.find_inital_glacier(gdir, y0=1847, init_bias=150)
     past_model = gdir.read_pickle('past_model')
     graphics.plot_modeloutput(gdir, past_model)
 
+
+@image_comparison(baseline_images=['test_nodivide' + suffix],
+                  extensions=['png'])
+@requires_mpltest
+@requires_mpl15
+def test_nodivide():
+
+    # test directory
+    testdir = TESTDIR_BASE + '_nodiv'
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+
+    # Init
+    cfg.initialize()
+    cfg.set_divides_db()
+    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = 40
+
+    # loop because for some reason indexing wont work
+    hef_file = get_demo_file('Hintereisferner.shp')
+    rgidf = gpd.GeoDataFrame.from_file(hef_file)
+    for index, entity in rgidf.iterrows():
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
+
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+
+    graphics.plot_centerlines(gdir)
+
+
 if __name__ == '__main__':  # pragma: no cover
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning,
-                                message=r'.*guessing baseline image.*')
-        nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)
+    nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)

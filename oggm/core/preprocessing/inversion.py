@@ -36,43 +36,24 @@ import pandas as pd
 import scipy.optimize as optimization
 from scipy.ndimage.filters import gaussian_filter1d
 # Locals
-import oggm.conf as cfg
-from oggm import utils
+from oggm import utils, cfg
+from oggm import entity_task, divide_task
 
 # Module logger
 log = logging.getLogger(__name__)
 
-# Global Physical Parameters
-sec_in_year = 365*24*3600
-rho = 900.
-g = 9.81
-twothirds = 2. / 3.
-onefifth = 1. / 5.
-
-
+@entity_task(writes=['inversion_input'])
+@divide_task(add_0=False)
 def prepare_for_inversion(gdir, div_id=None):
-    """Prepares the data for the inversion::
-        - widths
-        - flux
-        - slope
+    """Prepares the data needed for the inversion.
+
+    Mostly the mass flux and slope angle, the rest (width, height) was already
+    computed. It is then stored in a list of dicts in order to be faster.
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    New file::
-        - inversion_input.p
-        - avg_slope.p
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: prepare for inversion, divide %d', gdir.rgi_id, i)
-            prepare_for_inversion(gdir, div_id=i)
-        return
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
@@ -94,7 +75,7 @@ def prepare_for_inversion(gdir, div_id=None):
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
-        flux = fl.flux * (gdir.grid.dx**2) / sec_in_year / rho
+        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
 
         # Clip flux to 0
         if np.any(flux < -0.1):
@@ -106,7 +87,6 @@ def prepare_for_inversion(gdir, div_id=None):
         towrite.append(cl_dic)
 
     # Write out
-    gdir.write_pickle(np.mean(slopes), 'avg_slope', div_id=div_id)
     gdir.write_pickle(towrite, 'inversion_input', div_id=div_id)
 
 
@@ -120,27 +100,33 @@ def _inversion_poly(a3, a0):
 def _inversion_simple(a3, a0):
     """Solve for degree 5 polynom with coefs a5=1, a3=0., a0."""
 
-    return (-a0)**onefifth
+    return (-a0)**cfg.ONE_FIFTH
 
 
 def inversion_parabolic_point_slope(gdir,
                                     fs=5.7e-20,
                                     fd=1.9e-24,
                                     write=True):
-    """ Compute thickness and bed topography
+    """ Compute the glacier thickness along the flowlines
+
+    More or less following Farinotti et al., (2009).
+
+    The thickness estimation is computed under the assumption of a parabolic
+    bed section.
+
+    It returns (vol, thick) in (m3, m).
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    fs: sliding param
-    fd: deformation param
-    write: default behavior is to compute the thickness and write the
-           results in the pickle. Set to False in order to spare time
-           during calibration.
-
-    Returns
-    -------
-    glacier volume (m^3), glacier area (m^2)
+    gdir : oggm.GlacierDirectory
+    fs : float
+        sliding parameter
+    fd : float
+        deformation parameter
+    write: bool
+        default behavior is to compute the thickness and write the
+        results in the pickle. Set to False in order to spare time
+        during calibration.
     """
 
     # Check input
@@ -169,7 +155,7 @@ def inversion_parabolic_point_slope(gdir,
 
             # Parabolic bed rock
             w = cl['width']
-            a0s = -(3*cl['flux'])/(2*w*((rho*g*slope)**3)*fd)
+            a0s = -(3*cl['flux'])/(2*w*((cfg.RHO*cfg.G*slope)**3)*fd)
             assert np.all(np.isfinite(a0s))
 
             # GO
@@ -185,11 +171,11 @@ def inversion_parabolic_point_slope(gdir,
             pno = np.where(ratio > max_ratio)
 
             # TODO: investigate this
-            if gdir.rgi_id != 'RGI40-11.03002':
-                if len(pno[0]) > 0:
-                    ratio[pno] = np.NaN
-                    ratio = utils.interp_nans(ratio)
-                    out_thick = w * ratio
+            # if gdir.rgi_id != 'RGI40-11.03002':
+            if len(pno[0]) > 0:
+                ratio[pno] = np.NaN
+                ratio = utils.interp_nans(ratio)
+                out_thick = w * ratio
 
             # Check for the shape parameter (should ne be too large)
             out_shape = (4*out_thick)/(w**2)
@@ -200,12 +186,12 @@ def inversion_parabolic_point_slope(gdir,
                 out_thick = 0.25 * out_shape * w**2
 
             # smooth section
-            section = twothirds * w * out_thick
+            section = cfg.TWO_THIRDS * w * out_thick
             section = gaussian_filter1d(section, sec_smooth)
-            out_thick = section / (w * twothirds)
+            out_thick = section / (w * cfg.TWO_THIRDS)
 
             # volume
-            volume = twothirds * out_thick * w * cl['dx']
+            volume = cfg.TWO_THIRDS * out_thick * w * cl['dx']
 
             if write:
                 cl['thick'] = out_thick
@@ -221,7 +207,16 @@ def inversion_parabolic_point_slope(gdir,
 
 
 def optimize_inversion_params(gdirs):
-    """Optimizes fs and fd"""
+    """Optimizes fs and fd based on GlaThiDa thicknesses.
+
+    We use the glacier averaged thicknesses provided by GlaThiDa and correct
+    them for differences in area with RGI, using a glacier specific volume-area
+    scaling formula.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
 
     log.info('Compute the reference fs and fd parameters.')
 
@@ -247,7 +242,8 @@ def optimize_inversion_params(gdirs):
         fd = 1.9e-24 * x[0]
         fs = 5.7e-20 * x[1]
         for i, gdir in enumerate(ref_gdirs):
-            v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd)
+            v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
+                                                   write=False)
             tmp_vols[i] = v * 1e-9
         return utils.rmsd(tmp_vols, ref_volume_km3)
 
@@ -259,22 +255,75 @@ def optimize_inversion_params(gdirs):
     fd = 1.9e-24 * out['x'][0]
     fs = 5.7e-20 * out['x'][1]
 
-    tmp_vols = np.zeros(len(ref_gdirs))
+    oggm_volume_m3 = np.zeros(len(ref_gdirs))
+    rgi_area_m2 = np.zeros(len(ref_gdirs))
     for i, gdir in enumerate(ref_gdirs):
-        v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd)
-        tmp_vols[i] = v * 1e-9
+        v, a = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
+                                               write=False)
+        oggm_volume_m3[i] = v
+        rgi_area_m2[i] = a
+    assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
 
+    # This is for each glacier
     d = dict()
     d['fs'] = fs
     d['fd'] = fd
-    d['vol_rmsd'] = utils.rmsd(tmp_vols, ref_volume_km3)
-    d['thick_rmsd'] = utils.rmsd(tmp_vols / ref_area_km2 / 1000.,
+    for gdir in gdirs:
+        gdir.write_pickle(d, 'inversion_params')
+
+    # This is for the working dir
+    # Simple stats
+    d = dict()
+    d['fs'] = fs
+    d['fd'] = fd
+    d['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
+    d['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
                                  ref_thickness_m)
     log.info('Optimized fs={fs} and fd={fd} for a volume RMSD of '
-             '{vol_rmsd}'.format(**d))
+             '{vol_rmsd} '.format(**d))
 
     df = pd.DataFrame(d, index=[0])
-    file = os.path.join(cfg.PATHS['working_dir'], 'inversion_params.csv')
-    df.to_csv(file)
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_params.csv')
+    df.to_csv(fpath)
+
+    # All results
+    d = dict()
+    d['ref_area_km2'] = ref_area_km2
+    d['ref_volume_km3'] = ref_volume_km3
+    d['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
+    d['vas_volume_km3'] = 0.034*(d['ref_area_km2']**1.375)
+
+    rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
+    df = pd.DataFrame(d, index=rgi_id)
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_results.csv')
+    df.to_csv(fpath)
 
     return fs, fd
+
+
+@entity_task(writes=['inversion_output'])
+def volume_inversion(gdir, use_cfg_params=False):
+    """Computes the inversion for all the glaciers.
+
+    If fs and fd are not given, it will use the optimized params.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    use_cfg_params : bool, default=False
+        if True, use the user provided fs and fd. Else, use the results of
+        the optimisation.
+    """
+
+    if use_cfg_params:
+        raise NotImplementedError('use_cfg_params=True')
+    else:
+        # use the optimized ones
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
+
+    # go
+    inversion_parabolic_point_slope(gdir, fs=fs, fd=fd, write=True)

@@ -7,7 +7,7 @@ License: GPLv3+
 from __future__ import absolute_import, division
 
 import glob
-import pickle
+import six.moves.cPickle as pickle
 
 import pandas as pd
 from salem import lazy_property
@@ -15,9 +15,11 @@ from six.moves.urllib.request import urlretrieve
 
 # Builtins
 import os
+import gzip
 import shutil
 import zipfile
 import sys
+import logging
 from functools import partial, wraps
 
 # External libs
@@ -27,28 +29,17 @@ import scipy.stats as stats
 from joblib import Memory
 
 # Locals
-from oggm import CACHE_DIR
-from oggm.conf import PATHS, BASENAMES
+from oggm.cfg import PATHS, BASENAMES, CACHE_DIR, PARAMS
 
-gh_zip = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
+# Module logger
+log = logging.getLogger(__name__)
+
+GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
 
 # Joblib
-memory = Memory(cachedir=CACHE_DIR, verbose=0)
+MEMORY = Memory(cachedir=CACHE_DIR, verbose=0)
 
-gaussian_kernel = dict()
-gaussian_kernel[9] = np.array([1.33830625e-04, 4.43186162e-03,
-                               5.39911274e-02, 2.41971446e-01,
-                               3.98943469e-01, 2.41971446e-01,
-                               5.39911274e-02, 4.43186162e-03,
-                               1.33830625e-04])
-gaussian_kernel[7] = np.array([1.78435052e-04, 1.51942011e-02,
-                               2.18673667e-01, 5.31907394e-01,
-                               2.18673667e-01, 1.51942011e-02,
-                               1.78435052e-04])
-gaussian_kernel[5] = np.array([2.63865083e-04, 1.06450772e-01,
-                               7.86570726e-01, 1.06450772e-01,
-                               2.63865083e-04])
-
+# Function
 tuple2int = partial(np.array, dtype=np.int64)
 
 
@@ -71,7 +62,7 @@ def _download_demo_files():
     ofile = os.path.join(CACHE_DIR, 'oggm-sample-data.zip')
     odir = os.path.join(CACHE_DIR)
     if not os.path.exists(ofile):  # pragma: no cover
-        urlretrieve(gh_zip, ofile)
+        urlretrieve(GH_ZIP, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
@@ -206,7 +197,8 @@ def nicenumber(number, binsize, lower=False):
     else:
         return (e+1) * binsize
 
-@memory.cache
+
+@MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
                         prcp_scaling_factor):
     """Prevent to re-compute a timeserie if it was done before.
@@ -241,40 +233,95 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     return iprcp, itemp, igrad, ihgt
 
 
-class OggmTask(object):
-    """Decorator for all OGGM tasks.
+class entity_task(object):
+    """Decorator for common job-controlling logic.
 
-    Handles I/O requirements, catches errors and handles them, logs statuses.
+    All tasks share common operations. This decorator is here to handle them:
+    exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, requires=[], writes=[]):
-        self.requires = requires
+    def __init__(self, writes=[]):
+        """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
+
+        Parameters
+        ----------
+        writes: list
+            list of files that the task will write down to disk (must be
+            available in ``cfg.BASENAMES``)
+        """
         self.writes = writes
 
+        cnt =  ['    Returns']
+        cnt += ['    -------']
+        cnt += ['    Files writen to the glacier directory:']
+        for k in sorted(writes):
+            cnt += [BASENAMES.doc_str(k)]
+        self.iodoc = '\n'.join(cnt)
+
     def __call__(self, task_func):
-        print("inside my_decorator.__call__()")
+        """Decorate."""
+
+        # Add to the original docstring
+        task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def wrapped_task(gdir, **kwargs):
-            print("Inside wrapped_f()")
-            print("Decorator arguments:", self.arg1, self.arg2, self.arg3)
-            task_func(gdir, **kwargs)
-            print("After f(*args)")
-
-        return wrapped_task
+        def _entity_task(gdir, **kwargs):
+            return task_func(gdir, **kwargs)
+        return _entity_task
 
 
-class GlacierDir(object):
-    """Facilitates read and write access to the glacier's files.
+class divide_task(object):
+    """Decorator for common logic on divides.
 
-    It handles a glacier entity directory, created in a base directory (default
-    is the "per_glacier" folder in the working dir). The glacier entity has,
-    a map and a dem located in the base entity directory (also called divide_00
-    internally). It has one or more divide subdirectories divide_01, ... divide_XX.
-    Each divide has its own outlines and masks.  In the case the glacier has
-    one single divide, the outlines and masks are thus linked to the divide_00 files.
+    Simply calls the decorated task once for each divide.
+    """
 
-    For memory optimisations it might do a couple of things twice.
+    def __init__(self, add_0=False):
+        """Decorator
+
+        Parameters
+        ----------
+        add_0: bool, default=False
+            If the task also needs to be run on divide 0
+        """
+        self.add_0 = add_0
+        self._cdoc = """"
+            div_id : int
+                the ID of the divide to process. Should be left to  the default
+                ``None`` unless you know what you do.
+        """
+
+    def __call__(self, task_func):
+        """Decorate."""
+
+        @wraps(task_func)
+        def _divide_task(gdir, div_id=None, **kwargs):
+            if div_id is None:
+                ids = gdir.divide_ids
+                if self.add_0:
+                    ids = [0] + list(ids)
+                for i in ids:
+                    log.info('%s: %s, divide %d', gdir.rgi_id,
+                             task_func.__name__, i)
+                    task_func(gdir, div_id=i, **kwargs)
+            else:
+                # For testing only
+                task_func(gdir, div_id=div_id, **kwargs)
+
+        return _divide_task
+
+
+class GlacierDirectory(object):
+    """Organizes read and write access to the glacier's files.
+
+    It handles a glacier directory created in a base directory (default
+    is the "per_glacier" folder in the working directory). The role of a
+    GlacierDirectory is to give access to file paths and to I/O operations
+    in a transparent way. The user should not care about *where* the files are
+    located, but should know their name (see :ref:`basenames`).
+
+    A glacier entity has one or more divides. See :ref:`glacierdir`
+    for more information.
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False):
@@ -325,49 +372,51 @@ class GlacierDir(object):
         if not os.path.exists(self.dir):
             os.makedirs(self.dir)
 
-        # Divides dirs have to be created by gis.define_glacier_region
+        # The divides dirs are created by gis.define_glacier_region
 
     @lazy_property
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid."""
-
         return self.read_pickle('glacier_grid')
 
     @lazy_property
     def rgi_area_m2(self):
         """The glacier's RGI area (m2)."""
-
         return self.rgi_area_km2 * 10**6
 
     @property
     def divide_dirs(self):
-        """Directory of the glacier divides.
-
-        Must be called after gis.define_glacier_region."""
-
+        """list of the glacier divides directories."""
         dirs = [self.dir] + list(glob.glob(os.path.join(self.dir, 'divide_*')))
         return dirs
 
     @property
     def n_divides(self):
-        """Number of glacier divides.
-
-        Must be called after gis.define_glacier_region."""
-
+        """Number of glacier divides."""
         return len(self.divide_dirs)-1
 
     @property
     def divide_ids(self):
-        """Iterator over the glacier divides ids
-
-        Must be called after gis.define_glacier_region."""
-
+        """Iterator over the glacier divides ids."""
         return range(1, self.n_divides+1)
 
     def get_filepath(self, filename, div_id=0):
+        """Absolute path to a specific file.
+
+        Parameters
+        ----------
+        filename: str
+            file name (must be listed in cfg.BASENAME)
+        div_id: int
+            the divide for which you want to get the file path
+
+        Returns
+        -------
+        The absolute path to the desired file
+        """
 
         if filename not in BASENAMES:
-            raise ValueError(filename + ' not in the dict.')
+            raise ValueError(filename + ' not in cfg.BASENAMES.')
 
         dir = self.divide_dirs[div_id]
 
@@ -378,26 +427,59 @@ class GlacierDir(object):
         return os.path.exists(self.get_filepath(filename, div_id=div_id))
 
     def read_pickle(self, filename, div_id=0):
-        """Knows how to open pickles."""
+        """ Reads a pickle located in the directory.
 
-        with open(self.get_filepath(filename, div_id), 'rb') as f:
+        Parameters
+        ----------
+        filename: str
+            file name (must be listed in cfg.BASENAME)
+        div_id: int
+            the divide for which you want to get the file path
+
+        Returns
+        -------
+        An object read from the pickle
+        """
+
+        _open = gzip.open if PARAMS['use_compression'] else open
+        with _open(self.get_filepath(filename, div_id), 'rb') as f:
             out = pickle.load(f)
 
         return out
 
     def write_pickle(self, var, filename, div_id=0):
-        """Knows how to write pickles."""
+        """ Writes a variable to a pickle on disk.
 
-        with open(self.get_filepath(filename, div_id), 'wb') as f:
-            pickle.dump(var, f)
+        Parameters
+        ----------
+        var: object
+            the variable to write to disk
+        filename: str
+            file name (must be listed in cfg.BASENAME)
+        div_id: int
+            the divide for which you want to get the file path
+        """
 
-    def create_netcdf_file(self, fname, div_id=0):
-        """Creates a netCDF4 file with geoinformation in it, the rest has to be
-        filled by the calling routine.
+        _open = gzip.open if PARAMS['use_compression'] else open
+        with _open(self.get_filepath(filename, div_id), 'wb') as f:
+            pickle.dump(var, f, protocol=-1)
+
+    def create_gridded_ncdf_file(self, fname, div_id=0):
+        """Makes a gridded netcdf file template.
+
+        The other variables have to be created and filled by the calling
+        routine.
+
+        Parameters
+        ----------
+        filename: str
+            file name (must be listed in cfg.BASENAME)
+        div_id: int
+            the divide for which you want to get the file path
 
         Returns
         -------
-        A netCDF4.Dataset object
+        a ``netCDF4.Dataset`` object.
         """
 
         nc = netCDF4.Dataset(self.get_filepath(fname, div_id),
@@ -440,10 +522,11 @@ class GlacierDir(object):
 
         return nc
 
-    def create_monthly_climate_file(self, time, prcp, temp, grad, hgt):
+    def write_monthly_climate_file(self, time, prcp, temp, grad, hgt):
         """Creates a netCDF4 file with climate data.
 
-        See climate.distribute_climate_data"""
+        See :py:func:`oggm.tasks.distribute_climate_data`.
+        """
 
         nc = netCDF4.Dataset(self.get_filepath('climate_monthly'),
                              'w', format='NETCDF4')

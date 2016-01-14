@@ -1,6 +1,5 @@
 """Wrappers for the single tasks, multi processor handling."""
 from __future__ import division
-from six.moves import zip
 
 # Built ins
 import logging
@@ -11,14 +10,9 @@ import geopandas as gpd
 import multiprocessing as mp
 
 # Locals
-import oggm.conf as cfg
-import oggm.utils
-from oggm.prepro import gis
-from oggm.prepro import centerlines
-from oggm.prepro import geometry
-from oggm.prepro import inversion
-from oggm.prepro import climate
-from oggm import utils
+import oggm
+from oggm import cfg, tasks, utils
+
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -26,19 +20,29 @@ log = logging.getLogger(__name__)
 # Multiprocessing pool
 mppool = None
 
+
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
 
-    global  mppool
-    if cfg.USE_MP:
-        mppool = mp.Pool(cfg.NPROC)
+    global mppool
+    if cfg.PARAMS['use_multiprocessing']:
+        mppool = mp.Pool(cfg.PARAMS['mp_processes'])
 
 
-def execute_task(task, gdirs):
-    """Execute any taks on gdirs. If you asked for multiprocessing,
-    it will do it."""
+def execute_entity_task(task, gdirs):
+    """Execute a task on gdirs.
 
-    if cfg.USE_MP:
+    If you asked for multiprocessing, it will do it.
+
+    Parameters
+    ----------
+    task: function
+        the entity task to apply
+    gdirs: list
+        the list of oggm.GlacierDirectory to process
+    """
+
+    if cfg.PARAMS['use_multiprocessing']:
         if mppool is None:
             _init_pool()
         poolargs = gdirs
@@ -49,17 +53,19 @@ def execute_task(task, gdirs):
 
 
 def init_glacier_regions(rgidf, reset=False, force=False):
-    """Very first task to do (allways). Set reset=False
-    in order not to delete the content"""
+    """Very first task to do (always).
+
+    Set reset=True in order to delete the content of the directories.
+    """
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
 
     gdirs = []
     for _, entity in rgidf.iterrows():
-        gdir = oggm.utils.GlacierDir(entity, reset=reset)
+        gdir = oggm.GlacierDirectory(entity, reset=reset)
         if not os.path.exists(gdir.get_filepath('dem')):
-            gis.define_glacier_region(gdir, entity)
+            tasks.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
 
     return gdirs
@@ -70,7 +76,7 @@ def write_centerlines_to_shape(gdirs, filename):
 
     olist = []
     for gdir in gdirs:
-        olist.extend(gis.get_centerline_lonlat(gdir))
+        olist.extend(utils.get_centerline_lonlat(gdir))
 
     odf = gpd.GeoDataFrame(olist)
 
@@ -86,7 +92,7 @@ def write_centerlines_to_shape(gdirs, filename):
 
     crs = {'init': 'epsg:4326'}
 
-    #some writing function from geopandas rep
+    # some writing function from geopandas rep
     from six import iteritems
     from shapely.geometry import mapping
     import fiona
@@ -102,30 +108,55 @@ def write_centerlines_to_shape(gdirs, filename):
         for i, row in odf.iterrows():
             c.write(feature(i, row))
 
+
 def gis_prepro_tasks(gdirs):
-    """Prepare the flowlines"""
-    tasks = [
-             gis.glacier_masks,
-             centerlines.compute_centerlines,
-             centerlines.compute_downstream_lines,
-             geometry.catchment_area,
-             geometry.initialize_flowlines,
-             geometry.catchment_width_geom,
-             geometry.catchment_width_correction
-             ]
-    for task in tasks:
-        execute_task(task, gdirs)
+    """Prepare the flowlines."""
+
+    task_list = [
+        tasks.glacier_masks,
+        tasks.compute_centerlines,
+        tasks.compute_downstream_lines,
+        tasks.catchment_area,
+        tasks.initialize_flowlines,
+        tasks.catchment_width_geom,
+        tasks.catchment_width_correction
+    ]
+    for task in task_list:
+        execute_entity_task(task, gdirs)
+
 
 def climate_tasks(gdirs):
-    """Prepare the climate data"""
+    """Prepare the climate data."""
 
-    climate.distribute_climate_data(gdirs)
+    # Global task
+    tasks.distribute_climate_data(gdirs)
 
     # Get ref glaciers (all glaciers with MB)
     dfids = cfg.PATHS['wgms_rgi_links']
     dfids = pd.read_csv(dfids)['RGI_ID'].values
-
     ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
-    execute_task(climate.mu_candidates, ref_gdirs)
-    climate.compute_ref_t_stars(ref_gdirs)
-    climate.distribute_t_stars(gdirs)
+    execute_entity_task(tasks.mu_candidates, ref_gdirs)
+
+    # Global tasks
+    tasks.compute_ref_t_stars(ref_gdirs)
+    tasks.distribute_t_stars(gdirs)
+
+
+def inversion_tasks(gdirs):
+    """Invert the bed topography."""
+
+    # Init
+    execute_entity_task(tasks.prepare_for_inversion, gdirs)
+
+    # Global task
+    tasks.optimize_inversion_params(gdirs)
+
+    # Inversion for all glaciers
+    execute_entity_task(tasks.volume_inversion, gdirs)
+
+
+def model_tasks(gdirs):
+    """Hardcore jobs."""
+
+    execute_entity_task(tasks.init_present_time_glacier, gdirs)
+    # execute_entity_task(tasks.find_inital_glacier, gdirs)

@@ -1,7 +1,9 @@
 from __future__ import division
-from six.moves import zip
 
 import warnings
+
+from six.moves import zip
+
 warnings.filterwarnings("once", category=DeprecationWarning)
 
 import logging
@@ -11,24 +13,18 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 import unittest
 import os
 import copy
-import pickle
-from nose.plugins.attrib import attr
 
 import shapely.geometry as shpg
 import numpy as np
-import shutil
 import pandas as pd
-import geopandas as gpd
 import matplotlib.pyplot as plt
-import netCDF4
-import multiprocessing as mp
 
 # Local imports
 from oggm.tests.test_graphics import init_hef
-from oggm.models import flowline
-from oggm.models import massbalance
+from oggm.core.models import massbalance, flowline
 from oggm.tests import is_slow, ON_FABIENS_LAPTOP, requires_working_conda
-from oggm import utils
+from oggm import utils, cfg
+from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,13 +34,7 @@ testdir = os.path.join(current_dir, 'tmp')
 
 do_plot = False
 
-sec_in_year = 365*24*3600
-sec_in_month = 31*24*3600
-sec_in_day = 24*3600
-sec_in_hour = 3600
-
 DOM_BORDER = 80
-
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
 
@@ -106,7 +96,7 @@ def dummy_parabolic_bed():
     coords = np.arange(0, nx-0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, shape)]
+                                       bed_h, shape)]
 
 def dummy_mixed_bed():
 
@@ -122,7 +112,7 @@ def dummy_mixed_bed():
     coords = np.arange(0, nx-0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.MixedFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, shape, lambdas=3.5)]
+                                   bed_h, shape, lambdas=3.5)]
 
 
 def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
@@ -140,7 +130,7 @@ def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
 
     return [flowline.TrapezoidalFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths, lambdas)]
+                                         bed_h, widths, lambdas)]
 
 def dummy_width_bed():
 
@@ -196,7 +186,7 @@ class ConstantBalanceModel(massbalance.MassBalanceModel):
         for a given moment in time."""
 
         mb = (heights - self.ela_h) * self.grad + self._bias
-        return mb / sec_in_year / 900
+        return mb / SEC_IN_YEAR / 900
 
 
 class TestInitFlowline(unittest.TestCase):
@@ -314,10 +304,10 @@ class TestMassBalance(unittest.TestCase):
             h = np.append(h, fl.surface_h)
             w = np.append(w, fl.widths)
 
-        ombh = mb_mod_ref.get_mb(h, None) * sec_in_year
-        mbh = mb_mod.get_mb(h, None) * sec_in_year
+        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
+        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
         mb_mod.set_bias(100.)
-        mbhb = mb_mod.get_mb(h, None) * sec_in_year
+        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
 
         np.testing.assert_allclose(ombh, mbh, rtol=0.001)
         self.assertTrue(np.mean(mbhb) > np.mean(mbh))
@@ -338,10 +328,10 @@ class TestMassBalance(unittest.TestCase):
             h = np.append(h, fl.surface_h)
             w = np.append(w, fl.widths)
 
-        ombh = mb_mod_ref.get_mb(h, None) * sec_in_year
-        mbh = mb_mod.get_mb(h, None) * sec_in_year
+        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
+        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
         mb_mod.set_bias(-100.)
-        mbhb = mb_mod.get_mb(h, None) * sec_in_year
+        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
 
         np.testing.assert_allclose(ombh, mbh, rtol=0.005)
         self.assertTrue(np.mean(mbhb) < np.mean(mbh))
@@ -404,7 +394,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2600.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -448,7 +438,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2600.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             model.run_until_equilibrium()
             vols.append(model.volume_km3)
@@ -459,7 +449,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2600.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             model.run_until(600)
             ref_vols.append(model.volume_km3)
@@ -470,7 +460,7 @@ class TestIdealisedCases(unittest.TestCase):
     def test_adaptive_ts(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
-        steps = [sec_in_month, None]
+        steps = [SEC_IN_MONTH, None]
         lens = []
         surface_h = []
         volume = []
@@ -502,7 +492,7 @@ class TestIdealisedCases(unittest.TestCase):
     def test_bumpy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
-        steps = [15*sec_in_day, None]
+        steps = [15 * SEC_IN_DAY, None]
         lens = []
         surface_h = []
         volume = []
@@ -548,7 +538,7 @@ class TestIdealisedCases(unittest.TestCase):
     def test_noisy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
-        steps = [15*sec_in_day, None]
+        steps = [15 * SEC_IN_DAY, None]
         lens = []
         surface_h = []
         volume = []
@@ -591,7 +581,7 @@ class TestIdealisedCases(unittest.TestCase):
     def test_varying_width(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
-        steps = [15*sec_in_day, None]
+        steps = [15 * SEC_IN_DAY, None]
         lens = []
         surface_h = []
         volume = []
@@ -625,7 +615,7 @@ class TestIdealisedCases(unittest.TestCase):
     def test_tributary(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
-        steps = [15*sec_in_day, None]
+        steps = [15 * SEC_IN_DAY, None]
         flss = [dummy_width_bed(), dummy_width_bed_tributary()]
         lens = []
         surface_h = []
@@ -704,7 +694,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2800.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -751,7 +741,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2800.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -800,7 +790,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = ConstantBalanceModel(2800.)
 
             model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14*sec_in_day)
+                          fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -924,7 +914,7 @@ class TestHEF(unittest.TestCase):
 
         self.gdir = init_hef(border=DOM_BORDER)
 
-        d = self.gdir.read_pickle('flowline_params')
+        d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.fd = d['fd']
 
@@ -935,7 +925,10 @@ class TestHEF(unittest.TestCase):
     def test_equilibrium(self):
 
         #TODO: equilibrium test only working with parabolic bed
-        flowline.init_present_time_glacier(self.gdir, min_shape=0)
+        _tmp = cfg.PARAMS['mixed_min_shape']
+        cfg.PARAMS['mixed_min_shape'] = 0.
+        flowline.init_present_time_glacier(self.gdir)
+        cfg.PARAMS['mixed_min_shape'] = _tmp
 
         mb_mod = massbalance.TstarMassBalanceModel(self.gdir)
 
@@ -964,8 +957,10 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_commitment(self):
 
-        flowline.init_present_time_glacier(self.gdir, min_shape=0.,
-                                           lambdas=0.2)
+        _tmp = cfg.PARAMS['mixed_min_shape']
+        cfg.PARAMS['mixed_min_shape'] = 0.
+        flowline.init_present_time_glacier(self.gdir)
+        cfg.PARAMS['mixed_min_shape'] = _tmp
 
         mb_mod = massbalance.BackwardsMassBalanceModel(self.gdir)
 
@@ -986,8 +981,11 @@ class TestHEF(unittest.TestCase):
         after_area_1 = model.area_km2
         after_len_1 = model.fls[-1].length_m
 
-        flowline.init_present_time_glacier(self.gdir, min_shape=0.001,
-                                           lambdas=0.2)
+        _tmp = cfg.PARAMS['mixed_min_shape']
+        cfg.PARAMS['mixed_min_shape'] = 0.001
+        flowline.init_present_time_glacier(self.gdir)
+        cfg.PARAMS['mixed_min_shape'] = _tmp
+
         glacier = self.gdir.read_pickle('model_flowlines')
 
         mb_mod = massbalance.BackwardsMassBalanceModel(self.gdir)
@@ -1041,7 +1039,8 @@ class TestHEF(unittest.TestCase):
         if ON_FABIENS_LAPTOP:
             init_bias = 150
             rtol = 0.005
-        flowline.find_inital_glacier(self.gdir, init_bias=init_bias, rtol=rtol)
+        flowline.find_inital_glacier(self.gdir, y0=1847, init_bias=init_bias,
+                                     rtol=rtol)
 
         past_model = self.gdir.read_pickle('past_model')
 

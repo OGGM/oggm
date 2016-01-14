@@ -15,8 +15,8 @@ The tasks in this module initialise and update the list of Flowline objects::
 
 """
 from __future__ import absolute_import, division
-from six.moves import zip
 
+from six.moves import zip
 # Built ins
 import logging
 from itertools import groupby
@@ -32,20 +32,22 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.measurements import label
 from salem import lazy_property
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from oggm import utils
-import oggm.prepro.centerlines
+import oggm.core.preprocessing.centerlines
 from oggm.utils import tuple2int
+from oggm import entity_task, divide_task
+from oggm.cfg import GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
 
 # Variable needed later
-label_struct = np.array([[0, 1, 0],
+LABEL_STRUCT = np.array([[0, 1, 0],
                          [1, 1, 1],
                          [0, 1, 0]])
 
-class InversionFlowline(oggm.prepro.centerlines.Centerline):
+class InversionFlowline(oggm.core.preprocessing.centerlines.Centerline):
     """An advanced centerline, with widths and apparent MB."""
 
     def __init__(self, line, dx, heights):
@@ -108,13 +110,13 @@ class InversionFlowline(oggm.prepro.centerlines.Centerline):
             n = len(self.flows_to.line.coords)
             ide = self.flows_to_indice
             if n >= 9:
-                gk = utils.gaussian_kernel[9]
+                gk = GAUSSIAN_KERNEL[9]
                 self.flows_to.flux[ide-4:ide+5] += gk * self.flux[-1]
             elif n >= 7:
-                gk = utils.gaussian_kernel[7]
+                gk = GAUSSIAN_KERNEL[7]
                 self.flows_to.flux[ide-3:ide+4] += gk * self.flux[-1]
             elif n >= 5:
-                gk = utils.gaussian_kernel[5]
+                gk = GAUSSIAN_KERNEL[5]
                 self.flows_to.flux[ide-2:ide+3] += gk * self.flux[-1]
 
     def set_flows_to(self, other):
@@ -283,7 +285,7 @@ def _mask_to_polygon(mask, x=None, y=None):
         y = np.arange(0, ny, 1)
         x, y = np.meshgrid(x, y)
 
-    regions, nregions = label(mask, structure=label_struct)
+    regions, nregions = label(mask, structure=LABEL_STRUCT)
     if nregions > 1:
         log.debug('%s: we had to cut a blob from the catchment')
         # Check the size of those
@@ -424,6 +426,8 @@ def _filter_for_altitude_range(widths, wlines, topo):
     return out_width
 
 
+@entity_task(writes=['catchment_indices'])
+@divide_task(add_0=False)
 def catchment_area(gdir, div_id=None):
     """Compute the catchment areas of each tributary line.
 
@@ -434,19 +438,8 @@ def catchment_area(gdir, div_id=None):
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    catchment_indices.p: a list of
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: catchment areas, divide %d', gdir.rgi_id, i)
-            catchment_area(gdir, div_id=i)
-        return
 
     # Variables
     cls = gdir.read_pickle('centerlines', div_id=div_id)
@@ -532,25 +525,20 @@ def catchment_area(gdir, div_id=None):
     gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
 
 
+@entity_task(writes=['inversion_flowlines'])
+@divide_task(add_0=False)
 def initialize_flowlines(gdir, div_id=None):
-    """Interpolate the centerlines on a regular spacing, cut out the tail of
-       the tributaries.
+    """ Transforms the original (geometrical) Centerlines in a more "physical"
+    object: InversionFlowlines.
+
+    This interpolates the centerlines on a regular spacing (i.e. not the
+    grid's (i, j) indices. Cuts out the tail of the tributaries to make more
+    realistic junctions.
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    Creates a flowlines.p with the new objects.
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: initialize flowlines, divide %d', gdir.rgi_id, i)
-            initialize_flowlines(gdir, div_id=i)
-        return
 
     # variables
     cls = gdir.read_pickle('centerlines', div_id=div_id)
@@ -604,25 +592,17 @@ def initialize_flowlines(gdir, div_id=None):
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
+@entity_task(writes=['inversion_flowlines'])
+@divide_task(add_0=False)
 def catchment_width_geom(gdir, div_id=None):
-    """Compute geometrical catchment widths for each point of the flowlines
+    """Compute geometrical catchment widths for each point of the flowlines.
+
+    Updates the 'inversion_flowlines' save file.
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    Updates::
-        - flowlines.p with the new properties
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: catchment widths, divide %d', gdir.rgi_id, i)
-            catchment_width_geom(gdir, div_id=i)
-        return
 
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines', div_id=div_id)
@@ -696,6 +676,7 @@ def catchment_width_geom(gdir, div_id=None):
     gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)
 
 
+@entity_task(writes=['inversion_flowlines'])
 def catchment_width_correction(gdir, div_id=None):
     """Corrects for NaNs and inconsistencies in the geometrical widths.
 
@@ -703,17 +684,16 @@ def catchment_width_correction(gdir, div_id=None):
     surface-area distribution AND with the geometrical area of the glacier
     polygon, avoiding errors due to gridded representation.
 
+    Updates the 'inversion_flowlines' save file.
+
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    Updates::
-        - flowlines.p with the new properties
+    gdir : oggm.GlacierDirectory
     """
 
+    # The code below makes of this task a "special" divide task.
+    # We keep it as is and remove the divide task decorator
+    # TODO: could be separated in two 'cleaner' tasks without output
     if div_id is None:
         # This is the original call
         # This time instead of just looping over the divides we add a test

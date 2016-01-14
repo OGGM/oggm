@@ -1,28 +1,26 @@
 from __future__ import division
+
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
+
 import os
-import logging
 import shutil
 import unittest
 
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-import matplotlib.pyplot as plt
-
-from nose.plugins.attrib import attr
 
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from oggm import workflow
-from oggm.prepro import inversion
-from oggm.utils import get_demo_file
-from oggm.utils import rmsd
+from oggm.utils import get_demo_file, rmsd
 from oggm.tests import is_slow
+from oggm.core.models import flowline, massbalance
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
 
 
 def clean_dir(testdir):
@@ -34,19 +32,18 @@ def up_to_inversion():
     """Run the tasks you want."""
 
     # test directory
-    testdir = os.path.join(CURRENT_DIR, 'tmp_workflow')
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
-    clean_dir(testdir)
+    if not os.path.exists(TEST_DIR):
+        os.makedirs(TEST_DIR)
+    clean_dir(TEST_DIR)
 
     # Init
     cfg.initialize()
 
-    # Prevent multiprocessing
-    cfg.USE_MP = False
+    # Use multiprocessing
+    cfg.PARAMS['use_multiprocessing'] = False
 
     # Working dir
-    cfg.PATHS['working_dir'] = testdir
+    cfg.PATHS['working_dir'] = TEST_DIR
 
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
     cfg.PATHS['srtm_file'] = get_demo_file('srtm_oeztal.tif')
@@ -63,6 +60,9 @@ def up_to_inversion():
     rgi_file = get_demo_file('rgi_oeztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
 
+    # Params
+    cfg.PARAMS['border'] = 50
+
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
 
@@ -72,50 +72,42 @@ def up_to_inversion():
     # Climate related tasks
     workflow.climate_tasks(gdirs)
 
-    # Merge climate and catchments
-    workflow.execute_task(inversion.prepare_for_inversion, gdirs)
-    fs, fd = inversion.optimize_inversion_params(gdirs)
+    # Inversion related tasks
+    workflow.inversion_tasks(gdirs)
 
-    # Tests
-    dfids = cfg.PATHS['glathida_rgi_links']
-    try:
-        gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
-    except AttributeError:
-        gtd_df = pd.read_csv(dfids).sort(columns=['RGI_ID'])
-    dfids = gtd_df['RGI_ID'].values
-    ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
+    # Models!
+    workflow.model_tasks(gdirs)
 
-    # Account for area differences between glathida and rgi
-    ref_area_km2 = gtd_df.RGI_AREA.values
-    ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
-    ref_volume_km3 = ref_cs * ref_area_km2**1.375
+    return gdirs
 
-    vol = []
-    area = []
-    rgi = []
-    for gdir in ref_gdirs:
-        v, a = inversion.inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
-                                                         write=True)
-        vol.append(v)
-        area.append(a)
-        rgi.append(gdir.rgi_id)
-
-    df = pd.DataFrame()
-    df['rgi'] = rgi
-    df['area'] = area
-    df['ref_vol'] = ref_volume_km3
-    df['oggm_vol'] = np.array(vol) * 1e-9
-    df['vas_vol'] = 0.034*(ref_area_km2**1.375)
-    df = df.set_index('rgi')
-
-    shutil.rmtree(testdir)
-
-    return df
 
 class TestBasic(unittest.TestCase):
 
     @is_slow
-    def test_first_shot(self):
+    def test_up_to_inversion(self):
 
-        df = up_to_inversion()
-        self.assertTrue(rmsd(df['ref_vol'], df['oggm_vol']) < rmsd(df['ref_vol'], df['vas_vol']))
+        gdirs = up_to_inversion()
+
+        # Inversion Results
+        fpath = os.path.join(cfg.PATHS['working_dir'],
+                             'inversion_optim_results.csv')
+        df = pd.read_csv(fpath, index_col=0)
+        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
+        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
+        self.assertTrue(r1 < r2)
+
+        # Init glacier
+        d = gdirs[0].read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
+        for gdir in gdirs:
+            mb_mod = massbalance.TstarMassBalanceModel(gdir)
+            fls = gdir.read_pickle('model_flowlines')
+            model = flowline.FluxBasedModel(fls, mb_mod, 0., fs, fd)
+            _vol = model.volume_km3
+            _area = model.area_km2
+            gldf = df.loc[gdir.rgi_id]
+            np.testing.assert_allclose(gldf['oggm_volume_km3'], _vol)
+            np.testing.assert_allclose(gldf['ref_area_km2'], _area)
+
+        # shutil.rmtree(TEST_DIR)

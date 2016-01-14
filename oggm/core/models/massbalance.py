@@ -1,6 +1,5 @@
 """Mass-balance stuffs"""
 from __future__ import division
-from six.moves import zip
 
 # Built ins
 # External libs
@@ -9,12 +8,9 @@ import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
 # Locals
-import oggm.conf as cfg
-from oggm.prepro import climate
-
-
-sec_in_year = 365*24*3600
-
+import oggm.cfg as cfg
+from oggm.cfg import SEC_IN_YEAR
+from oggm.core.preprocessing import climate
 
 class MassBalanceModel(object):
     """An interface for mass balance."""
@@ -68,7 +64,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / sec_in_year / 900
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / 900
 
 
 class BackwardsMassBalanceModel(MassBalanceModel):
@@ -166,7 +162,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         for a given moment in time."""
 
         interp = self._get_interp()
-        return interp(heights) / sec_in_year / 900.
+        return interp(heights) / SEC_IN_YEAR / 900.
 
 
 class TodayMassBalanceModel(MassBalanceModel):
@@ -201,7 +197,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / sec_in_year / 900.
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / 900.
 
 
 class HistalpMassBalanceModel(MassBalanceModel):
@@ -264,4 +260,4 @@ class HistalpMassBalanceModel(MassBalanceModel):
         prcpsol = prcpsol * fac
 
         mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
-        return mb_annual / sec_in_year / 900.
+        return mb_annual / SEC_IN_YEAR / 900.

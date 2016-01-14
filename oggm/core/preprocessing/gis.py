@@ -37,7 +37,8 @@ import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
 # Locals
-import oggm.conf as cfg
+from oggm import entity_task
+import oggm.cfg as cfg
 from oggm.utils import tuple2int
 
 # Module logger
@@ -163,29 +164,32 @@ def _polygon_to_pix(polygon):
     return tmp
 
 
-def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
+def _mask_per_divide(gdir, div_id, dem, smoothed_dem):
     """Compute mask and geometries for each glacier divide.
 
     Is called by glacier masks.
 
     Parameters
     ----------
-    glacierdir: conf.GlacierDir instance
-    div_id: id of the divide to process
-    dem: 2D array of the topography
-    smoothed_dem: 2D array of the smoothed topography
+    gdir : oggm.GlacierDirectory
+    div_id: int
+        id of the divide to process
+    dem: 2D array
+        topography
+    smoothed_dem: 2D array
+        smoothed topography
     """
 
-    outlines_file = glacierdir.get_filepath('outlines', div_id=div_id)
+    outlines_file = gdir.get_filepath('outlines', div_id=div_id)
     geometry = gpd.GeoDataFrame.from_file(outlines_file).geometry[0]
 
     # Interpolate shape to a regular path
-    glacier_poly_hr = _interp_polygon(geometry, glacierdir.grid.dx)
+    glacier_poly_hr = _interp_polygon(geometry, gdir.grid.dx)
 
     # Transform geometry into grid coordinates
     # It has to be in pix center coordinates because of how skimage works
     def proj(x, y):
-        grid = glacierdir.grid.center_grid
+        grid = gdir.grid.center_grid
         return grid.transform(x, y, crs=grid.proj)
     glacier_poly_hr = shapely.ops.transform(proj, glacier_poly_hr)
 
@@ -200,7 +204,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
 
     # Compute the glacier mask (currently: center pixels + touched)
-    nx, ny = glacierdir.grid.nx, glacierdir.grid.ny
+    nx, ny = gdir.grid.nx, gdir.grid.ny
     glacier_mask = np.zeros((ny, nx), dtype=np.uint8)
     glacier_ext = np.zeros((ny, nx), dtype=np.uint8)
     (x, y) = glacier_poly_pix.exterior.xy
@@ -218,7 +222,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     # See if we can filter them out easily
     regions, nregions = label(glacier_mask, structure=label_struct)
     if nregions > 1:
-        log.debug('%s: we had to cut an island in the mask', glacierdir.rgi_id)
+        log.debug('%s: we had to cut an island in the mask', gdir.rgi_id)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
@@ -230,7 +234,7 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
         glacier_mask[np.where(regions == (am+1))] = 1
 
     # write out the grids in the netcdf file
-    nc = glacierdir.create_netcdf_file('gridded_data', div_id=div_id)
+    nc = gdir.create_gridded_ncdf_file('gridded_data', div_id=div_id)
 
     v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
@@ -259,29 +263,23 @@ def _mask_per_divide(glacierdir, div_id, dem, smoothed_dem):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    glacierdir.write_pickle(geometries, 'geometries', div_id=div_id)
+    gdir.write_pickle(geometries, 'geometries', div_id=div_id)
 
 
-def define_glacier_region(gdir, entity):
-    """Very first task: define the glacier's regional map.
+@entity_task(writes=['glacier_grid', 'dem', 'outlines'])
+def define_glacier_region(gdir, entity=None):
+    """
+    Very first task: define the glacier's grid.
 
-    Creates the local glacier grid (Transverse Mercator), transforms the DEM
-    as well as the RGI Lon-Lat shape into it.
-
-    NOT multiprocessable.
+    Defines the local glacier projection (Transverse Mercator), chooses a
+    resolution for the grid, and transforms the DEM as well as the RGI shape
+    into it.
 
     Parameters
     ----------
-    gdir: oggm.utils.GlacierDir
-    entity : a geopandas entity of the glacier geometry to process
-
-    I/O
-    ---
-    Creates the working directory and the divides subdirectories. Generates
-    three files::
-        - glacier_grid.p: a salem.Grid object pickle
-        - dem.tif: the local topography
-        - outlines,shp: the RGI outlines in projection coordinates
+    gdir : oggm.GlacierDirectory
+    entity : geopandas entity
+        the glacier geometry to process
     """
 
     log.info('%s: creating glacier region', gdir.rgi_id)
@@ -415,34 +413,26 @@ def define_glacier_region(gdir, entity):
             copyfile(sourcename, linkname)
 
 
-def glacier_masks(glacierdir):
-    """Computes the gridded glacier geometries.
+@entity_task(writes=['gridded_data', 'geometries'])
+def glacier_masks(gdir):
+    """Converts the glacier vector geometries to grids.
 
     Parameters
     ----------
-    glacierdir: GlacierDir
-        GlacierDir object
-
-    I/O
-    ---
-    Generates two files::
-        - grids.nc: netCDF4 file containing gridded variables
-                    (glacier masks, topography...)
-        - geometries.p: dictionary container of the glacier Shapely geometries
-                        (in grid coordinates)
+    gdir : oggm.GlacierDirectory
     """
 
-    log.info('%s: creating glacier masks', glacierdir.rgi_id)
+    log.info('%s: creating glacier masks', gdir.rgi_id)
 
     # open srtm tif-file:
-    srtm_ds = gdal.Open(glacierdir.get_filepath('dem'))
+    srtm_ds = gdal.Open(gdir.get_filepath('dem'))
     dem = srtm_ds.ReadAsArray().astype(float)
     assert np.min(dem) > 0.  # for missing data, use GDAL again
 
     nx = srtm_ds.RasterXSize
     ny = srtm_ds.RasterYSize
-    assert nx == glacierdir.grid.nx
-    assert ny == glacierdir.grid.ny
+    assert nx == gdir.grid.nx
+    assert ny == gdir.grid.ny
 
     geot = srtm_ds.GetGeoTransform()
     x0 = geot[0]  # UL corner
@@ -450,9 +440,9 @@ def glacier_masks(glacierdir):
     dx = geot[1]
     dy = geot[5]  # Negative
     assert dx == -dy
-    assert dx == glacierdir.grid.dx
-    assert y0 == glacierdir.grid.corner_grid.y0
-    assert x0 == glacierdir.grid.corner_grid.x0
+    assert dx == gdir.grid.dx
+    assert y0 == gdir.grid.corner_grid.y0
+    assert x0 == gdir.grid.corner_grid.x0
     srtm_ds = None  # to be sure...
 
     # Smooth SRTM?
@@ -463,15 +453,15 @@ def glacier_masks(glacierdir):
         smoothed_dem = dem.copy()
 
     # Make entity masks
-    log.debug('%s: glacier mask, divide %d', glacierdir.rgi_id, 0)
-    _mask_per_divide(glacierdir, 0, dem, smoothed_dem)
+    log.debug('%s: glacier mask, divide %d', gdir.rgi_id, 0)
+    _mask_per_divide(gdir, 0, dem, smoothed_dem)
 
     # Glacier divides
-    nd = glacierdir.n_divides
+    nd = gdir.n_divides
     if nd == 1:
         # Optim: just make links
-        linkname = glacierdir.get_filepath('gridded_data', div_id=1)
-        sourcename = glacierdir.get_filepath('gridded_data')
+        linkname = gdir.get_filepath('gridded_data', div_id=1)
+        sourcename = gdir.get_filepath('gridded_data')
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -479,8 +469,8 @@ def glacier_masks(glacierdir):
         except AttributeError:
             # we are on windows
             copyfile(sourcename, linkname)
-        linkname = glacierdir.get_filepath('geometries', div_id=1)
-        sourcename = glacierdir.get_filepath('geometries')
+        linkname = gdir.get_filepath('geometries', div_id=1)
+        sourcename = gdir.get_filepath('geometries')
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -490,6 +480,6 @@ def glacier_masks(glacierdir):
             copyfile(sourcename, linkname)
     else:
         # Loop over divides
-        for i in glacierdir.divide_ids:
-            log.debug('%s: glacier mask, divide %d', glacierdir.rgi_id, i)
-            _mask_per_divide(glacierdir, i, dem, smoothed_dem)
+        for i in gdir.divide_ids:
+            log.debug('%s: glacier mask, divide %d', gdir.rgi_id, i)
+            _mask_per_divide(gdir, i, dem, smoothed_dem)
