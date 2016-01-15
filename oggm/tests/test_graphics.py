@@ -38,13 +38,18 @@ try:
 except ImportError:
     HAS_MPL_TEST = False
 
+
 def requires_mpltest(test):
     # Decorator
     msg = 'requires matplotlib.testing.decorators'
     return test if HAS_MPL_TEST else unittest.skip(msg)(test)
 
+
 import matplotlib as mpl
 suffix = '_' + mpl.__version__
+if mpl.__version__ >= '1.5':
+    suffix = '_1.5+'
+
 if HAS_NEW_GDAL:
     suffix += '_conda'
 
