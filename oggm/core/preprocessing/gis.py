@@ -423,7 +423,8 @@ def glacier_masks(gdir):
     # open srtm tif-file:
     srtm_ds = gdal.Open(gdir.get_filepath('dem'))
     dem = srtm_ds.ReadAsArray().astype(float)
-    assert np.min(dem) > 0.  # for missing data, use GDAL again
+    if np.min(dem) <= 0.:
+        raise RuntimeError('Negative altitudes in the DEM.')
 
     nx = srtm_ds.RasterXSize
     ny = srtm_ds.RasterYSize

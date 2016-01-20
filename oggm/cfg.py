@@ -61,6 +61,7 @@ class DocumentedDict(dict):
 
 # Globals
 IS_INITIALIZED = False
+CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
 PATHS = OrderedDict()
 BASENAMES = DocumentedDict()
@@ -174,6 +175,7 @@ def initialize(file=None):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
+    global CONTINUE_ON_ERROR
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -190,6 +192,8 @@ def initialize(file=None):
 
     if cp['working_dir'] == '~':
         cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
+
+    CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     PATHS['working_dir'] = cp['working_dir']
 
@@ -230,7 +234,7 @@ def initialize(file=None):
            'glathida_rgi_links', 'grid_dx_method',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
-           'topo_interp', 'use_compression', 'bed_shape']
+           'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error']
     for k in ltr:
         del cp[k]
 

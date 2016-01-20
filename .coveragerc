@@ -1,6 +1,5 @@
 [run]
 source = oggm
-omit = */sandbox.py/*
 omit = oggm/tests/*
 
 [report]

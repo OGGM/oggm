@@ -973,3 +973,46 @@ class TestInversion(unittest.TestCase):
                 maxs = _max
 
         np.testing.assert_allclose(242, maxs, atol=30)
+
+
+class TestCatching(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(current_dir, 'tmp_errors')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['working_dir'] = current_dir
+
+
+    # def tearDown(self):
+    #     self.rm_dir()
+    #
+    # def rm_dir(self):
+    #     shutil.rmtree(self.testdir)
+    #
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_log(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # Make it large to raise an error
+        cfg.PARAMS['border'] = 250
+        cfg.CONTINUE_ON_ERROR = True
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+            gis.glacier_masks(gdir)

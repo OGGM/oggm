@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, interp_nans
-from oggm.tests import is_slow, ON_TRAVIS, ON_FABIENS_LAPTOP
+from oggm.tests import is_slow, ON_TRAVIS, ON_FABIENS_LAPTOP, requires_fabiens_laptop
 from oggm.core.models import flowline, massbalance
 from oggm import graphics
 
@@ -102,6 +102,7 @@ class TestWorkflow(unittest.TestCase):
     #         flowline.find_inital_glacier(gd, do_plot=True, init_bias=100)
 
     @is_slow
+    @requires_fabiens_laptop
     def test_grow(self):
 
         gdirs = up_to_inversion()

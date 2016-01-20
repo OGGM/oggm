@@ -29,12 +29,12 @@ import scipy.stats as stats
 from joblib import Memory
 
 # Locals
-from oggm.cfg import PATHS, BASENAMES, CACHE_DIR, PARAMS
+import oggm.cfg as cfg
 
 GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
 
 # Joblib
-MEMORY = Memory(cachedir=CACHE_DIR, verbose=0)
+MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
@@ -43,9 +43,9 @@ tuple2int = partial(np.array, dtype=np.int64)
 def empty_cache():  # pragma: no cover
     """Empty oggm's cache directory."""
 
-    if os.path.exists(CACHE_DIR):
-        shutil.rmtree(CACHE_DIR)
-    os.makedirs(CACHE_DIR)
+    if os.path.exists(cfg.CACHE_DIR):
+        shutil.rmtree(cfg.CACHE_DIR)
+    os.makedirs(cfg.CACHE_DIR)
 
 
 def _download_demo_files():
@@ -56,15 +56,15 @@ def _download_demo_files():
     files are up-to-date.
     """
 
-    ofile = os.path.join(CACHE_DIR, 'oggm-sample-data.zip')
-    odir = os.path.join(CACHE_DIR)
+    ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
+    odir = os.path.join(cfg.CACHE_DIR)
     if not os.path.exists(ofile):  # pragma: no cover
         urlretrieve(GH_ZIP, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
     out = dict()
-    sdir = os.path.join(CACHE_DIR, 'oggm-sample-data-master')
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
@@ -230,6 +230,26 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     return iprcp, itemp, igrad, ihgt
 
 
+def pipe_log(gdir, task_func, err=None):
+    """Log the error in a specific directory."""
+
+    fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
+    if not os.path.exists(fpath):
+        os.makedirs(fpath)
+    fpath = os.path.join(fpath, gdir.rgi_id)
+
+    if err is not None:
+        fpath += '.ERROR'
+    else:
+        return  # for now
+        fpath += '.SUCCESS'
+
+    with open(fpath, 'w') as f:
+        f.write(task_func.__name__ + ': ')
+        if err is not None:
+            f.write(err.__class__.__name__ + ': {}'.format(err))
+
+
 class entity_task(object):
     """Decorator for common job-controlling logic.
 
@@ -253,7 +273,7 @@ class entity_task(object):
         cnt += ['    -------']
         cnt += ['    Files writen to the glacier directory:']
         for k in sorted(writes):
-            cnt += [BASENAMES.doc_str(k)]
+            cnt += [cfg.BASENAMES.doc_str(k)]
         self.iodoc = '\n'.join(cnt)
 
     def __call__(self, task_func):
@@ -267,7 +287,20 @@ class entity_task(object):
             # Log only if needed:
             if not task_func.__dict__.get('divide_task', False):
                 self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
-            return task_func(gdir, **kwargs)
+
+            # Run the task
+            if cfg.CONTINUE_ON_ERROR:
+                try:
+                    out = task_func(gdir, **kwargs)
+                    gdir.log(task_func)
+                except Exception as err:
+                    # Something happened
+                    out = None
+                    gdir.log(task_func, err=err)
+                    pipe_log(gdir, task_func, err=err)
+            else:
+                out = task_func(gdir, **kwargs)
+            return out
         return _entity_task
 
 
@@ -356,7 +389,7 @@ class GlacierDirectory(object):
         """
 
         if base_dir is None:
-            base_dir = os.path.join(PATHS['working_dir'], 'per_glacier')
+            base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
         self.rgi_id = rgi_entity.RGIID
         self.glims_id = rgi_entity.GLIMSID
@@ -419,12 +452,12 @@ class GlacierDirectory(object):
         The absolute path to the desired file
         """
 
-        if filename not in BASENAMES:
+        if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
         dir = self.divide_dirs[div_id]
 
-        return os.path.join(dir, BASENAMES[filename])
+        return os.path.join(dir, cfg.BASENAMES[filename])
 
     def has_file(self, filename, div_id=0):
 
@@ -445,7 +478,7 @@ class GlacierDirectory(object):
         An object read from the pickle
         """
 
-        _open = gzip.open if PARAMS['use_compression'] else open
+        _open = gzip.open if cfg.PARAMS['use_compression'] else open
         with _open(self.get_filepath(filename, div_id), 'rb') as f:
             out = pickle.load(f)
 
@@ -464,7 +497,7 @@ class GlacierDirectory(object):
             the divide for which you want to get the file path
         """
 
-        _open = gzip.open if PARAMS['use_compression'] else open
+        _open = gzip.open if cfg.PARAMS['use_compression'] else open
         with _open(self.get_filepath(filename, div_id), 'wb') as f:
             pickle.dump(var, f, protocol=-1)
 
@@ -562,3 +595,20 @@ class GlacierDirectory(object):
         v[:] = grad
 
         nc.close()
+
+    def log(self, func, err=None):
+
+        fpath = os.path.join(self.dir, 'log')
+        if not os.path.exists(fpath):
+            os.makedirs(fpath)
+        fpath = os.path.join(fpath, func.__name__)
+
+        if err is not None:
+            fpath += '.ERROR'
+        else:
+            fpath += '.SUCCESS'
+
+        with open(fpath, 'w') as f:
+            f.write(func.__name__ + '\n')
+            if err is not None:
+                f.write(err.__class__.__name__ + ': {}'.format(err))
