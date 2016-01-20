@@ -18,10 +18,6 @@ import numpy as np
 import geopandas as gpd
 from configobj import ConfigObj, ConfigObjError
 
-# Fiona and shapely are spammers
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.getLogger("shapely").setLevel(logging.WARNING)
-
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
@@ -123,11 +119,11 @@ _doc = 'A shapely.LineString of the coordinates of the downstream line ' \
        'each divide.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
-_doc = 'A simple text file a the glacier root directory (divide 00) ' \
-       'containing an integer: the ID of the "major divide", i.e. the one ' \
-       'really flowing out of the glacier, the other downstream lines ' \
-       'flowing into the main branch.'
-BASENAMES['major_divide'] = ('major_divide.txt', _doc)
+_doc = 'A simple integer in the glacier root directory (divide 00) ' \
+       'containing the ID of the "major divide", i.e. the one ' \
+       'really flowing out of the glacier (the other downstream lines ' \
+       'flowing into the main branch).'
+BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 
 _doc = 'The apparent mass-balance data needed for the inversion.'
 BASENAMES['apparent_mb'] = ('apparent_mb.nc', _doc)

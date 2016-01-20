@@ -33,7 +33,7 @@ def distribute_climate_data(gdirs):
     gdirs: list of oggm.GlacierDirectory objects
     """
 
-    log.info('Distribute climate data')
+    log.info('distribute_climate_data')
 
     # read the file and data entirely (faster than many I/O)
     ncpath = cfg.PATHS['histalp_file']
@@ -246,8 +246,8 @@ def mb_yearly_climate_on_glacier(gdir, div_id=None, year_range=None):
     return years, temp, prcp
 
 
-@entity_task(writes=['mu_candidates'])
-@divide_task(add_0=True)
+@entity_task(log, writes=['mu_candidates'])
+@divide_task(log, add_0=True)
 def mu_candidates(gdir, div_id=None):
     """Computes the mu candidates.
 
@@ -357,7 +357,7 @@ def t_star_from_refmb(gdir, mbdf):
     return t_stars, bias
 
 
-@entity_task(writes=['local_mustar', 'inversion_flowlines'])
+@entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
 def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
     """Compute local mustar and apparent mb from tstar.
 

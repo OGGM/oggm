@@ -414,8 +414,8 @@ def _make_costgrid(mask, ext, z):
     return np.where(mask, cost, np.Inf)
 
 
-@entity_task(writes=['centerlines', 'gridded_data'])
-@divide_task(add_0=False)
+@entity_task(log, writes=['centerlines', 'gridded_data'])
+@divide_task(log, add_0=False)
 def compute_centerlines(gdir, div_id=None):
     """Compute the centerlines following Kienholz et al., (2014).
 
@@ -527,7 +527,7 @@ def compute_centerlines(gdir, div_id=None):
     nc.close()
 
 
-@entity_task(writes=['downstream_line', 'major_divide'])
+@entity_task(log, writes=['downstream_line', 'major_divide'])
 def compute_downstream_lines(gdir):
     """Compute the lines continuing the glacier (one per divide).
 
@@ -545,10 +545,11 @@ def compute_downstream_lines(gdir):
     gdir : oggm.GlacierDirectory
     """
 
-    log.info('%s: downstream lines', gdir.rgi_id)
-
     with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
         topo = nc.variables['topo_smoothed'][:]
+
+    # Make going up very costy
+    topo = topo**10
 
     # Variables we gonna need
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
@@ -575,14 +576,16 @@ def compute_downstream_lines(gdir):
     # Find all local minimas and their coordinates
     min_cost = np.Inf
     line = None
-    min_thresold = 100
+    min_thresold = 50
     while True:
         for h, x, y in zip(_h, _x, _y):
             ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
             for i in ids[0]:
-                if topo[y[i], x[i]] > (head_h-min_thresold):
-                    continue
-                lids, cost = route_through_array(topo, head, (y[i], x[i]))
+                # Prevent very high local minimas
+                # if topo[y[i], x[i]] > ((head_h-min_thresold)**10):
+                #     continue
+                lids, cost = route_through_array(topo, head, (y[i], x[i]),
+                                                 geometric=True)
                 if cost < min_cost:
                     min_cost = cost
                     line = shpg.LineString(np.array(lids)[:, [1, 0]])
@@ -594,9 +597,9 @@ def compute_downstream_lines(gdir):
             raise RuntimeError('Downstream line not found')
 
     # Write the data
-    fn = gdir.get_filepath('major_divide', div_id=0)
-    with open(fn, 'w') as text_file:
-        text_file.write('{}'.format(div_ids[major_id]))
+    mdiv = div_ids[major_id]
+    gdir.write_pickle(mdiv, 'major_divide', div_id=0)
+    fn = gdir.get_filepath('major_divide')
     gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
     if len(div_ids) == 1:
         return

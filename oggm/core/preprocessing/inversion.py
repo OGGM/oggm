@@ -42,8 +42,8 @@ from oggm import entity_task, divide_task
 # Module logger
 log = logging.getLogger(__name__)
 
-@entity_task(writes=['inversion_input'])
-@divide_task(add_0=False)
+@entity_task(log, writes=['inversion_input'])
+@divide_task(log, add_0=False)
 def prepare_for_inversion(gdir, div_id=None):
     """Prepares the data needed for the inversion.
 
@@ -83,7 +83,7 @@ def prepare_for_inversion(gdir, div_id=None):
 
         # add to output
         cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
-                      slope_angle=angle)
+                      slope_angle=angle, is_last=fl.flows_to is None)
         towrite.append(cl_dic)
 
     # Write out
@@ -169,21 +169,23 @@ def inversion_parabolic_point_slope(gdir,
             # Check for thick to width ratio (should ne be too large)
             ratio = out_thick / w  # there's no 0 width so we're good
             pno = np.where(ratio > max_ratio)
-
-            # TODO: investigate this
-            # if gdir.rgi_id != 'RGI40-11.03002':
             if len(pno[0]) > 0:
                 ratio[pno] = np.NaN
                 ratio = utils.interp_nans(ratio)
                 out_thick = w * ratio
 
-            # Check for the shape parameter (should ne be too large)
+            # Very last heights can be rough sometimes: interpolate
+            if cl['is_last']:
+                out_thick[-4:-1] = np.NaN
+                out_thick = utils.interp_nans(out_thick)
+
+            # Check for the shape parameter (should not be too large)
             out_shape = (4*out_thick)/(w**2)
             pno = np.where(out_shape > max_shape)
-            if len(pno[0]) > 0 and (len(pno[0]) < (len(out_shape)/1.2)):
+            if len(pno[0]) > 0:
                 out_shape[pno] = np.NaN
                 out_shape = utils.interp_nans(out_shape)
-                out_thick = 0.25 * out_shape * w**2
+                out_thick = (out_shape * w**2) / 4
 
             # smooth section
             section = cfg.TWO_THIRDS * w * out_thick
@@ -195,9 +197,6 @@ def inversion_parabolic_point_slope(gdir,
 
             if write:
                 cl['thick'] = out_thick
-                out_shape = (4*out_thick)/(w**2)
-                out_shape = np.where(out_thick == 0., np.NaN, out_shape)
-                cl['shape'] = out_shape
                 cl['volume'] = volume
             out_volume += np.nansum(volume)
         if write:
@@ -276,11 +275,13 @@ def optimize_inversion_params(gdirs):
     d = dict()
     d['fs'] = fs
     d['fd'] = fd
+    d['factor_fs'] = out['x'][1]
+    d['factor_fd'] = out['x'][0]
     d['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
     d['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
                                  ref_thickness_m)
-    log.info('Optimized fs={fs} and fd={fd} for a volume RMSD of '
-             '{vol_rmsd} '.format(**d))
+    log.info('Optimized fs and fd with a factor {factor_fs} and {factor_fd} '
+             'for a volume RMSD of {vol_rmsd:.3f} '.format(**d))
 
     df = pd.DataFrame(d, index=[0])
     fpath = os.path.join(cfg.PATHS['working_dir'],
@@ -303,7 +304,7 @@ def optimize_inversion_params(gdirs):
     return fs, fd
 
 
-@entity_task(writes=['inversion_output'])
+@entity_task(log, writes=['inversion_output'])
 def volume_inversion(gdir, use_cfg_params=False):
     """Computes the inversion for all the glaciers.
 

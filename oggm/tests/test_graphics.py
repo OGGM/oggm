@@ -209,7 +209,7 @@ def test_initial_glacier():  # pragma: no cover
     flowline.init_present_time_glacier(gdir)
     flowline.find_inital_glacier(gdir, y0=1847, init_bias=150)
     past_model = gdir.read_pickle('past_model')
-    graphics.plot_modeloutput(gdir, past_model)
+    graphics.plot_modeloutput_map(gdir, past_model)
 
 
 @image_comparison(baseline_images=['test_nodivide' + suffix],
@@ -241,6 +241,18 @@ def test_nodivide():
     centerlines.compute_centerlines(gdir)
 
     graphics.plot_centerlines(gdir)
+
+
+@image_comparison(baseline_images=['test_modelsection' + suffix],
+                  extensions=['png'])
+@requires_mpltest
+@requires_mpl15
+def test_plot_model():
+
+    gdir = init_hef()
+    flowline.init_present_time_glacier(gdir)
+    model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
+    graphics.plot_modeloutput_section(model)
 
 
 if __name__ == '__main__':  # pragma: no cover

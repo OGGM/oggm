@@ -6,10 +6,6 @@ import unittest
 import logging
 import sys
 
-# Fiona and shapely are spammers
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.getLogger("shapely").setLevel(logging.WARNING)
-
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
@@ -24,9 +20,11 @@ HAS_NEW_GDAL = False
 if osgeo.gdal.__version__ >= '1.11':
     HAS_NEW_GDAL = True
 
+ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     RUN_SLOW_TESTS = True
+    ON_TRAVIS = True
 if os.environ.get('OGGM_SLOW_TESTS') is not None:
     RUN_SLOW_TESTS = True
 

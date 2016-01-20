@@ -640,7 +640,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-2)
 
-        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=56)
+        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=60)
         np.testing.assert_allclose(utils.rmsd(volume[0], volume[1]), 0.,
                                    atol=6e-3)
         np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
@@ -925,10 +925,10 @@ class TestHEF(unittest.TestCase):
     def test_equilibrium(self):
 
         #TODO: equilibrium test only working with parabolic bed
-        _tmp = cfg.PARAMS['mixed_min_shape']
-        cfg.PARAMS['mixed_min_shape'] = 0.
+        _tmp = cfg.PARAMS['bed_shape']
+        cfg.PARAMS['bed_shape'] = 'parabolic'
         flowline.init_present_time_glacier(self.gdir)
-        cfg.PARAMS['mixed_min_shape'] = _tmp
+        cfg.PARAMS['bed_shape'] = _tmp
 
         mb_mod = massbalance.TstarMassBalanceModel(self.gdir)
 
@@ -941,7 +941,7 @@ class TestHEF(unittest.TestCase):
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until(50.)
         self.assertFalse(model.dt_warning)
@@ -972,7 +972,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -998,7 +998,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -1058,9 +1058,6 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)
 
         rmsd = utils.rmsd(df.Leclercq, df.oggm)
-
-        if ON_FABIENS_LAPTOP:
-            self.assertTrue(rmsd < 500.)
 
         self.assertTrue(rmsd < 1000.)
 

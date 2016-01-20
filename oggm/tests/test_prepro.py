@@ -864,12 +864,6 @@ class TestInversion(unittest.TestCase):
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
-            shape = cl['shape']
-            self.assertTrue(np.all(np.isfinite(shape)))
-
-            mywidths = np.sqrt(4*thick/shape) / gdir.grid.dx
-            np.testing.assert_allclose(fl.widths, mywidths)
-
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
@@ -901,123 +895,81 @@ class TestInversion(unittest.TestCase):
         maxs = 0.
         for cl in cls:
             thick = cl['thick']
-            self.assertTrue(np.all(np.isfinite(shape)))
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        # The following test fails because max thick is larger.
-        # I think that dx=2 is a minimum
-        # np.testing.assert_allclose(242, maxs, atol=13)
-        np.testing.assert_allclose(242, maxs, atol=42)
 
+        # The following test needs more tol because max thick is larger.
+        # I think that dx=2 is a minimum
+        np.testing.assert_allclose(242, maxs, atol=42)
 
     def test_invert_hef_nofs(self):
 
-        # TODO: does not work on CONDA
-        pass
-        # if 'win' in sys.platform:
-        #     print('test_invert_hef_nofs aborted due to windows.')
-        #     return
-        #
-        # hef_file = get_demo_file('Hintereisferner.shp')
-        # rgidf = gpd.GeoDataFrame.from_file(hef_file)
-        #
-        # # loop because for some reason indexing wont work
-        # for index, entity in rgidf.iterrows():
-        #     gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-        # gis.define_glacier_region(gdir, entity=entity)
-        # gis.glacier_masks(gdir)
-        # centerlines.compute_centerlines(gdir)
-        # geometry.initialize_flowlines(gdir)
-        # geometry.catchment_area(gdir)
-        # geometry.catchment_width_geom(gdir)
-        # geometry.catchment_width_correction(gdir)
-        # climate.distribute_climate_data([gdir])
-        # climate.mu_candidates(gdir, div_id=0)
-        # hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-        # mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        # t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-        # t_star = t_star[-1]
-        # bias = bias[-1]
-        # climate.local_mustar_apparent_mb(gdir, t_star, bias)
-        #
-        # # OK. Values from Fischer and Kuhn 2013
-        # # Area: 8.55
-        # # meanH = 67+-7
-        # # Volume = 0.573+-0.063
-        # # maxH = 242+-13
-        #
-        # inversion.prepare_for_inversion(gdir)
-        #
-        # ref_v = 0.573 * 1e9
-        #
-        # def to_optimize(x):
-        #     fd = 1.9e-24 * x[0]
-        #     fs = 0.
-        #     v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                      fs=fs,
-        #                                                      fd=fd)
-        #     return (v - ref_v)**2
-        #
-        # import scipy.optimize as optimization
-        # out = optimization.minimize(to_optimize, [1],
-        #                             bounds=((0.00001, 1000000),),
-        #                             tol=1e-3)['x']
-        #
-        # self.assertTrue(out[0] > 0.1)
-        # self.assertTrue(out[0] < 2)
-        #
-        # fd = 1.9e-24 * out[0]
-        # fs = 0.
-        # v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                  fs=fs,
-        #                                                  fd=fd,
-        #                                                  write=True)
-        # np.testing.assert_allclose(ref_v, v)
-        #
-        # lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        # pid = np.argmax(lens) + 1
-        # cls = gdir.read_pickle('inversion_output', div_id=pid)
-        # fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
-        # maxs = 0.
-        # for cl, fl in zip(cls, fls):
-        #     thick = cl['thick']
-        #     shape = cl['shape']
-        #     self.assertTrue(np.all(np.isfinite(shape)))
-        #
-        #     mywidths = np.sqrt(4*thick/shape) / gdir.grid.dx
-        #     np.testing.assert_allclose(fl.widths, mywidths)
-        #
-        #     _max = np.max(thick)
-        #     if _max > maxs:
-        #         maxs = _max
-        #
-        # np.testing.assert_allclose(242, maxs, atol=30)
-        #
-        # c0 = gdir.read_pickle('inversion_output', div_id=2)[-1]
-        #
-        # def to_optimize(x):
-        #     fd = 1.9e-24 * x[0]
-        #     fs = 5.7e-20 * x[1]
-        #     v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                      fs=fs,
-        #                                                      fd=fd)
-        #     return (v - ref_v)**2
-        #
-        # import scipy.optimize as optimization
-        # out = optimization.minimize(to_optimize, [1, 1],
-        #                             bounds=((0.01, 1), (0.01, 1)),
-        #                             tol=1e-3)['x']
-        #
-        # self.assertTrue(out[0] > 0.1)
-        # self.assertTrue(out[1] > 0.1)
-        # self.assertTrue(out[0] < 1)
-        # self.assertTrue(out[1] < 1)
-        #
-        # fd = 1.9e-24 * out[0]
-        # fs = 5.7e-20 * out[1]
-        # v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                  fs=fs,
-        #                                                  fd=fd,
-        #                                                  write=True)
-        # np.testing.assert_allclose(ref_v, v)
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.distribute_climate_data([gdir])
+        climate.mu_candidates(gdir, div_id=0)
+        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
+        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star = t_star[-1]
+        bias = bias[-1]
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+
+        # OK. Values from Fischer and Kuhn 2013
+        # Area: 8.55
+        # meanH = 67+-7
+        # Volume = 0.573+-0.063
+        # maxH = 242+-13
+
+        inversion.prepare_for_inversion(gdir)
+
+        ref_v = 0.573 * 1e9
+
+        def to_optimize(x):
+            fd = 1.9e-24 * x[0]
+            fs = 0.
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=fs,
+                                                             fd=fd)
+            return (v - ref_v)**2
+
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.00001, 1000000),),
+                                    tol=1e-3)['x']
+
+        self.assertTrue(out[0] > 0.1)
+        self.assertTrue(out[0] < 2)
+
+        fd = 1.9e-24 * out[0]
+        fs = 0.
+        v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                         fs=fs,
+                                                         fd=fd,
+                                                         write=True)
+        np.testing.assert_allclose(ref_v, v)
+
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        pid = np.argmax(lens) + 1
+        cls = gdir.read_pickle('inversion_output', div_id=pid)
+        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        maxs = 0.
+        for cl, fl in zip(cls, fls):
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+
+        np.testing.assert_allclose(242, maxs, atol=30)

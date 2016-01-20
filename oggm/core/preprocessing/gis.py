@@ -266,7 +266,7 @@ def _mask_per_divide(gdir, div_id, dem, smoothed_dem):
     gdir.write_pickle(geometries, 'geometries', div_id=div_id)
 
 
-@entity_task(writes=['glacier_grid', 'dem', 'outlines'])
+@entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
 def define_glacier_region(gdir, entity=None):
     """
     Very first task: define the glacier's grid.
@@ -281,8 +281,6 @@ def define_glacier_region(gdir, entity=None):
     entity : geopandas entity
         the glacier geometry to process
     """
-
-    log.info('%s: creating glacier region', gdir.rgi_id)
 
     # choose a spatial resolution with respect to the glacier area
     dxmethod = cfg.PARAMS['grid_dx_method']
@@ -413,7 +411,7 @@ def define_glacier_region(gdir, entity=None):
             copyfile(sourcename, linkname)
 
 
-@entity_task(writes=['gridded_data', 'geometries'])
+@entity_task(log, writes=['gridded_data', 'geometries'])
 def glacier_masks(gdir):
     """Converts the glacier vector geometries to grids.
 
@@ -421,8 +419,6 @@ def glacier_masks(gdir):
     ----------
     gdir : oggm.GlacierDirectory
     """
-
-    log.info('%s: creating glacier masks', gdir.rgi_id)
 
     # open srtm tif-file:
     srtm_ds = gdal.Open(gdir.get_filepath('dem'))

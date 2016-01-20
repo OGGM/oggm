@@ -1,11 +1,14 @@
 """Useful plotting functions"""
 from __future__ import division
 from six.moves import zip
+from collections import OrderedDict
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib import cm as colormap
+from matplotlib import transforms
 import matplotlib.colors as colors
+from matplotlib.ticker import NullFormatter
 import warnings
 
 from descartes import PolygonPatch
@@ -22,6 +25,7 @@ import cleo
 # Local imports
 import oggm.cfg as cfg
 
+nullfmt = NullFormatter()  # no labels
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     new_cmap = colors.LinearSegmentedColormap.from_list(
@@ -30,11 +34,11 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     return new_cmap
 
 
-def plot_googlemap(glacierdir, ax=None):
+def plot_googlemap(gdir, ax=None):
     """Plots the glacier over a googlemap."""
 
     # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
+    crs = gdir.grid.center_grid
 
     dofig = False
     if ax is None:
@@ -42,7 +46,7 @@ def plot_googlemap(glacierdir, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    s = salem.utils.read_shapefile(glacierdir.get_filepath('outlines'))
+    s = salem.utils.read_shapefile(gdir.get_filepath('outlines'))
     gm = salem.GoogleVisibleMap(np.array(s.geometry[0].exterior.xy[0]),
                                 np.array(s.geometry[0].exterior.xy[1]),
                                 src=s.crs)
@@ -52,16 +56,16 @@ def plot_googlemap(glacierdir, ax=None):
     cmap.set_lonlat_countours(0.02)
     cmap.set_rgb(img)
 
-    cmap.set_shapefile(glacierdir.get_filepath('outlines'))
+    cmap.set_shapefile(gdir.get_filepath('outlines'))
 
     cmap.plot(ax)
-    ax.set_title(glacierdir.rgi_id)
+    ax.set_title(gdir.rgi_id)
 
     if dofig:
         plt.tight_layout()
 
 
-def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
+def plot_centerlines(gdir, ax=None, use_flowlines=False,
                      add_downstream=False):
     """Plots the centerlines of a glacier directory."""
 
@@ -70,7 +74,7 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
     if use_flowlines:
         filename = 'inversion_flowlines'
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
@@ -80,7 +84,7 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
         ax = fig.add_subplot(111)
         dofig = True
 
-    mp = cleo.Map(glacierdir.grid, countries=False, nx=glacierdir.grid.nx)
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
     mp.set_lonlat_countours(0.02)
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     mp.set_cmap(cm)
@@ -88,10 +92,10 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
     mp.set_data(topo, interp='linear')
 
     # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
+    crs = gdir.grid.center_grid
 
-    for i in glacierdir.divide_ids:
-        geom = glacierdir.read_pickle('geometries', div_id=i)
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -103,7 +107,7 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
                               color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = glacierdir.read_pickle(filename, div_id=i)
+        cls = gdir.read_pickle(filename, div_id=i)
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
@@ -111,8 +115,8 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
         for l, c in zip(cls, color):
             mp.set_geometry(l.line, crs=crs, color=c,
                               linewidth=2.5, zorder=50)
-            mp.set_geometry(l.head, crs=glacierdir.grid, marker='o',
-                              markersize=60, alpha=0.8, color=c, zorder=99)
+            mp.set_geometry(l.head, crs=gdir.grid, marker='o',
+                            markersize=60, alpha=0.8, color=c, zorder=99)
 
             for j in l.inflow_points:
                 mp.set_geometry(j, crs=crs, marker='o',
@@ -120,7 +124,7 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
                                   zorder=99, facecolor='none')
 
         if add_downstream:
-            line = glacierdir.read_pickle('downstream_line', div_id=i)
+            line = gdir.read_pickle('downstream_line', div_id=i)
             mp.set_geometry(line, crs=crs, color='red', linewidth=2.5,
                               zorder=50)
 
@@ -131,13 +135,13 @@ def plot_centerlines(glacierdir, ax=None, use_flowlines=False,
     mp.plot(ax)
     cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Alt. [m]')
-    ax.set_title(glacierdir.rgi_id)
+    ax.set_title(gdir.rgi_id)
 
     if dofig:
         plt.tight_layout()
 
 
-def plot_catchment_width(glacierdir, ax=None, corrected=False):
+def plot_catchment_width(gdir, ax=None, corrected=False):
     """Plots the catchment widths out of a glacier directory."""
 
     dofig = False
@@ -146,18 +150,18 @@ def plot_catchment_width(glacierdir, ax=None, corrected=False):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
-    mp = cleo.Map(glacierdir.grid, countries=False, nx=glacierdir.grid.nx)
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
     mp.set_lonlat_countours(0.02)
     mp.set_topography(topo)
 
     # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
-    for i in glacierdir.divide_ids:
-        geom = glacierdir.read_pickle('geometries', div_id=i)
+    crs = gdir.grid.center_grid
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -166,7 +170,7 @@ def plot_catchment_width(glacierdir, ax=None, corrected=False):
             mp.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = glacierdir.read_pickle('inversion_flowlines', div_id=i)[::-1]
+        cls = gdir.read_pickle('inversion_flowlines', div_id=i)[::-1]
         color = gpd.plotting.gencolor(len(cls)+1, colormap='Set1')
         for l, c in zip(cls, color):
             mp.set_geometry(l.line, crs=crs, color=c,
@@ -191,7 +195,7 @@ def plot_catchment_width(glacierdir, ax=None, corrected=False):
         plt.tight_layout()
 
 
-def plot_inversion(glacierdir, ax=None):
+def plot_inversion(gdir, ax=None):
     """Plots the result of the inversion out of a glacier directory."""
 
     dofig = False
@@ -200,22 +204,22 @@ def plot_inversion(glacierdir, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
-    mp = cleo.Map(glacierdir.grid, countries=False, nx=glacierdir.grid.nx)
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
     mp.set_lonlat_countours(0.02)
     mp.set_topography(topo)
 
     # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
+    crs = gdir.grid.center_grid
 
     toplot_th = np.array([])
     toplot_lines = []
-    for i in glacierdir.divide_ids:
-        geom = glacierdir.read_pickle('geometries', div_id=i)
-        inv = glacierdir.read_pickle('inversion_output', div_id=i)
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
+        inv = gdir.read_pickle('inversion_output', div_id=i)
         # Plot boundaries
         poly_pix = geom['polygon_pix']
         mp.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
@@ -223,7 +227,7 @@ def plot_inversion(glacierdir, ax=None):
             mp.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = glacierdir.read_pickle('inversion_flowlines', div_id=i)
+        cls = gdir.read_pickle('inversion_flowlines', div_id=i)
         for l, c in zip(cls, inv):
 
             mp.set_geometry(l.line, crs=crs, color='gray',
@@ -244,12 +248,12 @@ def plot_inversion(glacierdir, ax=None):
     mp.plot(ax)
     cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Glacier thickness [m]')
-    ax.set_title(glacierdir.rgi_id)
+    ax.set_title(gdir.rgi_id)
     if dofig:
         plt.tight_layout()
 
 
-def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
+def plot_modeloutput_map(gdir, model, ax=None):  # pragma: no cover
     """Plots the result of the model output."""
 
     dofig = False
@@ -258,28 +262,28 @@ def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(glacierdir.get_filepath('gridded_data'))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
     topo = nc.variables['topo'][:]
     nc.close()
 
-    geom = glacierdir.read_pickle('geometries', div_id=0)
+    geom = gdir.read_pickle('geometries', div_id=0)
     poly_pix = geom['polygon_pix']
 
-    ds = salem.GeoDataset(glacierdir.grid)
+    ds = salem.GeoDataset(gdir.grid)
     mlines = shpg.GeometryCollection([l.line for l in model.fls] + [poly_pix])
     ml = mlines.bounds
     corners = ((ml[0], ml[1]), (ml[2], ml[3]))
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore",category=RuntimeWarning)
-        ds.set_subset(corners=corners, margin=10, crs=glacierdir.grid)
+        ds.set_subset(corners=corners, margin=10, crs=gdir.grid)
 
-    mp = cleo.Map(ds.grid, countries=False, nx=glacierdir.grid.nx)
+    mp = cleo.Map(ds.grid, countries=False, nx=gdir.grid.nx)
     mp.set_lonlat_countours(0.02)
-    mp.set_topography(topo, crs=glacierdir.grid)
+    mp.set_topography(topo, crs=gdir.grid)
 
     # TODO: center grid or corner grid???
-    crs = glacierdir.grid.center_grid
+    crs = gdir.grid.center_grid
     mp.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
     for l in poly_pix.interiors:
         mp.set_geometry(l, crs=crs, color='black', linewidth=0.5)
@@ -309,7 +313,158 @@ def plot_modeloutput(glacierdir, model, ax=None):  # pragma: no cover
     cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Glacier thickness [m]')
     tit = ' -- year: {:d}'.format(np.int64(model.yr))
-    ax.set_title(glacierdir.rgi_id + tit)
+    ax.set_title(gdir.rgi_id + tit)
 
     if dofig:
         plt.tight_layout()
+
+
+def plot_modeloutput_section(model, ax=None, title=''):
+    """Plots the result of the model output along the flowline."""
+
+    dofig = False
+    if ax is None:
+        fig = plt.figure(figsize=(12, 6))
+        ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
+        dofig = True
+
+    # Compute area histo
+    area = np.array([])
+    height = np.array([])
+    for cls in model.fls:
+        area = np.concatenate((area, cls.widths_m * cls.dx_meter * 1e-6))
+        height = np.concatenate((height, cls.surface_h))
+    ylim = [height.min(), height.max()]
+
+    # Plot histo
+    posax = ax.get_position()
+    posax = [posax.x0 + 2 * posax.width / 3.0,
+             posax.y0,  posax.width / 3.0,
+             posax.height]
+    axh = fig.add_axes(posax, frameon=False)
+
+    axh.hist(height, orientation='horizontal', range=ylim, bins=20,
+             alpha=0.3, weights=area)
+    axh.invert_xaxis()
+    axh.xaxis.tick_top()
+    axh.set_xlabel('Area incl. tributaries (km$^2$)')
+    axh.xaxis.set_label_position('top')
+    axh.set_ylim(ylim)
+    axh.yaxis.set_ticks_position('right')
+    axh.set_yticks([])
+    axh.axhline(y=ylim[1], color='black', alpha=1)  # qick n dirty trick
+
+    # plot Centerlines
+    cls = model.fls[-1]
+    x = np.arange(cls.nx) * cls.dx * cls.map_dx
+
+    # Plot the bed
+    ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
+
+    # Where trapezoid change color
+    if hasattr(cls, '_dot') and cls._dot:
+        bed_t = cls.bed_h * np.NaN
+        bed_t[cls._pt] = cls.bed_h[cls._pt]
+        ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+
+    # Plot glacier
+    surfh = cls.surface_h
+    pok = np.where(cls.thick == 0.)[0]
+    if (len(pok) > 0) and (pok[0] < (len(surfh)-1)):
+        surfh[pok[0]+1:] = np.NaN
+    ax.plot(x, surfh, color='#003399', linewidth=2, label='Glacier')
+
+    # Plot tributaries
+    for i, l in zip(cls.inflow_indices, cls.inflows):
+        if l.thick[-1] > 0:
+            ax.plot(x[i], cls.surface_h[i], 's', color='#993399',
+                    label='Tributary (active)')
+        else:
+            ax.plot(x[i], cls.surface_h[i], 's', color='none',
+                    label='Tributary (inactive)')
+
+    ax.set_ylim(ylim)
+
+    ax.spines['top'].set_color('none')
+    ax.xaxis.set_ticks_position('bottom')
+    ax.set_xlabel('Distance along flowline (m)')
+    ax.set_ylabel('Altitude (m)')
+
+    # Title
+    ax.set_title(title, loc='left')
+
+    # Legend
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = OrderedDict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(),
+              bbox_to_anchor=(1.34, 1.0),
+              frameon=False)
+
+
+def plot_modeloutput_section_withtrib(model, title=''):
+    """Plots the result of the model output along the flowline."""
+
+    n_tribs = len(model.fls) - 1
+
+    axs = []
+    if n_tribs == 0:
+        fig = plt.figure(figsize=(8, 5))
+        axmaj = fig.add_subplot(111)
+    elif n_tribs <= 3:
+        fig = plt.figure(figsize=(14, 10))
+        axmaj = plt.subplot2grid((2, 3), (1, 0), colspan=3)
+        for i in np.arange(n_tribs):
+            axs.append(plt.subplot2grid((2, 3), (0, i)))
+    elif n_tribs <= 6:
+        fig = plt.figure(figsize=(14, 10))
+        axmaj = plt.subplot2grid((3, 3), (2, 0), colspan=3)
+        for i in np.arange(n_tribs):
+            j = 0
+            if i >= 3:
+                i -= 3
+                j = 1
+            axs.append(plt.subplot2grid((3, 3), (j, i)))
+    else:
+        raise NotImplementedError()
+
+    for i, cls in enumerate(model.fls):
+        if i == n_tribs:
+            ax = axmaj
+        else:
+            ax = axs[i]
+
+        x = np.arange(cls.nx) * cls.dx * cls.map_dx
+
+        # Plot the bed
+        ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
+
+        # Where trapezoid change color
+        if hasattr(cls, '_dot') and cls._dot:
+            bed_t = cls.bed_h * np.NaN
+            bed_t[cls._pt] = cls.bed_h[cls._pt]
+            ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+
+        # Plot glacier
+        surfh = cls.surface_h
+        pok = np.where(cls.thick == 0.)[0]
+        if (len(pok) > 0) and (pok[0] < (len(surfh)-1)):
+            surfh[pok[0]+1:] = np.NaN
+        ax.plot(x, surfh, color='#003399', linewidth=2, label='Glacier')
+
+        # Plot tributaries
+        for i, l in zip(cls.inflow_indices, cls.inflows):
+            if l.thick[-1] > 0:
+                ax.plot(x[i], cls.surface_h[i], 's', color='#993399',
+                        label='Tributary (active)')
+            else:
+                ax.plot(x[i], cls.surface_h[i], 's', color='none',
+                        label='Tributary (inactive)')
+
+        ax.spines['top'].set_color('none')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xlabel('Distance along flowline (m)')
+        ax.set_ylabel('Altitude (m)')
+
+    # Title
+    plt.title(title, loc='left')
+    fig.tight_layout()

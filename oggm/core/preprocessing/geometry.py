@@ -426,8 +426,8 @@ def _filter_for_altitude_range(widths, wlines, topo):
     return out_width
 
 
-@entity_task(writes=['catchment_indices'])
-@divide_task(add_0=False)
+@entity_task(log, writes=['catchment_indices'])
+@divide_task(log, add_0=False)
 def catchment_area(gdir, div_id=None):
     """Compute the catchment areas of each tributary line.
 
@@ -525,8 +525,8 @@ def catchment_area(gdir, div_id=None):
     gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
 
 
-@entity_task(writes=['inversion_flowlines'])
-@divide_task(add_0=False)
+@entity_task(log, writes=['inversion_flowlines'])
+@divide_task(log, add_0=False)
 def initialize_flowlines(gdir, div_id=None):
     """ Transforms the original (geometrical) Centerlines in a more "physical"
     object: InversionFlowlines.
@@ -592,8 +592,8 @@ def initialize_flowlines(gdir, div_id=None):
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
-@entity_task(writes=['inversion_flowlines'])
-@divide_task(add_0=False)
+@entity_task(log, writes=['inversion_flowlines'])
+@divide_task(log, add_0=False)
 def catchment_width_geom(gdir, div_id=None):
     """Compute geometrical catchment widths for each point of the flowlines.
 
@@ -676,7 +676,7 @@ def catchment_width_geom(gdir, div_id=None):
     gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)
 
 
-@entity_task(writes=['inversion_flowlines'])
+@entity_task(log, writes=['inversion_flowlines'])
 def catchment_width_correction(gdir, div_id=None):
     """Corrects for NaNs and inconsistencies in the geometrical widths.
 

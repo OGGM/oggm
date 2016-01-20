@@ -5,6 +5,7 @@ from six.moves import zip
 # Built ins
 import logging
 import copy
+from functools import partial
 # External libs
 import numpy as np
 import netCDF4
@@ -99,6 +100,7 @@ class ParabolicFlowline(ModelFlowline):
         super(ParabolicFlowline, self).__init__(line, dx, map_dx,
                                                 surface_h, bed_h)
 
+        assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
         self._sqrt_bed = np.sqrt(bed_shape)
 
@@ -214,11 +216,12 @@ class MixedFlowline(ModelFlowline):
         super(MixedFlowline, self).__init__(line, dx, map_dx,
                                                 surface_h.copy(), bed_h.copy())
 
+        assert np.all(np.isfinite(bed_shape))
+
         self.bed_shape = bed_shape
         self._sqrt_bed = np.sqrt(bed_shape)
 
-        # Where we will have to use the other
-        #TODO: add these parameters to configfile
+        # Where we will have to use the other\
         totest = bed_shape.copy()
         if self.flows_to is None:
             totest[-np.floor(len(totest)/3.).astype(np.int64):] = min_shape + 1
@@ -235,7 +238,8 @@ class MixedFlowline(ModelFlowline):
         assert np.alltrue(h >= 0)
         self.bed_h[pt] = surface_h[pt] - h.clip(0)
         self._thick[pt] = h.clip(0)
-        assert np.allclose(surface_h, self.surface_h)
+        # This doesnt work because of interp at the tongue
+        # assert np.allclose(surface_h, self.surface_h)
 
         _w0_m = for_later - lambdas * self.thick[pt]
         assert np.alltrue(_w0_m >= 0)
@@ -281,7 +285,8 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd):
+    def __init__(self, flowlines, mass_balance=None, y0=0.,
+                 fs=None, fd=None):
         """ Instanciate.
 
         Parameters
@@ -321,15 +326,15 @@ class FlowlineModel(object):
                 continue
             idl = self.fls.index(fl.flows_to)
             ide = fl.flows_to_indice
-            if fl.nx >= 9:
+            if fl.flows_to.nx >= 9:
                 gk = GAUSSIAN_KERNEL[9]
                 id0 = ide-4
                 id1 = ide+5
-            elif fl.nx >= 7:
+            elif fl.flows_to.nx >= 7:
                 gk = GAUSSIAN_KERNEL[7]
                 id0 = ide-3
                 id1 = ide+4
-            elif fl.nx >= 5:
+            elif fl.flows_to.nx >= 5:
                 gk = GAUSSIAN_KERNEL[5]
                 id0 = ide-2
                 id1 = ide+3
@@ -356,6 +361,10 @@ class FlowlineModel(object):
     def area_km2(self):
         return self.area_m2 * 1e-6
 
+    def check_domain_end(self):
+        """Returns False if the glacier reaches the domains bound."""
+        return np.isclose(self.fls[-1].thick[-1], 0)
+
     def step(self, dt=None):
         """Advance one step."""
         raise NotImplementedError
@@ -366,7 +375,7 @@ class FlowlineModel(object):
         while self.t < t:
             self.step(dt=t-self.t)
 
-    def run_until_equilibrium(self, rate=0.0005, ystep=5, max_ite=200):
+    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
         ite = 0
         was_close_zero = 0
@@ -420,22 +429,36 @@ class FluxBasedModel(FlowlineModel):
         # Loop over tributaries to determine the flux rate
         flxs = []
         aflxs = []
-        for fl in self.fls:
+        for fl, trib in zip(self.fls, self._trib):
+
+            surface_h = fl.surface_h
+            thick = fl.thick
+            section = fl.section
+            nx = fl.nx
+
+            # If it is a tributary, we use the branch it flows into to compute
+            # the slope of the last grid points
+            is_trib = trib[0] is not None
+            if is_trib:
+                fl_to = self.fls[trib[0]]
+                ide = fl.flows_to_indice
+                surface_h = np.append(surface_h, fl_to.surface_h[ide])
+                thick = np.append(thick, thick[-1])
+                section = np.append(section, section[-1])
+                nx += 1
 
             dx = fl.dx_meter
 
             # Staggered gradient
-            sh = fl.surface_h
-            slope_stag = np.zeros(fl.nx+1)
-            slope_stag[1:-1] = (sh[0:-1] - sh[1:]) / dx
+            slope_stag = np.zeros(nx+1)
+            slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
             slope_stag[-1] = slope_stag[-2]
 
             # Convert to angle?
             # slope_stag = np.sin(np.arctan(slope_stag))
 
             # Staggered thick
-            thick = fl.thick
-            thick_stag = np.zeros(fl.nx+1)
+            thick_stag = np.zeros(nx+1)
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
 
@@ -445,15 +468,21 @@ class FluxBasedModel(FlowlineModel):
                      (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
-            section = fl.section
-            section_stag = np.zeros(fl.nx+1)
+            section_stag = np.zeros(nx+1)
             section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
             section_stag[[0, -1]] = section[[0, -1]]
 
             # Staggered flux rate
             flx_stag = u_stag * section_stag / dx
-            flxs.append(flx_stag)
-            aflxs.append(np.zeros(fl.nx))
+
+            # Store the results
+            if is_trib:
+                flxs.append(flx_stag[:-1])
+                aflxs.append(np.zeros(nx-1))
+                u_stag = u_stag[:-1]
+            else:
+                flxs.append(flx_stag)
+                aflxs.append(np.zeros(nx))
 
             # Time crit: limit the velocity somehow
             maxu = np.max(np.abs(u_stag))
@@ -466,6 +495,8 @@ class FluxBasedModel(FlowlineModel):
 
         # Time step
         if dt < min_dt:
+            if not self.dt_warning:
+                log.warning('Unstable')
             self.dt_warning = True
         dt = np.clip(dt, min_dt, self.max_dt)
 
@@ -580,7 +611,7 @@ class KarthausModel(FlowlineModel):
         self.t += dt
 
 
-@entity_task(writes=['model_flowlines'])
+@entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
     """First task after inversion. Merges the data from the various
     preprocessing tasks into a stand-alone dataset ready for run.
@@ -588,14 +619,12 @@ def init_present_time_glacier(gdir):
     In a first stage we assume that all divides CAN be merged as for HEF,
     so that the concept of divide is not necessary anymore.
 
+    This task is horribly coded and needs work
+
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
     """
-
-    fn = gdir.get_filepath('major_divide', div_id=0)
-    with open(fn, 'r') as text_file:
-        major_div = int(text_file.read())
 
     # Topo for heights
     nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
@@ -618,6 +647,7 @@ def init_present_time_glacier(gdir):
     # OK. Dont try to solve problems you don't know about yet - i.e.
     # rethink about all this when we will have proper divides everywhere.
     # for HEF the following will work, and this is very ugly.
+    major_div = gdir.read_pickle('major_divide', div_id=0)
     div_ids = list(gdir.divide_ids)
     div_ids.remove(major_div)
     div_ids = [major_div] + div_ids
@@ -631,26 +661,31 @@ def init_present_time_glacier(gdir):
         invs = gdir.read_pickle('inversion_output', div_id=div_id)
         inversion_per_divide.append(invs)
 
-    # Extend the flowlines with the downstream lines, make a new object
-    # out of these
-    from functools import partial
+    # Which kind of bed?
     if cfg.PARAMS['bed_shape'] == 'mixed':
         flobject = partial(MixedFlowline,
                            min_shape=cfg.PARAMS['mixed_min_shape'],
                            lambdas=cfg.PARAMS['trapezoid_lambdas'])
+    elif cfg.PARAMS['bed_shape'] == 'parabolic':
+        flobject = ParabolicFlowline
     else:
         raise NotImplementedError('bed: {}'.format(cfg.PARAMS['bed_shape']))
 
+
+    # Extend the flowlines with the downstream lines, make a new object
     new_fls = []
     flows_to_ids = []
     major_id = None
     for fls, invs, did in zip(fls_per_divide, inversion_per_divide, div_ids):
         for fl, inv in zip(fls[0:-1], invs[0:-1]):
             bed_h = fl.surface_h - inv['thick']
-            # Interpolate shapes
-            shape = utils.interp_nans(inv['shape'])
+            w = fl.widths * map_dx
+            bed_shape = (4*inv['thick'])/(w**2)
+            bed_shape = bed_shape.clip(0, cfg.PARAMS['max_shape_param'])
+            bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
+            bed_shape = utils.interp_nans(bed_shape)
             nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
-                                    bed_h, shape)
+                                    bed_h, bed_shape)
             flows_to_ids.append(fls_list.index(fl.flows_to))
             new_fls.append(nfl)
 
@@ -660,22 +695,35 @@ def init_present_time_glacier(gdir):
         inv = invs[-1]
         dline = gdir.read_pickle('downstream_line', div_id=did)
         long_line = oggm.core.preprocessing.geometry._line_extend(fl.line, dline, fl.dx)
+
         # Interpolate heights
         x, y = long_line.xy
         hgts = interpolator((y, x))
-        # If smoothing, this is the moment
-        hgts = gaussian_filter1d(hgts, sw)
 
         # Inversion stuffs
         bed_h = hgts.copy()
         bed_h[0:len(fl.surface_h)] -= inv['thick']
-        # Interpolate shapes
-        shape = utils.interp_nans(inv['shape'])
+
+        # Shapes
+        w = fl.widths * map_dx
+        bed_shape = (4*inv['thick'])/(w**2)
+        bed_shape = bed_shape.clip(0, cfg.PARAMS['max_shape_param'])
+        bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
+        bed_shape = utils.interp_nans(bed_shape)
+
+        # But forbid too small shape close to the end
+        if cfg.PARAMS['bed_shape'] == 'mixed':
+            bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
 
         # Take the median of the last 30%
-        ashape = np.median(shape[-np.floor(len(shape)/3.).astype(np.int64):])
-        shape = np.append(shape, np.ones(len(bed_h)-len(shape))*ashape)
-        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, shape)
+        ashape = np.median(bed_shape[-np.floor(len(bed_shape)/3.).astype(np.int64):])
+
+        # But forbid too small shape
+        if cfg.PARAMS['bed_shape'] == 'mixed':
+            ashape = ashape.clip(cfg.PARAMS['mixed_min_shape'])
+
+        bed_shape = np.append(bed_shape, np.ones(len(bed_h)-len(bed_shape))*ashape)
+        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, bed_shape)
 
         if major_id is None:
             flid = -1
@@ -706,11 +754,20 @@ def init_present_time_glacier(gdir):
 
 def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
                          rtol=0.01, atol=10, max_ite=100,
-                         init_bias=0., equi_rate=0.0005):
+                         init_bias=0., equi_rate=0.0005,
+                         do_plot=False, gdir=None, ref_area=None):
     """ Iterative search for a plausible starting time glacier"""
 
     # Objective
-    orig_area = final_model.area_m2
+    if ref_area is None:
+        ref_area = final_model.area_m2
+
+    if do_plot:
+        from oggm.graphics import plot_modeloutput_section, plot_modeloutput_section_withtrib
+        import matplotlib.pyplot as plt
+        plot_modeloutput_section(final_model, title='Initial state')
+        plot_modeloutput_section_withtrib(final_model, title='Initial state')
+        plt.show()
 
     # are we trying to grow or to shrink the glacier?
     prev_model = copy.deepcopy(final_model)
@@ -719,24 +776,29 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     prev_model.run_until(y1)
     prev_area = prev_model.area_m2
 
+    if do_plot:
+        plot_modeloutput_section(prev_model, title='After histalp')
+        plot_modeloutput_section_withtrib(prev_model, title='After histalp')
+        plt.show()
+
     # Just in case we already hit the correct starting state
-    if np.allclose(prev_area, orig_area, atol=atol, rtol=rtol):
+    if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
         log.info('find_inital_glacier, ite: %d. Converged with a final error '
                  'of %.3f', 0,
-                 utils.rel_err(orig_area, prev_area))
+                 utils.rel_err(ref_area, prev_area))
         return model
 
-    if prev_area < orig_area:
+    if prev_area < ref_area:
         sign_mb = 1.
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
                   'small of %.3f. Continue', 0,
-                  utils.rel_err(orig_area, prev_area))
+                  utils.rel_err(ref_area, prev_area))
     else:
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
                   'big of %.3f. Continue', 0,
-                  utils.rel_err(orig_area, prev_area))
+                  utils.rel_err(ref_area, prev_area))
         sign_mb = -1.
 
     # Log sentence
@@ -767,6 +829,11 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         log.info(logtxt + ', ite: %d. Grew for: %d years', c,
                   grow_model.yr)
 
+        if do_plot:
+            plot_modeloutput_section(grow_model, title='After grow ite '
+                                                              '{}'.format(c))
+            plt.show()
+
         # Shrink
         new_fls = copy.deepcopy(grow_model.fls)
         new_model = copy.deepcopy(final_model)
@@ -775,25 +842,29 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         new_model.run_until(y1)
         new_area = new_model.area_m2
 
+        if do_plot:
+            plot_modeloutput_section(new_model, title='After histalp')
+            plt.show()
+
         # Maybe we done?
-        if np.allclose(new_area, orig_area, atol=atol, rtol=rtol):
+        if np.allclose(new_area, ref_area, atol=atol, rtol=rtol):
             new_model.reset_flowlines(new_fls)
             new_model.reset_y0(y0)
             log.info(logtxt + ', ite: %d. Converged with a '
                      'final error of %.3f', c,
-                     utils.rel_err(orig_area, new_area))
+                     utils.rel_err(ref_area, new_area))
             return new_model
 
         # See if we did a step to far or if we have to continue growing
-        do_cont_1 = (sign_mb > 0.) and (new_area < orig_area)
-        do_cont_2 = (sign_mb < 0.) and (new_area > orig_area)
+        do_cont_1 = (sign_mb > 0.) and (new_area < ref_area)
+        do_cont_2 = (sign_mb < 0.) and (new_area > ref_area)
         if do_cont_1 or do_cont_2:
             # Reset the previous state and continue
             prev_fls = new_fls
 
             log.info(logtxt + ', ite: %d. Error of %.3f. '
                       'Continue', c,
-                      utils.rel_err(orig_area, new_area))
+                      utils.rel_err(ref_area, new_area))
             continue
 
         # Ok. We went too far. Reduce the bias step but keep previous state
@@ -806,8 +877,9 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
-@entity_task(writes=['past_model'])
-def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005):
+@entity_task(log, writes=['past_model'])
+def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
+                        do_plot=False):
     """Search for the glacier in year y0
 
     Parameters
@@ -828,14 +900,15 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005):
     if y0 is None:
         y0 = cfg.PARAMS['y0']
     y1 = gdir.rgi_date.year
-
     mb = mbmods.HistalpMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb, 0., fs, fd)
+    assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     mb = mbmods.BackwardsMassBalanceModel(gdir)
     past_model = _find_inital_glacier(model, mb, y0, y1, rtol=rtol,
-                                      init_bias=init_bias)
+                                      init_bias=init_bias, do_plot=do_plot,
+                                      gdir=gdir, ref_area=gdir.rgi_area_m2)
 
     # Write the data
     gdir.write_pickle(past_model, 'past_model')

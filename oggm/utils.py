@@ -31,9 +31,6 @@ from joblib import Memory
 # Locals
 from oggm.cfg import PATHS, BASENAMES, CACHE_DIR, PARAMS
 
-# Module logger
-log = logging.getLogger(__name__)
-
 GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
 
 # Joblib
@@ -240,7 +237,7 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, writes=[]):
+    def __init__(self, log, writes=[]):
         """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
 
         Parameters
@@ -249,6 +246,7 @@ class entity_task(object):
             list of files that the task will write down to disk (must be
             available in ``cfg.BASENAMES``)
         """
+        self.log = log
         self.writes = writes
 
         cnt =  ['    Returns']
@@ -266,6 +264,9 @@ class entity_task(object):
 
         @wraps(task_func)
         def _entity_task(gdir, **kwargs):
+            # Log only if needed:
+            if not task_func.__dict__.get('divide_task', False):
+                self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
             return task_func(gdir, **kwargs)
         return _entity_task
 
@@ -276,7 +277,7 @@ class divide_task(object):
     Simply calls the decorated task once for each divide.
     """
 
-    def __init__(self, add_0=False):
+    def __init__(self, log, add_0=False):
         """Decorator
 
         Parameters
@@ -284,6 +285,7 @@ class divide_task(object):
         add_0: bool, default=False
             If the task also needs to be run on divide 0
         """
+        self.log = log
         self.add_0 = add_0
         self._cdoc = """"
             div_id : int
@@ -301,13 +303,15 @@ class divide_task(object):
                 if self.add_0:
                     ids = [0] + list(ids)
                 for i in ids:
-                    log.info('%s: %s, divide %d', gdir.rgi_id,
-                             task_func.__name__, i)
+                    self.log.info('%s: %s, divide %d', gdir.rgi_id,
+                                  task_func.__name__, i)
                     task_func(gdir, div_id=i, **kwargs)
             else:
                 # For testing only
                 task_func(gdir, div_id=div_id, **kwargs)
 
+        # For the logger later on
+        _divide_task.__dict__['divide_task'] = True
         return _divide_task
 
 
