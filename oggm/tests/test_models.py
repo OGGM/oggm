@@ -234,11 +234,12 @@ class TestInitFlowline(unittest.TestCase):
 
             if refo == 1:
                 np.testing.assert_allclose(ofl.widths * gdir.grid.dx,
-                                           fl.widths_m[0:len(ofl.widths)])
+                                           fl.widths_m[0:len(ofl.widths)],
+                                           rtol=0.05)
 
-        np.testing.assert_allclose(0.573, vol)
+        np.testing.assert_allclose(0.573, vol, rtol=0.001)
         np.testing.assert_allclose(7350.0, fls[-1].length_m)
-        np.testing.assert_allclose(gdir.rgi_area_km2, area)
+        np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=0.001)
 
         if do_plot:  # pragma: no cover
             plt.plot(fls[-1].bed_h)

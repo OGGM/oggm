@@ -671,6 +671,7 @@ def init_present_time_glacier(gdir):
     else:
         raise NotImplementedError('bed: {}'.format(cfg.PARAMS['bed_shape']))
 
+    max_shape = cfg.PARAMS['max_shape_param']
 
     # Extend the flowlines with the downstream lines, make a new object
     new_fls = []
@@ -681,7 +682,7 @@ def init_present_time_glacier(gdir):
             bed_h = fl.surface_h - inv['thick']
             w = fl.widths * map_dx
             bed_shape = (4*inv['thick'])/(w**2)
-            bed_shape = bed_shape.clip(0, cfg.PARAMS['max_shape_param'])
+            bed_shape = bed_shape.clip(0, max_shape)
             bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
             bed_shape = utils.interp_nans(bed_shape)
             nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
@@ -707,7 +708,7 @@ def init_present_time_glacier(gdir):
         # Shapes
         w = fl.widths * map_dx
         bed_shape = (4*inv['thick'])/(w**2)
-        bed_shape = bed_shape.clip(0, cfg.PARAMS['max_shape_param'])
+        bed_shape = bed_shape.clip(0, max_shape)
         bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
         bed_shape = utils.interp_nans(bed_shape)
 
@@ -826,8 +827,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
-        log.info(logtxt + ', ite: %d. Grew for: %d years', c,
-                  grow_model.yr)
+        log.info(logtxt + ', ite: %d. Grew to equilibrium for: %d years', c,
+                 grow_model.yr)
 
         if do_plot:
             plot_modeloutput_section(grow_model, title='After grow ite '

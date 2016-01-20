@@ -134,7 +134,7 @@ def haversine(lon1, lat1, lon2, lat2):
     return c * r
 
 
-def interp_nans(array):
+def interp_nans(array, default=None):
     """Interpolate NaNs using np.interp.
 
     np.interp is reasonable in that it does not extrapolate, it replaces
@@ -143,7 +143,14 @@ def interp_nans(array):
 
     _tmp = array.copy()
     nans, x = np.isnan(array), lambda z: z.nonzero()[0]
-    _tmp[nans] = np.interp(x(nans), x(~nans), array[~nans])
+    if np.all(nans):
+        # No valid values
+        if default is None:
+            raise ValueError('No points available to interpolate: '
+                             'please set default.')
+        _tmp[:] = default
+    else:
+        _tmp[nans] = np.interp(x(nans), x(~nans), array[~nans])
 
     return _tmp
 
@@ -214,7 +221,7 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
     itemp = ttemp[:, 1, 1]
     thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
-    ihgt = hgt[1, 1]
+    ihgt = thgt[1, 1]
     thgt = thgt.flatten()
     iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
 
@@ -244,7 +251,7 @@ def pipe_log(gdir, task_func, err=None):
         return  # for now
         fpath += '.SUCCESS'
 
-    with open(fpath, 'w') as f:
+    with open(fpath, 'a') as f:
         f.write(task_func.__name__ + ': ')
         if err is not None:
             f.write(err.__class__.__name__ + ': {}'.format(err))

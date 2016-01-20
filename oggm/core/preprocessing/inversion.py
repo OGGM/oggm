@@ -171,7 +171,7 @@ def inversion_parabolic_point_slope(gdir,
             pno = np.where(ratio > max_ratio)
             if len(pno[0]) > 0:
                 ratio[pno] = np.NaN
-                ratio = utils.interp_nans(ratio)
+                ratio = utils.interp_nans(ratio, default=max_ratio)
                 out_thick = w * ratio
 
             # Very last heights can be rough sometimes: interpolate
@@ -184,7 +184,7 @@ def inversion_parabolic_point_slope(gdir,
             pno = np.where(out_shape > max_shape)
             if len(pno[0]) > 0:
                 out_shape[pno] = np.NaN
-                out_shape = utils.interp_nans(out_shape)
+                out_shape = utils.interp_nans(out_shape, default=max_shape)
                 out_thick = (out_shape * w**2) / 4
 
             # smooth section

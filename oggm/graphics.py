@@ -253,7 +253,7 @@ def plot_inversion(gdir, ax=None):
         plt.tight_layout()
 
 
-def plot_modeloutput_map(gdir, model, ax=None):  # pragma: no cover
+def plot_modeloutput_map(gdir, model, ax=None, vmax=None):  # pragma: no cover
     """Plots the result of the model output."""
 
     dofig = False
@@ -304,7 +304,7 @@ def plot_modeloutput_map(gdir, model, ax=None):  # pragma: no cover
 
 
     cm = plt.cm.get_cmap('YlOrRd')
-    dl = cleo.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0)
+    dl = cleo.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c in zip(toplot_lines, colors):
         mp.set_geometry(l, crs=crs, color=c,
