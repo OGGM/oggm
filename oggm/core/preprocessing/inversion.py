@@ -131,13 +131,13 @@ def inversion_parabolic_point_slope(gdir,
 
     # Check input
     if fs == 0.:
-        _inv = _inversion_simple
+        _inv_function = _inversion_simple
     else:
-        _inv = _inversion_poly
+        _inv_function = _inversion_poly
 
     a3 = fs / fd
 
-    # sometimes the width is small and the flux is big. crop this too
+    # sometimes the width is small and the flux is big. crop this
     max_ratio = cfg.PARAMS['max_thick_to_width_ratio']
     max_shape = cfg.PARAMS['max_shape_param']
     # sigma of the smoothing window after inversion
@@ -162,7 +162,7 @@ def inversion_parabolic_point_slope(gdir,
             out_thick = np.zeros(len(slope))
             for i, (a0, Q) in enumerate(zip(a0s, cl['flux'])):
                 if Q > 0.:
-                    out_thick[i] = _inv(a3, a0)
+                    out_thick[i] = _inv_function(a3, a0)
                 else:
                     out_thick[i] = 0.
 
@@ -217,8 +217,6 @@ def optimize_inversion_params(gdirs):
     gdirs: list of oggm.GlacierDirectory objects
     """
 
-    log.info('Compute the reference fs and fd parameters.')
-
     # Get test glaciers (all glaciers with thickness data)
     dfids = cfg.PATHS['glathida_rgi_links']
     try:
@@ -235,24 +233,43 @@ def optimize_inversion_params(gdirs):
     ref_volume_km3 = ref_cs * ref_area_km2**1.375
     ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.
 
-    # Optimize
-    def to_optimize(x):
-        tmp_vols = np.zeros(len(ref_gdirs))
-        fd = 1.9e-24 * x[0]
-        fs = 5.7e-20 * x[1]
-        for i, gdir in enumerate(ref_gdirs):
-            v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
-                                                   write=False)
-            tmp_vols[i] = v * 1e-9
-        return utils.rmsd(tmp_vols, ref_volume_km3)
+    if cfg.PARAMS['invert_with_sliding']:
+        # Optimize with both params
+        log.info('Compute the inversion fs and fd parameters.')
 
-    out = optimization.minimize(to_optimize, [1., 1.],
-                                bounds=((0.01, 1), (0.01, 1)),
-                                tol=1.e-3)
+        def to_optimize(x):
+            tmp_vols = np.zeros(len(ref_gdirs))
+            fd = 1.9e-24 * x[0]
+            fs = 5.7e-20 * x[1]
+            for i, gdir in enumerate(ref_gdirs):
+                v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
+                                                       write=False)
+                tmp_vols[i] = v * 1e-9
+            return utils.rmsd(tmp_vols, ref_volume_km3)
+        out = optimization.minimize(to_optimize, [1., 1.],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1.e-4)
+        # Check results and save.
+        fd = 1.9e-24 * out['x'][0]
+        fs = 5.7e-20 * out['x'][1]
+    else:
+        # Optimize without sliding
+        log.info('Compute the inversion fd parameter.')
 
-    # Check results and save.
-    fd = 1.9e-24 * out['x'][0]
-    fs = 5.7e-20 * out['x'][1]
+        def to_optimize(x):
+            tmp_vols = np.zeros(len(ref_gdirs))
+            fd = 2.4e-24 * x[0]
+            for i, gdir in enumerate(ref_gdirs):
+                v, _ = inversion_parabolic_point_slope(gdir, fs=0., fd=fd,
+                                                       write=False)
+                tmp_vols[i] = v * 1e-9
+            return utils.rmsd(tmp_vols, ref_volume_km3)
+        out = optimization.minimize(to_optimize, [1.],
+                                    bounds=((0.01, 10), ),
+                                    tol=1.e-4)
+        # Check results and save.
+        fs = 0.
+        fd = 2.4e-24 * out['x'][0]
 
     oggm_volume_m3 = np.zeros(len(ref_gdirs))
     rgi_area_m2 = np.zeros(len(ref_gdirs))
@@ -275,13 +292,16 @@ def optimize_inversion_params(gdirs):
     d = dict()
     d['fs'] = fs
     d['fd'] = fd
-    d['factor_fs'] = out['x'][1]
+    try:
+        d['factor_fs'] = out['x'][1]
+    except IndexError:
+        d['factor_fs'] = 0.
     d['factor_fd'] = out['x'][0]
     d['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
     d['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
                                  ref_thickness_m)
-    log.info('Optimized fs and fd with a factor {factor_fs} and {factor_fd} '
-             'for a volume RMSD of {vol_rmsd:.3f} '.format(**d))
+    log.info('Optimized fs and fd with a factor {factor_fs:.2f} and '
+             '{factor_fd:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**d))
 
     df = pd.DataFrame(d, index=[0])
     fpath = os.path.join(cfg.PATHS['working_dir'],

@@ -64,7 +64,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / 900
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
 class BackwardsMassBalanceModel(MassBalanceModel):
@@ -162,7 +162,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         for a given moment in time."""
 
         interp = self._get_interp()
-        return interp(heights) / SEC_IN_YEAR / 900.
+        return interp(heights) / SEC_IN_YEAR / cfg.RHO
 
 
 class TodayMassBalanceModel(MassBalanceModel):
@@ -197,7 +197,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / 900.
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
 class HistalpMassBalanceModel(MassBalanceModel):
@@ -260,4 +260,4 @@ class HistalpMassBalanceModel(MassBalanceModel):
         prcpsol = prcpsol * fac
 
         mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
-        return mb_annual / SEC_IN_YEAR / 900.
+        return mb_annual / SEC_IN_YEAR / cfg.RHO

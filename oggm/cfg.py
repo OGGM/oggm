@@ -226,15 +226,20 @@ def initialize(file=None):
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
 
+    # Inversion
+    PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
+
     # Flowline model
     PARAMS['bed_shape'] = cp['bed_shape']
+    PARAMS['use_flowline_params'] = cp.as_bool('use_flowline_params')
 
     # Delete non-floats
     ltr = ['working_dir', 'srtm_file', 'histalp_file', 'wgms_rgi_links',
            'glathida_rgi_links', 'grid_dx_method',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
-           'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error']
+           'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
+           'use_flowline_params', 'invert_with_sliding']
     for k in ltr:
         del cp[k]
 

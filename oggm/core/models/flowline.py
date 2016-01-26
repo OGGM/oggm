@@ -285,8 +285,7 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mass_balance=None, y0=0.,
-                 fs=None, fd=None):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None):
         """ Instanciate.
 
         Parameters
@@ -297,7 +296,7 @@ class FlowlineModel(object):
         #TODO: document properties
         """
 
-        self.mb = mass_balance
+        self.mb = mb_model
         self.fd = fd
         self.fs = fs
 
@@ -375,6 +374,10 @@ class FlowlineModel(object):
         while self.t < t:
             self.step(dt=t-self.t)
 
+        # Check for domains
+        if not np.isclose(self.fls[-1].thick[-1], 0):
+            raise RuntimeError('Glacier exceeds domain boundaries.')
+
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
         ite = 0
@@ -391,16 +394,14 @@ class FlowlineModel(object):
                 was_close_zero += 1
 
         if ite > max_ite:
-            raise RuntimeError('Did not find equilibrium as expected')
+            raise RuntimeError('Did not find equilibrium.')
 
 
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd,
-                       fixed_dt=None,
-                       min_dt=SEC_IN_DAY,
-                       max_dt=SEC_IN_MONTH):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+                       fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -411,8 +412,8 @@ class FluxBasedModel(FlowlineModel):
         ----------
         #TODO: document properties
         """
-        super(FluxBasedModel, self).__init__(flowlines, mass_balance,
-                                             y0, fs, fd)
+        super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
+                                             y0=y0, fs=fs, fd=fd)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -531,10 +532,8 @@ class FluxBasedModel(FlowlineModel):
 class KarthausModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd,
-                       fixed_dt=None,
-                       min_dt=SEC_IN_DAY,
-                       max_dt=SEC_IN_MONTH):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -549,8 +548,8 @@ class KarthausModel(FlowlineModel):
         if len(flowlines) > 1:
             raise ValueError('Karthaus model does not work with tributaries.')
 
-        super(KarthausModel, self).__init__(flowlines, mass_balance,
-                                            y0, fs, fd)
+        super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
+                                            y0=y0, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -762,6 +761,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
+    log.info('find_inital_glacier. Ref area to catch: %f km2', ref_area*1e-6)
 
     if do_plot:
         from oggm.graphics import plot_modeloutput_section, plot_modeloutput_section_withtrib
@@ -827,8 +827,9 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
-        log.info(logtxt + ', ite: %d. Grew to equilibrium for: %d years', c,
-                 grow_model.yr)
+        log.info(logtxt + ', ite: %d. Grew to equilibrium for %d years, '
+                          'new area: %f km2', c, grow_model.yr,
+                           grow_model.area_km2)
 
         if do_plot:
             plot_modeloutput_section(grow_model, title='After grow ite '
@@ -894,16 +895,20 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
         - past_model.p: a ModelFlowline object
     """
 
-    d = gdir.read_pickle('inversion_params')
-    fs = d['fs']
-    fd = d['fd']
+    if cfg.PARAMS['use_flowline_params']:
+        fs = cfg.PARAMS['flowline_fs']
+        fd = cfg.PARAMS['flowline_fd']
+    else:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
 
     if y0 is None:
         y0 = cfg.PARAMS['y0']
     y1 = gdir.rgi_date.year
     mb = mbmods.HistalpMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb, 0., fs, fd)
+    model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, fd=fd)
     assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     mb = mbmods.BackwardsMassBalanceModel(gdir)

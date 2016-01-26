@@ -45,7 +45,6 @@ def up_to_inversion(reset=False):
 
     # Use multiprocessing
     cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
-    cfg.PARAMS['use_multiprocessing'] = False
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
@@ -82,9 +81,6 @@ def up_to_inversion(reset=False):
 
         # Climate related tasks
         workflow.climate_tasks(gdirs)
-
-        # Inversion related tasks
-        workflow.inversion_tasks(gdirs)
 
     return gdirs
 
@@ -149,13 +145,25 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         # Inversion Results
+        cfg.PARAMS['invert_with_sliding'] = True
+        workflow.inversion_tasks(gdirs)
+
         fpath = os.path.join(cfg.PATHS['working_dir'],
                              'inversion_optim_results.csv')
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
         r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        # self.assertTrue(r1 < r2)
-        self.assertTrue(r1 < 0.12)
+        self.assertTrue(r1 < r2)
+
+        cfg.PARAMS['invert_with_sliding'] = False
+        workflow.inversion_tasks(gdirs)
+
+        fpath = os.path.join(cfg.PATHS['working_dir'],
+                             'inversion_optim_results.csv')
+        df = pd.read_csv(fpath, index_col=0)
+        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
+        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
+        self.assertTrue(r1 < r2)
 
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')

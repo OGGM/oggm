@@ -79,10 +79,12 @@ def requires_mpl15(test):
 # Lets go
 
 
-def init_hef(reset=False, border=40):
+def init_hef(reset=False, border=40, invert_with_sliding=True):
 
     # test directory
     testdir = TESTDIR_BASE + '_border{}'.format(border)
+    if not invert_with_sliding:
+        testdir += '_withoutslide'
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -126,29 +128,52 @@ def init_hef(reset=False, border=40):
     inversion.prepare_for_inversion(gdir)
     ref_v = 0.573 * 1e9
 
-    def to_optimize(x):
-        fd = 1.9e-24 * x[0]
-        fs = 5.7e-20 * x[1]
+    if invert_with_sliding:
+        def to_optimize(x):
+            fd = 1.9e-24 * x[0]
+            fs = 5.7e-20 * x[1]
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=fs,
+                                                             fd=fd)
+            return (v - ref_v)**2
+
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-4)['x']
+        fd = 1.9e-24 * out[0]
+        fs = 5.7e-20 * out[1]
         v, _ = inversion.inversion_parabolic_point_slope(gdir,
                                                          fs=fs,
-                                                         fd=fd)
-        return (v - ref_v)**2
+                                                         fd=fd,
+                                                         write=True)
+    else:
+        def to_optimize(x):
+            fd = 2.4e-24 * x[0]
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=0.,
+                                                             fd=fd)
+            return (v - ref_v)**2
 
-    import scipy.optimize as optimization
-    out = optimization.minimize(to_optimize, [1,1],
-                                bounds=((0.01, 1), (0.01, 1)),
-                                tol=1e-3)['x']
-    fd = 1.9e-24 * out[0]
-    fs = 5.7e-20 * out[1]
-    v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                     fs=fs,
-                                                     fd=fd,
-                                                     write=True)
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.01, 10),),
+                                    tol=1e-4)['x']
+        fd = 2.4e-24 * out[0]
+        fs = 0.
+        v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                         fs=fs,
+                                                         fd=fd,
+                                                         write=True)
     d = dict(fs=fs, fd=fd)
+    d['factor_fd'] = out[0]
+    try:
+        d['factor_fs'] = out[1]
+    except IndexError:
+        d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
 
     return gdir
-
 
 
 @image_comparison(baseline_images=['test_googlestatic' + suffix],

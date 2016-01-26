@@ -22,7 +22,9 @@ import matplotlib.pyplot as plt
 # Local imports
 from oggm.tests.test_graphics import init_hef
 from oggm.core.models import massbalance, flowline
-from oggm.tests import is_slow, ON_FABIENS_LAPTOP, requires_working_conda
+from oggm.tests import is_slow, requires_working_conda
+from oggm.tests import ON_FABIENS_LAPTOP, HAS_NEW_GDAL
+
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
 
@@ -233,18 +235,64 @@ class TestInitFlowline(unittest.TestCase):
             area += fl.area_km2
 
             if refo == 1:
+                rtol = 0.07 if HAS_NEW_GDAL else 0.05
                 np.testing.assert_allclose(ofl.widths * gdir.grid.dx,
                                            fl.widths_m[0:len(ofl.widths)],
-                                           rtol=0.05)
+                                           rtol=rtol)
 
         np.testing.assert_allclose(0.573, vol, rtol=0.001)
         np.testing.assert_allclose(7350.0, fls[-1].length_m)
-        np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=0.001)
+
+        rtol = 0.01 if HAS_NEW_GDAL else 0.001
+        np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
 
         if do_plot:  # pragma: no cover
             plt.plot(fls[-1].bed_h)
             plt.plot(fls[-1].surface_h)
             plt.show()
+
+    def test_present_time_glacier_massbalance(self):
+
+        gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(gdir)
+
+        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+
+        fls = gdir.read_pickle('model_flowlines')
+        glacier = flowline.FlowlineModel(fls)
+
+        hef_file = utils.get_demo_file('mbdata_RGI40-11.00897.csv')
+        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+
+        hgts = np.array([])
+        widths = np.array([])
+        for fl in glacier.fls:
+            hgts = np.concatenate((hgts, fl.surface_h))
+            widths = np.concatenate((widths, fl.widths_m))
+        tot_mb = []
+        refmb = []
+        grads = hgts * 0
+        for yr, mb in mbdf.iterrows():
+            refmb.append(mb['ANNUAL_BALANCE'])
+            mbh = mb_mod.get_mb(hgts, yr) * SEC_IN_YEAR * cfg.RHO
+            grads += mbh
+            tot_mb.append(np.average(mbh, weights=widths))
+        grads /= len(tot_mb)
+
+        # Bias
+        self.assertTrue(np.abs(utils.md(tot_mb, refmb)) < 50)
+
+        # Gradient
+        dfg = pd.read_csv(utils.get_demo_file('mbgrads_RGI40-11.00897.csv'),
+                          index_col='ALTITUDE').mean(axis=1)
+
+        # Take the altitudes below 3100 and fit a line
+        dfg = dfg[dfg.index < 3100]
+        pok = np.where(hgts < 3100)
+        from scipy.stats import linregress
+        slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
+        slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
+        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.1)
 
 
 class TestMassBalance(unittest.TestCase):
@@ -378,6 +426,8 @@ class TestIdealisedCases(unittest.TestCase):
     def setUp(self):
         self.fs = 5.7e-20
         self.fd = 1.9e-24
+        # self.fd = 2.4e-24
+        # self.fs = 0
 
     def tearDown(self):
         pass
@@ -394,8 +444,8 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb, 0., self.fs, self.fd,
-                          fixed_dt=14 * SEC_IN_DAY)
+            model = model(fls, mb_model= mb, y0=0., fs=self.fs, fd=self.fd,
+                          fixed_dt=10*SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -914,7 +964,6 @@ class TestHEF(unittest.TestCase):
     def setUp(self):
 
         self.gdir = init_hef(border=DOM_BORDER)
-
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.fd = d['fd']
@@ -1027,23 +1076,24 @@ class TestHEF(unittest.TestCase):
         # init bias 160, min_shape=0.001
         # init bias 150, min_shape=0.0012
 
-        flowline.init_present_time_glacier(self.gdir)
-        glacier = self.gdir.read_pickle('model_flowlines')
+        gdir = init_hef(border=DOM_BORDER, invert_with_sliding=False)
+
+        flowline.init_present_time_glacier(gdir)
+        glacier = gdir.read_pickle('model_flowlines')
         df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
         df.columns = ['Leclercq']
 
-        vol_ref = flowline.FlowlineModel(glacier, None, None,
-                                         None, None).volume_km3
+        vol_ref = flowline.FlowlineModel(glacier).volume_km3
 
         init_bias = 100.  # 100 so that "went too far" comes once on travis
         rtol = 0.005
         if ON_FABIENS_LAPTOP:
             init_bias = 150
             rtol = 0.005
-        flowline.find_inital_glacier(self.gdir, y0=1847, init_bias=init_bias,
-                                     rtol=rtol)
+        flowline.find_inital_glacier(gdir, y0=1847, init_bias=init_bias,
+                                     rtol=rtol, do_plot=False)
 
-        past_model = self.gdir.read_pickle('past_model')
+        past_model = gdir.read_pickle('past_model')
 
         vol_start = past_model.volume_km3
         bef_fls = copy.deepcopy(past_model.fls)
@@ -1059,7 +1109,6 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)
 
         rmsd = utils.rmsd(df.Leclercq, df.oggm)
-
         self.assertTrue(rmsd < 1000.)
 
         if do_plot:  # pragma: no cover

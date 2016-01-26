@@ -157,22 +157,22 @@ def interp_nans(array, default=None):
 
 def md(ref, data, axis=None):
     """Mean Deviation."""
-    return np.mean(data-ref, axis=axis)
+    return np.mean(np.asarray(data)-ref, axis=axis)
 
 
 def mad(ref, data, axis=None):
     """Mean Absolute Deviation."""
-    return np.mean(np.abs(data-ref), axis=axis)
+    return np.mean(np.abs(np.asarray(data)-ref), axis=axis)
 
 
 def rmsd(ref, data, axis=None):
     """Root Mean Square Deviation."""
-    return np.sqrt(np.mean((ref-data)**2, axis=axis))
+    return np.sqrt(np.mean((np.asarray(ref)-data)**2, axis=axis))
 
 
 def rel_err(ref, data):
     """Relative error. Ref should be non-zero"""
-    return (data - ref) / ref
+    return (np.asarray(data) - ref) / ref
 
 
 def corrcoef(ref, data):
