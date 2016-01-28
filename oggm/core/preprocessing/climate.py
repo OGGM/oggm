@@ -9,10 +9,10 @@ import datetime
 import numpy as np
 import pandas as pd
 import netCDF4
-import scipy.stats as stats
 # Locals
-import oggm.conf as cfg
+from oggm import cfg
 from oggm import utils
+from oggm import entity_task, divide_task
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -21,23 +21,22 @@ log = logging.getLogger(__name__)
 def distribute_climate_data(gdirs):
     """Reads the Histalp climate data and distributes to each glacier.
 
-    Not to be multi-processed.
-
-    Parameters:
-    -----------
-    gdirs: the list of GlacierDir objects where to write the data.
-
-    I/O
-    ---
     Generates a NetCDF file in the root glacier directory (climate_monthly.nc)
     It contains the timeseries of temperature, temperature gradient, and
     precipitation at the nearest grid point. The climate data reference height
-    is provided as global attribute."""
+    is provided as global attribute.
 
-    log.info('Distribute climate data')
+    Not to be multi-processed.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('distribute_climate_data')
 
     # read the file and data entirely (faster than many I/O)
-    ncpath = cfg.paths['histalp_file']
+    ncpath = cfg.PATHS['histalp_file']
     nc = netCDF4.Dataset(ncpath, mode='r')
     lon = nc.variables['lon'][:]
     lat = nc.variables['lat'][:]
@@ -56,8 +55,8 @@ def distribute_climate_data(gdirs):
 
     # Gradient defaults
     def_grad = -0.0065
-    g_minmax = cfg.params['temp_local_gradient_bounds']
-    sf = cfg.params['prcp_scaling_factor']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    sf = cfg.PARAMS['prcp_scaling_factor']
 
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
@@ -66,7 +65,7 @@ def distribute_climate_data(gdirs):
                                                               ilat, def_grad,
                                                               g_minmax,
                                                               sf)
-        gdir.create_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
+        gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
     nc.close()
 
 
@@ -101,9 +100,9 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
         return mb_climate_on_height(gdir, heights, time_range=[t0, t1])
 
     # Parameters
-    temp_all_solid = cfg.params['temp_all_solid']
-    temp_all_liq = cfg.params['temp_all_liq']
-    temp_melt = cfg.params['temp_melt']
+    temp_all_solid = cfg.PARAMS['temp_all_solid']
+    temp_all_liq = cfg.PARAMS['temp_all_liq']
+    temp_melt = cfg.PARAMS['temp_melt']
 
     # Read file
     nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
@@ -247,6 +246,8 @@ def mb_yearly_climate_on_glacier(gdir, div_id=None, year_range=None):
     return years, temp, prcp
 
 
+@entity_task(log, writes=['mu_candidates'])
+@divide_task(log, add_0=True)
 def mu_candidates(gdir, div_id=None):
     """Computes the mu candidates.
 
@@ -254,23 +255,14 @@ def mu_candidates(gdir, div_id=None):
     temperature sensitivity necessary for the glacier with its current shape
     to be in equilibrium with its climate.
 
+    For glaciers with MB data only!
+
     Parameters
     ----------
-    glacierdir: GlacierDir
-        GlacierDir object
-
-    I/O
-    ---
-    Generates a csv file (mu_candidates.csv) with the (year, mu) timeseries
+    gdir : oggm.GlacierDirectory
     """
 
-    if div_id is None:
-        for i in [0] + list(gdir.divide_ids):
-            log.info('%s: compute yearly mus, divide %d', gdir.rgi_id, i)
-            mu_candidates(gdir, div_id=i)
-        return
-
-    mu_hp = int(cfg.params['mu_star_halfperiod'])
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
 
     years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
                                                            div_id=div_id)
@@ -302,7 +294,7 @@ def t_star_from_refmb(gdir, mbdf):
 
     Parameters
     ----------
-    gdir: GlacierDir object
+    gdirs: the list of oggm.GlacierDirectory objects where to write the data.
     mbdf: a pd.Series containing the observed MB data indexed by year
 
     Returns:
@@ -365,24 +357,21 @@ def t_star_from_refmb(gdir, mbdf):
     return t_stars, bias
 
 
-def local_mustar_apparent_mb(gdir, tstar, bias):
-    """Compute local mustar and apparent mb from tstrar.
+@entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
+def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
+    """Compute local mustar and apparent mb from tstar.
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    tstar: the year where the glacier should be equilibrium
-    bias: the associated reference bias
-
-    I/O:
-    ----
-    Two files::
-        - apparent_mb.nc: netcdf file with the distributed mass-balance
-        - local_mustar.csv: local scalars mu*, t*, bias
+    gdir : oggm.GlacierDirectory
+    tstar: int
+        the year where the glacier should be equilibrium
+    bias: int
+        the associated reference bias
     """
 
     # Climate period
-    mu_hp = int(cfg.params['mu_star_halfperiod'])
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
     yr = [tstar-mu_hp, tstar+mu_hp]
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
@@ -432,52 +421,19 @@ def local_mustar_apparent_mb(gdir, tstar, bias):
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
-def distribute_t_stars(gdirs):
-    """After the computation of the reference tstars, apply
-    the interpolation to each individual glacier."""
-
-    log.info('Distribute t* and mu*')
-
-    ref_df = pd.read_csv(os.path.join(cfg.paths['working_dir'],
-                                      'ref_tstars.csv'))
-
-    for gdir in gdirs:
-
-        # Compute the distance to each glacier
-        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
-                                    ref_df.lon, ref_df.lat)
-
-        # Take the 10 closests
-        aso = np.argsort(distances)[0:9]
-        amin = ref_df.iloc[aso]
-        distances = distances[aso]**2
-
-        # If really close no need to divide, else weighted average
-        if distances.iloc[0] <= 0.1:
-            tstar = amin.tstar.iloc[0]
-            bias = amin.bias.iloc[0]
-        else:
-            tstar = int(np.average(amin.tstar, weights=1./distances))
-            bias = np.average(amin.bias, weights=1./distances)
-
-        # Go
-        local_mustar_apparent_mb(gdir, tstar, bias)
-
-
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers.
 
-    Assumes pre-processed directories with following tasks completed::
-        - define_glacier_region
-        - gis.glacier_masks
-        - climate.distribute_climate_data
-        - climate.mu_candidates
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+       for glaciers with MB data only!
     """
 
     log.info('Compute the reference t* and mu*')
 
     # Loop
-    mbdatadir = os.path.join(os.path.dirname(cfg.paths['wgms_rgi_links']),
+    mbdatadir = os.path.join(os.path.dirname(cfg.PATHS['wgms_rgi_links']),
                              'WGMS')
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
@@ -543,5 +499,42 @@ def compute_ref_t_stars(gdirs):
     df['bias'] = biases
     df['lon'] = lons
     df['lat'] = lats
-    file = os.path.join(cfg.paths['working_dir'], 'ref_tstars.csv')
+    file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
+
+
+def distribute_t_stars(gdirs):
+    """After the computation of the reference tstars, apply
+    the interpolation to each individual glacier.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('Distribute t* and mu*')
+
+    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                      'ref_tstars.csv'))
+
+    for gdir in gdirs:
+
+        # Compute the distance to each glacier
+        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
+                                    ref_df.lon, ref_df.lat)
+
+        # Take the 10 closests
+        aso = np.argsort(distances)[0:9]
+        amin = ref_df.iloc[aso]
+        distances = distances[aso]**2
+
+        # If really close no need to divide, else weighted average
+        if distances.iloc[0] <= 0.1:
+            tstar = amin.tstar.iloc[0]
+            bias = amin.bias.iloc[0]
+        else:
+            tstar = int(np.average(amin.tstar, weights=1./distances))
+            bias = np.average(amin.bias, weights=1./distances)
+
+        # Go
+        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias)

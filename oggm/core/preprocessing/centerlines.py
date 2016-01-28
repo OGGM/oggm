@@ -1,8 +1,8 @@
 """ Compute the centerlines according to Kienholz et al (2014) - with
-modifications. There is only one task (compute_centerlines).
+modifications.
 
-The output is a list of Centerline objects, stored as a list in a pickle
-(centerlines.p). The order of the list is important since the lines are
+The output is a list of Centerline objects, stored as a list in a pickle.
+The order of the list is important since the lines are
 sorted per order (hydrological flow level), from the lower orders (upstream)
 to the higher orders (downstream). Several tools later on rely on this order
 so don't mess with it.
@@ -31,9 +31,10 @@ import netCDF4
 import shapely.geometry as shpg
 import scipy.signal
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from salem import lazy_property
 from oggm.utils import tuple2int
+from oggm import entity_task, divide_task
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -366,11 +367,11 @@ def _line_order(line):
 
     Parameters
     ----------
-    line: Centerline instance
+    line: a Centerline instance
 
     Returns
     -------
-    The lines order
+    The line;s order
     """
 
     if len(line.inflows) == 0:
@@ -403,8 +404,8 @@ def _make_costgrid(mask, ext, z):
     dmax = np.nanmax(dis)
     zmax = np.nanmax(z)
     zmin = np.nanmin(z)
-    cost = ((dmax - dis) / dmax * cfg.params['f1']) ** cfg.params['a'] + \
-           ((z - zmin) / (zmax - zmin) * cfg.params['f2']) ** cfg.params['b']
+    cost = ((dmax - dis) / dmax * cfg.PARAMS['f1']) ** cfg.PARAMS['a'] + \
+           ((z - zmin) / (zmax - zmin) * cfg.PARAMS['f2']) ** cfg.PARAMS['b']
 
     # This is new: we make the cost to go over boundaries
     # arbitrary high to avoid the lines to jump over adjacent boundaries
@@ -413,36 +414,21 @@ def _make_costgrid(mask, ext, z):
     return np.where(mask, cost, np.Inf)
 
 
+@entity_task(log, writes=['centerlines', 'gridded_data'])
+@divide_task(log, add_0=False)
 def compute_centerlines(gdir, div_id=None):
-    """Compute the centerlines from a pre-processed directory.
+    """Compute the centerlines following Kienholz et al., (2014).
 
-    It follows quite closely Kienholz et al. (2014).
-
-    Modified Strahler number
+    They are then sorted according to the modified Strahler number:
     http://en.wikipedia.org/wiki/Strahler_number
 
     Parameters
     ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    Generates::
-        - centerlines.p: list of centerline instances as pickle
-    Updates::
-        - grids.nc with the costgrid
+    gdir : oggm.GlacierDirectory
     """
-
-    if div_id is None:
-        for i in gdir.divide_ids:
-            log.info('%s: centerlines, divide %d', gdir.rgi_id, i)
-            compute_centerlines(gdir, div_id=i)
-        return
-
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
-    grids_file = gdir.get_filepath('grids', div_id=div_id)
+    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
     nc = netCDF4.Dataset(grids_file)
 
     # Variables
@@ -458,7 +444,7 @@ def compute_centerlines(gdir, div_id=None):
     zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
     # Size of the half window to use to look for local maximas
-    maxorder = np.rint(cfg.params['localmax_window'] / gdir.grid.dx)
+    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
     maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
@@ -477,11 +463,11 @@ def compute_centerlines(gdir, div_id=None):
                                               heads[1, :])]
 
     # get radius of the buffer according to Kienholz eq. (1)
-    radius = cfg.params['q1'] * geom['polygon_area'] + cfg.params['q2']
-    radius = np.clip(radius, 0, cfg.params['rmax'])
+    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
+    radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
     radius /= gdir.grid.dx # in raster coordinates
     # Plus our criteria, quite usefull to remove short lines:
-    radius += cfg.params['flowline_junction_pix'] * cfg.params['flowline_dx']
+    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
     log.debug('%s: radius in raster coordinates: %.2f',
               gdir.rgi_id, radius)
 
@@ -507,9 +493,9 @@ def compute_centerlines(gdir, div_id=None):
     log.debug('%s: computed the routes', gdir.rgi_id)
 
     # Filter the shortest lines out
-    radius = cfg.params['flowline_junction_pix'] * cfg.params['flowline_dx']
-    radius += 6 * cfg.params['flowline_dx']
-    olines, _ = _filter_lines(lines, heads, cfg.params['kbuffer'], radius)
+    radius = cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
+    radius += 6 * cfg.PARAMS['flowline_dx']
+    olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
     log.debug('%s: number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
@@ -520,7 +506,7 @@ def compute_centerlines(gdir, div_id=None):
     for cl in olines:
         cl.order = _line_order(cl)
 
-    # And sort them per order !!! several tools downstream rely on this
+    # And sort them per order !!! several downstream tasks  rely on this
     cls = []
     for i in np.argsort([cl.order for cl in olines]):
         cls.append(olines[i])
@@ -541,26 +527,29 @@ def compute_centerlines(gdir, div_id=None):
     nc.close()
 
 
+@entity_task(log, writes=['downstream_line', 'major_divide'])
 def compute_downstream_lines(gdir):
     """Compute the lines continuing the glacier (one per divide).
 
     The idea is simple: starting from the glacier tail, compute all the routes
-    to all local minimas found at the domain edge. The cheapest is the One.
+    to all local minimas found at the domain edge. The cheapest is "the One".
+
+    The task also determines the so-called "major flowline" which is the
+    only line flowing out of the domain. The other ones are flowing into the
+    branch. The rest of the job (merging all centerlines + downstreams into
+    one single glacier is realized by
+    :py:func:`~oggm.tasks.init_present_time_glacier`).
 
     Parameters
     ----------
-    gdir: GlacierDir object
-
-    I/O
-    ---
-    Generates::
-        - downstream_line.p: line instance as pickle
+    gdir : oggm.GlacierDirectory
     """
 
-    log.info('%s: downstream lines', gdir.rgi_id)
-
-    with netCDF4.Dataset(gdir.get_filepath('grids', div_id=0)) as nc:
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
         topo = nc.variables['topo_smoothed'][:]
+
+    # Make going up very costy
+    topo = topo**10
 
     # Variables we gonna need
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
@@ -587,14 +576,16 @@ def compute_downstream_lines(gdir):
     # Find all local minimas and their coordinates
     min_cost = np.Inf
     line = None
-    min_thresold = 100
+    min_thresold = 50
     while True:
         for h, x, y in zip(_h, _x, _y):
             ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
             for i in ids[0]:
-                if topo[y[i], x[i]] > (head_h-min_thresold):
-                    continue
-                lids, cost = route_through_array(topo, head, (y[i], x[i]))
+                # Prevent very high local minimas
+                # if topo[y[i], x[i]] > ((head_h-min_thresold)**10):
+                #     continue
+                lids, cost = route_through_array(topo, head, (y[i], x[i]),
+                                                 geometric=True)
                 if cost < min_cost:
                     min_cost = cost
                     line = shpg.LineString(np.array(lids)[:, [1, 0]])
@@ -606,13 +597,17 @@ def compute_downstream_lines(gdir):
             raise RuntimeError('Downstream line not found')
 
     # Write the data
+    mdiv = div_ids[major_id]
+    gdir.write_pickle(mdiv, 'major_divide', div_id=0)
+    fn = gdir.get_filepath('major_divide')
     gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
     if len(div_ids) == 1:
         return
 
     # If we have divides, there is just one route and we have to interrupt
     # It at the glacier boundary
-    with netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_ids[a])) as nc:
+    fpath = gdir.get_filepath('gridded_data', div_id=div_ids[a])
+    with netCDF4.Dataset(fpath) as nc:
         mask = nc.variables['glacier_mask'][:]
         ext = nc.variables['glacier_ext'][:]
     mask[np.where(ext==1)] = 0
@@ -624,6 +619,3 @@ def compute_downstream_lines(gdir):
         lids = [l for l in lids if mask[l[0], l[1]] == 0][0:-1]
         line = shpg.LineString(np.array(lids)[:, [1, 0]])
         gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
-    fn = gdir.get_filepath('major_divide', div_id=0)
-    with open(fn, 'w') as text_file:
-        text_file.write('{}'.format(div_ids[major_id]))

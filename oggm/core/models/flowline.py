@@ -5,48 +5,36 @@ from six.moves import zip
 # Built ins
 import logging
 import copy
+from functools import partial
+from collections import OrderedDict
+
 # External libs
 import numpy as np
 import netCDF4
-from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
-import scipy.optimize as optimization
+
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from oggm import utils
-import oggm.prepro.geometry
-import oggm.prepro.centerlines
-import oggm.models.massbalance as mbmods
+import oggm.core.preprocessing.geometry
+import oggm.core.preprocessing.centerlines
+import oggm.core.models.massbalance as mbmods
+from oggm import entity_task
+
+# Constants
+from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR, TWO_THIRDS
+from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
 
-# Constants
-sec_in_year = 365*24*3600
-sec_in_month = 31*24*3600
-sec_in_day = 24*3600
-sec_in_hour = 3600
-
-rho = 900.  # ice density
-g = 9.81  # gravity
-n = 3.  # Glen's law's exponent
-twothirds = 2./3.
-fourthirds = 4./3.
-
-
-class ModelFlowline(oggm.prepro.geometry.InversionFlowline):
-    """A more advanced Flowline."""
+class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
+    """The is the input flowline for the model."""
 
     def __init__(self, line, dx, map_dx, surface_h, bed_h):
         """ Instanciate.
 
-        Parameters
-        ----------
-        line: Shapely LineString
-
-        Properties
-        ----------
-        #TODO: document properties
+        #TODO: documentation
         """
         super(ModelFlowline, self).__init__(line, dx, surface_h)
 
@@ -55,7 +43,7 @@ class ModelFlowline(oggm.prepro.geometry.InversionFlowline):
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
 
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    @oggm.core.preprocessing.geometry.InversionFlowline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
         return self.widths_m / self.map_dx
@@ -69,7 +57,7 @@ class ModelFlowline(oggm.prepro.geometry.InversionFlowline):
     def thick(self, value):
         self._thick = value.clip(0)
 
-    @oggm.prepro.geometry.InversionFlowline.surface_h.getter
+    @oggm.core.preprocessing.geometry.InversionFlowline.surface_h.getter
     def surface_h(self):
         return self._thick + self.bed_h
 
@@ -115,21 +103,22 @@ class ParabolicFlowline(ModelFlowline):
         super(ParabolicFlowline, self).__init__(line, dx, map_dx,
                                                 surface_h, bed_h)
 
+        assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
         self._sqrt_bed = np.sqrt(bed_shape)
 
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         return np.sqrt(4*self.thick/self.bed_shape)
 
     @property
     def section(self):
-        return twothirds * self.widths_m * self.thick
+        return TWO_THIRDS * self.widths_m * self.thick
 
     @section.setter
     def section(self, val):
-        self.thick = (0.75 * val * self._sqrt_bed)**twothirds
+        self.thick = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
 
 
 class VerticalWallFlowline(ModelFlowline):
@@ -151,7 +140,7 @@ class VerticalWallFlowline(ModelFlowline):
 
         self._widths = widths
 
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         return self._widths * self.map_dx
@@ -190,7 +179,7 @@ class TrapezoidalFlowline(ModelFlowline):
         self._w0_m = widths * self.map_dx - lambdas * self.thick
         self._lambdas = lambdas
 
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         return self._w0_m + self._lambdas * self.thick
@@ -230,11 +219,12 @@ class MixedFlowline(ModelFlowline):
         super(MixedFlowline, self).__init__(line, dx, map_dx,
                                                 surface_h.copy(), bed_h.copy())
 
+        assert np.all(np.isfinite(bed_shape))
+
         self.bed_shape = bed_shape
         self._sqrt_bed = np.sqrt(bed_shape)
 
-        # Where we will have to use the other
-        #TODO: add these parameters to configfile
+        # Where we will have to use the other\
         totest = bed_shape.copy()
         if self.flows_to is None:
             totest[-np.floor(len(totest)/3.).astype(np.int64):] = min_shape + 1
@@ -251,7 +241,8 @@ class MixedFlowline(ModelFlowline):
         assert np.alltrue(h >= 0)
         self.bed_h[pt] = surface_h[pt] - h.clip(0)
         self._thick[pt] = h.clip(0)
-        assert np.allclose(surface_h, self.surface_h)
+        # This doesnt work because of interp at the tongue
+        # assert np.allclose(surface_h, self.surface_h)
 
         _w0_m = for_later - lambdas * self.thick[pt]
         assert np.alltrue(_w0_m >= 0)
@@ -264,7 +255,7 @@ class MixedFlowline(ModelFlowline):
 
         assert np.allclose(for_assert, self.section)
 
-    @oggm.prepro.geometry.InversionFlowline.widths.getter
+    @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         out = np.sqrt(4*self.thick/self.bed_shape)
@@ -274,14 +265,14 @@ class MixedFlowline(ModelFlowline):
 
     @property
     def section(self):
-        out = twothirds * self.widths_m * self.thick
+        out = TWO_THIRDS * self.widths_m * self.thick
         if self._dot:
             out[self._pt] = (self.widths_m[self._pt] + self._w0_m) / 2 * self.thick[self._pt]
         return out
 
     @section.setter
     def section(self, val):
-        out = (0.75 * val * self._sqrt_bed)**twothirds
+        out = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
         if self._dot:
             b = 2 * self._w0_m
             a = 2 * self._lambdas
@@ -297,7 +288,7 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None):
         """ Instanciate.
 
         Parameters
@@ -308,7 +299,7 @@ class FlowlineModel(object):
         #TODO: document properties
         """
 
-        self.mb = mass_balance
+        self.mb = mb_model
         self.fd = fd
         self.fs = fs
 
@@ -337,16 +328,16 @@ class FlowlineModel(object):
                 continue
             idl = self.fls.index(fl.flows_to)
             ide = fl.flows_to_indice
-            if fl.nx >= 9:
-                gk = utils.gaussian_kernel[9]
+            if fl.flows_to.nx >= 9:
+                gk = GAUSSIAN_KERNEL[9]
                 id0 = ide-4
                 id1 = ide+5
-            elif fl.nx >= 7:
-                gk = utils.gaussian_kernel[7]
+            elif fl.flows_to.nx >= 7:
+                gk = GAUSSIAN_KERNEL[7]
                 id0 = ide-3
                 id1 = ide+4
-            elif fl.nx >= 5:
-                gk = utils.gaussian_kernel[5]
+            elif fl.flows_to.nx >= 5:
+                gk = GAUSSIAN_KERNEL[5]
                 id0 = ide-2
                 id1 = ide+3
             trib_ind.append((idl, id0, id1, gk))
@@ -354,7 +345,7 @@ class FlowlineModel(object):
 
     @property
     def yr(self):
-        return self.y0 + self.t / sec_in_year
+        return self.y0 + self.t / SEC_IN_YEAR
 
     @property
     def area_m2(self):
@@ -372,17 +363,36 @@ class FlowlineModel(object):
     def area_km2(self):
         return self.area_m2 * 1e-6
 
+    def check_domain_end(self):
+        """Returns False if the glacier reaches the domains bound."""
+        return np.isclose(self.fls[-1].thick[-1], 0)
+
     def step(self, dt=None):
         """Advance one step."""
         raise NotImplementedError
 
     def run_until(self, y1):
 
-        t = (y1-self.y0) * sec_in_year
+        t = (y1-self.y0) * SEC_IN_YEAR
         while self.t < t:
             self.step(dt=t-self.t)
 
-    def run_until_equilibrium(self, rate=0.0005, ystep=5, max_ite=200):
+        # Check for domains
+        if not np.isclose(self.fls[-1].thick[-1], 0):
+            raise RuntimeError('Glacier exceeds domain boundaries.')
+
+    def run_until_and_output(self, y1):
+        """Runs the model and writes intermediate steps in a dict."""
+
+        years = np.arange(self.yr, y1+1)
+        out = OrderedDict()
+        for yr in years:
+            self.run_until(yr)
+            out[yr] = copy.deepcopy(self)
+
+        return out
+
+    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
         ite = 0
         was_close_zero = 0
@@ -398,16 +408,14 @@ class FlowlineModel(object):
                 was_close_zero += 1
 
         if ite > max_ite:
-            raise RuntimeError('Did not find equilibrium as expected')
+            raise RuntimeError('Did not find equilibrium.')
 
 
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd,
-                       fixed_dt=None,
-                       min_dt=sec_in_day,
-                       max_dt=sec_in_month):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+                       fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -418,8 +426,8 @@ class FluxBasedModel(FlowlineModel):
         ----------
         #TODO: document properties
         """
-        super(FluxBasedModel, self).__init__(flowlines, mass_balance,
-                                             y0, fs, fd)
+        super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
+                                             y0=y0, fs=fs, fd=fd)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -427,7 +435,7 @@ class FluxBasedModel(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=sec_in_month):
+    def step(self, dt=SEC_IN_MONTH):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -436,40 +444,60 @@ class FluxBasedModel(FlowlineModel):
         # Loop over tributaries to determine the flux rate
         flxs = []
         aflxs = []
-        for fl in self.fls:
+        for fl, trib in zip(self.fls, self._trib):
+
+            surface_h = fl.surface_h
+            thick = fl.thick
+            section = fl.section
+            nx = fl.nx
+
+            # If it is a tributary, we use the branch it flows into to compute
+            # the slope of the last grid points
+            is_trib = trib[0] is not None
+            if is_trib:
+                fl_to = self.fls[trib[0]]
+                ide = fl.flows_to_indice
+                surface_h = np.append(surface_h, fl_to.surface_h[ide])
+                thick = np.append(thick, thick[-1])
+                section = np.append(section, section[-1])
+                nx += 1
 
             dx = fl.dx_meter
 
             # Staggered gradient
-            sh = fl.surface_h
-            slope_stag = np.zeros(fl.nx+1)
-            slope_stag[1:-1] = (sh[0:-1] - sh[1:]) / dx
+            slope_stag = np.zeros(nx+1)
+            slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
             slope_stag[-1] = slope_stag[-2]
 
             # Convert to angle?
             # slope_stag = np.sin(np.arctan(slope_stag))
 
             # Staggered thick
-            thick = fl.thick
-            thick_stag = np.zeros(fl.nx+1)
+            thick_stag = np.zeros(nx+1)
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
-            rhogh = (rho*g*slope_stag)**n
-            u_stag = (thick_stag**(n+1)) * self.fd * rhogh + \
-                     (thick_stag**(n-1)) * self.fs * rhogh
+            rhogh = (RHO*G*slope_stag)**N
+            u_stag = (thick_stag**(N+1)) * self.fd * rhogh + \
+                     (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
-            section = fl.section
-            section_stag = np.zeros(fl.nx+1)
+            section_stag = np.zeros(nx+1)
             section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
             section_stag[[0, -1]] = section[[0, -1]]
 
             # Staggered flux rate
             flx_stag = u_stag * section_stag / dx
-            flxs.append(flx_stag)
-            aflxs.append(np.zeros(fl.nx))
+
+            # Store the results
+            if is_trib:
+                flxs.append(flx_stag[:-1])
+                aflxs.append(np.zeros(nx-1))
+                u_stag = u_stag[:-1]
+            else:
+                flxs.append(flx_stag)
+                aflxs.append(np.zeros(nx))
 
             # Time crit: limit the velocity somehow
             maxu = np.max(np.abs(u_stag))
@@ -482,6 +510,8 @@ class FluxBasedModel(FlowlineModel):
 
         # Time step
         if dt < min_dt:
+            if not self.dt_warning:
+                log.warning('Unstable')
             self.dt_warning = True
         dt = np.clip(dt, min_dt, self.max_dt)
 
@@ -516,10 +546,8 @@ class FluxBasedModel(FlowlineModel):
 class KarthausModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mass_balance, y0, fs, fd,
-                       fixed_dt=None,
-                       min_dt=sec_in_day,
-                       max_dt=sec_in_month):
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -534,8 +562,8 @@ class KarthausModel(FlowlineModel):
         if len(flowlines) > 1:
             raise ValueError('Karthaus model does not work with tributaries.')
 
-        super(KarthausModel, self).__init__(flowlines, mass_balance,
-                                            y0, fs, fd)
+        super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
+                                            y0=y0, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -543,7 +571,7 @@ class KarthausModel(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=sec_in_month):
+    def step(self, dt=SEC_IN_MONTH):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -567,7 +595,7 @@ class KarthausModel(FlowlineModel):
         SurfaceGradient[0] = 0
 
         # Diffusivity
-        Diffusivity = width * (rho*g)**3 * thick**3 * SurfaceGradient**2
+        Diffusivity = width * (RHO*G)**3 * thick**3 * SurfaceGradient**2
         Diffusivity *= self.fd * thick**2 + self.fs
 
         # on stagger
@@ -596,28 +624,23 @@ class KarthausModel(FlowlineModel):
         self.t += dt
 
 
-def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
+@entity_task(log, writes=['model_flowlines'])
+def init_present_time_glacier(gdir):
     """First task after inversion. Merges the data from the various
     preprocessing tasks into a stand-alone dataset ready for run.
 
     In a first stage we assume that all divides CAN be merged as for HEF,
     so that the concept of divide is not necessary anymore.
 
+    This task is horribly coded and needs work
+
     Parameters
     ----------
-    gdir: GlacierDir object
-
-    I/O
-    ---
-     - new file: model_flowlines.p
+    gdir : oggm.GlacierDirectory
     """
 
-    fn = gdir.get_filepath('major_divide', div_id=0)
-    with open(fn, 'r') as text_file:
-        major_div = int(text_file.read())
-
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=0))
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
     topo = nc.variables['topo_smoothed'][:]
     nc.close()
 
@@ -629,7 +652,7 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
     interpolator = RegularGridInterpolator(xy, topo)
 
     # Smooth window
-    sw = cfg.params['flowline_height_smooth']
+    sw = cfg.PARAMS['flowline_height_smooth']
 
     # Map
     map_dx = gdir.grid.dx
@@ -637,6 +660,7 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
     # OK. Dont try to solve problems you don't know about yet - i.e.
     # rethink about all this when we will have proper divides everywhere.
     # for HEF the following will work, and this is very ugly.
+    major_div = gdir.read_pickle('major_divide', div_id=0)
     div_ids = list(gdir.divide_ids)
     div_ids.remove(major_div)
     div_ids = [major_div] + div_ids
@@ -650,23 +674,32 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
         invs = gdir.read_pickle('inversion_output', div_id=div_id)
         inversion_per_divide.append(invs)
 
+    # Which kind of bed?
+    if cfg.PARAMS['bed_shape'] == 'mixed':
+        flobject = partial(MixedFlowline,
+                           min_shape=cfg.PARAMS['mixed_min_shape'],
+                           lambdas=cfg.PARAMS['trapezoid_lambdas'])
+    elif cfg.PARAMS['bed_shape'] == 'parabolic':
+        flobject = ParabolicFlowline
+    else:
+        raise NotImplementedError('bed: {}'.format(cfg.PARAMS['bed_shape']))
+
+    max_shape = cfg.PARAMS['max_shape_param']
+
     # Extend the flowlines with the downstream lines, make a new object
-    # out of these
-
-    #TODO: add this choice to config
-    from functools import partial
-    flobject = partial(MixedFlowline, min_shape=min_shape, lambdas=lambdas)
-
     new_fls = []
     flows_to_ids = []
     major_id = None
     for fls, invs, did in zip(fls_per_divide, inversion_per_divide, div_ids):
         for fl, inv in zip(fls[0:-1], invs[0:-1]):
             bed_h = fl.surface_h - inv['thick']
-            # Interpolate shapes
-            shape = utils.interp_nans(inv['shape'])
+            w = fl.widths * map_dx
+            bed_shape = (4*inv['thick'])/(w**2)
+            bed_shape = bed_shape.clip(0, max_shape)
+            bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
+            bed_shape = utils.interp_nans(bed_shape)
             nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
-                                    bed_h, shape)
+                                    bed_h, bed_shape)
             flows_to_ids.append(fls_list.index(fl.flows_to))
             new_fls.append(nfl)
 
@@ -675,23 +708,36 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
         fl = fls[-1]
         inv = invs[-1]
         dline = gdir.read_pickle('downstream_line', div_id=did)
-        long_line = oggm.prepro.geometry._line_extend(fl.line, dline, fl.dx)
+        long_line = oggm.core.preprocessing.geometry._line_extend(fl.line, dline, fl.dx)
+
         # Interpolate heights
         x, y = long_line.xy
         hgts = interpolator((y, x))
-        # If smoothing, this is the moment
-        hgts = gaussian_filter1d(hgts, sw)
 
         # Inversion stuffs
         bed_h = hgts.copy()
         bed_h[0:len(fl.surface_h)] -= inv['thick']
-        # Interpolate shapes
-        shape = utils.interp_nans(inv['shape'])
+
+        # Shapes
+        w = fl.widths * map_dx
+        bed_shape = (4*inv['thick'])/(w**2)
+        bed_shape = bed_shape.clip(0, max_shape)
+        bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
+        bed_shape = utils.interp_nans(bed_shape)
+
+        # But forbid too small shape close to the end
+        if cfg.PARAMS['bed_shape'] == 'mixed':
+            bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
 
         # Take the median of the last 30%
-        ashape = np.median(shape[-np.floor(len(shape)/3.).astype(np.int64):])
-        shape = np.append(shape, np.ones(len(bed_h)-len(shape))*ashape)
-        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, shape)
+        ashape = np.median(bed_shape[-np.floor(len(bed_shape)/3.).astype(np.int64):])
+
+        # But forbid too small shape
+        if cfg.PARAMS['bed_shape'] == 'mixed':
+            ashape = ashape.clip(cfg.PARAMS['mixed_min_shape'])
+
+        bed_shape = np.append(bed_shape, np.ones(len(bed_h)-len(bed_shape))*ashape)
+        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, bed_shape)
 
         if major_id is None:
             flid = -1
@@ -709,7 +755,7 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
 
     # Adds the line level
     for fl in new_fls:
-        fl.order = oggm.prepro.centerlines._line_order(fl)
+        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
 
     # And sort them per order
     fls = []
@@ -722,11 +768,16 @@ def init_present_time_glacier(gdir, min_shape=0.0012, lambdas=0.2):
 
 def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
                          rtol=0.01, atol=10, max_ite=100,
-                         init_bias=0., equi_rate=0.0005):
+                         init_bias=0., equi_rate=0.0005,
+                         ref_area=None):
     """ Iterative search for a plausible starting time glacier"""
 
     # Objective
-    orig_area = final_model.area_m2
+    if ref_area is None:
+        ref_area = final_model.area_m2
+    log.info('find_inital_glacier in year %d. Ref area to catch: %.3f km2. '
+             'Tolerance: %.2f %%' ,
+             np.int64(y0), ref_area*1e-6, rtol*100)
 
     # are we trying to grow or to shrink the glacier?
     prev_model = copy.deepcopy(final_model)
@@ -736,24 +787,27 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     prev_area = prev_model.area_m2
 
     # Just in case we already hit the correct starting state
-    if np.allclose(prev_area, orig_area, atol=atol, rtol=rtol):
+    if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('find_inital_glacier, ite: %d. Converged with a final error '
-                 'of %.3f', 0,
-                 utils.rel_err(orig_area, prev_area))
-        return model
+        log.info('find_inital_glacier: inital starting glacier converges '
+                 'to itself with a final dif of %.2f %%',
+                 utils.rel_err(ref_area, prev_area) * 100)
+        return 0, None, model
 
-    if prev_area < orig_area:
+    if prev_area < ref_area:
         sign_mb = 1.
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
-                  'small of %.3f. Continue', 0,
-                  utils.rel_err(orig_area, prev_area))
+                 'small of %.2f %%. Continue', 0,
+                 utils.rel_err(ref_area, prev_area) * 100)
     else:
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
-                  'big of %.3f. Continue', 0,
-                  utils.rel_err(orig_area, prev_area))
+                 'big of %.2f %%. Continue', 0,
+                 utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = -1.
+
+    # Log prefix
+    logtxt = 'find_inital_glacier'
 
     # Loop until 100 iterations
     c = 0
@@ -773,13 +827,13 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         # Grow
         mb_bias += bias_step
         mb.set_bias(sign_mb * mb_bias)
-        log.info('find_inital_glacier, ite: %d. New bias: %.0f', c,
-                  sign_mb * mb_bias)
+        log.info(logtxt + ', ite: %d. New bias: %.0f', c, sign_mb * mb_bias)
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
-        log.info('find_inital_glacier, ite: %d. Grew for: %d years', c,
-                  grow_model.yr)
+        log.info(logtxt + ', ite: %d. Grew to equilibrium for %d years, '
+                          'new area: %.3f km2', c, grow_model.yr,
+                           grow_model.area_km2)
 
         # Shrink
         new_fls = copy.deepcopy(grow_model.fls)
@@ -790,38 +844,40 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         new_area = new_model.area_m2
 
         # Maybe we done?
-        if np.allclose(new_area, orig_area, atol=atol, rtol=rtol):
+        if np.allclose(new_area, ref_area, atol=atol, rtol=rtol):
             new_model.reset_flowlines(new_fls)
             new_model.reset_y0(y0)
-            log.info('find_inital_glacier, ite: %d. Converged with a '
-                     'final error of %.3f', c,
-                     utils.rel_err(orig_area, new_area))
-            return new_model
+            log.info(logtxt + ', ite: %d. Converged with a '
+                     'final dif of %.2f %%', c,
+                     utils.rel_err(ref_area, new_area)*100)
+            return c, mb_bias, new_model
 
         # See if we did a step to far or if we have to continue growing
-        do_cont_1 = (sign_mb > 0.) and (new_area < orig_area)
-        do_cont_2 = (sign_mb < 0.) and (new_area > orig_area)
+        do_cont_1 = (sign_mb > 0.) and (new_area < ref_area)
+        do_cont_2 = (sign_mb < 0.) and (new_area > ref_area)
         if do_cont_1 or do_cont_2:
             # Reset the previous state and continue
             prev_fls = new_fls
 
-            log.info('find_inital_glacier, ite: %d. Error of %.3f. '
-                      'Continue', c,
-                      utils.rel_err(orig_area, new_area))
+            log.info(logtxt + ', ite: %d. Dif of %.2f %%. '
+                              'Continue', c,
+                     utils.rel_err(ref_area, new_area)*100)
             continue
 
         # Ok. We went too far. Reduce the bias step but keep previous state
         mb_bias -= bias_step
         bias_step /= reduce_step
-        log.info('find_inital_glacier, ite: %d. Went too far.', c)
+        log.info(logtxt + ', ite: %d. Went too far.', c)
         if bias_step < 0.1:
             break
 
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
-def find_inital_glacier(gdir, div_id=None, init_bias=0., rtol=0.005):
-    """Search for the glacier in year 1847
+@entity_task(log, writes=['past_model'])
+def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
+                        write_steps=True):
+    """Search for the glacier in year y0
 
     Parameters
     ----------
@@ -834,21 +890,36 @@ def find_inital_glacier(gdir, div_id=None, init_bias=0., rtol=0.005):
         - past_model.p: a ModelFlowline object
     """
 
-    d = gdir.read_pickle('flowline_params')
-    fs = d['fs']
-    fd = d['fd']
+    if cfg.PARAMS['use_flowline_params']:
+        fs = cfg.PARAMS['flowline_fs']
+        fd = cfg.PARAMS['flowline_fd']
+    else:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
 
-    y0 = 1847
-    y1 = 2003
-
+    if y0 is None:
+        y0 = cfg.PARAMS['y0']
+    y1 = gdir.rgi_date.year
     mb = mbmods.HistalpMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb, 0., fs, fd)
-    vol_ref = model.volume_km3
+    model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, fd=fd)
+    assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     mb = mbmods.BackwardsMassBalanceModel(gdir)
-    past_model = _find_inital_glacier(model, mb, y0, y1, rtol=rtol,
-                                      init_bias=init_bias)
+    ref_area = gdir.rgi_area_m2
+    ite, bias, past_model = _find_inital_glacier(model, mb, y0, y1,
+                                                   rtol=rtol,
+                                                 init_bias=init_bias,
+                                                 ref_area=ref_area)
+
+    # Some parameters for posterity:
+    params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
+                         ite=ite, mb_bias=bias)
 
     # Write the data
+    gdir.write_pickle(params, 'find_initial_glacier_params')
     gdir.write_pickle(past_model, 'past_model')
+    if write_steps:
+        past_models = past_model.run_until_and_output(y1)
+        gdir.write_pickle(past_models, 'past_models')

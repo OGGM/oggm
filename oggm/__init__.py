@@ -1,17 +1,14 @@
-"""
-OGGM
-====
+""" OGGM package.
 
 Copyright: OGGM developers, 2014-2015
 
 License: GPLv3+
 """
 from __future__ import absolute_import, division
+import logging
 
-from os import path
-from os import makedirs
+# Fiona and shapely are spammers
+logging.getLogger("Fiona").setLevel(logging.WARNING)
+logging.getLogger("shapely").setLevel(logging.WARNING)
 
-# Path to the cache directory
-cache_dir = path.join(path.expanduser('~'), '.oggm')
-if not path.exists(cache_dir):
-    makedirs(cache_dir)  # pragma: no cover
+from oggm.utils import GlacierDirectory, entity_task, divide_task

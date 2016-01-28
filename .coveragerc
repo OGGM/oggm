@@ -1,6 +1,6 @@
 [run]
 source = oggm
-omit = */sandbox.py/*
+omit = oggm/tests/*
 
 [report]
 omit = */sandbox.py/*
@@ -9,6 +9,7 @@ exclude_lines =
     pragma: no cover
     coverage: no cover
     Test decorator
+    if do_plot:
 
     # Don't complain about missing debug-only code:
     def __repr__

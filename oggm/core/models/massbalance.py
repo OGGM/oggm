@@ -1,6 +1,5 @@
 """Mass-balance stuffs"""
 from __future__ import division
-from six.moves import zip
 
 # Built ins
 # External libs
@@ -9,12 +8,9 @@ import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
 # Locals
-import oggm.conf as cfg
-from oggm.prepro import climate
-
-
-sec_in_year = 365*24*3600
-
+import oggm.cfg as cfg
+from oggm.cfg import SEC_IN_YEAR
+from oggm.core.preprocessing import climate
 
 class MassBalanceModel(object):
     """An interface for mass balance."""
@@ -48,7 +44,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         t_star = df['t_star'][0]
 
         # Climate period
-        mu_hp = int(cfg.params['mu_star_halfperiod'])
+        mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         yr = [t_star-mu_hp, t_star+mu_hp]
 
         fls = gdir.read_pickle('model_flowlines')
@@ -68,7 +64,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / sec_in_year / 900
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
 class BackwardsMassBalanceModel(MassBalanceModel):
@@ -85,15 +81,15 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         # Climate period
         if use_tstar:
             t_star = df['t_star'][0]
-            mu_hp = int(cfg.params['mu_star_halfperiod'])
+            mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
             yr_range = [t_star-mu_hp, t_star+mu_hp]
         else:
             yr_range = [1983, 2003]
 
         # Parameters
-        self.temp_all_solid = cfg.params['temp_all_solid']
-        self.temp_all_liq = cfg.params['temp_all_liq']
-        self.temp_melt = cfg.params['temp_melt']
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
@@ -166,7 +162,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         for a given moment in time."""
 
         interp = self._get_interp()
-        return interp(heights) / sec_in_year / 900.
+        return interp(heights) / SEC_IN_YEAR / cfg.RHO
 
 
 class TodayMassBalanceModel(MassBalanceModel):
@@ -201,7 +197,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        return (self.interp(heights) + self._bias) / sec_in_year / 900.
+        return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
 class HistalpMassBalanceModel(MassBalanceModel):
@@ -214,9 +210,9 @@ class HistalpMassBalanceModel(MassBalanceModel):
         self.mu_star = df['mu_star'][0]
 
         # Parameters
-        self.temp_all_solid = cfg.params['temp_all_solid']
-        self.temp_all_liq = cfg.params['temp_all_liq']
-        self.temp_melt = cfg.params['temp_melt']
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
@@ -264,4 +260,4 @@ class HistalpMassBalanceModel(MassBalanceModel):
         prcpsol = prcpsol * fac
 
         mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
-        return mb_annual / sec_in_year / 900.
+        return mb_annual / SEC_IN_YEAR / cfg.RHO

@@ -1,28 +1,29 @@
 from __future__ import division
+
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
+
 import os
-import logging
 import shutil
 import unittest
 
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
 
-from nose.plugins.attrib import attr
-
 # Locals
-import oggm.conf as cfg
+import oggm.cfg as cfg
 from oggm import workflow
-from oggm.prepro import inversion
-from oggm.utils import get_demo_file
-from oggm.utils import rmsd
-from oggm.tests import is_slow
+from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
+from oggm.tests import is_slow, ON_TRAVIS
+from oggm.core.models import flowline, massbalance
+from oggm import graphics
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
 
 
 def clean_dir(testdir):
@@ -30,92 +31,151 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_inversion():
+def up_to_inversion(reset=False):
     """Run the tasks you want."""
 
     # test directory
-    testdir = os.path.join(CURRENT_DIR, 'tmp')
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
-    clean_dir(testdir)
+    if not os.path.exists(TEST_DIR):
+        os.makedirs(TEST_DIR)
+    if reset:
+        clean_dir(TEST_DIR)
 
     # Init
     cfg.initialize()
 
-    # Prevent multiprocessing
-    cfg.use_mp = False
+    # Use multiprocessing
+    cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
 
     # Working dir
-    cfg.paths['working_dir'] = testdir
+    cfg.PATHS['working_dir'] = TEST_DIR
 
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['srtm_file'] = get_demo_file('srtm_oeztal.tif')
+    cfg.PATHS['srtm_file'] = get_demo_file('srtm_oeztal.tif')
 
     # Set up the paths and other stuffs
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
+    cfg.PATHS['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
 
     # Get test glaciers (all glaciers with MB or Thickness data)
-    cfg.paths['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
-    cfg.paths['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
+    cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
+    cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oeztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
 
+    # Params
+    cfg.PARAMS['border'] = 70
+
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
 
-    # First preprocessing tasks
-    workflow.gis_prepro_tasks(gdirs)
-
-    # Climate related tasks
-    workflow.climate_tasks(gdirs)
-
-    # Merge climate and catchments
-    workflow.execute_task(inversion.prepare_for_inversion, gdirs)
-    fs, fd = inversion.optimize_inversion_params(gdirs)
-
-    # Tests
-    dfids = cfg.paths['glathida_rgi_links']
     try:
-        gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
-    except AttributeError:
-        gtd_df = pd.read_csv(dfids).sort(columns=['RGI_ID'])
-    dfids = gtd_df['RGI_ID'].values
-    ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
+        flowline.init_present_time_glacier(gdirs[0])
+    except Exception:
+        reset = True
 
-    # Account for area differences between glathida and rgi
-    ref_area_km2 = gtd_df.RGI_AREA.values
-    ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
-    ref_volume_km3 = ref_cs * ref_area_km2**1.375
+    if reset:
+        # First preprocessing tasks
+        workflow.gis_prepro_tasks(gdirs)
 
-    vol = []
-    area = []
-    rgi = []
-    for gdir in ref_gdirs:
-        v, a = inversion.inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
-                                                         write=True)
-        vol.append(v)
-        area.append(a)
-        rgi.append(gdir.rgi_id)
+        # Climate related tasks
+        workflow.climate_tasks(gdirs)
 
-    df = pd.DataFrame()
-    df['rgi'] = rgi
-    df['area'] = area
-    df['ref_vol'] = ref_volume_km3
-    df['oggm_vol'] = np.array(vol) * 1e-9
-    df['vas_vol'] = 0.034*(ref_area_km2**1.375)
-    df = df.set_index('rgi')
+        # Inversion
+        workflow.inversion_tasks(gdirs)
 
-    shutil.rmtree(testdir)
+    return gdirs
 
-    return df
 
-class TestBasic(unittest.TestCase):
+class TestWorkflow(unittest.TestCase):
+
+    # def test_find_past_glacier(self):
+    #
+    #     gdirs = up_to_inversion()
+    #     for gd in gdirs:
+    #
+    #         # if gd.rgi_id not in ['RGI40-11.00897']:
+    #         #     continue
+    #         flowline.init_present_time_glacier(gd)
+    #         flowline.find_inital_glacier(gd, do_plot=True, init_bias=100)
 
     @is_slow
-    def test_first_shot(self):
+    def test_grow(self):
 
-        df = up_to_inversion()
-        self.assertTrue(rmsd(df['ref_vol'], df['oggm_vol']) < rmsd(df['ref_vol'], df['vas_vol']))
+        gdirs = up_to_inversion()
+
+        d = gdirs[0].read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
+
+        for gd in gdirs[0:2]:
+
+            if gd.rgi_id in ['RGI40-11.00719']:
+                # Bad bad glacier
+                continue
+
+            flowline.init_present_time_glacier(gd)
+            flowline.find_inital_glacier(gd)
+
+
+    @is_slow
+    def test_shapefile_output(self):
+
+        # Just to increase coveralls, hehe
+        gdirs = up_to_inversion()
+        fpath = os.path.join(TEST_DIR, 'centerlines.shp')
+        write_centerlines_to_shape(gdirs, fpath)
+
+        import salem
+        shp = salem.utils.read_shapefile(fpath)
+        self.assertTrue(shp is not None)
+
+    @is_slow
+    def test_init_present_time_glacier(self):
+
+        gdirs = up_to_inversion()
+
+        # Inversion Results
+        cfg.PARAMS['invert_with_sliding'] = True
+        workflow.inversion_tasks(gdirs)
+
+        fpath = os.path.join(cfg.PATHS['working_dir'],
+                             'inversion_optim_results.csv')
+        df = pd.read_csv(fpath, index_col=0)
+        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
+        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
+        self.assertTrue(r1 < r2)
+
+        cfg.PARAMS['invert_with_sliding'] = False
+        workflow.inversion_tasks(gdirs)
+
+        fpath = os.path.join(cfg.PATHS['working_dir'],
+                             'inversion_optim_results.csv')
+        df = pd.read_csv(fpath, index_col=0)
+        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
+        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
+        self.assertTrue(r1 < r2)
+
+        # Init glacier
+        d = gdirs[0].read_pickle('inversion_params')
+        fs = d['fs']
+        fd = d['fd']
+        maxs = cfg.PARAMS['max_shape_param']
+        for gdir in gdirs:
+            flowline.init_present_time_glacier(gdir)
+            mb_mod = massbalance.TstarMassBalanceModel(gdir)
+            fls = gdir.read_pickle('model_flowlines')
+            model = flowline.FluxBasedModel(fls, mb_mod, 0., fs, fd)
+            _vol = model.volume_km3
+            _area = model.area_km2
+            gldf = df.loc[gdir.rgi_id]
+            assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.01)
+            assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
+            maxo = max([fl.order for fl in model.fls])
+            for fl in model.fls:
+                self.assertTrue(np.all(fl.bed_shape > 0))
+                self.assertTrue(np.all(fl.bed_shape <= maxs))
+                if len(model.fls) > 1:
+                    if fl.order == (maxo-1):
+                        self.assertTrue(fl.flows_to is fls[-1])

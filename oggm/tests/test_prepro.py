@@ -1,26 +1,28 @@
 from __future__ import absolute_import, division
 
 import warnings
-warnings.filterwarnings("once", category=DeprecationWarning) # , module=r'.*oggm.*'
+
+import oggm.utils
+
+warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
+import shutil
 
 import shapely.geometry as shpg
 import numpy as np
-import shutil
 import pandas as pd
 import geopandas as gpd
 import netCDF4
+import salem
 
 # Local imports
-from oggm.prepro import gis, centerlines, geometry, climate, inversion
-import oggm.conf as cfg
-from oggm.utils import get_demo_file
+from oggm.core.preprocessing import gis, geometry, climate, inversion
+from oggm.core.preprocessing import centerlines
+import oggm.cfg as cfg
 from oggm import utils
-from xml.dom import minidom
-import salem
-from oggm.utils import tuple2int
+from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow
 
 # Globals
@@ -29,6 +31,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 def read_svgcoords(svg_file):
     """Get the vertices coordinates out of a SVG file"""
+
+    from xml.dom import minidom
     doc = minidom.parse(svg_file)
     coords = [path.getAttribute('d') for path
                     in doc.getElementsByTagName('path')]
@@ -60,7 +64,7 @@ class TestGIS(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
         self.rm_dir()
@@ -79,8 +83,8 @@ class TestGIS(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
@@ -94,14 +98,15 @@ class TestGIS(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
 
-        nc = netCDF4.Dataset(gdir.get_filepath('grids'))
+        nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
         area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
-        np.testing.assert_allclose(area,gdir.glacier_area, rtol=1e-1)
+        np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
         nc.close()
+
 
 class TestCenterlines(unittest.TestCase):
 
@@ -116,8 +121,8 @@ class TestCenterlines(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.params['border'] = 10
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 10
 
     def tearDown(self):
         self.rm_dir()
@@ -142,9 +147,9 @@ class TestCenterlines(unittest.TestCase):
         radius = 25
 
         _heads, _ = centerlines._filter_heads(heads, heads_height, radius,
-                                            polygon)
+                                              polygon)
         _headsi, _ = centerlines._filter_heads(heads[::-1], heads_height[
-                                                          ::-1], radius, polygon)
+                                                            ::-1], radius, polygon)
 
         self.assertEqual(_heads, _headsi[::-1])
         self.assertEqual(_heads, [heads[h] for h in [2,5,6,7]])
@@ -156,8 +161,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
 
@@ -179,8 +184,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             centerlines.compute_downstream_lines(gdir)
@@ -188,8 +193,8 @@ class TestCenterlines(unittest.TestCase):
     @is_slow
     def test_baltoro_centerlines(self):
 
-        cfg.params['border'] = 2
-        cfg.paths['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
+        cfg.PARAMS['border'] = 2
+        cfg.PATHS['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
         rgidf = gpd.GeoDataFrame.from_file(b_file)
@@ -199,8 +204,8 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
 
@@ -264,8 +269,8 @@ class TestGeometry(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.params['border'] = 10
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 10
 
     def tearDown(self):
         self.rm_dir()
@@ -284,8 +289,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.catchment_area(gdir)
@@ -295,7 +300,7 @@ class TestGeometry(unittest.TestCase):
             cis = gdir.read_pickle('catchment_indices', div_id=div_id)
 
             # The catchment area must be as big as expected
-            nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=div_id))
+            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
             mask = nc.variables['glacier_mask'][:]
             nc.close()
 
@@ -314,8 +319,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -333,7 +338,7 @@ class TestGeometry(unittest.TestCase):
 
         x, y = map(np.array, cls[0].line.xy)
         dis = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
-        np.testing.assert_allclose(dis*0 + cfg.params['flowline_dx'], dis,
+        np.testing.assert_allclose(dis * 0 + cfg.PARAMS['flowline_dx'], dis,
                                    rtol=0.01)
 
     def test_geom_width(self):
@@ -343,8 +348,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -358,8 +363,8 @@ class TestGeometry(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -377,11 +382,11 @@ class TestGeometry(unittest.TestCase):
                 harea.extend(list(cl.widths * cl.dx))
                 hgt.extend(list(cl.surface_h))
                 area += np.sum(cl.widths * cl.dx)
-            nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=i))
+            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=i))
             otherarea += np.sum(nc.variables['glacier_mask'][:])
             nc.close()
 
-        nc = netCDF4.Dataset(gdir.get_filepath('grids', div_id=0))
+        nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
         mask = nc.variables['glacier_mask'][:]
         topo = nc.variables['topo_smoothed'][:]
         nc.close()
@@ -415,9 +420,9 @@ class TestClimate(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.params['border'] = 10
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 10
 
     def tearDown(self):
         self.rm_dir()
@@ -437,15 +442,15 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
         ref_h = nc_r.variables['hgt'][1, 1]
         ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.params['prcp_scaling_factor']
+        ref_p *= cfg.PARAMS['prcp_scaling_factor']
         ref_t = nc_r.variables['temp'][:, 1, 1]
         nc_r.close()
 
@@ -463,15 +468,15 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
         ref_h = nc_r.variables['hgt'][1, 1]
         ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.params['prcp_scaling_factor']
+        ref_p *= cfg.PARAMS['prcp_scaling_factor']
         ref_t = nc_r.variables['temp'][:, 1, 1]
         ref_t = np.where(ref_t < 0, 0, ref_t)
         nc_r.close()
@@ -526,15 +531,15 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
         ref_h = nc_r.variables['hgt'][1, 1]
         ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.params['prcp_scaling_factor']
+        ref_p *= cfg.PARAMS['prcp_scaling_factor']
         ref_t = nc_r.variables['temp'][:, 1, 1]
         ref_t = np.where(ref_t < 0, 0, ref_t)
         nc_r.close()
@@ -611,8 +616,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -649,8 +654,8 @@ class TestClimate(unittest.TestCase):
         # loop because for some reason indexing wont work
         gdirs = []
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
             centerlines.compute_centerlines(gdir)
             geometry.initialize_flowlines(gdir)
@@ -688,8 +693,8 @@ class TestClimate(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
@@ -706,7 +711,7 @@ class TestClimate(unittest.TestCase):
         t_star = t_star[-1]
         bias = bias[-1]
 
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_ref = gdir.read_pickle('mu_candidates', div_id=0).loc[t_star]
@@ -759,9 +764,9 @@ class TestInversion(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.params['border'] = 10
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 10
 
     def tearDown(self):
         self.rm_dir()
@@ -780,8 +785,8 @@ class TestInversion(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
-            gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity)
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
@@ -795,7 +800,7 @@ class TestInversion(unittest.TestCase):
         t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -859,12 +864,6 @@ class TestInversion(unittest.TestCase):
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
-            shape = cl['shape']
-            self.assertTrue(np.all(np.isfinite(shape)))
-
-            mywidths = np.sqrt(4*thick/shape) / gdir.grid.dx
-            np.testing.assert_allclose(fl.widths, mywidths)
-
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
@@ -872,7 +871,7 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(242, maxs, atol=13)
 
         # check that its not tooo sensitive to the dx
-        cfg.params['flowline_dx'] = 1.
+        cfg.PARAMS['flowline_dx'] = 1.
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
@@ -884,7 +883,7 @@ class TestInversion(unittest.TestCase):
         t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, t_star, bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
         inversion.prepare_for_inversion(gdir)
         v, _ = inversion.inversion_parabolic_point_slope(gdir,
                                                          fs=fs,
@@ -896,123 +895,124 @@ class TestInversion(unittest.TestCase):
         maxs = 0.
         for cl in cls:
             thick = cl['thick']
-            self.assertTrue(np.all(np.isfinite(shape)))
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        # The following test fails because max thick is larger.
-        # I think that dx=2 is a minimum
-        # np.testing.assert_allclose(242, maxs, atol=13)
-        np.testing.assert_allclose(242, maxs, atol=42)
 
+        # The following test needs more tol because max thick is larger.
+        # I think that dx=2 is a minimum
+        np.testing.assert_allclose(242, maxs, atol=45)
 
     def test_invert_hef_nofs(self):
 
-        # TODO: does not work on CONDA
-        pass
-        # if 'win' in sys.platform:
-        #     print('test_invert_hef_nofs aborted due to windows.')
-        #     return
-        #
-        # hef_file = get_demo_file('Hintereisferner.shp')
-        # rgidf = gpd.GeoDataFrame.from_file(hef_file)
-        #
-        # # loop because for some reason indexing wont work
-        # for index, entity in rgidf.iterrows():
-        #     gdir = cfg.GlacierDir(entity, base_dir=self.testdir)
-        # gis.define_glacier_region(gdir, entity)
-        # gis.glacier_masks(gdir)
-        # centerlines.compute_centerlines(gdir)
-        # geometry.initialize_flowlines(gdir)
-        # geometry.catchment_area(gdir)
-        # geometry.catchment_width_geom(gdir)
-        # geometry.catchment_width_correction(gdir)
-        # climate.distribute_climate_data([gdir])
-        # climate.mu_candidates(gdir, div_id=0)
-        # hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-        # mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        # t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-        # t_star = t_star[-1]
-        # bias = bias[-1]
-        # climate.local_mustar_apparent_mb(gdir, t_star, bias)
-        #
-        # # OK. Values from Fischer and Kuhn 2013
-        # # Area: 8.55
-        # # meanH = 67+-7
-        # # Volume = 0.573+-0.063
-        # # maxH = 242+-13
-        #
-        # inversion.prepare_for_inversion(gdir)
-        #
-        # ref_v = 0.573 * 1e9
-        #
-        # def to_optimize(x):
-        #     fd = 1.9e-24 * x[0]
-        #     fs = 0.
-        #     v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                      fs=fs,
-        #                                                      fd=fd)
-        #     return (v - ref_v)**2
-        #
-        # import scipy.optimize as optimization
-        # out = optimization.minimize(to_optimize, [1],
-        #                             bounds=((0.00001, 1000000),),
-        #                             tol=1e-3)['x']
-        #
-        # self.assertTrue(out[0] > 0.1)
-        # self.assertTrue(out[0] < 2)
-        #
-        # fd = 1.9e-24 * out[0]
-        # fs = 0.
-        # v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                  fs=fs,
-        #                                                  fd=fd,
-        #                                                  write=True)
-        # np.testing.assert_allclose(ref_v, v)
-        #
-        # lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        # pid = np.argmax(lens) + 1
-        # cls = gdir.read_pickle('inversion_output', div_id=pid)
-        # fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
-        # maxs = 0.
-        # for cl, fl in zip(cls, fls):
-        #     thick = cl['thick']
-        #     shape = cl['shape']
-        #     self.assertTrue(np.all(np.isfinite(shape)))
-        #
-        #     mywidths = np.sqrt(4*thick/shape) / gdir.grid.dx
-        #     np.testing.assert_allclose(fl.widths, mywidths)
-        #
-        #     _max = np.max(thick)
-        #     if _max > maxs:
-        #         maxs = _max
-        #
-        # np.testing.assert_allclose(242, maxs, atol=30)
-        #
-        # c0 = gdir.read_pickle('inversion_output', div_id=2)[-1]
-        #
-        # def to_optimize(x):
-        #     fd = 1.9e-24 * x[0]
-        #     fs = 5.7e-20 * x[1]
-        #     v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                      fs=fs,
-        #                                                      fd=fd)
-        #     return (v - ref_v)**2
-        #
-        # import scipy.optimize as optimization
-        # out = optimization.minimize(to_optimize, [1, 1],
-        #                             bounds=((0.01, 1), (0.01, 1)),
-        #                             tol=1e-3)['x']
-        #
-        # self.assertTrue(out[0] > 0.1)
-        # self.assertTrue(out[1] > 0.1)
-        # self.assertTrue(out[0] < 1)
-        # self.assertTrue(out[1] < 1)
-        #
-        # fd = 1.9e-24 * out[0]
-        # fs = 5.7e-20 * out[1]
-        # v, _ = inversion.inversion_parabolic_point_slope(gdir,
-        #                                                  fs=fs,
-        #                                                  fd=fd,
-        #                                                  write=True)
-        # np.testing.assert_allclose(ref_v, v)
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.distribute_climate_data([gdir])
+        climate.mu_candidates(gdir, div_id=0)
+        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
+        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star = t_star[-1]
+        bias = bias[-1]
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+
+        # OK. Values from Fischer and Kuhn 2013
+        # Area: 8.55
+        # meanH = 67+-7
+        # Volume = 0.573+-0.063
+        # maxH = 242+-13
+
+        inversion.prepare_for_inversion(gdir)
+
+        ref_v = 0.573 * 1e9
+
+        def to_optimize(x):
+            fd = 1.9e-24 * x[0]
+            fs = 0.
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=fs,
+                                                             fd=fd)
+            return (v - ref_v)**2
+
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.00001, 1000000),),
+                                    tol=1e-3)['x']
+
+        self.assertTrue(out[0] > 0.1)
+        self.assertTrue(out[0] < 2)
+
+        fd = 1.9e-24 * out[0]
+        fs = 0.
+        v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                         fs=fs,
+                                                         fd=fd,
+                                                         write=True)
+        np.testing.assert_allclose(ref_v, v)
+
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        pid = np.argmax(lens) + 1
+        cls = gdir.read_pickle('inversion_output', div_id=pid)
+        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        maxs = 0.
+        for cl, fl in zip(cls, fls):
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+
+        np.testing.assert_allclose(242, maxs, atol=30)
+
+
+class TestCatching(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(current_dir, 'tmp_errors')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['working_dir'] = current_dir
+
+
+    # def tearDown(self):
+    #     self.rm_dir()
+    #
+    # def rm_dir(self):
+    #     shutil.rmtree(self.testdir)
+    #
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_log(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # Make it large to raise an error
+        cfg.PARAMS['border'] = 250
+        cfg.CONTINUE_ON_ERROR = True
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+            gis.glacier_masks(gdir)

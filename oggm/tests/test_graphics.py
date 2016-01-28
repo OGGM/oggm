@@ -1,6 +1,12 @@
 from __future__ import division
+
 import warnings
+
+import oggm.utils
+
 warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning,
+                        message=r'.*guessing baseline image.*')
 
 import unittest
 import nose
@@ -10,16 +16,15 @@ from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
 import pandas as pd
 import geopandas as gpd
-import numpy as np
-import matplotlib.pyplot as plt
 
 # Local imports
-from oggm.prepro import gis, centerlines, geometry, climate, inversion
-import oggm.conf as cfg
+from oggm.core.preprocessing import gis, geometry, climate, inversion
+from oggm.core.preprocessing import centerlines
+import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
-from oggm.models import flowline
-from oggm.tests import HAS_NEW_GDAL, requires_fabiens_laptop, is_slow
+from oggm.core.models import flowline
+from oggm.tests import HAS_NEW_GDAL, is_slow
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,13 +38,18 @@ try:
 except ImportError:
     HAS_MPL_TEST = False
 
+
 def requires_mpltest(test):
     # Decorator
     msg = 'requires matplotlib.testing.decorators'
     return test if HAS_MPL_TEST else unittest.skip(msg)(test)
 
+
 import matplotlib as mpl
 suffix = '_' + mpl.__version__
+if mpl.__version__ >= '1.5':
+    suffix = '_1.5+'
+
 if HAS_NEW_GDAL:
     suffix += '_conda'
 
@@ -59,40 +69,48 @@ def requires_internet(test):
     msg = 'requires internet'
     return test if HAS_INTERNET else unittest.skip(msg)(test)
 
+
+def requires_mpl15(test):
+    # Decorator
+    msg = 'requires mpl V 1.5+'
+    return test if mpl.__version__ >= '1.5' else unittest.skip(msg)(test)
+
 # ----------------------------------------------------------
 # Lets go
 
 
-def init_hef(reset=False, border=40):
+def init_hef(reset=False, border=40, invert_with_sliding=True):
 
     # test directory
     testdir = TESTDIR_BASE + '_border{}'.format(border)
+    if not invert_with_sliding:
+        testdir += '_withoutslide'
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897')):
         reset = True
     if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897',
-                                       'flowline_params.p')):
+                                       'inversion_params.pkl')):
         reset = True
 
     # Init
     cfg.initialize()
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.paths['srtm_file'] = get_demo_file('hef_srtm.tif')
-    cfg.paths['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.params['border'] = border
+    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = border
 
     # loop because for some reason indexing wont work
     hef_file = get_demo_file('Hintereisferner.shp')
     rgidf = gpd.GeoDataFrame.from_file(hef_file)
     for index, entity in rgidf.iterrows():
-        gdir = cfg.GlacierDir(entity, base_dir=testdir, reset=reset)
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
 
     if not reset:
         return gdir
 
-    gis.define_glacier_region(gdir, entity)
+    gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
     centerlines.compute_downstream_lines(gdir)
@@ -105,34 +123,58 @@ def init_hef(reset=False, border=40):
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
     mbdf = pd.read_csv(hef_file).set_index('YEAR')
     t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-    climate.local_mustar_apparent_mb(gdir, t_star[-1], bias[-1])
+    climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1])
 
     inversion.prepare_for_inversion(gdir)
     ref_v = 0.573 * 1e9
 
-    def to_optimize(x):
-        fd = 1.9e-24 * x[0]
-        fs = 5.7e-20 * x[1]
+    if invert_with_sliding:
+        def to_optimize(x):
+            fd = 1.9e-24 * x[0]
+            fs = 5.7e-20 * x[1]
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=fs,
+                                                             fd=fd)
+            return (v - ref_v)**2
+
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-4)['x']
+        fd = 1.9e-24 * out[0]
+        fs = 5.7e-20 * out[1]
         v, _ = inversion.inversion_parabolic_point_slope(gdir,
                                                          fs=fs,
-                                                         fd=fd)
-        return (v - ref_v)**2
+                                                         fd=fd,
+                                                         write=True)
+    else:
+        def to_optimize(x):
+            fd = 2.4e-24 * x[0]
+            v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                             fs=0.,
+                                                             fd=fd)
+            return (v - ref_v)**2
 
-    import scipy.optimize as optimization
-    out = optimization.minimize(to_optimize, [1,1],
-                                bounds=((0.01, 1), (0.01, 1)),
-                                tol=1e-3)['x']
-    fd = 1.9e-24 * out[0]
-    fs = 5.7e-20 * out[1]
-    v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                     fs=fs,
-                                                     fd=fd,
-                                                     write=True)
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.01, 10),),
+                                    tol=1e-4)['x']
+        fd = 2.4e-24 * out[0]
+        fs = 0.
+        v, _ = inversion.inversion_parabolic_point_slope(gdir,
+                                                         fs=fs,
+                                                         fd=fd,
+                                                         write=True)
     d = dict(fs=fs, fd=fd)
-    gdir.write_pickle(d, 'flowline_params')
+    d['factor_fd'] = out[0]
+    try:
+        d['factor_fs'] = out[1]
+    except IndexError:
+        d['factor_fs'] = 0.
+    gdir.write_pickle(d, 'inversion_params')
+    print(d)
 
     return gdir
-
 
 
 @image_comparison(baseline_images=['test_googlestatic' + suffix],
@@ -182,21 +224,51 @@ def test_inversion():
     graphics.plot_inversion(gdir)
 
 
-@image_comparison(baseline_images=['test_initial_glacier' + suffix],
+@image_comparison(baseline_images=['test_nodivide' + suffix],
                   extensions=['png'])
-@is_slow
 @requires_mpltest
-@requires_fabiens_laptop
-def test_initial_glacier():  # pragma: no cover
+@requires_mpl15
+def test_nodivide():
 
-    gdir = init_hef(border=80)
+    # test directory
+    testdir = TESTDIR_BASE + '_nodiv'
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+
+    # Init
+    cfg.initialize()
+    cfg.set_divides_db()
+    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = 40
+
+    # loop because for some reason indexing wont work
+    hef_file = get_demo_file('Hintereisferner.shp')
+    rgidf = gpd.GeoDataFrame.from_file(hef_file)
+    for index, entity in rgidf.iterrows():
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
+
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+
+    graphics.plot_centerlines(gdir)
+
+
+@image_comparison(baseline_images=['test_modelsection' + suffix,
+                                   'test_modelmap' + suffix,
+                                   ],
+                  extensions=['png'])
+@requires_mpltest
+@requires_mpl15
+def test_plot_model():
+
+    gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    flowline.find_inital_glacier(gdir, init_bias=150)
-    past_model = gdir.read_pickle('past_model')
-    graphics.plot_modeloutput(gdir, past_model)
+    model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
+    graphics.plot_modeloutput_section(model)
+    graphics.plot_modeloutput_map(gdir, model)
+
 
 if __name__ == '__main__':  # pragma: no cover
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning,
-                                message=r'.*guessing baseline image.*')
-        nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)
+    nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)
