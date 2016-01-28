@@ -6,7 +6,6 @@ import logging
 import os
 # External libs
 import pandas as pd
-import geopandas as gpd
 import multiprocessing as mp
 
 # Locals
@@ -71,44 +70,6 @@ def init_glacier_regions(rgidf, reset=False, force=False):
     return gdirs
 
 
-def write_centerlines_to_shape(gdirs, filename):
-    """Write centerlines in a shapefile"""
-
-    olist = []
-    for gdir in gdirs:
-        olist.extend(utils.get_centerline_lonlat(gdir))
-
-    odf = gpd.GeoDataFrame(olist)
-
-    from collections import OrderedDict
-    shema = dict()
-    props = OrderedDict()
-    props['RGIID'] = 'str:14'
-    props['DIVIDE'] = 'int:9'
-    props['LE_SEGMENT'] = 'int:9'
-    props['MAIN'] = 'int:9'
-    shema['geometry'] = 'LineString'
-    shema['properties'] = props
-
-    crs = {'init': 'epsg:4326'}
-
-    # some writing function from geopandas rep
-    from six import iteritems
-    from shapely.geometry import mapping
-    import fiona
-    def feature(i, row):
-        return {
-            'id': str(i),
-            'type': 'Feature',
-            'properties':
-                dict((k, v) for k, v in iteritems(row) if k != 'geometry'),
-            'geometry': mapping(row['geometry'])}
-    with fiona.open(filename, 'w', driver='ESRI Shapefile',
-                    crs=crs, schema=shema) as c:
-        for i, row in odf.iterrows():
-            c.write(feature(i, row))
-
-
 def gis_prepro_tasks(gdirs):
     """Prepare the flowlines."""
 
@@ -153,10 +114,3 @@ def inversion_tasks(gdirs):
 
     # Inversion for all glaciers
     execute_entity_task(tasks.volume_inversion, gdirs)
-
-
-def model_tasks(gdirs):
-    """Hardcore jobs."""
-
-    execute_entity_task(tasks.init_present_time_glacier, gdirs)
-    # execute_entity_task(tasks.find_inital_glacier, gdirs)

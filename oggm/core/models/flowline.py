@@ -1,16 +1,18 @@
 """Flowline modelling"""
 from __future__ import division
-
 from six.moves import zip
+
 # Built ins
 import logging
 import copy
 from functools import partial
+from collections import OrderedDict
+
 # External libs
 import numpy as np
 import netCDF4
-from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
+
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
@@ -19,6 +21,7 @@ import oggm.core.preprocessing.centerlines
 import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
 
+# Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR, TWO_THIRDS
 from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
@@ -377,6 +380,17 @@ class FlowlineModel(object):
         # Check for domains
         if not np.isclose(self.fls[-1].thick[-1], 0):
             raise RuntimeError('Glacier exceeds domain boundaries.')
+
+    def run_until_and_output(self, y1):
+        """Runs the model and writes intermediate steps in a dict."""
+
+        years = np.arange(self.yr, y1+1)
+        out = OrderedDict()
+        for yr in years:
+            self.run_until(yr)
+            out[yr] = copy.deepcopy(self)
+
+        return out
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
@@ -755,20 +769,15 @@ def init_present_time_glacier(gdir):
 def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
                          rtol=0.01, atol=10, max_ite=100,
                          init_bias=0., equi_rate=0.0005,
-                         do_plot=False, gdir=None, ref_area=None):
+                         ref_area=None):
     """ Iterative search for a plausible starting time glacier"""
 
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
-    log.info('find_inital_glacier. Ref area to catch: %f km2', ref_area*1e-6)
-
-    if do_plot:
-        from oggm.graphics import plot_modeloutput_section, plot_modeloutput_section_withtrib
-        import matplotlib.pyplot as plt
-        plot_modeloutput_section(final_model, title='Initial state')
-        plot_modeloutput_section_withtrib(final_model, title='Initial state')
-        plt.show()
+    log.info('find_inital_glacier in year %d. Ref area to catch: %.3f km2. '
+             'Tolerance: %.2f %%' ,
+             np.int64(y0), ref_area*1e-6, rtol*100)
 
     # are we trying to grow or to shrink the glacier?
     prev_model = copy.deepcopy(final_model)
@@ -777,33 +786,28 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     prev_model.run_until(y1)
     prev_area = prev_model.area_m2
 
-    if do_plot:
-        plot_modeloutput_section(prev_model, title='After histalp')
-        plot_modeloutput_section_withtrib(prev_model, title='After histalp')
-        plt.show()
-
     # Just in case we already hit the correct starting state
     if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('find_inital_glacier, ite: %d. Converged with a final error '
-                 'of %.3f', 0,
-                 utils.rel_err(ref_area, prev_area))
-        return model
+        log.info('find_inital_glacier: inital starting glacier converges '
+                 'to itself with a final dif of %.2f %%',
+                 utils.rel_err(ref_area, prev_area) * 100)
+        return 0, None, model
 
     if prev_area < ref_area:
         sign_mb = 1.
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
-                  'small of %.3f. Continue', 0,
-                  utils.rel_err(ref_area, prev_area))
+                 'small of %.2f %%. Continue', 0,
+                 utils.rel_err(ref_area, prev_area) * 100)
     else:
         log.info('find_inital_glacier, ite: %d. Glacier would be too '
-                  'big of %.3f. Continue', 0,
-                  utils.rel_err(ref_area, prev_area))
+                 'big of %.2f %%. Continue', 0,
+                 utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = -1.
 
-    # Log sentence
-    logtxt = 'find glacier in year {}'.format(np.int64(y0))
+    # Log prefix
+    logtxt = 'find_inital_glacier'
 
     # Loop until 100 iterations
     c = 0
@@ -828,13 +832,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
         log.info(logtxt + ', ite: %d. Grew to equilibrium for %d years, '
-                          'new area: %f km2', c, grow_model.yr,
+                          'new area: %.3f km2', c, grow_model.yr,
                            grow_model.area_km2)
-
-        if do_plot:
-            plot_modeloutput_section(grow_model, title='After grow ite '
-                                                              '{}'.format(c))
-            plt.show()
 
         # Shrink
         new_fls = copy.deepcopy(grow_model.fls)
@@ -844,18 +843,14 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         new_model.run_until(y1)
         new_area = new_model.area_m2
 
-        if do_plot:
-            plot_modeloutput_section(new_model, title='After histalp')
-            plt.show()
-
         # Maybe we done?
         if np.allclose(new_area, ref_area, atol=atol, rtol=rtol):
             new_model.reset_flowlines(new_fls)
             new_model.reset_y0(y0)
             log.info(logtxt + ', ite: %d. Converged with a '
-                     'final error of %.3f', c,
-                     utils.rel_err(ref_area, new_area))
-            return new_model
+                     'final dif of %.2f %%', c,
+                     utils.rel_err(ref_area, new_area)*100)
+            return c, mb_bias, new_model
 
         # See if we did a step to far or if we have to continue growing
         do_cont_1 = (sign_mb > 0.) and (new_area < ref_area)
@@ -864,9 +859,9 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
             # Reset the previous state and continue
             prev_fls = new_fls
 
-            log.info(logtxt + ', ite: %d. Error of %.3f. '
-                      'Continue', c,
-                      utils.rel_err(ref_area, new_area))
+            log.info(logtxt + ', ite: %d. Dif of %.2f %%. '
+                              'Continue', c,
+                     utils.rel_err(ref_area, new_area)*100)
             continue
 
         # Ok. We went too far. Reduce the bias step but keep previous state
@@ -881,7 +876,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 @entity_task(log, writes=['past_model'])
 def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
-                        do_plot=False):
+                        write_steps=True):
     """Search for the glacier in year y0
 
     Parameters
@@ -912,9 +907,19 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
     assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     mb = mbmods.BackwardsMassBalanceModel(gdir)
-    past_model = _find_inital_glacier(model, mb, y0, y1, rtol=rtol,
-                                      init_bias=init_bias, do_plot=do_plot,
-                                      gdir=gdir, ref_area=gdir.rgi_area_m2)
+    ref_area = gdir.rgi_area_m2
+    ite, bias, past_model = _find_inital_glacier(model, mb, y0, y1,
+                                                   rtol=rtol,
+                                                 init_bias=init_bias,
+                                                 ref_area=ref_area)
+
+    # Some parameters for posterity:
+    params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
+                         ite=ite, mb_bias=bias)
 
     # Write the data
+    gdir.write_pickle(params, 'find_initial_glacier_params')
     gdir.write_pickle(past_model, 'past_model')
+    if write_steps:
+        past_models = past_model.run_until_and_output(y1)
+        gdir.write_pickle(past_models, 'past_models')

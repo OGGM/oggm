@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file, rmsd, interp_nans
-from oggm.tests import is_slow, ON_TRAVIS, ON_FABIENS_LAPTOP, requires_fabiens_laptop
+from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
+from oggm.tests import is_slow, ON_TRAVIS
 from oggm.core.models import flowline, massbalance
 from oggm import graphics
 
@@ -82,6 +82,9 @@ def up_to_inversion(reset=False):
         # Climate related tasks
         workflow.climate_tasks(gdirs)
 
+        # Inversion
+        workflow.inversion_tasks(gdirs)
+
     return gdirs
 
 
@@ -98,7 +101,6 @@ class TestWorkflow(unittest.TestCase):
     #         flowline.find_inital_glacier(gd, do_plot=True, init_bias=100)
 
     @is_slow
-    @requires_fabiens_laptop
     def test_grow(self):
 
         gdirs = up_to_inversion()
@@ -107,37 +109,27 @@ class TestWorkflow(unittest.TestCase):
         fs = d['fs']
         fd = d['fd']
 
-        for gd in gdirs:
+        for gd in gdirs[0:2]:
 
             if gd.rgi_id in ['RGI40-11.00719']:
                 # Bad bad glacier
                 continue
 
             flowline.init_present_time_glacier(gd)
-            mb_mod = massbalance.TstarMassBalanceModel(gd, bias=0)
+            flowline.find_inital_glacier(gd)
 
-            fls = gd.read_pickle('model_flowlines')
-            model = flowline.FluxBasedModel(fls, mb_mod, 0., fs, fd)
 
-            if ON_FABIENS_LAPTOP:
-                graphics.plot_modeloutput_section_withtrib(model)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_as0.png')
-                graphics.plot_modeloutput_section(model, title=gd.rgi_id)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_s0.png')
-                graphics.plot_modeloutput_map(gd, model)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_m0.png')
+    @is_slow
+    def test_shapefile_output(self):
 
-            model.run_until_equilibrium(rate=0.001)
+        # Just to increase coveralls, hehe
+        gdirs = up_to_inversion()
+        fpath = os.path.join(TEST_DIR, 'centerlines.shp')
+        write_centerlines_to_shape(gdirs, fpath)
 
-            if ON_FABIENS_LAPTOP:
-                print(gd.rgi_id + ' equi found in: {}'.format(model.yr))
-                graphics.plot_modeloutput_section_withtrib(model)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_as1.png')
-                graphics.plot_modeloutput_section(model, title=gd.rgi_id)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_s1.png')
-                graphics.plot_modeloutput_map(gd, model)
-                plt.savefig('/home/mowglie/' + gd.rgi_id + '_m1.png')
-                plt.close('all')
+        import salem
+        shp = salem.utils.read_shapefile(fpath)
+        self.assertTrue(shp is not None)
 
     @is_slow
     def test_init_present_time_glacier(self):

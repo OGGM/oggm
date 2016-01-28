@@ -19,14 +19,17 @@ import gzip
 import shutil
 import zipfile
 import sys
-import logging
+from collections import OrderedDict
 from functools import partial, wraps
 
 # External libs
+import geopandas as gpd
 import numpy as np
 import netCDF4
 import scipy.stats as stats
 from joblib import Memory
+from shapely.ops import transform as shp_trafo
+from salem import wgs84
 
 # Locals
 import oggm.cfg as cfg
@@ -255,6 +258,64 @@ def pipe_log(gdir, task_func, err=None):
         f.write(task_func.__name__ + ': ')
         if err is not None:
             f.write(err.__class__.__name__ + ': {}'.format(err))
+
+
+def get_centerline_lonlat(gdir):
+    """Quick n dirty solution to write the centerlines as a shapefile"""
+
+    olist = []
+    for i in gdir.divide_ids:
+        cls = gdir.read_pickle('centerlines', div_id=i)
+        for i, cl in enumerate(cls):
+            mm = 1 if i==0 else 0
+            gs = gpd.GeoSeries()
+            gs['RGIID'] = gdir.rgi_id
+            gs['DIVIDE'] = i
+            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            gs['MAIN'] = mm
+            tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
+            gs['geometry'] = shp_trafo(tra_func, cl.line)
+            olist.append(gs)
+
+    return olist
+
+def write_centerlines_to_shape(gdirs, filename):
+    """Write centerlines in a shapefile"""
+
+    olist = []
+    for gdir in gdirs:
+        olist.extend(get_centerline_lonlat(gdir))
+
+    odf = gpd.GeoDataFrame(olist)
+
+    shema = dict()
+    props = OrderedDict()
+    props['RGIID'] = 'str:14'
+    props['DIVIDE'] = 'int:9'
+    props['LE_SEGMENT'] = 'int:9'
+    props['MAIN'] = 'int:9'
+    shema['geometry'] = 'LineString'
+    shema['properties'] = props
+
+    crs = {'init': 'epsg:4326'}
+
+    # some writing function from geopandas rep
+    from six import iteritems
+    from shapely.geometry import mapping
+    import fiona
+
+    def feature(i, row):
+        return {
+            'id': str(i),
+            'type': 'Feature',
+            'properties':
+                dict((k, v) for k, v in iteritems(row) if k != 'geometry'),
+            'geometry': mapping(row['geometry'])}
+
+    with fiona.open(filename, 'w', driver='ESRI Shapefile',
+                    crs=crs, schema=shema) as c:
+        for i, row in odf.iterrows():
+            c.write(feature(i, row))
 
 
 class entity_task(object):

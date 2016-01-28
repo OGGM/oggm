@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 from oggm.tests.test_graphics import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.tests import is_slow, requires_working_conda
-from oggm.tests import ON_FABIENS_LAPTOP, HAS_NEW_GDAL
+from oggm.tests import HAS_NEW_GDAL
 
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
@@ -903,7 +903,10 @@ class TestBackwardsIdealized(unittest.TestCase):
         model = flowline.FluxBasedModel(self.glacier, mb, y0,
                                         self.fs, self.fd)
 
-        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
+        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
+                                                               y1,
+                                                               rtol=rtol)
+
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 > past_model.area_m2)
@@ -922,7 +925,8 @@ class TestBackwardsIdealized(unittest.TestCase):
         model = flowline.FluxBasedModel(self.glacier, mb, y0,
                                         self.fs, self.fd)
 
-        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
+        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
+                                                               y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
@@ -942,7 +946,8 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         self.fs, self.fd)
 
         # Hit the correct one
-        past_model = flowline._find_inital_glacier(model, mb, y0, y1, rtol=rtol)
+        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
+                                                               y1, rtol=rtol)
         past_model.run_until(y1)
         np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
                                    rtol=rtol)
@@ -1082,16 +1087,15 @@ class TestHEF(unittest.TestCase):
         glacier = gdir.read_pickle('model_flowlines')
         df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
         df.columns = ['Leclercq']
+        # df = df.loc[1950:]
 
         vol_ref = flowline.FlowlineModel(glacier).volume_km3
 
         init_bias = 100.  # 100 so that "went too far" comes once on travis
         rtol = 0.005
-        if ON_FABIENS_LAPTOP:
-            init_bias = 150
-            rtol = 0.005
-        flowline.find_inital_glacier(gdir, y0=1847, init_bias=init_bias,
-                                     rtol=rtol, do_plot=False)
+
+        flowline.find_inital_glacier(gdir, y0=df.index[0], init_bias=init_bias,
+                                     rtol=rtol, write_steps=False)
 
         past_model = gdir.read_pickle('past_model')
 

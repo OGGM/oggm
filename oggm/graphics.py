@@ -253,7 +253,7 @@ def plot_inversion(gdir, ax=None):
         plt.tight_layout()
 
 
-def plot_modeloutput_map(gdir, model, ax=None, vmax=None):  # pragma: no cover
+def plot_modeloutput_map(gdir, model, ax=None, vmax=None):
     """Plots the result of the model output."""
 
     dofig = False
@@ -401,7 +401,7 @@ def plot_modeloutput_section(model, ax=None, title=''):
               frameon=False)
 
 
-def plot_modeloutput_section_withtrib(model, title=''):
+def plot_modeloutput_section_withtrib(model, title=''):  # pragma: no cover
     """Plots the result of the model output along the flowline."""
 
     n_tribs = len(model.fls) - 1

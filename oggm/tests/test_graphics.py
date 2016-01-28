@@ -24,7 +24,7 @@ import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
 from oggm.core.models import flowline
-from oggm.tests import HAS_NEW_GDAL, requires_fabiens_laptop, is_slow
+from oggm.tests import HAS_NEW_GDAL, is_slow
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -172,6 +172,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     except IndexError:
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
+    print(d)
 
     return gdir
 
@@ -223,20 +224,6 @@ def test_inversion():
     graphics.plot_inversion(gdir)
 
 
-@image_comparison(baseline_images=['test_initial_glacier' + suffix],
-                  extensions=['png'])
-@is_slow
-@requires_mpltest
-@requires_fabiens_laptop
-def test_initial_glacier():  # pragma: no cover
-
-    gdir = init_hef(border=80)
-    flowline.init_present_time_glacier(gdir)
-    flowline.find_inital_glacier(gdir, y0=1847, init_bias=150)
-    past_model = gdir.read_pickle('past_model')
-    graphics.plot_modeloutput_map(gdir, past_model)
-
-
 @image_comparison(baseline_images=['test_nodivide' + suffix],
                   extensions=['png'])
 @requires_mpltest
@@ -268,7 +255,9 @@ def test_nodivide():
     graphics.plot_centerlines(gdir)
 
 
-@image_comparison(baseline_images=['test_modelsection' + suffix],
+@image_comparison(baseline_images=['test_modelsection' + suffix,
+                                   'test_modelmap' + suffix,
+                                   ],
                   extensions=['png'])
 @requires_mpltest
 @requires_mpl15
@@ -278,6 +267,7 @@ def test_plot_model():
     flowline.init_present_time_glacier(gdir)
     model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
     graphics.plot_modeloutput_section(model)
+    graphics.plot_modeloutput_map(gdir, model)
 
 
 if __name__ == '__main__':  # pragma: no cover
