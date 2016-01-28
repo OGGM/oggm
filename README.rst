@@ -22,22 +22,22 @@ Example
 
 We use the `Hintereisferner`_ as benchmark:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic_1.5.0.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic_1.5+.png
    :width: 200 px
 
 We first define a local grid and compute the centerlines (`Kienholz et al., 2014`_) as well as the downstream flowlines:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls_1.5.0.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls_1.5+.png
    :width: 200 px
 
 The glacier is then represented as several flowlines of varying width:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected_1.5.0.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected_1.5+.png
    :width: 200 px
 
 Finally, following an inversion algorithm based on mass-balance (`Marzeion et al., 2012`_) and ice-flow dynamics (`Farinotti et al., 2009`_), we derive the ice thickness of the glacier:
 
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion_1.5.0.png
+.. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion_1.5+.png
    :width: 200 px
 
 .. _Hintereisferner: http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef
@@ -82,7 +82,7 @@ About
     GNU GPLv3
 
 :Authors:
-    - Fabien Maussion - fabien.maussion@uibk.ac.at
+    - Fabien Maussion
     - Ben Marzeion
     - Kévin Fourteau
     - Christian Wild
