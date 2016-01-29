@@ -43,8 +43,14 @@ except ImportError:
     MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
                     'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
                     'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
-                    'cleo', 'motionless', 'rasterio', 'osgeo']
+                    'cleo', 'motionless', 'rasterio', 'osgeo', 'shapely.ops',
+                    'skimage', 'skimage.draw', 'shapely.geometry',
+                    'scipy.signal', 'scipy.ndimage', 'skimage.graph',
+                    'scipy.ndimage.measurements', 'scipy.ndimage.morphology',
+                    'matplotlib._cntr', 'scipy.ndimage.filters',
+                    'scipy.interpolate']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+    from oggm.tasks import *
 
 # -- General configuration ------------------------------------------------
 

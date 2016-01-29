@@ -70,14 +70,21 @@ About
 
 :Tests:
     .. image:: https://coveralls.io/repos/OGGM/oggm/badge.svg?branch=master&service=github
-      :target: https://coveralls.io/github/OGGM/oggm?branch=master
+        :target: https://coveralls.io/github/OGGM/oggm?branch=master
+        :alt: Code coverage
 
     .. image:: https://travis-ci.org/OGGM/oggm.svg?branch=master
         :target: https://travis-ci.org/OGGM/oggm
+        :alt: Linux build status
         
     .. image:: https://ci.appveyor.com/api/projects/status/alealh9rxmqgd3nm/branch/master?svg=true
         :target: https://ci.appveyor.com/project/fmaussion/oggm
-    
+        :alt: Windows-conda build status
+
+    .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
+        :target: http://oggm.readthedocs.org/en/latest/?badge=latest
+        :alt: Documentation status
+
 :License:
     GNU GPLv3
 
