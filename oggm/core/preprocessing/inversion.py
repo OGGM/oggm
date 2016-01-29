@@ -33,7 +33,7 @@ import os
 # External libs
 import numpy as np
 import pandas as pd
-import scipy.optimize as optimization
+from scipy import optimize as optimization
 from scipy.ndimage.filters import gaussian_filter1d
 # Locals
 from oggm import utils, cfg

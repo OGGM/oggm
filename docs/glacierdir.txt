@@ -37,9 +37,9 @@ Several OGGM tasks (such as :py:func:`~oggm.tasks.compute_centerlines`)
 can work properly on single glaciers only, as shown on the example below
 (*left*: with divides, *right*: without).
 
-    .. image:: ../oggm/tests/baseline_images/test_graphics/test_centerlines_1.5.0.png
+    .. image:: ../oggm/tests/baseline_images/test_graphics/test_centerlines_1.5+.png
         :width: 49%
-    .. image:: ../oggm/tests/baseline_images/test_graphics/test_nodivide_1.5.0.png
+    .. image:: ../oggm/tests/baseline_images/test_graphics/test_nodivide_1.5+.png
         :width: 49%
 
 The divides are handled as sub-directories in the glacier directory: each

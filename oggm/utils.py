@@ -26,7 +26,7 @@ from functools import partial, wraps
 import geopandas as gpd
 import numpy as np
 import netCDF4
-import scipy.stats as stats
+from scipy import stats
 from joblib import Memory
 from shapely.ops import transform as shp_trafo
 from salem import wgs84
