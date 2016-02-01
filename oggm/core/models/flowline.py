@@ -623,6 +623,153 @@ class KarthausModel(FlowlineModel):
         # Next step
         self.t += dt
 
+class MUSCLSuperBeeModel(FlowlineModel):
+    """This model is based on Jarosch et al. 2013 (doi:10.5194/tc-7-229-2013)
+       The equation references in the comments refer to the paper for clarity
+    """
+    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
+
+        """ Instanciate.
+
+        Parameters
+        ----------
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+
+        if len(flowlines) > 1:
+            raise ValueError('MUSCL SuperBee model does not work with tributaries.')
+
+        super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
+                                            y0=y0, fs=fs, fd=fd)
+        self.dt_warning = False,
+        if fixed_dt is not None:
+            min_dt = fixed_dt
+            max_dt = fixed_dt
+        self.min_dt = min_dt
+        self.max_dt = max_dt
+    
+        
+    def phi(self, r):
+        """ a definition of the limiting scheme to use"""
+        # minmod limiter Eq. 28
+        # val_phi = numpy.maximum(0,numpy.minimum(1,r))
+        
+        # superbee limiter Eq. 29
+        val_phi = np.maximum(0,np.minimum(2*r,1),np.minimum(r,2))
+        
+        return val_phi
+
+    def step(self, dt=SEC_IN_MONTH):
+        """Advance one step."""
+
+        # This is to guarantee a precise arrival on a specific date if asked
+        min_dt = dt if dt < self.min_dt else self.min_dt
+        dt = np.clip(dt, min_dt, self.max_dt)
+
+        fl = self.fls[0]
+        dx = fl.dx_meter
+        width = fl.widths_m
+        
+        """ Switch to the notation from the MUSCL_1D example
+            This is useful to ensure that the MUSCL-SuperBee code
+            is working as it has been benchmarked many time"""
+         
+
+        # mass balance
+        m_dot = self.mb.get_mb(fl.surface_h, self.yr)
+        # get in the surface elevation
+        S = fl.surface_h
+        # get the bed
+        B = fl.bed_h
+        # define Glen's law here
+        #Gamma = 2.*self.Aglen*(RHO*G)**N / (N+2) # this is the correct Gamma !!
+        Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
+        # time stepping 
+        c_stab = 0.165
+        
+        # define the finite difference indices required for the MUSCL-SuperBee scheme
+        k = np.arange(0,fl.nx)
+        kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
+        kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
+        km = np.hstack([0,np.arange(0,fl.nx-1)])
+        kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+
+        # I'm gonna introduce another level of adaptive time stepping here, which is probably not
+        # necessary. However I keep it to be consistent with my benchmarked and tested code.
+        # If the OGGM time stepping is correctly working, this loop should never run more than once
+        stab_t = 0.
+        while stab_t < dt:
+            H = S - B
+            
+            # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
+            r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
+            H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
+            r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
+            H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
+            
+            # surface slope gradient
+            s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
+            D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
+            D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
+            
+            D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
+            D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
+            D_up = np.zeros(fl.nx)
+            
+            # Eq. 33
+            D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
+            D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
+            D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
+            D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+
+            # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
+            r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
+            H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
+            r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
+            H_dn_p = H[k] - 0.5 * self.phi(r_dn_p)*(H[kp]-H[k])
+            
+            # calculate the slope gradient
+            s_grad_dn = ((S[k]-S[km])**2. / dx**2.)**((N-1.)/2.)
+            D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
+            D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
+            
+            D_dn_min = np.minimum(D_dn_m,D_dn_p);
+            D_dn_max = np.maximum(D_dn_m,D_dn_p);
+            D_dn = np.zeros(fl.nx)
+            
+            D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
+            D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
+            D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
+            D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
+            
+            dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
+            dt_use = min(dt_stab,dt-stab_t)
+            stab_t = stab_t + dt_use
+            
+            # check if the extra time stepping is needed [to be removed one day]
+            #if dt_stab < dt:
+            #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
+            #else:
+            #    print "MUSCL Scheme fine with time stepping as is"
+            
+            #explicit time stepping scheme
+            div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
+            S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
+            
+            S = np.maximum(S,B)                                                 # Eq. 7
+        
+        # Done with the loop, prepare output
+        NewIceThickness = S-B
+        
+        fl.section = NewIceThickness * width
+        #fl.section = NewIceThickness
+        
+        # Next step
+        self.t += dt
 
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
