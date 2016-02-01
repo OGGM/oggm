@@ -446,10 +446,10 @@ class TestMassBalance(unittest.TestCase):
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
+        self.fd = 1.9e-24       # old Oerlemans parameter
+        self.fs = 0             # set sliding to zero for the moment
         # self.fs = 5.7e-20
-        # self.fd = 1.9e-24
-        self.fd = 2.4e-24
-        self.fs = 0
+        self.Aglen = 2.4e-24    # Modern style Glen parameter A
 
     def tearDown(self):
         pass
@@ -466,7 +466,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model= mb, y0=0., fs=self.fs, fd=self.fd,
+            model = model(fls, mb_model= mb, y0=0., Aglen=self.Aglen, fs=self.fs, fd=self.fd,
                           fixed_dt=10*SEC_IN_DAY)
 
             length = yrs * 0.
@@ -536,7 +536,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed_cliff()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb, 0., self.Aglen, self.fs, self.fd,
+            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen, fs=self.fs, fd=self.fd,
                           fixed_dt=2*SEC_IN_DAY)
 
             length = yrs * 0.

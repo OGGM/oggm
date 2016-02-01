@@ -288,7 +288,7 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None):
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None):
         """ Instanciate.
 
         Parameters
@@ -300,6 +300,7 @@ class FlowlineModel(object):
         """
 
         self.mb = mb_model
+        self.Aglen = Aglen
         self.fd = fd
         self.fs = fs
 
@@ -414,7 +415,7 @@ class FlowlineModel(object):
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
                        fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
@@ -427,7 +428,7 @@ class FluxBasedModel(FlowlineModel):
         #TODO: document properties
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
-                                             y0=y0, fs=fs, fd=fd)
+                                             y0=y0, Aglen=Aglen, fs=fs, fd=fd)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -479,7 +480,7 @@ class FluxBasedModel(FlowlineModel):
 
             # Staggered velocity (Deformation + Sliding)
             rhogh = (RHO*G*slope_stag)**N
-            u_stag = (thick_stag**(N+1)) * self.fd * rhogh + \
+            u_stag = (thick_stag**(N+1)) * 2.*self.Aglen/(N+2.) * rhogh + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
@@ -546,7 +547,7 @@ class FluxBasedModel(FlowlineModel):
 class KarthausModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
@@ -557,13 +558,14 @@ class KarthausModel(FlowlineModel):
         Properties
         ----------
         #TODO: document properties
+        #TODO: Changed from assumed N=3 to N
         """
 
         if len(flowlines) > 1:
             raise ValueError('Karthaus model does not work with tributaries.')
 
         super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, fs=fs, fd=fd)
+                                            y0=y0, Aglen=Aglen, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -596,7 +598,7 @@ class KarthausModel(FlowlineModel):
 
         # Diffusivity
         Diffusivity = width * (RHO*G)**3 * thick**3 * SurfaceGradient**2
-        Diffusivity *= self.fd * thick**2 + self.fs
+        Diffusivity *= 2./(N+2.) * self.Aglen * thick**2 + self.fs
 
         # on stagger
         DiffusivityStaggered = np.zeros(fl.nx)
@@ -627,7 +629,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
     """This model is based on Jarosch et al. 2013 (doi:10.5194/tc-7-229-2013)
        The equation references in the comments refer to the paper for clarity
     """
-    def __init__(self, flowlines, mb_model=None, y0=0., fs=None, fd=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
@@ -644,7 +646,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
             raise ValueError('MUSCL SuperBee model does not work with tributaries.')
 
         super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, fs=fs, fd=fd)
+                                            y0=y0, Aglen=Aglen, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -686,8 +688,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
         # get the bed
         B = fl.bed_h
         # define Glen's law here
-        #Gamma = 2.*self.Aglen*(RHO*G)**N / (N+2) # this is the correct Gamma !!
-        Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
+        Gamma = 2.*self.Aglen*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
+        #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
         # time stepping 
         c_stab = 0.165
         
