@@ -4,6 +4,7 @@ from six.moves import zip
 
 # Built ins
 import logging
+import warnings
 import copy
 from functools import partial
 from collections import OrderedDict
@@ -63,6 +64,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 
     @property
     def length_m(self):
+        # TODO: therer could be a "cut" in the middle of the glacier!
         pok = np.where(self.thick == 0.)[0]
         if len(pok) == 0:
             return 0.
@@ -288,7 +290,8 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None):
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None,
+                       fs=0., fd=None):
         """ Instanciate.
 
         Parameters
@@ -300,12 +303,14 @@ class FlowlineModel(object):
         """
 
         self.mb = mb_model
-        # self.fd = fd
         self.fs = fs
-        # for current backwards compatibility I calculate fd from Aglen if fd is not given
-        # We should however streamline oggm to only use Aglen and get rid of fd
+
+        # for backwards compatibility I calculate fd from Aglen and
+        # throw a Deprecation warning
         if fd is not None and Aglen is None:
-            Aglen = (N+2.) * fd / 2.
+            self.fd_deprecated = fd
+            Aglen = (N+2) * fd / 2
+            warnings.warn(DeprecationWarning('the use of fd is deprecated'))
             
         self.Aglen = Aglen
 
@@ -420,8 +425,9 @@ class FlowlineModel(object):
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
-                       fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None,
+                 fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
+                 max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -485,7 +491,7 @@ class FluxBasedModel(FlowlineModel):
 
             # Staggered velocity (Deformation + Sliding)
             rhogh = (RHO*G*slope_stag)**N
-            u_stag = (thick_stag**(N+1)) * 2.*self.Aglen/(N+2.) * rhogh + \
+            u_stag = (thick_stag**(N+1)) * 2/(N+2) * self.Aglen * rhogh + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
@@ -552,8 +558,9 @@ class FluxBasedModel(FlowlineModel):
 class KarthausModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
-                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
+    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=0.,
+                 fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
+                 max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
 
@@ -603,7 +610,7 @@ class KarthausModel(FlowlineModel):
 
         # Diffusivity
         Diffusivity = width * (RHO*G)**3 * thick**3 * SurfaceGradient**2
-        Diffusivity *= 2./(N+2.) * self.Aglen * thick**2 + self.fs
+        Diffusivity *= 2/(N+2) * self.Aglen * thick**2 + self.fs
 
         # on stagger
         DiffusivityStaggered = np.zeros(fl.nx)
@@ -773,7 +780,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         NewIceThickness = S-B
         
         fl.thick = NewIceThickness
-        #fl.section = NewIceThickness * width
+        # fl.section = NewIceThickness * width
         #fl.section = NewIceThickness
         
         # Next step
@@ -972,8 +979,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
     mb = copy.deepcopy(firstguess_mb)
     mb.set_bias(sign_mb * mb_bias)
-    grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb,
-                                y0, final_model.fs, final_model.fd,
+    grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb_model=mb,
+                                fs=final_model.fs, fd=final_model.fd_deprecated,
                                 min_dt=final_model.min_dt,
                                 max_dt=final_model.max_dt)
     while True and (c < max_ite):
