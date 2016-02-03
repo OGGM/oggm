@@ -26,7 +26,7 @@ from oggm.tests import is_slow, requires_working_conda
 from oggm.tests import HAS_NEW_GDAL
 
 from oggm import utils, cfg
-from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
+from oggm.cfg import N, SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +34,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # test directory
 testdir = os.path.join(current_dir, 'tmp')
 
-do_plot = False
+do_plot = True
 
 DOM_BORDER = 80
 
@@ -46,6 +46,28 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
     surface_h = np.linspace(hmax, hmin, nx)
     bed_h = surface_h
     widths = surface_h * 0. + 3.
+
+    coords = np.arange(0, nx-0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
+                                          bed_h, widths)]
+
+def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
+    """
+    I introduce a cliff in the bed to test the mass conservation of the models
+    Such a cliff could be real or a DEM error/artifact
+    """
+    
+    map_dx = 100.
+    dx = 1.
+
+    surface_h = np.linspace(hmax, hmin, nx)
+    
+    cliff_height = 250.0
+    surface_h[50:] = surface_h[50:] - cliff_height
+    
+    bed_h = surface_h
+    widths = surface_h * 0. + 1.
 
     coords = np.arange(0, nx-0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
@@ -424,27 +446,27 @@ class TestMassBalance(unittest.TestCase):
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
-        self.fs = 5.7e-20
-        self.fd = 1.9e-24
-        # self.fd = 2.4e-24
-        # self.fs = 0
-
+        self.Aglen = 2.4e-24    # Modern style Glen parameter A
+        self.fd = 2.* self.Aglen / (N + 2.)       # set to be equivalent to Aglen
+        self.fs = 0             # set slidin
+        # self.fs = 5.7e-20
+        
     def tearDown(self):
         pass
 
     def test_constant_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [flowline.KarthausModel, flowline.FluxBasedModel, flowline.MUSCLSuperBeeModel]
 
         lens = []
         surface_h = []
         volume = []
-        yrs = np.arange(1, 500, 2)
+        yrs = np.arange(1, 700, 2)
         for model in models:
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model= mb, y0=0., fs=self.fs, fd=self.fd,
+            model = model(fls, mb_model= mb, y0=0., Aglen=self.Aglen, fs=self.fs, fd=self.fd,
                           fixed_dt=10*SEC_IN_DAY)
 
             length = yrs * 0.
@@ -457,26 +479,115 @@ class TestIdealisedCases(unittest.TestCase):
             volume.append(vol)
             surface_h.append(fls[-1].surface_h.copy())
 
-        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
-        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-3)
-
-        self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1])<0.7)
-
         if do_plot:  # pragma: no cover
-            plt.plot(lens[0], 'r')
-            plt.plot(lens[1], 'b')
-            plt.show()
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.plot(yrs, lens[2], 'g')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
 
-            plt.plot(volume[0], 'r')
-            plt.plot(volume[1], 'b')
-            plt.show()
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.plot(yrs, volume[2], 'g')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
 
+            plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
             plt.plot(surface_h[0], 'r')
             plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[2], 'g')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed','Karthaus','Flux','MUSCL-SuperBee'],loc=3)
             plt.show()
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=3e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=3e-3)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[2])<50.)
+        self.assertTrue(utils.rmsd(lens[1], lens[2])<50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[2])<2e-3)
+        self.assertTrue(utils.rmsd(volume[1], volume[2])<2e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
+            
+    def test_constant_bed_cliff(self):
+        """ a test case for mass conservation in the flowline models
+            the idea is to introduce a cliff in the sloping bed and see what the models do
+            when the cliff height is changed
+        """
+        
+        models = [flowline.KarthausModel, flowline.FluxBasedModel, flowline.MUSCLSuperBeeModel]
+
+        lens = []
+        surface_h = []
+        volume = []
+        yrs = np.arange(1, 700, 2)
+        for model in models:
+            fls = dummy_constant_bed_cliff()
+            mb = ConstantBalanceModel(2600.)
+
+            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen, fs=self.fs, fixed_dt=2*SEC_IN_DAY)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                length[i] = fls[-1].length_m
+                vol[i] = fls[-1].volume_km3
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+            
+        if do_plot:  # pragma: no cover
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.plot(yrs, lens[2], 'g')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.plot(yrs, volume[2], 'g')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[2], 'g')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed','Karthaus','Flux','MUSCL-SuperBee'],loc=3)
+            plt.show()
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[2])<50.)
+        self.assertTrue(utils.rmsd(lens[1], lens[2])<50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[2])<1e-3)
+        self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
             
     @requires_working_conda
     def test_equilibrium(self):
