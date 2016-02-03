@@ -300,9 +300,14 @@ class FlowlineModel(object):
         """
 
         self.mb = mb_model
-        self.Aglen = Aglen
-        self.fd = fd
+        # self.fd = fd
         self.fs = fs
+        # for current backwards compatibility I calculate fd from Aglen if fd is not given
+        # We should however streamline oggm to only use Aglen and get rid of fd
+        if fd is not None and Aglen is None:
+            Aglen = (N+2.) * fd / 2.
+            
+        self.Aglen = Aglen
 
         self.y0 = None
         self.t = None
@@ -767,7 +772,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
         # Done with the loop, prepare output
         NewIceThickness = S-B
         
-        fl.section = NewIceThickness * width
+        fl.thick = NewIceThickness
+        #fl.section = NewIceThickness * width
         #fl.section = NewIceThickness
         
         # Next step

@@ -26,7 +26,7 @@ from oggm.tests import is_slow, requires_working_conda
 from oggm.tests import HAS_NEW_GDAL
 
 from oggm import utils, cfg
-from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
+from oggm.cfg import N, SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -446,11 +446,11 @@ class TestMassBalance(unittest.TestCase):
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
-        self.fd = 1.9e-24       # old Oerlemans parameter
-        self.fs = 0             # set sliding to zero for the moment
-        # self.fs = 5.7e-20
         self.Aglen = 2.4e-24    # Modern style Glen parameter A
-
+        self.fd = 2.* self.Aglen / (N + 2.)       # set to be equivalent to Aglen
+        self.fs = 0             # set slidin
+        # self.fs = 5.7e-20
+        
     def tearDown(self):
         pass
 
@@ -536,8 +536,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed_cliff()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen, fs=self.fs, fd=self.fd,
-                          fixed_dt=2*SEC_IN_DAY)
+            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen, fs=self.fs, fixed_dt=2*SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
