@@ -449,7 +449,7 @@ class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
         self.Aglen = 2.4e-24    # Modern style Glen parameter A
-        self.fd_old = 2. * 1.9e-24  # outdated value
+        self.fd_old = 1.9e-24  # outdated value
         self.fd = 2. * self.Aglen / (N + 2.)  # equivalent to Aglen
         self.fs = 0             # set slidin
         self.fs_old = 5.7e-20  # outdated value

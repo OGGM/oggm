@@ -27,7 +27,10 @@ Documentation
 
     examples
     installing-oggm
-    glacierdir-gen.rst
+    centerlines
+    mass-balance
+    flowline
+    glacierdir-gen
     api
 
 

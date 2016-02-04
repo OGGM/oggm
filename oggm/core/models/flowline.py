@@ -1,4 +1,7 @@
-"""Flowline modelling"""
+"""Flowline modelling: bed shapes and model numerics.
+
+
+"""
 from __future__ import division
 from six.moves import zip
 
@@ -28,6 +31,7 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
+
 
 class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     """The is the input flowline for the model."""
@@ -64,7 +68,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 
     @property
     def length_m(self):
-        # TODO: therer could be a "cut" in the middle of the glacier!
+        # TODO: cliffs imply a cut in the middle of the glacier
         pok = np.where(self.thick == 0.)[0]
         if len(pok) == 0:
             return 0.
