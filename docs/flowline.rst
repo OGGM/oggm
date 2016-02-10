@@ -1,5 +1,5 @@
-Ice dynamics in OGGM
-====================
+Ice dynamics
+============
 
 The glaciers in OGGM are represented by a depth integrated flowline
 model. The equations for the isothermal shallow ice are solved along

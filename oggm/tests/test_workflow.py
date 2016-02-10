@@ -66,6 +66,7 @@ def up_to_inversion(reset=False):
 
     # Params
     cfg.PARAMS['border'] = 70
+    cfg.PARAMS['use_inversion_params'] = True
 
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
@@ -90,24 +91,10 @@ def up_to_inversion(reset=False):
 
 class TestWorkflow(unittest.TestCase):
 
-    # def test_find_past_glacier(self):
-    #
-    #     gdirs = up_to_inversion()
-    #     for gd in gdirs:
-    #
-    #         # if gd.rgi_id not in ['RGI40-11.00897']:
-    #         #     continue
-    #         flowline.init_present_time_glacier(gd)
-    #         flowline.find_inital_glacier(gd, do_plot=True, init_bias=100)
-
     @is_slow
     def test_grow(self):
 
         gdirs = up_to_inversion()
-
-        d = gdirs[0].read_pickle('inversion_params')
-        fs = d['fs']
-        fd = d['fd']
 
         for gd in gdirs[0:2]:
 
@@ -160,13 +147,14 @@ class TestWorkflow(unittest.TestCase):
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')
         fs = d['fs']
-        fd = d['fd']
+        glen_a = d['glen_a']
         maxs = cfg.PARAMS['max_shape_param']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
             mb_mod = massbalance.TstarMassBalanceModel(gdir)
             fls = gdir.read_pickle('model_flowlines')
-            model = flowline.FluxBasedModel(fls, mb_mod, 0., fs, fd)
+            model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                            fs=fs, glen_a=glen_a)
             _vol = model.volume_km3
             _area = model.area_km2
             gldf = df.loc[gdir.rgi_id]

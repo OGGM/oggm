@@ -23,7 +23,7 @@ from oggm.core.preprocessing import centerlines
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow
+from oggm.tests import is_slow, HAS_NEW_GDAL
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -833,28 +833,25 @@ class TestInversion(unittest.TestCase):
         ref_v = 0.573 * 1e9
 
         def to_optimize(x):
-            fd = 1.9e-24 * x[0]
-            fs = 5.7e-20 * x[1]
-            v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                             fs=fs,
-                                                             fd=fd)
+            glen_a = cfg.A * x[0]
+            fs = cfg.FS * x[1]
+            v, _ = inversion.inversion_parabolic(gdir, fs=fs,
+                                                 glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
-                                    tol=1e-3)['x']
-
+                                    tol=1e-4)['x']
         self.assertTrue(out[0] > 0.1)
         self.assertTrue(out[1] > 0.1)
         self.assertTrue(out[0] < 1.1)
         self.assertTrue(out[1] < 1.1)
-        fd = 1.9e-24 * out[0]
-        fs = 5.7e-20 * out[1]
-        v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                         fs=fs,
-                                                         fd=fd,
-                                                         write=True)
+        glen_a = cfg.A * out[0]
+        fs = cfg.FS * out[1]
+        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
+                                             glen_a=glen_a,
+                                             write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -868,40 +865,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=13)
-
-        # check that its not tooo sensitive to the dx
-        cfg.PARAMS['flowline_dx'] = 1.
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
-        climate.mu_candidates(gdir, div_id=0)
-        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-        mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-        t_star = t_star[-1]
-        bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
-        inversion.prepare_for_inversion(gdir)
-        v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                         fs=fs,
-                                                         fd=fd,
-                                                         write=True)
-
-        np.testing.assert_allclose(ref_v, v, rtol=0.02)
-        cls = gdir.read_pickle('inversion_output', div_id=pid)
-        maxs = 0.
-        for cl in cls:
-            thick = cl['thick']
-            _max = np.max(thick)
-            if _max > maxs:
-                maxs = _max
-
-        # The following test needs more tol because max thick is larger.
-        # I think that dx=2 is a minimum
-        np.testing.assert_allclose(242, maxs, atol=45)
+        np.testing.assert_allclose(242, maxs, atol=21)
 
     def test_invert_hef_nofs(self):
 
@@ -938,27 +902,25 @@ class TestInversion(unittest.TestCase):
         ref_v = 0.573 * 1e9
 
         def to_optimize(x):
-            fd = 1.9e-24 * x[0]
+            glen_a = cfg.A * x[0]
             fs = 0.
-            v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                             fs=fs,
-                                                             fd=fd)
+            v, _ = inversion.inversion_parabolic(gdir, fs=fs,
+                                                 glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1],
-                                    bounds=((0.00001, 1000000),),
-                                    tol=1e-3)['x']
+                                    bounds=((0.00001, 100000),),
+                                    tol=1e-4)['x']
 
         self.assertTrue(out[0] > 0.1)
-        self.assertTrue(out[0] < 2)
+        self.assertTrue(out[0] < 10)
 
-        fd = 1.9e-24 * out[0]
+        glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.inversion_parabolic_point_slope(gdir,
-                                                         fs=fs,
-                                                         fd=fd,
-                                                         write=True)
+        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
+                                             glen_a=glen_a,
+                                             write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -971,8 +933,38 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
+        atol = 30 if HAS_NEW_GDAL else 10
+        np.testing.assert_allclose(242, maxs, atol=atol)
 
-        np.testing.assert_allclose(242, maxs, atol=30)
+        # check that its not tooo sensitive to the dx
+        cfg.PARAMS['flowline_dx'] = 1.
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.distribute_climate_data([gdir])
+        climate.mu_candidates(gdir, div_id=0)
+        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
+        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star = t_star[-1]
+        bias = bias[-1]
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        inversion.prepare_for_inversion(gdir)
+        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
+                                             glen_a=glen_a,
+                                             write=True)
+
+        np.testing.assert_allclose(ref_v, v, rtol=0.02)
+        cls = gdir.read_pickle('inversion_output', div_id=pid)
+        maxs = 0.
+        for cl in cls:
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+
+        np.testing.assert_allclose(242, maxs, atol=atol)
 
 
 class TestCatching(unittest.TestCase):

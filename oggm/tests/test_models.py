@@ -448,9 +448,9 @@ class TestMassBalance(unittest.TestCase):
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
-        self.Aglen = 2.4e-24    # Modern style Glen parameter A
-        self.fd_old = 1.9e-24  # outdated value
-        self.fd = 2. * self.Aglen / (N + 2.)  # equivalent to Aglen
+        self.glen_a = 2.4e-24    # Modern style Glen parameter A
+        self.aglen_old = (N+2) * 1.9e-24 / 2. # outdated value
+        self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
         self.fs = 0             # set slidin
         self.fs_old = 5.7e-20  # outdated value
         
@@ -470,7 +470,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen,
+            model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt=10*SEC_IN_DAY)
 
             length = yrs * 0.
@@ -541,7 +541,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed_cliff()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, y0=0., Aglen=self.Aglen,
+            model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt=2*SEC_IN_DAY)
 
             length = yrs * 0.
@@ -587,7 +587,7 @@ class TestIdealisedCases(unittest.TestCase):
         # OK, so basically, Alex's tests below show that the other models
         # are wrong and produce too much mass. There is also another more
         # more trivial issue with the computation of the length, I added a
-        # to do in the code.
+        # "to do" in the code.
 
         # Unit-testing perspective:
         # verify that indeed the models are wrong of more than 50%
@@ -617,7 +617,7 @@ class TestIdealisedCases(unittest.TestCase):
         for model in models:
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
-            model = model(fls, mb_model=mb, Aglen=self.Aglen,
+            model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
 
             model.run_until_equilibrium()
@@ -628,7 +628,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen,
+            model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
 
             model.run_until(600)
@@ -649,7 +649,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen, fixed_dt=step)
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -683,7 +683,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_bumpy_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen, fixed_dt=step)
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -749,7 +749,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = copy.deepcopy(fls_orig)
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen, fixed_dt=step)
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -818,7 +818,7 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_width_bed()
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen, fixed_dt=step)
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -881,7 +881,8 @@ class TestIdealisedCases(unittest.TestCase):
         for model, step, fls in zip(models, steps, flss):
             mb = ConstantBalanceModel(2600.)
 
-            model = model(fls, mb_model=mb, fs=self.fs_old, fd=self.fd_old,
+            model = model(fls, mb_model=mb, fs=self.fs_old,
+                          glen_a=self.aglen_old,
                           fixed_dt=step)
 
             length = yrs * 0.
@@ -949,7 +950,8 @@ class TestIdealisedCases(unittest.TestCase):
         for model, fls in zip(models, flss):
             mb = ConstantBalanceModel(2800.)
 
-            model = model(fls, mb_model=mb, fs=self.fs_old, fd=self.fd_old,
+            model = model(fls, mb_model=mb, fs=self.fs_old,
+                          glen_a=self.aglen_old,
                           fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
@@ -996,7 +998,7 @@ class TestIdealisedCases(unittest.TestCase):
         for model, fls in zip(models, flss):
             mb = ConstantBalanceModel(2800.)
 
-            model = model(fls, mb_model=mb, Aglen=self.Aglen,
+            model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
 
             length = yrs * 0.
@@ -1045,7 +1047,9 @@ class TestIdealisedCases(unittest.TestCase):
         for model, fls in zip(models, flss):
             mb = ConstantBalanceModel(2800.)
 
-            model = model(fls, mb_model=mb, fs=self.fs_old, fd=self.fd_old,
+
+            model = model(fls, mb_model=mb, fs=self.fs_old,
+                          glen_a=self.aglen_old,
                           fixed_dt=14 * SEC_IN_DAY)
 
             length = yrs * 0.
@@ -1085,7 +1089,9 @@ class TestBackwardsIdealized(unittest.TestCase):
     def setUp(self):
 
         self.fs = 5.7e-20
-        self.fd = 1.9e-24
+        # Backwards
+        _fd = 1.9e-24
+        self.glen_a = (N+2) * _fd / 2.
 
         self.ela = 2800.
 
@@ -1093,7 +1099,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         mb = ConstantBalanceModel(self.ela)
         model = flowline.FluxBasedModel(origfls, mb_model=mb,
-                                        fs=self.fs, fd=self.fd)
+                                        fs=self.fs, glen_a=self.glen_a)
         model.run_until(500)
         self.glacier = copy.deepcopy(model.fls)
 
@@ -1108,7 +1114,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         mb = ConstantBalanceModel(self.ela+50.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb,
-                                        fs=self.fs, fd=self.fd)
+                                        fs=self.fs, glen_a=self.glen_a)
 
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
                                                                y1, rtol=rtol)
@@ -1129,7 +1135,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         mb = ConstantBalanceModel(self.ela-50.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                                        fs=self.fs, fd=self.fd)
+                                        fs=self.fs, glen_a=self.glen_a)
 
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
                                                                y1, rtol=rtol)
@@ -1149,7 +1155,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         mb = ConstantBalanceModel(self.ela)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                                        fs=self.fs, fd=self.fd)
+                                        fs=self.fs, glen_a=self.glen_a)
 
         # Hit the correct one
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
@@ -1165,7 +1171,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         mb = ConstantBalanceModel(self.ela-150.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                                        fs=self.fs, fd=self.fd)
+                                        fs=self.fs, glen_a=self.glen_a)
         self.assertRaises(RuntimeError, flowline._find_inital_glacier, model,
                           mb, y0, y1, rtol=0.02, max_ite=5)
 
@@ -1177,7 +1183,7 @@ class TestHEF(unittest.TestCase):
         self.gdir = init_hef(border=DOM_BORDER)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
-        self.fd = d['fd']
+        self.glen_a = d['glen_a']
 
     def tearDown(self):
         pass
@@ -1196,7 +1202,7 @@ class TestHEF(unittest.TestCase):
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=self.fs,
-                                        fd=self.fd)
+                                        glen_a=self.glen_a)
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -1228,7 +1234,7 @@ class TestHEF(unittest.TestCase):
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=self.fs,
-                                        fd=self.fd)
+                                        glen_a=self.glen_a)
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -1254,7 +1260,7 @@ class TestHEF(unittest.TestCase):
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=self.fs,
-                                        fd=self.fd)
+                                        glen_a=self.glen_a)
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -1283,17 +1289,13 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_find_t0(self):
 
-        # init bias 130, min_shape=0.0015
-        # init bias 160, min_shape=0.001
-        # init bias 150, min_shape=0.0012
-
         gdir = init_hef(border=DOM_BORDER, invert_with_sliding=False)
 
         flowline.init_present_time_glacier(gdir)
         glacier = gdir.read_pickle('model_flowlines')
         df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
         df.columns = ['Leclercq']
-        # df = df.loc[1950:]
+        df = df.loc[1950:]
 
         vol_ref = flowline.FlowlineModel(glacier).volume_km3
 
