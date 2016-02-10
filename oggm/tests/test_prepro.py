@@ -835,8 +835,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                                 glen_a=glen_a)
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                                  glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -849,9 +849,9 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] < 1.1)
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                             glen_a=glen_a,
-                                             write=True)
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -904,8 +904,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = 0.
-            v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                                 glen_a=glen_a)
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                                  glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -918,9 +918,9 @@ class TestInversion(unittest.TestCase):
 
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                             glen_a=glen_a,
-                                             write=True)
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -951,9 +951,9 @@ class TestInversion(unittest.TestCase):
         bias = bias[-1]
         climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
         inversion.prepare_for_inversion(gdir)
-        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                             glen_a=glen_a,
-                                             write=True)
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
 
         np.testing.assert_allclose(ref_v, v, rtol=0.02)
         cls = gdir.read_pickle('inversion_output', div_id=pid)

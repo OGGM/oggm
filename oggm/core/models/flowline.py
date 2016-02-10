@@ -643,7 +643,7 @@ class KarthausModel(FlowlineModel):
 
         NewIceThickness[-1] = thick[fl.nx-2]
 
-        fl.section = NewIceThickness.clip(0) * width
+        fl.thick = NewIceThickness.clip(0)
 
         # Next step
         self.t += dt

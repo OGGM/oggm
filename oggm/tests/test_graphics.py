@@ -134,8 +134,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
             _fd = 1.9e-24 * x[0]
             glen_a = (cfg.N+2) * _fd / 2.
             fs = 5.7e-20 * x[1]
-            v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                                 glen_a=glen_a)
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                                  glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -145,14 +145,14 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         _fd = 1.9e-24 * out[0]
         glen_a = (cfg.N+2) * _fd / 2.
         fs = 5.7e-20 * out[1]
-        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                             glen_a=glen_a,
-                                             write=True)
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
     else:
         def to_optimize(x):
             glen_a = cfg.A * x[0]
-            v, _ = inversion.inversion_parabolic(gdir, fs=0.,
-                                                 glen_a=glen_a)
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=0.,
+                                                  glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -161,9 +161,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                     tol=1e-4)['x']
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.inversion_parabolic(gdir, fs=fs,
-                                             glen_a=glen_a,
-                                             write=True)
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]
     try:

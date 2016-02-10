@@ -806,6 +806,7 @@ class TestIdealisedCases(unittest.TestCase):
          accumulation area twice as wide as the tongue."""
 
         # TODO: @alexjarosch here we should have a look at MUSCLSuperBeeModel
+        # set do_plot = True to see the plots
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
                   flowline.MUSCLSuperBeeModel]

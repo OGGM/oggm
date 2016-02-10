@@ -103,10 +103,7 @@ def _inversion_simple(a3, a0):
     return (-a0)**cfg.ONE_FIFTH
 
 
-def inversion_parabolic(gdir,
-                        glen_a=cfg.A,
-                        fs=0.,
-                        write=True):
+def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -244,8 +241,8 @@ def optimize_inversion_params(gdirs):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = inversion_parabolic(gdir, glen_a=glen_a,
-                                           fs=fs, write=False)
+                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                            fs=fs, write=False)
                 tmp_vols[i] = v * 1e-9
             return utils.rmsd(tmp_vols, ref_volume_km3)
         opti = optimization.minimize(to_optimize, [1., 1.],
@@ -262,8 +259,8 @@ def optimize_inversion_params(gdirs):
             tmp_vols = np.zeros(len(ref_gdirs))
             glen_a = cfg.A * x[0]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = inversion_parabolic(gdir, glen_a=glen_a,
-                                           fs=0., write=False)
+                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                            fs=0., write=False)
                 tmp_vols[i] = v * 1e-9
             return utils.rmsd(tmp_vols, ref_volume_km3)
         opti = optimization.minimize(to_optimize, [1.],
@@ -277,8 +274,8 @@ def optimize_inversion_params(gdirs):
     oggm_volume_m3 = np.zeros(len(ref_gdirs))
     rgi_area_m2 = np.zeros(len(ref_gdirs))
     for i, gdir in enumerate(ref_gdirs):
-        v, a = inversion_parabolic(gdir, glen_a=glen_a, fs=fs,
-                                   write=False)
+        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
+                                    write=False)
         oggm_volume_m3[i] = v
         rgi_area_m2[i] = a
     assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
@@ -348,4 +345,4 @@ def volume_inversion(gdir, use_cfg_params=False):
         glen_a = d['glen_a']
 
     # go
-    inversion_parabolic(gdir, glen_a=glen_a, fs=fs, write=True)
+    invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs, write=True)
