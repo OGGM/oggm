@@ -103,10 +103,7 @@ def _inversion_simple(a3, a0):
     return (-a0)**cfg.ONE_FIFTH
 
 
-def inversion_parabolic_point_slope(gdir,
-                                    fs=5.7e-20,
-                                    fd=1.9e-24,
-                                    write=True):
+def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -119,10 +116,10 @@ def inversion_parabolic_point_slope(gdir,
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
+    glen_a : float
+        glen's creep parameter A
     fs : float
         sliding parameter
-    fd : float
-        deformation parameter
     write: bool
         default behavior is to compute the thickness and write the
         results in the pickle. Set to False in order to spare time
@@ -135,6 +132,8 @@ def inversion_parabolic_point_slope(gdir,
     else:
         _inv_function = _inversion_poly
 
+    # Ice flow params
+    fd = 2. / (cfg.N+2) * glen_a
     a3 = fs / fd
 
     # sometimes the width is small and the flux is big. crop this
@@ -235,93 +234,92 @@ def optimize_inversion_params(gdirs):
 
     if cfg.PARAMS['invert_with_sliding']:
         # Optimize with both params
-        log.info('Compute the inversion fs and fd parameters.')
+        log.info('Compute the inversion parameters.')
 
         def to_optimize(x):
             tmp_vols = np.zeros(len(ref_gdirs))
-            fd = 1.9e-24 * x[0]
-            fs = 5.7e-20 * x[1]
+            glen_a = cfg.A * x[0]
+            fs = cfg.FS * x[1]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
-                                                       write=False)
+                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                            fs=fs, write=False)
                 tmp_vols[i] = v * 1e-9
             return utils.rmsd(tmp_vols, ref_volume_km3)
-        out = optimization.minimize(to_optimize, [1., 1.],
+        opti = optimization.minimize(to_optimize, [1., 1.],
                                     bounds=((0.01, 10), (0.01, 10)),
                                     tol=1.e-4)
         # Check results and save.
-        fd = 1.9e-24 * out['x'][0]
-        fs = 5.7e-20 * out['x'][1]
+        glen_a = cfg.A * opti['x'][0]
+        fs = cfg.FS * opti['x'][1]
     else:
         # Optimize without sliding
-        log.info('Compute the inversion fd parameter.')
+        log.info('Compute the inversion parameter.')
 
         def to_optimize(x):
             tmp_vols = np.zeros(len(ref_gdirs))
-            fd = 2.4e-24 * x[0]
+            glen_a = cfg.A * x[0]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = inversion_parabolic_point_slope(gdir, fs=0., fd=fd,
-                                                       write=False)
+                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                            fs=0., write=False)
                 tmp_vols[i] = v * 1e-9
             return utils.rmsd(tmp_vols, ref_volume_km3)
-        out = optimization.minimize(to_optimize, [1.],
+        opti = optimization.minimize(to_optimize, [1.],
                                     bounds=((0.01, 10), ),
                                     tol=1.e-4)
         # Check results and save.
+        glen_a = cfg.A * opti['x'][0]
         fs = 0.
-        fd = 2.4e-24 * out['x'][0]
 
+    # This is for the stats
     oggm_volume_m3 = np.zeros(len(ref_gdirs))
     rgi_area_m2 = np.zeros(len(ref_gdirs))
     for i, gdir in enumerate(ref_gdirs):
-        v, a = inversion_parabolic_point_slope(gdir, fs=fs, fd=fd,
-                                               write=False)
+        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
+                                    write=False)
         oggm_volume_m3[i] = v
         rgi_area_m2[i] = a
     assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
 
     # This is for each glacier
-    d = dict()
-    d['fs'] = fs
-    d['fd'] = fd
+    out = dict()
+    out['glen_a'] = glen_a
+    out['fs'] = fs
+    out['factor_glen_a'] = opti['x'][0]
+    try:
+        out['factor_fs'] = opti['x'][1]
+    except IndexError:
+        out['factor_fs'] = 0.
     for gdir in gdirs:
-        gdir.write_pickle(d, 'inversion_params')
+        gdir.write_pickle(out, 'inversion_params')
 
     # This is for the working dir
     # Simple stats
-    d = dict()
-    d['fs'] = fs
-    d['fd'] = fd
-    try:
-        d['factor_fs'] = out['x'][1]
-    except IndexError:
-        d['factor_fs'] = 0.
-    d['factor_fd'] = out['x'][0]
-    d['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
-    d['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
+    out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
+    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
                                  ref_thickness_m)
-    log.info('Optimized fs and fd with a factor {factor_fs:.2f} and '
-             '{factor_fd:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**d))
+    log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
+             '{factor_fs:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**out))
 
-    df = pd.DataFrame(d, index=[0])
+    df = pd.DataFrame(out, index=[0])
     fpath = os.path.join(cfg.PATHS['working_dir'],
                          'inversion_optim_params.csv')
     df.to_csv(fpath)
 
     # All results
-    d = dict()
-    d['ref_area_km2'] = ref_area_km2
-    d['ref_volume_km3'] = ref_volume_km3
-    d['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
-    d['vas_volume_km3'] = 0.034*(d['ref_area_km2']**1.375)
+    df = dict()
+    df['ref_area_km2'] = ref_area_km2
+    df['ref_volume_km3'] = ref_volume_km3
+    df['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
+    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
 
     rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
-    df = pd.DataFrame(d, index=rgi_id)
+    df = pd.DataFrame(df, index=rgi_id)
     fpath = os.path.join(cfg.PATHS['working_dir'],
                          'inversion_optim_results.csv')
     df.to_csv(fpath)
 
-    return fs, fd
+    # return value for tests
+    return out
 
 
 @entity_task(log, writes=['inversion_output'])
@@ -334,8 +332,8 @@ def volume_inversion(gdir, use_cfg_params=False):
     ----------
     gdir : oggm.GlacierDirectory
     use_cfg_params : bool, default=False
-        if True, use the user provided fs and fd. Else, use the results of
-        the optimisation.
+        if True, use A and fs provided by the user and if false, use the
+        results of the optimisation.
     """
 
     if use_cfg_params:
@@ -344,7 +342,7 @@ def volume_inversion(gdir, use_cfg_params=False):
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')
         fs = d['fs']
-        fd = d['fd']
+        glen_a = d['glen_a']
 
     # go
-    inversion_parabolic_point_slope(gdir, fs=fs, fd=fd, write=True)
+    invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs, write=True)

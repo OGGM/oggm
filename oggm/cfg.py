@@ -74,6 +74,8 @@ SEC_IN_HOUR = 3600
 RHO = 900.  # ice density
 G = 9.81  # gravity
 N = 3.  # Glen's law's exponent
+A = 2.4e-24  # Glen's default creep's parameter
+FS = 5.7e-20  # Default sliding parameter from Oerlemans - OUTDATED
 TWO_THIRDS = 2./3.
 FOUR_THIRDS = 4./3.
 ONE_FIFTH = 1./5.
@@ -183,6 +185,9 @@ def initialize(file=None):
     global PARAMS
     global PATHS
     global CONTINUE_ON_ERROR
+    global N
+    global A
+    global RHO
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -238,7 +243,7 @@ def initialize(file=None):
 
     # Flowline model
     PARAMS['bed_shape'] = cp['bed_shape']
-    PARAMS['use_flowline_params'] = cp.as_bool('use_flowline_params')
+    PARAMS['use_inversion_params'] = cp.as_bool('use_inversion_params')
 
     # Delete non-floats
     ltr = ['working_dir', 'srtm_file', 'histalp_file', 'wgms_rgi_links',
@@ -246,7 +251,7 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_flowline_params', 'invert_with_sliding']
+           'use_inversion_params', 'invert_with_sliding']
     for k in ltr:
         del cp[k]
 

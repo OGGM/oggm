@@ -1,4 +1,7 @@
-"""Flowline modelling"""
+"""Flowline modelling: bed shapes and model numerics.
+
+
+"""
 from __future__ import division
 from six.moves import zip
 
@@ -28,6 +31,7 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
+
 
 class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     """The is the input flowline for the model."""
@@ -64,7 +68,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 
     @property
     def length_m(self):
-        # TODO: therer could be a "cut" in the middle of the glacier!
+        # TODO: cliffs imply a cut in the middle of the glacier
         pok = np.where(self.thick == 0.)[0]
         if len(pok) == 0:
             return 0.
@@ -290,7 +294,7 @@ class MixedFlowline(ModelFlowline):
 class FlowlineModel(object):
     """Interface to the actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                        fs=0., fd=None):
         """ Instanciate.
 
@@ -305,14 +309,20 @@ class FlowlineModel(object):
         self.mb = mb_model
         self.fs = fs
 
-        # for backwards compatibility I calculate fd from Aglen and
+        # for backwards compatibility I calculate fd from glen_a and
         # throw a Deprecation warning
-        if fd is not None and Aglen is None:
+        if fd is not None and glen_a is None:
             self.fd_deprecated = fd
-            Aglen = (N+2) * fd / 2
+            glen_a = (N+2) * fd / 2.
             warnings.warn(DeprecationWarning('the use of fd is deprecated'))
-            
-        self.Aglen = Aglen
+
+        # Defaults
+        if glen_a is None:
+            glen_a = cfg.A
+        self.glen_a = glen_a
+
+        # we keep glen_a as input, but for optimisation we stick to "fd"
+        self._fd = 2. / (N+2) * self.glen_a
 
         self.y0 = None
         self.t = None
@@ -425,7 +435,7 @@ class FlowlineModel(object):
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
                  max_dt=SEC_IN_MONTH):
 
@@ -439,7 +449,7 @@ class FluxBasedModel(FlowlineModel):
         #TODO: document properties
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
-                                             y0=y0, Aglen=Aglen, fs=fs, fd=fd)
+                                             y0=y0, glen_a=glen_a, fs=fs, fd=fd)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -490,8 +500,9 @@ class FluxBasedModel(FlowlineModel):
             thick_stag[[0, -1]] = thick[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
+            # _fd = 2/(N+2) * self.glen_a
             rhogh = (RHO*G*slope_stag)**N
-            u_stag = (thick_stag**(N+1)) * 2/(N+2) * self.Aglen * rhogh + \
+            u_stag = (thick_stag**(N+1)) * self._fd * rhogh + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
@@ -558,7 +569,7 @@ class FluxBasedModel(FlowlineModel):
 class KarthausModel(FlowlineModel):
     """The actual model"""
 
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=0.,
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
                  max_dt=SEC_IN_MONTH):
 
@@ -577,7 +588,7 @@ class KarthausModel(FlowlineModel):
             raise ValueError('Karthaus model does not work with tributaries.')
 
         super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, Aglen=Aglen, fs=fs, fd=fd)
+                                            y0=y0, glen_a=glen_a, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -610,7 +621,7 @@ class KarthausModel(FlowlineModel):
 
         # Diffusivity
         Diffusivity = width * (RHO*G)**3 * thick**3 * SurfaceGradient**2
-        Diffusivity *= 2/(N+2) * self.Aglen * thick**2 + self.fs
+        Diffusivity *= 2/(N+2) * self.glen_a * thick**2 + self.fs
 
         # on stagger
         DiffusivityStaggered = np.zeros(fl.nx)
@@ -632,16 +643,17 @@ class KarthausModel(FlowlineModel):
 
         NewIceThickness[-1] = thick[fl.nx-2]
 
-        fl.section = NewIceThickness.clip(0) * width
+        fl.thick = NewIceThickness.clip(0)
 
         # Next step
         self.t += dt
 
 class MUSCLSuperBeeModel(FlowlineModel):
     """This model is based on Jarosch et al. 2013 (doi:10.5194/tc-7-229-2013)
+
        The equation references in the comments refer to the paper for clarity
     """
-    def __init__(self, flowlines, mb_model=None, y0=0., Aglen=None, fs=None, fd=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None, fd=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
 
         """ Instanciate.
@@ -658,7 +670,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
             raise ValueError('MUSCL SuperBee model does not work with tributaries.')
 
         super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, Aglen=Aglen, fs=fs, fd=fd)
+                                            y0=y0, glen_a=glen_a, fs=fs, fd=fd)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -700,7 +712,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         # get the bed
         B = fl.bed_h
         # define Glen's law here
-        Gamma = 2.*self.Aglen*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
+        Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
         #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
         # time stepping 
         c_stab = 0.165
@@ -980,7 +992,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     mb = copy.deepcopy(firstguess_mb)
     mb.set_bias(sign_mb * mb_bias)
     grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb_model=mb,
-                                fs=final_model.fs, fd=final_model.fd_deprecated,
+                                fs=final_model.fs,
+                                glen_a=final_model.glen_a,
                                 min_dt=final_model.min_dt,
                                 max_dt=final_model.max_dt)
     while True and (c < max_ite):
@@ -1052,26 +1065,26 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
         - past_model.p: a ModelFlowline object
     """
 
-    if cfg.PARAMS['use_flowline_params']:
-        fs = cfg.PARAMS['flowline_fs']
-        fd = cfg.PARAMS['flowline_fd']
-    else:
+    if cfg.PARAMS['use_inversion_params']:
         d = gdir.read_pickle('inversion_params')
         fs = d['fs']
-        fd = d['fd']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
 
     if y0 is None:
         y0 = cfg.PARAMS['y0']
     y1 = gdir.rgi_date.year
     mb = mbmods.HistalpMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, fd=fd)
+    model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, glen_a=glen_a)
     assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     mb = mbmods.BackwardsMassBalanceModel(gdir)
     ref_area = gdir.rgi_area_m2
     ite, bias, past_model = _find_inital_glacier(model, mb, y0, y1,
-                                                   rtol=rtol,
+                                                 rtol=rtol,
                                                  init_bias=init_bias,
                                                  ref_area=ref_area)
 
