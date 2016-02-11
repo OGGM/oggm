@@ -528,8 +528,8 @@ def catchment_area(gdir, div_id=None):
 @entity_task(log, writes=['inversion_flowlines'])
 @divide_task(log, add_0=False)
 def initialize_flowlines(gdir, div_id=None):
-    """ Transforms the original (geometrical) Centerlines in a more "physical"
-    object: InversionFlowlines.
+    """ Transforms the geometrical Centerlines in the more "physical"
+    InversionFlowlines.
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
