@@ -25,14 +25,14 @@ class MassBalanceModel(object):
     def set_bias(self, bias=0):
         self._bias = bias
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
         raise NotImplementedError()
 
 
 class TstarMassBalanceModel(MassBalanceModel):
-    """Mass balance for the equilibrium mass-balance around t*."""
+    """Constant mass balance: equilibrium MB at period t*."""
 
     def __init__(self, gdir, bias=0.):
         """ Instanciate."""
@@ -59,8 +59,9 @@ class TstarMassBalanceModel(MassBalanceModel):
         mb_on_h = p - mu_star * t
 
         self.interp = interp1d(h, mb_on_h)
+        self.t_star = t_star
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
@@ -68,7 +69,10 @@ class TstarMassBalanceModel(MassBalanceModel):
 
 
 class BackwardsMassBalanceModel(MassBalanceModel):
-    """Mass balance for finding the initial glacier."""
+    """Constant mass balance: MB for [1983, 2003] with temperature bias.
+
+    This is useful for finding a possible past galcier state.
+    """
 
     def __init__(self, gdir, use_tstar=False, bias=0.):
         """ Instanciate."""
@@ -119,7 +123,6 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         # For optimisation
         self._interp = dict()
 
-
         # Get default heights
         fls = gdir.read_pickle('model_flowlines')
         h = np.array([])
@@ -157,7 +160,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         return self._interp[self._bias]
 
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
@@ -166,7 +169,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
 
 class TodayMassBalanceModel(MassBalanceModel):
-    """Mass-balance during the last 30 yrs."""
+    """Constant mass-balance: MB during the last 30 yrs."""
 
     def __init__(self, gdir, bias=0.):
         """ Instanciate."""
@@ -193,7 +196,7 @@ class TodayMassBalanceModel(MassBalanceModel):
 
         self.interp = interp1d(h, mb_on_h)
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
@@ -201,7 +204,7 @@ class TodayMassBalanceModel(MassBalanceModel):
 
 
 class HistalpMassBalanceModel(MassBalanceModel):
-    """Mass balance Histalp period."""
+    """Mass balance during the HISTALP period."""
 
     def __init__(self, gdir):
         """ Instanciate."""
@@ -232,7 +235,7 @@ class HistalpMassBalanceModel(MassBalanceModel):
         self.ref_hgt = nc.ref_hgt
         nc.close()
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 

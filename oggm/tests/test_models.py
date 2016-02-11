@@ -207,7 +207,7 @@ class ConstantBalanceModel(massbalance.MassBalanceModel):
         self.ela_h = ela_h
         self.grad = grad
 
-    def get_mb(self, heights, year):
+    def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
