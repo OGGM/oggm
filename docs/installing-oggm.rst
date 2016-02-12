@@ -68,7 +68,7 @@ installing `miniconda`_ or `anaconda`_).
 **Linux** users should install a couple of packages (not all of them are
 required but just to be sure)::
 
-    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf
+    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf ttf-bitstream-vera
 
 .. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 .. _miniconda: http://conda.pydata.org/miniconda.html
