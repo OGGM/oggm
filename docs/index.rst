@@ -25,8 +25,8 @@ Documentation
 .. toctree::
     :maxdepth: 1
 
-    examples
     installing-oggm
+    examples
     centerlines
     mass-balance
     flowline
@@ -64,6 +64,7 @@ About
 :Authors:
     - Fabien Maussion
     - Ben Marzeion
+    - Alexander H. Jarosch
     - Kévin Fourteau
     - Christian Wild
     - Michael Adamer

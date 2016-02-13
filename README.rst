@@ -49,7 +49,7 @@ Finally, following an inversion algorithm based on mass-balance (`Marzeion et al
 Installation, documentation
 ---------------------------
 
-A documentation draft is hosted on ReadTheDocs: http://oggm.readthedocs.org
+A documentation draft is hosted on ReadTheDocs: http://oggm.org
 
 
 Get in touch
@@ -91,6 +91,7 @@ About
 :Authors:
     - Fabien Maussion
     - Ben Marzeion
+    - Alexander H. Jarosch
     - Kévin Fourteau
     - Christian Wild
     - Michael Adamer
