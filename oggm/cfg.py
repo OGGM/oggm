@@ -209,6 +209,7 @@ def initialize(file=None):
 
     PATHS['working_dir'] = cp['working_dir']
 
+    PATHS['topo_dir'] = cp['topo_dir']
     PATHS['srtm_file'] = cp['srtm_file']
     PATHS['histalp_file'] = cp['histalp_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -247,7 +248,7 @@ def initialize(file=None):
 
     # Delete non-floats
     ltr = ['working_dir', 'srtm_file', 'histalp_file', 'wgms_rgi_links',
-           'glathida_rgi_links', 'grid_dx_method',
+           'glathida_rgi_links', 'grid_dx_method', 'topo_dir',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',

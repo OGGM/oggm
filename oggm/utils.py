@@ -30,6 +30,8 @@ from scipy import stats
 from joblib import Memory
 from shapely.ops import transform as shp_trafo
 from salem import wgs84
+import rasterio
+from rasterio.tools.merge import merge as merge_tool
 
 # Locals
 import oggm.cfg as cfg
@@ -61,6 +63,9 @@ def _download_demo_files():
 
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     odir = os.path.join(cfg.CACHE_DIR)
+
+    # here there should be a check on the online file if it has changed
+    # maybe with last modified tag or something?
     if not os.path.exists(ofile):  # pragma: no cover
         urlretrieve(GH_ZIP, ofile)
         with zipfile.ZipFile(ofile) as zf:
@@ -71,6 +76,26 @@ def _download_demo_files():
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
+    return out
+
+
+def _download_srtm_file(zone):
+    """Checks if the srtm data is in the directory and if not, download it.
+    """
+
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'srtm')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
+    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+            '/srtm_' + zone + '.zip'
+    if not os.path.exists(ofile):  # pragma: no cover
+        urlretrieve(ifile, ofile)
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(odir)
+
+    out = os.path.join(odir, 'srtm_' + zone + '.tif')
+    assert os.path.exists(out)
     return out
 
 
@@ -279,6 +304,7 @@ def get_centerline_lonlat(gdir):
 
     return olist
 
+
 def write_centerlines_to_shape(gdirs, filename):
     """Write centerlines in a shapefile"""
 
@@ -316,6 +342,96 @@ def write_centerlines_to_shape(gdirs, filename):
                     crs=crs, schema=shema) as c:
         for i, row in odf.iterrows():
             c.write(feature(i, row))
+
+
+def srtm_zone(lon_ex, lat_ex):
+    """Returns a list of SRTM zones covering the desired extent.
+
+    Note: this does not handle large areas, ie the intermediate files. But
+    we could handle this if we wanted to.
+    """
+
+    srtm_x0 = -180.
+    srtm_y0 = 60.
+    srtm_dx = 5.
+    srtm_dy = -5.
+
+    zones = []
+    for lon in lon_ex:
+        for lat in lat_ex:
+            dx = lon - srtm_x0
+            dy = lat - srtm_y0
+            assert dy < 0
+            zx = np.ceil(dx / srtm_dx)
+            zy = np.ceil(dy / srtm_dy)
+            zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
+    return list(sorted(set(zones)))
+
+
+def get_demfile(lon_ex, lat_ex):
+    """
+    Returns a path to the DEM file covering the desired extent.
+
+    If the file is not present, download it. If the extent covers two or
+    more files, merge them.
+
+    Returns a downloaded SRTM file for [-60S;60N], a Greenland DEM if
+    possible, and GTOPO elsewhere (hihi)
+
+    Parameters
+    ----------
+    lon_ex: (min_lon, max_lon)
+    lat_ex: (min_lat, max_lat)
+
+    Returns
+    -------
+    tuple: (path to the dem file, data source)
+    """
+
+    # Did the user specify a specific SRTM file?
+    if ('srtm_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['srtm_file']):
+        return cfg.PATHS['srtm_file'], 'USER'
+
+    gimp_ex_lon = [-89.308354690462679, 7.5470626510391874]
+    gimp_ex_lat = [58.795819626751445, 83.953399932614346]
+    if (lon_ex[0] > gimp_ex_lon[0]) and (lon_ex[1] < gimp_ex_lon[1]) and \
+       (lat_ex[0] > gimp_ex_lat[0]) and (lat_ex[1] < gimp_ex_lat[1]):
+        gimp_file = os.path.join(cfg.PATHS['topo_dir'], 'gimpdem_90m.tif')
+        assert os.path.exists(gimp_file)
+        return gimp_file, 'GIMP'
+
+    # Currently a very coarse dataset
+    if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
+        t_file = os.path.join(cfg.PATHS['topo_dir'],
+                              'ETOPO1_Ice_g_geotiff.tif')
+        assert os.path.exists(t_file)
+        return t_file, 'ETOPO1'
+
+    # List of necessary zones
+    zones = srtm_zone(lon_ex, lat_ex)
+    sources = []
+    for z in zones:
+        sources.append(_download_srtm_file(z))
+
+    if len(sources) == 1:
+        return sources[0], 'SRTM'
+    else:
+        # merge
+        zone_str = '+'.join(zones)
+        odir = cfg.PATHS['topo_dir']
+        merged_file = os.path.join(odir, 'srtm_merged_' + zone_str + '.tif')
+        if not os.path.exists(merged_file):
+            # write it
+            dest, output_transform = merge_tool(sources)
+            profile = sources[0].profile
+            profile.pop('affine')
+            profile['transform'] = output_transform
+            profile['height'] = dest.shape[1]
+            profile['width'] = dest.shape[2]
+            profile['driver'] = 'GTiff'
+            with rasterio.open(merged_file, 'w', **profile) as dst:
+                dst.write(dest)
+        return merged_file, 'SRTM_MERGED'
 
 
 class entity_task(object):

@@ -39,7 +39,7 @@ from scipy.ndimage.measurements import label
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int
+from oggm.utils import tuple2int, get_demfile
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -307,14 +307,30 @@ def define_glacier_region(gdir, entity=None):
     geometry = shapely.ops.transform(project, entity['geometry'])
     xx, yy = geometry.exterior.xy
 
-    # save it to disk
+    # Corners, incl. a buffer of N pix
+    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
+    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
+    uly = np.max(yy) + cfg.PARAMS['border'] * dx
+    lry = np.min(yy) - cfg.PARAMS['border'] * dx
+    # n pixels
+    nx = np.int((lrx - ulx) / dx)
+    ny = np.int((uly - lry) / dx)
+
+    # Back to lon, lat for DEM download/preparation
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), ul_corner=(ulx, uly),
+                          dxdy=(dx, -dx), pixel_ref='corner')
+    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
+
+    # save transformed geometry to disk
     entity['geometry'] = geometry
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Open SRTM
-    srtm = gdal.Open(cfg.PATHS['srtm_file'])
+    srtm_file, dem_source = get_demfile((minlon, maxlon), (minlat, maxlat))
+    log.debug('%s: DEM source:: %d', gdir.rgi_id, dem_source)
+    srtm = gdal.Open(srtm_file)
     geo_t = srtm.GetGeoTransform()
 
     # GDAL proj
@@ -326,19 +342,11 @@ def define_glacier_region(gdir, entity=None):
     wgs84 = osr.SpatialReference()
     wgs84.ImportFromEPSG(4326)
 
-    # Corners, incl. a buffer of N pix
-    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
-    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
-    uly = np.max(yy) + cfg.PARAMS['border'] * dx
-    lry = np.min(yy) - cfg.PARAMS['border'] * dx
-
     # Create an in-memory raster
     mem_drv = gdal.GetDriverByName('MEM')
 
     # GDALDataset Create (char *pszName, int nXSize, int nYSize,
     #                     int nBands, GDALDataType eType)
-    nx = np.int((lrx - ulx) / dx)
-    ny = np.int((uly - lry) / dx)
     dest = mem_drv.Create('', nx, ny, 1, gdal.GDT_Float32)
 
     # Calculate the new geotransform
