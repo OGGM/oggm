@@ -296,8 +296,7 @@ def define_glacier_region(gdir, entity=None):
     log.debug('%s: area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Make a local glacier map
-    cenlon = np.float(entity['CENLON'])
-    proj_params = dict(name='tmerc', lat_0=0., lon_0=cenlon,
+    proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
                 "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
@@ -305,6 +304,8 @@ def define_glacier_region(gdir, entity=None):
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(pyproj.transform, proj_in, proj_out)
     geometry = shapely.ops.transform(project, entity['geometry'])
+    if 'Multi' in geometry.type:
+        geometry = geometry.buffer(0)
     xx, yy = geometry.exterior.xy
 
     # Corners, incl. a buffer of N pix
@@ -327,20 +328,28 @@ def define_glacier_region(gdir, entity=None):
     towrite.crs = proj4_str
     towrite.to_file(gdir.get_filepath('outlines'))
 
-    # Open SRTM
-    srtm_file, dem_source = get_demfile((minlon, maxlon), (minlat, maxlat))
-    log.debug('%s: DEM source:: %d', gdir.rgi_id, dem_source)
-    srtm = gdal.Open(srtm_file)
-    geo_t = srtm.GetGeoTransform()
+    # Open DEM
+    dem_file, dem_source = get_demfile((minlon, maxlon), (minlat, maxlat),
+                                        region=gdir.rgi_region)
+    log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
+    dem = gdal.Open(dem_file)
+    geo_t = dem.GetGeoTransform()
 
-    # GDAL proj
+    # Input proj
+    dem_proj = dem.GetProjection()
+    if dem_proj == '':
+        # Assume defaults
+        wgs84 = osr.SpatialReference()
+        wgs84.ImportFromEPSG(4326)
+        dem_proj = wgs84.ExportToWkt()
+
+
+    # Dest proj
     gproj = osr.SpatialReference()
     gproj.SetProjCS('Local transverse Mercator')
     gproj.SetWellKnownGeogCS("WGS84")
-    gproj.SetTM(np.float(0), cenlon,
+    gproj.SetTM(np.float(0), gdir.cenlon,
                 np.float(0.9996), np.float(0), np.float(0))
-    wgs84 = osr.SpatialReference()
-    wgs84.ImportFromEPSG(4326)
 
     # Create an in-memory raster
     mem_drv = gdal.GetDriverByName('MEM')
@@ -365,7 +374,7 @@ def define_glacier_region(gdir, entity=None):
         raise ValueError('{} interpolation not understood'
                          .format(cfg.PARAMS['topo_interp']))
 
-    res = gdal.ReprojectImage(srtm, dest, wgs84.ExportToWkt(),
+    res = gdal.ReprojectImage(dem, dest, dem_proj,
                               gproj.ExportToWkt(), interp)
 
     # Let's save it as a GeoTIFF.
@@ -429,17 +438,20 @@ def glacier_masks(gdir):
     """
 
     # open srtm tif-file:
-    srtm_ds = gdal.Open(gdir.get_filepath('dem'))
-    dem = srtm_ds.ReadAsArray().astype(float)
-    if np.min(dem) <= 0.:
-        raise RuntimeError('Negative altitudes in the DEM.')
+    dem_ds = gdal.Open(gdir.get_filepath('dem'))
+    dem = dem_ds.ReadAsArray().astype(float)
+    mindem, maxdem = np.min(dem), np.max(dem)
+    if mindem <= -9990.:
+        raise RuntimeError(gdir.rgi_id + ': negative altitudes in the DEM.')
+    if mindem == maxdem:
+        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
-    nx = srtm_ds.RasterXSize
-    ny = srtm_ds.RasterYSize
+    nx = dem_ds.RasterXSize
+    ny = dem_ds.RasterYSize
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
-    geot = srtm_ds.GetGeoTransform()
+    geot = dem_ds.GetGeoTransform()
     x0 = geot[0]  # UL corner
     y0 = geot[3]  # UL corner
     dx = geot[1]
@@ -448,7 +460,7 @@ def glacier_masks(gdir):
     assert dx == gdir.grid.dx
     assert y0 == gdir.grid.corner_grid.y0
     assert x0 == gdir.grid.corner_grid.x0
-    srtm_ds = None  # to be sure...
+    dem_ds = None  # to be sure...
 
     # Smooth SRTM?
     if cfg.PARAMS['smooth_window'] > 0.:

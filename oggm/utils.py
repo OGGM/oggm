@@ -368,7 +368,7 @@ def srtm_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
-def get_demfile(lon_ex, lat_ex):
+def get_demfile(lon_ex, lat_ex, region=None):
     """
     Returns a path to the DEM file covering the desired extent.
 
@@ -392,18 +392,21 @@ def get_demfile(lon_ex, lat_ex):
     if ('srtm_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['srtm_file']):
         return cfg.PATHS['srtm_file'], 'USER'
 
-    gimp_ex_lon = [-89.308354690462679, 7.5470626510391874]
-    gimp_ex_lat = [58.795819626751445, 83.953399932614346]
-    if (lon_ex[0] > gimp_ex_lon[0]) and (lon_ex[1] < gimp_ex_lon[1]) and \
-       (lat_ex[0] > gimp_ex_lat[0]) and (lat_ex[1] < gimp_ex_lat[1]):
+    topodir = cfg.PATHS['topo_dir']
+
+    # TODO: GIMP is in polar stereographic, not easy to test
+    # gimp_ex_lon = [-89.308354690462679, 7.5470626510391874]
+    # gimp_ex_lat = [58.795819626751445, 83.953399932614346]
+    # if (lon_ex[0] > gimp_ex_lon[0]) and (lon_ex[1] < gimp_ex_lon[1]) and \
+    #    (lat_ex[0] > gimp_ex_lat[0]) and (lat_ex[1] < gimp_ex_lat[1]):
+    if int(region) == 5:
         gimp_file = os.path.join(cfg.PATHS['topo_dir'], 'gimpdem_90m.tif')
         assert os.path.exists(gimp_file)
         return gimp_file, 'GIMP'
 
     # Currently a very coarse dataset
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        t_file = os.path.join(cfg.PATHS['topo_dir'],
-                              'ETOPO1_Ice_g_geotiff.tif')
+        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
         assert os.path.exists(t_file)
         return t_file, 'ETOPO1'
 
@@ -418,8 +421,8 @@ def get_demfile(lon_ex, lat_ex):
     else:
         # merge
         zone_str = '+'.join(zones)
-        odir = cfg.PATHS['topo_dir']
-        merged_file = os.path.join(odir, 'srtm_merged_' + zone_str + '.tif')
+        merged_file = os.path.join(topodir, 'srtm',
+                                   'srtm_merged_' + zone_str + '.tif')
         if not os.path.exists(merged_file):
             # write it
             dest, output_transform = merge_tool(sources)
@@ -570,22 +573,36 @@ class GlacierDirectory(object):
         rgi_date : datetime
             The RGI's BGNDATE attribute if available. Otherwise, defaults to
             2003-01-01
+        rgi_region : str
+            The RGI region name
         """
 
         if base_dir is None:
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
-        self.rgi_id = rgi_entity.RGIID
-        self.glims_id = rgi_entity.GLIMSID
-        self.rgi_area_km2 = float(rgi_entity.AREA)
-        self.cenlon = float(rgi_entity.CENLON)
-        self.cenlat = float(rgi_entity.CENLAT)
+        # RGI V4 vs V5
         try:
-            rgi_date = pd.to_datetime(rgi_entity.BGNDATE[0:6],
+            self.rgi_id = rgi_entity.RGIID
+            self.glims_id = rgi_entity.GLIMSID
+            self.rgi_area_km2 = float(rgi_entity.AREA)
+            self.cenlon = float(rgi_entity.CENLON)
+            self.cenlat = float(rgi_entity.CENLAT)
+            rgi_datestr = rgi_entity.BGNDATE
+        except AttributeError:
+            self.rgi_id = rgi_entity.RGIId
+            self.glims_id = rgi_entity.GLIMSId
+            self.rgi_area_km2 = float(rgi_entity.Area)
+            self.cenlon = float(rgi_entity.CenLon)
+            self.cenlat = float(rgi_entity.CenLat)
+            rgi_datestr = rgi_entity.BgnDate
+        try:
+            rgi_date = pd.to_datetime(rgi_datestr[0:6],
                                       errors='raise', format='%Y%m')
         except:
             rgi_date = pd.to_datetime('200301', format='%Y%m')
+
         self.rgi_date = rgi_date
+        self.rgi_region = rgi_entity.O1Region
 
         self.dir = os.path.join(base_dir, self.rgi_id)
         if reset and os.path.exists(self.dir):

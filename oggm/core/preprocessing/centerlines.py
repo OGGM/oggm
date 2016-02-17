@@ -96,8 +96,6 @@ class Centerline(object):
         """
 
         self.nx = len(line.coords)
-        if self.nx < 5:
-            raise ValueError('Expecting lines longer than 5 elements.')
         self.line = line
         dis = [line.project(shpg.Point(co)) for co in line.coords]
         self.dis_on_line = np.array(dis)
