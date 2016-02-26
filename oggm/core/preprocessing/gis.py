@@ -36,6 +36,7 @@ import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
+from scipy.interpolate import griddata
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
@@ -440,17 +441,28 @@ def glacier_masks(gdir):
     # open srtm tif-file:
     dem_ds = gdal.Open(gdir.get_filepath('dem'))
     dem = dem_ds.ReadAsArray().astype(float)
-    mindem, maxdem = np.min(dem), np.max(dem)
-    if mindem <= -9990.:
-        raise RuntimeError(gdir.rgi_id + ': negative altitudes in the DEM.')
-    if mindem == maxdem:
+
+    # Correct the DEM (ASTER...)
+    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    min_z = -999.
+    if np.min(dem) <= min_z:
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero(dem <= min_z)
+        pok = np.nonzero(dem > min_z)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+    if np.min(dem) == np.max(dem):
         raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
+    # Grid
     nx = dem_ds.RasterXSize
     ny = dem_ds.RasterYSize
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
+    # Proj
     geot = dem_ds.GetGeoTransform()
     x0 = geot[0]  # UL corner
     y0 = geot[3]  # UL corner
@@ -462,7 +474,7 @@ def glacier_masks(gdir):
     assert x0 == gdir.grid.corner_grid.x0
     dem_ds = None  # to be sure...
 
-    # Smooth SRTM?
+    # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = _gaussian_blur(dem, np.int(gsize))

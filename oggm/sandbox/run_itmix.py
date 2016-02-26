@@ -54,7 +54,7 @@ df_itmix = pd.read_pickle('/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/lin
 
 
 df_rgi_file = '/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_shp.pkl'
-# df_rgi_file = '/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_shp_sel_RGI50-03.02479.pkl'
+# df_rgi_file = '/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_shp_sel_RGI50-09.00910.pkl'
 if os.path.exists(df_rgi_file):
     rgidf = pd.read_pickle(df_rgi_file)
 else:
@@ -63,8 +63,8 @@ else:
         rgi_shp = list(glob.glob(os.path.join(rgi_dir, "*", row['rgi_reg'] + '_rgi50_*.shp')))[0]
         rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
         rgi_parts = row.T['rgi_parts_ids']
-        # if 'RGI50-03.02479' in rgi_parts:
-        #     rgi_parts = ['RGI50-03.02479']
+        # if 'RGI50-09.00910' in rgi_parts:
+        #     rgi_parts = ['RGI50-09.00910']
         # else:
         #     continue
         sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)]
@@ -89,9 +89,9 @@ from oggm.workflow import execute_entity_task
 task_list = [
     tasks.glacier_masks,
     tasks.compute_centerlines,
-    tasks.catchment_area,
-    tasks.initialize_flowlines,
-    tasks.catchment_width_geom
+    # tasks.catchment_area,
+    # tasks.initialize_flowlines,
+    # tasks.catchment_width_geom
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)
@@ -100,7 +100,7 @@ for task in task_list:
 dir = '/home/mowglie/disk/Data/ITMIX/oggm_plots/'
 from oggm import graphics
 for gd in gdirs:
-    graphics.plot_catchment_width(gd)
+    graphics.plot_centerlines(gd)
     plt.savefig(dir + gd.rgi_id + '.png')
     plt.close()
 

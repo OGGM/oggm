@@ -6,24 +6,26 @@ License: GPLv3+
 """
 from __future__ import absolute_import, division
 
-import glob
 import six.moves.cPickle as pickle
-
-import pandas as pd
-from salem import lazy_property
 from six.moves.urllib.request import urlretrieve
+from six.moves.urllib.error import HTTPError
 
 # Builtins
+import glob
 import os
 import gzip
 import shutil
 import zipfile
 import sys
+import math
+from shutil import copyfile
 from collections import OrderedDict
 from functools import partial, wraps
 
 # External libs
 import geopandas as gpd
+import pandas as pd
+from salem import lazy_property
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -89,12 +91,54 @@ def _download_srtm_file(zone):
     ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
     ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
             '/srtm_' + zone + '.zip'
-    if not os.path.exists(ofile):  # pragma: no cover
-        urlretrieve(ifile, ofile)
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(odir)
+    if not os.path.exists(ofile):
+        # Try to download
+        try:
+            urlretrieve(ifile, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        except HTTPError as err:
+            # This works well for py3, not py2
+            if err.code == 404:
+                # Ok so this *should* be an ocean tile
+                return None
+            else:
+                raise
+        except zipfile.BadZipfile:
+            # This is for py2
+            # Ok so this *should* be an ocean tile
+            return None
 
     out = os.path.join(odir, 'srtm_' + zone + '.tif')
+    assert os.path.exists(out)
+    return out
+
+
+def _download_aster_file(zone, unit):
+    """Checks if the aster data is in the directory and if not, download it.
+    """
+
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'aster')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    fbname = 'ASTGTM2_' + zone + '.zip'
+    dirbname = 'UNIT_' + unit
+    ofile = os.path.join(odir, fbname)
+
+    # TODO: this is very local!
+    ifile = '/home/mowglie/disk/ASTGTM_V2'
+    ifile = os.path.join(ifile, dirbname, fbname)
+    if not os.path.exists(ofile):
+        if os.path.exists(ifile):
+            # Ok so the tile is a valid one
+            copyfile(ifile, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        else:
+            # Ok so this *should* be an ocean tile
+            return None
+
+    out = os.path.join(odir, 'ASTGTM2_' + zone + '_dem.tif')
     assert os.path.exists(out)
     return out
 
@@ -271,6 +315,7 @@ def pipe_log(gdir, task_func, err=None):
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     if not os.path.exists(fpath):
         os.makedirs(fpath)
+
     fpath = os.path.join(fpath, gdir.rgi_id)
 
     if err is not None:
@@ -346,15 +391,19 @@ def write_centerlines_to_shape(gdirs, filename):
 
 def srtm_zone(lon_ex, lat_ex):
     """Returns a list of SRTM zones covering the desired extent.
-
-    Note: this does not handle large areas, ie the intermediate files. But
-    we could handle this if we wanted to.
     """
 
+    # SRTM are sorted in tiles of 5 degrees
     srtm_x0 = -180.
     srtm_y0 = 60.
     srtm_dx = 5.
     srtm_dy = -5.
+
+    # quick n dirty solution to be sure that we will cover the whole range
+    mi, ma = np.min(lon_ex), np.max(lon_ex)
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+    mi, ma = np.min(lat_ex), np.max(lat_ex)
+    lat_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
 
     zones = []
     for lon in lon_ex:
@@ -366,6 +415,51 @@ def srtm_zone(lon_ex, lat_ex):
             zy = np.ceil(dy / srtm_dy)
             zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
     return list(sorted(set(zones)))
+
+
+def aster_zone_unit(lon_ex, lat_ex):
+    """Returns a list of ASTER V2 zones and units covering the desired extent.
+    """
+
+    # ASTER is a bit more work. The units are directories of 5 by 5,
+    # tiles are 1 by 1. The letter in the filename depends on the sign
+    units_dx = 5.
+
+    # quick n dirty solution to be sure that we will cover the whole range
+    mi, ma = np.min(lon_ex), np.max(lon_ex)
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+    mi, ma = np.min(lat_ex), np.max(lat_ex)
+    lat_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+
+    zones = []
+    units = []
+    for lon in lon_ex:
+        for lat in lat_ex:
+            dx = np.floor(lon)
+            zx = np.floor(lon / units_dx) * units_dx
+            if math.copysign(1, dx) == -1:
+                dx = -dx
+                zx = -zx
+                lon_let = 'W'
+            else:
+                lon_let = 'E'
+
+            dy = np.floor(lat)
+            zy = np.floor(lat / units_dx) * units_dx
+            if math.copysign(1, dy) == -1:
+                dy = -dy
+                zy = -zy
+                lat_let = 'S'
+            else:
+                lat_let = 'N'
+
+            z = '{}{:02.0f}{}{:03.0f}'.format(lat_let, dy, lon_let, dx)
+            u = '{}{:02.0f}{}{:03.0f}'.format(lat_let, zy, lon_let, zx)
+            if z not in zones:
+                zones.append(z)
+                units.append(u)
+
+    return zones, units
 
 
 def get_demfile(lon_ex, lat_ex, region=None):
@@ -395,38 +489,52 @@ def get_demfile(lon_ex, lat_ex, region=None):
     topodir = cfg.PATHS['topo_dir']
 
     # TODO: GIMP is in polar stereographic, not easy to test
-    # gimp_ex_lon = [-89.308354690462679, 7.5470626510391874]
-    # gimp_ex_lat = [58.795819626751445, 83.953399932614346]
-    # if (lon_ex[0] > gimp_ex_lon[0]) and (lon_ex[1] < gimp_ex_lon[1]) and \
-    #    (lat_ex[0] > gimp_ex_lat[0]) and (lat_ex[1] < gimp_ex_lat[1]):
+    # would be possible with a salem grid but this is a bit more expensive
+    # than jsut asking RGI for the region
     if int(region) == 5:
         gimp_file = os.path.join(cfg.PATHS['topo_dir'], 'gimpdem_90m.tif')
         assert os.path.exists(gimp_file)
         return gimp_file, 'GIMP'
 
-    # Currently a very coarse dataset
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
-        assert os.path.exists(t_file)
-        return t_file, 'ETOPO1'
 
-    # List of necessary zones
-    zones = srtm_zone(lon_ex, lat_ex)
-    sources = []
-    for z in zones:
-        sources.append(_download_srtm_file(z))
+        # # for the very last cases a very coarse dataset ?
+        # if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
+        #     t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
+        #     assert os.path.exists(t_file)
+        #     return t_file, 'ETOPO1'
+
+        # use ASTER V2 for northern lats
+        zones, units = aster_zone_unit(lon_ex, lat_ex)
+        sources = []
+        for z, u in zip(zones, units):
+            sf = _download_aster_file(z, u)
+            if sf is not None:
+                sources.append(sf)
+        source_str = 'ASTER'
+    else:
+        # Use SRTM!
+        zones = srtm_zone(lon_ex, lat_ex)
+        sources = []
+        for z in zones:
+            sources.append(_download_srtm_file(z))
+        source_str = 'SRTM'
+
+    assert len(sources) >= 1
 
     if len(sources) == 1:
-        return sources[0], 'SRTM'
+        return sources[0], source_str
     else:
         # merge
         zone_str = '+'.join(zones)
-        merged_file = os.path.join(topodir, 'srtm',
-                                   'srtm_merged_' + zone_str + '.tif')
+        bname = source_str.lower() + '_merged_' + zone_str + '.tif'
+        merged_file = os.path.join(topodir, source_str.lower(),
+                                   bname)
         if not os.path.exists(merged_file):
             # write it
-            dest, output_transform = merge_tool(sources)
-            profile = sources[0].profile
+            rfiles = [rasterio.open(s) for s in sources]
+            dest, output_transform = merge_tool(rfiles)
+            profile = rfiles[0].profile
             profile.pop('affine')
             profile['transform'] = output_transform
             profile['height'] = dest.shape[1]
@@ -434,7 +542,9 @@ def get_demfile(lon_ex, lat_ex, region=None):
             profile['driver'] = 'GTiff'
             with rasterio.open(merged_file, 'w', **profile) as dst:
                 dst.write(dest)
-        return merged_file, 'SRTM_MERGED'
+        return merged_file, source_str + '_MERGED'
+
+
 
 
 class entity_task(object):
@@ -587,6 +697,7 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.AREA)
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
+            self.rgi_region = rgi_entity.O1REGION
             rgi_datestr = rgi_entity.BGNDATE
         except AttributeError:
             self.rgi_id = rgi_entity.RGIId
@@ -594,15 +705,14 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.Area)
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
+            self.rgi_region = rgi_entity.O1Region
             rgi_datestr = rgi_entity.BgnDate
         try:
             rgi_date = pd.to_datetime(rgi_datestr[0:6],
                                       errors='raise', format='%Y%m')
         except:
             rgi_date = pd.to_datetime('200301', format='%Y%m')
-
         self.rgi_date = rgi_date
-        self.rgi_region = rgi_entity.O1Region
 
         self.dir = os.path.join(base_dir, self.rgi_id)
         if reset and os.path.exists(self.dir):

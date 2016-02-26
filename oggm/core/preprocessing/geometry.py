@@ -629,9 +629,6 @@ def catchment_width_geom(gdir, div_id=None):
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
     for fl, ci in zip(flowlines, catchment_indices):
 
-        if flowlines.index(fl) == 3:
-            tt = 1
-
         n = len(fl.dis_on_line)
 
         widths = np.zeros(n)
@@ -650,26 +647,29 @@ def catchment_width_geom(gdir, div_id=None):
 
         valid = np.where(np.isfinite(widths))
         if len(valid[0]) == 0:
-            raise RuntimeError('{}: First guess widths went wrong.'.format(gdir.rgi_id))
-
+            errmsg = '{}: first guess widths went wrong.'.format(gdir.rgi_id)
+            raise RuntimeError(errmsg)
 
         # Ok now the entire centerline is computed.
         # we filter the lines which have a large altitude range
-        widths = _filter_for_altitude_range(widths, wlines, topo)
+        fil_widths = _filter_for_altitude_range(widths, wlines, topo)
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
             i0 = np.clip(fid-jpix, jpix/2, n-jpix/2).astype(np.int64)
             i1 = np.clip(fid+jpix+1, jpix/2, n-jpix/2).astype(np.int64)
-            widths[i0:i1] = np.NaN
+            fil_widths[i0:i1] = np.NaN
 
-        valid = np.where(np.isfinite(widths))
+        valid = np.where(np.isfinite(fil_widths))
         if len(valid[0]) == 0:
-            raise RuntimeError('{}: I filtered too much.'.format(gdir.rgi_id))
+            # This happens very rarely. Just pick the middle and
+            # the correction task should do the rest
+            log.warning('{}: width filtering too strong.'.format(gdir.rgi_id))
+            fil_widths = widths[np.int(len(widths) / 2.)]
 
         # Write it in the objects attributes
-        assert len(widths) == n
-        fl.widths = widths
+        assert len(fil_widths) == n
+        fl.widths = fil_widths
         fl.geometrical_widths = wlines
 
     # Overwrite pickle

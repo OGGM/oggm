@@ -264,8 +264,8 @@ def test_plot_model():
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
     model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
-    graphics.plot_modeloutput_section(model)
-    graphics.plot_modeloutput_map(gdir, model)
+    graphics.plot_modeloutput_section(gdir, model=model)
+    graphics.plot_modeloutput_map(gdir, model=model)
 
 
 if __name__ == '__main__':  # pragma: no cover

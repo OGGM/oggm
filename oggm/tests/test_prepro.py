@@ -204,6 +204,9 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
+            # add fake attribs
+            entity.O1REGION = 0
+            entity.BGNDATE = 0
             gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)

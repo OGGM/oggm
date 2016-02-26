@@ -4,6 +4,7 @@ from __future__ import division
 # Built ins
 import logging
 import os
+from shutil import rmtree
 # External libs
 import pandas as pd
 import multiprocessing as mp
@@ -59,6 +60,12 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
+
+    # if reset delete also the log directory
+    if reset:
+        fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
+        if os.path.exists(fpath):
+            rmtree(fpath)
 
     gdirs = []
     for _, entity in rgidf.iterrows():
