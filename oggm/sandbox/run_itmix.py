@@ -53,8 +53,7 @@ rgi_dir = '/home/mowglie/disk/Data/GIS/SHAPES/RGI/RGI_V5/'
 df_itmix = pd.read_pickle('/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_links.pkl')
 
 
-df_rgi_file = '/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_shp.pkl'
-# df_rgi_file = '/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_shp_sel_RGI50-09.00910.pkl'
+df_rgi_file = '/home/mowglie/itmix_rgi_shp_t2.pkl'
 if os.path.exists(df_rgi_file):
     rgidf = pd.read_pickle(df_rgi_file)
 else:
@@ -68,6 +67,9 @@ else:
         # else:
         #     continue
         sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)]
+
+        # add glacier name to the entity
+        sel.loc[:, 'Name'] = [row.name] * len(sel)
         rgidf.append(sel)
     rgidf = pd.concat(rgidf)
     rgidf.to_pickle(df_rgi_file)
@@ -80,28 +82,31 @@ else:
 cfg.PARAMS['border'] = 20
 
 # Go
-gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 gdirs = workflow.init_glacier_regions(rgidf)
 
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 
-task_list = [
-    tasks.glacier_masks,
-    tasks.compute_centerlines,
-    # tasks.catchment_area,
-    # tasks.initialize_flowlines,
-    # tasks.catchment_width_geom
-]
-for task in task_list:
-    execute_entity_task(task, gdirs)
+# task_list = [
+#     tasks.glacier_masks,
+#     tasks.compute_centerlines,
+#     # tasks.catchment_area,
+#     # tasks.initialize_flowlines,
+#     # tasks.catchment_width_geom
+# ]
+# for task in task_list:
+#     execute_entity_task(task, gdirs)
 
 
 dir = '/home/mowglie/disk/Data/ITMIX/oggm_plots/'
 from oggm import graphics
 for gd in gdirs:
+    graphics.plot_domain(gd)
+    plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_dom.png')
+    plt.close()
     graphics.plot_centerlines(gd)
-    plt.savefig(dir + gd.rgi_id + '.png')
+    plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_cls.png')
     plt.close()
 
 #

@@ -207,6 +207,7 @@ class TestCenterlines(unittest.TestCase):
             # add fake attribs
             entity.O1REGION = 0
             entity.BGNDATE = 0
+            entity.NAME = 'Baltoro'
             gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)

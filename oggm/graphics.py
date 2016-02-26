@@ -65,7 +65,58 @@ def plot_googlemap(gdir, ax=None):
     cmap.set_shapefile(gdir.get_filepath('outlines'))
 
     cmap.plot(ax)
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
+
+    if dofig:
+        plt.tight_layout()
+
+
+@entity_task(log)
+def plot_domain(gdir, ax=None):  # pragma: no cover
+    """Plot the glacier directory."""
+
+    # Files
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
+    topo = nc.variables['topo'][:]
+    nc.close()
+
+    dofig = False
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        dofig = True
+
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
+    cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
+    mp.set_cmap(cm)
+    mp.set_plot_params(nlevels=256)
+    mp.set_data(topo, interp='linear')
+
+    # TODO: center grid or corner grid???
+    crs = gdir.grid.center_grid
+
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
+
+        # Plot boundaries
+        poly_pix = geom['polygon_pix']
+
+        mp.set_geometry(poly_pix, crs=crs, fc='white',
+                         alpha=0.3, zorder=2, linewidth=.2)
+        for l in poly_pix.interiors:
+            mp.set_geometry(l, crs=crs,
+                              color='black', linewidth=0.5)
+
+    mp.plot(ax)
+    cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
+    cb.set_label('Alt. [m]')
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
 
     if dofig:
         plt.tight_layout()
@@ -141,7 +192,10 @@ def plot_centerlines(gdir, ax=None, use_flowlines=False,
     mp.plot(ax)
     cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Alt. [m]')
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
 
     if dofig:
         plt.tight_layout()
@@ -254,7 +308,10 @@ def plot_inversion(gdir, ax=None):
     mp.plot(ax)
     cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Glacier thickness [m]')
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
     if dofig:
         plt.tight_layout()
 

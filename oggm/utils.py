@@ -685,6 +685,8 @@ class GlacierDirectory(object):
             2003-01-01
         rgi_region : str
             The RGI region name
+        name : str
+            The RGI glacier name (if Available)
         """
 
         if base_dir is None:
@@ -698,6 +700,7 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
             self.rgi_region = rgi_entity.O1REGION
+            self.name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
         except AttributeError:
             self.rgi_id = rgi_entity.RGIId
@@ -706,6 +709,7 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
             self.rgi_region = rgi_entity.O1Region
+            self.name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
         try:
             rgi_date = pd.to_datetime(rgi_datestr[0:6],
