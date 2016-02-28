@@ -76,6 +76,28 @@ def _gaussian_blur(in_array, size):
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
 
 
+def _check_geometry(geometry):
+    """RGI polygons are not always clean: try to make these better.
+
+    In particular, MultiPolygons should be converted to Polygons
+    """
+
+    if 'Multi' in geometry.type:
+        parts = list(geometry)
+        for p in parts:
+            assert p.type == 'Polygon'
+        exterior = parts[0].exterior
+        # let's assume that all other polygons are in fact interiors
+        interiors = []
+        for p in parts[1:]:
+            assert parts[0].contains(p)
+            interiors.append(p.exterior)
+        geometry = shpg.Polygon(exterior, interiors)
+
+    assert 'Polygon' in geometry.type
+    return geometry
+
+
 def _interp_polygon(polygon, dx):
     """Interpolates an irregular polygon to a regular step dx.
 
@@ -305,8 +327,7 @@ def define_glacier_region(gdir, entity=None):
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(pyproj.transform, proj_in, proj_out)
     geometry = shapely.ops.transform(project, entity['geometry'])
-    if 'Multi' in geometry.type:
-        geometry = geometry.buffer(0)
+    geometry = _check_geometry(geometry)
     xx, yy = geometry.exterior.xy
 
     # Corners, incl. a buffer of N pix
@@ -491,6 +512,9 @@ def glacier_masks(gdir):
         # Optim: just make links
         linkname = gdir.get_filepath('gridded_data', div_id=1)
         sourcename = gdir.get_filepath('gridded_data')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -500,6 +524,9 @@ def glacier_masks(gdir):
             copyfile(sourcename, linkname)
         linkname = gdir.get_filepath('geometries', div_id=1)
         sourcename = gdir.get_filepath('geometries')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX

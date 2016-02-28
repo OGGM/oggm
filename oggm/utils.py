@@ -834,8 +834,11 @@ class GlacierDirectory(object):
         a ``netCDF4.Dataset`` object.
         """
 
-        nc = netCDF4.Dataset(self.get_filepath(fname, div_id),
-                             'w', format='NETCDF4')
+        # overwrite as default
+        fpath = self.get_filepath(fname, div_id)
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
         xd = nc.createDimension('x', self.grid.nx)
         yd = nc.createDimension('y', self.grid.ny)
@@ -880,8 +883,12 @@ class GlacierDirectory(object):
         See :py:func:`oggm.tasks.distribute_climate_data`.
         """
 
-        nc = netCDF4.Dataset(self.get_filepath('climate_monthly'),
-                             'w', format='NETCDF4')
+        # overwrite as default
+        fpath = self.get_filepath('climate_monthly')
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
+
         nc.ref_hgt = hgt
 
         dtime = nc.createDimension('time', None)

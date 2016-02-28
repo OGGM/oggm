@@ -5,9 +5,11 @@ import os
 import logging
 from shutil import copyfile
 from functools import partial
+import glob
 # External libs
 from osgeo import osr
 import salem
+from salem.datasets import EsriITMIX
 from osgeo import gdal
 import pyproj
 import numpy as np
@@ -22,6 +24,7 @@ from scipy.interpolate import griddata
 from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.core.preprocessing.gis import _gaussian_blur, _mask_per_divide
+from oggm.sandbox import itmix_cfg
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -60,7 +63,33 @@ def glacier_masks_itmix(gdir):
         raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
     # Replace DEM values with ITMIX ones where possible
-    
+    # Open DEM
+    dem_f = None
+    for dem_f in glob.glob(itmix_cfg.itmix_data_dir + '/*/02_surface_' +
+                                  gdir.name + '*.asc'):
+        pass
+
+    if dem_f is not None:
+        log.debug('%s: ITMIX DEM file: %s', gdir.rgi_id, dem_f)
+        it_dem_ds = EsriITMIX(dem_f)
+        it_dem = it_dem_ds.get_vardata()
+        it_dem = np.where(it_dem < -999., np.NaN, it_dem)
+
+        # for some glaciers, trick
+        if gdir.name in ['Academy', 'Devon']:
+            it_dem = np.where(it_dem <= 0, np.NaN, it_dem)
+            it_dem = np.where(np.isfinite(it_dem), it_dem, np.nanmin(it_dem))
+        if gdir.name in ['Brewster', 'Austfonna']:
+            it_dem = np.where(it_dem <= 0, np.NaN, it_dem)
+
+        # Transform to local grid
+        it_dem = gdir.grid.map_gridded_data(it_dem, it_dem_ds.grid,
+                                            interp='linear')
+        # And update values where possible
+        dem = np.where(~ it_dem.mask, it_dem, dem)
+
+    # Disallow negative
+    dem = dem.clip(0)
 
     # Grid
     nx = dem_ds.RasterXSize
@@ -97,6 +126,9 @@ def glacier_masks_itmix(gdir):
         # Optim: just make links
         linkname = gdir.get_filepath('gridded_data', div_id=1)
         sourcename = gdir.get_filepath('gridded_data')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -106,6 +138,9 @@ def glacier_masks_itmix(gdir):
             copyfile(sourcename, linkname)
         linkname = gdir.get_filepath('geometries', div_id=1)
         sourcename = gdir.get_filepath('geometries')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
