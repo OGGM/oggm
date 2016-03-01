@@ -458,18 +458,16 @@ class TestClimate(unittest.TestCase):
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
-        nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
-        ref_h = nc_r.variables['hgt'][1, 1]
-        ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.PARAMS['prcp_scaling_factor']
-        ref_t = nc_r.variables['temp'][:, 1, 1]
-        nc_r.close()
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_h = nc_r.variables['hgt'][1, 1]
+            ref_p = nc_r.variables['prcp'][:, 1, 1]
+            ref_p *= cfg.PARAMS['prcp_scaling_factor']
+            ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        nc_r = netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc'))
-        self.assertTrue(ref_h == nc_r.ref_hgt)
-        np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-        np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
-        nc_r.close()
+        with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+            self.assertTrue(ref_h == nc_r.ref_hgt)
+            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
+            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
     def test_distribute_climate_cru(self):
 
@@ -499,18 +497,16 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-
-        nc_h = xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc'))
-        nc_c = xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc'))
-
-        # put on the same altitude (using default gradient because better)
-        temp_cor = nc_c.temp -0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
-        totest = temp_cor - nc_h.temp
-        self.assertTrue(totest.mean() < 0.5)
-
-        # precip
-        totest = nc_c.prcp - nc_h.prcp
-        self.assertTrue(totest.mean() < 100)
+        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+                # put on the same altitude
+                # (using default gradient because better)
+                temp_cor = nc_c.temp -0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                totest = temp_cor - nc_h.temp
+                self.assertTrue(totest.mean() < 0.5)
+                # precip
+                totest = nc_c.prcp - nc_h.prcp
+                self.assertTrue(totest.mean() < 100)
 
     def test_mb_climate(self):
 
