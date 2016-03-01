@@ -11,7 +11,8 @@ import six.moves.cPickle as pickle
 
 import pandas as pd
 from salem import lazy_property
-from six.moves.urllib.request import urlretrieve
+from six.moves.urllib.request import urlretrieve, urlopen
+from six.moves.urllib.error import HTTPError
 
 # Builtins
 import os
@@ -19,6 +20,8 @@ import gzip
 import shutil
 import zipfile
 import sys
+import json
+import time
 from collections import OrderedDict
 from functools import partial, wraps
 
@@ -34,7 +37,7 @@ from salem import wgs84
 # Locals
 import oggm.cfg as cfg
 
-GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
+SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
@@ -52,17 +55,40 @@ def empty_cache():  # pragma: no cover
 
 
 def _download_demo_files():
-    """Checks if the demo data is already on the cache and downloads it.
+    """Checks if the demo data is already on the cache and downloads it."""
 
-    TODO: Currently there's no check to see of the server file has changed
-    this is bad. In the mean time, with empty_cache() you can ensure that the
-    files are up-to-date.
-    """
-
+    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % SAMPLE_DATA_GH_REPO
+    master_zip_url = 'https://github.com/%s/archive/master.zip' % SAMPLE_DATA_GH_REPO
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
+    shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
+
+    if os.path.exists(shafile):
+        with open(shafile, 'r') as sfile:
+            local_sha = sfile.read().strip()
+        last_mod = os.path.getmtime(shafile)
+    else:
+        local_sha = '0000'
+        last_mod = 0
+
+    if time.time() - last_mod > 1800:
+        write_sha = True
+
+        try:
+            with urlopen(master_sha_url) as resp:
+                json_str = resp.read().decode('utf-8')
+                json_obj = json.loads(json_str)
+                master_sha = json_obj['sha']
+
+            if local_sha != master_sha:
+                empty_cache()
+        except HTTPError:
+            master_sha = 'error'
+    else:
+        write_sha = False
+
     if not os.path.exists(ofile):  # pragma: no cover
-        urlretrieve(GH_ZIP, ofile)
+        urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
@@ -71,6 +97,11 @@ def _download_demo_files():
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
+
+    if write_sha:
+        with open(shafile, 'w') as sfile:
+            sfile.write(master_sha)
+
     return out
 
 
