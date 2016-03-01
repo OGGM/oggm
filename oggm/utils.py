@@ -21,6 +21,8 @@ import math
 from shutil import copyfile
 from collections import OrderedDict
 from functools import partial, wraps
+import json
+import time
 
 # External libs
 import geopandas as gpd
@@ -38,7 +40,7 @@ from rasterio.tools.merge import merge as merge_tool
 # Locals
 import oggm.cfg as cfg
 
-GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
+SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
              '.1506241137.v3.23/'
 # Joblib
@@ -57,28 +59,60 @@ def empty_cache():  # pragma: no cover
 
 
 def _download_demo_files():
-    """Checks if the demo data is already on the cache and downloads it.
+    """Checks if the demo data is already on the cache and downloads it."""
 
-    TODO: Currently there's no check to see of the server file has changed
-    this is bad. In the mean time, with empty_cache() you can ensure that the
-    files are up-to-date.
-    """
-
+    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
+                     SAMPLE_DATA_GH_REPO
+    master_zip_url = 'https://github.com/%s/archive/master.zip' % \
+                     SAMPLE_DATA_GH_REPO
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
+    shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
 
-    # here there should be a check on the online file if it has changed
-    # maybe with last modified tag or something?
-    if not os.path.exists(ofile):  # pragma: no cover
-        urlretrieve(GH_ZIP, ofile)
+    # a file containing the online's file's hash
+    if os.path.exists(shafile):
+        with open(shafile, 'r') as sfile:
+            local_sha = sfile.read().strip()
+        last_mod = os.path.getmtime(shafile)
+    else:
+        # very first download
+        local_sha = '0000'
+        last_mod = 0
+
+    # test only every half hour
+    if time.time() - last_mod > 1800:
+        write_sha = True
+        try:
+            with urlopen(master_sha_url) as resp:
+                json_str = resp.read().decode('utf-8')
+                json_obj = json.loads(json_str)
+                master_sha = json_obj['sha']
+            # if not same, delte entire dir
+            if local_sha != master_sha:
+                empty_cache()
+        except HTTPError:
+            master_sha = 'error'
+    else:
+        write_sha = False
+
+    # download only if necessary
+    if not os.path.exists(ofile):
+        urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
+    # sha did change, replace
+    if write_sha:
+        with open(shafile, 'w') as sfile:
+            sfile.write(master_sha)
+
+    # list of files for output
     out = dict()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
+
     return out
 
 
