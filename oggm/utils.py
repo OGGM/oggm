@@ -7,7 +7,7 @@ License: GPLv3+
 from __future__ import absolute_import, division
 
 import six.moves.cPickle as pickle
-from six.moves.urllib.request import urlretrieve
+from six.moves.urllib.request import urlretrieve, urlopen
 from six.moves.urllib.error import HTTPError
 
 # Builtins
