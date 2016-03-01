@@ -90,6 +90,15 @@ def _download_demo_files():
             # if not same, delte entire dir
             if local_sha != master_sha:
                 empty_cache()
+        except AttributeError:
+            try:
+                # on python2
+                resp = urlopen(master_sha_url)
+                json_str = resp.read().decode('utf-8')
+                json_obj = json.loads(json_str)
+                master_sha = json_obj['sha']
+            except HTTPError:
+                master_sha = 'error'
         except HTTPError:
             master_sha = 'error'
     else:
