@@ -10,3 +10,4 @@ netCDF4
 shapely
 rasterio
 configobj
+xarray

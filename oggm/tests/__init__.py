@@ -29,6 +29,8 @@ ON_WINDOWS_PY3_CONDA = False
 if (platform.system() == 'Windows') and (sys.version_info >= (3, 0)):
     ON_WINDOWS_PY3_CONDA = True
 
+RUN_DOWNLOAD_TESTS = False
+
 
 def requires_working_conda(test):
     # Test decorator
@@ -40,3 +42,9 @@ def is_slow(test):
     # Test decorator
     msg = "requires explicit environment for slow tests"
     return test if RUN_SLOW_TESTS else unittest.skip(msg)(test)
+
+
+def is_download(test):
+    # Test decorator
+    msg = "requires explicit environment for download tests"
+    return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)

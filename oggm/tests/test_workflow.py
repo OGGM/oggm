@@ -50,11 +50,11 @@ def up_to_inversion(reset=False):
     cfg.PATHS['working_dir'] = TEST_DIR
 
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['srtm_file'] = get_demo_file('srtm_oeztal.tif')
+    cfg.PATHS['dem_file'] = get_demo_file('srtm_oeztal.tif')
 
     # Set up the paths and other stuffs
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
+    cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oeztal.nc')
 
     # Get test glaciers (all glaciers with MB or Thickness data)
     cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')

@@ -39,7 +39,8 @@ from rasterio.tools.merge import merge as merge_tool
 import oggm.cfg as cfg
 
 GH_ZIP = 'https://github.com/OGGM/oggm-sample-data/archive/master.zip'
-
+CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
+             '.1506241137.v3.23/'
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -276,7 +277,7 @@ def nicenumber(number, binsize, lower=False):
 
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        prcp_scaling_factor):
+                        prcp_scaling_factor, use_grad):
     """Prevent to re-compute a timeserie if it was done before.
 
     TODO: dirty solution, should be replaced by proper input.
@@ -298,13 +299,13 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
 
     # Now the gradient
-    for t, loct in enumerate(ttemp):
-        slope, _, _, p_val, _ = stats.linregress(thgt,
-                                                 loct.flatten())
-        igrad[t] = slope if (p_val < 0.01) else default_grad
-
-    # dont exagerate too much
-    igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
+    if use_grad:
+        for t, loct in enumerate(ttemp):
+            slope, _, _, p_val, _ = stats.linregress(thgt,
+                                                     loct.flatten())
+            igrad[t] = slope if (p_val < 0.01) else default_grad
+        # dont exagerate too much
+        igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
 
     return iprcp, itemp, igrad, ihgt
 
@@ -462,6 +463,47 @@ def aster_zone_unit(lon_ex, lat_ex):
     return zones, units
 
 
+def get_crufile(var=None):
+    """
+    Returns a path to the desired CRU TS file.
+
+    If the file is not present, download it.
+
+    Parameters
+    ----------
+    var: 'tmp' or 'pre'
+
+    Returns
+    -------
+    path to the CRU file
+    """
+
+    # Be sure the user gave a sensible path to the climate dir
+    cru_dir = cfg.PATHS['cru_dir']
+    if not os.path.exists(cru_dir):
+        raise ValueError('The CRU data directory does not exist!')
+
+    # Be sure input makes sense
+    if var not in ['tmp', 'pre']:
+        raise ValueError('CRU variable {} does not exist!'.format(var))
+
+    # cru_ts3.23.1901.2014.tmp.dat.nc
+    bname = 'cru_ts3.23.1901.2014.{}.dat.nc'.format(var)
+    ofile = os.path.join(cru_dir, bname)
+
+    # if not there download it
+    if not os.path.exists(ofile):  # pragma: no cover
+        tf = CRU_SERVER + '{}/cru_ts3.23.1901.2014.{}.dat.nc.gz'.format(var,
+                                                                        var)
+        urlretrieve(tf, ofile + '.gz')
+        with gzip.GzipFile(ofile + '.gz') as zf:
+            with open(ofile, 'wb') as outfile:
+                for line in zf:
+                    outfile.write(line)
+
+    return ofile
+
+
 def get_demfile(lon_ex, lat_ex, region=None):
     """
     Returns a path to the DEM file covering the desired extent.
@@ -483,9 +525,10 @@ def get_demfile(lon_ex, lat_ex, region=None):
     """
 
     # Did the user specify a specific SRTM file?
-    if ('srtm_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['srtm_file']):
-        return cfg.PATHS['srtm_file'], 'USER'
+    if ('dem_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['dem_file']):
+        return cfg.PATHS['dem_file'], 'USER'
 
+    # If not, do the job ourselves: download and merge stuffs
     topodir = cfg.PATHS['topo_dir']
 
     # TODO: GIMP is in polar stereographic, not easy to test
@@ -497,13 +540,6 @@ def get_demfile(lon_ex, lat_ex, region=None):
         return gimp_file, 'GIMP'
 
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-
-        # # for the very last cases a very coarse dataset ?
-        # if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        #     t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
-        #     assert os.path.exists(t_file)
-        #     return t_file, 'ETOPO1'
-
         # use ASTER V2 for northern lats
         zones, units = aster_zone_unit(lon_ex, lat_ex)
         sources = []
@@ -543,8 +579,6 @@ def get_demfile(lon_ex, lat_ex, region=None):
             with rasterio.open(merged_file, 'w', **profile) as dst:
                 dst.write(dest)
         return merged_file, source_str + '_MERGED'
-
-
 
 
 class entity_task(object):

@@ -7,12 +7,13 @@ import shutil
 
 import salem
 
+from oggm.tests import is_download
 from oggm import utils
 from oggm import cfg
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_topo')
+TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_download')
 if not os.path.exists(TEST_DIR):
     os.makedirs(TEST_DIR)
 
@@ -92,3 +93,16 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W100', u[1])
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
+
+    @is_download
+    def test_download_cru(self):
+
+        cfg.initialize()
+
+        tmp = cfg.PATHS['cru_dir']
+        cfg.PATHS['cru_dir'] = TEST_DIR
+
+        of = utils.get_crufile('tmp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['cru_dir'] = tmp

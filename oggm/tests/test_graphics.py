@@ -97,8 +97,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     # Init
     cfg.initialize()
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
-    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
 
     # loop because for some reason indexing wont work
@@ -236,8 +236,8 @@ def test_nodivide():
     # Init
     cfg.initialize()
     cfg.set_divides_db()
-    cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
-    cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
 
     # loop because for some reason indexing wont work

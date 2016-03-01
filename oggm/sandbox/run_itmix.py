@@ -46,7 +46,7 @@ cfg.PATHS['topo_dir'] = '/home/mowglie/disk/Dropbox/Share/oggm-data/topo'
 
 # Set up the paths and other stuffs
 cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-cfg.PATHS['histalp_file'] = get_demo_file('HISTALP_oeztal.nc')
+cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oeztal.nc')
 
 # Get test glaciers (all glaciers with MB or Thickness data)
 cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
