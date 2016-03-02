@@ -29,6 +29,7 @@ Standard SciPy track:
     - pillow
     - matplotlib
     - pandas
+    - xarray
     - joblib
 
 Python 2 support:
@@ -40,10 +41,11 @@ Configuration file parsing tool:
 I/O:
     - netcdf4
 
-GIS and geometrical tools:
+GIS tools:
     - gdal
     - shapely
     - pyproj
+    - rasterio
     - geopandas
 
 Testing:
@@ -98,7 +100,7 @@ Packages
 
 Install the packages from the ioos channel::
 
-    conda install -c ioos geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy
+    conda install -c ioos geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray
 
 After success, install the following packages from Fabien's github::
 
@@ -237,7 +239,7 @@ using the system binaries::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray
 
 And the external libraries::
 

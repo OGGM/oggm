@@ -40,7 +40,7 @@ from scipy.interpolate import griddata
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_demfile
+from oggm.utils import tuple2int, get_topo_file
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -351,8 +351,8 @@ def define_glacier_region(gdir, entity=None):
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Open DEM
-    dem_file, dem_source = get_demfile((minlon, maxlon), (minlat, maxlat),
-                                        region=gdir.rgi_region)
+    dem_file, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
+                                         region=gdir.rgi_region)
     log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
     dem = gdal.Open(dem_file)
     geo_t = dem.GetGeoTransform()

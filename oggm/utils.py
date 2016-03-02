@@ -58,7 +58,7 @@ def empty_cache():  # pragma: no cover
     os.makedirs(cfg.CACHE_DIR)
 
 
-def _download_demo_files():
+def _download_oggm_files():
     """Checks if the demo data is already on the cache and downloads it."""
 
     master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
@@ -69,7 +69,7 @@ def _download_demo_files():
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
 
-    # a file containing the online's file's hash
+    # a file containing the online's file's hash and the time of last check
     if os.path.exists(shafile):
         with open(shafile, 'r') as sfile:
             local_sha = sfile.read().strip()
@@ -79,26 +79,24 @@ def _download_demo_files():
         local_sha = '0000'
         last_mod = 0
 
-    # test only every half hour
-    if time.time() - last_mod > 1800:
+    # test only every hour
+    if time.time() - last_mod > 3600:
         write_sha = True
         try:
-            with urlopen(master_sha_url) as resp:
+            # this might fail with HTTP 403 when server overload
+            resp = urlopen(master_sha_url)
+
+            # following try/finally is just for py2/3 compatibility
+            # https://mail.python.org/pipermail/python-list/2016-March/704073.html
+            try:
                 json_str = resp.read().decode('utf-8')
-                json_obj = json.loads(json_str)
-                master_sha = json_obj['sha']
-            # if not same, delte entire dir
+            finally:
+                resp.close()
+            json_obj = json.loads(json_str)
+            master_sha = json_obj['sha']
+            # if not same, delete entire dir
             if local_sha != master_sha:
                 empty_cache()
-        except AttributeError:
-            try:
-                # on python2
-                resp = urlopen(master_sha_url)
-                json_str = resp.read().decode('utf-8')
-                json_obj = json.loads(json_str)
-                master_sha = json_obj['sha']
-            except HTTPError:
-                master_sha = 'error'
         except HTTPError:
             master_sha = 'error'
     else:
@@ -142,7 +140,7 @@ def _download_srtm_file(zone):
             with zipfile.ZipFile(ofile) as zf:
                 zf.extractall(odir)
         except HTTPError as err:
-            # This works well for py3, not py2
+            # This works well for py3
             if err.code == 404:
                 # Ok so this *should* be an ocean tile
                 return None
@@ -187,14 +185,24 @@ def _download_aster_file(zone, unit):
     return out
 
 
-def get_demo_file(fname):
-    """Returns the path to the desired demo file."""
+def _get_centerline_lonlat(gdir):
+    """Quick n dirty solution to write the centerlines as a shapefile"""
 
-    d = _download_demo_files()
-    if fname in d:
-        return d[fname]
-    else:
-        return None
+    olist = []
+    for i in gdir.divide_ids:
+        cls = gdir.read_pickle('centerlines', div_id=i)
+        for i, cl in enumerate(cls):
+            mm = 1 if i==0 else 0
+            gs = gpd.GeoSeries()
+            gs['RGIID'] = gdir.rgi_id
+            gs['DIVIDE'] = i
+            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            gs['MAIN'] = mm
+            tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
+            gs['geometry'] = shp_trafo(tra_func, cl.line)
+            olist.append(gs)
+
+    return olist
 
 
 def query_yes_no(question, default="yes"):
@@ -374,32 +382,12 @@ def pipe_log(gdir, task_func, err=None):
             f.write(err.__class__.__name__ + ': {}'.format(err))
 
 
-def get_centerline_lonlat(gdir):
-    """Quick n dirty solution to write the centerlines as a shapefile"""
-
-    olist = []
-    for i in gdir.divide_ids:
-        cls = gdir.read_pickle('centerlines', div_id=i)
-        for i, cl in enumerate(cls):
-            mm = 1 if i==0 else 0
-            gs = gpd.GeoSeries()
-            gs['RGIID'] = gdir.rgi_id
-            gs['DIVIDE'] = i
-            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-            gs['MAIN'] = mm
-            tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
-            gs['geometry'] = shp_trafo(tra_func, cl.line)
-            olist.append(gs)
-
-    return olist
-
-
 def write_centerlines_to_shape(gdirs, filename):
     """Write centerlines in a shapefile"""
 
     olist = []
     for gdir in gdirs:
-        olist.extend(get_centerline_lonlat(gdir))
+        olist.extend(_get_centerline_lonlat(gdir))
 
     odf = gpd.GeoDataFrame(olist)
 
@@ -461,7 +449,7 @@ def srtm_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
-def aster_zone_unit(lon_ex, lat_ex):
+def aster_zone(lon_ex, lat_ex):
     """Returns a list of ASTER V2 zones and units covering the desired extent.
     """
 
@@ -506,7 +494,33 @@ def aster_zone_unit(lon_ex, lat_ex):
     return zones, units
 
 
-def get_crufile(var=None):
+def get_demo_file(fname):
+    """Returns the path to the desired OGGM file."""
+
+    d = _download_oggm_files()
+    if fname in d:
+        return d[fname]
+    else:
+        return None
+
+
+def get_cru_cl_file():
+    """Returns the path to the unpacked CRU CL file (is in sample data)."""
+
+    _download_oggm_files()
+
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'cru')
+    fpath = os.path.join(sdir, 'cru_cl2.nc')
+    if os.path.exists(fpath):
+        return fpath
+    else:
+        with zipfile.ZipFile(fpath + '.zip') as zf:
+            zf.extractall(sdir)
+        assert os.path.exists(fpath)
+        return fpath
+
+
+def get_cru_file(var=None):
     """
     Returns a path to the desired CRU TS file.
 
@@ -547,7 +561,7 @@ def get_crufile(var=None):
     return ofile
 
 
-def get_demfile(lon_ex, lat_ex, region=None):
+def get_topo_file(lon_ex, lat_ex, region=None):
     """
     Returns a path to the DEM file covering the desired extent.
 
@@ -584,7 +598,7 @@ def get_demfile(lon_ex, lat_ex, region=None):
 
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
         # use ASTER V2 for northern lats
-        zones, units = aster_zone_unit(lon_ex, lat_ex)
+        zones, units = aster_zone(lon_ex, lat_ex)
         sources = []
         for z, u in zip(zones, units):
             sf = _download_aster_file(z, u)

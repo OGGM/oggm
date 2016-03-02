@@ -71,22 +71,22 @@ class TestDataFiles(unittest.TestCase):
 
     def test_asterzone(self):
 
-        z, u = utils.aster_zone_unit(lon_ex=[137.5, 137.5],
-                                     lat_ex=[-72.5, -72.5])
+        z, u = utils.aster_zone(lon_ex=[137.5, 137.5],
+                                lat_ex=[-72.5, -72.5])
         self.assertTrue(len(z) == 1)
         self.assertTrue(len(u) == 1)
         self.assertEqual('S73E137', z[0])
         self.assertEqual('S75E135', u[0])
 
-        z, u= utils.aster_zone_unit(lon_ex=[-95.5, -95.5],
-                                    lat_ex=[30.5, 30.5])
+        z, u= utils.aster_zone(lon_ex=[-95.5, -95.5],
+                               lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 1)
         self.assertTrue(len(u) == 1)
         self.assertEqual('N30W096', z[0])
         self.assertEqual('N30W100', u[0])
 
-        z, u= utils.aster_zone_unit(lon_ex=[-96.5, -95.5],
-                                    lat_ex=[30.5, 30.5])
+        z, u= utils.aster_zone(lon_ex=[-96.5, -95.5],
+                               lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 2)
         self.assertTrue(len(u) == 2)
         self.assertEqual('N30W096', z[1])
@@ -102,7 +102,7 @@ class TestDataFiles(unittest.TestCase):
         tmp = cfg.PATHS['cru_dir']
         cfg.PATHS['cru_dir'] = TEST_DIR
 
-        of = utils.get_crufile('tmp')
+        of = utils.get_cru_file('tmp')
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['cru_dir'] = tmp

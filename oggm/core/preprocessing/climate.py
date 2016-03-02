@@ -70,10 +70,11 @@ def _distribute_cru_style(gdirs):
     """
 
     # read the climatology
-    ncclim = salem.GeoNetcdf(utils.get_demo_file('cru_cl2.nc'))
+    clfile = utils.get_cru_cl_file()
+    ncclim = salem.GeoNetcdf(clfile)
     # and the TS data
-    nc_ts_tmp = salem.GeoNetcdf(utils.get_crufile('tmp'), monthbegin=True)
-    nc_ts_pre = salem.GeoNetcdf(utils.get_crufile('pre'), monthbegin=True)
+    nc_ts_tmp = salem.GeoNetcdf(utils.get_cru_file('tmp'), monthbegin=True)
+    nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
     nc_ts_tmp.set_period(t0='1901-10-01', t1='2014-09-01')
