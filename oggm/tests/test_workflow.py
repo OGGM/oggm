@@ -54,9 +54,6 @@ def up_to_inversion(reset=False):
 
     # Set up the paths and other stuffs
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oeztal.nc')
-
-    # Get test glaciers (all glaciers with MB or Thickness data)
     cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
     cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
 
@@ -81,6 +78,17 @@ def up_to_inversion(reset=False):
         workflow.gis_prepro_tasks(gdirs)
 
         # Climate related tasks
+        # See if CRU is running
+        cfg.PARAMS['temp_use_local_gradient'] = False
+        cfg.PATHS['climate_file'] = '~'
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
+        workflow.climate_tasks(gdirs)
+
+        # Use histalp for the actual test
+        cfg.PARAMS['temp_use_local_gradient'] = True
+        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oeztal.nc')
+        cfg.PATHS['cru_dir'] = '~'
         workflow.climate_tasks(gdirs)
 
         # Inversion

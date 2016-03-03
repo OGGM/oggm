@@ -520,6 +520,32 @@ def get_cru_cl_file():
         return fpath
 
 
+def get_wgms_files():
+    """Get the path to the default WGMS-RGI link file and the data dir.
+
+    Returns
+    -------
+    (file, dir): paths to the files
+    """
+
+    if os.path.exists(cfg.PATHS['wgms_rgi_links']):
+        # User provided data
+        outf = cfg.PATHS['wgms_rgi_links']
+        datadir = os.path.join(os.path.dirname(outf), 'mbdata')
+        if not os.path.exists(datadir):
+            raise ValueError('The WGMS data directory is missing')
+        return outf, datadir
+
+    # Roll our own
+    _download_oggm_files()
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'wgms')
+    outf = os.path.join(sdir, 'rgi_wgms_links_2015_RGIV5.csv')
+    assert os.path.exists(outf)
+    datadir = os.path.join(sdir, 'mbdata')
+    assert os.path.exists(datadir)
+    return outf, datadir
+
+
 def get_cru_file(var=None):
     """
     Returns a path to the desired CRU TS file.

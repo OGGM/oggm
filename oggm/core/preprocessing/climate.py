@@ -155,6 +155,9 @@ def _distribute_cru_style(gdirs):
         # done
         loc_hgt = loc_hgt[1, 1]
         assert np.isfinite(loc_hgt)
+        assert np.all(np.isfinite(ts_pre.values))
+        assert np.all(np.isfinite(ts_tmp.values))
+        assert np.all(np.isfinite(ts_grad))
         gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                         ts_grad, loc_hgt)
 
@@ -543,32 +546,46 @@ def compute_ref_t_stars(gdirs):
     Parameters
     ----------
     gdirs: list of oggm.GlacierDirectory objects
-       for glaciers with MB data only!
     """
 
-    log.info('Compute the reference t* and mu*')
+    log.info('Compute the reference t* and mu* for WGMS glaciers')
+
+    # Get ref glaciers (all glaciers with MB)
+    flink, mbdatadir = utils.get_wgms_files()
+    dfids = pd.read_csv(flink)['RGI_ID'].values
+
+    # Reference glaciers only if in the list
+    ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
 
     # Loop
-    mbdatadir = os.path.join(os.path.dirname(cfg.PATHS['wgms_rgi_links']),
-                             'WGMS')
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
-    for gdir in gdirs:
+    for gdir in ref_gdirs:
+        # all possible mus
+        mu_candidates(gdir)
+        # list of mus compatibles with refmb
         reff = os.path.join(mbdatadir, 'mbdata_' + gdir.rgi_id + '.csv')
         mbdf = pd.read_csv(reff).set_index('YEAR')
         t_star, res_bias = t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+
+        # if we have just one candidate this is good
         if len(t_star) == 1:
             only_one.append(gdir.rgi_id)
+        # this might be more than one, we'll have to select them later
         per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias)
 
+    # At least of of the X glaciers should have a single t*, otherwise we dont
+    # know how to start
     if len(only_one) == 0:
-        # TODO: hardcoded shit here
-        only_one.append('RGI40-11.00887')
-        gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
-        per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
-        # raise RuntimeError('Didnt expect to be here.')
+        if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
+            # TODO: hardcoded shit here, for the test workflow
+            only_one.append('RGI40-11.00887')
+            gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
+            per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
+        else:
+            raise RuntimeError('Didnt expect to be here.')
 
-    # Ok. now loop over the glaciers until all have a unique t*
+    # Ok. now loop over the nearest glaciers until all have a unique t*
     while True:
         ids_left = [id for id in per_glacier.keys() if id not in only_one]
         if len(ids_left) == 0:
@@ -599,11 +616,7 @@ def compute_ref_t_stars(gdirs):
         only_one.append(gdir.rgi_id)
 
     # Write out the data
-    rgis_ids = []
-    t_stars = []
-    biases = []
-    lons = []
-    lats = []
+    rgis_ids, t_stars,  biases, lons, lats = [], [], [], [], []
     for id, (gdir, t_star, res_bias) in per_glacier.items():
         rgis_ids.append(id)
         t_stars.append(t_star[0])

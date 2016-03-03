@@ -96,17 +96,9 @@ def gis_prepro_tasks(gdirs):
 def climate_tasks(gdirs):
     """Prepare the climate data."""
 
-    # Global task
+    # Only global tasks
     tasks.distribute_climate_data(gdirs)
-
-    # Get ref glaciers (all glaciers with MB)
-    dfids = cfg.PATHS['wgms_rgi_links']
-    dfids = pd.read_csv(dfids)['RGI_ID'].values
-    ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
-    execute_entity_task(tasks.mu_candidates, ref_gdirs)
-
-    # Global tasks
-    tasks.compute_ref_t_stars(ref_gdirs)
+    tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 
 
