@@ -546,6 +546,26 @@ def get_wgms_files():
     return outf, datadir
 
 
+def get_glathida_file():
+    """Get the path to the default WGMS-RGI link file and the data dir.
+
+    Returns
+    -------
+    (file, dir): paths to the files
+    """
+
+    if os.path.exists(cfg.PATHS['glathida_rgi_links']):
+        # User provided data
+        return cfg.PATHS['glathida_rgi_links']
+
+    # Roll our own
+    _download_oggm_files()
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'glathida')
+    outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
+    assert os.path.exists(outf)
+    return outf
+
+
 def get_cru_file(var=None):
     """
     Returns a path to the desired CRU TS file.
@@ -639,7 +659,12 @@ def get_topo_file(lon_ex, lat_ex, region=None):
             sources.append(_download_srtm_file(z))
         source_str = 'SRTM'
 
-    assert len(sources) >= 1
+    if len(sources) < 1:
+        raise RuntimeError('No topography file available!')
+        # for the very last cases a very coarse dataset ?
+        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
+        assert os.path.exists(t_file)
+        return t_file, 'ETOPO1'
 
     if len(sources) == 1:
         return sources[0], source_str

@@ -58,7 +58,7 @@ def plot_googlemap(gdir, ax=None):
                                 np.array(s.geometry[0].exterior.xy[1]),
                                 src=s.crs)
 
-    img = gm.get_vardata()
+    img = gm.get_vardata()[..., 0:3]  # sometimes there is an alpha
     cmap = cleo.Map(gm.grid, countries=False, nx=gm.grid.nx)
     cmap.set_rgb(img)
 

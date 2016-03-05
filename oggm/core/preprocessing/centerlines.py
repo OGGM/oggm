@@ -511,18 +511,17 @@ def compute_centerlines(gdir, div_id=None):
 
     # Final check
     if len(cls) == 0:
-        raise RuntimeError('No centerline found!')
+        raise RuntimeError('{} : no centerline found!'.format(gdir.rgi_id))
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines', div_id=div_id)
 
     # Netcdf
-    nc = netCDF4.Dataset(grids_file, 'a')
-    v = nc.createVariable('cost_grid', 'f4', ('y', 'x', ), zlib=True)
-    v.units = '-'
-    v.long_name = 'Centerlines cost grid'
-    v[:] = costgrid
-    nc.close()
+    with netCDF4.Dataset(grids_file, 'a') as nc:
+        v = nc.createVariable('cost_grid', 'f4', ('y', 'x', ), zlib=True)
+        v.units = '-'
+        v.long_name = 'Centerlines cost grid'
+        v[:] = costgrid
 
 
 @entity_task(log, writes=['downstream_line', 'major_divide'])

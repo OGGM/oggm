@@ -65,8 +65,9 @@ def glacier_masks_itmix(gdir):
     # Replace DEM values with ITMIX ones where possible
     # Open DEM
     dem_f = None
+    n_g = gdir.name.split(':')[-1]
     for dem_f in glob.glob(itmix_cfg.itmix_data_dir + '/*/02_surface_' +
-                                  gdir.name + '*.asc'):
+                           n_g + '*.asc'):
         pass
 
     if dem_f is not None:
@@ -76,10 +77,10 @@ def glacier_masks_itmix(gdir):
         it_dem = np.where(it_dem < -999., np.NaN, it_dem)
 
         # for some glaciers, trick
-        if gdir.name in ['Academy', 'Devon']:
+        if n_g in ['Academy', 'Devon']:
             it_dem = np.where(it_dem <= 0, np.NaN, it_dem)
             it_dem = np.where(np.isfinite(it_dem), it_dem, np.nanmin(it_dem))
-        if gdir.name in ['Brewster', 'Austfonna']:
+        if n_g in ['Brewster', 'Austfonna']:
             it_dem = np.where(it_dem <= 0, np.NaN, it_dem)
 
         # Transform to local grid
