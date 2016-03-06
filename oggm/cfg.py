@@ -15,6 +15,7 @@ import sys
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from configobj import ConfigObj, ConfigObjError
 
@@ -121,6 +122,9 @@ _doc = 'A shapely.LineString of the coordinates of the downstream line ' \
        '(flowing out of the glacier until the border of the domain) for ' \
        'each divide.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
+
+_doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
+BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
 
 _doc = 'A simple integer in the glacier root directory (divide 00) ' \
        'containing the ID of the "major divide", i.e. the one ' \
@@ -275,6 +279,10 @@ def set_divides_db(path=None):
 
     if PARAMS['use_divides'] and path is not None:
         df = gpd.GeoDataFrame.from_file(path)
+        # dirty fix for RGIV5
+        r5 = df.copy()
+        r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
+        df = pd.concat([df, r5])
         PARAMS['divides_gdf'] = df.set_index('RGIID')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()

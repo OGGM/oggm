@@ -20,17 +20,24 @@ import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
 from scipy.interpolate import griddata
+import matplotlib.pyplot as plt
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.core.preprocessing.gis import _gaussian_blur, _mask_per_divide
 from oggm.sandbox import itmix_cfg
+from oggm import utils
 
 # Module logger
 log = logging.getLogger(__name__)
 
 # Needed later
 label_struct = np.ones((3, 3))
+
+# Globals
+import glob
+import pandas as pd
+RGI_DIR = '/home/mowglie/disk/Data/GIS/SHAPES/RGI/RGI_V5'
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
@@ -58,7 +65,9 @@ def glacier_masks_itmix(gdir):
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
         dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
-        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+        msg = gdir.rgi_id + ': DEM needed interpolation'
+        msg += '({:.1f}% missing).'.format(len(pnan[0])/len(dem.flatten())*100)
+        log.warning(msg)
     if np.min(dem) == np.max(dem):
         raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
@@ -154,3 +163,37 @@ def glacier_masks_itmix(gdir):
         for i in gdir.divide_ids:
             log.debug('%s: glacier mask, divide %d', gdir.rgi_id, i)
             _mask_per_divide(gdir, i, dem, smoothed_dem)
+
+
+def correct_dem(gdir, glacier_mask, dem, smoothed_dem):
+    """Compare with Huss and stuff."""
+
+    dem_glac = dem[np.nonzero(glacier_mask)]
+
+    # Read RGI hypso for compa
+    tosearch = '{:02d}'.format(np.int(gdir.rgi_region))
+    tosearch = os.path.join(RGI_DIR, '*', tosearch + '*_hypso.csv')
+    for fh in glob.glob(tosearch):
+        pass
+    df = pd.read_csv(fh)
+    df.columns = [c.strip() for c in df.columns]
+    df = df.loc[df.RGIId.isin([gdir.rgi_id])]
+    df = df[df.columns[3:]].T
+    df.columns = ['RGI (Huss)']
+    hs = np.asarray(df.index.values, np.int)
+    bins = utils.nicenumber(hs, 50, lower=True)
+    bins = np.append(bins, bins[-1] + 50)
+    myhist, _ = np.histogram(dem_glac, bins=bins)
+    myhist = myhist / np.sum(myhist) * 1000
+    df['OGGM'] = myhist
+    df = df / 10
+    df.index.rename('Alt (m)', inplace=True)
+    df.plot()
+    plt.ylabel('Freq (%)')
+    plt.savefig('/home/mowglie/hypso_' + gdir.rgi_id + '.png')
+
+    minz = None
+    if gdir.rgi_id == 'RGI50-06.00424': minz = 800
+    if gdir.rgi_id == 'RGI50-06.00443': minz = 600
+
+    return dem, smoothed_dem

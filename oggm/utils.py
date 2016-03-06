@@ -642,6 +642,28 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         assert os.path.exists(gimp_file)
         return gimp_file, 'GIMP'
 
+    # Some regional files I could gather
+    # Iceland http://viewfinderpanoramas.org/dem3/ISL.zip
+    # Svalbard http://viewfinderpanoramas.org/dem3/SVALBARD.zip
+    # NorthCanada (could be larger - need tiles download)
+    _exs = (
+        [-25., -12., 63., 67.],
+        [10., 34., 76., 81.],
+        [-96., -60., 76., 84.]
+    )
+    _files = (
+        'iceland.tif',
+        'svalbard.tif',
+        'northcanada.tif',
+    )
+    for _ex, _f in zip(_exs, _files):
+
+        if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
+           (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
+            r_file = os.path.join(cfg.PATHS['topo_dir'], _f)
+            assert os.path.exists(r_file)
+            return r_file, 'REGIO'
+
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
         # use ASTER V2 for northern lats
         zones, units = aster_zone(lon_ex, lat_ex)

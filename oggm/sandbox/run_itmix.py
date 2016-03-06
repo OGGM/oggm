@@ -23,6 +23,7 @@ from oggm.core.models import flowline, massbalance
 from oggm import graphics, utils
 from oggm.sandbox import itmix
 from oggm.sandbox import itmix_cfg
+import fiona
 
 # Globals
 LOG_DIR = ''
@@ -37,7 +38,7 @@ cfg.initialize()
 
 # Use multiprocessing
 cfg.PARAMS['use_multiprocessing'] = True
-cfg.CONTINUE_ON_ERROR = True
+cfg.CONTINUE_ON_ERROR = False
 
 # Working dir
 cfg.PATHS['working_dir'] = '/home/mowglie/OGGM_ITMIX_WD'
@@ -60,7 +61,6 @@ df_rgi_file = '/home/mowglie/itmix_rgi_shp.pkl'
 if os.path.exists(df_rgi_file) and not reset:
     rgidf = pd.read_pickle(df_rgi_file)
 else:
-
     rgi_dir = '/home/mowglie/disk/Data/GIS/SHAPES/RGI/RGI_V5/'
     df_itmix = pd.read_pickle('/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_links.pkl')
 
@@ -76,6 +76,8 @@ else:
         # read the rgi region
         rgi_shp = list(glob.glob(os.path.join(rgi_dir, "*", row['rgi_reg'] + '_rgi50_*.shp')))[0]
         rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
+        with fiona.open(rgi_shp) as f:
+            input_schema = f.schema
 
         rgi_parts = row.T['rgi_parts_ids']
         sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)].copy()
@@ -121,15 +123,18 @@ else:
             pass
 
         # add glacier name to the entity
-        name = np.array(['ITMIX:' + row.name] * len(sel))
+        name = ['I:' + row.name] * len(sel)
         add_n = sel.RGIId.isin(wgms_df.RGI_ID.values)
         for z, it in enumerate(add_n.values):
             if it:
-                name[z] = 'WGMS-' + name[z]
+                name[z] = 'W-' + name[z]
         add_n = sel.RGIId.isin(gtd_df.RGI_ID.values)
         for z, it in enumerate(add_n.values):
             if it:
-                name[z] = 'GTD-' + name[z]
+                name[z] = 'G-' + name[z]
+        for n in name:
+            if len(n) > 48:
+                raise
         sel.loc[:, 'Name'] = name
         rgidf.append(sel)
 
@@ -152,8 +157,16 @@ else:
         assert len(sel) == 1
 
         # add glacier name to the entity
-        _corname = row.NAME.replace('/', 'or').replace('.', '').replace(' ', '-')
-        sel.loc[:, 'Name'] = ['WGMS:' + _corname] * len(sel)
+        _cor = row.NAME.replace('/', 'or').replace('.', '').replace(' ', '-')
+        name = ['W:' + _cor] * len(sel)
+        add_n = sel.RGIId.isin(gtd_df.RGI_ID.values)
+        for z, it in enumerate(add_n.values):
+            if it:
+                name[z] = 'G-' + name[z]
+        for n in name:
+            if len(n) > 48:
+                raise
+        sel.loc[:, 'Name'] = name
         rgidf.append(sel)
 
     _rgi_ids.extend(wgms_df.RGI_ID.values)
@@ -176,18 +189,43 @@ else:
 
         # add glacier name to the entity
         _corname = row.NAME.replace('/', 'or').replace('.', '').replace(' ', '-')
-        sel.loc[:, 'Name'] = ['GTD:' + _corname] * len(sel)
+        name = ['G:' + _corname] * len(sel)
+        for n in name:
+            if len(n) > 48:
+                raise
+        sel.loc[:, 'Name'] = name
         rgidf.append(sel)
 
-    # Save for not computeing each time
+    # Save for not computing each time
     rgidf = pd.concat(rgidf)
     rgidf.to_pickle(df_rgi_file)
 
-
 # Remove problem glaciers
-rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-03.04079', 'RGI50-07.01394'])]
+rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-07.01394'])]
+
+# Test problem topo
+# topo_rgi = [
+#     'RGI50-07.00775',
+#     'RGI50-06.00377',
+#     'RGI50-06.00477',
+#     'RGI50-07.00240',
+#     'RGI50-06.00424',
+#     'RGI50-06.00310',
+#     'RGI50-06.00443',
+# ]
+# topo_rgi = [
+#     'RGI50-03.04079',
+#     'RGI50-07.01394',
+# ]
+# rgidf = rgidf.loc[rgidf.RGIId.isin(['RGI50-11.00897'])]
 
 print('Number of glaciers: {}'.format(len(rgidf)))
+
+for i, row in rgidf.iterrows():
+    if row.GlacType[0] == '1':
+        print(row.Name, row.GlacType, row.RGIFlag)
+
+exit(0)
 
 # Params
 cfg.PARAMS['border'] = 20
@@ -202,9 +240,9 @@ from oggm.workflow import execute_entity_task
 task_list = [
     # itmix.glacier_masks_itmix,
     # tasks.compute_centerlines,
-    tasks.catchment_area,
-    tasks.initialize_flowlines,
-    tasks.catchment_width_geom
+    # tasks.catchment_area,
+    # tasks.initialize_flowlines,
+    # tasks.catchment_width_geom
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)
@@ -221,10 +259,9 @@ for gd in gdirs:
     # graphics.plot_domain(gd)
     # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_dom.png')
     # plt.close()
-    # graphics.plot_centerlines(gd)
-    # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_cls.png')
-    # plt.close()
-    pass
+    graphics.plot_centerlines(gd)
+    plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_cls.png')
+    plt.close()
 
 #
 # try:

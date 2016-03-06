@@ -410,6 +410,7 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
                               ul_corner=ul_corner)
     gdir.write_pickle(glacier_grid, 'glacier_grid')
+    gdir.write_pickle(dem_source, 'dem_source')
 
     # Looks in the database if the glacier has divides.
     gdf = cfg.PARAMS['divides_gdf']
