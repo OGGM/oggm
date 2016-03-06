@@ -57,29 +57,40 @@ def empty_cache():  # pragma: no cover
 def _download_demo_files():
     """Checks if the demo data is already on the cache and downloads it."""
 
-    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % SAMPLE_DATA_GH_REPO
-    master_zip_url = 'https://github.com/%s/archive/master.zip' % SAMPLE_DATA_GH_REPO
+    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
+                     SAMPLE_DATA_GH_REPO
+    master_zip_url = 'https://github.com/%s/archive/master.zip' % \
+                     SAMPLE_DATA_GH_REPO
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
 
+    # a file containing the online's file's hash and the time of last check
     if os.path.exists(shafile):
         with open(shafile, 'r') as sfile:
             local_sha = sfile.read().strip()
         last_mod = os.path.getmtime(shafile)
     else:
+        # very first download
         local_sha = '0000'
         last_mod = 0
 
-    if time.time() - last_mod > 1800:
+    # test only every hour
+    if time.time() - last_mod > 3600:
         write_sha = True
-
         try:
-            with urlopen(master_sha_url) as resp:
-                json_str = resp.read().decode('utf-8')
-                json_obj = json.loads(json_str)
-                master_sha = json_obj['sha']
+            # this might fail with HTTP 403 when server overload
+            resp = urlopen(master_sha_url)
 
+            # following try/finally is just for py2/3 compatibility
+            # https://mail.python.org/pipermail/python-list/2016-March/704073.html
+            try:
+                json_str = resp.read().decode('utf-8')
+            finally:
+                resp.close()
+            json_obj = json.loads(json_str)
+            master_sha = json_obj['sha']
+            # if not same, delete entire dir
             if local_sha != master_sha:
                 empty_cache()
         except HTTPError:
@@ -87,20 +98,23 @@ def _download_demo_files():
     else:
         write_sha = False
 
-    if not os.path.exists(ofile):  # pragma: no cover
+    # download only if necessary
+    if not os.path.exists(ofile):
         urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
+    # sha did change, replace
+    if write_sha:
+        with open(shafile, 'w') as sfile:
+            sfile.write(master_sha)
+
+    # list of files for output
     out = dict()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
-
-    if write_sha:
-        with open(shafile, 'w') as sfile:
-            sfile.write(master_sha)
 
     return out
 
