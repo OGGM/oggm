@@ -6,7 +6,7 @@
 #-Last modified:  Thu Jul 09, 2015  13:10
 #@author Felix Oesterle
 #-----------------------------------------------------------
-from __future__ import with_statement
+from __future__ import with_statement, print_function
 from fabric.api import *
 import boto.ec2
 from boto.ec2.blockdevicemapping import EBSBlockDeviceType, BlockDeviceMapping
@@ -178,7 +178,7 @@ def cloud_make(cn=def_cn):
         best_avz = def_default_avz
         request_type = 'ondemand'
 
-    print best_avz, request_type
+    print(best_avz, request_type)
     log_with_ts('avz: ' + best_avz)
     log_with_ts('request_type: ' + request_type)
 
@@ -215,12 +215,12 @@ def list_ubuntu_amis(regions=def_regions):
     List all available ubuntu 14.04 AMIs in all configured regions
     """
     for region in regions:
-        print "Region:", region
+        print("Region:", region)
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
         imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/ebs-ssd/ubuntu-trusty-14.04-amd64-server-*'})
         for img in sorted(imgs, key=lambda v: v.name):
-            print img.id,':',img.name
-        print
+            print(img.id,':',img.name)
+        print()
 
 
 @task
@@ -269,10 +269,10 @@ def run_workflow(cn=def_cn,avz=def_default_avz):
 
         # FSO--- check whether Globus container is up
         run('while ! echo exit | nc localhost 40195; do sleep 10; echo "waiting for globus"; done')
-        print "Connection to globus"
+        print("Connection to globus")
 
     log_with_ts("workflow done")
-    print "Time needed for run_workflow (min)", (time.time()-t)/60.0
+    print("Time needed for run_workflow (min)", (time.time()-t)/60.0)
 
     #copy result
     # FSO--- TODO need to check decisions in agwl file to get correct files
@@ -280,7 +280,7 @@ def run_workflow(cn=def_cn,avz=def_default_avz):
     try:
         get('~/screenlog.0',target_file)
     except:
-        print "Uh oh, no screenlog file found"
+        print("Uh oh, no screenlog file found")
         log_with_ts("no transfer of results")
 
     return target_file
@@ -294,12 +294,12 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
         instances = cloud.get_all_instances()
         vols = cloud.get_all_volumes()
-        print
-        print "-------CURRENT RUNNING-----------"
-        print "       REGION:", region
-        print
-        print "Instances:"
-        print
+        print()
+        print("-------CURRENT RUNNING-----------")
+        print("       REGION:", region)
+        print()
+        print("Instances:")
+        print()
 
         update_costs(cn=cn,regions=regions,itype=itype)
 
@@ -320,7 +320,7 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
                 hours, rest = divmod(time_taken.total_seconds(),3600)
                 minutes, seconds = divmod(rest, 60)
 
-                print inst.id, inst.instance_type, \
+                print(inst.id, inst.instance_type, \
                             inst.tags.get('Name'), \
                             inst.tags.get('type'), \
                             inst.state,\
@@ -330,15 +330,15 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
                             inst.tags.get('current_price'), \
                             inst.tags.get('billable_hours'), \
                             inst.tags.get('terminate_time'), \
-                            inst.placement
+                            inst.placement)
 
                 # FSO--- -1 is a dirty fix for different timezones
-                print "running for: ", hours,'h', minutes, "min"
-                print
+                print("running for: ", hours,'h', minutes, "min")
+                print()
 
-        print
-        print "Volumes:"
-        print
+        print()
+        print("Volumes:")
+        print()
 
         for vol in vols:
             info = ""
@@ -346,7 +346,7 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
                 info += '\tLifetime: ' + vol.tags['vol-lifetime']
             if 'vol-user-name' in vol.tags:
                 info += '\tUservolume Name: ' + vol.tags['vol-user-name']
-            print vol.id, "\t", vol.status, '\t', vol.size, info
+            print(vol.id, "\t", vol.status, '\t', vol.size, info)
 
 
 def check_keypair(cloud, keynames):
@@ -356,9 +356,9 @@ def check_keypair(cloud, keynames):
     key_dir = def_key_dir
     try:
         cloud.get_all_key_pairs(keynames=[keynames])[0]
-    except cloud.ResponseError, e:
+    except cloud.ResponseError as e:
         if e.code == 'InvalidKeyPair.NotFound':
-            print 'Creating keypair: %s' % keynames
+            print('Creating keypair: %s' % keynames)
             # Create an SSH key to use when logging into instances.
             key = cloud.create_key_pair(keynames)
             # Make sure the specified key_dir actually exists.
@@ -384,16 +384,16 @@ def get_user_persist_ebs(cloud, avz):
     vols = cloud.get_all_volumes(filters={'tag:vol-user-name':home_volume_ebs_name, 'availability-zone': avz})
 
     if len(vols) == 0:
-        print "Creating new EBS volume for user volume %s" % home_volume_ebs_name
+        print("Creating new EBS volume for user volume %s" % home_volume_ebs_name)
         vol = cloud.create_volume(new_homefs_size_gb, avz)
         vol.add_tag('vol-user-name', home_volume_ebs_name)
         vol.add_tag('vol-lifetime', 'perm')
     else:
         vol = vols[0]
-        print "Found existing volume %s for user volume %s!" % (vol.id, home_volume_ebs_name)
+        print("Found existing volume %s for user volume %s!" % (vol.id, home_volume_ebs_name))
 
         if vol.status != 'available':
-            print "But it's not available..."
+            print("But it's not available...")
             return None
 
     return vol
@@ -435,9 +435,9 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
     # it means that it doesn't exist and we need to create it.
     try:
         group = cloud.get_all_security_groups(groupnames=[group_name])[0]
-    except cloud.ResponseError, e:
+    except cloud.ResponseError as e:
         if e.code == 'InvalidGroup.NotFound':
-            print 'Creating Security Group: %s' % group_name
+            print('Creating Security Group: %s' % group_name)
             # Create a security group to control access to instance via SSH.
             group = cloud.create_security_group(group_name, 'A group that allows SSH access')
         else:
@@ -447,17 +447,17 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
     # on the specified port.
     try:
         group.authorize('tcp', ssh_port, ssh_port, cidr)
-    except cloud.ResponseError, e:
+    except cloud.ResponseError as e:
         if e.code == 'InvalidPermission.Duplicate':
-            print 'Security Group: %s already authorized' % group_name
+            print('Security Group: %s already authorized' % group_name)
         else:
             raise
 
     log_with_ts("request node "+str(idn))
-    print 'Reserving instance for node', aminfo.id, instance_infos[inst_type_idx]['type'], aminfo.name, aminfo.region
+    print('Reserving instance for node', aminfo.id, instance_infos[inst_type_idx]['type'], aminfo.name, aminfo.region)
 
     if rt == 'spot':
-        print ("placing node in ",avz)
+        print("placing node in ",avz)
         requests = cloud.request_spot_instances(def_price,
                       def_ami[avz[:-1]],
                       count=1,
@@ -473,7 +473,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         node = instances[0]
         log_with_ts("fullfilled spot node "+str(idn))
     else:
-        print ("placing node in ",avz)
+        print("placing node in ",avz)
         reservation = cloud.run_instances(image_id=def_ami[avz[:-1]],
                 key_name=key_name,
                 placement = avz,
@@ -485,7 +485,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
 
     time.sleep(2)
     while not node.update() == 'running':
-        print 'waiting for', cn, 'node', idn, 'to boot...'
+        print('waiting for', cn, 'node', idn, 'to boot...')
         time.sleep(5)
 
     log_with_ts("booted node "+str(idn))
@@ -522,16 +522,16 @@ def terminate_perm_user_vol(name=home_volume_ebs_name,regions=def_regions):
     """
     Terminate the permanent user volume
     """
-    print regions
+    print(regions)
     for region in regions:
         cloud = boto.ec2.connect_to_region(region, profile_name=ec2Profile)
         vols = cloud.get_all_volumes(filters={'tag:vol-user-name':name})
         for vol in vols:
             if vol.status == 'available':
-                print vol.id,"\t", vol.status, "... deleted"
+                print(vol.id,"\t", vol.status, "... deleted")
                 vol.delete()
             else:
-                print vol.id,"\t", vol.status, "... in use"
+                print(vol.id,"\t", vol.status, "... in use")
 
 
 @task
@@ -539,11 +539,11 @@ def cloud_terminate(cn=def_cn,itype='all',regions=def_regions):
     """
     Terminate all instances
     """
-    print regions
+    print(regions)
     for region in regions:
-        print
-        print "-------CURRENT RUNNING-----------"
-        print "       REGION:",region
+        print()
+        print("-------CURRENT RUNNING-----------")
+        print("       REGION:",region)
 
         cloud = boto.ec2.connect_to_region(region, profile_name=ec2Profile)
         instances = cloud.get_all_instances()
@@ -555,21 +555,21 @@ def cloud_terminate(cn=def_cn,itype='all',regions=def_regions):
             for inst in reservation.instances:
                 if inst.state != 'terminated':
                     if itype == 'all':
-                        print 'TERMINATING', inst.tags.get('Name'), inst.dns_name
+                        print('TERMINATING', inst.tags.get('Name'), inst.dns_name)
                         inst.add_tag('Name', 'term')
                         inst.add_tag('type', 'term')
                         inst.terminate()
                         stati2 = datetime.datetime.utcnow()
                         inst.add_tag('terminate_time', stati2.isoformat())
                     elif itype == 'node' and inst.tags.get('type') == cn+'node':
-                        print 'TERMINATING', inst.tags.get('Name'), inst.dns_name
+                        print('TERMINATING', inst.tags.get('Name'), inst.dns_name)
                         inst.add_tag('Name', 'term')
                         inst.add_tag('type', 'term')
                         inst.terminate()
                         stati2 = datetime.datetime.utcnow()
                         inst.add_tag('terminate_time', stati2.isoformat())
                     elif itype == 'master' and inst.tags.get('type') == cn+'master':
-                        print 'TERMINATING', inst.tags.get('Name'), inst.dns_name
+                        print('TERMINATING', inst.tags.get('Name'), inst.dns_name)
                         inst.add_tag('Name', 'term')
                         inst.add_tag('type', 'term')
                         inst.terminate()
@@ -578,12 +578,12 @@ def cloud_terminate(cn=def_cn,itype='all',regions=def_regions):
 
         for unattachedvol in vol:
             if 'vol-lifetime' in unattachedvol.tags and unattachedvol.tags['vol-lifetime'] == 'perm':
-                print unattachedvol.id,"\t", unattachedvol.status, "... is marked permanent"
+                print(unattachedvol.id,"\t", unattachedvol.status, "... is marked permanent")
             elif unattachedvol.status == 'available':
-                print unattachedvol.id,"\t", unattachedvol.status, "... deleted"
+                print(unattachedvol.id,"\t", unattachedvol.status, "... deleted")
                 unattachedvol.delete()
             else:
-                print unattachedvol.id,"\t", unattachedvol.status, "... not deleted"
+                print(unattachedvol.id,"\t", unattachedvol.status, "... not deleted")
 
 @task
 def calc_approx_costs_running(cn=def_cn,regions=def_regions,itype ='all'):
@@ -603,8 +603,8 @@ def calc_approx_costs_running(cn=def_cn,regions=def_regions,itype ='all'):
     for region in regions:
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
         instances = cloud.get_all_instances()
-        print
-        print "----------REGION:",region,itype,'-----------'
+        print()
+        print("----------REGION:",region,itype,'-----------')
 
 
         for reservation in instances:
@@ -614,27 +614,27 @@ def calc_approx_costs_running(cn=def_cn,regions=def_regions,itype ='all'):
                     cu_price = float(inst.tags.get('current_price'))
                     cu_ondemand_price = hours * find_inst_info(inst.instance_type)['price']
 
-                    print
-                    print inst.id, inst.instance_type, \
+                    print()
+                    print(inst.id, inst.instance_type, \
                                 inst.tags.get('Name'), \
                                 inst.dns_name,\
                                 inst.tags.get('current_price')+'USD', \
                                 inst.tags.get('billable_hours')+'h', \
-                                inst.placement
+                                inst.placement)
                     # print 'Billable hours ',hours
                     # print 'Current price', cu_price
                     # print 'Current ondemand price', cu_ondemand_price
                     costs['ondemand'] += cu_ondemand_price
                     if inst.spot_instance_request_id is None:
-                        print 'ondemand instance'
+                        print('ondemand instance')
                         costs['running'] = cu_ondemand_price
                     else:
-                        print 'spot instance'
+                        print('spot instance')
                         costs['running'] += cu_price
 
-    print
-    print 'Total ondemand: ', costs['ondemand']
-    print 'Total of running: ' , costs['running']
+    print()
+    print('Total ondemand: ', costs['ondemand'])
+    print('Total of running: ' , costs['running'])
 
     return costs
 
@@ -648,24 +648,24 @@ def connect(nn='', user='root'):
     for region in def_regions:
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
         instances = cloud.get_all_instances()
-        print
+        print()
         for reservation in instances:
             for inst in reservation.instances:
                 if inst.state == 'running':
-                    print i, ': ', inst.tags.get('Name'),inst.dns_name, inst.private_ip_address, inst.placement
+                    print(i, ': ', inst.tags.get('Name'),inst.dns_name, inst.private_ip_address, inst.placement)
                     instlist.append(inst)
                     i += 1
 
-    print
+    print()
 
     if nn =='':
         nn = prompt('Which instance to connect to:')
 
     update_key_filename(instlist[int(nn)].region.name)
 
-    print 'ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user,instlist[int(nn)].dns_name)
-    print '...'
-    print
+    print('ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user,instlist[int(nn)].dns_name))
+    print('...')
+    print()
 
     os.execlp('ssh', 'ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user, instlist[int(nn)].dns_name))
 
@@ -706,8 +706,8 @@ def get_cheapest_availability_zone(ondemand_price):
 
     best_avz_nodes = min(maxprice_nodes, key=maxprice_nodes.get) # gets just the first if serveral avz's are the same
 
-    print( "Cheapest nodes: ", best_avz_nodes, maxprice_nodes[best_avz_nodes] )
-    print( "Ondemand nodes (EU):", ondemand_price )
+    print("Cheapest nodes: ", best_avz_nodes, maxprice_nodes[best_avz_nodes])
+    print("Ondemand nodes (EU):", ondemand_price)
     if maxprice_nodes[best_avz_nodes] < ondemand_price:
         return best_avz_nodes,'spot'
     else:
@@ -723,17 +723,17 @@ def wait_for_fulfillment(cloud,pending_ids):
         for request in pending:
             if request.status.code == 'fulfilled':
                 pending_ids.pop(pending_ids.index(request.id))
-                print "spot request `{}` fulfilled!".format(request.id)
+                print("spot request `{}` fulfilled!".format(request.id))
                 #print request.__dict__
                 instances.append(request.instance_id)
                 cloud.cancel_spot_instance_requests(request.id)
             elif request.state == 'cancelled':
                 pending_ids.pop(pending_ids.index(request.id))
-                print "spot request `{}` cancelled!".format(request.id)
+                print("spot request `{}` cancelled!".format(request.id))
             else:
-                print "waiting on `{}`".format(request.id)
+                print("waiting on `{}`".format(request.id))
         time.sleep(5)
-    print "all spots fulfilled!"
+    print("all spots fulfilled!")
     return instances
 
 def update_costs(cn=def_cn,itype='all',regions=def_regions):
@@ -844,7 +844,7 @@ def node_find(node,avz=def_default_avz):
     for reservation in instances:
         for inst in reservation.instances:
             if inst.tags.get('Name') == node and inst.state == 'running':
-                print 'found', inst.tags.get('Name'), inst.dns_name
+                print('found', inst.tags.get('Name'), inst.dns_name)
                 return inst
 
 def node_exists(node,avz=def_default_avz):
@@ -856,7 +856,7 @@ def node_exists(node,avz=def_default_avz):
     for reservation in instances:
         for inst in reservation.instances:
             if inst.tags.get('Name') == node and inst.state == 'running':
-                print 'found', inst.tags.get('Name'), inst.dns_name
+                print('found', inst.tags.get('Name'), inst.dns_name)
                 return True
 
     return False
@@ -895,7 +895,7 @@ def ssh_test(inst):
             sock.connect((inst.dns_name, 22))
             break
         except:
-            print 'waiting for ssh daemon...'
+            print('waiting for ssh daemon...')
             time.sleep(5)
         finally:
             sock.close()
