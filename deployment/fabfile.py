@@ -85,6 +85,10 @@ env.user = 'root'
 # set this eg. to your name
 def_cn = 'AWS'
 
+# Change to a string identifying yourself
+# Defaults to your system username if set to None
+user_identifier = None
+
 # FSO--- ssh and credentials setup
 # FSO---the name of the amazon keypair (will be created if it does not exist)
 keyn='oggm'
@@ -125,6 +129,10 @@ def_inst_type = 1
 #-----------------------------------------------------------
 # SETUP END
 #-----------------------------------------------------------
+
+if user_identifier is None:
+    import getpass
+    user_identifier = getpass.getuser()
 
 instance_infos = [
     {
@@ -316,7 +324,8 @@ def print_instance(inst):
             inst.tags.get('current_price'), \
             inst.tags.get('billable_hours'), \
             inst.tags.get('terminate_time'), \
-            inst.placement)
+            inst.placement, \
+            'Owner:%s' % inst.tags.get('node-owner'))
     print("running for: ", hours,'h', minutes, "min")
 
 
@@ -326,6 +335,9 @@ def print_volume(vol):
         info += '\tLifetime: ' + vol.tags['vol-lifetime']
     if 'vol-user-name' in vol.tags:
         info += '\tUservolume Name: ' + vol.tags['vol-user-name']
+    if 'vol-owner' in vol.tags:
+        info += '\tOwner: ' + vol.tags['vol-owner']
+
     print(vol.id, "\t", vol.zone, "\t", vol.status, '\t', vol.size, info)
 
 
@@ -418,6 +430,7 @@ def get_user_persist_ebs(cloud, avz):
         vol = cloud.create_volume(new_homefs_size_gb, avz)
         vol.add_tag('vol-user-name', home_volume_ebs_name)
         vol.add_tag('vol-lifetime', 'perm')
+        vol.add_tag('vol-owner', user_identifier)
     else:
         vol = vols[0]
         print("Found existing volume %s for user volume %s!" % (vol.id, home_volume_ebs_name))
@@ -525,6 +538,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
 
     node.add_tag('Name', cn+'_node'+str(idn))
     node.add_tag('type', cn+'node')
+    node.add_tag('node-owner', user_identifier)
 
     # FSO---set delete on termination flag to true for ebs block device
     node.modify_attribute('blockDeviceMapping', { '/dev/sda1' : True })
