@@ -288,6 +288,45 @@ def run_workflow(cn=def_cn,avz=def_default_avz):
 
     return target_file
 
+def print_instance(inst):
+    if inst.state != 'terminated':
+        cu_time = datetime.datetime.utcnow()
+        it =  datetime.datetime.strptime(inst.launch_time,'%Y-%m-%dT%H:%M:%S.000Z')
+    else:
+        try:
+            cu_time = datetime.datetime.strptime(inst.tags.get('terminate_time'),'%Y-%m-%dT%H:%M:%S.%f')
+        except:
+            cu_time = datetime.datetime.utcnow()
+
+        it = datetime.datetime.strptime(inst.launch_time,'%Y-%m-%dT%H:%M:%S.000Z')
+
+    time_taken = cu_time - it
+    hours, rest = divmod(time_taken.total_seconds(),3600)
+    minutes, seconds = divmod(rest, 60)
+
+    print(inst.id, inst.instance_type, \
+            inst.tags.get('Name'), \
+            inst.tags.get('type'), \
+            inst.state, \
+            inst.dns_name, \
+            inst.private_ip_address, \
+            inst.private_dns_name, \
+            inst.tags.get('current_price'), \
+            inst.tags.get('billable_hours'), \
+            inst.tags.get('terminate_time'), \
+            inst.placement)
+    print("running for: ", hours,'h', minutes, "min")
+
+
+def print_volume(vol):
+    info = ""
+    if 'vol-lifetime' in vol.tags:
+        info += '\tLifetime: ' + vol.tags['vol-lifetime']
+    if 'vol-user-name' in vol.tags:
+        info += '\tUservolume Name: ' + vol.tags['vol-user-name']
+    print(vol.id, "\t", vol.zone, "\t", vol.status, '\t', vol.size, info)
+
+
 @task
 def cloud_list(cn=def_cn,itype='all',regions=def_regions):
     """
@@ -308,35 +347,7 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
 
         for reservation in instances:
             for inst in reservation.instances:
-                if inst.state != 'terminated':
-                    cu_time = datetime.datetime.utcnow()
-                    it =  datetime.datetime.strptime(inst.launch_time,'%Y-%m-%dT%H:%M:%S.000Z')
-                else:
-                    try:
-                        cu_time = datetime.datetime.strptime(inst.tags.get('terminate_time'),'%Y-%m-%dT%H:%M:%S.%f')
-                    except:
-                        cu_time = datetime.datetime.utcnow()
-
-                    it =  datetime.datetime.strptime(inst.launch_time,'%Y-%m-%dT%H:%M:%S.000Z')
-
-                time_taken = cu_time - it
-                hours, rest = divmod(time_taken.total_seconds(),3600)
-                minutes, seconds = divmod(rest, 60)
-
-                print(inst.id, inst.instance_type, \
-                            inst.tags.get('Name'), \
-                            inst.tags.get('type'), \
-                            inst.state,\
-                            inst.dns_name,\
-                            inst.private_ip_address,\
-                            inst.private_dns_name,\
-                            inst.tags.get('current_price'), \
-                            inst.tags.get('billable_hours'), \
-                            inst.tags.get('terminate_time'), \
-                            inst.placement)
-
-                # FSO--- -1 is a dirty fix for different timezones
-                print("running for: ", hours,'h', minutes, "min")
+                print_instance(inst)
                 print()
 
         print()
@@ -344,12 +355,7 @@ def cloud_list(cn=def_cn,itype='all',regions=def_regions):
         print()
 
         for vol in vols:
-            info = ""
-            if 'vol-lifetime' in vol.tags:
-                info += '\tLifetime: ' + vol.tags['vol-lifetime']
-            if 'vol-user-name' in vol.tags:
-                info += '\tUservolume Name: ' + vol.tags['vol-user-name']
-            print(vol.id, "\t", vol.status, '\t', vol.size, info)
+            print_volume(vol)
 
 
 def check_keypair(cloud, keynames):
@@ -606,6 +612,84 @@ def cloud_terminate(cn=def_cn,itype='all',regions=def_regions):
                 unattachedvol.delete()
             else:
                 print(unattachedvol.id,"\t", unattachedvol.status, "... not deleted")
+
+
+@task
+def terminate_one(regions=def_regions, nn=''):
+    """
+    Terminate one instance
+    """
+    instlist = list()
+    i = 0
+    for region in regions:
+        print()
+        print("-------CURRENT RUNNING-----------")
+        print("       REGION: ", region)
+        print()
+
+        cloud = boto.ec2.connect_to_region(region, profile_name=ec2Profile)
+        reservations = cloud.get_all_instances()
+
+        for reserv in reservations:
+            for inst in reserv.instances:
+                if inst.state == 'terminated':
+                    continue
+
+                print('Instance %s:' % i)
+                print_instance(inst)
+                print()
+
+                instlist.append(inst)
+                i += 1
+
+    print()
+
+    if nn == '':
+        nn = prompt('Which instance to terminate:')
+
+    nn = int(nn)
+
+    inst = instlist[nn]
+    inst.add_tag('Name', 'term')
+    inst.add_tag('type', 'term')
+    inst.terminate()
+    stati2 = datetime.datetime.utcnow()
+    inst.add_tag('terminate_time', stati2.isoformat())
+
+
+@task
+def terminate_volume(regions=def_regions, nn=''):
+    """
+    Terminate one volume
+    """
+    vollist = list()
+    i = 0
+    for region in regions:
+        print()
+        print("-------CURRENT RUNNING-----------")
+        print("       REGION: ", region)
+        print()
+
+        cloud = boto.ec2.connect_to_region(region, profile_name=ec2Profile)
+        vols = cloud.get_all_volumes()
+
+        for vol in vols:
+            print("Volume %s:" % i)
+            print_volume(vol)
+            print()
+
+            vollist.append(vol)
+            i += 1
+
+    print()
+
+    if nn == '':
+        nn = prompt('Which volume to terminate:')
+
+    nn = int(nn)
+
+    vollist[nn].delete()
+
 
 @task
 def calc_approx_costs_running(cn=def_cn,regions=def_regions,itype ='all'):
