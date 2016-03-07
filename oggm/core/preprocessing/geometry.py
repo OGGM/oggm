@@ -258,7 +258,7 @@ def _line_extend(uline, dline, dx):
     return shpg.LineString(points)
 
 
-def _mask_to_polygon(mask, x=None, y=None):
+def _mask_to_polygon(mask, x=None, y=None, gdir=None):
     """Converts a mask to a single polygon.
 
     The mask should be a single entity with nunataks: I didnt test for more
@@ -272,6 +272,8 @@ def _mask_to_polygon(mask, x=None, y=None):
         if not given it will be generated, give it for optimisation
     y: 2d array with the coordinates
         if not given it will be generated, give it for optimisation
+    gdir: GlacierDirectory
+        for logging
 
     Returns
     -------
@@ -287,14 +289,15 @@ def _mask_to_polygon(mask, x=None, y=None):
 
     regions, nregions = label(mask, structure=LABEL_STRUCT)
     if nregions > 1:
-        log.debug('%s: we had to cut a blob from the catchment')
+        log.debug('%s: we had to cut a blob from the catchment', gdir.rgi_id)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
         # Check not a strange glacier
         sr = region_sizes.pop(am)
         for ss in region_sizes:
-            assert (ss / sr) < 0.1
+            if (ss / sr) > 0.2:
+                log.warning('%s: this blob was unusually large', gdir.rgi_id)
         mask[:] = 0
         mask[np.where(regions == (am+1))] = 1
 
@@ -637,7 +640,7 @@ def catchment_width_geom(gdir, div_id=None):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh)
+        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
 
         # First guess widths
         for i, (normal, pcoord) in enumerate(zip(fl.normals, fl.line.coords)):

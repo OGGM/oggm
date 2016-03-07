@@ -90,7 +90,7 @@ def _distribute_cru_style(gdirs):
     prcp_scaling_factor = cfg.PARAMS['prcp_scaling_factor']
 
     for gdir in gdirs:
-
+        log.info('%s: %s', gdir.rgi_id, 'distribute_cru_style')
         lon = gdir.cenlon
         lat = gdir.cenlat
 
@@ -133,10 +133,31 @@ def _distribute_cru_style(gdirs):
         ts_pre = ts_pre.groupby('time.month') - ts_pre_avg
 
         # interpolate to HR grid
-        ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                               interp='linear')
-        ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                               interp='linear')
+        if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
+            # Extreme case, middle pix is not valid
+            # take any valid pix from the 3*3 (and hope theres one)
+            found_it = False
+            for idi in range(2):
+                for idj in range(2):
+                    if np.all(np.isfinite(ts_tmp[:, idj, idi])):
+                        ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
+                        ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
+                        found_it = True
+            if not found_it:
+                msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+                raise RuntimeError(msg)
+        elif np.any(~np.isfinite(ts_tmp)):
+            # maybe the side is nan, but we can do nearest
+            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                                   interp='nearest')
+            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                                   interp='nearest')
+        else:
+            # We can do bilinear
+            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                                   interp='linear')
+            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                                   interp='linear')
 
         # take the center pixel and add it to the CRU CL clim
         # for temp
@@ -536,7 +557,15 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
 
         # Overwrite
         if div_id >= 1:
-            assert np.allclose(fls[-1].flux[-1], 0., atol=0.01)
+            if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+                log.warning('%s: flux should be zero, but is: %.2f',
+                            gdir.rgi_id,
+                            fls[-1].flux[-1])
+            if not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
+                msg = '{}: flux should be zero, but is: {.2f}'.format(
+                            gdir.rgi_id,
+                            fls[-1].flux[-1])
+                raise RuntimeError(msg)
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
@@ -584,6 +613,10 @@ def compute_ref_t_stars(gdirs):
             per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
         else:
             raise RuntimeError('Didnt expect to be here.')
+
+
+    log.info('%d out of %d have only one possible t*. Start from here',
+             len(only_one), len(ref_gdirs))
 
     # Ok. now loop over the nearest glaciers until all have a unique t*
     while True:
