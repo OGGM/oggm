@@ -69,7 +69,9 @@ from collections import defaultdict
 #         fab calc_approx_costs_running
 #        or list all instances with
 #         fab cloud_list
-#     7. Once you have enough, shut the instances down with
+#     7. Once you have enough, shut down your instance via
+#         fab terminate_one
+#        Or terminate all running instances if you are sure they all belong to you
 #         fab cloud_terminate
 
 
@@ -82,6 +84,10 @@ env.user = 'root'
 # FSO--- default name used in tags and instance names:
 # set this eg. to your name
 def_cn = 'AWS'
+
+# Change to a string identifying yourself
+# Defaults to your system username if set to None
+user_identifier = None
 
 # FSO--- ssh and credentials setup
 # FSO---the name of the amazon keypair (will be created if it does not exist)
@@ -102,8 +108,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-c0ca76b3' #eu Ubuntu 14.04 LTS
-def_ami['us-east-1'] = 'ami-175d6f7d' #us Ubuntu 14.04 LTS
+def_ami['eu-west-1'] = 'ami-abc579d8' #eu Ubuntu 14.04 LTS
+def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
@@ -123,6 +129,10 @@ def_inst_type = 1
 #-----------------------------------------------------------
 # SETUP END
 #-----------------------------------------------------------
+
+if user_identifier is None:
+    import getpass
+    user_identifier = getpass.getuser()
 
 instance_infos = [
     {
@@ -220,7 +230,7 @@ def list_ubuntu_amis(regions=def_regions):
     for region in regions:
         print("Region:", region)
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
-        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/ebs-ssd/ubuntu-trusty-14.04-amd64-server-*'})
+        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-*'})
         for img in sorted(imgs, key=lambda v: v.name):
             print(img.id,':',img.name)
         print()
@@ -314,7 +324,8 @@ def print_instance(inst):
             inst.tags.get('current_price'), \
             inst.tags.get('billable_hours'), \
             inst.tags.get('terminate_time'), \
-            inst.placement)
+            inst.placement, \
+            'Owner:%s' % inst.tags.get('node-owner'))
     print("running for: ", hours,'h', minutes, "min")
 
 
@@ -324,6 +335,9 @@ def print_volume(vol):
         info += '\tLifetime: ' + vol.tags['vol-lifetime']
     if 'vol-user-name' in vol.tags:
         info += '\tUservolume Name: ' + vol.tags['vol-user-name']
+    if 'vol-owner' in vol.tags:
+        info += '\tOwner: ' + vol.tags['vol-owner']
+
     print(vol.id, "\t", vol.zone, "\t", vol.status, '\t', vol.size, info)
 
 
@@ -416,6 +430,7 @@ def get_user_persist_ebs(cloud, avz):
         vol = cloud.create_volume(new_homefs_size_gb, avz)
         vol.add_tag('vol-user-name', home_volume_ebs_name)
         vol.add_tag('vol-lifetime', 'perm')
+        vol.add_tag('vol-owner', user_identifier)
     else:
         vol = vols[0]
         print("Found existing volume %s for user volume %s!" % (vol.id, home_volume_ebs_name))
@@ -523,6 +538,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
 
     node.add_tag('Name', cn+'_node'+str(idn))
     node.add_tag('type', cn+'node')
+    node.add_tag('node-owner', user_identifier)
 
     # FSO---set delete on termination flag to true for ebs block device
     node.modify_attribute('blockDeviceMapping', { '/dev/sda1' : True })
