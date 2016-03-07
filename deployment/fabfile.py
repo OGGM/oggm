@@ -151,8 +151,11 @@ def_price = instance_infos[def_inst_type]['price']
 
 
 def update_key_filename(avz):
-    env.key_filename = def_key_dir+'/'+avz+'_'+keyn+'.pem'
-    print("Current key filename: %s" % env.key_filename)
+    key_name = get_keypair_name()
+    key_dir = os.path.expanduser(def_key_dir)
+    key_dir = os.path.expandvars(key_dir)
+    env.key_filename = os.path.join(key_dir, key_name + '.pem')
+    print('Current key filename: %s' % env.key_filename)
 
 
 def find_inst_info(inst_type):
@@ -377,6 +380,25 @@ def check_keypair(cloud, keynames):
             raise
 
 
+def get_keypair_name():
+    key_dir = def_key_dir
+    key_dir = os.path.expanduser(key_dir)
+    key_dir = os.path.expandvars(key_dir)
+
+    un_file = os.path.join(key_dir, '%s_unique.txt' % keyn)
+
+    if os.path.exists(un_file):
+        with open(un_file, 'r') as un:
+            unique_part = un.read().strip()
+    else:
+        import uuid
+        unique_part = str(uuid.uuid4().get_hex().upper()[0:8])
+        with open(un_file, 'w') as un:
+            un.write(unique_part)
+
+    return keyn + '_' + unique_part
+
+
 def get_user_persist_ebs(cloud, avz):
     if home_volume_ebs_name is None:
         return None
@@ -418,7 +440,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         sys.exit()
 
     # Check if ssh keypair exists
-    key_name = avz[:-1] + "_" + keyn
+    key_name = get_keypair_name()
     check_keypair(cloud, key_name)
 
     # FSO---create a bigger root device
