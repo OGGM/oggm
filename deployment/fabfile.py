@@ -69,7 +69,9 @@ from collections import defaultdict
 #         fab calc_approx_costs_running
 #        or list all instances with
 #         fab cloud_list
-#     7. Once you have enough, shut the instances down with
+#     7. Once you have enough, shut down your instance via
+#         fab terminate_one
+#        Or terminate all running instances if you are sure they all belong to you
 #         fab cloud_terminate
 
 
