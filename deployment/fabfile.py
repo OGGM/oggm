@@ -108,8 +108,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-c0ca76b3' #eu Ubuntu 14.04 LTS
-def_ami['us-east-1'] = 'ami-175d6f7d' #us Ubuntu 14.04 LTS
+def_ami['eu-west-1'] = 'ami-abc579d8' #eu Ubuntu 14.04 LTS
+def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
@@ -230,7 +230,7 @@ def list_ubuntu_amis(regions=def_regions):
     for region in regions:
         print("Region:", region)
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
-        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/ebs-ssd/ubuntu-trusty-14.04-amd64-server-*'})
+        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-*'})
         for img in sorted(imgs, key=lambda v: v.name):
             print(img.id,':',img.name)
         print()
