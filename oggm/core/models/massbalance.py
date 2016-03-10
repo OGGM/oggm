@@ -31,6 +31,33 @@ class MassBalanceModel(object):
         raise NotImplementedError()
 
 
+class ConstantBalanceModel(MassBalanceModel):
+    """Simple gradient MB model."""
+
+    def __init__(self, ela_h, grad=3., bias=0.):
+        """ Instanciate.
+
+        Parameters
+        ---------
+        ela_h: float
+            Equilibrium line altitude
+        grad: float
+            Mass-balance gradient (unit: mm m-1)
+        """
+
+        super(ConstantBalanceModel, self).__init__(bias)
+
+        self.ela_h = ela_h
+        self.grad = grad
+
+    def get_mb(self, heights, year=None):
+        """Returns the mass-balance at given altitudes
+        for a given moment in time."""
+
+        mb = (heights - self.ela_h) * self.grad + self._bias
+        return mb / SEC_IN_YEAR / 1000.
+
+
 class TstarMassBalanceModel(MassBalanceModel):
     """Constant mass balance: equilibrium MB at period t*."""
 
