@@ -16,6 +16,7 @@ from collections import OrderedDict
 import numpy as np
 import netCDF4
 from scipy.interpolate import RegularGridInterpolator
+import shapely.geometry as shpg
 
 # Locals
 import oggm.cfg as cfg
@@ -36,11 +37,21 @@ log = logging.getLogger(__name__)
 class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     """The is the input flowline for the model."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h):
+    def __init__(self, line=None, dx=1, map_dx=None,
+                 surface_h=None, bed_h=None):
         """ Instanciate.
 
         #TODO: documentation
         """
+
+        # This is do add flexibility for testing. I have no time for fancier
+        # stuff right now, but I will do this better one day:
+        if dx is None:
+            dx = 1.
+        if line is None:
+            coords = np.arange(0, len(surface_h)-0.5, dx)
+            line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+
         super(ModelFlowline, self).__init__(line, dx, surface_h)
 
         self._thick = (surface_h - bed_h).clip(0.)
@@ -70,7 +81,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     def length_m(self):
         # TODO: cliffs imply a cut in the middle of the glacier
         pok = np.where(self.thick == 0.)[0]
-        if len(pok) == 0:
+        if len(pok) == self.nx:
             return 0.
         else:
             return (pok[0]-0.5) * self.dx_meter
@@ -95,7 +106,8 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 class ParabolicFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h, bed_shape):
+    def __init__(self, line=None, dx=None, map_dx=None,
+                 surface_h=None, bed_h=None, bed_shape=None):
         """ Instanciate.
 
         Parameters
@@ -130,7 +142,8 @@ class ParabolicFlowline(ModelFlowline):
 class VerticalWallFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h, widths):
+    def __init__(self, line=None, dx=None, map_dx=None,
+                 surface_h=None, bed_h=None, widths=None):
         """ Instanciate.
 
         Parameters
@@ -168,7 +181,8 @@ class VerticalWallFlowline(ModelFlowline):
 class TrapezoidalFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h, widths, lambdas):
+    def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
+                 bed_h=None, widths=None, lambdas=None):
         """ Instanciate.
 
         Parameters
@@ -209,7 +223,8 @@ class TrapezoidalFlowline(ModelFlowline):
 class MixedFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line, dx, map_dx, surface_h, bed_h, bed_shape,
+    def __init__(self, line=None, dx=None, map_dx=None,
+                 surface_h=None, bed_h=None, bed_shape=None,
                  min_shape=0.0015, lambdas=0.2):
         """ Instanciate.
 
@@ -295,7 +310,7 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                       fs=0., fd=None):
+                       fs=0., fd=None, inplace=True):
         """ Instanciate.
 
         Parameters
@@ -305,6 +320,14 @@ class FlowlineModel(object):
         ----------
         #TODO: document properties
         """
+
+        if not inplace:
+            flowlines = copy.deepcopy(flowlines)
+
+        try:
+            _ = len(flowlines)
+        except TypeError:
+            flowlines = [flowlines]
 
         self.mb = mb_model
         self.fs = fs
@@ -384,6 +407,10 @@ class FlowlineModel(object):
     def area_km2(self):
         return self.area_m2 * 1e-6
 
+    @property
+    def length_m(self):
+        return self.fls[-1].length_m
+
     def check_domain_end(self):
         """Returns False if the glacier reaches the domains bound."""
         return np.isclose(self.fls[-1].thick[-1], 0)
@@ -437,7 +464,7 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH):
+                 max_dt=SEC_IN_MONTH, inplace=True):
 
         """ Instanciate.
 
@@ -449,7 +476,8 @@ class FluxBasedModel(FlowlineModel):
         #TODO: document properties
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
-                                             y0=y0, glen_a=glen_a, fs=fs, fd=fd)
+                                             y0=y0, glen_a=glen_a, fs=fs,
+                                             fd=fd, inplace=inplace)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -571,7 +599,7 @@ class KarthausModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH):
+                 max_dt=SEC_IN_MONTH, inplace=True):
 
         """ Instanciate.
 
@@ -588,7 +616,8 @@ class KarthausModel(FlowlineModel):
             raise ValueError('Karthaus model does not work with tributaries.')
 
         super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, glen_a=glen_a, fs=fs, fd=fd)
+                                            y0=y0, glen_a=glen_a, fs=fs,
+                                            fd=fd, inplace=inplace)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -654,7 +683,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
        The equation references in the comments refer to the paper for clarity
     """
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None, fd=None,
-                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH):
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH,
+                 inplace=True):
 
         """ Instanciate.
 
@@ -670,7 +700,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
             raise ValueError('MUSCL SuperBee model does not work with tributaries.')
 
         super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
-                                            y0=y0, glen_a=glen_a, fs=fs, fd=fd)
+                                                 y0=y0, glen_a=glen_a, fs=fs,
+                                                 fd=fd, inplace=inplace)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
