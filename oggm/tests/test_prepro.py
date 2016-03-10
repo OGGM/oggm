@@ -16,6 +16,7 @@ import pandas as pd
 import geopandas as gpd
 import netCDF4
 import salem
+import xarray as xr
 
 # Local imports
 from oggm.core.preprocessing import gis, geometry, climate, inversion
@@ -64,7 +65,7 @@ class TestGIS(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
         self.rm_dir()
@@ -121,7 +122,7 @@ class TestCenterlines(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -194,7 +195,7 @@ class TestCenterlines(unittest.TestCase):
     def test_baltoro_centerlines(self):
 
         cfg.PARAMS['border'] = 2
-        cfg.PATHS['srtm_file'] =  get_demo_file('baltoro_srtm_clip.tif')
+        cfg.PATHS['dem_file'] =  get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
         rgidf = gpd.GeoDataFrame.from_file(b_file)
@@ -204,6 +205,10 @@ class TestCenterlines(unittest.TestCase):
 
         # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
+            # add fake attribs
+            entity.O1REGION = 0
+            entity.BGNDATE = 0
+            entity.NAME = 'Baltoro'
             gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
@@ -269,7 +274,7 @@ class TestGeometry(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -412,16 +417,19 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(current_dir, 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
+        self.testdir_cru = os.path.join(current_dir, 'tmp_prepro_cru')
+        if not os.path.exists(self.testdir_cru):
+            os.makedirs(self.testdir_cru)
         self.clean_dir()
 
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -433,32 +441,72 @@ class TestClimate(unittest.TestCase):
     def clean_dir(self):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
+        shutil.rmtree(self.testdir_cru)
+        os.makedirs(self.testdir_cru)
 
     def test_distribute_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
 
-        # loop because for some reason indexing wont work
         gdirs = []
+
+        # loop because for some reason indexing wont work
         for index, entity in rgidf.iterrows():
             gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
-        nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
-        ref_h = nc_r.variables['hgt'][1, 1]
-        ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.PARAMS['prcp_scaling_factor']
-        ref_t = nc_r.variables['temp'][:, 1, 1]
-        nc_r.close()
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_h = nc_r.variables['hgt'][1, 1]
+            ref_p = nc_r.variables['prcp'][:, 1, 1]
+            ref_p *= cfg.PARAMS['prcp_scaling_factor']
+            ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        nc_r = netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc'))
-        self.assertTrue(ref_h == nc_r.ref_hgt)
-        np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-        np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
-        nc_r.close()
+        with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+            self.assertTrue(ref_h == nc_r.ref_hgt)
+            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
+            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+
+    def test_distribute_climate_cru(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        gdirs = []
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+            gdirs.append(gdir)
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+            gis.define_glacier_region(gdir, entity=entity)
+            gdirs.append(gdir)
+
+        climate.distribute_climate_data([gdirs[0]])
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['cru_dir'] = cru_dir
+        climate.distribute_climate_data([gdirs[1]])
+        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+                # put on the same altitude
+                # (using default gradient because better)
+                temp_cor = nc_c.temp -0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                totest = temp_cor - nc_h.temp
+                self.assertTrue(totest.mean() < 0.5)
+                # precip
+                totest = nc_c.prcp - nc_h.prcp
+                self.assertTrue(totest.mean() < 100)
 
     def test_mb_climate(self):
 
@@ -764,8 +812,8 @@ class TestInversion(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['histalp_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -980,7 +1028,7 @@ class TestCatching(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-        cfg.PATHS['srtm_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = current_dir
 
 

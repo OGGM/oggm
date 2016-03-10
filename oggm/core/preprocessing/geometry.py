@@ -258,7 +258,7 @@ def _line_extend(uline, dline, dx):
     return shpg.LineString(points)
 
 
-def _mask_to_polygon(mask, x=None, y=None):
+def _mask_to_polygon(mask, x=None, y=None, gdir=None):
     """Converts a mask to a single polygon.
 
     The mask should be a single entity with nunataks: I didnt test for more
@@ -272,6 +272,8 @@ def _mask_to_polygon(mask, x=None, y=None):
         if not given it will be generated, give it for optimisation
     y: 2d array with the coordinates
         if not given it will be generated, give it for optimisation
+    gdir: GlacierDirectory
+        for logging
 
     Returns
     -------
@@ -287,14 +289,15 @@ def _mask_to_polygon(mask, x=None, y=None):
 
     regions, nregions = label(mask, structure=LABEL_STRUCT)
     if nregions > 1:
-        log.debug('%s: we had to cut a blob from the catchment')
+        log.debug('%s: we had to cut a blob from the catchment', gdir.rgi_id)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
         # Check not a strange glacier
         sr = region_sizes.pop(am)
         for ss in region_sizes:
-            assert (ss / sr) < 0.1
+            if (ss / sr) > 0.2:
+                log.warning('%s: this blob was unusually large', gdir.rgi_id)
         mask[:] = 0
         mask[np.where(regions == (am+1))] = 1
 
@@ -629,9 +632,6 @@ def catchment_width_geom(gdir, div_id=None):
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
     for fl, ci in zip(flowlines, catchment_indices):
 
-        if flowlines.index(fl) == 3:
-            tt = 1
-
         n = len(fl.dis_on_line)
 
         widths = np.zeros(n)
@@ -640,7 +640,7 @@ def catchment_width_geom(gdir, div_id=None):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh)
+        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
 
         # First guess widths
         for i, (normal, pcoord) in enumerate(zip(fl.normals, fl.line.coords)):
@@ -650,26 +650,29 @@ def catchment_width_geom(gdir, div_id=None):
 
         valid = np.where(np.isfinite(widths))
         if len(valid[0]) == 0:
-            raise RuntimeError('{}: First guess widths went wrong.'.format(gdir.rgi_id))
-
+            errmsg = '{}: first guess widths went wrong.'.format(gdir.rgi_id)
+            raise RuntimeError(errmsg)
 
         # Ok now the entire centerline is computed.
         # we filter the lines which have a large altitude range
-        widths = _filter_for_altitude_range(widths, wlines, topo)
+        fil_widths = _filter_for_altitude_range(widths, wlines, topo)
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
             i0 = np.clip(fid-jpix, jpix/2, n-jpix/2).astype(np.int64)
             i1 = np.clip(fid+jpix+1, jpix/2, n-jpix/2).astype(np.int64)
-            widths[i0:i1] = np.NaN
+            fil_widths[i0:i1] = np.NaN
 
-        valid = np.where(np.isfinite(widths))
+        valid = np.where(np.isfinite(fil_widths))
         if len(valid[0]) == 0:
-            raise RuntimeError('{}: I filtered too much.'.format(gdir.rgi_id))
+            # This happens very rarely. Just pick the middle and
+            # the correction task should do the rest
+            log.warning('{}: width filtering too strong.'.format(gdir.rgi_id))
+            fil_widths = widths[np.int(len(widths) / 2.)]
 
         # Write it in the objects attributes
-        assert len(widths) == n
-        fl.widths = widths
+        assert len(fil_widths) == n
+        fl.widths = fil_widths
         fl.geometrical_widths = wlines
 
     # Overwrite pickle

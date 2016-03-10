@@ -4,6 +4,7 @@ from __future__ import division
 # Built ins
 import logging
 import os
+from shutil import rmtree
 # External libs
 import pandas as pd
 import multiprocessing as mp
@@ -60,6 +61,12 @@ def init_glacier_regions(rgidf, reset=False, force=False):
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
 
+    # if reset delete also the log directory
+    if reset:
+        fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
+        if os.path.exists(fpath):
+            rmtree(fpath)
+
     gdirs = []
     for _, entity in rgidf.iterrows():
         gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -89,17 +96,9 @@ def gis_prepro_tasks(gdirs):
 def climate_tasks(gdirs):
     """Prepare the climate data."""
 
-    # Global task
+    # Only global tasks
     tasks.distribute_climate_data(gdirs)
-
-    # Get ref glaciers (all glaciers with MB)
-    dfids = cfg.PATHS['wgms_rgi_links']
-    dfids = pd.read_csv(dfids)['RGI_ID'].values
-    ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
-    execute_entity_task(tasks.mu_candidates, ref_gdirs)
-
-    # Global tasks
-    tasks.compute_ref_t_stars(ref_gdirs)
+    tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 
 

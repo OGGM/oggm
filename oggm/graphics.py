@@ -1,7 +1,10 @@
 """Useful plotting functions"""
 from __future__ import division
 from six.moves import zip
+
 from collections import OrderedDict
+import warnings
+import logging
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -9,7 +12,6 @@ from matplotlib import cm as colormap
 from matplotlib import transforms
 import matplotlib.colors as colors
 from matplotlib.ticker import NullFormatter
-import warnings
 
 from descartes import PolygonPatch
 import shapely.geometry as shpg
@@ -19,11 +21,15 @@ import numpy as np
 import netCDF4
 import salem
 
+from oggm.utils import entity_task
 
 import cleo
 
 # Local imports
 import oggm.cfg as cfg
+
+# Module logger
+log = logging.getLogger(__name__)
 
 nullfmt = NullFormatter()  # no labels
 
@@ -34,6 +40,7 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     return new_cmap
 
 
+@entity_task(log)
 def plot_googlemap(gdir, ax=None):
     """Plots the glacier over a googlemap."""
 
@@ -51,20 +58,71 @@ def plot_googlemap(gdir, ax=None):
                                 np.array(s.geometry[0].exterior.xy[1]),
                                 src=s.crs)
 
-    img = gm.get_vardata()
+    img = gm.get_vardata()[..., 0:3]  # sometimes there is an alpha
     cmap = cleo.Map(gm.grid, countries=False, nx=gm.grid.nx)
-    cmap.set_lonlat_countours(0.02)
     cmap.set_rgb(img)
 
     cmap.set_shapefile(gdir.get_filepath('outlines'))
 
     cmap.plot(ax)
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
 
     if dofig:
         plt.tight_layout()
 
 
+@entity_task(log)
+def plot_domain(gdir, ax=None):  # pragma: no cover
+    """Plot the glacier directory."""
+
+    # Files
+    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
+    topo = nc.variables['topo'][:]
+    nc.close()
+
+    dofig = False
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        dofig = True
+
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
+    cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
+    mp.set_cmap(cm)
+    mp.set_plot_params(nlevels=256)
+    mp.set_data(topo, interp='linear')
+
+    # TODO: center grid or corner grid???
+    crs = gdir.grid.center_grid
+
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
+
+        # Plot boundaries
+        poly_pix = geom['polygon_pix']
+
+        mp.set_geometry(poly_pix, crs=crs, fc='white',
+                         alpha=0.3, zorder=2, linewidth=.2)
+        for l in poly_pix.interiors:
+            mp.set_geometry(l, crs=crs,
+                              color='black', linewidth=0.5)
+
+    mp.plot(ax)
+    cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
+    cb.set_label('Alt. [m]')
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
+
+    if dofig:
+        plt.tight_layout()
+
+
+@entity_task(log)
 def plot_centerlines(gdir, ax=None, use_flowlines=False,
                      add_downstream=False):
     """Plots the centerlines of a glacier directory."""
@@ -85,7 +143,6 @@ def plot_centerlines(gdir, ax=None, use_flowlines=False,
         dofig = True
 
     mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
-    mp.set_lonlat_countours(0.02)
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     mp.set_cmap(cm)
     mp.set_plot_params(nlevels=256)
@@ -135,12 +192,16 @@ def plot_centerlines(gdir, ax=None, use_flowlines=False,
     mp.plot(ax)
     cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Alt. [m]')
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
 
     if dofig:
         plt.tight_layout()
 
 
+@entity_task(log)
 def plot_catchment_width(gdir, ax=None, corrected=False):
     """Plots the catchment widths out of a glacier directory."""
 
@@ -155,7 +216,6 @@ def plot_catchment_width(gdir, ax=None, corrected=False):
     nc.close()
 
     mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
-    mp.set_lonlat_countours(0.02)
     mp.set_topography(topo)
 
     # TODO: center grid or corner grid???
@@ -195,6 +255,7 @@ def plot_catchment_width(gdir, ax=None, corrected=False):
         plt.tight_layout()
 
 
+@entity_task(log)
 def plot_inversion(gdir, ax=None):
     """Plots the result of the inversion out of a glacier directory."""
 
@@ -209,7 +270,6 @@ def plot_inversion(gdir, ax=None):
     nc.close()
 
     mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
-    mp.set_lonlat_countours(0.02)
     mp.set_topography(topo)
 
     # TODO: center grid or corner grid???
@@ -248,12 +308,16 @@ def plot_inversion(gdir, ax=None):
     mp.plot(ax)
     cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
     cb.set_label('Glacier thickness [m]')
-    ax.set_title(gdir.rgi_id)
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
     if dofig:
         plt.tight_layout()
 
 
-def plot_modeloutput_map(gdir, model, ax=None, vmax=None):
+@entity_task(log)
+def plot_modeloutput_map(gdir, model=None, ax=None, vmax=None):
     """Plots the result of the model output."""
 
     dofig = False
@@ -279,7 +343,6 @@ def plot_modeloutput_map(gdir, model, ax=None, vmax=None):
         ds.set_subset(corners=corners, margin=10, crs=gdir.grid)
 
     mp = cleo.Map(ds.grid, countries=False, nx=gdir.grid.nx)
-    mp.set_lonlat_countours(0.02)
     mp.set_topography(topo, crs=gdir.grid)
 
     # TODO: center grid or corner grid???
@@ -319,7 +382,8 @@ def plot_modeloutput_map(gdir, model, ax=None, vmax=None):
         plt.tight_layout()
 
 
-def plot_modeloutput_section(model, ax=None, title=''):
+@entity_task(log)
+def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
     """Plots the result of the model output along the flowline."""
 
     dofig = False
@@ -401,7 +465,8 @@ def plot_modeloutput_section(model, ax=None, title=''):
               frameon=False)
 
 
-def plot_modeloutput_section_withtrib(model, title=''):  # pragma: no cover
+@entity_task(log)
+def plot_modeloutput_section_withtrib(gdir, model=None, title=''):  # pragma: no cover
     """Plots the result of the model output along the flowline."""
 
     n_tribs = len(model.fls) - 1

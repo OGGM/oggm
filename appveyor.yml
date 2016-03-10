@@ -26,7 +26,7 @@ install:
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
   # install dependencies
-  - "conda install --yes --quiet -c ioos geopandas matplotlib=1.4.3 Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy"
+  - "conda install --yes --quiet -c ioos geopandas matplotlib=1.4.3 Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy rasterio krb5 xarray"
   - "pip install git+https://github.com/fmaussion/motionless.git"
   - "pip install git+https://github.com/fmaussion/salem.git"
   - "pip install git+https://github.com/fmaussion/cleo.git"

@@ -3,7 +3,7 @@ source = oggm
 omit = oggm/tests/*
 
 [report]
-omit = */sandbox.py/*
+omit = */sandbox*/*
 # Regexes for lines to exclude from consideration
 exclude_lines =
     pragma: no cover

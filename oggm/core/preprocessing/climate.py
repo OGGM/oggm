@@ -8,7 +8,10 @@ import datetime
 # External libs
 import numpy as np
 import pandas as pd
+import xarray as xr
+from scipy import stats
 import netCDF4
+import salem
 # Locals
 from oggm import cfg
 from oggm import utils
@@ -18,26 +21,15 @@ from oggm import entity_task, divide_task
 log = logging.getLogger(__name__)
 
 
-def distribute_climate_data(gdirs):
-    """Reads the Histalp climate data and distributes to each glacier.
+def _distribute_histalp_syle(gdirs, fpath):
+    """This is the way OGGM does it for the Alps.
 
-    Generates a NetCDF file in the root glacier directory (climate_monthly.nc)
-    It contains the timeseries of temperature, temperature gradient, and
-    precipitation at the nearest grid point. The climate data reference height
-    is provided as global attribute.
-
-    Not to be multi-processed.
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
+    It requires an input file with a specific format, and uses lazy
+    optimisation (computing time dependant gradients can be slow)
     """
 
-    log.info('distribute_climate_data')
-
     # read the file and data entirely (faster than many I/O)
-    ncpath = cfg.PATHS['histalp_file']
-    nc = netCDF4.Dataset(ncpath, mode='r')
+    nc = netCDF4.Dataset(fpath, mode='r')
     lon = nc.variables['lon'][:]
     lat = nc.variables['lat'][:]
 
@@ -54,19 +46,167 @@ def distribute_climate_data(gdirs):
     assert nc.variables['prcp'].units == 'kg m-2'
 
     # Gradient defaults
-    def_grad = -0.0065
+    use_grad = cfg.PARAMS['temp_use_local_gradient']
+    def_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
     sf = cfg.PARAMS['prcp_scaling_factor']
 
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
         ilat = np.argmin(np.abs(lat - gdir.cenlat))
-        iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(ncpath, ilon,
+        iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
                                                               ilat, def_grad,
                                                               g_minmax,
-                                                              sf)
+                                                              sf, use_grad)
         gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
     nc.close()
+
+
+def _distribute_cru_style(gdirs):
+    """More general solution for OGGM globally.
+
+    It uses the CRU CL2 ten-minutes climatology as baseline
+    (provided with OGGM)
+    """
+
+    # read the climatology
+    clfile = utils.get_cru_cl_file()
+    ncclim = salem.GeoNetcdf(clfile)
+    # and the TS data
+    nc_ts_tmp = salem.GeoNetcdf(utils.get_cru_file('tmp'), monthbegin=True)
+    nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
+
+    # set temporal subset for the ts data (hydro years)
+    nc_ts_tmp.set_period(t0='1901-10-01', t1='2014-09-01')
+    nc_ts_pre.set_period(t0='1901-10-01', t1='2014-09-01')
+    time = nc_ts_pre.time
+    ny, r = divmod(len(time), 12)
+    assert r == 0
+
+    # gradient default params
+    use_grad = cfg.PARAMS['temp_use_local_gradient']
+    def_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    prcp_scaling_factor = cfg.PARAMS['prcp_scaling_factor']
+
+    for gdir in gdirs:
+        log.info('%s: %s', gdir.rgi_id, 'distribute_cru_style')
+        lon = gdir.cenlon
+        lat = gdir.cenlat
+
+        # This is guaranteed to work because I prepared the file (I hope)
+        ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+
+        # get monthly gradient ...
+        loc_hgt = ncclim.get_vardata('elev')
+        loc_tmp = ncclim.get_vardata('temp')
+        loc_pre = ncclim.get_vardata('prcp')
+        isok = np.isfinite(loc_hgt)
+        hgt_f = loc_hgt[isok].flatten()
+        ts_grad = np.zeros(12) + def_grad
+        if use_grad and len(hgt_f) >= 5:
+            for i in range(12):
+                loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
+                slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
+                ts_grad[i] = slope if (p_val < 0.01) else def_grad
+        # ... but dont exaggerate too much
+        ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
+        # convert to timeserie and hydroyears
+        ts_grad = ts_grad.tolist()
+        ts_grad = ts_grad[9:] + ts_grad[0:9]
+        ts_grad = np.asarray(ts_grad * ny)
+
+        # maybe this will throw out of bounds warnings
+        nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+        nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+
+        # compute monthly anomalies
+        # of temp
+        ts_tmp = nc_ts_tmp.get_vardata('tmp', as_xarray=True)
+        ts_tmp_avg = ts_tmp.sel(time=slice('1961-01-01', '1990-12-01'))
+        ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+        ts_tmp = ts_tmp.groupby('time.month') - ts_tmp_avg
+        # of precip
+        ts_pre = nc_ts_pre.get_vardata('pre', as_xarray=True)
+        ts_pre_avg = ts_pre.sel(time=slice('1961-01-01', '1990-12-01'))
+        ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+        ts_pre = ts_pre.groupby('time.month') - ts_pre_avg
+
+        # interpolate to HR grid
+        if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
+            # Extreme case, middle pix is not valid
+            # take any valid pix from the 3*3 (and hope theres one)
+            found_it = False
+            for idi in range(2):
+                for idj in range(2):
+                    if np.all(np.isfinite(ts_tmp[:, idj, idi])):
+                        ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
+                        ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
+                        found_it = True
+            if not found_it:
+                msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+                raise RuntimeError(msg)
+        elif np.any(~np.isfinite(ts_tmp)):
+            # maybe the side is nan, but we can do nearest
+            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                                   interp='nearest')
+            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                                   interp='nearest')
+        else:
+            # We can do bilinear
+            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                                   interp='linear')
+            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                                   interp='linear')
+
+        # take the center pixel and add it to the CRU CL clim
+        # for temp
+        loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
+                               coords={'month':ts_pre_avg.month})
+        ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
+                               coords={'time':time})
+        ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+        # for prcp
+        loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
+                               coords={'month':ts_pre_avg.month})
+        ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
+                               coords={'time':time})
+        ts_pre = ts_pre.groupby('time.month') + loc_pre * prcp_scaling_factor
+
+        # done
+        loc_hgt = loc_hgt[1, 1]
+        assert np.isfinite(loc_hgt)
+        assert np.all(np.isfinite(ts_pre.values))
+        assert np.all(np.isfinite(ts_tmp.values))
+        assert np.all(np.isfinite(ts_grad))
+        gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
+                                        ts_grad, loc_hgt)
+
+
+def distribute_climate_data(gdirs):
+    """Reads the climate data and distributes to each glacier.
+
+    Generates a NetCDF file in the root glacier directory (climate_monthly.nc)
+    It contains the timeseries of temperature, temperature gradient, and
+    precipitation at the nearest grid point. The climate data reference height
+    is provided as global attribute.
+
+    Not to be multi-processed.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('distribute_climate_data')
+
+    # Did the user specify a specific climate data file?
+    if ('climate_file' in cfg.PATHS) and \
+        os.path.exists(cfg.PATHS['climate_file']):
+        _distribute_histalp_syle(gdirs, cfg.PATHS['climate_file'])
+    else:
+        # OK, so use the default CRU "high-resolution" method
+        _distribute_cru_style(gdirs)
 
 
 def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
@@ -417,7 +557,15 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
 
         # Overwrite
         if div_id >= 1:
-            assert np.allclose(fls[-1].flux[-1], 0., atol=0.01)
+            if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+                log.warning('%s: flux should be zero, but is: %.2f',
+                            gdir.rgi_id,
+                            fls[-1].flux[-1])
+            if not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
+                msg = '{}: flux should be zero, but is: {.2f}'.format(
+                            gdir.rgi_id,
+                            fls[-1].flux[-1])
+                raise RuntimeError(msg)
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
@@ -427,32 +575,50 @@ def compute_ref_t_stars(gdirs):
     Parameters
     ----------
     gdirs: list of oggm.GlacierDirectory objects
-       for glaciers with MB data only!
     """
 
-    log.info('Compute the reference t* and mu*')
+    log.info('Compute the reference t* and mu* for WGMS glaciers')
+
+    # Get ref glaciers (all glaciers with MB)
+    flink, mbdatadir = utils.get_wgms_files()
+    dfids = pd.read_csv(flink)['RGI_ID'].values
+
+    # Reference glaciers only if in the list
+    ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
 
     # Loop
-    mbdatadir = os.path.join(os.path.dirname(cfg.PATHS['wgms_rgi_links']),
-                             'WGMS')
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
-    for gdir in gdirs:
+    for gdir in ref_gdirs:
+        # all possible mus
+        mu_candidates(gdir)
+        # list of mus compatibles with refmb
         reff = os.path.join(mbdatadir, 'mbdata_' + gdir.rgi_id + '.csv')
         mbdf = pd.read_csv(reff).set_index('YEAR')
         t_star, res_bias = t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+
+        # if we have just one candidate this is good
         if len(t_star) == 1:
             only_one.append(gdir.rgi_id)
+        # this might be more than one, we'll have to select them later
         per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias)
 
+    # At least of of the X glaciers should have a single t*, otherwise we dont
+    # know how to start
     if len(only_one) == 0:
-        # TODO: hardcoded shit here
-        only_one.append('RGI40-11.00887')
-        gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
-        per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
-        # raise RuntimeError('Didnt expect to be here.')
+        if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
+            # TODO: hardcoded shit here, for the test workflow
+            only_one.append('RGI40-11.00887')
+            gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
+            per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
+        else:
+            raise RuntimeError('Didnt expect to be here.')
 
-    # Ok. now loop over the glaciers until all have a unique t*
+
+    log.info('%d out of %d have only one possible t*. Start from here',
+             len(only_one), len(ref_gdirs))
+
+    # Ok. now loop over the nearest glaciers until all have a unique t*
     while True:
         ids_left = [id for id in per_glacier.keys() if id not in only_one]
         if len(ids_left) == 0:
@@ -483,11 +649,7 @@ def compute_ref_t_stars(gdirs):
         only_one.append(gdir.rgi_id)
 
     # Write out the data
-    rgis_ids = []
-    t_stars = []
-    biases = []
-    lons = []
-    lats = []
+    rgis_ids, t_stars,  biases, lons, lats = [], [], [], [], []
     for id, (gdir, t_star, res_bias) in per_glacier.items():
         rgis_ids.append(id)
         t_stars.append(t_star[0])

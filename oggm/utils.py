@@ -6,39 +6,44 @@ License: GPLv3+
 """
 from __future__ import absolute_import, division
 
-import glob
 import six.moves.cPickle as pickle
-
-import pandas as pd
-from salem import lazy_property
 from six.moves.urllib.request import urlretrieve, urlopen
 from six.moves.urllib.error import HTTPError
 
 # Builtins
+import glob
 import os
 import gzip
 import shutil
 import zipfile
 import sys
-import json
-import time
+import math
+from shutil import copyfile
 from collections import OrderedDict
 from functools import partial, wraps
+import json
+import time
 
 # External libs
 import geopandas as gpd
+import pandas as pd
+from salem import lazy_property
 import numpy as np
 import netCDF4
 from scipy import stats
 from joblib import Memory
 from shapely.ops import transform as shp_trafo
 from salem import wgs84
+import xarray as xr
+import rasterio
+from rasterio.tools.merge import merge as merge_tool
 
 # Locals
 import oggm.cfg as cfg
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-
+CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
+             '.1506241137.v3.23/'
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -54,32 +59,43 @@ def empty_cache():  # pragma: no cover
     os.makedirs(cfg.CACHE_DIR)
 
 
-def _download_demo_files():
+def _download_oggm_files():
     """Checks if the demo data is already on the cache and downloads it."""
 
-    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % SAMPLE_DATA_GH_REPO
-    master_zip_url = 'https://github.com/%s/archive/master.zip' % SAMPLE_DATA_GH_REPO
+    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
+                     SAMPLE_DATA_GH_REPO
+    master_zip_url = 'https://github.com/%s/archive/master.zip' % \
+                     SAMPLE_DATA_GH_REPO
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
 
+    # a file containing the online's file's hash and the time of last check
     if os.path.exists(shafile):
         with open(shafile, 'r') as sfile:
             local_sha = sfile.read().strip()
         last_mod = os.path.getmtime(shafile)
     else:
+        # very first download
         local_sha = '0000'
         last_mod = 0
 
-    if time.time() - last_mod > 1800:
+    # test only every hour
+    if time.time() - last_mod > 3600:
         write_sha = True
-
         try:
-            with urlopen(master_sha_url) as resp:
-                json_str = resp.read().decode('utf-8')
-                json_obj = json.loads(json_str)
-                master_sha = json_obj['sha']
+            # this might fail with HTTP 403 when server overload
+            resp = urlopen(master_sha_url)
 
+            # following try/finally is just for py2/3 compatibility
+            # https://mail.python.org/pipermail/python-list/2016-March/704073.html
+            try:
+                json_str = resp.read().decode('utf-8')
+            finally:
+                resp.close()
+            json_obj = json.loads(json_str)
+            master_sha = json_obj['sha']
+            # if not same, delete entire dir
             if local_sha != master_sha:
                 empty_cache()
         except HTTPError:
@@ -87,32 +103,107 @@ def _download_demo_files():
     else:
         write_sha = False
 
-    if not os.path.exists(ofile):  # pragma: no cover
+    # download only if necessary
+    if not os.path.exists(ofile):
         urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
+    # sha did change, replace
+    if write_sha:
+        with open(shafile, 'w') as sfile:
+            sfile.write(master_sha)
+
+    # list of files for output
     out = dict()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             out[filename] = os.path.join(root, filename)
 
-    if write_sha:
-        with open(shafile, 'w') as sfile:
-            sfile.write(master_sha)
-
     return out
 
 
-def get_demo_file(fname):
-    """Returns the path to the desired demo file."""
+def _download_srtm_file(zone):
+    """Checks if the srtm data is in the directory and if not, download it.
+    """
 
-    d = _download_demo_files()
-    if fname in d:
-        return d[fname]
-    else:
-        return None
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'srtm')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
+    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+            '/srtm_' + zone + '.zip'
+    if not os.path.exists(ofile):
+        # Try to download
+        try:
+            urlretrieve(ifile, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        except HTTPError as err:
+            # This works well for py3
+            if err.code == 404:
+                # Ok so this *should* be an ocean tile
+                return None
+            else:
+                raise
+        except zipfile.BadZipfile:
+            # This is for py2
+            # Ok so this *should* be an ocean tile
+            return None
+
+    out = os.path.join(odir, 'srtm_' + zone + '.tif')
+    assert os.path.exists(out)
+    return out
+
+
+def _download_aster_file(zone, unit):
+    """Checks if the aster data is in the directory and if not, download it.
+    """
+
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'aster')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    fbname = 'ASTGTM2_' + zone + '.zip'
+    dirbname = 'UNIT_' + unit
+    ofile = os.path.join(odir, fbname)
+
+    # TODO: this is very local!
+    ifile = '/home/mowglie/disk/ASTGTM_V2'
+    ifile = os.path.join(ifile, dirbname, fbname)
+    if not os.path.exists(ofile):
+        if os.path.exists(ifile):
+            # Ok so the tile is a valid one
+            copyfile(ifile, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        else:
+            # Ok so this *should* be an ocean tile
+            return None
+
+    out = os.path.join(odir, 'ASTGTM2_' + zone + '_dem.tif')
+    assert os.path.exists(out)
+    return out
+
+
+def _get_centerline_lonlat(gdir):
+    """Quick n dirty solution to write the centerlines as a shapefile"""
+
+    olist = []
+    for i in gdir.divide_ids:
+        cls = gdir.read_pickle('centerlines', div_id=i)
+        for i, cl in enumerate(cls):
+            mm = 1 if i==0 else 0
+            gs = gpd.GeoSeries()
+            gs['RGIID'] = gdir.rgi_id
+            gs['DIVIDE'] = i
+            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            gs['MAIN'] = mm
+            tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
+            gs['geometry'] = shp_trafo(tra_func, cl.line)
+            olist.append(gs)
+
+    return olist
 
 
 def query_yes_no(question, default="yes"):
@@ -238,7 +329,7 @@ def nicenumber(number, binsize, lower=False):
 
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        prcp_scaling_factor):
+                        prcp_scaling_factor, use_grad):
     """Prevent to re-compute a timeserie if it was done before.
 
     TODO: dirty solution, should be replaced by proper input.
@@ -260,13 +351,13 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
 
     # Now the gradient
-    for t, loct in enumerate(ttemp):
-        slope, _, _, p_val, _ = stats.linregress(thgt,
-                                                 loct.flatten())
-        igrad[t] = slope if (p_val < 0.01) else default_grad
-
-    # dont exagerate too much
-    igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
+    if use_grad:
+        for t, loct in enumerate(ttemp):
+            slope, _, _, p_val, _ = stats.linregress(thgt,
+                                                     loct.flatten())
+            igrad[t] = slope if (p_val < 0.01) else default_grad
+        # dont exagerate too much
+        igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
 
     return iprcp, itemp, igrad, ihgt
 
@@ -277,6 +368,7 @@ def pipe_log(gdir, task_func, err=None):
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     if not os.path.exists(fpath):
         os.makedirs(fpath)
+
     fpath = os.path.join(fpath, gdir.rgi_id)
 
     if err is not None:
@@ -291,31 +383,12 @@ def pipe_log(gdir, task_func, err=None):
             f.write(err.__class__.__name__ + ': {}'.format(err))
 
 
-def get_centerline_lonlat(gdir):
-    """Quick n dirty solution to write the centerlines as a shapefile"""
-
-    olist = []
-    for i in gdir.divide_ids:
-        cls = gdir.read_pickle('centerlines', div_id=i)
-        for i, cl in enumerate(cls):
-            mm = 1 if i==0 else 0
-            gs = gpd.GeoSeries()
-            gs['RGIID'] = gdir.rgi_id
-            gs['DIVIDE'] = i
-            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-            gs['MAIN'] = mm
-            tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
-            gs['geometry'] = shp_trafo(tra_func, cl.line)
-            olist.append(gs)
-
-    return olist
-
 def write_centerlines_to_shape(gdirs, filename):
     """Write centerlines in a shapefile"""
 
     olist = []
     for gdir in gdirs:
-        olist.extend(get_centerline_lonlat(gdir))
+        olist.extend(_get_centerline_lonlat(gdir))
 
     odf = gpd.GeoDataFrame(olist)
 
@@ -347,6 +420,385 @@ def write_centerlines_to_shape(gdirs, filename):
                     crs=crs, schema=shema) as c:
         for i, row in odf.iterrows():
             c.write(feature(i, row))
+
+
+def srtm_zone(lon_ex, lat_ex):
+    """Returns a list of SRTM zones covering the desired extent.
+    """
+
+    # SRTM are sorted in tiles of 5 degrees
+    srtm_x0 = -180.
+    srtm_y0 = 60.
+    srtm_dx = 5.
+    srtm_dy = -5.
+
+    # quick n dirty solution to be sure that we will cover the whole range
+    mi, ma = np.min(lon_ex), np.max(lon_ex)
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+    mi, ma = np.min(lat_ex), np.max(lat_ex)
+    lat_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+
+    zones = []
+    for lon in lon_ex:
+        for lat in lat_ex:
+            dx = lon - srtm_x0
+            dy = lat - srtm_y0
+            assert dy < 0
+            zx = np.ceil(dx / srtm_dx)
+            zy = np.ceil(dy / srtm_dy)
+            zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
+    return list(sorted(set(zones)))
+
+
+def aster_zone(lon_ex, lat_ex):
+    """Returns a list of ASTER V2 zones and units covering the desired extent.
+    """
+
+    # ASTER is a bit more work. The units are directories of 5 by 5,
+    # tiles are 1 by 1. The letter in the filename depends on the sign
+    units_dx = 5.
+
+    # quick n dirty solution to be sure that we will cover the whole range
+    mi, ma = np.min(lon_ex), np.max(lon_ex)
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+    mi, ma = np.min(lat_ex), np.max(lat_ex)
+    lat_ex = np.linspace(mi, ma, np.ceil((ma - mi) + 3))
+
+    zones = []
+    units = []
+    for lon in lon_ex:
+        for lat in lat_ex:
+            dx = np.floor(lon)
+            zx = np.floor(lon / units_dx) * units_dx
+            if math.copysign(1, dx) == -1:
+                dx = -dx
+                zx = -zx
+                lon_let = 'W'
+            else:
+                lon_let = 'E'
+
+            dy = np.floor(lat)
+            zy = np.floor(lat / units_dx) * units_dx
+            if math.copysign(1, dy) == -1:
+                dy = -dy
+                zy = -zy
+                lat_let = 'S'
+            else:
+                lat_let = 'N'
+
+            z = '{}{:02.0f}{}{:03.0f}'.format(lat_let, dy, lon_let, dx)
+            u = '{}{:02.0f}{}{:03.0f}'.format(lat_let, zy, lon_let, zx)
+            if z not in zones:
+                zones.append(z)
+                units.append(u)
+
+    return zones, units
+
+
+def get_demo_file(fname):
+    """Returns the path to the desired OGGM file."""
+
+    d = _download_oggm_files()
+    if fname in d:
+        return d[fname]
+    else:
+        return None
+
+
+def get_cru_cl_file():
+    """Returns the path to the unpacked CRU CL file (is in sample data)."""
+
+    _download_oggm_files()
+
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'cru')
+    fpath = os.path.join(sdir, 'cru_cl2.nc')
+    if os.path.exists(fpath):
+        return fpath
+    else:
+        with zipfile.ZipFile(fpath + '.zip') as zf:
+            zf.extractall(sdir)
+        assert os.path.exists(fpath)
+        return fpath
+
+
+def get_wgms_files():
+    """Get the path to the default WGMS-RGI link file and the data dir.
+
+    Returns
+    -------
+    (file, dir): paths to the files
+    """
+
+    if os.path.exists(cfg.PATHS['wgms_rgi_links']):
+        # User provided data
+        outf = cfg.PATHS['wgms_rgi_links']
+        datadir = os.path.join(os.path.dirname(outf), 'mbdata')
+        if not os.path.exists(datadir):
+            raise ValueError('The WGMS data directory is missing')
+        return outf, datadir
+
+    # Roll our own
+    _download_oggm_files()
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'wgms')
+    outf = os.path.join(sdir, 'rgi_wgms_links_2015_RGIV5.csv')
+    assert os.path.exists(outf)
+    datadir = os.path.join(sdir, 'mbdata')
+    assert os.path.exists(datadir)
+    return outf, datadir
+
+
+def get_glathida_file():
+    """Get the path to the default WGMS-RGI link file and the data dir.
+
+    Returns
+    -------
+    (file, dir): paths to the files
+    """
+
+    if os.path.exists(cfg.PATHS['glathida_rgi_links']):
+        # User provided data
+        return cfg.PATHS['glathida_rgi_links']
+
+    # Roll our own
+    _download_oggm_files()
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'glathida')
+    outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
+    assert os.path.exists(outf)
+    return outf
+
+
+def get_cru_file(var=None):
+    """
+    Returns a path to the desired CRU TS file.
+
+    If the file is not present, download it.
+
+    Parameters
+    ----------
+    var: 'tmp' or 'pre'
+
+    Returns
+    -------
+    path to the CRU file
+    """
+
+    # Be sure the user gave a sensible path to the climate dir
+    cru_dir = cfg.PATHS['cru_dir']
+    if not os.path.exists(cru_dir):
+        raise ValueError('The CRU data directory does not exist!')
+
+    # Be sure input makes sense
+    if var not in ['tmp', 'pre']:
+        raise ValueError('CRU variable {} does not exist!'.format(var))
+
+    # cru_ts3.23.1901.2014.tmp.dat.nc
+    bname = 'cru_ts3.23.1901.2014.{}.dat.nc'.format(var)
+    ofile = os.path.join(cru_dir, bname)
+
+    # if not there download it
+    if not os.path.exists(ofile):  # pragma: no cover
+        tf = CRU_SERVER + '{}/cru_ts3.23.1901.2014.{}.dat.nc.gz'.format(var,
+                                                                        var)
+        urlretrieve(tf, ofile + '.gz')
+        with gzip.GzipFile(ofile + '.gz') as zf:
+            with open(ofile, 'wb') as outfile:
+                for line in zf:
+                    outfile.write(line)
+
+    return ofile
+
+
+def get_topo_file(lon_ex, lat_ex, region=None):
+    """
+    Returns a path to the DEM file covering the desired extent.
+
+    If the file is not present, download it. If the extent covers two or
+    more files, merge them.
+
+    Returns a downloaded SRTM file for [-60S;60N], a Greenland DEM if
+    possible, and GTOPO elsewhere (hihi)
+
+    Parameters
+    ----------
+    lon_ex: (min_lon, max_lon)
+    lat_ex: (min_lat, max_lat)
+
+    Returns
+    -------
+    tuple: (path to the dem file, data source)
+    """
+
+    # Did the user specify a specific SRTM file?
+    if ('dem_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['dem_file']):
+        return cfg.PATHS['dem_file'], 'USER'
+
+    # If not, do the job ourselves: download and merge stuffs
+    topodir = cfg.PATHS['topo_dir']
+
+    # TODO: GIMP is in polar stereographic, not easy to test
+    # would be possible with a salem grid but this is a bit more expensive
+    # than jsut asking RGI for the region
+    if int(region) == 5:
+        gimp_file = os.path.join(cfg.PATHS['topo_dir'], 'gimpdem_90m.tif')
+        assert os.path.exists(gimp_file)
+        return gimp_file, 'GIMP'
+
+    # Some regional files I could gather
+    # Iceland http://viewfinderpanoramas.org/dem3/ISL.zip
+    # Svalbard http://viewfinderpanoramas.org/dem3/SVALBARD.zip
+    # NorthCanada (could be larger - need tiles download)
+    _exs = (
+        [-25., -12., 63., 67.],
+        [10., 34., 76., 81.],
+        [-96., -60., 76., 84.]
+    )
+    _files = (
+        'iceland.tif',
+        'svalbard.tif',
+        'northcanada.tif',
+    )
+    for _ex, _f in zip(_exs, _files):
+
+        if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
+           (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
+            r_file = os.path.join(cfg.PATHS['topo_dir'], _f)
+            assert os.path.exists(r_file)
+            return r_file, 'REGIO'
+
+    if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
+        # use ASTER V2 for northern lats
+        zones, units = aster_zone(lon_ex, lat_ex)
+        sources = []
+        for z, u in zip(zones, units):
+            sf = _download_aster_file(z, u)
+            if sf is not None:
+                sources.append(sf)
+        source_str = 'ASTER'
+    else:
+        # Use SRTM!
+        zones = srtm_zone(lon_ex, lat_ex)
+        sources = []
+        for z in zones:
+            sources.append(_download_srtm_file(z))
+        source_str = 'SRTM'
+
+    if len(sources) < 1:
+        raise RuntimeError('No topography file available!')
+        # for the very last cases a very coarse dataset ?
+        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
+        assert os.path.exists(t_file)
+        return t_file, 'ETOPO1'
+
+    if len(sources) == 1:
+        return sources[0], source_str
+    else:
+        # merge
+        zone_str = '+'.join(zones)
+        bname = source_str.lower() + '_merged_' + zone_str + '.tif'
+        merged_file = os.path.join(topodir, source_str.lower(),
+                                   bname)
+        if not os.path.exists(merged_file):
+            # write it
+            rfiles = [rasterio.open(s) for s in sources]
+            dest, output_transform = merge_tool(rfiles)
+            profile = rfiles[0].profile
+            profile.pop('affine')
+            profile['transform'] = output_transform
+            profile['height'] = dest.shape[1]
+            profile['width'] = dest.shape[2]
+            profile['driver'] = 'GTiff'
+            with rasterio.open(merged_file, 'w', **profile) as dst:
+                dst.write(dest)
+        return merged_file, source_str + '_MERGED'
+
+
+def glacier_characteristics(gdirs):
+    """Gathers as many statistics as possible about a list of glacier
+    directories.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    """
+
+    out_df = []
+    for gdir in gdirs:
+
+        d = OrderedDict()
+
+        # Easy stats
+        d['rgi_id'] = gdir.rgi_id
+        d['cenlon'] = gdir.cenlon
+        d['cenlat'] = gdir.cenlat
+        d['rgi_area_km2'] = gdir.rgi_area_km2
+        d['glacier_type'] = gdir.glacier_type
+        d['terminus_type'] = gdir.terminus_type
+
+        # Masks related stuff
+        if gdir.has_file('gridded_data', div_id=0):
+            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo'][:]
+            nc.close()
+            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+
+        # Divides
+        d['n_divides'] = len(list(gdir.divide_ids))
+
+        # Centerlines
+        if gdir.has_file('centerlines', div_id=1):
+            cls = []
+            for i in gdir.divide_ids:
+                cls.extend(gdir.read_pickle('centerlines', div_id=i))
+            longuest = 0.
+            for cl in cls:
+                longuest = np.max([longuest, cl.dis_on_line[-1]])
+            d['n_centerlines'] = len(cls)
+            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+
+        # MB and flowline related stuff
+        if gdir.has_file('inversion_flowlines', div_id=0):
+            amb = np.array([])
+            h = np.array([])
+            widths = np.array([])
+            slope = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines', div_id=0)
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                amb = np.append(amb, fl.apparent_mb)
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * dx)
+                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+
+            pacc = np.where(amb >= 0)
+            pab = np.where(amb < 0)
+            d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
+            mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+            d['mb_grad'] = mb_slope
+            d['avg_width'] = np.mean(widths)
+            d['avg_slope'] = np.mean(slope)
+
+        # Climate
+        if gdir.has_file('climate_monthly', div_id=0):
+            cds = xr.open_dataset(gdir.get_filepath('climate_monthly'))
+            d['clim_alt'] = cds.ref_hgt
+            t = cds.temp.mean(dim='time').values
+            t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
+                cfg.PARAMS['temp_default_gradient']
+            d['clim_temp_avgh'] = t
+            d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+
+        out_df.append(d)
+
+    cols = list(out_df[0].keys())
+    return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
 
 
 class entity_task(object):
@@ -485,18 +937,59 @@ class GlacierDirectory(object):
         rgi_date : datetime
             The RGI's BGNDATE attribute if available. Otherwise, defaults to
             2003-01-01
+        rgi_region : str
+            The RGI region name
+        name : str
+            The RGI glacier name (if Available)
         """
 
         if base_dir is None:
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
-        self.rgi_id = rgi_entity.RGIID
-        self.glims_id = rgi_entity.GLIMSID
-        self.rgi_area_km2 = float(rgi_entity.AREA)
-        self.cenlon = float(rgi_entity.CENLON)
-        self.cenlat = float(rgi_entity.CENLAT)
         try:
-            rgi_date = pd.to_datetime(rgi_entity.BGNDATE[0:6],
+            # Assume RGI V4
+            self.rgi_id = rgi_entity.RGIID
+            self.glims_id = rgi_entity.GLIMSID
+            self.rgi_area_km2 = float(rgi_entity.AREA)
+            self.cenlon = float(rgi_entity.CENLON)
+            self.cenlat = float(rgi_entity.CENLAT)
+            self.rgi_region = rgi_entity.O1REGION
+            self.name = rgi_entity.NAME
+            rgi_datestr = rgi_entity.BGNDATE
+        except AttributeError:
+            # Should be V5
+            self.rgi_id = rgi_entity.RGIId
+            self.glims_id = rgi_entity.GLIMSId
+            self.rgi_area_km2 = float(rgi_entity.Area)
+            self.cenlon = float(rgi_entity.CenLon)
+            self.cenlat = float(rgi_entity.CenLat)
+            self.rgi_region = rgi_entity.O1Region
+            self.name = rgi_entity.Name
+            rgi_datestr = rgi_entity.BgnDate
+
+            # Read glacier attrs
+            gt = rgi_entity.GlacType
+            keys = {'0': 'Glacier',
+                    '1': 'Ice cap',
+                    '2': 'Perennial snowfield',
+                    '3': 'Seasonal snowfield',
+                    '9': 'Not assigned',
+                    }
+
+            self.glacier_type = keys[gt[0]]
+            keys = {'0': 'Land-terminating',
+                    '1': 'Marine-terminating',
+                    '2': 'Lake-terminating',
+                    '3': 'Dry calving',
+                    '4': 'Regenerated',
+                    '5': 'Shelf-terminating',
+                    '9': 'Not assigned',
+                    }
+            self.terminus_type = keys[gt[1]]
+
+        # convert the date
+        try:
+            rgi_date = pd.to_datetime(rgi_datestr[0:6],
                                       errors='raise', format='%Y%m')
         except:
             rgi_date = pd.to_datetime('200301', format='%Y%m')
@@ -618,8 +1111,11 @@ class GlacierDirectory(object):
         a ``netCDF4.Dataset`` object.
         """
 
-        nc = netCDF4.Dataset(self.get_filepath(fname, div_id),
-                             'w', format='NETCDF4')
+        # overwrite as default
+        fpath = self.get_filepath(fname, div_id)
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
         xd = nc.createDimension('x', self.grid.nx)
         yd = nc.createDimension('y', self.grid.ny)
@@ -664,8 +1160,12 @@ class GlacierDirectory(object):
         See :py:func:`oggm.tasks.distribute_climate_data`.
         """
 
-        nc = netCDF4.Dataset(self.get_filepath('climate_monthly'),
-                             'w', format='NETCDF4')
+        # overwrite as default
+        fpath = self.get_filepath('climate_monthly')
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
+
         nc.ref_hgt = hgt
 
         dtime = nc.createDimension('time', None)

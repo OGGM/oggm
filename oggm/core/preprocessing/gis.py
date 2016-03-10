@@ -36,10 +36,11 @@ import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
+from scipy.interpolate import griddata
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int
+from oggm.utils import tuple2int, get_topo_file
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -73,6 +74,28 @@ def _gaussian_blur(in_array, size):
 
     # do the Gaussian blur
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
+
+
+def _check_geometry(geometry):
+    """RGI polygons are not always clean: try to make these better.
+
+    In particular, MultiPolygons should be converted to Polygons
+    """
+
+    if 'Multi' in geometry.type:
+        parts = list(geometry)
+        for p in parts:
+            assert p.type == 'Polygon'
+        exterior = parts[0].exterior
+        # let's assume that all other polygons are in fact interiors
+        interiors = []
+        for p in parts[1:]:
+            assert parts[0].contains(p)
+            interiors.append(p.exterior)
+        geometry = shpg.Polygon(exterior, interiors)
+
+    assert 'Polygon' in geometry.type
+    return geometry
 
 
 def _interp_polygon(polygon, dx):
@@ -296,8 +319,7 @@ def define_glacier_region(gdir, entity=None):
     log.debug('%s: area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Make a local glacier map
-    cenlon = np.float(entity['CENLON'])
-    proj_params = dict(name='tmerc', lat_0=0., lon_0=cenlon,
+    proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
                 "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
@@ -305,40 +327,57 @@ def define_glacier_region(gdir, entity=None):
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(pyproj.transform, proj_in, proj_out)
     geometry = shapely.ops.transform(project, entity['geometry'])
+    geometry = _check_geometry(geometry)
     xx, yy = geometry.exterior.xy
-
-    # save it to disk
-    entity['geometry'] = geometry
-    towrite = gpd.GeoDataFrame(entity).T
-    towrite.crs = proj4_str
-    towrite.to_file(gdir.get_filepath('outlines'))
-
-    # Open SRTM
-    srtm = gdal.Open(cfg.PATHS['srtm_file'])
-    geo_t = srtm.GetGeoTransform()
-
-    # GDAL proj
-    gproj = osr.SpatialReference()
-    gproj.SetProjCS('Local transverse Mercator')
-    gproj.SetWellKnownGeogCS("WGS84")
-    gproj.SetTM(np.float(0), cenlon,
-                np.float(0.9996), np.float(0), np.float(0))
-    wgs84 = osr.SpatialReference()
-    wgs84.ImportFromEPSG(4326)
 
     # Corners, incl. a buffer of N pix
     ulx = np.min(xx) - cfg.PARAMS['border'] * dx
     lrx = np.max(xx) + cfg.PARAMS['border'] * dx
     uly = np.max(yy) + cfg.PARAMS['border'] * dx
     lry = np.min(yy) - cfg.PARAMS['border'] * dx
+    # n pixels
+    nx = np.int((lrx - ulx) / dx)
+    ny = np.int((uly - lry) / dx)
+
+    # Back to lon, lat for DEM download/preparation
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), ul_corner=(ulx, uly),
+                          dxdy=(dx, -dx), pixel_ref='corner')
+    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
+
+    # save transformed geometry to disk
+    entity['geometry'] = geometry
+    towrite = gpd.GeoDataFrame(entity).T
+    towrite.crs = proj4_str
+    towrite.to_file(gdir.get_filepath('outlines'))
+
+    # Open DEM
+    dem_file, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
+                                         region=gdir.rgi_region)
+    log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
+    dem = gdal.Open(dem_file)
+    geo_t = dem.GetGeoTransform()
+
+    # Input proj
+    dem_proj = dem.GetProjection()
+    if dem_proj == '':
+        # Assume defaults
+        wgs84 = osr.SpatialReference()
+        wgs84.ImportFromEPSG(4326)
+        dem_proj = wgs84.ExportToWkt()
+
+
+    # Dest proj
+    gproj = osr.SpatialReference()
+    gproj.SetProjCS('Local transverse Mercator')
+    gproj.SetWellKnownGeogCS("WGS84")
+    gproj.SetTM(np.float(0), gdir.cenlon,
+                np.float(0.9996), np.float(0), np.float(0))
 
     # Create an in-memory raster
     mem_drv = gdal.GetDriverByName('MEM')
 
     # GDALDataset Create (char *pszName, int nXSize, int nYSize,
     #                     int nBands, GDALDataType eType)
-    nx = np.int((lrx - ulx) / dx)
-    ny = np.int((uly - lry) / dx)
     dest = mem_drv.Create('', nx, ny, 1, gdal.GDT_Float32)
 
     # Calculate the new geotransform
@@ -357,7 +396,7 @@ def define_glacier_region(gdir, entity=None):
         raise ValueError('{} interpolation not understood'
                          .format(cfg.PARAMS['topo_interp']))
 
-    res = gdal.ReprojectImage(srtm, dest, wgs84.ExportToWkt(),
+    res = gdal.ReprojectImage(dem, dest, dem_proj,
                               gproj.ExportToWkt(), interp)
 
     # Let's save it as a GeoTIFF.
@@ -371,6 +410,7 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
                               ul_corner=ul_corner)
     gdir.write_pickle(glacier_grid, 'glacier_grid')
+    gdir.write_pickle(dem_source, 'dem_source')
 
     # Looks in the database if the glacier has divides.
     gdf = cfg.PARAMS['divides_gdf']
@@ -421,17 +461,31 @@ def glacier_masks(gdir):
     """
 
     # open srtm tif-file:
-    srtm_ds = gdal.Open(gdir.get_filepath('dem'))
-    dem = srtm_ds.ReadAsArray().astype(float)
-    if np.min(dem) <= 0.:
-        raise RuntimeError('Negative altitudes in the DEM.')
+    dem_ds = gdal.Open(gdir.get_filepath('dem'))
+    dem = dem_ds.ReadAsArray().astype(float)
 
-    nx = srtm_ds.RasterXSize
-    ny = srtm_ds.RasterYSize
+    # Correct the DEM (ASTER...)
+    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    min_z = -999.
+    if np.min(dem) <= min_z:
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero(dem <= min_z)
+        pok = np.nonzero(dem > min_z)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+    if np.min(dem) == np.max(dem):
+        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
+
+    # Grid
+    nx = dem_ds.RasterXSize
+    ny = dem_ds.RasterYSize
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
-    geot = srtm_ds.GetGeoTransform()
+    # Proj
+    geot = dem_ds.GetGeoTransform()
     x0 = geot[0]  # UL corner
     y0 = geot[3]  # UL corner
     dx = geot[1]
@@ -440,9 +494,9 @@ def glacier_masks(gdir):
     assert dx == gdir.grid.dx
     assert y0 == gdir.grid.corner_grid.y0
     assert x0 == gdir.grid.corner_grid.x0
-    srtm_ds = None  # to be sure...
+    dem_ds = None  # to be sure...
 
-    # Smooth SRTM?
+    # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = _gaussian_blur(dem, np.int(gsize))
@@ -459,6 +513,9 @@ def glacier_masks(gdir):
         # Optim: just make links
         linkname = gdir.get_filepath('gridded_data', div_id=1)
         sourcename = gdir.get_filepath('gridded_data')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX
@@ -468,6 +525,9 @@ def glacier_masks(gdir):
             copyfile(sourcename, linkname)
         linkname = gdir.get_filepath('geometries', div_id=1)
         sourcename = gdir.get_filepath('geometries')
+        # overwrite as default
+        if os.path.exists(linkname):
+            os.remove(linkname)
         # TODO: temporary suboptimal solution
         try:
             # we are on UNIX

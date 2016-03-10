@@ -15,6 +15,7 @@ import sys
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from configobj import ConfigObj, ConfigObjError
 
@@ -122,6 +123,9 @@ _doc = 'A shapely.LineString of the coordinates of the downstream line ' \
        'each divide.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
+_doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
+BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
+
 _doc = 'A simple integer in the glacier root directory (divide 00) ' \
        'containing the ID of the "major divide", i.e. the one ' \
        'really flowing out of the glacier (the other downstream lines ' \
@@ -209,8 +213,10 @@ def initialize(file=None):
 
     PATHS['working_dir'] = cp['working_dir']
 
-    PATHS['srtm_file'] = cp['srtm_file']
-    PATHS['histalp_file'] = cp['histalp_file']
+    PATHS['topo_dir'] = cp['topo_dir']
+    PATHS['cru_dir'] = cp['cru_dir']
+    PATHS['dem_file'] = cp['dem_file']
+    PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
 
@@ -246,8 +252,8 @@ def initialize(file=None):
     PARAMS['use_inversion_params'] = cp.as_bool('use_inversion_params')
 
     # Delete non-floats
-    ltr = ['working_dir', 'srtm_file', 'histalp_file', 'wgms_rgi_links',
-           'glathida_rgi_links', 'grid_dx_method',
+    ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
+           'glathida_rgi_links', 'grid_dx_method', 'topo_dir', 'cru_dir',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
@@ -273,6 +279,10 @@ def set_divides_db(path=None):
 
     if PARAMS['use_divides'] and path is not None:
         df = gpd.GeoDataFrame.from_file(path)
+        # dirty fix for RGIV5
+        r5 = df.copy()
+        r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
+        df = pd.concat([df, r5])
         PARAMS['divides_gdf'] = df.set_index('RGIID')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()

@@ -80,6 +80,7 @@ def prepare_for_inversion(gdir, div_id=None):
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.warning('%s: has negative flux somewhere', gdir.rgi_id)
+            flux = flux.clip(0)
 
         # add to output
         cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
@@ -217,17 +218,20 @@ def optimize_inversion_params(gdirs):
     """
 
     # Get test glaciers (all glaciers with thickness data)
-    dfids = cfg.PATHS['glathida_rgi_links']
+    fpath = utils.get_glathida_file()
     try:
-        gtd_df = pd.read_csv(dfids).sort_values(by=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
     except AttributeError:
-        gtd_df = pd.read_csv(dfids).sort(columns=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
     dfids = gtd_df['RGI_ID'].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
+    ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
+    gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
 
     # Account for area differences between glathida and rgi
     ref_area_km2 = gtd_df.RGI_AREA.values
+    gtd_df.VOLUME = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
     ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
     ref_volume_km3 = ref_cs * ref_area_km2**1.375
     ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.
