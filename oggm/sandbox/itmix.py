@@ -350,3 +350,306 @@ def correct_dem(gdir, glacier_mask, dem, smoothed_dem):
     if gdir.rgi_id == 'RGI50-06.00443': minz = 600
 
     return dem, smoothed_dem
+
+from oggm.core.preprocessing.inversion import invert_parabolic_bed
+from scipy import optimize as optimization
+
+
+def _prepare_inv(gdirs):
+
+    # Get test glaciers (all glaciers with thickness data)
+    fpath = utils.get_glathida_file()
+    try:
+        gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
+    except AttributeError:
+        gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
+    dfids = gtd_df['RGI_ID'].values
+
+    ref_gdirs = []
+    for gdir in gdirs:
+        if gdir.rgi_id not in dfids:
+            continue
+        if gdir.glacier_type == 'Ice cap':
+            continue
+        if gdir.terminus_type in ['Marine-terminating', 'Lake-terminating',
+                                  'Dry calving', 'Regenerated',
+                                  'Shelf-terminating']:
+            continue
+
+        # This glacier, OGGM is very wrong
+        ref_gdirs.append(gdir)
+
+    ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
+    gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
+
+    # Account for area differences between glathida and rgi
+    ref_area_km2 = np.asarray([gdir.rgi_area_km2 for gdir in ref_gdirs])
+    gtd_df.VOLUME = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
+    ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
+    ref_volume_km3 = ref_cs * ref_area_km2**1.375
+    ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.
+
+    gtd_df['ref_area_km2'] = ref_area_km2
+    gtd_df['ref_volume_km3'] = ref_volume_km3
+    gtd_df['ref_thickness_m'] = ref_thickness_m
+    gtd_df['ref_gdirs'] = ref_gdirs
+
+    return gtd_df
+
+
+def optimize_volume(gdirs):
+    """Optimizesfd based on GlaThiDa thicknesses.
+
+    We use the glacier averaged thicknesses provided by GlaThiDa and correct
+    them for differences in area with RGI, using a glacier specific volume-area
+    scaling formula.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    gtd_df = _prepare_inv(gdirs)
+    ref_gdirs = gtd_df['ref_gdirs']
+    ref_volume_km3 = gtd_df['ref_volume_km3']
+    ref_area_km2 = gtd_df['ref_area_km2']
+    ref_thickness_m = gtd_df['ref_thickness_m']
+
+    # Optimize without sliding
+    log.info('Compute the inversion parameter.')
+
+    def to_optimize(x):
+        tmp_vols = np.zeros(len(ref_gdirs))
+        glen_a = cfg.A * x[0]
+        for i, gdir in enumerate(ref_gdirs):
+            v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                        fs=0., write=False)
+            tmp_vols[i] = v * 1e-9
+        return utils.rmsd(tmp_vols, ref_volume_km3)
+    opti = optimization.minimize(to_optimize, [1.],
+                                bounds=((0.01, 10), ),
+                                tol=1.e-4)
+    # Check results and save.
+    glen_a = cfg.A * opti['x'][0]
+    fs = 0.
+
+    # This is for the stats
+    oggm_volume_m3 = np.zeros(len(ref_gdirs))
+    rgi_area_m2 = np.zeros(len(ref_gdirs))
+    for i, gdir in enumerate(ref_gdirs):
+        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
+                                    write=False)
+        oggm_volume_m3[i] = v
+        rgi_area_m2[i] = a
+    assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
+
+    # This is for each glacier
+    out = dict()
+    out['glen_a'] = glen_a
+    out['fs'] = fs
+    out['factor_glen_a'] = opti['x'][0]
+    try:
+        out['factor_fs'] = opti['x'][1]
+    except IndexError:
+        out['factor_fs'] = 0.
+    for gdir in gdirs:
+        gdir.write_pickle(out, 'inversion_params')
+
+    # This is for the working dir
+    # Simple stats
+    out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
+    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
+                                 ref_thickness_m)
+    log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
+             '{factor_fs:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**out))
+
+    df = pd.DataFrame(out, index=[0])
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_params.csv')
+    df.to_csv(fpath)
+
+    # All results
+    df = dict()
+    df['ref_area_km2'] = ref_area_km2
+    df['ref_volume_km3'] = ref_volume_km3
+    df['ref_thickness_m'] = ref_thickness_m
+    df['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
+    df['oggm_thickness_m'] = oggm_volume_m3 / (ref_area_km2 * 1e6)
+    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
+    df['vas_thickness_m'] = df['vas_volume_km3'] / ref_area_km2 * 1000
+
+    rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
+    df = pd.DataFrame(df, index=rgi_id)
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_results.csv')
+    df.to_csv(fpath)
+
+    # return value for tests
+    return out
+
+
+def optimize_thick(gdirs):
+    """Optimizesfd based on GlaThiDa thicknesses.
+
+    We use the glacier averaged thicknesses provided by GlaThiDa and correct
+    them for differences in area with RGI, using a glacier specific volume-area
+    scaling formula.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    gtd_df = _prepare_inv(gdirs)
+    ref_gdirs = gtd_df['ref_gdirs']
+    ref_volume_km3 = gtd_df['ref_volume_km3']
+    ref_area_km2 = gtd_df['ref_area_km2']
+    ref_thickness_m = gtd_df['ref_thickness_m']
+
+    # Optimize without sliding
+    log.info('Compute the inversion parameter.')
+
+    def to_optimize(x):
+        tmp_ = np.zeros(len(ref_gdirs))
+        glen_a = cfg.A * x[0]
+        for i, gdir in enumerate(ref_gdirs):
+            v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
+                                        fs=0., write=False)
+            tmp_[i] = v / a
+        return utils.rmsd(tmp_, ref_thickness_m)
+    opti = optimization.minimize(to_optimize, [1.],
+                                bounds=((0.01, 10), ),
+                                tol=1.e-4)
+    # Check results and save.
+    glen_a = cfg.A * opti['x'][0]
+    fs = 0.
+
+    # This is for the stats
+    oggm_volume_m3 = np.zeros(len(ref_gdirs))
+    rgi_area_m2 = np.zeros(len(ref_gdirs))
+    for i, gdir in enumerate(ref_gdirs):
+        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
+                                    write=False)
+        oggm_volume_m3[i] = v
+        rgi_area_m2[i] = a
+    assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
+
+    # This is for each glacier
+    out = dict()
+    out['glen_a'] = glen_a
+    out['fs'] = fs
+    out['factor_glen_a'] = opti['x'][0]
+    try:
+        out['factor_fs'] = opti['x'][1]
+    except IndexError:
+        out['factor_fs'] = 0.
+    for gdir in gdirs:
+        gdir.write_pickle(out, 'inversion_params')
+
+    # This is for the working dir
+    # Simple stats
+    out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
+    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 / (ref_area_km2 * 1e6),
+                                   ref_thickness_m)
+    log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
+             '{factor_fs:.2f} for a thick RMSD of {thick_rmsd:.3f}'.format(
+        **out))
+
+    df = pd.DataFrame(out, index=[0])
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_params.csv')
+    df.to_csv(fpath)
+
+    # All results
+    df = dict()
+    df['ref_area_km2'] = ref_area_km2
+    df['ref_volume_km3'] = ref_volume_km3
+    df['ref_thickness_m'] = ref_thickness_m
+    df['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
+    df['oggm_thickness_m'] = oggm_volume_m3 / (ref_area_km2 * 1e6)
+    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
+    df['vas_thickness_m'] = df['vas_volume_km3'] / ref_area_km2 * 1000
+
+    rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
+    df = pd.DataFrame(df, index=rgi_id)
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_results.csv')
+    df.to_csv(fpath)
+
+    # return value for tests
+    return out
+
+from oggm.core.preprocessing.climate import mb_yearly_climate_on_height
+def get_apparent_climate(gdir):
+
+    # Climate period
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+
+    df = pd.read_csv(gdir.get_filepath('local_mustar'))
+    tstar = df['tstar']
+    yr = [tstar-mu_hp, tstar+mu_hp]
+
+    # Ok. Looping over divides
+    for div_id in list(gdir.divide_ids):
+        # For each flowline compute the apparent MB
+        # For div 0 it is kind of artificial but this is for validation
+
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar'), div_id=div_id)
+
+        fls = []
+        if div_id == 0:
+            for i in gdir.divide_ids:
+                 fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+        else:
+            fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+
+        # Reset flux
+        for fl in fls:
+            fl.flux = np.zeros(len(fl.surface_h))
+
+        # Flowlines in order to be sure
+        for fl in fls:
+            y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
+                                                  year_range=yr,
+                                                  flatten=False)
+            fl.set_apparent_mb(np.mean(p, axis=1) - df['mustar']*np.mean(t,
+                                                                      axis=1))
+
+
+def optimize_per_glacier(gdirs):
+
+    gtd_df = _prepare_inv(gdirs)
+    ref_gdirs = gtd_df['ref_gdirs']
+    ref_volume_km3 = gtd_df['ref_volume_km3']
+    ref_area_km2 = gtd_df['ref_area_km2']
+    ref_thickness_m = gtd_df['ref_thickness_m']
+
+    # Optimize without sliding
+    log.info('Compute the inversion parameter.')
+
+    fac = []
+    for gdir in ref_gdirs:
+        def to_optimize(x):
+            glen_a = cfg.A * x[0]
+            v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=0.,
+                                        write=False)
+            return utils.rmsd(v / a, gtd_df['ref_thickness_m'].loc[gdir.rgi_id])
+        opti = optimization.minimize(to_optimize, [1.],
+                                    bounds=((0.01, 10), ),
+                                    tol=1.e-4)
+        # Check results and save.
+        fac.append(opti['x'][0])
+
+    # All results
+    df = utils.glacier_characteristics(ref_gdirs)
+
+    df['ref_area_km2'] = ref_area_km2
+    df['ref_volume_km3'] = ref_volume_km3
+    df['ref_thickness_m'] = ref_thickness_m
+    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
+    df['vas_thickness_m'] = df['vas_volume_km3'] / ref_area_km2 * 1000
+    df['fac'] = fac
+    fpath = os.path.join(cfg.PATHS['working_dir'],
+                         'inversion_optim_pergla.csv')
+    df.to_csv(fpath)

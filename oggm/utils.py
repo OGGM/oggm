@@ -34,6 +34,7 @@ from scipy import stats
 from joblib import Memory
 from shapely.ops import transform as shp_trafo
 from salem import wgs84
+import xarray as xr
 import rasterio
 from rasterio.tools.merge import merge as merge_tool
 
@@ -709,6 +710,95 @@ def get_topo_file(lon_ex, lat_ex, region=None):
             with rasterio.open(merged_file, 'w', **profile) as dst:
                 dst.write(dest)
         return merged_file, source_str + '_MERGED'
+
+
+def glacier_characteristics(gdirs):
+    """Gathers as many statistics as possible about a list of glacier
+    directories.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    """
+
+    out_df = []
+    for gdir in gdirs:
+
+        d = OrderedDict()
+
+        # Easy stats
+        d['rgi_id'] = gdir.rgi_id
+        d['cenlon'] = gdir.cenlon
+        d['cenlat'] = gdir.cenlat
+        d['rgi_area_km2'] = gdir.rgi_area_km2
+        d['glacier_type'] = gdir.glacier_type
+        d['terminus_type'] = gdir.terminus_type
+
+        # Masks related stuff
+        if gdir.has_file('gridded_data', div_id=0):
+            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo'][:]
+            nc.close()
+            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+
+        # Divides
+        d['n_divides'] = len(list(gdir.divide_ids))
+
+        # Centerlines
+        if gdir.has_file('centerlines', div_id=1):
+            cls = []
+            for i in gdir.divide_ids:
+                cls.extend(gdir.read_pickle('centerlines', div_id=i))
+            longuest = 0.
+            for cl in cls:
+                longuest = np.max([longuest, cl.dis_on_line[-1]])
+            d['n_centerlines'] = len(cls)
+            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+
+        # MB and flowline related stuff
+        if gdir.has_file('inversion_flowlines', div_id=0):
+            amb = np.array([])
+            h = np.array([])
+            widths = np.array([])
+            slope = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines', div_id=0)
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                amb = np.append(amb, fl.apparent_mb)
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * dx)
+                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+
+            pacc = np.where(amb >= 0)
+            pab = np.where(amb < 0)
+            d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
+            mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+            d['mb_grad'] = mb_slope
+            d['avg_width'] = np.mean(widths)
+            d['avg_slope'] = np.mean(slope)
+
+        # Climate
+        if gdir.has_file('climate_monthly', div_id=0):
+            cds = xr.open_dataset(gdir.get_filepath('climate_monthly'))
+            d['clim_alt'] = cds.ref_hgt
+            t = cds.temp.mean(dim='time').values
+            t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
+                cfg.PARAMS['temp_default_gradient']
+            d['clim_temp_avgh'] = t
+            d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+
+        out_df.append(d)
+
+    cols = list(out_df[0].keys())
+    return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
 
 
 class entity_task(object):
