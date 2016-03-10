@@ -48,7 +48,8 @@ except ImportError:
                     'scipy.signal', 'scipy.ndimage', 'skimage.graph',
                     'scipy.ndimage.measurements', 'scipy.ndimage.morphology',
                     'matplotlib._cntr', 'scipy.ndimage.filters',
-                    'scipy.interpolate']
+                    'scipy.interpolate', 'xarray', 'rasterio.tools',
+                    'rasterio.tools.merge']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
     from oggm.tasks import *
 
