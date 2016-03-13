@@ -585,6 +585,11 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
                 run('mkdir ~/.aws')
                 put(aws_file, '~/.aws/config')
 
+            # If user has screen file, take it too!
+            s_file = os.path.expanduser('~/.screenrc')
+            if os.path.exists(s_file):
+                put(s_file, '~/.screenrc')
+
             # Now virtualenv stuffs
             run('pip install virtualenvwrapper')
             run('mkdir ~/.pyvirtualenvs')
