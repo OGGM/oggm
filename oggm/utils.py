@@ -23,6 +23,8 @@ from collections import OrderedDict
 from functools import partial, wraps
 import json
 import time
+import fnmatch
+import subprocess
 
 # External libs
 import geopandas as gpd
@@ -159,6 +161,13 @@ def _download_srtm_file(zone):
 
 def _download_aster_file(zone, unit):
     """Checks if the aster data is in the directory and if not, download it.
+
+    You need AWS cli and AWS credentials for this. Quoting Timo:
+
+    $ aws configure
+
+    Key ID und Secret you should have
+    Region is eu-west-1 and Output Format is json.
     """
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'aster')
@@ -168,13 +177,12 @@ def _download_aster_file(zone, unit):
     dirbname = 'UNIT_' + unit
     ofile = os.path.join(odir, fbname)
 
-    # TODO: this is very local!
-    ifile = '/home/mowglie/disk/ASTGTM_V2'
-    ifile = os.path.join(ifile, dirbname, fbname)
+    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/ASTGTM_V2/'
+    cmd = cmd + dirbname + '/' + fbname + ' ' + ofile
     if not os.path.exists(ofile):
-        if os.path.exists(ifile):
+        subprocess.call(cmd, shell=True)
+        if os.path.exists(ofile):
             # Ok so the tile is a valid one
-            copyfile(ifile, ofile)
             with zipfile.ZipFile(ofile) as zf:
                 zf.extractall(odir)
         else:
@@ -567,6 +575,48 @@ def get_glathida_file():
     return outf
 
 
+def get_rgi_dir():
+    """
+    Returns a path to the RGI directory.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the RGI directory
+    """
+
+    # Be sure the user gave a sensible path to the rgi dir
+    rgi_dir = cfg.PATHS['rgi_dir']
+    if not os.path.exists(rgi_dir):
+        raise ValueError('The RGI data directory does not exist!')
+
+    bname = 'rgi50.zip'
+    ofile = os.path.join(rgi_dir, bname)
+
+    # if not there download it
+    if not os.path.exists(ofile):  # pragma: no cover
+        tf = 'http://www.glims.org/RGI/rgi50_files/' + bname
+        urlretrieve(tf, ofile)
+
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+
+        # Extract subdirs
+        pattern = '*_rgi50_*.zip'
+        for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
+            for filename in fnmatch.filter(files, pattern):
+                ofile = os.path.join(root, filename)
+                with zipfile.ZipFile(ofile) as zf:
+                    ex_root = ofile.replace('.zip', '')
+                    if not os.path.exists(ex_root):
+                        os.makedirs(ex_root)
+                    zf.extractall(ex_root)
+
+    return rgi_dir
+
+
 def get_cru_file(var=None):
     """
     Returns a path to the desired CRU TS file.
@@ -732,6 +782,7 @@ def glacier_characteristics(gdirs):
 
         # Easy stats
         d['rgi_id'] = gdir.rgi_id
+        d['name'] = gdir.name
         d['cenlon'] = gdir.cenlon
         d['cenlat'] = gdir.cenlat
         d['rgi_area_km2'] = gdir.rgi_area_km2

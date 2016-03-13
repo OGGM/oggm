@@ -1,4 +1,3 @@
-import socket
 import osgeo.gdal
 import os
 import platform
