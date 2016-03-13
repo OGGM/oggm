@@ -156,7 +156,9 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
             # Parabolic bed rock
             w = cl['width']
             a0s = -(3*cl['flux'])/(2*w*((cfg.RHO*cfg.G*slope)**3)*fd)
-            assert np.all(np.isfinite(a0s))
+            if np.any(~np.isfinite(a0s)):
+                raise RuntimeError('{}: something went wrong with '
+                                   'inversion'.format(gdir.rgi_id))
 
             # GO
             out_thick = np.zeros(len(slope))

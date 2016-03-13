@@ -57,6 +57,6 @@ install:
   - pip install nose
   - pip install -e .
 script: 
-  - nosetests --with-coverage --cover-package oggm --logging-level=INFO
+  - nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
 after_success:
   - coveralls

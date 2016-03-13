@@ -1,4 +1,3 @@
-import socket
 import osgeo.gdal
 import os
 import platform
@@ -17,19 +16,21 @@ if osgeo.gdal.__version__ >= '1.11':
 
 ON_TRAVIS = False
 RUN_SLOW_TESTS = False
+RUN_DOWNLOAD_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     RUN_SLOW_TESTS = True
     ON_TRAVIS = True
+    RUN_DOWNLOAD_TESTS = False  # security
 if os.environ.get('OGGM_SLOW_TESTS') is not None:
     RUN_SLOW_TESTS = True
+if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
+    RUN_DOWNLOAD_TESTS = True
 
 # TODO: conda builds on python 3.4 have EVEN MORE issues
 # https://ci.appveyor.com/project/fmaussion/oggm/build/job/k9qvsxp4k3h3l2y9
 ON_WINDOWS_PY3_CONDA = False
 if (platform.system() == 'Windows') and (sys.version_info >= (3, 0)):
     ON_WINDOWS_PY3_CONDA = True
-
-RUN_DOWNLOAD_TESTS = False
 
 
 def requires_working_conda(test):
