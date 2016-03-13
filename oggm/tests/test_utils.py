@@ -54,21 +54,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 4)
         self.assertEqual(ref, z)
 
-    def test_srtmdownload(self):
-
-        # this zone does exist and file should be small enough for download
-        zone = '68_11'
-        fp = utils._download_srtm_file(zone)
-        self.assertTrue(os.path.exists(fp))
-        fp = utils._download_srtm_file(zone)
-        self.assertTrue(os.path.exists(fp))
-
-    def test_srtmdownloadfails(self):
-
-        # this zone does not exist
-        zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
-
     def test_asterzone(self):
 
         z, u = utils.aster_zone(lon_ex=[137.5, 137.5],
@@ -95,6 +80,40 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W100', u[0])
 
     @is_download
+    def test_srtmdownload(self):
+
+        # this zone does exist and file should be small enough for download
+        zone = '68_11'
+        fp = utils._download_srtm_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        fp = utils._download_srtm_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    @is_download
+    def test_srtmdownloadfails(self):
+
+        # this zone does not exist
+        zone = '41_20'
+        self.assertTrue(utils._download_srtm_file(zone) is None)
+
+    @is_download
+    def test_asterdownload(self):
+
+        # this zone does exist and file should be small enough for download
+        zone = 'S73E137'
+        unit = 'S75E135'
+        fp = utils._download_aster_file(zone, unit)
+        self.assertTrue(os.path.exists(fp))
+
+    @is_download
+    def test_asterdownloadfails(self):
+
+        # this zone does exist and file should be small enough for download
+        zone = 'bli'
+        unit = 'S75E135'
+        self.assertTrue(utils._download_aster_file(zone, unit) is None)
+
+    @is_download
     def test_download_cru(self):
 
         cfg.initialize()
@@ -106,3 +125,17 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['cru_dir'] = tmp
+
+    @is_download
+    def test_download_rgi(self):
+
+        cfg.initialize()
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = TEST_DIR
+
+        of = utils.get_rgi_dir()
+        of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp

@@ -93,7 +93,7 @@ def plot_domain(gdir, ax=None):  # pragma: no cover
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     mp.set_cmap(cm)
     mp.set_plot_params(nlevels=256)
-    mp.set_data(topo, interp='linear')
+    mp.set_data(topo)
 
     # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
@@ -146,7 +146,7 @@ def plot_centerlines(gdir, ax=None, use_flowlines=False,
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     mp.set_cmap(cm)
     mp.set_plot_params(nlevels=256)
-    mp.set_data(topo, interp='linear')
+    mp.set_data(topo)
 
     # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid

@@ -22,7 +22,7 @@ from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.core.models import flowline, massbalance
 from oggm import graphics, utils
 from oggm.sandbox import itmix
-from oggm.sandbox import itmix_cfg
+from oggm.sandbox.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
 import fiona
 
 # Globals
@@ -41,17 +41,27 @@ cfg.PARAMS['use_multiprocessing'] = False
 cfg.CONTINUE_ON_ERROR = False
 
 # Working dir
-cfg.PATHS['working_dir'] = '/home/mowglie/disk/TMP/ITMIX/OGGM_ITMIX_WD_nograd'
+cfg.PATHS['working_dir'] = WORKING_DIR
 
 cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-cfg.PATHS['topo_dir'] = '/home/mowglie/disk/Dropbox/Share/oggm-data/topo'
+cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
 
 # Set up the paths and other stuffs
 cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-cfg.PATHS['cru_dir'] = '/home/mowglie/disk/Data/Gridded/CRU'
+cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
+cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
+
+# Update with calib data where ITMIX glaciers have been removed
+cfg.PATHS['wgms_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
+                                           'wgms',
+                                           'rgi_wgms_links_2015_RGIV5.csv')
+cfg.PATHS['glathida_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
+                                           'glathida',
+                                           'rgi_glathida_links_2014_RGIV5.csv')
 
 # Params
 cfg.PARAMS['border'] = 20
+
 
 # Read in the RGI file(s)
 rgidf = itmix.get_rgi_df(reset=False)
@@ -69,35 +79,33 @@ rgidf = rgidf.loc[~ rgidf['O1Region'].isin(['19'])]
 # This really is an OGGM problem with strange lines
 rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-02.13974'])]
 
+# Remove bad black rapids:
+# rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-01.00037'])]
+
+# rgidf = rgidf.loc[['Columbia' in n for n in rgidf.Name]]
+#
 # Test problems
 # rgidf = rgidf.loc[rgidf.RGIId.isin(['RGI50-01.00037'])]
 
 print('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go
-# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-gdirs = workflow.init_glacier_regions(rgidf)
-rgidf['glacier_type'] = [gd.glacier_type for gd in gdirs]
-rgidf['terminus_type'] = [gd.terminus_type for gd in gdirs]
-
-# towrite = rgidf[['Name', 'RGIId', 'Area', 'Aspect', 'CenLat', 'CenLon', 'Lmax',
-#                 'Slope', 'Zmax', 'Zmed', 'Zmin', 'glacier_type',
-#                 'terminus_type']]
-# towrite.to_csv('/home/mowglie/disk/Data/ITMIX/final_glacier_list.csv')
+gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+# gdirs = workflow.init_glacier_regions(rgidf)
 
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 
-# task_list = [
-    # itmix.glacier_masks_itmix,
+task_list = [
+    itmix.glacier_masks_itmix,
     # tasks.compute_centerlines,
     # tasks.catchment_area,
     # tasks.initialize_flowlines,
     # tasks.catchment_width_geom,
     # tasks.catchment_width_correction
-# ]
-# for task in task_list:
-#     execute_entity_task(task, gdirs)
+]
+for task in task_list:
+    execute_entity_task(task, gdirs)
 
 # Climate related tasks
 # Only global tasks
@@ -111,38 +119,26 @@ from oggm.workflow import execute_entity_task
 # cfg.PARAMS['invert_with_sliding'] = False
 # itmix.optimize_thick(gdirs)
 # itmix.optimize_per_glacier(gdirs)
+# itmix.invert_marine(gdirs)
 # execute_entity_task(tasks.volume_inversion, gdirs)
 
-dir = '/home/mowglie/disk/TMP/ITMIX/OGGM_ITMIX_PLOTS/'
+pdir = PLOTS_DIR
+if not os.path.exists(pdir):
+    os.makedirs(pdir)
 for gd in gdirs:
     # graphics.plot_googlemap(gd)
-    # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_ggl.png')
+    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_ggl.png')
     # plt.close()
-    # graphics.plot_domain(gd)
-    # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_dom.png')
-    # plt.close()
+    graphics.plot_domain(gd)
+    plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_dom.png')
+    plt.close()
     # graphics.plot_centerlines(gd)
-    # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_cls.png')
+    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_cls.png')
     # plt.close()
     # graphics.plot_catchment_width(gd, corrected=True)
-    # plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_w.png')
+    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_w.png')
     # plt.close()
-    graphics.plot_inversion(gd)
-    plt.savefig(dir + gd.name + '_' + gd.rgi_id + '_inv.png')
-    plt.close()
+    # graphics.plot_inversion(gd)
+    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_inv.png')
+    # plt.close()
     pass
-#
-# try:
-#     flowline.init_present_time_glacier(gdirs[0])
-# except Exception:
-#     reset = True
-#
-# if reset:
-#     # First preprocessing tasks
-#     workflow.gis_prepro_tasks(gdirs)
-#
-#     # Climate related tasks
-#     workflow.climate_tasks(gdirs)
-#
-#     # Inversion
-#     workflow.inversion_tasks(gdirs)
