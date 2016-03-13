@@ -1,0 +1,20 @@
+#!/bin/bash
+
+source /usr/local/bin/virtualenvwrapper.sh
+
+workon oggm_env
+
+pip install --quiet --upgrade pip
+pip install --quiet numpy
+pip install --quiet scipy
+pip install --quiet pandas shapely
+pip install --quiet matplotlib
+pip install --quiet gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+pip install --quiet fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+pip install --quiet pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray nose
+pip install --quiet git+https://github.com/fmaussion/motionless.git
+pip install --quiet git+https://github.com/fmaussion/salem.git
+pip install --quiet git+https://github.com/fmaussion/cleo.git
+
+deactivate
+echo "Done installing pip packages"
