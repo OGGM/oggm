@@ -27,7 +27,10 @@ addons:
       - libgdal-dev
 matrix:
   include:
+    - python: 2.7
     - python: 3.4
+    - python: 3.4
+      env: OLDER_PACKAGES=true
   allow_failures:
     - python: 2.7
     - python: 3.4
