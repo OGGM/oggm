@@ -92,7 +92,7 @@ user_identifier = None
 
 # FSO--- ssh and credentials setup
 # FSO---the name of the amazon keypair (will be created if it does not exist)
-keyn=user_identifier + '_oggm'
+keyn=(user_identifier or 'None') + '_oggm'
 # FSO--- the same name as you used in boto setup XXXX (see Readme)
 ec2Profile = 'OGGM'
 def_key_dir=os.path.expanduser('~/.ssh')
@@ -116,7 +116,7 @@ def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
 rootfs_size_gb = 50
 
 # Name and size of the persistent /work file system
-home_volume_ebs_name = "ebs_" + user_identifier # Set to None to disable home volume
+home_volume_ebs_name = "ebs_" + (user_identifier or 'None') # Set to None to disable home volume
 new_homefs_size_gb = 50 # GiB, only applies to newly created volumes
 
 # FSO---log file with timestamps to analyse cloud performance
