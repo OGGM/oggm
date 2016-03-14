@@ -230,6 +230,7 @@ def optimize_inversion_params(gdirs):
     gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
 
     # Account for area differences between glathida and rgi
+    gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
     ref_area_km2 = gtd_df.RGI_AREA.values
     gtd_df.VOLUME = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
     ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
