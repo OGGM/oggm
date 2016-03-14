@@ -61,15 +61,22 @@ from collections import defaultdict
 #     2. create instance with
 #         fab cloud_make
 #     3. Takes between 5 - 10 minutes (if still using spot as def_default_requesttype)
-#     4. use
+#     4. Use
+#         fab install_node_software
+#        to setup a virtualenv ready for OGGM.
+#
+#        If you already setup a virtualenv on your user volume
+#         fab install_node_apt
+#        to install only required system components.
+#     5. Use
 #         fab connect
 #        to ssh into instance
-#     5. play around with the instance, install software etc
-#     6. look at current costs with
+#     6. play around with the instance, install software etc
+#     7. look at current costs with
 #         fab calc_approx_costs_running
 #        or list all instances with
 #         fab cloud_list
-#     7. Once you have enough, shut down your instance via
+#     8. Once you have enough, shut down your instance via
 #         fab terminate_one
 #        Or terminate all running instances if you are sure they all belong to you
 #         fab cloud_terminate
@@ -81,7 +88,7 @@ from collections import defaultdict
 # SETUP
 #-----------------------------------------------------------
 env.disable_known_hosts=True
-env.user = 'root'
+env.user = 'ubuntu'
 
 # FSO--- default name used in tags and instance names:
 # set this eg. to your name
@@ -92,7 +99,7 @@ user_identifier = None
 
 # FSO--- ssh and credentials setup
 # FSO---the name of the amazon keypair (will be created if it does not exist)
-keyn= user_identifier + '_oggm'
+keyn=(user_identifier or 'None') + '_oggm'
 # FSO--- the same name as you used in boto setup XXXX (see Readme)
 ec2Profile = 'OGGM'
 def_key_dir=os.path.expanduser('~/.ssh')
@@ -116,7 +123,7 @@ def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
 rootfs_size_gb = 50
 
 # Name and size of the persistent /work file system
-home_volume_ebs_name = "ebs_" + user_identifier # Set to None to disable home volume
+home_volume_ebs_name = "ebs_" + (user_identifier or 'None') # Set to None to disable home volume
 new_homefs_size_gb = 50 # GiB, only applies to newly created volumes
 
 # FSO---log file with timestamps to analyse cloud performance
@@ -126,13 +133,6 @@ def_logfile = os.path.expanduser('~/cloudexecution.log')
 # Default instance type, index into instance_infos array below
 def_inst_type = 1
 
-# Install apt and pip packages for OGGM?
-# This can take some time, in particular pip
-# After install you should have access to a virtualenv:
-# $ workon oggm_env
-# in which oggm can run
-install_apt = False
-install_pip = False
 
 #-----------------------------------------------------------
 # SETUP END
@@ -268,43 +268,6 @@ def instance_start(cn=def_cn,
 
     cloud_list()
 
-@task
-def run_workflow(cn=def_cn,avz=def_default_avz):
-    """
-    Runs workflow
-    This is just an example, adjust to suit your needs
-    """
-    # FSO---timing
-    t = time.time()
-    log_with_ts("workflow start")
-
-    with shell_env( PATH='$PATH:/root/jre1.6.0_45/bin',
-            GLOBUS_LOCATION='/root/ws-core-felix',
-            ASKALON_HOME='/root/AskalonClient'):
-        run('screen -L -S GlobusCont -d -m sh ./GlobusContainerCtrl.sh start ;sleep 1 ')
-        run('sh CloudNodes.sh -key '+keyn)
-
-        # FSO--- Clean transfer directory. !HAS! to match the given directory in .agwl file, otherwise useless
-        with settings(warn_only=True):
-            run('rm -rf ~/public/*')
-
-        # FSO--- check whether Globus container is up
-        run('while ! echo exit | nc localhost 40195; do sleep 10; echo "waiting for globus"; done')
-        print("Connection to globus")
-
-    log_with_ts("workflow done")
-    print("Time needed for run_workflow (min)", (time.time()-t)/60.0)
-
-    #copy result
-    # FSO--- TODO need to check decisions in agwl file to get correct files
-    target_file = '~/tmp/screenlog.0'
-    try:
-        get('~/screenlog.0',target_file)
-    except:
-        print("Uh oh, no screenlog file found")
-        log_with_ts("no transfer of results")
-
-    return target_file
 
 def print_instance(inst):
     if inst.state != 'terminated':
@@ -557,68 +520,103 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
 
     update_key_filename(node.region.name)
 
-    # FSO---enable root (also sets env.host_name needed for fab to run run())
-    enable_root(node.dns_name)
-
     # Mount potential user volume
     if dev_sdf_vol is not None:
         use_user_volume(node.dns_name)
 
-    env.user = 'root'
-
-    if install_apt:
-        # This installs the apt packages necessary for OGGM py3
-        with hide('output'):
-            run('apt-get -u update; sleep 4', shell=True, pty=True)
-            run('apt-get install -y build-essential liblapack-dev gfortran libproj-dev', shell=True, pty=True)
-            run('apt-get install -y gdal-bin libgdal-dev', shell=True, pty=True)
-            run('apt-get install -y netcdf-bin ncview python-netcdf', shell=True, pty=True)
-            run('apt-get install -y tk-dev python3-tk python3-dev ttf-bitstream-vera', shell=True, pty=True)
-
-            run('apt-get install -y python-pip', shell=True, pty=True)
-            run('apt-get install -y git', shell=True, pty=True)
-
-            # AWS stuff, only if installer has AWS cli installed
-            aws_file = os.path.expanduser('~/.aws/config')
-            if os.path.exists(aws_file):
-                run('apt-get install -y awscli', shell=True, pty=True)
-                run('mkdir ~/.aws')
-                put(aws_file, '~/.aws/config')
-
-            # If user has screen file, take it too!
-            s_file = os.path.expanduser('~/.screenrc')
-            if os.path.exists(s_file):
-                put(s_file, '~/.screenrc')
-
-            # Now virtualenv stuffs
-            run('pip install virtualenvwrapper')
-            run('mkdir ~/.pyvirtualenvs')
-
-            run("echo '' >> ~/.profile")
-            run("echo '# Virtual environment options' >> ~/.profile")
-            run("echo 'export WORKON_HOME=$HOME/.pyvirtualenvs' >> ~/.profile")
-            run("echo 'source /usr/local/bin/virtualenvwrapper_lazy.sh' >> ~/.profile")
-
-            run("echo '' >> ~/.bashrc")
-            run("echo '# Virtual environment options' >> ~/.bashrc")
-            run("echo 'export WORKON_HOME=$HOME/.pyvirtualenvs' >> ~/.bashrc")
-            run("echo 'source /usr/local/bin/virtualenvwrapper_lazy.sh' >> ~/.bashrc")
-
-            run('mkvirtualenv oggm_env -p /usr/bin/python3')
-
-    # Python install script
-    pip_file = os.path.join(fabfile_dir, 'install_env')
-    if os.path.exists(pip_file):
-        put(pip_file, '~/install_env')
-        run('chmod a+x ~/install_env')
-
-    if install_pip:
-        run('./install_env')
-        # After pip install one should replace mpl backend
-        fpath = '/root/.pyvirtualenvs/oggm_env/lib/python3.4/site-packages/matplotlib/mpl-data/matplotlibrc'
-        run("sed -i 's/^backend.*/backend      : Agg/' " + fpath)
-
     log_with_ts("finished node "+str(idn))
+
+
+@task
+def install_node_software(nn=''):
+    """
+    Setup ready-for-use virtualenv for OGGM on instance
+    """
+    inst = select_instance(nn)
+    install_node_apt('', inst)
+    install_node_pip('', inst)
+
+    run('sudo shutdown -r now')
+
+
+@task
+def install_node_pip(nn='', inst=None):
+    """
+    Install oggm dependencies via pip
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    source ~/.virtenvrc &&
+    workon oggm_env &&
+    pip install --upgrade pip &&
+    pip install numpy &&
+    pip install scipy &&
+    pip install pandas shapely cython &&
+    pip install matplotlib &&
+    pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
+    pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
+    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray nose &&
+    pip install git+https://github.com/fmaussion/motionless.git &&
+    pip install git+https://github.com/fmaussion/salem.git &&
+    pip install git+https://github.com/fmaussion/cleo.git &&
+    sed -i 's/^backend.*/backend      : Agg/' "${WORKON_HOME}"/oggm_env/lib/python?.?/site-packages/matplotlib/mpl-data/matplotlibrc
+    """, pty=False)
+
+
+@task
+def install_node_apt(nn='', inst=None):
+    """
+    Install required OGGM apt dependencies
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    sudo apt-get update &&
+    sudo apt-get -y dist-upgrade &&
+    sudo apt-get install -y build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf tk-dev python3-tk python3-dev ttf-bitstream-vera python-pip git awscli virtualenvwrapper
+    """, pty=False)
+
+    aws_file = os.path.expanduser('~/.aws/config')
+    if os.path.exists(aws_file):
+        run('mkdir -p ~/.aws')
+        put(aws_file, '~/.aws/config')
+
+    s_file = os.path.expanduser('~/.screenrc')
+    if os.path.exists(s_file):
+        put(s_file, '~/.screenrc')
+
+    run("""
+    if [ -e /work/ubuntu ]; then
+        mkdir -p /work/ubuntu/.pyvirtualenvs
+        echo '# Virtual environment options' > ~/.virtenvrc
+        echo 'export WORKON_HOME="/work/ubuntu/.pyvirtualenvs"' >> ~/.virtenvrc
+        echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper_lazy.sh' >> ~/.virtenvrc
+    else
+        mkdir -p ~/.pyvirtualenvs
+        echo '# Virtual environment options' > ~/.virtenvrc
+        echo 'export WORKON_HOME="${HOME}/.pyvirtualenvs"' >> ~/.virtenvrc
+        echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper_lazy.sh' >> ~/.virtenvrc
+    fi
+    echo >> ~/.bashrc
+    echo 'source ~/.virtenvrc' >> ~/.bashrc
+    """)
+
+    # bashrc is not sourced for non-interactive shells, so source the virtenvrc explicitly
+    run("""
+    source ~/.virtenvrc
+    if ! [ -d ${WORKON_HOME}/oggm_env ]; then
+        mkvirtualenv oggm_env -p /usr/bin/python3
+    fi
+    """)
 
 
 @task
@@ -690,10 +688,9 @@ def cloud_terminate(cn=def_cn,itype='all',regions=def_regions):
                 print(unattachedvol.id,"\t", unattachedvol.status, "... not deleted")
 
 
-@task
-def terminate_one(regions=def_regions, nn=''):
+def select_instance(nn='', regions=def_regions):
     """
-    Terminate one instance
+    Prompt the user to select an instance
     """
     instlist = list()
     i = 0
@@ -720,23 +717,21 @@ def terminate_one(regions=def_regions, nn=''):
 
     print()
 
-    if nn == '':
-        nn = prompt('Which instance to terminate:')
+    if nn == '' or nn is None:
+        nn = prompt('Instance index:')
 
     nn = int(nn)
 
-    inst = instlist[nn]
-    inst.add_tag('Name', 'term')
-    inst.add_tag('type', 'term')
-    inst.terminate()
-    stati2 = datetime.datetime.utcnow()
-    inst.add_tag('terminate_time', stati2.isoformat())
+    if nn < 0 or nn >= len(instlist):
+        print('Instance index out of range!')
+        sys.exit(-1)
+
+    return instlist[nn]
 
 
-@task
-def terminate_volume(regions=def_regions, nn=''):
+def select_volume(nn='', regions=def_regions):
     """
-    Terminate one volume
+    Prompt the user to select a volume
     """
     vollist = list()
     i = 0
@@ -759,12 +754,42 @@ def terminate_volume(regions=def_regions, nn=''):
 
     print()
 
-    if nn == '':
-        nn = prompt('Which volume to terminate:')
+    if nn == '' or nn is None:
+        nn = prompt('Volume index:')
 
     nn = int(nn)
 
-    vollist[nn].delete()
+    if nn < 0 or nn >= len(vollist):
+        print('Volume index out of range!')
+        sys.exit(-1)
+
+    return vollist[nn]
+
+
+@task
+def terminate_one(regions=def_regions, nn=''):
+    """
+    Terminate one instance
+    """
+    print('Select instance to terminate:')
+    print()
+    inst = select_instance(nn, regions)
+    inst.add_tag('Name', 'term')
+    inst.add_tag('type', 'term')
+    inst.terminate()
+    stati2 = datetime.datetime.utcnow()
+    inst.add_tag('terminate_time', stati2.isoformat())
+
+
+@task
+def terminate_volume(regions=def_regions, nn=''):
+    """
+    Terminate one volume
+    """
+    print('Select volume to terminate:')
+    print()
+    vol = select_volume(nn, regions)
+    vol.delete()
 
 
 @task
@@ -820,36 +845,21 @@ def calc_approx_costs_running(cn=def_cn,regions=def_regions,itype ='all'):
 
     return costs
 
+
 @task
-def connect(nn='', user='root'):
+def connect(nn='', user='ubuntu'):
     """
-    SSH to cloud instances (as root)
+    SSH to cloud instances
     """
-    instlist = list()
-    i = 0
-    for region in def_regions:
-        cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
-        instances = cloud.get_all_instances()
-        print()
-        for reservation in instances:
-            for inst in reservation.instances:
-                if inst.state == 'running':
-                    print(i, ': ', inst.tags.get('Name'),inst.dns_name, inst.private_ip_address, inst.placement)
-                    instlist.append(inst)
-                    i += 1
+    inst = select_instance(nn)
 
-    print()
+    update_key_filename(inst.region.name)
 
-    if nn =='':
-        nn = prompt('Which instance to connect to:')
-
-    update_key_filename(instlist[int(nn)].region.name)
-
-    print('ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user,instlist[int(nn)].dns_name))
+    print('ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user, inst.dns_name))
     print('...')
     print()
 
-    os.execlp('ssh', 'ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user, instlist[int(nn)].dns_name))
+    os.execlp('ssh', 'ssh', '-i', os.path.expanduser(env.key_filename), '%s@%s' % (user, inst.dns_name))
 
 
 def get_cheapest_availability_zone(ondemand_price):
@@ -895,6 +905,7 @@ def get_cheapest_availability_zone(ondemand_price):
     else:
         return def_default_avz,'ondemand'
 
+
 def wait_for_fulfillment(cloud,pending_ids):
     """
     Wait for fulfillment of spot instance requests
@@ -917,6 +928,7 @@ def wait_for_fulfillment(cloud,pending_ids):
         time.sleep(5)
     print("all spots fulfilled!")
     return instances
+
 
 def update_costs(cn=def_cn,itype='all',regions=def_regions):
     """
@@ -954,6 +966,7 @@ def update_costs(cn=def_cn,itype='all',regions=def_regions):
                     inst.add_tag('current_price', total_price)
                     inst.add_tag('billable_hours', hours)
 
+
 def log_with_ts(logtext="no text given",lf=def_logfile):
     """
     Helper function to write logs with timestamps
@@ -963,6 +976,7 @@ def log_with_ts(logtext="no text given",lf=def_logfile):
     st = str(datetime.datetime.utcnow())
     with open(lf, "a+") as myfile:
         myfile.writelines('['+st+' UTC] '+ logtext+'\n')
+
 
 def spot_price(cloud,launch_time,inst_type):
     """
@@ -1017,6 +1031,7 @@ def spot_price(cloud,launch_time,inst_type):
         #print price.timestamp, price.price
     return prices
 
+
 def node_find(node,avz=def_default_avz):
     """
     Return the instance object of a given node hostname.
@@ -1028,6 +1043,7 @@ def node_find(node,avz=def_default_avz):
             if inst.tags.get('Name') == node and inst.state == 'running':
                 print('found', inst.tags.get('Name'), inst.dns_name)
                 return inst
+
 
 def node_exists(node,avz=def_default_avz):
     """
@@ -1043,6 +1059,7 @@ def node_exists(node,avz=def_default_avz):
 
     return False
 
+
 def enable_root(host):
     """
     Enable root access on instance
@@ -1053,6 +1070,7 @@ def enable_root(host):
     run("sudo perl -i -pe 's/#PermitRootLogin .*/PermitRootLogin without-password/' /etc/ssh/sshd_config")
     run('sudo cp -f /home/ubuntu/.ssh/authorized_keys /root/.ssh/authorized_keys', shell=True, pty=True)
     run("sudo reload ssh")
+
 
 def use_user_volume(host):
     """
