@@ -261,43 +261,6 @@ def instance_start(cn=def_cn,
 
     cloud_list()
 
-@task
-def run_workflow(cn=def_cn,avz=def_default_avz):
-    """
-    Runs workflow
-    This is just an example, adjust to suit your needs
-    """
-    # FSO---timing
-    t = time.time()
-    log_with_ts("workflow start")
-
-    with shell_env( PATH='$PATH:/root/jre1.6.0_45/bin',
-            GLOBUS_LOCATION='/root/ws-core-felix',
-            ASKALON_HOME='/root/AskalonClient'):
-        run('screen -L -S GlobusCont -d -m sh ./GlobusContainerCtrl.sh start ;sleep 1 ')
-        run('sh CloudNodes.sh -key '+keyn)
-
-        # FSO--- Clean transfer directory. !HAS! to match the given directory in .agwl file, otherwise useless
-        with settings(warn_only=True):
-            run('rm -rf ~/public/*')
-
-        # FSO--- check whether Globus container is up
-        run('while ! echo exit | nc localhost 40195; do sleep 10; echo "waiting for globus"; done')
-        print("Connection to globus")
-
-    log_with_ts("workflow done")
-    print("Time needed for run_workflow (min)", (time.time()-t)/60.0)
-
-    #copy result
-    # FSO--- TODO need to check decisions in agwl file to get correct files
-    target_file = '~/tmp/screenlog.0'
-    try:
-        get('~/screenlog.0',target_file)
-    except:
-        print("Uh oh, no screenlog file found")
-        log_with_ts("no transfer of results")
-
-    return target_file
 
 def print_instance(inst):
     if inst.state != 'terminated':
