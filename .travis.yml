@@ -29,26 +29,17 @@ matrix:
   include:
     - python: 2.7
     - python: 3.4
-    - python: 3.4
-      env: OLDER_PACKAGES=true
+    - python: 3.5
   allow_failures:
     - python: 2.7
-    - python: 3.4
-      env: OLDER_PACKAGES=true
 before_install:
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start"
   - pip install -U pip
   - pip install wheel
 install:
-  - |
-    if [[ $OLDER_PACKAGES == true ]]; then
-      travis_wait pip wheel -r ci/requirements_old.txt
-      travis_wait pip install -r ci/requirements_old.txt
-    else
-      travis_wait pip wheel -r ci/requirements.txt
-      travis_wait pip install -r ci/requirements.txt
-    fi;
+  - travis_wait pip wheel -r ci/requirements.txt
+  - travis_wait pip install -r ci/requirements.txt
   - pip wheel scikit-image
   - pip install scikit-image
   - pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
