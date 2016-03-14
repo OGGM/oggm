@@ -61,15 +61,22 @@ from collections import defaultdict
 #     2. create instance with
 #         fab cloud_make
 #     3. Takes between 5 - 10 minutes (if still using spot as def_default_requesttype)
-#     4. use
+#     4. Use
+#         fab install_node_software
+#        to setup a virtualenv ready for OGGM.
+#
+#        If you already setup a virtualenv on your user volume
+#         fab install_node_apt
+#        to install only required system components.
+#     5. Use
 #         fab connect
 #        to ssh into instance
-#     5. play around with the instance, install software etc
-#     6. look at current costs with
+#     6. play around with the instance, install software etc
+#     7. look at current costs with
 #         fab calc_approx_costs_running
 #        or list all instances with
 #         fab cloud_list
-#     7. Once you have enough, shut down your instance via
+#     8. Once you have enough, shut down your instance via
 #         fab terminate_one
 #        Or terminate all running instances if you are sure they all belong to you
 #         fab cloud_terminate
