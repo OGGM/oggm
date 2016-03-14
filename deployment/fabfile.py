@@ -73,6 +73,8 @@ from collections import defaultdict
 #         fab terminate_one
 #        Or terminate all running instances if you are sure they all belong to you
 #         fab cloud_terminate
+#        you can also delete volumes with:
+#         fab terminate_perm_user_vol:name='your_volume_name'
 
 
 #-----------------------------------------------------------
@@ -86,12 +88,11 @@ env.user = 'root'
 def_cn = 'AWS'
 
 # Change to a string identifying yourself
-# Defaults to your system username if set to None
 user_identifier = None
 
 # FSO--- ssh and credentials setup
 # FSO---the name of the amazon keypair (will be created if it does not exist)
-keyn='oggm'
+keyn= user_identifier + '_oggm'
 # FSO--- the same name as you used in boto setup XXXX (see Readme)
 ec2Profile = 'OGGM'
 def_key_dir=os.path.expanduser('~/.ssh')
@@ -115,7 +116,7 @@ def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
 rootfs_size_gb = 50
 
 # Name and size of the persistent /work file system
-home_volume_ebs_name = "ebs_work_volume" # Set to None to disable home volume
+home_volume_ebs_name = "ebs_" + user_identifier # Set to None to disable home volume
 new_homefs_size_gb = 50 # GiB, only applies to newly created volumes
 
 # FSO---log file with timestamps to analyse cloud performance
@@ -125,14 +126,21 @@ def_logfile = os.path.expanduser('~/cloudexecution.log')
 # Default instance type, index into instance_infos array below
 def_inst_type = 1
 
+# Install apt and pip packages for OGGM?
+# This can take some time, in particular pip
+# After install you should have access to a virtualenv:
+# $ workon oggm_env
+# in which oggm can run
+install_apt = False
+install_pip = False
 
 #-----------------------------------------------------------
 # SETUP END
 #-----------------------------------------------------------
+fabfile_dir = os.path.dirname(os.path.abspath(__file__))
 
 if user_identifier is None:
-    import getpass
-    user_identifier = getpass.getuser()
+    raise RuntimeError('user identifier must be set')
 
 instance_infos = [
     {
@@ -557,6 +565,58 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         use_user_volume(node.dns_name)
 
     env.user = 'root'
+
+    if install_apt:
+        # This installs the apt packages necessary for OGGM py3
+        with hide('output'):
+            run('apt-get -u update; sleep 4', shell=True, pty=True)
+            run('apt-get install -y build-essential liblapack-dev gfortran libproj-dev', shell=True, pty=True)
+            run('apt-get install -y gdal-bin libgdal-dev', shell=True, pty=True)
+            run('apt-get install -y netcdf-bin ncview python-netcdf', shell=True, pty=True)
+            run('apt-get install -y tk-dev python3-tk python3-dev ttf-bitstream-vera', shell=True, pty=True)
+
+            run('apt-get install -y python-pip', shell=True, pty=True)
+            run('apt-get install -y git', shell=True, pty=True)
+
+            # AWS stuff, only if installer has AWS cli installed
+            aws_file = os.path.expanduser('~/.aws/config')
+            if os.path.exists(aws_file):
+                run('apt-get install -y awscli', shell=True, pty=True)
+                run('mkdir ~/.aws')
+                put(aws_file, '~/.aws/config')
+
+            # If user has screen file, take it too!
+            s_file = os.path.expanduser('~/.screenrc')
+            if os.path.exists(s_file):
+                put(s_file, '~/.screenrc')
+
+            # Now virtualenv stuffs
+            run('pip install virtualenvwrapper')
+            run('mkdir ~/.pyvirtualenvs')
+
+            run("echo '' >> ~/.profile")
+            run("echo '# Virtual environment options' >> ~/.profile")
+            run("echo 'export WORKON_HOME=$HOME/.pyvirtualenvs' >> ~/.profile")
+            run("echo 'source /usr/local/bin/virtualenvwrapper_lazy.sh' >> ~/.profile")
+
+            run("echo '' >> ~/.bashrc")
+            run("echo '# Virtual environment options' >> ~/.bashrc")
+            run("echo 'export WORKON_HOME=$HOME/.pyvirtualenvs' >> ~/.bashrc")
+            run("echo 'source /usr/local/bin/virtualenvwrapper_lazy.sh' >> ~/.bashrc")
+
+            run('mkvirtualenv oggm_env -p /usr/bin/python3')
+
+    # Python install script
+    pip_file = os.path.join(fabfile_dir, 'install_env')
+    if os.path.exists(pip_file):
+        put(pip_file, '~/install_env')
+        run('chmod a+x ~/install_env')
+
+    if install_pip:
+        run('./install_env')
+        # After pip install one should replace mpl backend
+        fpath = '/root/.pyvirtualenvs/oggm_env/lib/python3.4/site-packages/matplotlib/mpl-data/matplotlibrc'
+        run("sed -i 's/^backend.*/backend      : Agg/' " + fpath)
 
     log_with_ts("finished node "+str(idn))
 
