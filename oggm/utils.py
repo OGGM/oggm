@@ -135,22 +135,31 @@ def _download_srtm_file(zone):
     ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
             '/srtm_' + zone + '.zip'
     if not os.path.exists(ofile):
-        # Try to download
-        try:
-            urlretrieve(ifile, ofile)
-            with zipfile.ZipFile(ofile) as zf:
-                zf.extractall(odir)
-        except HTTPError as err:
-            # This works well for py3
-            if err.code == 404:
+        retry_counter = 0
+        retry_max = 5
+        while True:
+            # Try to download
+            try:
+                retry_counter += 1
+                urlretrieve(ifile, ofile)
+                with zipfile.ZipFile(ofile) as zf:
+                    zf.extractall(odir)
+                break
+            except HTTPError as err:
+                # This works well for py3
+                if err.code == 404:
+                    # Ok so this *should* be an ocean tile
+                    return None
+                elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
+                    print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" % (err.code, retry_counter, retry_max))
+                    time.sleep(10)
+                    continue
+                else:
+                    raise
+            except zipfile.BadZipfile:
+                # This is for py2
                 # Ok so this *should* be an ocean tile
                 return None
-            else:
-                raise
-        except zipfile.BadZipfile:
-            # This is for py2
-            # Ok so this *should* be an ocean tile
-            return None
 
     out = os.path.join(odir, 'srtm_' + zone + '.tif')
     assert os.path.exists(out)
@@ -1211,3 +1220,4 @@ class GlacierDirectory(object):
             f.write(func.__name__ + '\n')
             if err is not None:
                 f.write(err.__class__.__name__ + ': {}'.format(err))
+
