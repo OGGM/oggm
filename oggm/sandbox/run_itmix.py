@@ -5,10 +5,8 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 
 import os
 import shutil
-import glob
 
 import pandas as pd
-import salem
 import geopandas as gpd
 import numpy as np
 import shapely.geometry as shpg
@@ -19,34 +17,30 @@ import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.core.models import flowline, massbalance
 from oggm import graphics, utils
 from oggm.sandbox import itmix
 from oggm.sandbox.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
-import fiona
-
-# Globals
-LOG_DIR = ''
 
 # Funcs
 def clean_dir(d):
     shutil.rmtree(d)
     os.makedirs(d)
 
+
 # Init
 cfg.initialize()
 
 # Use multiprocessing
-cfg.PARAMS['use_multiprocessing'] = False
+cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = False
 
 # Working dir
 cfg.PATHS['working_dir'] = WORKING_DIR
 
+# Set up the paths and other stuffs
 cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
 cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
 
-# Set up the paths and other stuffs
 cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
 cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
 cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
@@ -56,12 +50,21 @@ cfg.PATHS['wgms_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
                                            'wgms',
                                            'rgi_wgms_links_2015_RGIV5.csv')
 cfg.PATHS['glathida_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
-                                           'glathida',
-                                           'rgi_glathida_links_2014_RGIV5.csv')
+                                               'glathida',
+                                               'rgi_glathida_links_2014_RGIV5.csv')
 
 # Params
 cfg.PARAMS['border'] = 20
 
+cfg.PARAMS['invert_with_sliding'] = False
+cfg.PARAMS['min_slope'] = 3.5
+cfg.PARAMS['max_shape_param'] = 0.006
+cfg.PARAMS['max_thick_to_width_ratio'] = 0.5
+cfg.PARAMS['calving_rate'] = 8.0
+cfg.PARAMS['base_binsize'] = 100.
+cfg.PARAMS['temp_use_local_gradient'] = False
+cfg.PARAMS['calving_rate'] = 8.0
+# cfg.PARAMS['prcp_scaling_factor'] = 4
 
 # Read in the RGI file(s)
 rgidf = itmix.get_rgi_df(reset=False)
@@ -78,30 +81,33 @@ rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-03.02479'])]
 rgidf = rgidf.loc[~ rgidf['O1Region'].isin(['19'])]
 # This really is an OGGM problem with strange lines
 rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-02.13974'])]
-
+# Lewis
+rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-16.01638'])]
 # Remove bad black rapids:
-# rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-01.00037'])]
+rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-01.00037'])]
 
+# Keep only columbia
 # rgidf = rgidf.loc[['Columbia' in n for n in rgidf.Name]]
-#
+# rgidf = rgidf.loc[~ np.asarray(['Wa' in n for n in rgidf.Name])]
+
 # Test problems
 # rgidf = rgidf.loc[rgidf.RGIId.isin(['RGI50-01.00037'])]
 
 print('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go
-gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-# gdirs = workflow.init_glacier_regions(rgidf)
+# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+gdirs = workflow.init_glacier_regions(rgidf)
 
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 
 task_list = [
     itmix.glacier_masks_itmix,
-    # tasks.compute_centerlines,
-    # tasks.catchment_area,
-    # tasks.initialize_flowlines,
-    # tasks.catchment_width_geom,
+    tasks.compute_centerlines,
+    tasks.catchment_area,
+    tasks.initialize_flowlines,
+    tasks.catchment_width_geom,
     # tasks.catchment_width_correction
 ]
 for task in task_list:
@@ -109,14 +115,12 @@ for task in task_list:
 
 # Climate related tasks
 # Only global tasks
-# cfg.PARAMS['temp_use_local_gradient'] = False
-# tasks.distribute_climate_data(gdirs)
+tasks.distribute_climate_data(gdirs)
 # tasks.compute_ref_t_stars(gdirs)
 # tasks.distribute_t_stars(gdirs)
 
 # Inversion
 # execute_entity_task(tasks.prepare_for_inversion, gdirs)
-# cfg.PARAMS['invert_with_sliding'] = False
 # itmix.optimize_thick(gdirs)
 # itmix.optimize_per_glacier(gdirs)
 # itmix.invert_marine(gdirs)
@@ -129,9 +133,9 @@ for gd in gdirs:
     # graphics.plot_googlemap(gd)
     # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_ggl.png')
     # plt.close()
-    graphics.plot_domain(gd)
-    plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_dom.png')
-    plt.close()
+    # graphics.plot_domain(gd)
+    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_dom.png')
+    # plt.close()
     # graphics.plot_centerlines(gd)
     # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_cls.png')
     # plt.close()

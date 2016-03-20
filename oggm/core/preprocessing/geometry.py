@@ -766,7 +766,7 @@ def catchment_width_correction(gdir, div_id=None):
             minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
         # Now decide on a binsize which ensures at least one element per bin
-        bsize = 50.
+        bsize = cfg.PARAMS['base_binsize']
         while True:
             maxb = utils.nicenumber(maxh, 1)
             minb = utils.nicenumber(minh, 1, lower=True)
@@ -793,10 +793,11 @@ def catchment_width_correction(gdir, div_id=None):
             if (_c == ref_set) and (_fl == ref_set):
                 break
             bsize += 5
+
             # Add a secutity for infinite loops
             if bsize > 250:
                 nmin -= 1
-                bsize = 50
+                bsize = cfg.PARAMS['base_binsize']
                 log.warning('%s: reduced min n per bin to %d', gdir.rgi_id,
                             nmin)
                 if nmin == 0:

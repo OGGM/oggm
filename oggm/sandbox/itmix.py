@@ -39,10 +39,11 @@ log = logging.getLogger(__name__)
 label_struct = np.ones((3, 3))
 
 # Globals
+SEARCHD = os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted')
 
 def get_rgi_df(reset=False):
-    # This makes an RGI dataframe with all ITMIX + WGMS + GTD glaciers
 
+    # This makes an RGI dataframe with all ITMIX + WGMS + GTD glaciers
     RGI_DIR = utils.get_rgi_dir()
 
     df_rgi_file = os.path.join(DATA_DIR, 'itmix', 'itmix_rgi_shp.pkl')
@@ -76,7 +77,7 @@ def get_rgi_df(reset=False):
                             'Brewster', 'Kesselwandferner', 'NorthGlacier',
                             'SouthGlacier', 'Tasman', 'Unteraar',
                             'Washmawapta', 'Columbia']:
-                for shf in glob.glob(DATA_DIR + '*/*/*_' +
+                for shf in glob.glob(SEARCHD + '/*/*/*_' +
                                              row.name + '*.shp'):
                     pass
                 shp = salem.utils.read_shapefile(shf)
@@ -109,7 +110,7 @@ def get_rgi_df(reset=False):
                 sel.loc[sel.index[0], 'Area'] = area_km2
             elif row.name == 'Urumqi':
                 # ITMIX Urumqi is in fact two glaciers
-                for shf in glob.glob(DATA_DIR + '*/*/*_' +
+                for shf in glob.glob(SEARCHD + '/*/*/*_' +
                                              row.name + '*.shp'):
                     pass
                 shp2 = salem.utils.read_shapefile(shf)
@@ -662,7 +663,7 @@ def optimize_per_glacier(gdirs):
             return utils.rmsd(v / a, gtd_df['ref_thickness_m'].loc[gdir.rgi_id])
         opti = optimization.minimize(to_optimize, [1.],
                                     bounds=((0.01, 10), ),
-                                    tol=1.e-4)
+                                    tol=0.1)
         # Check results and save.
         fac.append(opti['x'][0])
 
