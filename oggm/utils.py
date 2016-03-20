@@ -1049,6 +1049,9 @@ class GlacierDirectory(object):
             self.rgi_region = rgi_entity.O1REGION
             self.name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
+            # this is for the tests which are still in V4
+            self.glacier_type = 'Glacier'
+            self.terminus_type = 'Land-terminating'
         except AttributeError:
             # Should be V5
             self.rgi_id = rgi_entity.RGIId
