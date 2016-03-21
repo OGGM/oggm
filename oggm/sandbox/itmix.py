@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.core.preprocessing.gis import _gaussian_blur, _mask_per_divide
+from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
 from oggm.sandbox.itmix_cfg import DATA_DIR
 from oggm import utils
 
@@ -292,7 +292,7 @@ def glacier_masks_itmix(gdir):
     # Smooth SRTM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
-        smoothed_dem = _gaussian_blur(dem, np.int(gsize))
+        smoothed_dem = gaussian_blur(dem, np.int(gsize))
     else:
         smoothed_dem = dem.copy()
 

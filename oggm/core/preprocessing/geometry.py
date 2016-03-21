@@ -448,10 +448,10 @@ def catchment_area(gdir, div_id=None):
     cls = gdir.read_pickle('centerlines', div_id=div_id)
     geoms = gdir.read_pickle('geometries', div_id=div_id)
     glacier_pix = geoms['polygon_pix']
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    costgrid = nc.variables['cost_grid'][:]
-    mask = nc.variables['glacier_mask'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        costgrid = nc.variables['cost_grid'][:]
+        mask = nc.variables['glacier_mask'][:]
 
     # If we have only one centerline this is going to be easy: take the
     # mask and return
@@ -552,9 +552,10 @@ def initialize_flowlines(gdir, div_id=None):
     fls = []
 
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo_smoothed'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo_smoothed'][:]
+
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
     # (0, 0) is also located in the center of the pixel
@@ -616,13 +617,13 @@ def catchment_width_geom(gdir, div_id=None):
     # Topography is to filter the lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo'][:]
-    mask_ext = nc.variables['glacier_ext'][:]
-    mask_glacier = nc.variables['glacier_mask'][:]
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo'][:]
+        mask_ext = nc.variables['glacier_ext'][:]
+        mask_glacier = nc.variables['glacier_mask'][:]
     topo[np.where(mask_glacier == 0)] = np.NaN
     topo[np.where(mask_ext == 1)] = np.NaN
-    nc.close()
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
@@ -728,10 +729,10 @@ def catchment_width_correction(gdir, div_id=None):
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo'][:]
-    ext = nc.variables['glacier_ext'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo'][:]
+        ext = nc.variables['glacier_ext'][:]
     topo[np.where(ext==1)] = np.NaN
 
     # Param

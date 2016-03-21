@@ -79,9 +79,8 @@ def plot_domain(gdir, ax=None):  # pragma: no cover
     """Plot the glacier directory."""
 
     # Files
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-    topo = nc.variables['topo'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
 
     dofig = False
     if ax is None:
@@ -132,9 +131,8 @@ def plot_centerlines(gdir, ax=None, use_flowlines=False,
     if use_flowlines:
         filename = 'inversion_flowlines'
 
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-    topo = nc.variables['topo'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
 
     dofig = False
     if ax is None:
@@ -211,9 +209,8 @@ def plot_catchment_width(gdir, ax=None, corrected=False):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-    topo = nc.variables['topo'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
 
     mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
     mp.set_topography(topo)
@@ -265,9 +262,8 @@ def plot_inversion(gdir, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-    topo = nc.variables['topo'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
 
     mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
     mp.set_topography(topo)
@@ -317,6 +313,64 @@ def plot_inversion(gdir, ax=None):
 
 
 @entity_task(log)
+def plot_distributed_thickness(gdir, ax=None, method='alt'):
+    """Plots the result of the inversion out of a glacier directory.
+
+    Method: 'alt' or 'interp'
+    """
+
+    dofig = False
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        dofig = True
+
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
+        mask = nc.variables['glacier_mask'][:]
+
+    thick = topo * 0.
+    for di in gdir.divide_ids:
+        grids_file = gdir.get_filepath('gridded_data', div_id=di)
+        with netCDF4.Dataset(grids_file) as nc:
+            thick += nc.variables['thickness_' + method][:]
+
+    thick = np.where(mask, thick, np.NaN)
+
+    mp = cleo.Map(gdir.grid, countries=False, nx=gdir.grid.nx)
+    mp.set_topography(topo)
+
+    # TODO: center grid or corner grid???
+    crs = gdir.grid.center_grid
+
+    toplot_th = np.array([])
+    toplot_lines = []
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
+
+        # Plot boundaries
+        poly_pix = geom['polygon_pix']
+        mp.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
+        for l in poly_pix.interiors:
+            mp.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+    mp.set_cmap(plt.get_cmap('viridis'))
+    mp.set_plot_params(nlevels=256)
+    mp.set_data(thick)
+
+    mp.plot(ax)
+    cb = mp.append_colorbar(ax, "right", size="5%", pad=0.2)
+    cb.set_label('Thick. [m]')
+    title = gdir.rgi_id
+    if gdir.name is not None and gdir.name != '':
+        title += ': ' + gdir.name
+    ax.set_title(title)
+
+    if dofig:
+        plt.tight_layout()
+
+
+@entity_task(log)
 def plot_modeloutput_map(gdir, model=None, ax=None, vmax=None):
     """Plots the result of the model output."""
 
@@ -326,9 +380,8 @@ def plot_modeloutput_map(gdir, model=None, ax=None, vmax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-    topo = nc.variables['topo'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
 
     geom = gdir.read_pickle('geometries', div_id=0)
     poly_pix = geom['polygon_pix']

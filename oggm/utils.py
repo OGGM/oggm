@@ -388,19 +388,17 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     """
 
     # read the file and data
-    nc = netCDF4.Dataset(ncpath, mode='r')
-    temp = nc.variables['temp']
-    prcp = nc.variables['prcp']
-    hgt = nc.variables['hgt']
-
-    igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
-
-    ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
-    itemp = ttemp[:, 1, 1]
-    thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
-    ihgt = thgt[1, 1]
-    thgt = thgt.flatten()
-    iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+    with netCDF4.Dataset(ncpath, mode='r') as nc:
+        temp = nc.variables['temp']
+        prcp = nc.variables['prcp']
+        hgt = nc.variables['hgt']
+        igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
+        ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
+        itemp = ttemp[:, 1, 1]
+        thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
+        ihgt = thgt[1, 1]
+        thgt = thgt.flatten()
+        iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
 
     # Now the gradient
     if use_grad:
@@ -833,10 +831,10 @@ def glacier_characteristics(gdirs):
 
         # Masks related stuff
         if gdir.has_file('gridded_data', div_id=0):
-            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-            nc.close()
+            fpath = gdir.get_filepath('gridded_data', div_id=0)
+            with netCDF4.Dataset(fpath) as nc:
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
@@ -1211,6 +1209,7 @@ class GlacierDirectory(object):
         fpath = self.get_filepath(fname, div_id)
         if os.path.exists(fpath):
             os.remove(fpath)
+
         nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
         xd = nc.createDimension('x', self.grid.nx)
@@ -1260,36 +1259,34 @@ class GlacierDirectory(object):
         fpath = self.get_filepath('climate_monthly')
         if os.path.exists(fpath):
             os.remove(fpath)
-        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
-        nc.ref_hgt = hgt
+        with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
+            nc.ref_hgt = hgt
 
-        dtime = nc.createDimension('time', None)
+            dtime = nc.createDimension('time', None)
 
-        nc.author = 'OGGM'
-        nc.author_info = 'Open Global Glacier Model'
+            nc.author = 'OGGM'
+            nc.author_info = 'Open Global Glacier Model'
 
-        timev = nc.createVariable('time','i4',('time',))
-        timev.setncatts({'units':'days since 1801-01-01 00:00:00'})
-        timev[:] = netCDF4.date2num([t for t in time],
+            timev = nc.createVariable('time','i4',('time',))
+            timev.setncatts({'units':'days since 1801-01-01 00:00:00'})
+            timev[:] = netCDF4.date2num([t for t in time],
                                  'days since 1801-01-01 00:00:00')
 
-        v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
-        v.units = 'kg m-2'
-        v.long_name = 'total precipitation amount'
-        v[:] = prcp
+            v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
+            v.units = 'kg m-2'
+            v.long_name = 'total precipitation amount'
+            v[:] = prcp
 
-        v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
-        v.units = 'degC'
-        v.long_name = '2m temperature at height ref_hgt'
-        v[:] = temp
+            v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
+            v.units = 'degC'
+            v.long_name = '2m temperature at height ref_hgt'
+            v[:] = temp
 
-        v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
-        v.units = 'degC m-1'
-        v.long_name = 'temperature gradient'
-        v[:] = grad
-
-        nc.close()
+            v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
+            v.units = 'degC m-1'
+            v.long_name = 'temperature gradient'
+            v[:] = grad
 
     def log(self, func, err=None):
 

@@ -29,21 +29,21 @@ def _distribute_histalp_syle(gdirs, fpath):
     """
 
     # read the file and data entirely (faster than many I/O)
-    nc = netCDF4.Dataset(fpath, mode='r')
-    lon = nc.variables['lon'][:]
-    lat = nc.variables['lat'][:]
+    with netCDF4.Dataset(fpath, mode='r') as nc:
+        lon = nc.variables['lon'][:]
+        lat = nc.variables['lat'][:]
 
-    # Time
-    time = nc.variables['time']
-    time = netCDF4.num2date(time[:], time.units)
-    ny, r = divmod(len(time), 12)
-    if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        # Time
+        time = nc.variables['time']
+        time = netCDF4.num2date(time[:], time.units)
+        ny, r = divmod(len(time), 12)
+        if r != 0:
+            raise ValueError('Climate data should be N full years exclusively')
 
-    # Units
-    assert nc.variables['hgt'].units == 'm'
-    assert nc.variables['temp'].units == 'degC'
-    assert nc.variables['prcp'].units == 'kg m-2'
+        # Units
+        assert nc.variables['hgt'].units == 'm'
+        assert nc.variables['temp'].units == 'degC'
+        assert nc.variables['prcp'].units == 'kg m-2'
 
     # Gradient defaults
     use_grad = cfg.PARAMS['temp_use_local_gradient']
@@ -59,7 +59,6 @@ def _distribute_histalp_syle(gdirs, fpath):
                                                               g_minmax,
                                                               sf, use_grad)
         gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
-    nc.close()
 
 
 def _distribute_cru_style(gdirs):
@@ -245,34 +244,32 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
     temp_melt = cfg.PARAMS['temp_melt']
 
     # Read file
-    nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
+    with netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
+        # time
+        time = nc.variables['time']
+        time = netCDF4.num2date(time[:], time.units)
+        if time_range is not None:
+            p0 = np.where(time == time_range[0])[0]
+            try:
+                p0 = p0[0]
+            except IndexError:
+                raise RuntimeError('time_range[0] not found in file')
+            p1 = np.where(time == time_range[1])[0]
+            try:
+                p1 = p1[0]
+            except IndexError:
+                raise RuntimeError('time_range[1] not found in file')
+        else:
+            p0 = 0
+            p1 = len(time)-1
 
-    # time
-    time = nc.variables['time']
-    time = netCDF4.num2date(time[:], time.units)
-    if time_range is not None:
-        p0 = np.where(time == time_range[0])[0]
-        try:
-            p0 = p0[0]
-        except IndexError:
-            raise RuntimeError('time_range[0] not found in file')
-        p1 = np.where(time == time_range[1])[0]
-        try:
-            p1 = p1[0]
-        except IndexError:
-            raise RuntimeError('time_range[1] not found in file')
-    else:
-        p0 = 0
-        p1 = len(time)-1
+        time = time[p0:p1+1]
 
-    time = time[p0:p1+1]
-
-    # Read timeseries
-    itemp = nc.variables['temp'][p0:p1+1]
-    iprcp = nc.variables['prcp'][p0:p1+1]
-    igrad = nc.variables['grad'][p0:p1+1]
-    ref_hgt = nc.ref_hgt
-    nc.close()
+        # Read timeseries
+        itemp = nc.variables['temp'][p0:p1+1]
+        iprcp = nc.variables['prcp'][p0:p1+1]
+        igrad = nc.variables['grad'][p0:p1+1]
+        ref_hgt = nc.ref_hgt
 
     # For each height pixel:
     # Compute temp and tempformelt (temperature above melting threshold)

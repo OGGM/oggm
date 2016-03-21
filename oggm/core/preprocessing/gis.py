@@ -49,7 +49,7 @@ log = logging.getLogger(__name__)
 label_struct = np.ones((3, 3))
 
 
-def _gaussian_blur(in_array, size):
+def gaussian_blur(in_array, size):
     """Applies a Gaussian filter to a 2d array.
 
     Parameters
@@ -499,7 +499,7 @@ def glacier_masks(gdir):
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
-        smoothed_dem = _gaussian_blur(dem, np.int(gsize))
+        smoothed_dem = gaussian_blur(dem, np.int(gsize))
     else:
         smoothed_dem = dem.copy()
 

@@ -123,23 +123,22 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
-        nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
+        fpath = gdir.get_filepath('climate_monthly')
+        with netCDF4.Dataset(fpath, mode='r') as nc:
+            # time
+            time = nc.variables['time']
+            time = netCDF4.num2date(time[:], time.units)
+            ny, r = divmod(len(time), 12)
+            yrs = np.arange(time[-1].year-ny+1, time[-1].year+1, 1).repeat(12)
+            assert len(yrs) == len(time)
+            p0 = np.min(np.nonzero(yrs == yr_range[0])[0])
+            p1 = np.max(np.nonzero(yrs == yr_range[1])[0]) + 1
 
-        # time
-        time = nc.variables['time']
-        time = netCDF4.num2date(time[:], time.units)
-        ny, r = divmod(len(time), 12)
-        yrs = np.arange(time[-1].year-ny+1, time[-1].year+1, 1).repeat(12)
-        assert len(yrs) == len(time)
-        p0 = np.min(np.nonzero(yrs == yr_range[0])[0])
-        p1 = np.max(np.nonzero(yrs == yr_range[1])[0]) + 1
-
-        # Read timeseries
-        self.temp = nc.variables['temp'][p0:p1]
-        self.prcp = nc.variables['prcp'][p0:p1]
-        self.grad = nc.variables['grad'][p0:p1]
-        self.ref_hgt = nc.ref_hgt
-        nc.close()
+            # Read timeseries
+            self.temp = nc.variables['temp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1]
+            self.grad = nc.variables['grad'][p0:p1]
+            self.ref_hgt = nc.ref_hgt
 
         # Ny
         ny, r = divmod(len(self.temp), 12)
@@ -245,22 +244,21 @@ class HistalpMassBalanceModel(MassBalanceModel):
         self.temp_melt = cfg.PARAMS['temp_melt']
 
         # Read file
-        nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
-
-        # time
-        time = nc.variables['time']
-        time = netCDF4.num2date(time[:], time.units)
-        ny, r = divmod(len(time), 12)
-        if r != 0:
-            raise ValueError('Climate data should be N full years exclusively')
-        # Last year gives the tone of the hydro year
-        self.years = np.arange(time[-1].year-ny+1, time[-1].year+1, 1)
-        # Read timeseries
-        self.temp = nc.variables['temp'][:]
-        self.prcp = nc.variables['prcp'][:]
-        self.grad = nc.variables['grad'][:]
-        self.ref_hgt = nc.ref_hgt
-        nc.close()
+        fpath = gdir.get_filepath('climate_monthly')
+        with netCDF4.Dataset(fpath, mode='r') as nc:
+            # time
+            time = nc.variables['time']
+            time = netCDF4.num2date(time[:], time.units)
+            ny, r = divmod(len(time), 12)
+            if r != 0:
+                raise ValueError('Climate data should be N full years exclusively')
+            # Last year gives the tone of the hydro year
+            self.years = np.arange(time[-1].year-ny+1, time[-1].year+1, 1)
+            # Read timeseries
+            self.temp = nc.variables['temp'][:]
+            self.prcp = nc.variables['prcp'][:]
+            self.grad = nc.variables['grad'][:]
+            self.ref_hgt = nc.ref_hgt
 
     def get_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
