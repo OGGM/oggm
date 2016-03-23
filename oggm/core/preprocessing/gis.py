@@ -416,13 +416,17 @@ def define_glacier_region(gdir, entity=None):
     gdf = cfg.PARAMS['divides_gdf']
     if gdir.rgi_id in gdf.index.values:
         divdf = [g for g in gdf.loc[gdir.rgi_id].geometry]
-        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divdf))
 
         # Reproject the shape
         def proj(lon, lat):
             return salem.transform_proj(salem.wgs84, gdir.grid.proj,
                                         lon, lat)
         divdf = [shapely.ops.transform(proj, g) for g in divdf]
+
+        # Keep only the ones large enough
+        log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divdf))
+        divdf = [g for g in divdf if (g.area >= (25*dx**2))]
+        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divdf))
 
         # Write the directories and the files
         for i, g in enumerate(divdf):

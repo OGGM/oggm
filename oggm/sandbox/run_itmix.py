@@ -1,5 +1,9 @@
 from __future__ import division
 
+import logging
+logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
+
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 
@@ -17,6 +21,8 @@ import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
+from oggm import tasks
+from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 from oggm.sandbox import itmix
 from oggm.sandbox.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
@@ -25,7 +31,6 @@ from oggm.sandbox.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
 def clean_dir(d):
     shutil.rmtree(d)
     os.makedirs(d)
-
 
 # Init
 cfg.initialize()
@@ -38,14 +43,10 @@ cfg.CONTINUE_ON_ERROR = False
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Set up the paths and other stuffs
-cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
 cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
-
-cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
 cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
 cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
-
-# Update with calib data where ITMIX glaciers have been removed
+# calib data where ITMIX glaciers have been removed
 cfg.PATHS['wgms_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
                                            'wgms',
                                            'rgi_wgms_links_2015_RGIV5.csv')
@@ -53,7 +54,26 @@ cfg.PATHS['glathida_rgi_links'] = os.path.join(DATA_DIR, 'itmix',
                                                'glathida',
                                                'rgi_glathida_links_2014_RGIV5.csv')
 
+
+cfg.PATHS['itmix_divs'] =  os.path.join(DATA_DIR, 'itmix', 'my_divides.pkl')
+
+# Read in the RGI file(s)
+rgidf = itmix.get_rgi_df(reset=True)
+
+print('N glaciers before filt', len(rgidf))
+
+# Set the newly created divides
+df = gpd.GeoDataFrame.from_file(get_demo_file('HEF_divided.shp'))
+# dirty fix
+new = pd.read_pickle(cfg.PATHS['itmix_divs'])
+df = pd.concat([df, new])
+cfg.PARAMS['divides_gdf'] = df.set_index('RGIID')
+
+
 # Params
+cfg.PARAMS['d1'] = 4
+cfg.PARAMS['dmax'] = 100
+
 cfg.PARAMS['border'] = 20
 
 cfg.PARAMS['invert_with_sliding'] = False
@@ -66,8 +86,6 @@ cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['calving_rate'] = 8.0
 # cfg.PARAMS['prcp_scaling_factor'] = 4
 
-# Read in the RGI file(s)
-rgidf = itmix.get_rgi_df(reset=False)
 
 # Remove problem glaciers
 # This is an ice-cap, centerlines wont work
@@ -83,8 +101,9 @@ rgidf = rgidf.loc[~ rgidf['O1Region'].isin(['19'])]
 rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-02.13974'])]
 # Lewis
 rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-16.01638'])]
+
 # Remove bad black rapids:
-rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-01.00037'])]
+# rgidf = rgidf.loc[~ rgidf.RGIId.isin(['RGI50-01.00037'])]
 
 # Keep only columbia
 # rgidf = rgidf.loc[['Columbia' in n for n in rgidf.Name]]
@@ -99,8 +118,9 @@ print('Number of glaciers: {}'.format(len(rgidf)))
 # gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 gdirs = workflow.init_glacier_regions(rgidf)
 
-from oggm import tasks
-from oggm.workflow import execute_entity_task
+# for gd in gdirs:
+#    print(gd.name, gd.grid.dx, gd.grid.nx, gd.grid.ny)
+#
 
 task_list = [
     itmix.glacier_masks_itmix,
@@ -136,9 +156,9 @@ for gd in gdirs:
     # graphics.plot_domain(gd)
     # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_dom.png')
     # plt.close()
-    # graphics.plot_centerlines(gd)
-    # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_cls.png')
-    # plt.close()
+    graphics.plot_centerlines(gd)
+    plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_cls.png')
+    plt.close()
     # graphics.plot_catchment_width(gd, corrected=True)
     # plt.savefig(pdir + gd.name + '_' + gd.rgi_id + '_w.png')
     # plt.close()

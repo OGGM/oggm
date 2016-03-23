@@ -1,9 +1,9 @@
 import os
 
-DATA_DIR = ''
-WORKING_DIR = ''
-PLOTS_DIR = ''
+DATA_DIR = '/work/ubuntu/oggm-data/'
+WORKING_DIR = '/work/ubuntu/wd/base/'
+PLOTS_DIR = '/work/ubuntu/wd/base/plots/'
 
 # DATA_DIR = '/home/mowglie/disk/Dropbox/Share/oggm-data/'
-# WORKING_DIR = '/home/mowglie/disk/TMP/itmix_aws/wd/lessbedfilt/'
-# PLOTS_DIR = '/home/mowglie/disk/TMP/itmix_aws/wd/plots/'
+# WORKING_DIR = '/home/mowglie/disk/ITMIX/new/'
+# PLOTS_DIR = '/home/mowglie/disk/ITMIX/new/plots/'

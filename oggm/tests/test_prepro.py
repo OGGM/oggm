@@ -977,7 +977,8 @@ class TestInversion(unittest.TestCase):
                     t1 += nc.variables['thickness_alt'][:]
                     t2 += nc.variables['thickness_interp'][:]
         np.testing.assert_allclose(np.sum(t1), np.sum(t2))
-        np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
+        if not HAS_NEW_GDAL:
+            np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
 
     def test_invert_hef_nofs(self):
 

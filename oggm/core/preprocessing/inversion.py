@@ -360,7 +360,7 @@ def volume_inversion(gdir, use_cfg_params=False):
 
 @entity_task(log, writes=['gridded_data'])
 @divide_task(log, add_0=False)
-def distribute_thickness_alt(gdir, div_id=None):
+def distribute_thickness_alt(gdir, div_id=None, add_slope=False):
     """Compute a thickness map of the glacier using the nearests centerlines.
 
     This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
@@ -423,10 +423,12 @@ def distribute_thickness_alt(gdir, div_id=None):
 
     # Slope
     dx = gdir.grid.dx
-    sy, sx = np.gradient(topo, dx, dx)
-    slope = np.arctan(np.sqrt(sy**2 + sx**2))
-    slope = np.clip(slope, np.deg2rad(6.), np.pi/2.)
-    slope = 1 / slope**(cfg.N / (cfg.N+2))
+    slope = 1.
+    if add_slope:
+        sy, sx = np.gradient(topo, dx, dx)
+        slope = np.arctan(np.sqrt(sy**2 + sx**2))
+        slope = np.clip(slope, np.deg2rad(6.), np.pi/2.)
+        slope = 1 / slope**(cfg.N / (cfg.N+2))
 
     # Conserve volume
     tmp_vol = np.nansum(thick * dis * slope * dx**2)
@@ -444,7 +446,7 @@ def distribute_thickness_alt(gdir, div_id=None):
 
 @entity_task(log, writes=['gridded_data'])
 @divide_task(log, add_0=False)
-def distribute_thickness_interp(gdir, div_id=None):
+def distribute_thickness_interp(gdir, div_id=None, smooth=False):
     """Compute a thickness map of the glacier using regular interpolation.
 
     This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
@@ -484,9 +486,10 @@ def distribute_thickness_interp(gdir, div_id=None):
     thick[pnan] = griddata(points, np.ravel(thick[pok]), inter, method='cubic')
 
     # Smooth
-    # gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
-    # thick = gaussian_blur(thick, np.int(gsize))
-    # thick = np.where(glacier_mask, thick, 0.)
+    if smooth:
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
+        thick = gaussian_blur(thick, np.int(gsize))
+        thick = np.where(glacier_mask, thick, 0.)
 
     # Conserve volume
     dx = gdir.grid.dx

@@ -579,7 +579,9 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if os.path.exists(cfg.PATHS['wgms_rgi_links']):
+    if cfg.PATHS['wgms_rgi_links'] != '~':
+        if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
+            raise ValueError('wrong wgms_rgi_links path provided.')
         # User provided data
         outf = cfg.PATHS['wgms_rgi_links']
         datadir = os.path.join(os.path.dirname(outf), 'mbdata')
@@ -605,7 +607,9 @@ def get_glathida_file():
     (file, dir): paths to the files
     """
 
-    if os.path.exists(cfg.PATHS['glathida_rgi_links']):
+    if cfg.PATHS['glathida_rgi_links'] != '~':
+        if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
+            raise ValueError('wrong glathida_rgi_links path provided.')
         # User provided data
         return cfg.PATHS['glathida_rgi_links']
 
