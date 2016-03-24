@@ -456,7 +456,7 @@ def catchment_area(gdir, div_id=None):
     # If we have only one centerline this is going to be easy: take the
     # mask and return
     if len(cls) == 1:
-        cl_catchments = [np.array(np.where(mask == 1)).T]
+        cl_catchments = [np.array(np.nonzero(mask == 1)).T]
         gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
         return
 
@@ -470,21 +470,31 @@ def catchment_area(gdir, div_id=None):
             assert (y, x) not in dic_catch
             dic_catch[(y, x)] = set([(y, x)])
 
+    # It is much faster to make the array as small as possible (especially
+    # with divides). We have to trick:
+    pm = np.nonzero(mask == 1)
+    ymi, yma = np.min(pm[0])-1, np.max(pm[0])+2
+    xmi, xma = np.min(pm[1])-1, np.max(pm[1])+2
+    costgrid = costgrid[ymi:yma, xmi:xma]
+    mask = mask[ymi:yma, xmi:xma]
+
     # Where did we compute the path already?
     computed = np.where(mask == 1, 0, np.nan)
 
-    # Coords of Terminus
+    # Coords of Terminus (converted)
     endcoords = np.array(cls[0].tail.coords[0])[::-1].astype(np.int64)
+    endcoords -= [ymi, xmi]
 
     # Start with all the paths at the boundaries, they are more likely
     # to cover much of the glacier
     for headx, heady in tuple2int(glacier_pix.exterior.coords):
-        indices, _ = route_through_array(costgrid, np.array([heady, headx]),
-                                         endcoords)
+        headcoords = np.array([heady-ymi, headx-xmi])  # convert
+        indices, _ = route_through_array(costgrid, headcoords, endcoords)
         inds = np.array(indices).T
         computed[inds[0], inds[1]] = 1
         set_dump = set([])
         for y, x in indices:
+            y, x = y+ymi, x+xmi  # back to original
             set_dump.add((y, x))
             if (y, x) in dic_catch:
                 dic_catch[(y, x)] = dic_catch[(y, x)].union(set_dump)
@@ -501,6 +511,7 @@ def catchment_area(gdir, div_id=None):
         computed[inds[0], inds[1]] = 1
         set_dump = set([])
         for y, x in indices:
+            y, x = y+ymi, x+xmi  # back to original
             set_dump.add((y, x))
             if (y, x) in dic_catch:
                 dic_catch[(y, x)] = dic_catch[(y, x)].union(set_dump)

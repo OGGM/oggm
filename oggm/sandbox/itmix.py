@@ -78,6 +78,8 @@ def get_rgi_df(reset=False):
         _rgi_ids_for_overwrite = []
         for i, row in df_itmix.iterrows():
 
+            print('Prepro: ' + row.name)
+
             # read the rgi region
             rgi_shp = find_path(RGI_DIR, row['rgi_reg'] + '_rgi50_*.shp')
             rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
@@ -306,7 +308,6 @@ def glacier_masks_itmix(gdir):
     n_g = gdir.name.split(':')[-1]
     searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted', '*')
     searchf = os.path.join(searchf, '02_surface_' + n_g + '*.asc')
-    print(searchf)
     for dem_f in glob.glob(searchf):
         pass
 
