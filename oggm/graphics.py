@@ -313,7 +313,7 @@ def plot_inversion(gdir, ax=None):
 
 
 @entity_task(log)
-def plot_distributed_thickness(gdir, ax=None, method='alt'):
+def plot_distributed_thickness(gdir, ax=None, how=None):
     """Plots the result of the inversion out of a glacier directory.
 
     Method: 'alt' or 'interp'
@@ -329,11 +329,9 @@ def plot_distributed_thickness(gdir, ax=None, method='alt'):
         topo = nc.variables['topo'][:]
         mask = nc.variables['glacier_mask'][:]
 
-    thick = topo * 0.
-    for di in gdir.divide_ids:
-        grids_file = gdir.get_filepath('gridded_data', div_id=di)
-        with netCDF4.Dataset(grids_file) as nc:
-            thick += nc.variables['thickness_' + method][:]
+    grids_file = gdir.get_filepath('gridded_data', div_id=0)
+    with netCDF4.Dataset(grids_file) as nc:
+        thick = nc.variables['thickness_' + how][:]
 
     thick = np.where(mask, thick, np.NaN)
 

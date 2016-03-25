@@ -890,6 +890,19 @@ def glacier_characteristics(gdirs):
             d['clim_temp_avgh'] = t
             d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
 
+        # Inversion
+        if gdir.has_file('inversion_output', div_id=1):
+            vol = []
+            for i in gdir.divide_ids:
+                cl = gdir.read_pickle('inversion_output', div_id=i)
+                for c in cl:
+                    vol.extend(c['volume'])
+            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+            area = gdir.rgi_area_km2
+            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+            d['vas_volume_km3'] = 0.034*(area**1.375)
+            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+
         out_df.append(d)
 
     cols = list(out_df[0].keys())

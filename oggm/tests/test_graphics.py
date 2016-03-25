@@ -172,8 +172,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
 
-    inversion.distribute_thickness_alt(gdir)
-    inversion.distribute_thickness_interp(gdir)
+    inversion.distribute_thickness(gdir, how='per_altitude')
+    inversion.distribute_thickness(gdir, how='per_interpolation',
+                                   add_slope=False, smooth=False)
 
     return gdir
 
@@ -280,8 +281,8 @@ def test_plot_model():
 def test_plot_distrib():
 
     gdir = init_hef()
-    graphics.plot_distributed_thickness(gdir, method='alt')
-    graphics.plot_distributed_thickness(gdir, method='interp')
+    graphics.plot_distributed_thickness(gdir, how='per_altitude')
+    graphics.plot_distributed_thickness(gdir, how='per_interpolation')
 
 if __name__ == '__main__':  # pragma: no cover
     nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)

@@ -444,7 +444,7 @@ def compute_centerlines(gdir, div_id=None):
     maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
-    if len(heads_idx[0]) <= 1:
+    if (not cfg.PARAMS['use_multiple_flowlines']) or len(heads_idx[0]) <= 1:
         # small glaciers with one or less heads: take the absolute max
         heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
 

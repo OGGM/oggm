@@ -239,6 +239,7 @@ def initialize(file=None):
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
+    PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -258,7 +259,8 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_inversion_params', 'invert_with_sliding', 'rgi_dir']
+           'use_inversion_params', 'invert_with_sliding', 'rgi_dir',
+           'use_multiple_flowlines']
     for k in ltr:
         del cp[k]
 

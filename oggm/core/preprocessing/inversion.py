@@ -63,7 +63,6 @@ def prepare_for_inversion(gdir, div_id=None):
     fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
     towrite = []
-    slopes = np.array([])
     for fl in fls:
 
         # Distance between two points
@@ -72,10 +71,9 @@ def prepare_for_inversion(gdir, div_id=None):
         # Widths
         widths = fl.widths * gdir.grid.dx
 
-        # Heigth and slope(s)
+        # Heigth
         hgt = fl.surface_h
         angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
-        slopes = np.append(slopes, angle)
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
@@ -355,36 +353,17 @@ def volume_inversion(gdir, use_cfg_params=False):
         glen_a = d['glen_a']
 
     # go
-    invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs, write=True)
+    return invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs, write=True)
 
 
-@entity_task(log, writes=['gridded_data'])
-@divide_task(log, add_0=False)
-def distribute_thickness_alt(gdir, div_id=None, add_slope=False):
-    """Compute a thickness map of the glacier using the nearests centerlines.
-
-    This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
-    Here we take the neirest neighbor and do stuff. Maybe not the best.
-
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    """
-
-    # Variables
-    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
-    with netCDF4.Dataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:]
-        topo = nc.variables['topo_smoothed'][:]
+def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
+                                       add_slope=True,
+                                       smooth=True):
+    """Where the job is actually done."""
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output', div_id=div_id)
-    fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-    hs = np.array([])
-    ts = np.array([])
-    vs = np.array([])
-    xs = np.array([])
-    ys = np.array([])
+    dx = grid.dx
+    hs, ts, vs, xs, ys = [], [], [], [] ,[]
     for cl, fl in zip(cls, fls):
         # TODO: here one should see if parabola is always the best choice
         hs = np.append(hs, cl['hgt'])
@@ -412,9 +391,10 @@ def distribute_thickness_alt(gdir, div_id=None, add_slope=False):
         thick[y, x] = np.average(ts[pok], weights=dis_w)
 
     # Smooth
-    thick = np.where(np.isfinite(thick), thick, 0.)
-    gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
-    thick = gaussian_blur(thick, np.int(gsize))
+    if smooth:
+        thick = np.where(np.isfinite(thick), thick, 0.)
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
+        thick = gaussian_blur(thick, np.int(gsize))
     thick = np.where(glacier_mask, thick, 0.)
 
     # Distance
@@ -422,7 +402,6 @@ def distribute_thickness_alt(gdir, div_id=None, add_slope=False):
     dis = np.where(glacier_mask, dis, np.NaN)**0.5
 
     # Slope
-    dx = gdir.grid.dx
     slope = 1.
     if add_slope:
         sy, sx = np.gradient(topo, dx, dx)
@@ -434,41 +413,21 @@ def distribute_thickness_alt(gdir, div_id=None, add_slope=False):
     tmp_vol = np.nansum(thick * dis * slope * dx**2)
     final_t = thick * dis * slope * vol / tmp_vol
 
-    # Add to grids
+    # Done
     final_t = np.where(np.isfinite(final_t), final_t, 0.)
     assert np.allclose(np.sum(final_t * dx**2), vol)
-    with netCDF4.Dataset(grids_file, 'a') as nc:
-        v = nc.createVariable('thickness_alt', 'f4', ('y', 'x', ), zlib=True)
-        v.units = '-'
-        v.long_name = 'Distributed thickness version alt'
-        v[:] = final_t
+    return final_t
 
 
-@entity_task(log, writes=['gridded_data'])
-@divide_task(log, add_0=False)
-def distribute_thickness_interp(gdir, div_id=None, smooth=False):
-    """Compute a thickness map of the glacier using regular interpolation.
-
-    This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
-    Here we take the neirest neighbor and do stuff. Maybe not the best.
-
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    """
-
-    # Variables
-    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
-    with netCDF4.Dataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:]
-        topo = nc.variables['topo_smoothed'][:]
+def _distribute_thickness_per_interp(glacier_mask, topo, cls, fls, grid,
+                                     smooth=True, add_slope=True):
+    """Where the job is actually done."""
 
     # Thick to interpolate
+    dx = grid.dx
     thick = np.where(glacier_mask, np.NaN, 0)
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output', div_id=div_id)
-    fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
     vs = []
     for cl, fl in zip(cls, fls):
         # TODO: here one should see if parabola is always the best choice
@@ -478,7 +437,7 @@ def distribute_thickness_interp(gdir, div_id=None, smooth=False):
     vol = np.sum(vs)
 
     # Interpolate
-    xx, yy = gdir.grid.ij_coordinates
+    xx, yy = grid.ij_coordinates
     pnan = np.nonzero(~ np.isfinite(thick))
     pok = np.nonzero(np.isfinite(thick))
     points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -487,21 +446,85 @@ def distribute_thickness_interp(gdir, div_id=None, smooth=False):
 
     # Smooth
     if smooth:
-        gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         thick = gaussian_blur(thick, np.int(gsize))
         thick = np.where(glacier_mask, thick, 0.)
 
+    # Slope
+    slope = 1.
+    if add_slope:
+        sy, sx = np.gradient(topo, dx, dx)
+        slope = np.arctan(np.sqrt(sy**2 + sx**2))
+        slope = np.clip(slope, np.deg2rad(6.), np.pi/2.)
+        slope = 1 / slope**(cfg.N / (cfg.N+2))
+
     # Conserve volume
-    dx = gdir.grid.dx
-    tmp_vol = np.nansum(thick * dx**2)
-    final_t = thick * vol / tmp_vol
+    tmp_vol = np.nansum(thick * slope * dx**2)
+    final_t = thick * slope * vol / tmp_vol
 
     # Add to grids
     final_t = np.where(np.isfinite(final_t), final_t, 0.)
     assert np.allclose(np.sum(final_t * dx**2), vol)
+    return final_t
+
+
+@entity_task(log, writes=['gridded_data'])
+def distribute_thickness(gdir, how='', add_slope=True, smooth=True):
+    """Compute a thickness map of the glacier using the nearest centerlines.
+
+    This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
+    Here we take the nearest neighbors in a certain altitude range.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    if how == 'per_altitude':
+        inv_g = _distribute_thickness_per_altitude
+    elif how == 'per_interpolation':
+        inv_g = _distribute_thickness_per_interp
+    else:
+        raise ValueError('interpolation method not understood')
+
+    # Different behavior for ice-caps
+    if gdir.glacier_type == 'Ice cap':
+        glacier_mask = 0.
+        cls, fls = [], []
+        for div_id in gdir.divide_ids:
+            # Variables
+            grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
+            with netCDF4.Dataset(grids_file) as nc:
+                glacier_mask += nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo_smoothed'][:]
+            cls.extend(gdir.read_pickle('inversion_output', div_id=div_id))
+            fls.extend(gdir.read_pickle('inversion_flowlines', div_id=div_id))
+        # One call for all divides
+        glacier_mask = np.clip(glacier_mask, 0, 1)
+        thick = inv_g(glacier_mask, topo, cls, fls, gdir.grid,
+                      add_slope=add_slope, smooth=smooth)
+    else:
+        thick = 0.
+        for div_id in gdir.divide_ids:
+            # Variables
+            grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
+            with netCDF4.Dataset(grids_file) as nc:
+                glacier_mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo_smoothed'][:]
+            cls = gdir.read_pickle('inversion_output', div_id=div_id)
+            fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+            _h = inv_g(glacier_mask, topo, cls, fls, gdir.grid,
+                       add_slope=add_slope, smooth=smooth)
+            thick += _h
+
+    # write to divide 0
+    grids_file = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(grids_file, 'a') as nc:
-        v = nc.createVariable('thickness_interp', 'f4', ('y', 'x', ),
-                              zlib=True)
+        vn = 'thickness_' + how
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
         v.units = '-'
-        v.long_name = 'Distributed thickness version interp'
-        v[:] = final_t
+        v.long_name = 'Distributed ice thickness'
+        v[:] = thick

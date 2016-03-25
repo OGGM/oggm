@@ -957,28 +957,27 @@ class TestInversion(unittest.TestCase):
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
-                                    tol=1e-4)['x']
+                                    tol=1e-1)['x']
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
         v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
                                               glen_a=glen_a,
                                               write=True)
         np.testing.assert_allclose(ref_v, v)
-        inversion.distribute_thickness_alt(gdir)
-        inversion.distribute_thickness_interp(gdir)
 
-        for di in gdir.divide_ids:
-            grids_file = gdir.get_filepath('gridded_data', div_id=di)
-            with netCDF4.Dataset(grids_file) as nc:
-                if di == 1:
-                    t1 = nc.variables['thickness_alt'][:]
-                    t2 = nc.variables['thickness_interp'][:]
-                else:
-                    t1 += nc.variables['thickness_alt'][:]
-                    t2 += nc.variables['thickness_interp'][:]
+        inversion.distribute_thickness(gdir, how='per_altitude')
+        inversion.distribute_thickness(gdir, how='per_interpolation',
+                                       add_slope=False)
+
+        grids_file = gdir.get_filepath('gridded_data')
+        with netCDF4.Dataset(grids_file) as nc:
+            t1 = nc.variables['thickness_per_altitude'][:]
+            t2 = nc.variables['thickness_per_interpolation'][:]
+
         np.testing.assert_allclose(np.sum(t1), np.sum(t2))
         if not HAS_NEW_GDAL:
             np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
+
 
     def test_invert_hef_nofs(self):
 
