@@ -7,10 +7,81 @@ from codecs import open  # To use a consistent encoding
 from os import path, walk
 import importlib
 
-# Get the long description from the relevant file
-here = path.abspath(path.dirname(__file__))
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+MAJOR = 0
+MINOR = 1
+MICRO = 0
+ISRELEASED = False
+VERSION = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
+QUALIFIER = ''
+
+DISTNAME = 'oggm'
+LICENSE = 'GPLv3+'
+AUTHOR = 'oggm Developers'
+AUTHOR_EMAIL = 'fabien.maussion@uibk.ac.at'
+URL = 'http://oggm.org'
+CLASSIFIERS = [
+        # How mature is this project? Common values are
+        # 3 - Alpha  4 - Beta  5 - Production/Stable
+        'Development Status :: 3 - Alpha',
+        # Indicate who your project is intended for
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: GNU General Public License ' +
+        'v3 or later (GPLv3+)',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+    ]
+
+DESCRIPTION = 'Open Global Glacier Model'
+LONG_DESCRIPTION = """
+OGGM builds upon `Marzeion et al., (2012)`_ and intends to become a
+global scale, modular, and open source model for glacier dynamics. The model
+accounts for glacier geometry (including contributory branches) and includes
+a simple (yet explicit) ice dynamics module. It can simulate past and
+future mass-balance, volume and geometry of any glacier in a fully
+automated workflow. We rely exclusively on publicly available data for
+calibration and validation.
+
+The project is currently in intense development. Get in touch with us if
+you want to contribute.
+
+.. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
+
+Links
+-----
+- HTML documentation: http://oggm.org
+- Source code: http://github.com/oggm/oggm
+"""
+
+# code to extract and write the version copied from pandas
+FULLVERSION = VERSION
+write_version = True
+
+if not ISRELEASED:
+    FULLVERSION += '.dev'
+else:
+    FULLVERSION += QUALIFIER
+
+
+def write_version_py(filename=None):
+    cnt = """\
+version = '%s'
+short_version = '%s'
+"""
+    if not filename:
+        filename = path.join(path.dirname(__file__), 'oggm', 'version.py')
+
+    a = open(filename, 'w')
+    try:
+        a.write(cnt % (FULLVERSION, VERSION))
+    finally:
+        a.close()
+
+
+if write_version:
+    write_version_py()
 
 
 def check_dependencies(package_names):
@@ -25,15 +96,26 @@ def check_dependencies(package_names):
         errmsg = "Warning: the following packages could not be found: "
         print(errmsg + ', '.join(not_met))
 
-req_packages = ['numpy',
+
+req_packages = ['six',
+                'numpy',
                 'scipy',
-                'six',
                 'pyproj',
                 'pandas',
+                'geopandas',
+                'fiona',
                 'matplotlib',
-                'joblib']
-
+                'scikit-image',
+                'Pillow',
+                'joblib',
+                'netCDF4',
+                'shapely',
+                'rasterio',
+                'configobj',
+                'nose',
+                'xarray']
 check_dependencies(req_packages)
+
 
 def file_walk(top, remove=''):
     """
@@ -48,34 +130,20 @@ def file_walk(top, remove=''):
 
 setup(
     # Project info
-    name='OGGM',
-    version='0.0.1',
-    description='Open Global Glacier Model',
-    long_description=long_description,
+    name=DISTNAME,
+    version=FULLVERSION,
+    description=DESCRIPTION,
+    long_description=LONG_DESCRIPTION,
     # The project's main homepage.
-    url='https://github.com/OGGM/oggm',
+    url=URL,
     # Author details
-    author='OGGM developers',
-    author_email='fabien.maussion@uibk.ac.at',
+    author=AUTHOR,
+    author_email=AUTHOR_EMAIL,
     # License
-    license='GPLv3+',
-    # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
-    classifiers=[
-        # How mature is this project? Common values are
-        # 3 - Alpha  4 - Beta  5 - Production/Stable
-        'Development Status :: 4 - Alpha',
-        # Indicate who your project is intended for
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: GNU General Public License '
-        'v3 or later (GPLv3+)',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-    ],
+    license=LICENSE,
+    classifiers=CLASSIFIERS,
     # What does your project relate to?
-    keywords=['glacier', 'climate'],
+    keywords=['geosciences', 'glaciers', 'climate', 'gis'],
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Decided not to let pip install the dependencies, this is too brutal
@@ -86,7 +154,6 @@ setup(
     package_data={'oggm.tests': list(file_walk('oggm/tests/baseline_images',
                                                remove='oggm/tests/')),
                   'oggm': ['params.cfg']},
-
     # Old
     data_files=[],
     # Executable scripts
