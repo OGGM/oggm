@@ -31,6 +31,7 @@ Documentation
     mass-balance
     flowline
     glacierdir-gen
+    itmix
     api
 
 
