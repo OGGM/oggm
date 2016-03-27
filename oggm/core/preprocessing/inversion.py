@@ -71,7 +71,7 @@ def prepare_for_inversion(gdir, div_id=None):
         # Widths
         widths = fl.widths * gdir.grid.dx
 
-        # Heigth
+        # Heights
         hgt = fl.surface_h
         angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
 
@@ -192,9 +192,9 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 out_thick = (out_shape * w**2) / 4
 
             # smooth section
-            section = cfg.TWO_THIRDS * w * out_thick
+            section = cfg.TWO_THIRDS * w * out_thick * cl['dx']
             section = gaussian_filter1d(section, sec_smooth)
-            out_thick = section / (w * cfg.TWO_THIRDS)
+            out_thick = section / (w * cfg.TWO_THIRDS * cl['dx'])
 
             # volume
             volume = cfg.TWO_THIRDS * out_thick * w * cl['dx']
@@ -469,7 +469,8 @@ def _distribute_thickness_per_interp(glacier_mask, topo, cls, fls, grid,
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness(gdir, how='', add_slope=True, smooth=True):
+def distribute_thickness(gdir, how='', add_slope=True, smooth=True,
+                         add_nc_name=False):
     """Compute a thickness map of the glacier using the nearest centerlines.
 
     This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
@@ -520,7 +521,10 @@ def distribute_thickness(gdir, how='', add_slope=True, smooth=True):
     # write to divide 0
     grids_file = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(grids_file, 'a') as nc:
-        vn = 'thickness_' + how
+        vn = 'thickness'
+        # TODO: this is for testing -- remove later
+        if add_nc_name:
+            vn += '_' + how
         if vn in nc.variables:
             v = nc.variables[vn]
         else:

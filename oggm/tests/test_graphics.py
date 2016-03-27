@@ -172,9 +172,11 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
 
-    inversion.distribute_thickness(gdir, how='per_altitude')
+    inversion.distribute_thickness(gdir, how='per_altitude',
+                                   add_nc_name=True)
     inversion.distribute_thickness(gdir, how='per_interpolation',
-                                   add_slope=False, smooth=False)
+                                   add_slope=False, smooth=False,
+                                   add_nc_name=True)
 
     return gdir
 

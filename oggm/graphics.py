@@ -253,7 +253,7 @@ def plot_catchment_width(gdir, ax=None, corrected=False):
 
 
 @entity_task(log)
-def plot_inversion(gdir, ax=None):
+def plot_inversion(gdir, ax=None, add_title_comment=''):
     """Plots the result of the inversion out of a glacier directory."""
 
     dofig = False
@@ -273,6 +273,7 @@ def plot_inversion(gdir, ax=None):
 
     toplot_th = np.array([])
     toplot_lines = []
+    vol = []
     for i in gdir.divide_ids:
         geom = gdir.read_pickle('geometries', div_id=i)
         inv = gdir.read_pickle('inversion_output', div_id=i)
@@ -293,7 +294,7 @@ def plot_inversion(gdir, ax=None):
                 l = shpg.LineString([shpg.Point(cur + wi/2. * n1),
                                      shpg.Point(cur + wi/2. * n2)])
                 toplot_lines.append(l)
-
+            vol.extend(c['volume'])
 
     cm = plt.cm.get_cmap('YlOrRd')
     dl = cleo.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0)
@@ -307,6 +308,8 @@ def plot_inversion(gdir, ax=None):
     title = gdir.rgi_id
     if gdir.name is not None and gdir.name != '':
         title += ': ' + gdir.name
+    title += add_title_comment
+    title += ' ({:.2f} km3)'.format(np.nansum(vol) * 1e-9)
     ax.set_title(title)
     if dofig:
         plt.tight_layout()
@@ -331,7 +334,10 @@ def plot_distributed_thickness(gdir, ax=None, how=None):
 
     grids_file = gdir.get_filepath('gridded_data', div_id=0)
     with netCDF4.Dataset(grids_file) as nc:
-        thick = nc.variables['thickness_' + how][:]
+        vn = 'thickness'
+        if how is not None:
+            vn += '_' + how
+        thick = nc.variables[vn][:]
 
     thick = np.where(mask, thick, np.NaN)
 

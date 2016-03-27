@@ -7,6 +7,7 @@ License: GPLv3+
 from __future__ import absolute_import, division
 
 import six.moves.cPickle as pickle
+from six import string_types
 from six.moves.urllib.request import urlretrieve, urlopen
 from six.moves.urllib.error import HTTPError, URLError
 
@@ -30,6 +31,7 @@ import subprocess
 import geopandas as gpd
 import pandas as pd
 from salem import lazy_property
+from salem.utils import read_shapefile
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -1053,6 +1055,11 @@ class GlacierDirectory(object):
 
         if base_dir is None:
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+
+        # RGI IDs are also valid entries
+        if isinstance(rgi_entity, string_types):
+            _shp = os.path.join(base_dir, rgi_entity, 'outlines.shp')
+            rgi_entity = read_shapefile(_shp).iloc[0]
 
         try:
             # Assume RGI V4

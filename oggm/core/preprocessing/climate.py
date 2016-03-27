@@ -542,7 +542,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
 
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
-        log.info('%s: local mu*, divide %d', gdir.rgi_id, div_id)
+        log.info('%s: local mu* for t*=%d, divide %d',
+                 gdir.rgi_id, tstar, div_id)
 
         # Get the corresponding mu
         years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,

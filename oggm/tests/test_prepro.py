@@ -91,6 +91,19 @@ class TestGIS(unittest.TestCase):
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
 
+    def test_glacierdir(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+
+        # this should simply run
+        mygdir = oggm.GlacierDirectory(entity.RGIID, base_dir=self.testdir)
+
     def test_glacier_masks(self):
 
         # The GIS was double checked externally with IDL.
@@ -965,9 +978,11 @@ class TestInversion(unittest.TestCase):
                                               write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        inversion.distribute_thickness(gdir, how='per_altitude')
+        inversion.distribute_thickness(gdir, how='per_altitude',
+                                       add_nc_name=True)
         inversion.distribute_thickness(gdir, how='per_interpolation',
-                                       add_slope=False)
+                                       add_slope=False,
+                                       add_nc_name=True)
 
         grids_file = gdir.get_filepath('gridded_data')
         with netCDF4.Dataset(grids_file) as nc:
