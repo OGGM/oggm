@@ -845,9 +845,8 @@ def init_present_time_glacier(gdir):
     """
 
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
-    topo = nc.variables['topo_smoothed'][:]
-    nc.close()
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+        topo = nc.variables['topo_smoothed'][:]
 
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e

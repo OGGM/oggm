@@ -7,8 +7,9 @@ License: GPLv3+
 from __future__ import absolute_import, division
 
 import six.moves.cPickle as pickle
+from six import string_types
 from six.moves.urllib.request import urlretrieve, urlopen
-from six.moves.urllib.error import HTTPError
+from six.moves.urllib.error import HTTPError, URLError
 
 # Builtins
 import glob
@@ -23,11 +24,14 @@ from collections import OrderedDict
 from functools import partial, wraps
 import json
 import time
+import fnmatch
+import subprocess
 
 # External libs
 import geopandas as gpd
 import pandas as pd
 from salem import lazy_property
+from salem.utils import read_shapefile
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -98,7 +102,7 @@ def _download_oggm_files():
             # if not same, delete entire dir
             if local_sha != master_sha:
                 empty_cache()
-        except HTTPError:
+        except (HTTPError, URLError):
             master_sha = 'error'
     else:
         write_sha = False
@@ -168,6 +172,13 @@ def _download_srtm_file(zone):
 
 def _download_aster_file(zone, unit):
     """Checks if the aster data is in the directory and if not, download it.
+
+    You need AWS cli and AWS credentials for this. Quoting Timo:
+
+    $ aws configure
+
+    Key ID und Secret you should have
+    Region is eu-west-1 and Output Format is json.
     """
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'aster')
@@ -177,13 +188,12 @@ def _download_aster_file(zone, unit):
     dirbname = 'UNIT_' + unit
     ofile = os.path.join(odir, fbname)
 
-    # TODO: this is very local!
-    ifile = '/home/mowglie/disk/ASTGTM_V2'
-    ifile = os.path.join(ifile, dirbname, fbname)
+    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/ASTGTM_V2/'
+    cmd = cmd + dirbname + '/' + fbname + ' ' + ofile
     if not os.path.exists(ofile):
-        if os.path.exists(ifile):
+        subprocess.call(cmd, shell=True)
+        if os.path.exists(ofile):
             # Ok so the tile is a valid one
-            copyfile(ifile, ofile)
             with zipfile.ZipFile(ofile) as zf:
                 zf.extractall(odir)
         else:
@@ -191,6 +201,50 @@ def _download_aster_file(zone, unit):
             return None
 
     out = os.path.join(odir, 'ASTGTM2_' + zone + '_dem.tif')
+    assert os.path.exists(out)
+    return out
+
+
+def _download_alternate_topo_file(fname):
+    """Checks if the special topo data is in the directory and if not,
+    download it from AWS.
+
+    You need AWS cli and AWS credentials for this. Quoting Timo:
+
+    $ aws configure
+
+    Key ID und Secret you should have
+    Region is eu-west-1 and Output Format is json.
+    """
+
+    # temporary check
+    fzipname = fname + '.zip'
+    if fzipname not in [
+        'gimpdem_90m.tif.zip',
+        'iceland.tif.zip',
+        'northcanada.tif.zip',
+        'svalbard.tif.zip',
+    ]:
+        raise ValueError('fname not ok.')
+
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    ofile = os.path.join(odir, fzipname)
+
+    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/topo/'
+    cmd = cmd + fzipname + ' ' + ofile
+    if not os.path.exists(ofile):
+        subprocess.call(cmd, shell=True)
+        if os.path.exists(ofile):
+            # Ok so the tile is a valid one
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        else:
+            # Ok so this *should* be an ocean tile
+            return None
+
+    out = os.path.join(odir, fname)
     assert os.path.exists(out)
     return out
 
@@ -345,19 +399,17 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     """
 
     # read the file and data
-    nc = netCDF4.Dataset(ncpath, mode='r')
-    temp = nc.variables['temp']
-    prcp = nc.variables['prcp']
-    hgt = nc.variables['hgt']
-
-    igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
-
-    ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
-    itemp = ttemp[:, 1, 1]
-    thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
-    ihgt = thgt[1, 1]
-    thgt = thgt.flatten()
-    iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+    with netCDF4.Dataset(ncpath, mode='r') as nc:
+        temp = nc.variables['temp']
+        prcp = nc.variables['prcp']
+        hgt = nc.variables['hgt']
+        igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
+        ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
+        itemp = ttemp[:, 1, 1]
+        thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
+        ihgt = thgt[1, 1]
+        thgt = thgt.flatten()
+        iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
 
     # Now the gradient
     if use_grad:
@@ -538,7 +590,9 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if os.path.exists(cfg.PATHS['wgms_rgi_links']):
+    if cfg.PATHS['wgms_rgi_links'] != '~':
+        if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
+            raise ValueError('wrong wgms_rgi_links path provided.')
         # User provided data
         outf = cfg.PATHS['wgms_rgi_links']
         datadir = os.path.join(os.path.dirname(outf), 'mbdata')
@@ -564,7 +618,9 @@ def get_glathida_file():
     (file, dir): paths to the files
     """
 
-    if os.path.exists(cfg.PATHS['glathida_rgi_links']):
+    if cfg.PATHS['glathida_rgi_links'] != '~':
+        if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
+            raise ValueError('wrong glathida_rgi_links path provided.')
         # User provided data
         return cfg.PATHS['glathida_rgi_links']
 
@@ -574,6 +630,48 @@ def get_glathida_file():
     outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
     assert os.path.exists(outf)
     return outf
+
+
+def get_rgi_dir():
+    """
+    Returns a path to the RGI directory.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the RGI directory
+    """
+
+    # Be sure the user gave a sensible path to the rgi dir
+    rgi_dir = cfg.PATHS['rgi_dir']
+    if not os.path.exists(rgi_dir):
+        raise ValueError('The RGI data directory does not exist!')
+
+    bname = 'rgi50.zip'
+    ofile = os.path.join(rgi_dir, bname)
+
+    # if not there download it
+    if not os.path.exists(ofile):  # pragma: no cover
+        tf = 'http://www.glims.org/RGI/rgi50_files/' + bname
+        urlretrieve(tf, ofile)
+
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+
+        # Extract subdirs
+        pattern = '*_rgi50_*.zip'
+        for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
+            for filename in fnmatch.filter(files, pattern):
+                ofile = os.path.join(root, filename)
+                with zipfile.ZipFile(ofile) as zf:
+                    ex_root = ofile.replace('.zip', '')
+                    if not os.path.exists(ex_root):
+                        os.makedirs(ex_root)
+                    zf.extractall(ex_root)
+
+    return rgi_dir
 
 
 def get_cru_file(var=None):
@@ -648,8 +746,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     # would be possible with a salem grid but this is a bit more expensive
     # than jsut asking RGI for the region
     if int(region) == 5:
-        gimp_file = os.path.join(cfg.PATHS['topo_dir'], 'gimpdem_90m.tif')
-        assert os.path.exists(gimp_file)
+        gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
         return gimp_file, 'GIMP'
 
     # Some regional files I could gather
@@ -670,8 +767,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
 
         if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
            (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
-            r_file = os.path.join(cfg.PATHS['topo_dir'], _f)
-            assert os.path.exists(r_file)
+            r_file = _download_alternate_topo_file(_f)
             return r_file, 'REGIO'
 
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
@@ -741,6 +837,7 @@ def glacier_characteristics(gdirs):
 
         # Easy stats
         d['rgi_id'] = gdir.rgi_id
+        d['name'] = gdir.name
         d['cenlon'] = gdir.cenlon
         d['cenlat'] = gdir.cenlat
         d['rgi_area_km2'] = gdir.rgi_area_km2
@@ -749,10 +846,10 @@ def glacier_characteristics(gdirs):
 
         # Masks related stuff
         if gdir.has_file('gridded_data', div_id=0):
-            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-            nc.close()
+            fpath = gdir.get_filepath('gridded_data', div_id=0)
+            with netCDF4.Dataset(fpath) as nc:
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
@@ -803,6 +900,19 @@ def glacier_characteristics(gdirs):
                 cfg.PARAMS['temp_default_gradient']
             d['clim_temp_avgh'] = t
             d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+
+        # Inversion
+        if gdir.has_file('inversion_output', div_id=1):
+            vol = []
+            for i in gdir.divide_ids:
+                cl = gdir.read_pickle('inversion_output', div_id=i)
+                for c in cl:
+                    vol.extend(c['volume'])
+            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+            area = gdir.rgi_area_km2
+            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+            d['vas_volume_km3'] = 0.034*(area**1.375)
+            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
 
         out_df.append(d)
 
@@ -955,6 +1065,11 @@ class GlacierDirectory(object):
         if base_dir is None:
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
+        # RGI IDs are also valid entries
+        if isinstance(rgi_entity, string_types):
+            _shp = os.path.join(base_dir, rgi_entity, 'outlines.shp')
+            rgi_entity = read_shapefile(_shp).iloc[0]
+
         try:
             # Assume RGI V4
             self.rgi_id = rgi_entity.RGIID
@@ -965,6 +1080,9 @@ class GlacierDirectory(object):
             self.rgi_region = rgi_entity.O1REGION
             self.name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
+            # this is for the tests which are still in V4
+            self.glacier_type = 'Glacier'
+            self.terminus_type = 'Land-terminating'
         except AttributeError:
             # Should be V5
             self.rgi_id = rgi_entity.RGIId
@@ -1124,6 +1242,7 @@ class GlacierDirectory(object):
         fpath = self.get_filepath(fname, div_id)
         if os.path.exists(fpath):
             os.remove(fpath)
+
         nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
         xd = nc.createDimension('x', self.grid.nx)
@@ -1173,36 +1292,34 @@ class GlacierDirectory(object):
         fpath = self.get_filepath('climate_monthly')
         if os.path.exists(fpath):
             os.remove(fpath)
-        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
 
-        nc.ref_hgt = hgt
+        with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
+            nc.ref_hgt = hgt
 
-        dtime = nc.createDimension('time', None)
+            dtime = nc.createDimension('time', None)
 
-        nc.author = 'OGGM'
-        nc.author_info = 'Open Global Glacier Model'
+            nc.author = 'OGGM'
+            nc.author_info = 'Open Global Glacier Model'
 
-        timev = nc.createVariable('time','i4',('time',))
-        timev.setncatts({'units':'days since 1801-01-01 00:00:00'})
-        timev[:] = netCDF4.date2num([t for t in time],
+            timev = nc.createVariable('time','i4',('time',))
+            timev.setncatts({'units':'days since 1801-01-01 00:00:00'})
+            timev[:] = netCDF4.date2num([t for t in time],
                                  'days since 1801-01-01 00:00:00')
 
-        v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
-        v.units = 'kg m-2'
-        v.long_name = 'total precipitation amount'
-        v[:] = prcp
+            v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
+            v.units = 'kg m-2'
+            v.long_name = 'total precipitation amount'
+            v[:] = prcp
 
-        v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
-        v.units = 'degC'
-        v.long_name = '2m temperature at height ref_hgt'
-        v[:] = temp
+            v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
+            v.units = 'degC'
+            v.long_name = '2m temperature at height ref_hgt'
+            v[:] = temp
 
-        v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
-        v.units = 'degC m-1'
-        v.long_name = 'temperature gradient'
-        v[:] = grad
-
-        nc.close()
+            v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
+            v.units = 'degC m-1'
+            v.long_name = 'temperature gradient'
+            v[:] = grad
 
     def log(self, func, err=None):
 

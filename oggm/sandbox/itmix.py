@@ -4,49 +4,59 @@ from __future__ import absolute_import, division
 import os
 import logging
 from shutil import copyfile
-from functools import partial
 import glob
 # External libs
-from osgeo import osr
 import salem
 from salem.datasets import EsriITMIX
 from osgeo import gdal
-import pyproj
+import netCDF4
+import rasterio
+import pandas as pd
 import numpy as np
-import shapely.ops
-import geopandas as gpd
-import skimage.draw as skdraw
 import shapely.geometry as shpg
-import scipy.signal
-from scipy.ndimage.measurements import label
 from scipy.interpolate import griddata
+from oggm.core.preprocessing.inversion import invert_parabolic_bed
+from scipy import optimize as optimization
 import matplotlib.pyplot as plt
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.core.preprocessing.gis import _gaussian_blur, _mask_per_divide
-from oggm.sandbox import itmix_cfg
+from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
+from oggm.sandbox.itmix_cfg import DATA_DIR, ITMIX_ODIR
 from oggm import utils
-
-import fiona
 
 # Module logger
 log = logging.getLogger(__name__)
 
-# Needed later
-label_struct = np.ones((3, 3))
-
 # Globals
-import glob
-import pandas as pd
-RGI_DIR = '/home/mowglie/disk/Dropbox/Share/oggm-data/rgi/v5'
-DATA_DIR = '/home/mowglie/disk/Dropbox/Share/oggm-data'
+SEARCHD = os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted')
+LABEL_STRUCT = np.ones((3, 3))
+
+
+def find_path(start_dir, pattern, allow_more=False):
+    """Find a file in a dir and subdir"""
+
+    files = []
+    for dir, _, _ in os.walk(start_dir):
+        files.extend(glob.glob(os.path.join(dir,pattern)))
+
+    if allow_more:
+        assert len(files) > 0
+        return files
+    else:
+        assert len(files) == 1
+        return files[0]
 
 
 def get_rgi_df(reset=False):
-    # This makes an RGI dataframe with all ITMIX + WGMS + GTD glaciers
+    """This function prepares a kind of `fake` RGI file, with the updated
+    geometries for ITMIX.
+    """
 
-    df_rgi_file = os.path.expanduser('~/itmix_rgi_shp.pkl')
+    # This makes an RGI dataframe with all ITMIX + WGMS + GTD glaciers
+    RGI_DIR = utils.get_rgi_dir()
+
+    df_rgi_file = os.path.join(DATA_DIR, 'itmix', 'itmix_rgi_shp.pkl')
     if os.path.exists(df_rgi_file) and not reset:
         rgidf = pd.read_pickle(df_rgi_file)
     else:
@@ -59,32 +69,47 @@ def get_rgi_df(reset=False):
         f = utils.get_glathida_file()
         gtd_df = pd.read_csv(f)
 
+        divides = []
         rgidf = []
-        _rgi_ids = []
+        _rgi_ids_for_overwrite = []
         for i, row in df_itmix.iterrows():
+
+            log.info('Prepare RGI df for ' + row.name)
+
             # read the rgi region
-            rgi_shp = os.path.join(RGI_DIR, "*",
-                                   row['rgi_reg'] + '_rgi50_*.shp')
-            rgi_shp = list(glob.glob(rgi_shp))[0]
+            rgi_shp = find_path(RGI_DIR, row['rgi_reg'] + '_rgi50_*.shp')
             rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
 
             rgi_parts = row.T['rgi_parts_ids']
             sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)].copy()
-            _rgi_ids.extend(rgi_parts)
 
             # use the ITMIX shape where possible
             if row.name in ['Hellstugubreen', 'Freya', 'Aqqutikitsoq',
                             'Brewster', 'Kesselwandferner', 'NorthGlacier',
                             'SouthGlacier', 'Tasman', 'Unteraar',
-                            'Washmawapta']:
-                for shf in glob.glob(itmix_cfg.itmix_data_dir + '*/*/*_' +
-                                             row.name + '*.shp'):
-                    pass
+                            'Washmawapta', 'Columbia']:
+                shf = find_path(SEARCHD, '*_' + row.name + '*.shp')
                 shp = salem.utils.read_shapefile(shf)
                 if row.name == 'Unteraar':
                     shp = shp.iloc[[-1]]
                 if 'LineString' == shp.iloc[0].geometry.type:
                     shp.loc[shp.index[0], 'geometry'] = shpg.Polygon(shp.iloc[0].geometry)
+                if shp.iloc[0].geometry.type == 'MultiLineString':
+                    # Columbia
+                    geometry = shp.iloc[0].geometry
+                    parts = list(geometry)
+                    for p in parts:
+                        assert p.type == 'LineString'
+                    exterior = shpg.Polygon(parts[0])
+                    # let's assume that all other polygons are in fact interiors
+                    interiors = []
+                    for p in parts[1:]:
+                        assert exterior.contains(p)
+                        interiors.append(p)
+                    geometry = shpg.Polygon(parts[0], interiors)
+                    assert 'Polygon' in geometry.type
+                    shp.loc[shp.index[0], 'geometry'] = geometry
+
                 assert len(shp) == 1
                 area_km2 = shp.iloc[0].geometry.area * 1e-6
                 shp = salem.gis.transform_geopandas(shp)
@@ -94,9 +119,7 @@ def get_rgi_df(reset=False):
                 sel.loc[sel.index[0], 'Area'] = area_km2
             elif row.name == 'Urumqi':
                 # ITMIX Urumqi is in fact two glaciers
-                for shf in glob.glob(itmix_cfg.itmix_data_dir + '*/*/*_' +
-                                             row.name + '*.shp'):
-                    pass
+                shf = find_path(SEARCHD, '*_' + row.name + '*.shp')
                 shp2 = salem.utils.read_shapefile(shf)
                 assert len(shp2) == 2
                 for k in [0, 1]:
@@ -108,6 +131,55 @@ def get_rgi_df(reset=False):
                     sel.loc[sel.index[k], 'geometry'] = shp
                     sel.loc[sel.index[k], 'Area'] = area_km2
                 assert len(sel) == 2
+            elif len(rgi_parts) > 1:
+                # Ice-caps. Make divides
+                # First we gather all the parts:
+                sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)].copy()
+                # Make the multipolygon for the record
+                multi = shpg.MultiPolygon([g for g in sel.geometry])
+                # update the RGI attributes. We take a dummy rgi ID
+                new_area = np.sum(sel.Area)
+                found = False
+                for i in range(len(sel)):
+                    tsel = sel.iloc[[i]].copy()
+                    if 'Multi' in tsel.loc[tsel.index[0], 'geometry'].type:
+                        continue
+                    else:
+                        found = True
+                        sel = tsel
+                        break
+                if not found:
+                    raise RuntimeError()
+
+                inif = 0.
+                add = 1e-5
+                if row.name == 'Devon':
+                    inif = 0.001
+                    add = 1e-4
+                while True:
+                    buff = multi.buffer(inif)
+                    if 'Multi' in buff.type:
+                        inif += add
+                    else:
+                        break
+                x, y = multi.centroid.xy
+                if 'Multi' in buff.type:
+                    raise RuntimeError
+                sel.loc[sel.index[0], 'geometry'] = buff
+                sel.loc[sel.index[0], 'Area'] = new_area
+                sel.loc[sel.index[0], 'CenLon'] = np.asarray(x)[0]
+                sel.loc[sel.index[0], 'CenLat'] = np.asarray(y)[0]
+
+                # Divides db
+                div_sel = dict()
+                for k, v in sel.iloc[0].iteritems():
+                    if k == 'geometry':
+                        div_sel[k] = multi
+                    elif k == 'RGIId':
+                        div_sel['RGIID'] = v
+                    else:
+                        div_sel[k] = v
+                divides.append(div_sel)
             else:
                 pass
 
@@ -124,21 +196,24 @@ def get_rgi_df(reset=False):
             sel.loc[:, 'Name'] = name
             rgidf.append(sel)
 
+            # Add divides to the original one
+            adf = pd.DataFrame(divides)
+            adf.to_pickle(cfg.PATHS['itmix_divs'])
+
+        log.info('N glaciers ITMIX: {}'.format(len(rgidf)))
+
         # WGMS glaciers which are not already there
         # Actually we should remove the data of those 7 to be honest...
         f, d = utils.get_wgms_files()
         wgms_df = pd.read_csv(f)
-        print('N WGMS before: {}'.format(len(wgms_df)))
-        wgms_df = wgms_df.loc[~ wgms_df.RGI_ID.isin(_rgi_ids)]
-        print('N WGMS after: {}'.format(len(wgms_df)))
+        wgms_df = wgms_df.loc[~ wgms_df.RGI_ID.isin(_rgi_ids_for_overwrite)]
 
+        log.info('N glaciers WGMS: {}'.format(len(wgms_df)))
         for i, row in wgms_df.iterrows():
             rid = row.RGI_ID
             reg = rid.split('-')[1].split('.')[0]
             # read the rgi region
-            rgi_shp = os.path.join(RGI_DIR, "*",
-                                   reg + '_rgi50_*.shp')
-            rgi_shp = list(glob.glob(rgi_shp))[0]
+            rgi_shp = find_path(RGI_DIR, reg + '_rgi50_*.shp')
             rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
 
             sel = rgi_df.loc[rgi_df.RGIId.isin([rid])].copy()
@@ -157,21 +232,18 @@ def get_rgi_df(reset=False):
             sel.loc[:, 'Name'] = name
             rgidf.append(sel)
 
-        _rgi_ids.extend(wgms_df.RGI_ID.values)
+        _rgi_ids_for_overwrite.extend(wgms_df.RGI_ID.values)
 
         # GTD glaciers which are not already there
         # Actually we should remove the data of those 2 to be honest...
-        print('N GTD before: {}'.format(len(gtd_df)))
-        gtd_df = gtd_df.loc[~ gtd_df.RGI_ID.isin(_rgi_ids)]
-        print('N GTD after: {}'.format(len(gtd_df)))
+        gtd_df = gtd_df.loc[~ gtd_df.RGI_ID.isin(_rgi_ids_for_overwrite)]
+        log.info('N glaciers GTD: {}'.format(len(gtd_df)))
 
         for i, row in gtd_df.iterrows():
             rid = row.RGI_ID
             reg = rid.split('-')[1].split('.')[0]
             # read the rgi region
-            rgi_shp = os.path.join(RGI_DIR, "*",
-                                   reg + '_rgi50_*.shp')
-            rgi_shp = list(glob.glob(rgi_shp))[0]
+            rgi_shp = find_path(RGI_DIR, reg + '_rgi50_*.shp')
             rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
 
             sel = rgi_df.loc[rgi_df.RGIId.isin([rid])].copy()
@@ -228,8 +300,9 @@ def glacier_masks_itmix(gdir):
     # Open DEM
     dem_f = None
     n_g = gdir.name.split(':')[-1]
-    for dem_f in glob.glob(itmix_cfg.itmix_data_dir + '/*/02_surface_' +
-                           n_g + '*.asc'):
+    searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted', '*')
+    searchf = os.path.join(searchf, '02_surface_' + n_g + '*.asc')
+    for dem_f in glob.glob(searchf):
         pass
 
     if dem_f is not None:
@@ -250,7 +323,10 @@ def glacier_masks_itmix(gdir):
                                             interp='linear')
         # And update values where possible
         dem = np.where(~ it_dem.mask, it_dem, dem)
-
+    else:
+        if 'Devon' in n_g:
+            raise RuntimeError('Should have found DEM for Devon')
+    
     # Disallow negative
     dem = dem.clip(0)
 
@@ -275,7 +351,7 @@ def glacier_masks_itmix(gdir):
     # Smooth SRTM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
-        smoothed_dem = _gaussian_blur(dem, np.int(gsize))
+        smoothed_dem = gaussian_blur(dem, np.int(gsize))
     else:
         smoothed_dem = dem.copy()
 
@@ -318,53 +394,18 @@ def glacier_masks_itmix(gdir):
             _mask_per_divide(gdir, i, dem, smoothed_dem)
 
 
-def correct_dem(gdir, glacier_mask, dem, smoothed_dem):
-    """Compare with Huss and stuff."""
-
-    dem_glac = dem[np.nonzero(glacier_mask)]
-
-    # Read RGI hypso for compa
-    tosearch = '{:02d}'.format(np.int(gdir.rgi_region))
-    tosearch = os.path.join(RGI_DIR, '*', tosearch + '*_hypso.csv')
-    for fh in glob.glob(tosearch):
-        pass
-    df = pd.read_csv(fh)
-    df.columns = [c.strip() for c in df.columns]
-    df = df.loc[df.RGIId.isin([gdir.rgi_id])]
-    df = df[df.columns[3:]].T
-    df.columns = ['RGI (Huss)']
-    hs = np.asarray(df.index.values, np.int)
-    bins = utils.nicenumber(hs, 50, lower=True)
-    bins = np.append(bins, bins[-1] + 50)
-    myhist, _ = np.histogram(dem_glac, bins=bins)
-    myhist = myhist / np.sum(myhist) * 1000
-    df['OGGM'] = myhist
-    df = df / 10
-    df.index.rename('Alt (m)', inplace=True)
-    df.plot()
-    plt.ylabel('Freq (%)')
-    plt.savefig('/home/mowglie/hypso_' + gdir.rgi_id + '.png')
-
-    minz = None
-    if gdir.rgi_id == 'RGI50-06.00424': minz = 800
-    if gdir.rgi_id == 'RGI50-06.00443': minz = 600
-
-    return dem, smoothed_dem
-
-from oggm.core.preprocessing.inversion import invert_parabolic_bed
-from scipy import optimize as optimization
-
-
 def _prepare_inv(gdirs):
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
+
     try:
         gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
     except AttributeError:
         gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
     dfids = gtd_df['RGI_ID'].values
 
+    print('GTD Glac before', len(dfids))
     ref_gdirs = []
     for gdir in gdirs:
         if gdir.rgi_id not in dfids:
@@ -375,9 +416,9 @@ def _prepare_inv(gdirs):
                                   'Dry calving', 'Regenerated',
                                   'Shelf-terminating']:
             continue
-
-        # This glacier, OGGM is very wrong
         ref_gdirs.append(gdir)
+
+    print('GTD Glac after', len(ref_gdirs))
 
     ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
     gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
@@ -397,99 +438,8 @@ def _prepare_inv(gdirs):
     return gtd_df
 
 
-def optimize_volume(gdirs):
-    """Optimizesfd based on GlaThiDa thicknesses.
-
-    We use the glacier averaged thicknesses provided by GlaThiDa and correct
-    them for differences in area with RGI, using a glacier specific volume-area
-    scaling formula.
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
-    """
-
-    gtd_df = _prepare_inv(gdirs)
-    ref_gdirs = gtd_df['ref_gdirs']
-    ref_volume_km3 = gtd_df['ref_volume_km3']
-    ref_area_km2 = gtd_df['ref_area_km2']
-    ref_thickness_m = gtd_df['ref_thickness_m']
-
-    # Optimize without sliding
-    log.info('Compute the inversion parameter.')
-
-    def to_optimize(x):
-        tmp_vols = np.zeros(len(ref_gdirs))
-        glen_a = cfg.A * x[0]
-        for i, gdir in enumerate(ref_gdirs):
-            v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
-                                        fs=0., write=False)
-            tmp_vols[i] = v * 1e-9
-        return utils.rmsd(tmp_vols, ref_volume_km3)
-    opti = optimization.minimize(to_optimize, [1.],
-                                bounds=((0.01, 10), ),
-                                tol=1.e-4)
-    # Check results and save.
-    glen_a = cfg.A * opti['x'][0]
-    fs = 0.
-
-    # This is for the stats
-    oggm_volume_m3 = np.zeros(len(ref_gdirs))
-    rgi_area_m2 = np.zeros(len(ref_gdirs))
-    for i, gdir in enumerate(ref_gdirs):
-        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
-                                    write=False)
-        oggm_volume_m3[i] = v
-        rgi_area_m2[i] = a
-    assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
-
-    # This is for each glacier
-    out = dict()
-    out['glen_a'] = glen_a
-    out['fs'] = fs
-    out['factor_glen_a'] = opti['x'][0]
-    try:
-        out['factor_fs'] = opti['x'][1]
-    except IndexError:
-        out['factor_fs'] = 0.
-    for gdir in gdirs:
-        gdir.write_pickle(out, 'inversion_params')
-
-    # This is for the working dir
-    # Simple stats
-    out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
-    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
-                                 ref_thickness_m)
-    log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
-             '{factor_fs:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**out))
-
-    df = pd.DataFrame(out, index=[0])
-    fpath = os.path.join(cfg.PATHS['working_dir'],
-                         'inversion_optim_params.csv')
-    df.to_csv(fpath)
-
-    # All results
-    df = dict()
-    df['ref_area_km2'] = ref_area_km2
-    df['ref_volume_km3'] = ref_volume_km3
-    df['ref_thickness_m'] = ref_thickness_m
-    df['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
-    df['oggm_thickness_m'] = oggm_volume_m3 / (ref_area_km2 * 1e6)
-    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
-    df['vas_thickness_m'] = df['vas_volume_km3'] / ref_area_km2 * 1000
-
-    rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
-    df = pd.DataFrame(df, index=rgi_id)
-    fpath = os.path.join(cfg.PATHS['working_dir'],
-                         'inversion_optim_results.csv')
-    df.to_csv(fpath)
-
-    # return value for tests
-    return out
-
-
 def optimize_thick(gdirs):
-    """Optimizesfd based on GlaThiDa thicknesses.
+    """Optimizes fd based on GlaThiDa thicknesses.
 
     We use the glacier averaged thicknesses provided by GlaThiDa and correct
     them for differences in area with RGI, using a glacier specific volume-area
@@ -561,7 +511,7 @@ def optimize_thick(gdirs):
     df.to_csv(fpath)
 
     # All results
-    df = dict()
+    df = utils.glacier_characteristics(ref_gdirs)
     df['ref_area_km2'] = ref_area_km2
     df['ref_volume_km3'] = ref_volume_km3
     df['ref_thickness_m'] = ref_thickness_m
@@ -579,77 +529,84 @@ def optimize_thick(gdirs):
     # return value for tests
     return out
 
-from oggm.core.preprocessing.climate import mb_yearly_climate_on_height
-def get_apparent_climate(gdir):
 
-    # Climate period
-    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+def write_itmix_ascii(gdir, version):
+    """Write the results"""
 
-    df = pd.read_csv(gdir.get_filepath('local_mustar'))
-    tstar = df['tstar']
-    yr = [tstar-mu_hp, tstar+mu_hp]
+    gname = gdir.name.replace('I:', '')
+    real = gname
+    gname = gname.replace('_A', '')
+    gname = gname.replace('_B', '')
 
-    # Ok. Looping over divides
-    for div_id in list(gdir.divide_ids):
-        # For each flowline compute the apparent MB
-        # For div 0 it is kind of artificial but this is for validation
+    log.info('Write ITMIX ' + real)
 
+    # Get the data
+    grids_file = gdir.get_filepath('gridded_data', div_id=0)
+    with netCDF4.Dataset(grids_file) as nc:
+        thick = nc.variables['thickness'][:]
+    vol = np.nansum(thick * gdir.grid.dx**2)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'), div_id=div_id)
+    # Transform to output grid
+    ifile = find_path(os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted'),
+                      '02_surface_' + gname + '*.asc')
+    itmix = salem.EsriITMIX(ifile)
 
-        fls = []
-        if div_id == 0:
-            for i in gdir.divide_ids:
-                 fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
-        else:
-            fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+    thick = itmix.grid.map_gridded_data(thick, gdir.grid, interp='linear')
 
-        # Reset flux
-        for fl in fls:
-            fl.flux = np.zeros(len(fl.surface_h))
+    # Mask out
+    itmix.set_roi(shape=gdir.get_filepath('outlines'))
+    omask = itmix.roi
+    thick[np.nonzero(omask==0)] = np.nan
 
-        # Flowlines in order to be sure
-        for fl in fls:
-            y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
-                                                  year_range=yr,
-                                                  flatten=False)
-            fl.set_apparent_mb(np.mean(p, axis=1) - df['mustar']*np.mean(t,
-                                                                      axis=1))
+    # Output path
+    bname = os.path.basename(ifile).split('.')[0]
+    pok = bname.find('UTM')
+    zone = bname[pok:]
+    ofile = os.path.join(ITMIX_ODIR, gname)
+    if not os.path.exists(ofile):
+        os.mkdir(ofile)
+    fname = 'Maussion_' + real + '_bedrock_v{}_'.format(version) + zone +'.asc'
+    ofile = os.path.join(ofile, fname)
 
+    # Write out
+    with rasterio.drivers():
+        with rasterio.open(ifile) as src:
+            topo = src.read(1).astype(np.float)
+            topo = np.where(topo < -999., np.NaN, topo)
 
-def optimize_per_glacier(gdirs):
+            # Also for ours
+            thick = np.where(topo < -999., np.NaN, thick)
 
-    gtd_df = _prepare_inv(gdirs)
-    ref_gdirs = gtd_df['ref_gdirs']
-    ref_volume_km3 = gtd_df['ref_volume_km3']
-    ref_area_km2 = gtd_df['ref_area_km2']
-    ref_thickness_m = gtd_df['ref_thickness_m']
+            # Be sure volume is conserved
+            thick *= vol / np.nansum(thick*itmix.grid.dx**2)
+            assert np.isclose(np.nansum(thick*itmix.grid.dx**2), vol)
 
-    # Optimize without sliding
-    log.info('Compute the inversion parameter.')
+            # convert
+            topo -= thick
+            with rasterio.open(ofile, 'w',
+                               driver=src.driver,
+                               width=src.width,
+                               height=src.height,
+                               transform=src.transform,
+                               count=1,
+                               dtype=np.float,
+                               nodata=np.NaN) as dst:
+                dst.write_band(1, topo)
 
-    fac = []
-    for gdir in ref_gdirs:
-        def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=0.,
-                                        write=False)
-            return utils.rmsd(v / a, gtd_df['ref_thickness_m'].loc[gdir.rgi_id])
-        opti = optimization.minimize(to_optimize, [1.],
-                                    bounds=((0.01, 10), ),
-                                    tol=1.e-4)
-        # Check results and save.
-        fac.append(opti['x'][0])
+    # Check
+    with rasterio.open(ifile) as src:
+        topo = src.read(1).astype(np.float)
+        topo = np.where(topo < -9999., np.NaN, topo)
 
-    # All results
-    df = utils.glacier_characteristics(ref_gdirs)
+    with rasterio.open(ofile) as src:
+        mtopo = src.read(1).astype(np.float)
+        mtopo = np.where(mtopo < -9999., np.NaN, mtopo)
 
-    df['ref_area_km2'] = ref_area_km2
-    df['ref_volume_km3'] = ref_volume_km3
-    df['ref_thickness_m'] = ref_thickness_m
-    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
-    df['vas_thickness_m'] = df['vas_volume_km3'] / ref_area_km2 * 1000
-    df['fac'] = fac
-    fpath = os.path.join(cfg.PATHS['working_dir'],
-                         'inversion_optim_pergla.csv')
-    df.to_csv(fpath)
+    if not np.allclose(np.nanmax(topo - mtopo), np.nanmax(thick), atol=5):
+        print(np.nanmax(topo - mtopo), np.nanmax(thick))
+        f, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+        ax1.imshow(topo - mtopo)
+        ax2.imshow(thick)
+        ax3.imshow(topo - mtopo - thick)
+        ax4.imshow(~np.isclose(topo - mtopo, thick, atol=1, equal_nan=True))
+        plt.show()

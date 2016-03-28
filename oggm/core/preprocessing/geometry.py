@@ -448,15 +448,15 @@ def catchment_area(gdir, div_id=None):
     cls = gdir.read_pickle('centerlines', div_id=div_id)
     geoms = gdir.read_pickle('geometries', div_id=div_id)
     glacier_pix = geoms['polygon_pix']
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    costgrid = nc.variables['cost_grid'][:]
-    mask = nc.variables['glacier_mask'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        costgrid = nc.variables['cost_grid'][:]
+        mask = nc.variables['glacier_mask'][:]
 
     # If we have only one centerline this is going to be easy: take the
     # mask and return
     if len(cls) == 1:
-        cl_catchments = [np.array(np.where(mask == 1)).T]
+        cl_catchments = [np.array(np.nonzero(mask == 1)).T]
         gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
         return
 
@@ -470,21 +470,31 @@ def catchment_area(gdir, div_id=None):
             assert (y, x) not in dic_catch
             dic_catch[(y, x)] = set([(y, x)])
 
+    # It is much faster to make the array as small as possible (especially
+    # with divides). We have to trick:
+    pm = np.nonzero(mask == 1)
+    ymi, yma = np.min(pm[0])-1, np.max(pm[0])+2
+    xmi, xma = np.min(pm[1])-1, np.max(pm[1])+2
+    costgrid = costgrid[ymi:yma, xmi:xma]
+    mask = mask[ymi:yma, xmi:xma]
+
     # Where did we compute the path already?
     computed = np.where(mask == 1, 0, np.nan)
 
-    # Coords of Terminus
+    # Coords of Terminus (converted)
     endcoords = np.array(cls[0].tail.coords[0])[::-1].astype(np.int64)
+    endcoords -= [ymi, xmi]
 
     # Start with all the paths at the boundaries, they are more likely
     # to cover much of the glacier
     for headx, heady in tuple2int(glacier_pix.exterior.coords):
-        indices, _ = route_through_array(costgrid, np.array([heady, headx]),
-                                         endcoords)
+        headcoords = np.array([heady-ymi, headx-xmi])  # convert
+        indices, _ = route_through_array(costgrid, headcoords, endcoords)
         inds = np.array(indices).T
         computed[inds[0], inds[1]] = 1
         set_dump = set([])
         for y, x in indices:
+            y, x = y+ymi, x+xmi  # back to original
             set_dump.add((y, x))
             if (y, x) in dic_catch:
                 dic_catch[(y, x)] = dic_catch[(y, x)].union(set_dump)
@@ -501,6 +511,7 @@ def catchment_area(gdir, div_id=None):
         computed[inds[0], inds[1]] = 1
         set_dump = set([])
         for y, x in indices:
+            y, x = y+ymi, x+xmi  # back to original
             set_dump.add((y, x))
             if (y, x) in dic_catch:
                 dic_catch[(y, x)] = dic_catch[(y, x)].union(set_dump)
@@ -552,9 +563,10 @@ def initialize_flowlines(gdir, div_id=None):
     fls = []
 
     # Topo for heights
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo_smoothed'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo_smoothed'][:]
+
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
     # (0, 0) is also located in the center of the pixel
@@ -616,13 +628,13 @@ def catchment_width_geom(gdir, div_id=None):
     # Topography is to filter the lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo'][:]
-    mask_ext = nc.variables['glacier_ext'][:]
-    mask_glacier = nc.variables['glacier_mask'][:]
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo'][:]
+        mask_ext = nc.variables['glacier_ext'][:]
+        mask_glacier = nc.variables['glacier_mask'][:]
     topo[np.where(mask_glacier == 0)] = np.NaN
     topo[np.where(mask_ext == 1)] = np.NaN
-    nc.close()
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
@@ -728,10 +740,10 @@ def catchment_width_correction(gdir, div_id=None):
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
-    nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-    topo = nc.variables['topo'][:]
-    ext = nc.variables['glacier_ext'][:]
-    nc.close()
+    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(fpath) as nc:
+        topo = nc.variables['topo'][:]
+        ext = nc.variables['glacier_ext'][:]
     topo[np.where(ext==1)] = np.NaN
 
     # Param
@@ -766,7 +778,7 @@ def catchment_width_correction(gdir, div_id=None):
             minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
         # Now decide on a binsize which ensures at least one element per bin
-        bsize = 50.
+        bsize = cfg.PARAMS['base_binsize']
         while True:
             maxb = utils.nicenumber(maxh, 1)
             minb = utils.nicenumber(minh, 1, lower=True)
@@ -793,10 +805,11 @@ def catchment_width_correction(gdir, div_id=None):
             if (_c == ref_set) and (_fl == ref_set):
                 break
             bsize += 5
+
             # Add a secutity for infinite loops
             if bsize > 250:
                 nmin -= 1
-                bsize = 50
+                bsize = cfg.PARAMS['base_binsize']
                 log.warning('%s: reduced min n per bin to %d', gdir.rgi_id,
                             nmin)
                 if nmin == 0:

@@ -29,21 +29,21 @@ def _distribute_histalp_syle(gdirs, fpath):
     """
 
     # read the file and data entirely (faster than many I/O)
-    nc = netCDF4.Dataset(fpath, mode='r')
-    lon = nc.variables['lon'][:]
-    lat = nc.variables['lat'][:]
+    with netCDF4.Dataset(fpath, mode='r') as nc:
+        lon = nc.variables['lon'][:]
+        lat = nc.variables['lat'][:]
 
-    # Time
-    time = nc.variables['time']
-    time = netCDF4.num2date(time[:], time.units)
-    ny, r = divmod(len(time), 12)
-    if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        # Time
+        time = nc.variables['time']
+        time = netCDF4.num2date(time[:], time.units)
+        ny, r = divmod(len(time), 12)
+        if r != 0:
+            raise ValueError('Climate data should be N full years exclusively')
 
-    # Units
-    assert nc.variables['hgt'].units == 'm'
-    assert nc.variables['temp'].units == 'degC'
-    assert nc.variables['prcp'].units == 'kg m-2'
+        # Units
+        assert nc.variables['hgt'].units == 'm'
+        assert nc.variables['temp'].units == 'degC'
+        assert nc.variables['prcp'].units == 'kg m-2'
 
     # Gradient defaults
     use_grad = cfg.PARAMS['temp_use_local_gradient']
@@ -59,7 +59,6 @@ def _distribute_histalp_syle(gdirs, fpath):
                                                               g_minmax,
                                                               sf, use_grad)
         gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
-    nc.close()
 
 
 def _distribute_cru_style(gdirs):
@@ -245,34 +244,32 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
     temp_melt = cfg.PARAMS['temp_melt']
 
     # Read file
-    nc = netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r')
+    with netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
+        # time
+        time = nc.variables['time']
+        time = netCDF4.num2date(time[:], time.units)
+        if time_range is not None:
+            p0 = np.where(time == time_range[0])[0]
+            try:
+                p0 = p0[0]
+            except IndexError:
+                raise RuntimeError('time_range[0] not found in file')
+            p1 = np.where(time == time_range[1])[0]
+            try:
+                p1 = p1[0]
+            except IndexError:
+                raise RuntimeError('time_range[1] not found in file')
+        else:
+            p0 = 0
+            p1 = len(time)-1
 
-    # time
-    time = nc.variables['time']
-    time = netCDF4.num2date(time[:], time.units)
-    if time_range is not None:
-        p0 = np.where(time == time_range[0])[0]
-        try:
-            p0 = p0[0]
-        except IndexError:
-            raise RuntimeError('time_range[0] not found in file')
-        p1 = np.where(time == time_range[1])[0]
-        try:
-            p1 = p1[0]
-        except IndexError:
-            raise RuntimeError('time_range[1] not found in file')
-    else:
-        p0 = 0
-        p1 = len(time)-1
+        time = time[p0:p1+1]
 
-    time = time[p0:p1+1]
-
-    # Read timeseries
-    itemp = nc.variables['temp'][p0:p1+1]
-    iprcp = nc.variables['prcp'][p0:p1+1]
-    igrad = nc.variables['grad'][p0:p1+1]
-    ref_hgt = nc.ref_hgt
-    nc.close()
+        # Read timeseries
+        itemp = nc.variables['temp'][p0:p1+1]
+        iprcp = nc.variables['prcp'][p0:p1+1]
+        igrad = nc.variables['grad'][p0:p1+1]
+        ref_hgt = nc.ref_hgt
 
     # For each height pixel:
     # Compute temp and tempformelt (temperature above melting threshold)
@@ -407,6 +404,9 @@ def mu_candidates(gdir, div_id=None):
     years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
                                                            div_id=div_id)
 
+    # Be sure we have no marine terminating glacier
+    assert gdir.terminus_type == 'Land-terminating'
+
     # Compute mu for each 31-yr climatological period
     ny = len(years)
     mu_yr_clim = np.zeros(ny) * np.NaN
@@ -497,6 +497,29 @@ def t_star_from_refmb(gdir, mbdf):
     return t_stars, bias
 
 
+def calving_mb(gdir):
+    """Calving mass-loss in specific MB equivalent.
+
+    This is necessary to compute mu star.
+
+    TODO: currently this is hardcoded for Columbia, but we should come-up with
+    somthing better!
+    """
+
+    if gdir.terminus_type != 'Marine-terminating':
+        return 0.
+
+    if 'Columbia' not in gdir.name:
+        return 0.
+
+    if 'calving_rate' not in cfg.PARAMS:
+        return 0.
+
+    # Ok. Just take the caving rate from cfg and change its units
+    # Original units: km3 a-1, to change to mm a-1
+    return cfg.PARAMS['calving_rate'] * 1e12 / gdir.rgi_area_m2
+
+
 @entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
 def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
     """Compute local mustar and apparent mb from tstar.
@@ -513,18 +536,25 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
     # Climate period
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
     yr = [tstar-mu_hp, tstar+mu_hp]
+
+    # Do we have a calving glacier?
+    cmb = calving_mb(gdir)
+
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
-        log.info('%s: local mu*, divide %d', gdir.rgi_id, div_id)
+        log.info('%s: local mu* for t*=%d, divide %d',
+                 gdir.rgi_id, tstar, div_id)
 
         # Get the corresponding mu
         years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
                                                                div_id=div_id,
                                                                year_range=yr)
         assert len(years) == (2 * mu_hp + 1)
-        mustar = np.mean(prcp_yr) / np.mean(temp_yr)
+
+        # mustar is taking calving into account
+        mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
         if not np.isfinite(mustar):
-            raise RuntimeError('{} has an infinite mu'.format(gdir.rgi_id))
+            raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
 
         # Scalars in a small dataframe for later
         df = pd.DataFrame()
@@ -549,23 +579,28 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
             fl.flux = np.zeros(len(fl.surface_h))
 
         # Flowlines in order to be sure
+        # TODO: here it would be possible to test for a minimum mb gradient
+        # and change prcp factor if judged useful
         for fl in fls:
             y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
                                                   year_range=yr,
                                                   flatten=False)
             fl.set_apparent_mb(np.mean(p, axis=1) - mustar*np.mean(t, axis=1))
 
-        # Overwrite
+        # Check
         if div_id >= 1:
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
                 log.warning('%s: flux should be zero, but is: %.2f',
                             gdir.rgi_id,
                             fls[-1].flux[-1])
-            if not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
-                msg = '{}: flux should be zero, but is: {.2f}'.format(
+            # If not marine and quite far from zero, error
+            if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
+                msg = '{}: flux should be zero, but is: {:.2f}'.format(
                             gdir.rgi_id,
                             fls[-1].flux[-1])
                 raise RuntimeError(msg)
+
+        # Overwrite
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
@@ -584,7 +619,9 @@ def compute_ref_t_stars(gdirs):
     dfids = pd.read_csv(flink)['RGI_ID'].values
 
     # Reference glaciers only if in the list
-    ref_gdirs = [g for g in gdirs if g.rgi_id in dfids]
+    # TODO: we removed marine glaciers here. Is it ok?
+    ref_gdirs = [g for g in gdirs if (g.rgi_id in dfids and
+                                      g.terminus_type=='Land-terminating')]
 
     # Loop
     only_one = []  # start to store the glaciers with just one t*

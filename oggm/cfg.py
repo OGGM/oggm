@@ -215,6 +215,7 @@ def initialize(file=None):
 
     PATHS['topo_dir'] = cp['topo_dir']
     PATHS['cru_dir'] = cp['cru_dir']
+    PATHS['rgi_dir'] = cp['rgi_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -238,6 +239,7 @@ def initialize(file=None):
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
+    PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -257,7 +259,8 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_inversion_params', 'invert_with_sliding']
+           'use_inversion_params', 'invert_with_sliding', 'rgi_dir',
+           'use_multiple_flowlines']
     for k in ltr:
         del cp[k]
 

@@ -1,6 +1,14 @@
-# Read in the RGI file(s)
-import pandas as pd
+"""Config file for ITMIX."""
 
-rgi_dir = '/home/mowglie/disk/Data/GIS/SHAPES/RGI/RGI_V5/'
-itmix_data_dir = '/home/mowglie/disk/Data/ITMIX/glaciers_sorted/'
-df_itmix = pd.read_pickle('/home/mowglie/disk/Dropbox/Photos/itmix_rgi_plots/links/itmix_rgi_links.pkl')
+DATA_DIR = '/work/ubuntu/oggm-data/'
+WORKING_DIR = '/work/ubuntu/wd/'
+PLOTS_DIR = '/work/ubuntu/plots/'
+
+#DATA_DIR = '/home/mowglie/disk/Dropbox/Share/oggm-data/'
+#WORKING_DIR = '/home/mowglie/disk/ITMIX/mybs100/'
+#PLOTS_DIR = '/home/mowglie/disk/ITMIX/plots/'
+ITMIX_ODIR = '/work/ubuntu/output/'
+
+# DATA_DIR = '/home/mowglie/disk/Dropbox/Share/oggm-data/'
+# WORKING_DIR = '/home/mowglie/disk/ITMIX/onefl/'
+# PLOTS_DIR = '/home/mowglie/disk/ITMIX/onefl/plots/'

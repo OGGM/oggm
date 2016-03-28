@@ -91,6 +91,19 @@ class TestGIS(unittest.TestCase):
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
 
+    def test_glacierdir(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+
+        # this should simply run
+        mygdir = oggm.GlacierDirectory(entity.RGIID, base_dir=self.testdir)
+
     def test_glacier_masks(self):
 
         # The GIS was double checked externally with IDL.
@@ -914,6 +927,72 @@ class TestInversion(unittest.TestCase):
                 maxs = _max
 
         np.testing.assert_allclose(242, maxs, atol=21)
+
+
+    def test_distribute(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.distribute_climate_data([gdir])
+        climate.mu_candidates(gdir, div_id=0)
+        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
+        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star = t_star[-1]
+        bias = bias[-1]
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+
+        # OK. Values from Fischer and Kuhn 2013
+        # Area: 8.55
+        # meanH = 67+-7
+        # Volume = 0.573+-0.063
+        # maxH = 242+-13
+        inversion.prepare_for_inversion(gdir)
+
+        ref_v = 0.573 * 1e9
+        def to_optimize(x):
+            glen_a = cfg.A * x[0]
+            fs = cfg.FS * x[1]
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                                  glen_a=glen_a)
+            return (v - ref_v)**2
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-1)['x']
+        glen_a = cfg.A * out[0]
+        fs = cfg.FS * out[1]
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
+        np.testing.assert_allclose(ref_v, v)
+
+        inversion.distribute_thickness(gdir, how='per_altitude',
+                                       add_nc_name=True)
+        inversion.distribute_thickness(gdir, how='per_interpolation',
+                                       add_slope=False,
+                                       add_nc_name=True)
+
+        grids_file = gdir.get_filepath('gridded_data')
+        with netCDF4.Dataset(grids_file) as nc:
+            t1 = nc.variables['thickness_per_altitude'][:]
+            t2 = nc.variables['thickness_per_interpolation'][:]
+
+        np.testing.assert_allclose(np.sum(t1), np.sum(t2))
+        if not HAS_NEW_GDAL:
+            np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
+
 
     def test_invert_hef_nofs(self):
 

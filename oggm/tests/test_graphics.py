@@ -172,6 +172,12 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
 
+    inversion.distribute_thickness(gdir, how='per_altitude',
+                                   add_nc_name=True)
+    inversion.distribute_thickness(gdir, how='per_interpolation',
+                                   add_slope=False, smooth=False,
+                                   add_nc_name=True)
+
     return gdir
 
 
@@ -267,6 +273,18 @@ def test_plot_model():
     graphics.plot_modeloutput_section(gdir, model=model)
     graphics.plot_modeloutput_map(gdir, model=model)
 
+
+@image_comparison(baseline_images=['test_thick_alt' + suffix,
+                                   'test_thick_interp' + suffix,
+                                   ],
+                  extensions=['png'])
+@requires_mpltest
+@requires_mpl15
+def test_plot_distrib():
+
+    gdir = init_hef()
+    graphics.plot_distributed_thickness(gdir, how='per_altitude')
+    graphics.plot_distributed_thickness(gdir, how='per_interpolation')
 
 if __name__ == '__main__':  # pragma: no cover
     nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)

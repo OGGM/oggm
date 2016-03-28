@@ -427,14 +427,12 @@ def compute_centerlines(gdir, div_id=None):
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
     grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
-    nc = netCDF4.Dataset(grids_file)
-
-    # Variables
-    glacier_mask = nc.variables['glacier_mask'][:]
-    glacier_ext = nc.variables['glacier_ext'][:]
-    topo = nc.variables['topo_smoothed'][:]
-    poly_pix = geom['polygon_pix']
-    nc.close()
+    with netCDF4.Dataset(grids_file) as nc:
+        # Variables
+        glacier_mask = nc.variables['glacier_mask'][:]
+        glacier_ext = nc.variables['glacier_ext'][:]
+        topo = nc.variables['topo_smoothed'][:]
+        poly_pix = geom['polygon_pix']
 
     # Find for local maximas on the outline
     x, y = tuple2int(poly_pix.exterior.xy)
@@ -446,7 +444,7 @@ def compute_centerlines(gdir, div_id=None):
     maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
-    if len(heads_idx[0]) <= 1:
+    if (not cfg.PARAMS['use_multiple_flowlines']) or len(heads_idx[0]) <= 1:
         # small glaciers with one or less heads: take the absolute max
         heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
 
