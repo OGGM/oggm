@@ -10,14 +10,14 @@ import importlib
 MAJOR = 0
 MINOR = 1
 MICRO = 0
-ISRELEASED = False
+ISRELEASED = True
 VERSION = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
 QUALIFIER = ''
 
 DISTNAME = 'oggm'
 LICENSE = 'GPLv3+'
 AUTHOR = 'oggm Developers'
-AUTHOR_EMAIL = 'fabien.maussion@uibk.ac.at'
+AUTHOR_EMAIL = 'oggm@lists.uibk.ac.at'
 URL = 'http://oggm.org'
 CLASSIFIERS = [
         # How mature is this project? Common values are

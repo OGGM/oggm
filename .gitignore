@@ -25,6 +25,7 @@ oggm/tests/tmp_*
 *.html
 docs/*-gen.rst
 docs/_build
+docs/_build_html
 docs/generated
 docs/_static
 docs/_sources

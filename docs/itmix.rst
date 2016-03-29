@@ -1,3 +1,6 @@
+.. currentmodule:: oggm
+.. _itmix_2016:
+
 ITMIX Experiment 2016
 =====================
 
@@ -323,7 +326,7 @@ Distributed ice thickness
 In a final step, we had to somehow interpolate the flowline thicknesses to
 the ITMIX map. Here again we made the choice to keep as much logic as
 possible within the standard OGGM framework and defined a new task,
-:py:func:`~oggm.tasks.distribute_thickness`. We compute the ice
+:py:func:`oggm.tasks.distribute_thickness`. We compute the ice
 thickness on the OGGM local map and simply interpolate our results on the high
 resolution ITMIX grid only at the very end.
 

@@ -7,14 +7,15 @@ self-explanatory and should work on any platform. However,
 complete beginners should get familiar with Python and its packaging
 ecosystem before trying to install and run OGGM.
 
-OGGM is tested with Python versions `2.7 and 3.4`_.
+OGGM is `tested`_ with the Python `versions`_ 2.7, 3.4 and 3.5.
 
 For most users we recommend to use the conda_ package manager  to install
 the dependencies `With conda (all platforms)`_. Linux users and people
 with experience with `pip`_ can follow the specific instructions
 `With virtualenv (linux/debian)`_.
 
-.. _2.7 and 3.4: https://wiki.python.org/moin/Python2orPython3
+.. _tested: https://travis-ci.org/OGGM/oggm
+.. _versions: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
 

@@ -49,7 +49,7 @@ except ImportError:
                     'scipy.ndimage.measurements', 'scipy.ndimage.morphology',
                     'matplotlib._cntr', 'scipy.ndimage.filters',
                     'scipy.interpolate', 'xarray', 'rasterio.tools',
-                    'rasterio.tools.merge']
+                    'rasterio.tools.merge', 'salem.utils']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
     from oggm.tasks import *
 
@@ -75,7 +75,9 @@ extensions = [
     'sphinxcontrib.images',
 ]
 
-extlinks = {'issue': ('https://github.com/OGGM/oggm/%s', 'GH')}
+extlinks = {'issue': ('https://github.com/OGGM/oggm/issues/%s', 'GH'),
+            'pull': ('https://github.com/OGGM/oggm/pull/%s', 'PR'),
+            }
 
 autosummary_generate = True
 
