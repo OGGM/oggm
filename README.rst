@@ -58,7 +58,7 @@ Get in touch
 - To ask questions or discuss OGGM, send us an `e-mail`_.
 - Report bugs, share your ideas or view the source code `on GitHub`_.
 
-.. _e-mail: oggm@lists.uibk.ac.at
+.. _e-mail: fabien.maussion@uibk.ac.at
 .. _on GitHub: https://github.com/OGGM/oggm
 
 

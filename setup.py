@@ -17,7 +17,7 @@ QUALIFIER = ''
 DISTNAME = 'oggm'
 LICENSE = 'GPLv3+'
 AUTHOR = 'oggm Developers'
-AUTHOR_EMAIL = 'oggm@lists.uibk.ac.at'
+AUTHOR_EMAIL = 'fabien.maussion@uibk.ac.at'
 URL = 'http://oggm.org'
 CLASSIFIERS = [
         # How mature is this project? Common values are
