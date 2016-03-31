@@ -588,14 +588,13 @@ def install_node_apt(nn='', inst=None):
     sudo apt-get install -y build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf tk-dev python3-tk python3-dev ttf-bitstream-vera python-pip git awscli virtualenvwrapper
     """, pty=False)
 
-    aws_file = os.path.expanduser('~/.aws/config')
-    if os.path.exists(aws_file):
-        run('mkdir -p ~/.aws')
-        put(aws_file, '~/.aws/config')
+    copy_files = ['~/.aws/config', '~/.screenrc', '~/.gitconfig']
 
-    s_file = os.path.expanduser('~/.screenrc')
-    if os.path.exists(s_file):
-        put(s_file, '~/.screenrc')
+    for cf in copy_files:
+        if not os.path.exists(os.path.expanduser(cf)):
+            continue
+        run('mkdir -p %s' % os.path.dirname(cf))
+        put(cf, cf)
 
     run("""
     if [ -e /work/ubuntu ]; then
