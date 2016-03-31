@@ -57,9 +57,12 @@ from collections import defaultdict
 # fab -l
 #
 # A few first steps:
-#     1. go through setup below and adjust at least: ec2Profile, def_logfile
-#     2. create instance with
+#     1. Go through setup below and adjust at least: ec2Profile, def_logfile
+#     2. Create instance with
 #         fab cloud_make
+#        If you are using spot instances and require your instances to be in the same region
+#         fab instance_start
+#        This will use the region configured in def_default_avz.
 #     3. Takes between 5 - 10 minutes (if still using spot as def_default_requesttype)
 #     4. Use
 #         fab install_node_software
