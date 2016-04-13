@@ -182,7 +182,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
 
 
 @image_comparison(baseline_images=['test_googlestatic' + suffix],
-                  extensions=['png'])
+                  extensions=['png'], tol=15)
 @requires_internet
 @requires_mpltest
 def test_googlemap():
