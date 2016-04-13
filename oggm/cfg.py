@@ -220,6 +220,7 @@ def initialize(file=None):
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
+    PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
     log.info('Working directory: %s', PATHS['working_dir'])
 
@@ -260,7 +261,7 @@ def initialize(file=None):
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_inversion_params', 'invert_with_sliding', 'rgi_dir',
-           'use_multiple_flowlines']
+           'use_multiple_flowlines', 'leclercq_rgi_links']
     for k in ltr:
         del cp[k]
 

@@ -610,6 +610,36 @@ def get_wgms_files():
     return outf, datadir
 
 
+def get_leclercq_files():
+    """Get the path to the default Leclercq-RGI link file and the data dir.
+
+    Returns
+    -------
+    (file, dir): paths to the files
+    """
+
+    if cfg.PATHS['leclercq_rgi_links'] != '~':
+        if not os.path.exists(cfg.PATHS['leclercq_rgi_links']):
+            raise ValueError('wrong leclercq_rgi_links path provided.')
+        # User provided data
+        outf = cfg.PATHS['leclercq_rgi_links']
+        # TODO: This doesnt exist yet
+        datadir = os.path.join(os.path.dirname(outf), 'lendata')
+        # if not os.path.exists(datadir):
+        #     raise ValueError('The Leclercq data directory is missing')
+        return outf, datadir
+
+    # Roll our own
+    _download_oggm_files()
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'leclercq')
+    outf = os.path.join(sdir, 'rgi_leclercq_links_2012_RGIV5.csv')
+    assert os.path.exists(outf)
+    # TODO: This doesnt exist yet
+    datadir = os.path.join(sdir, 'lendata')
+    # assert os.path.exists(datadir)
+    return outf, datadir
+
+
 def get_glathida_file():
     """Get the path to the default WGMS-RGI link file and the data dir.
 
