@@ -269,6 +269,43 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
+def aws_file_download(aws_path, local_path, reset=False):
+    """Download a file from the AWS drive s3://astgtmv2/
+
+    **Note:** you need AWS credentials for this to work.
+
+    Parameters
+    ----------
+    aws_path: path relative to  s3://astgtmv2/
+    local_path: where to copy the file
+    reset: overwrite the local file
+    """
+
+    if reset and os.path.exists(local_path):
+        os.remove(local_path)
+
+    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/'
+    cmd = cmd + aws_path + ' ' + local_path
+    if not os.path.exists(local_path):
+        subprocess.call(cmd, shell=True)
+    if not os.path.exists(local_path):
+        raise RuntimeError('Something went wrong with the download')
+
+
+def mkdir(path, reset=False):
+    """Checks if directory exists and if not, create one.
+
+    Parameters
+    ----------
+    reset: erase the content of the directory if exists
+    """
+
+    if reset and os.path.exists(path):
+        shutil.rmtree(path)
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
 

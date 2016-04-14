@@ -222,18 +222,12 @@ def initialize(file=None):
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
     PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
-    log.info('Working directory: %s', PATHS['working_dir'])
-
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
     if PARAMS['mp_processes'] == -1:
         PARAMS['mp_processes'] = None
-    if PARAMS['use_multiprocessing']:
-        log.info('Multiprocessing run')
-    else:
-        log.info('No multiprocessing')
 
     # Some non-trivial params
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
