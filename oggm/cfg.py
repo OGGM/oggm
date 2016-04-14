@@ -220,8 +220,7 @@ def initialize(file=None):
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
-
-    log.info('Working directory: %s', PATHS['working_dir'])
+    PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
@@ -229,10 +228,6 @@ def initialize(file=None):
 
     if PARAMS['mp_processes'] == -1:
         PARAMS['mp_processes'] = None
-    if PARAMS['use_multiprocessing']:
-        log.info('Multiprocessing run')
-    else:
-        log.info('No multiprocessing')
 
     # Some non-trivial params
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
@@ -260,7 +255,7 @@ def initialize(file=None):
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_inversion_params', 'invert_with_sliding', 'rgi_dir',
-           'use_multiple_flowlines']
+           'use_multiple_flowlines', 'leclercq_rgi_links']
     for k in ltr:
         del cp[k]
 
