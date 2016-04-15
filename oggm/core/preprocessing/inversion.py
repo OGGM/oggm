@@ -281,7 +281,7 @@ def optimize_inversion_params(gdirs):
             tmp_ref = np.zeros(len(ref_gdirs))
             glen_a = cfg.A * x[0]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
                                             fs=0., write=False)
                 if optim_t:
                     tmp_ref[i] = v / a

@@ -4,7 +4,7 @@ from __future__ import division
 # Log message format
 import logging
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
+                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
 
 # Climate file
 hist_path = os.path.join(DATA_DIR, 'histalp_merged_with_cru_hydro_yrs.nc')
-utils.aws_file_download('/alps/histalp_merged_with_cru_hydro_yrs.nc',
+utils.aws_file_download('alps/histalp_merged_with_cru_hydro_yrs.nc',
                         hist_path, reset=False)
 cfg.PATHS['cru_dir'] = '~'
 cfg.PATHS['climate_file'] = hist_path
@@ -59,16 +59,31 @@ utils.mkdir(cfg.PATHS['rgi_dir'])
 cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = False
 
+# Run parameters
+cfg.PARAMS['d1'] = 4
+cfg.PARAMS['dmax'] = 100
+cfg.PARAMS['border'] = 120
+cfg.PARAMS['invert_with_sliding'] = False
+cfg.PARAMS['min_slope'] = 2
+cfg.PARAMS['max_shape_param'] = 0.006
+cfg.PARAMS['max_thick_to_width_ratio'] = 0.5
+cfg.PARAMS['temp_use_local_gradient'] = False
+cfg.PARAMS['optimize_thick'] = True
+cfg.PARAMS['force_one_flowline'] = ['RGI50-11.01270']
+
+# Divides
+cfg.set_divides_db(utils.get_demo_file('HEF_divided.shp'))
+
 # Read in the Alps RGI file
 rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_ref_alps.pkl')
-utils.aws_file_download('/alps/rgi_ref_alps.pkl', rgi_pkl_path, reset=False)
+utils.aws_file_download('alps/rgi_ref_alps.pkl', rgi_pkl_path, reset=False)
 rgidf = pd.read_pickle(rgi_pkl_path)
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go - initialize working directories
-# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-gdirs = workflow.init_glacier_regions(rgidf)
+gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+# gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks
 task_list = [
@@ -104,13 +119,13 @@ if PLOTS_DIR == '':
     exit()
 utils.mkdir(PLOTS_DIR)
 for gd in gdirs:
-    bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_')
-    graphics.plot_googlemap(gd)
-    plt.savefig(bname + 'ggl.png')
-    plt.close()
-    graphics.plot_domain(gd)
-    plt.savefig(bname + 'dom.png')
-    plt.close()
+    bname = os.path.join(PLOTS_DIR, gd.rgi_id + '_')
+    # graphics.plot_googlemap(gd)
+    # plt.savefig(bname + 'ggl.png')
+    # plt.close()
+    # graphics.plot_domain(gd)
+    # plt.savefig(bname + 'dom.png')
+    # plt.close()
     graphics.plot_centerlines(gd)
     plt.savefig(bname + 'cls.png')
     plt.close()
