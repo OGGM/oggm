@@ -133,6 +133,7 @@ class TestWorkflow(unittest.TestCase):
 
         # Inversion Results
         cfg.PARAMS['invert_with_sliding'] = True
+        cfg.PARAMS['optimize_thick'] = True
         workflow.inversion_tasks(gdirs)
 
         fpath = os.path.join(cfg.PATHS['working_dir'],
@@ -143,6 +144,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertTrue(r1 < r2)
 
         cfg.PARAMS['invert_with_sliding'] = False
+        cfg.PARAMS['optimize_thick'] = False
         workflow.inversion_tasks(gdirs)
 
         fpath = os.path.join(cfg.PATHS['working_dir'],

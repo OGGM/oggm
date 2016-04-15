@@ -241,22 +241,35 @@ def optimize_inversion_params(gdirs):
     ref_volume_km3 = ref_cs * ref_area_km2**1.375
     ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.
 
+    # Minimize volume or thick RMSD?
+    optim_t = cfg.PARAMS['optimize_thick']
+    if optim_t:
+        ref_data = ref_thickness_m
+        tol = 0.1
+    else:
+        ref_data = ref_volume_km3
+        tol = 1.e-4
+
     if cfg.PARAMS['invert_with_sliding']:
         # Optimize with both params
         log.info('Compute the inversion parameters.')
 
         def to_optimize(x):
-            tmp_vols = np.zeros(len(ref_gdirs))
+            tmp_ref = np.zeros(len(ref_gdirs))
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
             for i, gdir in enumerate(ref_gdirs):
-                v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
+                v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
                                             fs=fs, write=False)
-                tmp_vols[i] = v * 1e-9
-            return utils.rmsd(tmp_vols, ref_volume_km3)
+                if optim_t:
+                    tmp_ref[i] = v / a
+                else:
+                    tmp_ref[i] = v * 1e-9
+            return utils.rmsd(tmp_ref, ref_data)
+
         opti = optimization.minimize(to_optimize, [1., 1.],
                                     bounds=((0.01, 10), (0.01, 10)),
-                                    tol=1.e-4)
+                                    tol=tol)
         # Check results and save.
         glen_a = cfg.A * opti['x'][0]
         fs = cfg.FS * opti['x'][1]
@@ -265,16 +278,19 @@ def optimize_inversion_params(gdirs):
         log.info('Compute the inversion parameter.')
 
         def to_optimize(x):
-            tmp_vols = np.zeros(len(ref_gdirs))
+            tmp_ref = np.zeros(len(ref_gdirs))
             glen_a = cfg.A * x[0]
             for i, gdir in enumerate(ref_gdirs):
                 v, _ = invert_parabolic_bed(gdir, glen_a=glen_a,
                                             fs=0., write=False)
-                tmp_vols[i] = v * 1e-9
-            return utils.rmsd(tmp_vols, ref_volume_km3)
+                if optim_t:
+                    tmp_ref[i] = v / a
+                else:
+                    tmp_ref[i] = v * 1e-9
+            return utils.rmsd(tmp_ref, ref_data)
         opti = optimization.minimize(to_optimize, [1.],
                                     bounds=((0.01, 10), ),
-                                    tol=1.e-4)
+                                    tol=tol)
         # Check results and save.
         glen_a = cfg.A * opti['x'][0]
         fs = 0.
@@ -304,10 +320,13 @@ def optimize_inversion_params(gdirs):
     # This is for the working dir
     # Simple stats
     out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
-    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000.,
-                                 ref_thickness_m)
+    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000,
+                                   ref_thickness_m)
+
     log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
-             '{factor_fs:.2f} for a volume RMSD of {vol_rmsd:.3f}'.format(**out))
+             '{factor_fs:.2f} for a thick RMSD of '
+             '{thick_rmsd:.1f} and a volume RMSD of '
+             '{vol_rmsd:.3f}'.format(**out))
 
     df = pd.DataFrame(out, index=[0])
     fpath = os.path.join(cfg.PATHS['working_dir'],
