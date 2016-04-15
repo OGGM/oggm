@@ -803,7 +803,8 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     """
 
     # Did the user specify a specific SRTM file?
-    if ('dem_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['dem_file']):
+    if ('dem_file' in cfg.PATHS) and (cfg.PATHS['dem_file'] != '~') and \
+            os.path.exists(cfg.PATHS['dem_file']):
         return cfg.PATHS['dem_file'], 'USER'
 
     # If not, do the job ourselves: download and merge stuffs
