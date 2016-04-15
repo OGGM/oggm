@@ -424,6 +424,14 @@ def compute_centerlines(gdir, div_id=None):
     ----------
     gdir : oggm.GlacierDirectory
     """
+
+    # Params
+    single_fl = not cfg.PARAMS['use_multiple_flowlines']
+
+    if 'force_one_flowline' in cfg.PARAMS:
+        if gdir.rgi_id in cfg.PARAMS['force_one_flowline']:
+            single_fl = True
+
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
     grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
@@ -444,7 +452,7 @@ def compute_centerlines(gdir, div_id=None):
     maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
-    if (not cfg.PARAMS['use_multiple_flowlines']) or len(heads_idx[0]) <= 1:
+    if single_fl or len(heads_idx[0]) <= 1:
         # small glaciers with one or less heads: take the absolute max
         heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
 
