@@ -38,18 +38,6 @@ class TestDataFiles(unittest.TestCase):
         sh = salem.utils.read_shapefile(f)
         self.assertTrue(hasattr(sh, 'geometry'))
 
-        # Data files
-        cfg.initialize()
-
-        lf, df = utils.get_leclercq_files()
-        self.assertTrue(os.path.exists(lf))
-
-        lf, df = utils.get_wgms_files()
-        self.assertTrue(os.path.exists(lf))
-
-        lf = utils.get_glathida_file()
-        self.assertTrue(os.path.exists(lf))
-
     def test_srtmzone(self):
 
         z = utils.srtm_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
@@ -99,6 +87,15 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_srtm_file(zone)
         self.assertTrue(os.path.exists(fp))
         fp = utils._download_srtm_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    def test_srtmfilleddownload(self):
+
+        # this zone does exist and file should be small enough for download
+        zone = 'L32'
+        fp = utils._download_srtm_filled_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        fp = utils._download_srtm_filled_file(zone)
         self.assertTrue(os.path.exists(fp))
 
     @is_download
