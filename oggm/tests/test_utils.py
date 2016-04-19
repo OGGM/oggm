@@ -38,6 +38,19 @@ class TestDataFiles(unittest.TestCase):
         sh = salem.utils.read_shapefile(f)
         self.assertTrue(hasattr(sh, 'geometry'))
 
+        # Data files
+        cfg.initialize()
+
+        lf, df = utils.get_leclercq_files()
+        self.assertTrue(os.path.exists(lf))
+
+        lf, df = utils.get_wgms_files()
+        self.assertTrue(os.path.exists(lf))
+
+        lf = utils.get_glathida_file()
+        self.assertTrue(os.path.exists(lf))
+
+
     def test_srtmzone(self):
 
         z = utils.srtm_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
