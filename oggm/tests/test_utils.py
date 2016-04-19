@@ -50,19 +50,20 @@ class TestDataFiles(unittest.TestCase):
         lf = utils.get_glathida_file()
         self.assertTrue(os.path.exists(lf))
 
-    def test_srtmzone(self):
 
-        z = utils.srtm_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
+    def test_srtmfilledzone(self):
+
+        z = utils.srtm_filled_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
         self.assertTrue(len(z) == 1)
         self.assertEqual('14_01', z[0])
 
-        z = utils.srtm_zone(lon_ex=[-72, -73], lat_ex=[-52, -53])
+        z = utils.srtm_filled_zone(lon_ex=[-72, -73], lat_ex=[-52, -53])
         self.assertTrue(len(z) == 1)
         self.assertEqual('22_23', z[0])
 
         # Alps
         ref = sorted(['39_04', '38_03', '38_04', '39_03'])
-        z = utils.srtm_zone(lon_ex=[6, 14], lat_ex=[41, 48])
+        z = utils.srtm_filled_zone(lon_ex=[6, 14], lat_ex=[41, 48])
         self.assertTrue(len(z) == 4)
         self.assertEqual(ref, z)
 
@@ -91,22 +92,20 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
 
-    @is_download
-    def test_srtmdownload(self):
+    def test_srtmfilleddownload(self):
 
         # this zone does exist and file should be small enough for download
-        zone = '68_11'
-        fp = utils._download_srtm_file(zone)
+        zone = 'L32'
+        fp = utils._download_srtm_filled_file(zone)
         self.assertTrue(os.path.exists(fp))
-        fp = utils._download_srtm_file(zone)
+        fp = utils._download_srtm_filled_file(zone)
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
-    def test_srtmdownloadfails(self):
+    def test_srtmfilleddownloadfails(self):
 
         # this zone does not exist
-        zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
+        zone = 'SZ20'
+        self.assertTrue(utils._download_srtm_filled_file(zone) is None)
 
     @is_download
     def test_asterdownload(self):
