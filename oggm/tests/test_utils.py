@@ -79,16 +79,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
 
-    @is_download
-    def test_srtmdownload(self):
-
-        # this zone does exist and file should be small enough for download
-        zone = '68_11'
-        fp = utils._download_srtm_file(zone)
-        self.assertTrue(os.path.exists(fp))
-        fp = utils._download_srtm_file(zone)
-        self.assertTrue(os.path.exists(fp))
-
     def test_srtmfilleddownload(self):
 
         # this zone does exist and file should be small enough for download
@@ -98,12 +88,11 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_srtm_filled_file(zone)
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
-    def test_srtmdownloadfails(self):
+    def test_srtmfilleddownloadfails(self):
 
         # this zone does not exist
-        zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
+        zone = 'SZ20'
+        self.assertTrue(utils._download_srtm_filled_file(zone) is None)
 
     @is_download
     def test_asterdownload(self):
