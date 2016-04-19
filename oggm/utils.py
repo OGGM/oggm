@@ -855,13 +855,6 @@ def get_topo_file(lon_ex, lat_ex, region=None):
             sources.append(_download_srtm_file(z))
         source_str = 'SRTM'
 
-    if len(sources) < 1:
-        raise RuntimeError('No topography file available!')
-        # for the very last cases a very coarse dataset ?
-        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
-        assert os.path.exists(t_file)
-        return t_file, 'ETOPO1'
-
     if len(sources) == 1:
         return sources[0], source_str
     else:
@@ -1104,7 +1097,7 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity: glacier entity read from the shapefile
+        rgi_entity: glacier entity read from the shapefile OR a valid RGI ID
         base_dir: path to the directory where to open the directory
             defaults to "conf.PATHPATHS['working_dir'] + /per_glacier/"
         reset: emtpy the directory at construction (careful!)

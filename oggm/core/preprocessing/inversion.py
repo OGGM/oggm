@@ -351,7 +351,7 @@ def optimize_inversion_params(gdirs):
 
 
 @entity_task(log, writes=['inversion_output'])
-def volume_inversion(gdir, use_cfg_params=False):
+def volume_inversion(gdir, use_cfg_params=None):
     """Computes the inversion the glacier.
 
     If fs and fd are not given, it will use the optimized params.
@@ -359,13 +359,12 @@ def volume_inversion(gdir, use_cfg_params=False):
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
-    use_cfg_params : bool, default=False
-        if True, use A and fs provided by the user in the config file and if
-        False, use the results of the optimisation.
+    use_cfg_params : set to a dict of params (experimental)
     """
 
-    if use_cfg_params:
-        raise NotImplementedError('use_cfg_params=True')
+    if use_cfg_params is not None:
+        fs = use_cfg_params['fs']
+        glen_a = use_cfg_params['glen_a']
     else:
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')
