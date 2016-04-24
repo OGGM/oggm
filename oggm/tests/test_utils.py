@@ -50,20 +50,42 @@ class TestDataFiles(unittest.TestCase):
         lf = utils.get_glathida_file()
         self.assertTrue(os.path.exists(lf))
 
-    def test_srtmzone(self):
 
-        z = utils.srtm_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
-        self.assertTrue(len(z) == 1)
-        self.assertEqual('14_01', z[0])
+    def test_dem3_viewpano_zone(self):
 
-        z = utils.srtm_zone(lon_ex=[-72, -73], lat_ex=[-52, -53])
+        test_loc = {'ISL': [-25., -12., 63., 67.],      # Iceland
+                        'SVALBARD': [10., 34., 76., 81.],
+                        'JANMAYEN': [-10., -7., 70., 72.],
+                        'FJ': [36., 66., 79., 82.],         # Franz Josef Land
+                        'FAR': [-8., -6., 61., 63.],        # Faroer
+                        'BEAR': [18., 20., 74., 75.],       # Bear Island
+                        'SHL': [-3., 0., 60., 61.],         # Shetland
+                        '01-15': [-180., -91., -90, -60.],  # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+                        '16-30': [-91., -1., -90., -60.],
+                        '31-45': [-1., 89., -90., -60.],
+                        '46-60': [89., 189., -90., -60.]}
+        # special names
+        for key in test_loc:
+            z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]], [test_loc[key][2], test_loc[key][3]],
+                                       test_loc)
+            self.assertTrue(len(z) == 1)
+
+            self.assertEqual(key, z[0])
+
+        # weired Antarctica tile
+        z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.], test_loc)
         self.assertTrue(len(z) == 1)
-        self.assertEqual('22_23', z[0])
+        self.assertEqual('SR15', z[0])
+
+        # normal tile
+        z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.], test_loc)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('Q01', z[0])
 
         # Alps
-        ref = sorted(['39_04', '38_03', '38_04', '39_03'])
-        z = utils.srtm_zone(lon_ex=[6, 14], lat_ex=[41, 48])
-        self.assertTrue(len(z) == 4)
+        ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32', 'L33', 'M31', 'M32', 'M33'])
+        z = utils.dem3_viewpano_zone([6, 14], [41, 48], test_loc)
+        self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
 
     def test_asterzone(self):
@@ -91,22 +113,22 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
 
-    @is_download
-    def test_srtmdownload(self):
+    def test_download_dem3_viewpano(self):
 
         # this zone does exist and file should be small enough for download
-        zone = '68_11'
-        fp = utils._download_srtm_file(zone)
+        zone = 'L32'
+        fp = utils._download_dem3_viewpano(zone, {})
         self.assertTrue(os.path.exists(fp))
-        fp = utils._download_srtm_file(zone)
+        zone = 'U44'
+        fp = utils._download_dem3_viewpano(zone, {})
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
-    def test_srtmdownloadfails(self):
+
+    def test_download_dem3_viewpano_fails(self):
 
         # this zone does not exist
-        zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
+        zone = 'SZ20'
+        self.assertTrue(utils._download_dem3_viewpano(zone, {}) is None)
 
     @is_download
     def test_asterdownload(self):

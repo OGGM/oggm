@@ -127,7 +127,6 @@ def _download_oggm_files():
 
     return out
 
-
 def _download_srtm_file(zone):
     """Checks if the srtm data is in the directory and if not, download it.
     """
@@ -155,6 +154,59 @@ def _download_srtm_file(zone):
                     # Ok so this *should* be an ocean tile
                     return None
                 elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
+                    print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" %
+                          (err.code, retry_counter, retry_max))
+                    time.sleep(10)
+                    continue
+                else:
+                    raise
+            except zipfile.BadZipfile:
+                # This is for py2
+                # Ok so this *should* be an ocean tile
+                return None
+
+
+    out = os.path.join(odir, 'srtm_' + zone + '.tif')
+    print out
+    assert os.path.exists(out)
+    return out
+
+
+def _download_dem3_viewpano(zone, specialzones):
+    """Checks if the srtm data is in the directory and if not, download it.
+    """
+
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'srtm')
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
+
+    # some files have a newer version 'v2'
+    if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34', 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40',
+                'P31', 'P32', 'P33', 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
+        ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
+    elif zone in ['01-15', '16-30', '31-45', '46-60']:
+        ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
+    else:
+        ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
+
+    if not os.path.exists(ofile):
+        retry_counter = 0
+        retry_max = 5
+        while True:
+            # Try to download
+            try:
+                retry_counter += 1
+                urlretrieve(ifile, ofile)
+                with zipfile.ZipFile(ofile) as zf:
+                    zf.extractall(odir)
+                break
+            except HTTPError as err:
+                # This works well for py3
+                if err.code == 404:
+                    # Ok so this *should* be an ocean tile
+                    return None
+                elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
                     print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" % (err.code, retry_counter, retry_max))
                     time.sleep(10)
                     continue
@@ -165,9 +217,43 @@ def _download_srtm_file(zone):
                 # Ok so this *should* be an ocean tile
                 return None
 
-    out = os.path.join(odir, 'srtm_' + zone + '.tif')
-    assert os.path.exists(out)
-    return out
+    # Serious issue: sometimes, if a southern hemisphere URL is queried for download and there is none
+    # a NH zip file os downloaded. Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
+    # BUT: There are southern hemisphere files that download properly. However, the unzipped folder has the file name of
+    # the northern hemisphere file. Some checks if correct file exists:
+
+    if len(zone)==4 and zone.startswith('S'):
+        zonedir = os.path.join(odir, zone[1:])
+        globlist = glob.glob(zonedir+'\\S*.hgt') #'S' is important: cloud be confused with NH files otherwise
+    else:
+        zonedir = os.path.join(odir, zone)
+        globlist = glob.glob(zonedir+'\\*.hgt')
+
+    # take care of the special file naming cases (very ineffective...)
+    print zone
+    if zone in specialzones.keys():
+        print odir
+        globlist = glob.glob(odir+'\\*\\*.hgt')
+
+    if not globlist:
+        return None
+
+    # merge the single HGT files (can be a bit ineffective, bcz not every single file might be exactly within extent...)
+    rfiles = [rasterio.open(s) for s in globlist]
+    dest, output_transform = merge_tool(rfiles)
+    profile = rfiles[0].profile
+    profile.pop('affine')
+    profile['transform'] = output_transform
+    profile['height'] = dest.shape[1]
+    profile['width'] = dest.shape[2]
+    profile['driver'] = 'GTiff'
+    outpath = os.path.join(odir, zone+'.tif')
+    with rasterio.open(outpath, 'w', **profile) as dst:
+        dst.write(dest)
+
+    assert os.path.exists(outpath)
+
+    return outpath
 
 
 def _download_aster_file(zone, unit):
@@ -218,14 +304,19 @@ def _download_alternate_topo_file(fname):
     """
 
     # temporary check
-    fzipname = fname + '.zip'
-    if fzipname not in [
-        'gimpdem_90m.tif.zip',
-        'iceland.tif.zip',
-        'northcanada.tif.zip',
-        'svalbard.tif.zip',
-    ]:
-        raise ValueError('fname not ok.')
+    fzipname = fname.split('.')[0] + '.zip'
+    #if fzipname not in [
+    #    'gimpdem_90m.zip',
+    #    'iceland.zip',
+    #    'northcanada.zip',
+    #    'svalbard.zip',
+    #    'AN1.zip',
+    #    'AN2.zip',
+    #    'AN3.zip',
+    #    'AN4.zip',
+    #    'AN5.zip'
+    #]:
+    #    raise ValueError('fname not ok.')
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
     if not os.path.exists(odir):
@@ -236,13 +327,14 @@ def _download_alternate_topo_file(fname):
     cmd = cmd + fzipname + ' ' + ofile
     if not os.path.exists(ofile):
         subprocess.call(cmd, shell=True)
-        if os.path.exists(ofile):
-            # Ok so the tile is a valid one
-            with zipfile.ZipFile(ofile) as zf:
-                zf.extractall(odir)
-        else:
-            # Ok so this *should* be an ocean tile
-            return None
+
+    if os.path.exists(ofile):
+        # Ok so the tile is a valid one
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(odir)
+    else:
+        # Ok so this *should* be an ocean tile
+        return None
 
     out = os.path.join(odir, fname)
     assert os.path.exists(out)
@@ -548,6 +640,62 @@ def srtm_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
+def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
+    """Returns a list of corrected SRTM zones from
+    http://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm covering the desired extent.
+    """
+
+    for _f in specialfiles.keys():  # Python version independent iteration through dictionary
+
+        if (np.min(lon_ex) >= specialfiles[_f][0]) and (np.max(lon_ex) <= specialfiles[_f][1]) and \
+           (np.min(lat_ex) >= specialfiles[_f][2]) and (np.max(lat_ex) <= specialfiles[_f][3]):
+
+            # test some weired inset files in Antarctica
+            if (np.min(lon_ex) >= -91.) and (np.max(lon_ex) <= -90.) and \
+               (np.min(lat_ex) >= -72.) and (np.max(lat_ex) <= -68.):
+                return ['SR15']
+
+            elif (np.min(lon_ex) >= -47.) and (np.max(lon_ex) <= -43.) and \
+                 (np.min(lat_ex) >= -61.) and (np.max(lat_ex) <= -60.):
+                return ['SP23']
+
+            elif (np.min(lon_ex) >= 162.) and (np.max(lon_ex) <= 165.) and \
+                 (np.min(lat_ex) >= -68.) and (np.max(lat_ex) <= -66.):
+                return ['SQ58']
+
+            else:
+                return [_f]
+
+    # if the tile does *not* have a special name, its name can be found like this:
+    # corrected SRTMs are sorted in tiles of 6 deg longitude and 4 deg latitude
+    srtm_x0 = -180.
+    srtm_y0 = 0.
+    srtm_dx = 6.
+    srtm_dy = 4.
+
+
+    # quick n dirty solution to be sure that we will cover the whole range
+    mi, ma = np.min(lon_ex), np.max(lon_ex)
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dy)+3) # +3 is just for the number to become still a bit larger
+    mi, ma = np.min(lat_ex), np.max(lat_ex)
+    lat_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dx)+3)
+
+    zones = []
+    for lon in lon_ex:
+        for lat in lat_ex:
+            dx = lon - srtm_x0
+            dy = lat - srtm_y0
+
+            zx = np.ceil(dx / srtm_dx)
+            zy = chr(int(abs(dy / srtm_dy)) + ord('A'))  # convert number to letter
+
+            if lat >= 0:
+                zones.append('%s%02.0f' % (zy, zx))
+            else:
+                zones.append('S%s%02.0f' % (zy, zx))
+    return list(sorted(set(zones)))
+
+
 def aster_zone(lon_ex, lat_ex):
     """Returns a list of ASTER V2 zones and units covering the desired extent.
     """
@@ -789,8 +937,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     If the file is not present, download it. If the extent covers two or
     more files, merge them.
 
-    Returns a downloaded SRTM file for [-60S;60N], a Greenland DEM if
-    possible, and GTOPO elsewhere (hihi)
+    Returns a downloaded SRTM file for [-60S;60N], and a corrected DEM3" from viewfinderpanoramas.org else
 
     Parameters
     ----------
@@ -803,7 +950,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     """
 
     # Did the user specify a specific SRTM file?
-    if ('dem_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['dem_file']):
+    if ('dem_file' in cfg.PATHS) and os.path.isfile(cfg.PATHS['dem_file']):
         return cfg.PATHS['dem_file'], 'USER'
 
     # If not, do the job ourselves: download and merge stuffs
@@ -811,43 +958,44 @@ def get_topo_file(lon_ex, lat_ex, region=None):
 
     # TODO: GIMP is in polar stereographic, not easy to test
     # would be possible with a salem grid but this is a bit more expensive
-    # than jsut asking RGI for the region
-    if int(region) == 5:
+    # than just asking RGI for the region
+    if region is not None and int(region) == 5:
         gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
         return gimp_file, 'GIMP'
 
-    # Some regional files I could gather
-    # Iceland http://viewfinderpanoramas.org/dem3/ISL.zip
-    # Svalbard http://viewfinderpanoramas.org/dem3/SVALBARD.zip
-    # NorthCanada (could be larger - need tiles download)
-    _exs = (
-        [-25., -12., 63., 67.],
-        [10., 34., 76., 81.],
-        [-96., -60., 76., 84.]
-    )
-    _files = (
-        'iceland.tif',
-        'svalbard.tif',
-        'northcanada.tif',
-    )
-    for _ex, _f in zip(_exs, _files):
-
-        if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
-           (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
-            r_file = _download_alternate_topo_file(_f)
-            return r_file, 'REGIO'
-
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        # use ASTER V2 for northern lats
-        zones, units = aster_zone(lon_ex, lat_ex)
+
+        # Use corrected viewpanoramas.org SRTM!
+        # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
+        specialfiles = {'ISL': [-25., -12., 63., 67.],      # Iceland
+                        'SVALBARD': [10., 34., 76., 81.],
+                        'JANMAYEN': [-10., -7., 70., 72.],
+                        'FJ': [36., 66., 79., 82.],         # Franz Josef Land
+                        'FAR': [-8., -6., 61., 63.],        # Faroer
+                        'BEAR': [18., 20., 74., 75.],       # Bear Island
+                        'SHL': [-3., 0., 60., 61.],         # Shetland
+                        '01-15': [-180., -91., -90, -60.],  # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+                        '16-30': [-91., -1., -90., -60.],
+                        '31-45': [-1., 89., -90., -60.],
+                        '46-60': [89., 189., -90., -60.]}
+
+        zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
         sources = []
-        for z, u in zip(zones, units):
-            sf = _download_aster_file(z, u)
-            if sf is not None:
-                sources.append(sf)
-        source_str = 'ASTER'
+        for z in zones:
+            sources.append(_download_dem3_viewpano(z, specialfiles))
+        source_str = 'SRTM'
+
+        # if download failed for some reason, use ASTER
+        if not sources:
+            zones, units = aster_zone(lon_ex, lat_ex)
+            sources = []
+            for z, u in zip(zones, units):
+                sf = _download_aster_file(z, u)
+                if sf is not None:
+                    sources.append(sf)
+            source_str = 'ASTER'
+
     else:
-        # Use SRTM!
         zones = srtm_zone(lon_ex, lat_ex)
         sources = []
         for z in zones:
@@ -870,6 +1018,11 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         merged_file = os.path.join(topodir, source_str.lower(),
                                    bname)
         if not os.path.exists(merged_file):
+
+            # check case where wrong zip file is downloaded from
+            if all(x is None for x in sources):
+                raise ValueError('Chosen lat/lon values are not available')
+
             # write it
             rfiles = [rasterio.open(s) for s in sources]
             dest, output_transform = merge_tool(rfiles)
