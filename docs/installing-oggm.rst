@@ -2,17 +2,21 @@ Installing OGGM
 ===============
 
 OGGM itself is a pure python package, but it has several dependencies wich
-are not always trivial to install. The instructions below are
-self-explanatory and should work on any platform. However,
-complete beginners should get familiar with Python and its packaging
-ecosystem before trying to install and run OGGM.
+are not trivial to install. The instructions below are
+self-explanatory and should work on any platform.
 
 OGGM is `tested`_ with the Python `versions`_ 2.7, 3.4 and 3.5.
 
-For most users we recommend to use the conda_ package manager  to install
+.. note::
+
+   Complete beginners should get familiar with Python and its packaging
+   ecosystem before trying to install and run OGGM.
+
+For most users we recommend to use the conda_ package manager to install
 the dependencies `With conda (all platforms)`_. Linux users and people
 with experience with `pip`_ can follow the specific instructions
 `With virtualenv (linux/debian)`_.
+
 
 .. _tested: https://travis-ci.org/OGGM/oggm
 .. _versions: https://wiki.python.org/moin/Python2orPython3
@@ -69,7 +73,7 @@ installing `miniconda`_ or `anaconda`_).
 
 
 **Linux** users should install a couple of packages (not all of them are
-required but just to be sure)::
+required but it's good to have them anyway)::
 
     $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf ttf-bitstream-vera
 
@@ -84,14 +88,14 @@ Conda environment
 We recommend to create a specific `environment`_ for OGGM. In a terminal
 window, type::
 
-    conda create --name oggm python=3.4
+    conda create --name oggm_env python=3.5
 
-You can of course use any other name for your environment. Don't forget to
-activate it::
+You can of course use any other name or python version for your environment.
+Don't forget to activate it before going on::
 
-    source activate oggm
+    source activate oggm_env
 
-(on windows: `activate oggm`)
+(on windows: `activate oggm_env`)
 
 .. _environment: http://conda.pydata.org/docs/using/envs.html
 
@@ -99,15 +103,33 @@ activate it::
 Packages
 ~~~~~~~~
 
-Install the packages from the ioos channel::
+Install the packages from the `conda-forge`_ channel::
 
-    conda install -c ioos geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray
+    conda install -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray
+
+.. warning::
+
+    The `conda-forge`_ channel ensures that the complex package dependencies are
+    handled correctly. Subsequent installations or upgrades from the default
+    conda channel might brake the chain (see an example `here`_). We strongly
+    recommend to **always** use the the `conda-forge`_ channel for your
+    installation.
+
+You might consider setting `conda-forge`_ as default, as suggested on their
+documentation page::
+
+    conda config --add channels conda-forge
+    conda install <package-name>
 
 After success, install the following packages from Fabien's github::
 
     pip install git+https://github.com/fmaussion/motionless.git
     pip install git+https://github.com/fmaussion/salem.git
     pip install git+https://github.com/fmaussion/cleo.git
+
+
+.. _conda-forge: https://conda-forge.github.io/
+.. _here: https://github.com/ioos/conda-recipes/issues/623
 
 OGGM
 ~~~~
