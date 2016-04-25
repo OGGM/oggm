@@ -50,15 +50,15 @@ def up_to_inversion(reset=False):
     cfg.PATHS['working_dir'] = TEST_DIR
 
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['dem_file'] = get_demo_file('srtm_oeztal.tif')
+    cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
 
     # Set up the paths and other stuffs
     cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
-    cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oeztal.csv')
-    cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oeztal.csv')
+    cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
+    cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oetztal.csv')
 
     # Read in the RGI file
-    rgi_file = get_demo_file('rgi_oeztal.shp')
+    rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
 
     # Params
@@ -87,7 +87,7 @@ def up_to_inversion(reset=False):
 
         # Use histalp for the actual test
         cfg.PARAMS['temp_use_local_gradient'] = True
-        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oeztal.nc')
+        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
         cfg.PATHS['cru_dir'] = '~'
         workflow.climate_tasks(gdirs)
 
