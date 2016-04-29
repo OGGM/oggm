@@ -417,11 +417,12 @@ def plot_modeloutput_map(gdir, model=None, ax=None, vmax=None):
         mp.set_geometry(l.line, crs=crs, color='gray',
                           linewidth=1.2, zorder=50)
         toplot_th = np.append(toplot_th, l.thick)
-        for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
+        widths = l.widths.copy()
+        widths = np.where(l.thick > 0, widths, 0.)
+        for wi, cur, (n1, n2) in zip(widths, l.line.coords, l.normals):
             l = shpg.LineString([shpg.Point(cur + wi/2. * n1),
                                  shpg.Point(cur + wi/2. * n2)])
             toplot_lines.append(l)
-
 
     cm = plt.cm.get_cmap('YlOrRd')
     dl = cleo.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0, vmax=vmax)

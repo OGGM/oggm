@@ -24,7 +24,7 @@ from oggm.core.preprocessing import centerlines
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, HAS_NEW_GDAL
+from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1094,6 +1094,140 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(242, maxs, atol=atol)
 
 
+class TestGrindelInvert(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(current_dir, 'tmp_grindel')
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_multiple_flowlines'] = False
+        # not crop
+        cfg.PARAMS['max_thick_to_width_ratio'] = 10
+        cfg.PARAMS['max_shape_param'] = 10
+        cfg.PARAMS['section_smoothing'] = 0.
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        self.rm_dir()
+        tfile = get_demo_file('dem.tif')
+        gpath = os.path.dirname(tfile)
+        self.rgin = os.path.basename(gpath)
+        gpath = os.path.dirname(gpath)
+        assert self.rgin == 'RGI50-11.01270'
+        shutil.copytree(gpath, self.testdir)
+
+    def _parabolic_bed(self):
+
+        from oggm.core.models import flowline
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+
+        surface_h = np.linspace(3000, 1000, nx)
+        bed_h = surface_h
+        shape = surface_h * 0. + 3.e-03
+
+        coords = np.arange(0, nx-0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+        return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
+                                           bed_h, shape)]
+
+    @requires_py3
+    def test_ideal_glacier(self):
+
+        # we are making a
+
+        glen_a = cfg.A * 1
+        from oggm.core.models import flowline, massbalance
+
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+
+        fls = self._parabolic_bed()
+        mbmod = massbalance.ConstantBalanceModel(2800.)
+        model = flowline.FluxBasedModel(fls, mb_model=mbmod, glen_a=glen_a)
+        model.run_until_equilibrium()
+
+        # from dummy bed
+        map_dx = 100.
+        towrite = []
+        for fl in model.fls:
+            # Distance between two points
+            dx = fl.dx * map_dx
+            # Widths
+            widths = fl.widths * map_dx
+            # Heights
+            hgt = fl.surface_h
+            # Flux
+            mb = mbmod.get_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
+            fl.flux = np.zeros(len(fl.surface_h))
+            fl.set_apparent_mb(mb)
+            flux = fl.flux * (map_dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
+            pok = np.nonzero(widths > 10.)
+            widths = widths[pok]
+            hgt = hgt[pok]
+            flux = flux[pok]
+            angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+            # Clip flux to 0
+            assert not np.any(flux < -0.1)
+            # add to output
+            cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
+                          slope_angle=angle, is_last=True)
+            towrite.append(cl_dic)
+
+        # Write out
+        gdir.write_pickle(towrite, 'inversion_input', div_id=1)
+        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v_km3 = v * 1e-9
+        a_km2 = np.sum(widths * dx) * 1e-6
+        v_vas = 0.034*(a_km2**1.375)
+
+        np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
+
+        cl = gdir.read_pickle('inversion_output', div_id=1)[0]
+        assert utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])]) < 10.
+        # print(v_km3, model.volume_km3, v_vas)
+
+    @requires_py3
+    def test_invert_and_run(self):
+
+        from oggm.core.models import flowline, massbalance
+
+        glen_a = cfg.A*2
+
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.compute_downstream_lines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0.)
+        inversion.prepare_for_inversion(gdir)
+        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        cfg.PARAMS['bed_shape'] = 'parabolic'
+        flowline.init_present_time_glacier(gdir)
+        mb_mod = massbalance.TstarMassBalanceModel(gdir)
+        fls = gdir.read_pickle('model_flowlines')
+        model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                        fs=0, glen_a=glen_a)
+        ref_vol = model.volume_m3
+        model.run_until_equilibrium()
+        after_vol = model.volume_m3
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+
+
 class TestCatching(unittest.TestCase):
 
     def setUp(self):
@@ -1110,13 +1244,12 @@ class TestCatching(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = current_dir
 
+    def tearDown(self):
+        self.rm_dir()
 
-    # def tearDown(self):
-    #     self.rm_dir()
-    #
-    # def rm_dir(self):
-    #     shutil.rmtree(self.testdir)
-    #
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
     def clean_dir(self):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)

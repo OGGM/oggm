@@ -108,6 +108,7 @@ def dummy_noisy_bed():
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
 
+
 def dummy_parabolic_bed():
 
     map_dx = 100.
@@ -246,7 +247,7 @@ class TestInitFlowline(unittest.TestCase):
                                            rtol=rtol)
 
         np.testing.assert_allclose(0.573, vol, rtol=0.001)
-        np.testing.assert_allclose(7350.0, fls[-1].length_m)
+        np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
 
         rtol = 0.01 if HAS_NEW_GDAL else 0.001
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
@@ -994,7 +995,7 @@ class TestIdealisedCases(unittest.TestCase):
             widths.append(fls[-1].widths_m.copy())
             surface_h.append(fls[-1].surface_h.copy())
 
-        np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=1100)
+        np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=1300)
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
 
         if do_plot:  # pragma: no cover
