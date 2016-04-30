@@ -1,3 +1,4 @@
+import six
 import osgeo.gdal
 import os
 import platform
@@ -39,6 +40,12 @@ def requires_working_conda(test):
     return unittest.skip(msg)(test) if ON_WINDOWS_PY3_CONDA else test
 
 
+def requires_py3(test):
+    # Test decorator
+    msg = "requires python3"
+    return unittest.skip(msg)(test) if six.PY2 else test
+
+
 def is_slow(test):
     # Test decorator
     msg = "requires explicit environment for slow tests"
@@ -49,3 +56,5 @@ def is_download(test):
     # Test decorator
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
+
+

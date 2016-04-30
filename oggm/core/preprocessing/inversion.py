@@ -96,7 +96,7 @@ def prepare_for_inversion(gdir, div_id=None):
 def _inversion_poly(a3, a0):
     """Solve for degree 5 polynom with coefs a5=1, a3, a0."""
     sols = np.roots([1., 0., a3, 0., 0., a0])
-    test = (np.isreal(sols)*np.greater(sols,[0]*len(sols)))
+    test = (np.isreal(sols)*np.greater(sols, [0]*len(sols)))
     return sols[test][0].real
 
 
@@ -192,9 +192,10 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 out_thick = (out_shape * w**2) / 4
 
             # smooth section
-            section = cfg.TWO_THIRDS * w * out_thick * cl['dx']
-            section = gaussian_filter1d(section, sec_smooth)
-            out_thick = section / (w * cfg.TWO_THIRDS * cl['dx'])
+            if sec_smooth != 0.:
+                section = cfg.TWO_THIRDS * w * out_thick * cl['dx']
+                section = gaussian_filter1d(section, sec_smooth)
+                out_thick = section / (w * cfg.TWO_THIRDS * cl['dx'])
 
             # volume
             volume = cfg.TWO_THIRDS * out_thick * w * cl['dx']

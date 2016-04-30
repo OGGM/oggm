@@ -84,7 +84,9 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
         if len(pok) == self.nx:
             return 0.
         else:
-            return (pok[0]-0.5) * self.dx_meter
+            # We define the length a bit differently: but more robust
+            pok = np.where(self.thick != 0.)[0]
+            return len(pok) * self.dx_meter
 
     @property
     def volume_m3(self):
@@ -123,7 +125,6 @@ class ParabolicFlowline(ModelFlowline):
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
-        self._sqrt_bed = np.sqrt(bed_shape)
 
     @property
     def widths_m(self):
@@ -136,7 +137,7 @@ class ParabolicFlowline(ModelFlowline):
 
     @section.setter
     def section(self, val):
-        self.thick = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
+        self.thick = (0.75 * val * np.sqrt(self.bed_shape))**TWO_THIRDS
 
 
 class VerticalWallFlowline(ModelFlowline):
@@ -912,7 +913,8 @@ def init_present_time_glacier(gdir):
         fl = fls[-1]
         inv = invs[-1]
         dline = gdir.read_pickle('downstream_line', div_id=did)
-        long_line = oggm.core.preprocessing.geometry._line_extend(fl.line, dline, fl.dx)
+        long_line = oggm.core.preprocessing.geometry._line_extend(fl.line,
+                                                                  dline, fl.dx)
 
         # Interpolate heights
         x, y = long_line.xy
