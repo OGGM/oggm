@@ -55,6 +55,15 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 tuple2int = partial(np.array, dtype=np.int64)
 
 
+def _urlretrieve(url, ofile, *args, **kwargs):
+    try:
+        return urlretrieve(url, ofile, *args, **kwargs)
+    except:
+        if os.path.exists(ofile):
+            os.remove(ofile)
+        raise
+
+
 def progress_urlretrieve(url, ofile):
     print("Downloading %s ..." % url)
     try:
@@ -64,11 +73,11 @@ def progress_urlretrieve(url, ofile):
             if pbar.max_value is None:
                 pbar.start(total)
             pbar.update(min(count * size, total))
-        res = urlretrieve(url, ofile, reporthook=_upd)
+        res = _urlretrieve(url, ofile, reporthook=_upd)
         pbar.finish()
         return res
     except ImportError:
-        return urlretrieve(url, ofile)
+        return _urlretrieve(url, ofile)
 
 
 def empty_cache():  # pragma: no cover
