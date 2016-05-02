@@ -109,7 +109,7 @@ def_key_dir=os.path.expanduser('~/.ssh')
 
 # FSO--- Amazon AWS region setup
 def_regions = ['us-east-1','eu-west-1'] #regions for spot search
-def_default_avz = 'us-east-1b' #Default availability zone if ondemand is used
+def_default_avz = 'eu-west-1a' #Default availability zone if ondemand is used
 
 # FSO--- type of instance pricing, either:
 # ondemand: faster availability, more expensive
