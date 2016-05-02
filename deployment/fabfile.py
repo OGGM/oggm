@@ -171,8 +171,8 @@ instance_infos = [
 def_price = instance_infos[def_inst_type]['price']
 
 
-def update_key_filename(avz):
-    key_name = get_keypair_name()
+def update_key_filename(region):
+    key_name = get_keypair_name(region)
     key_dir = os.path.expanduser(def_key_dir)
     key_dir = os.path.expandvars(key_dir)
     env.key_filename = os.path.join(key_dir, key_name + '.pem')
@@ -374,7 +374,7 @@ def check_keypair(cloud, keynames):
             raise
 
 
-def get_keypair_name():
+def get_keypair_name(region):
     key_dir = def_key_dir
     key_dir = os.path.expanduser(key_dir)
     key_dir = os.path.expandvars(key_dir)
@@ -390,7 +390,7 @@ def get_keypair_name():
         with open(un_file, 'w') as un:
             un.write(unique_part)
 
-    return keyn + '_' + unique_part
+    return keyn + '_' + region + '_' + unique_part
 
 
 def get_user_persist_ebs(cloud, avz):
@@ -435,7 +435,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         sys.exit()
 
     # Check if ssh keypair exists
-    key_name = get_keypair_name()
+    key_name = get_keypair_name(avz[:-1])
     check_keypair(cloud, key_name)
 
     # FSO---create a bigger root device
