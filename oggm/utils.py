@@ -152,7 +152,8 @@ def _download_srtm_file(zone):
     if not os.path.exists(odir):
         os.makedirs(odir)
     ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
-    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+#    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+    ifile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs' \
             '/srtm_' + zone + '.zip'
     if not os.path.exists(ofile):
         retry_counter = 0
