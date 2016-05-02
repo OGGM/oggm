@@ -1082,7 +1082,7 @@ def use_user_volume(host):
     env.user = 'ubuntu'
     run("test -e /dev/xvdf1 || ( sudo sgdisk -o -g -n 1:2048:0 /dev/xvdf && sudo mkfs.ext4 /dev/xvdf1 )")
     run("sudo mkdir /work")
-    run("sudo mount /dev/xvdf1 /work")
+    run("sudo mount -o defaults,discard /dev/xvdf1 /work")
     run("echo \"/dev/xvdf1 /work ext4 defaults,discard 0 0\" | sudo tee -a /etc/fstab")
     run("test -e /work/ubuntu || ( sudo mkdir /work/ubuntu && sudo chown ubuntu:ubuntu /work/ubuntu )")
 
