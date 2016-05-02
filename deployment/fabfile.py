@@ -109,7 +109,7 @@ def_key_dir=os.path.expanduser('~/.ssh')
 
 # FSO--- Amazon AWS region setup
 def_regions = ['us-east-1','eu-west-1'] #regions for spot search
-def_default_avz = 'us-east-1b' #Default availability zone if ondemand is used
+def_default_avz = 'eu-west-1a' #Default availability zone if ondemand is used
 
 # FSO--- type of instance pricing, either:
 # ondemand: faster availability, more expensive
@@ -119,8 +119,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-abc579d8' #eu Ubuntu 14.04 LTS
-def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
+def_ami['eu-west-1'] = 'ami-6177f712' #eu Ubuntu 14.04 LTS
+def_ami['us-east-1'] = 'ami-2b594f41' #us Ubuntu 14.04 LTS
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
@@ -171,8 +171,8 @@ instance_infos = [
 def_price = instance_infos[def_inst_type]['price']
 
 
-def update_key_filename(avz):
-    key_name = get_keypair_name()
+def update_key_filename(region):
+    key_name = get_keypair_name(region)
     key_dir = os.path.expanduser(def_key_dir)
     key_dir = os.path.expandvars(key_dir)
     env.key_filename = os.path.join(key_dir, key_name + '.pem')
@@ -374,7 +374,7 @@ def check_keypair(cloud, keynames):
             raise
 
 
-def get_keypair_name():
+def get_keypair_name(region):
     key_dir = def_key_dir
     key_dir = os.path.expanduser(key_dir)
     key_dir = os.path.expandvars(key_dir)
@@ -390,7 +390,7 @@ def get_keypair_name():
         with open(un_file, 'w') as un:
             un.write(unique_part)
 
-    return keyn + '_' + unique_part
+    return keyn + '_' + region + '_' + unique_part
 
 
 def get_user_persist_ebs(cloud, avz):
@@ -435,7 +435,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         sys.exit()
 
     # Check if ssh keypair exists
-    key_name = get_keypair_name()
+    key_name = get_keypair_name(avz[:-1])
     check_keypair(cloud, key_name)
 
     # FSO---create a bigger root device
@@ -588,7 +588,7 @@ def install_node_apt(nn='', inst=None):
     sudo apt-get install -y build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf tk-dev python3-tk python3-dev ttf-bitstream-vera python-pip git awscli virtualenvwrapper
     """, pty=False)
 
-    copy_files = ['~/.aws/config', '~/.screenrc', '~/.gitconfig']
+    copy_files = ['~/.aws/credentials', '~/.aws/config', '~/.screenrc', '~/.gitconfig']
 
     for cf in copy_files:
         if not os.path.exists(os.path.expanduser(cf)):
@@ -1082,7 +1082,8 @@ def use_user_volume(host):
     env.user = 'ubuntu'
     run("test -e /dev/xvdf1 || ( sudo sgdisk -o -g -n 1:2048:0 /dev/xvdf && sudo mkfs.ext4 /dev/xvdf1 )")
     run("sudo mkdir /work")
-    run("sudo mount /dev/xvdf1 /work")
+    run("sudo mount -o defaults,discard /dev/xvdf1 /work")
+    run("echo \"/dev/xvdf1 /work ext4 defaults,discard 0 0\" | sudo tee -a /etc/fstab")
     run("test -e /work/ubuntu || ( sudo mkdir /work/ubuntu && sudo chown ubuntu:ubuntu /work/ubuntu )")
 
 
