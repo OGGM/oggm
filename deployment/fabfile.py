@@ -119,8 +119,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-abc579d8' #eu Ubuntu 14.04 LTS
-def_ami['us-east-1'] = 'ami-415f6d2b' #us Ubuntu 14.04 LTS
+def_ami['eu-west-1'] = 'ami-6177f712' #eu Ubuntu 14.04 LTS
+def_ami['us-east-1'] = 'ami-2b594f41' #us Ubuntu 14.04 LTS
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
