@@ -55,6 +55,22 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 tuple2int = partial(np.array, dtype=np.int64)
 
 
+def progress_urlretrieve(url, ofile):
+    print("Downloading %s ..." % url)
+    try:
+        from progressbar import ProgressBar, Percentage, Bar, DataSize, FileTransferSpeed, ETA
+        pbar = ProgressBar(widgets=[Percentage(), ' ', Bar(), ' ', DataSize(), ' ', FileTransferSpeed(), ' ', ETA()])
+        def _upd(count, size, total):
+            if pbar.max_value is None:
+                pbar.start(total)
+            pbar.update(min(count * size, total))
+        res = urlretrieve(url, ofile, reporthook=_upd)
+        pbar.finish()
+        return res
+    except ImportError:
+        return urlretrieve(url, ofile)
+
+
 def empty_cache():  # pragma: no cover
     """Empty oggm's cache directory."""
 
@@ -109,7 +125,7 @@ def _download_oggm_files():
 
     # download only if necessary
     if not os.path.exists(ofile):
-        urlretrieve(master_zip_url, ofile)
+        progress_urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
@@ -145,7 +161,7 @@ def _download_srtm_file(zone):
             # Try to download
             try:
                 retry_counter += 1
-                urlretrieve(ifile, ofile)
+                progress_urlretrieve(ifile, ofile)
                 with zipfile.ZipFile(ofile) as zf:
                     zf.extractall(odir)
                 break
@@ -721,7 +737,7 @@ def get_rgi_dir():
     # if not there download it
     if not os.path.exists(ofile):  # pragma: no cover
         tf = 'http://www.glims.org/RGI/rgi50_files/' + bname
-        urlretrieve(tf, ofile)
+        progress_urlretrieve(tf, ofile)
 
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
@@ -773,7 +789,7 @@ def get_cru_file(var=None):
     if not os.path.exists(ofile):  # pragma: no cover
         tf = CRU_SERVER + '{}/cru_ts3.23.1901.2014.{}.dat.nc.gz'.format(var,
                                                                         var)
-        urlretrieve(tf, ofile + '.gz')
+        progress_urlretrieve(tf, ofile + '.gz')
         with gzip.GzipFile(ofile + '.gz') as zf:
             with open(ofile, 'wb') as outfile:
                 for line in zf:
