@@ -61,6 +61,9 @@ Other libraries:
     - `cleo <https://github.com/fmaussion/cleo>`_
     - `motionless (py3) <https://github.com/fmaussion/motionless>`_
 
+Optional:
+    - progressbar2 (Display download progress)
+
 
 With conda (all platforms)
 --------------------------
@@ -120,6 +123,11 @@ documentation page::
 
     conda config --add channels conda-forge
     conda install <package-name>
+
+If you want progress reports when downloading data files you can optionally
+install progressbar2::
+
+    pip install progressbar2
 
 After success, install the following packages from Fabien's github::
 
@@ -262,7 +270,7 @@ using the system binaries::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2
 
 And the external libraries::
 

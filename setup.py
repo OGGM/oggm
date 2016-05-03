@@ -113,7 +113,8 @@ req_packages = ['six',
                 'rasterio',
                 'configobj',
                 'nose',
-                'xarray']
+                'xarray',
+                'progressbar2']
 check_dependencies(req_packages)
 
 
