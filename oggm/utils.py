@@ -67,11 +67,14 @@ def _urlretrieve(url, ofile, *args, **kwargs):
 def progress_urlretrieve(url, ofile):
     print("Downloading %s ..." % url)
     try:
-        from progressbar import ProgressBar, Percentage, Bar, DataSize, FileTransferSpeed, ETA
-        pbar = ProgressBar(widgets=[Percentage(), ' ', Bar(), ' ', DataSize(), ' ', FileTransferSpeed(), ' ', ETA()])
+        from progressbar import DataTransferBar, UnknownLength
+        pbar = DataTransferBar()
         def _upd(count, size, total):
             if pbar.max_value is None:
-                pbar.start(total)
+                if total > 0:
+                    pbar.start(total)
+                else:
+                    pbar.start(UnknownLength)
             pbar.update(min(count * size, total))
         res = _urlretrieve(url, ofile, reporthook=_upd)
         pbar.finish()
