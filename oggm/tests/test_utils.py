@@ -103,7 +103,11 @@ class TestDataFiles(unittest.TestCase):
                         '01-15': [-180., -91., -90, -60.],  # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
                         '16-30': [-91., -1., -90., -60.],
                         '31-45': [-1., 89., -90., -60.],
-                        '46-60': [89., 189., -90., -60.]}
+                        '46-60': [89., 189., -90., -60.],
+                        'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
+                        'GL-West': [-68., -42., 64., 76.],
+                        'GL-South': [-52., -40., 59., 64.],
+                        'GL-East': [-42., -17., 64., 76.]}
         # special names
         for key in test_loc:
             z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]], [test_loc[key][2], test_loc[key][3]],
@@ -144,6 +148,23 @@ class TestDataFiles(unittest.TestCase):
         # this zone does not exist
         zone = '41_20'
         self.assertTrue(utils._download_srtm_file(zone) is None)
+
+    def test_download_dem3_viewpano(self):
+
+        # this zone does exist and file should be small enough for download
+        zone = 'L32'
+        fp = utils._download_dem3_viewpano(zone, {})
+        self.assertTrue(os.path.exists(fp))
+        zone = 'U44'
+        fp = utils._download_dem3_viewpano(zone, {})
+        self.assertTrue(os.path.exists(fp))
+
+
+    def test_download_dem3_viewpano_fails(self):
+
+        # this zone does not exist
+        zone = 'SZ20'
+        self.assertTrue(utils._download_dem3_viewpano(zone, {}) is None)
 
     @is_download
     def test_asterdownload(self):

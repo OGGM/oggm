@@ -176,9 +176,15 @@ def _download_dem3_viewpano(zone, specialzones):
     """
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'dem3')
+
     if not os.path.exists(odir):
         os.makedirs(odir)
     ofile = os.path.join(odir, 'dem3_' + zone + '.zip')
+    outpath = os.path.join(odir, zone+'.tif')
+
+    # check if TIFF file exists already
+    if os.path.exists(outpath):
+        return outpath
 
     # some files have a newer version 'v2'
     if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34', 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40',
@@ -245,7 +251,6 @@ def _download_dem3_viewpano(zone, specialzones):
     profile['height'] = dest.shape[1]
     profile['width'] = dest.shape[2]
     profile['driver'] = 'GTiff'
-    outpath = os.path.join(odir, zone+'.tif')
     with rasterio.open(outpath, 'w', **profile) as dst:
         dst.write(dest)
 
@@ -648,6 +653,19 @@ def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
                  (np.min(lat_ex) >= -68.) and (np.max(lat_ex) <= -66.):
                 return ['SQ58']
 
+            # test some Greenland tiles as GL-North is not rectangular
+            elif (np.min(lon_ex) >= -66.) and (np.max(lon_ex) <= -60.) and \
+                 (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
+                return ['U20']
+
+            elif (np.min(lon_ex) >= -60.) and (np.max(lon_ex) <= -54.) and \
+                 (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
+                return ['U21']
+
+            elif (np.min(lon_ex) >= -54.) and (np.max(lon_ex) <= -48.) and \
+                 (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
+                return ['U22']
+
             else:
                 return [_f]
 
@@ -953,17 +971,21 @@ def get_topo_file(lon_ex, lat_ex, region=None):
 
         # Use corrected viewpanoramas.org SRTM!
         # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
-        specialfiles = {'ISL': [-25., -12., 63., 67.],      # Iceland
+        specialfiles = {'ISL': [-25., -12., 63., 67.],       # Iceland
                         'SVALBARD': [10., 34., 76., 81.],
                         'JANMAYEN': [-10., -7., 70., 72.],
-                        'FJ': [36., 66., 79., 82.],         # Franz Josef Land
-                        'FAR': [-8., -6., 61., 63.],        # Faroer
-                        'BEAR': [18., 20., 74., 75.],       # Bear Island
-                        'SHL': [-3., 0., 60., 61.],         # Shetland
-                        '01-15': [-180., -91., -90, -60.],  # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+                        'FJ': [36., 66., 79., 82.],          # Franz Josef Land
+                        'FAR': [-8., -6., 61., 63.],         # Faroer
+                        'BEAR': [18., 20., 74., 75.],        # Bear Island
+                        'SHL': [-3., 0., 60., 61.],          # Shetland
+                        '01-15': [-180., -91., -90, -60.],   # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
                         '16-30': [-91., -1., -90., -60.],
                         '31-45': [-1., 89., -90., -60.],
-                        '46-60': [89., 189., -90., -60.]}
+                        '46-60': [89., 189., -90., -60.],
+                        'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
+                        'GL-West': [-68., -42., 64., 76.],
+                        'GL-South': [-52., -40., 59., 64.],
+                        'GL-East': [-42., -17., 64., 76.]}
 
         zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
         sources = []
