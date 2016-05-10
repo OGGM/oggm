@@ -77,7 +77,10 @@ def progress_urlretrieve(url, ofile):
                     pbar.start(UnknownLength)
             pbar.update(min(count * size, total))
         res = _urlretrieve(url, ofile, reporthook=_upd)
-        pbar.finish()
+        try:
+            pbar.finish()
+        except:
+            pass
         return res
     except ImportError:
         return _urlretrieve(url, ofile)
