@@ -397,6 +397,39 @@ class TestMassBalance(unittest.TestCase):
             plt.plot(h, mbhb, 'x')
             plt.show()
 
+    def test_biased_mb(self):
+
+        gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(gdir)
+
+        mb_mod_ref = massbalance.TstarMassBalanceModel(gdir)
+        mb_mod = massbalance.BiasedMassBalanceModel(gdir, use_tstar=True)
+
+        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in ofl:
+            h = np.append(h, fl.surface_h)
+            w = np.append(w, fl.widths)
+
+        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
+        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
+        mb_mod.set_temp_bias(-1.)
+        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
+        mb_mod.set_temp_bias(0)
+        mb_mod.set_prcp_factor(1.2)
+        mbhbp = mb_mod.get_mb(h, None) * SEC_IN_YEAR
+
+        np.testing.assert_allclose(ombh, mbh, rtol=0.001)
+        self.assertTrue(np.mean(mbhb) > np.mean(mbh))
+        self.assertTrue(np.mean(mbhbp) > np.mean(mbh))
+
+        if do_plot:  # pragma: no cover
+            plt.plot(h, ombh, 'o')
+            plt.plot(h, mbh, 'x')
+            plt.plot(h, mbhb, 'x')
+            plt.plot(h, mbhbp, 'x')
+            plt.show()
 
     def test_histalp_mb(self):
 

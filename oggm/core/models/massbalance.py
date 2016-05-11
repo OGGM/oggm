@@ -6,6 +6,7 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 import netCDF4
+import warnings
 from scipy.interpolate import interp1d
 # Locals
 import oggm.cfg as cfg
@@ -105,6 +106,8 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         """ Instanciate."""
 
         super(BackwardsMassBalanceModel, self).__init__(bias)
+        warnings.warn(DeprecationWarning('BackwardsMassBalanceModel'
+                                         ' is deprecated'))
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
@@ -194,6 +197,143 @@ class BackwardsMassBalanceModel(MassBalanceModel):
         return interp(heights) / SEC_IN_YEAR / cfg.RHO
 
 
+class BiasedMassBalanceModel(MassBalanceModel):
+    """Constant mass balance: MB for a given 30yr period,
+     with temperature and/or precipitation bias.
+
+    This is useful for finding a possible past glacier state or for sensitivity
+    experiments.
+    """
+
+    def __init__(self, gdir, year=None, use_tstar=False, bias=None):
+        """ Instanciate.
+
+        Parameters
+        ---------
+        year: int
+            provide a year around which the 30 yr period will be averaged.
+            default is the last 30 yrs
+        use_tstar: bool
+            overwrites year to be tstar
+        bias: Deprecated
+        """
+
+        if (bias is not None) and (bias != 0.):
+            raise ValueError('bias should be zero for BiasedMassBalanceModel')
+        super(BiasedMassBalanceModel, self).__init__()
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        self.mu_star = df['mu_star'][0]
+
+        # Climate period
+        if use_tstar:
+            year = df['t_star'][0]
+
+        if year is not None:
+            mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+            yr_range = [year-mu_hp, year+mu_hp]
+        else:
+            # temporary solution until https://github.com/OGGM/oggm/issues/88
+            # is implemented
+            fpath = gdir.get_filepath('climate_monthly')
+            with netCDF4.Dataset(fpath, mode='r') as nc:
+                # time
+                time = nc.variables['time']
+                time = netCDF4.num2date(time[:], time.units)
+                last_yr = time[-1].year
+            yr_range = [last_yr-30, last_yr]
+
+        # Parameters
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
+
+        # Read file
+        fpath = gdir.get_filepath('climate_monthly')
+        with netCDF4.Dataset(fpath, mode='r') as nc:
+            # time
+            time = nc.variables['time']
+            time = netCDF4.num2date(time[:], time.units)
+            ny, r = divmod(len(time), 12)
+            yrs = np.arange(time[-1].year-ny+1, time[-1].year+1, 1).repeat(12)
+            assert len(yrs) == len(time)
+            p0 = np.min(np.nonzero(yrs == yr_range[0])[0])
+            p1 = np.max(np.nonzero(yrs == yr_range[1])[0]) + 1
+
+            # Read timeseries
+            self.temp = nc.variables['temp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1]
+            self.grad = nc.variables['grad'][p0:p1]
+            self.ref_hgt = nc.ref_hgt
+
+        # Ny
+        ny, r = divmod(len(self.temp), 12)
+        if r != 0:
+            raise ValueError('Climate data should be N full years exclusively')
+        self.ny = ny
+
+        # For optimisation
+        self._temp_bias = 0.
+        self._prcp_fac = 1.
+        self._interp = dict()
+
+        # Get default heights
+        fls = gdir.read_pickle('model_flowlines')
+        h = np.array([])
+        for fl in fls:
+            h = np.append(h, fl.surface_h)
+        npix = 1000
+        self.heights = np.linspace(np.min(h)-200, np.max(h)+1200, npix)
+        grad_temp = np.atleast_2d(self.grad).repeat(npix, 0)
+        grad_temp *= (self.heights.repeat(12*self.ny).reshape(grad_temp.shape) -
+                      self.ref_hgt)
+        self.temp_2d = np.atleast_2d(self.temp).repeat(npix, 0) + grad_temp
+        self.prcpsol = np.atleast_2d(self.prcp).repeat(npix, 0)
+
+    def set_bias(self, bias=0):
+        """Override set bias"""
+
+        if (bias is not None) and (bias != 0.):
+            raise ValueError('bias should be zero for BiasedMassBalanceModel')
+
+        self._bias = bias
+
+    def set_temp_bias(self, bias=0):
+        """Add a temperature bias (in K) to the temperature climatology"""
+        self._temp_bias = bias
+
+    def set_prcp_factor(self, factor=1):
+        """Multiply precipitation climatology with a given factor"""
+        self._prcp_fac = factor
+
+    def _get_interp(self):
+
+        key = (self._temp_bias, self._prcp_fac)
+        if key not in self._interp:
+
+            # For each height pixel:
+            # Compute temp and tempformelt (temperature above melting threshold)
+            temp2d = self.temp_2d + self._temp_bias
+            temp2dformelt = (temp2d - self.temp_melt).clip(0)
+
+            # Compute solid precipitation from total precipitation
+            fac = 1 - (temp2d - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
+            fac = np.clip(fac, 0, 1)
+            prcpsol = self.prcpsol * self._prcp_fac * fac
+
+            mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1) / self.ny
+            self._interp[key] = interp1d(self.heights, mb_annual)
+
+        return self._interp[key]
+
+    def get_mb(self, heights, year=None):
+        """Returns the mass-balance at given altitudes
+        for a given moment in time."""
+
+        interp = self._get_interp()
+        return interp(heights) / SEC_IN_YEAR / cfg.RHO
+
+
 class TodayMassBalanceModel(MassBalanceModel):
     """Constant mass-balance: MB during the last 30 yrs."""
 
@@ -207,6 +347,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         t_star = df['t_star'][0]
 
         # Climate period
+        # TODO: baaad hardcoded stuff
         yr = [1983, 2003]
 
         fls = gdir.read_pickle('model_flowlines')
