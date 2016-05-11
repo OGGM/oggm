@@ -145,7 +145,7 @@ OGGM
 We recommend to clone the git repository (or a fork if you want
 to participate to the development)::
 
-   git clone git@github.com:OGGM/oggm.git
+   git clone https://github.com/OGGM/oggm.git
 
 Then go to the project root directory::
 
