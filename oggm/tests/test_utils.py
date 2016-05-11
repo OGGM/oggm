@@ -176,6 +176,16 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(os.path.exists(fp))
 
     @is_download
+    def test_gimp(self):
+        fp, z = utils.get_topo_file([], [], region=5)
+        self.assertTrue(os.path.exists(fp))
+
+    @is_download
+    def test_iceland(self):
+        fp, z = utils.get_topo_file([-20, -20], [65, 65])
+        self.assertTrue(os.path.exists(fp))
+
+    @is_download
     def test_asterdownloadfails(self):
 
         # this zone does exist and file should be small enough for download

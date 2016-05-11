@@ -338,7 +338,7 @@ def _download_alternate_topo_file(fname):
     Region is eu-west-1 and Output Format is json.
     """
 
-    fzipname = fname.split('.')[0] + '.zip'
+    fzipname = fname + '.zip'
     # Here we had a file exists check
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
@@ -999,42 +999,61 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
         return gimp_file, 'GIMP'
 
+    # Some regional files I could gather
+    # Iceland http://viewfinderpanoramas.org/dem3/ISL.zip
+    # Svalbard http://viewfinderpanoramas.org/dem3/SVALBARD.zip
+    # NorthCanada (could be larger - need tiles download)
+    _exs = (
+        [-25., -12., 63., 67.],
+        [10., 34., 76., 81.],
+        [-96., -60., 76., 84.]
+    )
+    _files = (
+        'iceland.tif',
+        'svalbard.tif',
+        'northcanada.tif',
+    )
+    for _ex, _f in zip(_exs, _files):
+
+        if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
+           (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
+            r_file = _download_alternate_topo_file(_f)
+            return r_file, 'REGIO'
+
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-
-        # Use corrected viewpanoramas.org SRTM!
-        # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
-        specialfiles = {'ISL': [-25., -12., 63., 67.],       # Iceland
-                        'SVALBARD': [10., 34., 76., 81.],
-                        'JANMAYEN': [-10., -7., 70., 72.],
-                        'FJ': [36., 66., 79., 82.],          # Franz Josef Land
-                        'FAR': [-8., -6., 61., 63.],         # Faroer
-                        'BEAR': [18., 20., 74., 75.],        # Bear Island
-                        'SHL': [-3., 0., 60., 61.],          # Shetland
-                        '01-15': [-180., -91., -90, -60.],   # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-                        '16-30': [-91., -1., -90., -60.],
-                        '31-45': [-1., 89., -90., -60.],
-                        '46-60': [89., 189., -90., -60.],
-                        'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
-                        'GL-West': [-68., -42., 64., 76.],
-                        'GL-South': [-52., -40., 59., 64.],
-                        'GL-East': [-42., -17., 64., 76.]}
-
-        zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
+        # TODO: https://github.com/OGGM/oggm/pull/79 does not work properly yet
+        # # Use corrected viewpanoramas.org SRTM!
+        # # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
+        # specialfiles = {'ISL': [-25., -12., 63., 67.],       # Iceland
+        #                 'SVALBARD': [10., 34., 76., 81.],
+        #                 'JANMAYEN': [-10., -7., 70., 72.],
+        #                 'FJ': [36., 66., 79., 82.],          # Franz Josef Land
+        #                 'FAR': [-8., -6., 61., 63.],         # Faroer
+        #                 'BEAR': [18., 20., 74., 75.],        # Bear Island
+        #                 'SHL': [-3., 0., 60., 61.],          # Shetland
+        #                 '01-15': [-180., -91., -90, -60.],   # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+        #                 '16-30': [-91., -1., -90., -60.],
+        #                 '31-45': [-1., 89., -90., -60.],
+        #                 '46-60': [89., 189., -90., -60.],
+        #                 'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
+        #                 'GL-West': [-68., -42., 64., 76.],
+        #                 'GL-South': [-52., -40., 59., 64.],
+        #                 'GL-East': [-42., -17., 64., 76.]}
+        # zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
+        # sources = []
+        # for z in zones:
+        #     sources.append(_download_dem3_viewpano(z, specialfiles))
+        # source_str = 'DEM3'
+        #
+        # # if download failed for some reason, use ASTER
+        # if len(sources) < 1:
+        zones, units = aster_zone(lon_ex, lat_ex)
         sources = []
-        for z in zones:
-            sources.append(_download_dem3_viewpano(z, specialfiles))
-        source_str = 'DEM3'
-
-        # if download failed for some reason, use ASTER
-        if len(sources) < 1:
-            zones, units = aster_zone(lon_ex, lat_ex)
-            sources = []
-            for z, u in zip(zones, units):
-                sf = _download_aster_file(z, u)
-                if sf is not None:
-                    sources.append(sf)
-            source_str = 'ASTER'
-
+        for z, u in zip(zones, units):
+            sf = _download_aster_file(z, u)
+            if sf is not None:
+                sources.append(sf)
+        source_str = 'ASTER'
     else:
         zones = srtm_zone(lon_ex, lat_ex)
         sources = []
@@ -1296,7 +1315,7 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity: glacier entity read from the shapefile
+        rgi_entity: glacier entity read from the shapefile  or a valid RGI ID
         base_dir: path to the directory where to open the directory
             defaults to "conf.PATHPATHS['working_dir'] + /per_glacier/"
         reset: emtpy the directory at construction (careful!)
