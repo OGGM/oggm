@@ -55,6 +55,37 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 tuple2int = partial(np.array, dtype=np.int64)
 
 
+def _urlretrieve(url, ofile, *args, **kwargs):
+    try:
+        return urlretrieve(url, ofile, *args, **kwargs)
+    except:
+        if os.path.exists(ofile):
+            os.remove(ofile)
+        raise
+
+
+def progress_urlretrieve(url, ofile):
+    print("Downloading %s ..." % url)
+    try:
+        from progressbar import DataTransferBar, UnknownLength
+        pbar = DataTransferBar()
+        def _upd(count, size, total):
+            if pbar.max_value is None:
+                if total > 0:
+                    pbar.start(total)
+                else:
+                    pbar.start(UnknownLength)
+            pbar.update(min(count * size, total))
+        res = _urlretrieve(url, ofile, reporthook=_upd)
+        try:
+            pbar.finish()
+        except:
+            pass
+        return res
+    except ImportError:
+        return _urlretrieve(url, ofile)
+
+
 def empty_cache():  # pragma: no cover
     """Empty oggm's cache directory."""
 
@@ -109,7 +140,7 @@ def _download_oggm_files():
 
     # download only if necessary
     if not os.path.exists(ofile):
-        urlretrieve(master_zip_url, ofile)
+        progress_urlretrieve(master_zip_url, ofile)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
 
@@ -136,7 +167,8 @@ def _download_srtm_file(zone):
     if not os.path.exists(odir):
         os.makedirs(odir)
     ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
-    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+#    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
+    ifile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs' \
             '/srtm_' + zone + '.zip'
     if not os.path.exists(ofile):
         retry_counter = 0
@@ -145,7 +177,7 @@ def _download_srtm_file(zone):
             # Try to download
             try:
                 retry_counter += 1
-                urlretrieve(ifile, ofile)
+                progress_urlretrieve(ifile, ofile)
                 with zipfile.ZipFile(ofile) as zf:
                     zf.extractall(odir)
                 break
@@ -721,7 +753,7 @@ def get_rgi_dir():
     # if not there download it
     if not os.path.exists(ofile):  # pragma: no cover
         tf = 'http://www.glims.org/RGI/rgi50_files/' + bname
-        urlretrieve(tf, ofile)
+        progress_urlretrieve(tf, ofile)
 
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
@@ -773,7 +805,7 @@ def get_cru_file(var=None):
     if not os.path.exists(ofile):  # pragma: no cover
         tf = CRU_SERVER + '{}/cru_ts3.23.1901.2014.{}.dat.nc.gz'.format(var,
                                                                         var)
-        urlretrieve(tf, ofile + '.gz')
+        progress_urlretrieve(tf, ofile + '.gz')
         with gzip.GzipFile(ofile + '.gz') as zf:
             with open(ofile, 'wb') as outfile:
                 for line in zf:
@@ -803,8 +835,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     """
 
     # Did the user specify a specific SRTM file?
-    if ('dem_file' in cfg.PATHS) and (cfg.PATHS['dem_file'] != '~') and \
-            os.path.exists(cfg.PATHS['dem_file']):
+    if ('dem_file' in cfg.PATHS) and os.path.exists(cfg.PATHS['dem_file']):
         return cfg.PATHS['dem_file'], 'USER'
 
     # If not, do the job ourselves: download and merge stuffs
@@ -854,6 +885,13 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         for z in zones:
             sources.append(_download_srtm_file(z))
         source_str = 'SRTM'
+
+    if len(sources) < 1:
+        raise RuntimeError('No topography file available!')
+        # for the very last cases a very coarse dataset ?
+        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
+        assert os.path.exists(t_file)
+        return t_file, 'ETOPO1'
 
     if len(sources) == 1:
         return sources[0], source_str
@@ -1097,7 +1135,7 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity: glacier entity read from the shapefile OR a valid RGI ID
+        rgi_entity: glacier entity read from the shapefile
         base_dir: path to the directory where to open the directory
             defaults to "conf.PATHPATHS['working_dir'] + /per_glacier/"
         reset: emtpy the directory at construction (careful!)
