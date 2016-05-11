@@ -287,26 +287,35 @@ def glacier_masks_itmix(gdir):
         xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(dem <= min_z)
         pok = np.nonzero(dem > min_z)
-        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
-        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
-        msg = gdir.rgi_id + ': DEM needed interpolation'
-        msg += '({:.1f}% missing).'.format(len(pnan[0])/len(dem.flatten())*100)
-        log.warning(msg)
-    if np.min(dem) == np.max(dem):
-        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
+        if len(pok[0]) > 0:
+            points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+            inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+            dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+            msg = gdir.rgi_id + ': DEM needed interpolation'
+            msg += '({:.1f}% missing).'.format(len(pnan[0])/len(dem.flatten())*100)
+            log.warning(msg)
+        else:
+            dem = dem*np.NaN
 
     # Replace DEM values with ITMIX ones where possible
     # Open DEM
     dem_f = None
     n_g = gdir.name.split(':')[-1]
     searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted', '*')
-    searchf = os.path.join(searchf, '02_surface_' + n_g + '*.asc')
+    searchf = os.path.join(searchf, '02_surface_' + n_g + '_*.asc')
     for dem_f in glob.glob(searchf):
         pass
 
+    if dem_f is None:
+        # try synth
+        n_g = gdir.rgi_id
+        searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_synth', '*')
+        searchf = os.path.join(searchf, '02_surface_' + n_g + '*.asc')
+        for dem_f in glob.glob(searchf):
+            pass
+
     if dem_f is not None:
-        log.debug('%s: ITMIX DEM file: %s', gdir.rgi_id, dem_f)
+        log.info('%s: ITMIX DEM file: %s', gdir.rgi_id, dem_f)
         it_dem_ds = EsriITMIX(dem_f)
         it_dem = it_dem_ds.get_vardata()
         it_dem = np.where(it_dem < -999., np.NaN, it_dem)
@@ -322,7 +331,10 @@ def glacier_masks_itmix(gdir):
         it_dem = gdir.grid.map_gridded_data(it_dem, it_dem_ds.grid,
                                             interp='linear')
         # And update values where possible
-        dem = np.where(~ it_dem.mask, it_dem, dem)
+        if  n_g in ['Synthetic2', 'Synthetic1']:
+            dem = np.where(~ it_dem.mask, it_dem, np.nanmin(it_dem))
+        else:
+            dem = np.where(~ it_dem.mask, it_dem, dem)
     else:
         if 'Devon' in n_g:
             raise RuntimeError('Should have found DEM for Devon')
@@ -530,6 +542,105 @@ def optimize_thick(gdirs):
     return out
 
 
+def synth_apparent_mb(gdir, tstar=None, bias=None):
+    """Compute local mustar and apparent mb from tstar.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    tstar: int
+        the year where the glacier should be equilibrium
+    bias: int
+        the associated reference bias
+    """
+
+    # Ok. Looping over divides
+    for div_id in list(gdir.divide_ids):
+        log.info('%s: apparent mb synth')
+
+        # For each flowline compute the apparent MB
+        fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+
+        # Reset flux
+        for fl in fls:
+            fl.flux = np.zeros(len(fl.surface_h))
+
+
+        n_g = gdir.rgi_id
+
+        searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_synth', '*')
+        searchf = os.path.join(searchf, '04_mb_' + n_g + '*.asc')
+        for dem_f in glob.glob(searchf):
+            pass
+        ds_mb = salem.EsriITMIX(dem_f)
+        mb = ds_mb.get_vardata() * 1000.
+        mb = np.where(mb < -9998, np.NaN, mb)
+
+        f = os.path.join(DATA_DIR, 'itmix', 'glaciers_synth',
+                         '01_margin_'+ n_g +'_0000_UTM00.shp')
+        ds_mb.set_roi(f)
+        mb = np.where(ds_mb.roi, mb, np.NaN)
+
+        searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_synth', '*')
+        searchf = os.path.join(searchf, '02_*_' + n_g + '*.asc')
+        for dem_f in glob.glob(searchf):
+            pass
+        ds_dem = salem.EsriITMIX(dem_f)
+        dem = ds_dem.get_vardata()
+
+
+        from scipy import stats
+        pok = np.where(np.isfinite(mb) & (mb > 0))
+        slope_p, _, _, _, _ = stats.linregress(dem[pok], mb[pok])
+        pok = np.where(np.isfinite(mb) & (mb < 0))
+        slope_m, _, _, _, _ = stats.linregress(dem[pok], mb[pok])
+
+        def ela_mb_grad(ela_h, h):
+            return np.where(h < ela_h, slope_m * (h - ela_h),
+                            slope_p * (h - ela_h))
+
+        # Get all my hs
+        hs = []
+        ws = []
+        for fl in fls:
+            hs = np.append(hs, fl.surface_h)
+            ws = np.append(ws, fl.widths)
+
+        # find ela for zero mb
+        def to_optim(x):
+            tot_mb = np.average(ela_mb_grad(x[0], hs), weights=ws)
+            return tot_mb**2
+
+        opti = optimization.minimize(to_optim, [1000.],
+                                     bounds=((0., 10000),),
+                                     tol=1e-6)
+
+        # Check results and save.
+        final_elah = opti['x'][0]
+        # print(final_elah)
+        # pok = np.where(np.isfinite(mb))
+        # plt.plot(dem[pok], mb[pok], 'o')
+        # plt.plot(hs, ela_mb_grad(final_elah, hs), 'o')
+        # plt.show()
+
+        # Flowlines in order to be sure
+        # TODO: here it would be possible to test for a minimum mb gradient
+        # and change prcp factor if judged useful
+        for fl in fls:
+            mb_on_h = ela_mb_grad(final_elah, fl.surface_h)
+            fl.set_apparent_mb(mb_on_h)
+
+        # Check
+        if div_id >= 1:
+            if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+                log.warning('%s: flux should be zero, but is: %.2f',
+                            gdir.rgi_id,
+                            fls[-1].flux[-1])
+
+        # Overwrite
+        gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
+
+
 def write_itmix_ascii(gdir, version):
     """Write the results"""
 
@@ -547,8 +658,13 @@ def write_itmix_ascii(gdir, version):
     vol = np.nansum(thick * gdir.grid.dx**2)
 
     # Transform to output grid
-    ifile = find_path(os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted'),
-                      '02_surface_' + gname + '*.asc')
+    try:
+        ifile = find_path(os.path.join(DATA_DIR, 'itmix', 'glaciers_sorted'),
+                          '02_surface_' + gname + '*.asc')
+    except AssertionError:
+        gname = gdir.rgi_id
+        searchf = os.path.join(DATA_DIR, 'itmix', 'glaciers_synth')
+        ifile = find_path(searchf,  '02_surface_' + gname + '*.asc')
     itmix = salem.EsriITMIX(ifile)
 
     thick = itmix.grid.map_gridded_data(thick, gdir.grid, interp='linear')
