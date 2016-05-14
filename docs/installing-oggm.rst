@@ -5,23 +5,26 @@ OGGM itself is a pure python package, but it has several dependencies wich
 are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
-OGGM is `tested`_ with the Python `versions`_ 2.7, 3.4 and 3.5.
+OGGM is `tested`_ with the python `versions`_ 2.7, 3.4 and 3.5. We
+`strongly recommend`_ to use python 3.5.
 
 .. note::
 
-   Complete beginners should get familiar with Python and its packaging
+   Complete beginners should get familiar with python and its packaging
    ecosystem before trying to install and run OGGM.
 
-For most users we recommend to use the conda_ package manager to install
-the dependencies `With conda (all platforms)`_. Linux users and people
+For most users we recommend to install python and the package dependencies
+withs the conda_ package manager:
+`Install with conda (all platforms)`_. Linux users and people
 with experience with `pip`_ can follow the specific instructions
-`With virtualenv (linux/debian)`_.
+`Install with virtualenv (linux/debian)`_.
 
 
 .. _tested: https://travis-ci.org/OGGM/oggm
 .. _versions: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
+.. _strongly recommend: http://python3statement.github.io/
 
 
 Dependencies
@@ -65,14 +68,16 @@ Optional:
     - progressbar2 (Display download progress)
 
 
-With conda (all platforms)
---------------------------
+Install with conda (all platforms)
+----------------------------------
 
 Prerequisites
 ~~~~~~~~~~~~~
 
-You should have a recent version of `git`_ and of `conda`_ (either by
-installing `miniconda`_ or `anaconda`_).
+You should have a recent version of `git`_ and of the `conda`_ package manager.
+You can get `conda`_ by installing `miniconda`_ (the package manager alone -
+recommended)  or `anaconda`_ (the full suite - with many packages you wont
+need).
 
 
 **Linux** users should install a couple of packages (not all of them are
@@ -93,7 +98,7 @@ window, type::
 
     conda create --name oggm_env python=3.5
 
-You can of course use any other name or python version for your environment.
+You can of course use any other name for your environment.
 Don't forget to activate it before going on::
 
     source activate oggm_env
@@ -118,7 +123,7 @@ Install the packages from the `conda-forge`_ channel::
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ as default, as suggested on their
+You might consider setting `conda-forge`_ per default, as suggested on their
 documentation page::
 
     conda config --add channels conda-forge
@@ -129,6 +134,11 @@ install progressbar2::
 
     pip install progressbar2
 
+No scientific python installation is complete without installing
+`ipython`_ and `jupyter`_::
+
+    conda install -c conda-forge ipython jupyter
+
 After success, install the following packages from Fabien's github::
 
     pip install git+https://github.com/fmaussion/motionless.git
@@ -138,6 +148,8 @@ After success, install the following packages from Fabien's github::
 
 .. _conda-forge: https://conda-forge.github.io/
 .. _here: https://github.com/ioos/conda-recipes/issues/623
+.. _ipython: https://ipython.org/
+.. _jupyter: https://jupyter.org/
 
 OGGM
 ~~~~
@@ -156,18 +168,51 @@ And install OGGM in development mode::
     pip install -e .
 
 
+.. note::
+
+    Installing OGGM in development mode means that subsequent changes to this
+    code repository will be taken into account the next time you will
+    ``import oggm``. This means that you are going to
+    be able to update OGGM with a simple `git pull`_ from the head of the
+    cloned repository (but also that if you make changes in this repository,
+    this might brake things).
+
+.. _git pull: https://git-scm.com/docs/git-pull
+
+
 Testing
 ~~~~~~~
 
-From the oggm root directory, type::
+You are almost there! The last step is to check if everything works as
+expected. From the oggm directory, type::
 
     nosetests .
 
+The tests can run for several minutes. If everything worked fine, you
+should see something like::
 
-With virtualenv (linux/debian)
-------------------------------
+    ...............S.S..................S......................SSS..SSS.SSSSS.SSS
+    ----------------------------------------------------------------------
+    Ran 77 tests in 401.080s
 
-For Debian / Ubuntu / Mint users only!
+    OK (SKIP=17)
+
+You can safely ignore deprecation warnings and other DLL messages as long as
+the tests end with ``OK``.
+
+**Congrats**, you are now set-up for the :ref:`getting-started` section!
+
+
+Install with virtualenv (linux/debian)
+--------------------------------------
+
+.. note::
+
+   The installation with pip requires to compile the packages one by one: it
+   can take a long time. Unless you have a good reason to be here,
+   `Install with conda (all platforms)`_ is probably what you want do do.
+
+The instructions below are for Debian / Ubuntu / Mint systems only!
 
 Linux packages
 ~~~~~~~~~~~~~~
@@ -176,11 +221,11 @@ For building stuffs::
 
     $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev
 
-For matplolib to work on **Python 2**::
+For matplolib to work on **python 2**::
 
     $ sudo apt-get install python-gtk2-dev
 
-And on **Python 3**::
+And on **python 3**::
 
     $ sudo apt-get install tk-dev python3-tk python3-dev
 
@@ -214,11 +259,11 @@ Reset your profile::
 
     $ . ~/.profile
 
-Make a new environment with **Python 2**::
+Make a new environment with **python 2**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python
 
-Or **Python 3**::
+Or **python 3**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python3
 
@@ -236,14 +281,14 @@ Install one by one the easy stuff::
 
    $ pip install numpy scipy pandas shapely
 
-For Matplotlib and **Python 2** we need to link the libs in the virtual env::
+For Matplotlib and **python 2** we need to link the libs in the virtual env::
 
     $ ln -sf /usr/lib/python2.7/dist-packages/{glib,gobject,cairo,gtk-2.0,pygtk.py,pygtk.pth} $VIRTUAL_ENV/lib/python2.7/site-packages
     $ pip install matplotlib
 
 (Details: http://www.stevenmaude.co.uk/2013/09/installing-matplotlib-in-virtualenv.html )
 
-For Matplotlib and **Python 3** it doesn't seem to be necessary::
+For Matplotlib and **python 3** it doesn't seem to be necessary::
 
     $ pip install matplotlib
 

@@ -27,7 +27,7 @@ Documentation
 
     whats-new
     installing-oggm
-    examples
+    getting-started
     centerlines
     mass-balance
     flowline
