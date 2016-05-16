@@ -18,6 +18,7 @@ from oggm.core.preprocessing.geometry import initialize_flowlines
 from oggm.core.preprocessing.geometry import catchment_width_geom
 from oggm.core.preprocessing.geometry import catchment_width_correction
 from oggm.core.preprocessing.climate import mu_candidates
+from oggm.core.preprocessing.climate import distribute_cru_style
 from oggm.core.preprocessing.inversion import prepare_for_inversion
 from oggm.core.preprocessing.inversion import volume_inversion
 from oggm.core.preprocessing.inversion import distribute_thickness

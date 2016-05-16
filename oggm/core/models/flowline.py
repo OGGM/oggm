@@ -1101,7 +1101,6 @@ def random_glacier_evolution(gdir, nyears=500):
     mb = mbmods.RandomMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
-    assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
     # run
     model.run_until(y1)

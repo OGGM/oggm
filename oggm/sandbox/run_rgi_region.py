@@ -57,8 +57,8 @@ rgi_reg = '11'  # alps
 cfg.initialize()
 
 # Local paths (where to write output and where to download input)
-WORKING_DIR = '/home/mowglie/disk/TMP/test_a/run'
-DATA_DIR = '/home/mowglie/disk/TMP/test_a/data'
+WORKING_DIR = '/work/ubuntu/run_alps'
+DATA_DIR = '/work/ubuntu/oggm-data'
 
 cfg.PATHS['working_dir'] = WORKING_DIR
 cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
@@ -75,6 +75,11 @@ utils.mkdir(cfg.PATHS['rgi_dir'])
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = True
+
+# Other params
+cfg.PARAMS['invert_with_sliding'] = False
+cfg.PARAMS['temp_use_local_gradient'] = False
+cfg.PARAMS['border'] = 80
 
 # Download RGI files
 rgi_dir = utils.get_rgi_dir()
@@ -102,7 +107,9 @@ for task in task_list:
     execute_entity_task(task, gdirs)
 
 # Climate related tasks - this will download
-tasks.distribute_climate_data(gdirs)
+# see if we can distribute
+workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+# tasks.distribute_climate_data(gdirs)
 tasks.compute_ref_t_stars(gdirs)
 tasks.distribute_t_stars(gdirs)
 
@@ -112,11 +119,13 @@ tasks.optimize_inversion_params(gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
 
 # Write out glacier statistics
+log.info('Glacier characteristics')
 df = utils.glacier_characteristics(gdirs)
 fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
 df.to_csv(fpath)
 
 # Random dynamics
+execute_entity_task(tasks.init_present_time_glacier, gdirs)
 execute_entity_task(tasks.random_glacier_evolution, gdirs)
 
 # Plots (if you want)
