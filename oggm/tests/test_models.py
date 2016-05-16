@@ -513,6 +513,25 @@ class TestMassBalance(unittest.TestCase):
         r_mbh_b /= ny
         self.assertTrue(np.mean(r_mbh) > np.mean(r_mbh_b))
 
+        mb_mod = massbalance.RandomMassBalanceModel(gdir, use_tstar=True)
+        r_mbh_b = 0.
+        for yr in yrs:
+            r_mbh_b += mb_mod.get_mb(h, yr) * 365 * 24 * 3600
+        r_mbh_b /= ny
+        self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
+
+        # Compare sigma from real climate and mine
+        mb_ref = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.RandomMassBalanceModel(gdir)
+        mb_ts = []
+        mb_ts2 = []
+        yrs = np.arange(1973, 2003, 1)
+        for yr in yrs:
+            mb_ts.append(np.average(mb_ref.get_mb(h, yr) * 365 * 24 * 3600, weights=w))
+            mb_ts2.append(np.average(mb_mod.get_mb(h, yr) * 365 * 24 * 3600, weights=w))
+        np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
+
+
     def test_mb_performance(self):
 
         gdir = init_hef(border=DOM_BORDER)
@@ -1330,7 +1349,7 @@ class TestHEF(unittest.TestCase):
         flowline.init_present_time_glacier(self.gdir)
         cfg.PARAMS['mixed_min_shape'] = _tmp
 
-        mb_mod = massbalance.BackwardsMassBalanceModel(self.gdir)
+        mb_mod = massbalance.TodayMassBalanceModel(self.gdir)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -1355,8 +1374,6 @@ class TestHEF(unittest.TestCase):
         cfg.PARAMS['mixed_min_shape'] = _tmp
 
         glacier = self.gdir.read_pickle('model_flowlines')
-
-        mb_mod = massbalance.BackwardsMassBalanceModel(self.gdir)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -1386,6 +1403,15 @@ class TestHEF(unittest.TestCase):
             plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
             plt.legend(loc='best')
             plt.show()
+
+    @is_slow
+    def test_random(self):
+
+        _tmp = cfg.PARAMS['mixed_min_shape']
+        cfg.PARAMS['mixed_min_shape'] = 0.
+        flowline.init_present_time_glacier(self.gdir)
+        cfg.PARAMS['mixed_min_shape'] = _tmp
+        flowline.random_glacier_evolution(self.gdir, nyears=200)
 
     @is_slow
     def test_find_t0(self):

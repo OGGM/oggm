@@ -1081,6 +1081,32 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
+@entity_task(log)
+def random_glacier_evolution(gdir, nyears=500):
+    """Random glacier dynamics for benchmarking purposes.
+
+     This runs the random mass-balance model for a certain number of years.
+     """
+
+    if cfg.PARAMS['use_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    y0 = 1800
+    y1 = y0 + nyears
+    mb = mbmods.RandomMassBalanceModel(gdir)
+    fls = gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
+    assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
+
+    # run
+    model.run_until(y1)
+
+
 @entity_task(log, writes=['past_model'])
 def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
                         write_steps=True):
