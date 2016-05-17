@@ -170,10 +170,15 @@ useful for the bed inversion: if :math:`S` and :math:`w` are known:
 
     h = \frac{3}{2} \frac{S}{w}
 
-The parabola is defined by the single bed-shape parameter
-:math:`P_s = 4 h / w^2`. Very small values of this parameter imply very
+The parabola is defined by the bed-shape parameter
+:math:`P_s = 4 h / w^2` [1]_. Very small values of this parameter imply very
 `flat` shapes, unrealistically sensitive to changes in :math:`h`. For this
 reason, the default in OGGM is to use the mixed flowline model.
+
+.. [1] the local thickness :math:`y`  of the parabolic bed can be described by
+    :math:`y = h − P_s x^2`. At :math:`x = w / 2`, :math:`y = 0` and
+    therefore :math:`P_s = 4 h / w^2`.
+
 
 MixedFlowline
 ~~~~~~~~~~~~~
