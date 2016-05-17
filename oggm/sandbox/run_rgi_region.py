@@ -30,7 +30,9 @@ from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 
 # This will run OGGM on the RGI region of your choice
-# After pre-processing, the glaciers are run for 500 years with a random climate
+# After preprocessing, the glaciers are run for 500 years with a random climate
+
+# Regions:
 # Alaska 01
 # Western Canada and US 02
 # Arctic Canada North 03
@@ -52,6 +54,12 @@ from oggm import graphics, utils
 # New Zealand 18
 # Antarctic and Subantarctic 19
 rgi_reg = '11'  # alps
+
+# Some globals for more control on what to run
+RUN_GIS_PREPRO = True  # run GIS preprocessing tasks (before climate)
+RUN_CLIMATE_PREPRO = True  # run climate preprocessing tasks
+RUN_INVERSION = True  # run bed inversion
+RUN_DYNAMICS = True  # run dybnamics
 
 # Initialize OGGM
 cfg.initialize()
@@ -104,23 +112,27 @@ task_list = [
     tasks.catchment_width_geom,
     tasks.catchment_width_correction
 ]
-for task in task_list:
-    execute_entity_task(task, gdirs)
+if RUN_GIS_PREPRO:
+    for task in task_list:
+        execute_entity_task(task, gdirs)
 
-# Climate related tasks - this will download
-# see if we can distribute
-workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
-tasks.compute_ref_t_stars(gdirs)
-tasks.distribute_t_stars(gdirs)
+if RUN_CLIMATE_PREPRO:
+    # Climate related tasks - this will download
+    # see if we can distribute
+    workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+    tasks.compute_ref_t_stars(gdirs)
+    tasks.distribute_t_stars(gdirs)
 
-# Inversion
-execute_entity_task(tasks.prepare_for_inversion, gdirs)
-tasks.optimize_inversion_params(gdirs)
-execute_entity_task(tasks.volume_inversion, gdirs)
+if RUN_INVERSION:
+    # Inversion
+    execute_entity_task(tasks.prepare_for_inversion, gdirs)
+    tasks.optimize_inversion_params(gdirs)
+    execute_entity_task(tasks.volume_inversion, gdirs)
 
-# Random dynamics
-execute_entity_task(tasks.init_present_time_glacier, gdirs)
-execute_entity_task(tasks.random_glacier_evolution, gdirs)
+if RUN_DYNAMICS:
+    # Random dynamics
+    execute_entity_task(tasks.init_present_time_glacier, gdirs)
+    execute_entity_task(tasks.random_glacier_evolution, gdirs)
 
 # Plots (if you want)
 PLOTS_DIR = ''
