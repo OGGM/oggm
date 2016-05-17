@@ -1203,6 +1203,52 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
+    def test_optim(self):
+
+        models = [flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
+                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
+                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
+                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
+                  ]
+        lens = []
+        surface_h = []
+        volume = []
+        runtime = []
+        yrs = np.arange(1, 200, 5)
+        for model in models:
+            fls = dummy_width_bed_tributary()
+            mb = ConstantBalanceModel(2600.)
+
+            model = model(fls, mb_model=mb, glen_a=self.glen_a,
+                          min_dt=5*SEC_IN_DAY)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            start_time = time.time()
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                length[i] = fls[-1].length_m
+                vol[i] = model.volume_km3
+            runtime.append(time.time() - start_time)
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
+
+        t1 = np.mean(runtime[::2])
+        t2 = np.mean(runtime[1::2])
+        try:
+            assert t2 <= t1
+        except AssertionError:
+            # no big deal
+            unittest.skip('Allowed failure')
+
 
 class TestBackwardsIdealized(unittest.TestCase):
 
