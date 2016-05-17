@@ -8,10 +8,12 @@ import pandas as pd
 import netCDF4
 import warnings
 from scipy.interpolate import interp1d
+from numpy.random import randn
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR
 from oggm.core.preprocessing import climate
+
 
 class MassBalanceModel(object):
     """An interface for mass balance."""
@@ -118,7 +120,14 @@ class BackwardsMassBalanceModel(MassBalanceModel):
             mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
             yr_range = [t_star-mu_hp, t_star+mu_hp]
         else:
-            yr_range = [1983, 2003]
+            # TODO temporary solution until https://github.com/OGGM/oggm/issues/88
+            fpath = gdir.get_filepath('climate_monthly')
+            with netCDF4.Dataset(fpath, mode='r') as nc:
+                # time
+                time = nc.variables['time']
+                time = netCDF4.num2date(time[:], time.units)
+                last_yr = time[-1].year
+                yr_range = [last_yr-30, last_yr]
 
         # Parameters
         self.temp_all_solid = cfg.PARAMS['temp_all_solid']
@@ -334,6 +343,143 @@ class BiasedMassBalanceModel(MassBalanceModel):
         return interp(heights) / SEC_IN_YEAR / cfg.RHO
 
 
+class RandomMassBalanceModel(MassBalanceModel):
+    """Normally distributed MB based on central value and deviation of a
+    given 30yr period. Both temperature and precipitation are random, and you
+    can add a bias. The bias and random values are added to the monthly
+    averages of the 30 yrs time period, following the monthly distributions.
+
+    This is useful for finding a possible past glacier state or for sensitivity
+    experiments.
+    """
+
+    def __init__(self, gdir, year=None, use_tstar=False, bias=None):
+        """ Instanciate.
+
+        Parameters
+        ---------
+        year: int
+            provide a year around which the 30 yr period will be averaged.
+            default is the last 30 yrs
+        use_tstar: bool
+            overwrites year to be tstar
+        bias: Deprecated
+        """
+
+        if (bias is not None) and (bias != 0.):
+            raise ValueError('bias should be zero for RandomMassBalanceModel')
+        super(RandomMassBalanceModel, self).__init__()
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        self.mu_star = df['mu_star'][0]
+
+        # Climate period
+        if use_tstar:
+            year = df['t_star'][0]
+
+        if year is not None:
+            mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+            yr_range = [year-mu_hp, year+mu_hp]
+        else:
+            # temporary solution until https://github.com/OGGM/oggm/issues/88
+            # is implemented
+            fpath = gdir.get_filepath('climate_monthly')
+            with netCDF4.Dataset(fpath, mode='r') as nc:
+                # time
+                time = nc.variables['time']
+                time = netCDF4.num2date(time[:], time.units)
+                last_yr = time[-1].year
+            yr_range = [last_yr-30, last_yr]
+
+        # Parameters
+        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
+        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
+        self.temp_melt = cfg.PARAMS['temp_melt']
+
+        # Read file
+        fpath = gdir.get_filepath('climate_monthly')
+        with netCDF4.Dataset(fpath, mode='r') as nc:
+            # time
+            time = nc.variables['time']
+            time = netCDF4.num2date(time[:], time.units)
+            ny, r = divmod(len(time), 12)
+            yrs = np.arange(time[-1].year-ny+1, time[-1].year+1, 1).repeat(12)
+            assert len(yrs) == len(time)
+            p0 = np.min(np.nonzero(yrs == yr_range[0])[0])
+            p1 = np.max(np.nonzero(yrs == yr_range[1])[0]) + 1
+            ny = yr_range[1] - yr_range[0] + 1
+
+            # Read timeseries and store the stats
+            tmp = nc.variables['temp'][p0:p1].reshape((ny, 12))
+            self.temp_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
+            tmp = nc.variables['prcp'][p0:p1].reshape((ny, 12))
+            self.prcp_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
+            tmp = nc.variables['grad'][p0:p1].reshape((ny, 12))
+            self.grad_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
+            self.ref_hgt = nc.ref_hgt
+
+        # Ny
+        self.ny = ny
+
+        # For optimisation
+        self._temp_bias = 0.
+        self._prcp_fac = 1.
+        self._cyears = dict()
+
+    def set_bias(self, bias=0):
+        """Override set bias"""
+        if (bias is not None) and (bias != 0.):
+            raise ValueError('bias should be zero for RandomMassBalanceModel')
+
+    def set_temp_bias(self, bias=0):
+        """Add a temperature bias (in K) to the temperature climatology"""
+        self._temp_bias = bias
+
+    def set_prcp_factor(self, factor=1):
+        """Multiply precipitation climatology with a given factor"""
+        self._prcp_fac = factor
+
+    def _get_syr(self, year):
+        """One random per year"""
+
+        if year not in self._cyears:
+            # random timeseries
+            itemp = self.temp_s[1] * randn(12) + self.temp_s[0]
+            iprcp = self.prcp_s[1] * randn(12) + self.prcp_s[0]
+            igrad = self.grad_s[1] * randn(12) + self.grad_s[0]
+            # gradient has limits
+            g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+            igrad = igrad.clip(g_minmax[0], g_minmax[1])
+            self._cyears[year] = (itemp, iprcp, igrad)
+
+        return self._cyears[year]
+
+    def get_mb(self, heights, year=None):
+        """Returns the mass-balance at given altitudes
+        for a given moment in time."""
+
+        itemp, iprcp, igrad = self._get_syr(year)
+
+        # For each height pixel:
+        # Compute temp and tempformelt (temperature above melting threshold)
+        npix = len(heights)
+        grad_temp = np.atleast_2d(igrad).repeat(npix, 0)
+        grad_temp *= (heights.repeat(12).reshape(grad_temp.shape) -
+                      self.ref_hgt)
+        temp2d = np.atleast_2d(itemp + self._temp_bias).repeat(npix, 0) + grad_temp
+        temp2dformelt = temp2d - self.temp_melt
+        temp2dformelt = np.clip(temp2dformelt, 0, temp2dformelt.max())
+
+        # Compute solid precipitation from total precipitation
+        prcpsol = np.atleast_2d(iprcp * self._prcp_fac).repeat(npix, 0)
+        fac = 1 - (temp2d - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
+        fac = np.clip(fac, 0, 1)
+        prcpsol = prcpsol * fac
+
+        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
+        return mb_annual / SEC_IN_YEAR / cfg.RHO
+
+
 class TodayMassBalanceModel(MassBalanceModel):
     """Constant mass-balance: MB during the last 30 yrs."""
 
@@ -347,8 +493,15 @@ class TodayMassBalanceModel(MassBalanceModel):
         t_star = df['t_star'][0]
 
         # Climate period
-        # TODO: baaad hardcoded stuff
-        yr = [1983, 2003]
+        # TODO temporary solution until https://github.com/OGGM/oggm/issues/88
+        # is implemented
+        fpath = gdir.get_filepath('climate_monthly')
+        with netCDF4.Dataset(fpath, mode='r') as nc:
+            # time
+            time = nc.variables['time']
+            time = netCDF4.num2date(time[:], time.units)
+            last_yr = time[-1].year
+        yr = [last_yr-30, last_yr]
 
         fls = gdir.read_pickle('model_flowlines')
         h = np.array([])

@@ -61,7 +61,7 @@ def _distribute_histalp_syle(gdirs, fpath):
         gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
 
 
-def _distribute_cru_style(gdirs):
+def _distribute_cru_style_nonparallel(gdirs):
     """More general solution for OGGM globally.
 
     It uses the CRU CL2 ten-minutes climatology as baseline
@@ -182,6 +182,129 @@ def _distribute_cru_style(gdirs):
                                         ts_grad, loc_hgt)
 
 
+@entity_task(log, writes=['climate_monthly'])
+def distribute_cru_style(gdir):
+    """Testing distribute cru style in parallel to see.
+
+    It uses the CRU CL2 ten-minutes climatology as baseline
+    (provided with OGGM)
+    """
+
+    # read the climatology
+    clfile = utils.get_cru_cl_file()
+    ncclim = salem.GeoNetcdf(clfile)
+    # and the TS data
+    nc_ts_tmp = salem.GeoNetcdf(utils.get_cru_file('tmp'), monthbegin=True)
+    nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
+
+    # set temporal subset for the ts data (hydro years)
+    nc_ts_tmp.set_period(t0='1901-10-01', t1='2014-09-01')
+    nc_ts_pre.set_period(t0='1901-10-01', t1='2014-09-01')
+    time = nc_ts_pre.time
+    ny, r = divmod(len(time), 12)
+    assert r == 0
+
+    # gradient default params
+    use_grad = cfg.PARAMS['temp_use_local_gradient']
+    def_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    prcp_scaling_factor = cfg.PARAMS['prcp_scaling_factor']
+
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+
+    # This is guaranteed to work because I prepared the file (I hope)
+    ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+
+    # get monthly gradient ...
+    loc_hgt = ncclim.get_vardata('elev')
+    loc_tmp = ncclim.get_vardata('temp')
+    loc_pre = ncclim.get_vardata('prcp')
+    isok = np.isfinite(loc_hgt)
+    hgt_f = loc_hgt[isok].flatten()
+    ts_grad = np.zeros(12) + def_grad
+    if use_grad and len(hgt_f) >= 5:
+        for i in range(12):
+            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
+            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
+            ts_grad[i] = slope if (p_val < 0.01) else def_grad
+    # ... but dont exaggerate too much
+    ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
+    # convert to timeserie and hydroyears
+    ts_grad = ts_grad.tolist()
+    ts_grad = ts_grad[9:] + ts_grad[0:9]
+    ts_grad = np.asarray(ts_grad * ny)
+
+    # maybe this will throw out of bounds warnings
+    nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+    nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+
+    # compute monthly anomalies
+    # of temp
+    ts_tmp = nc_ts_tmp.get_vardata('tmp', as_xarray=True)
+    ts_tmp_avg = ts_tmp.sel(time=slice('1961-01-01', '1990-12-01'))
+    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+    ts_tmp = ts_tmp.groupby('time.month') - ts_tmp_avg
+    # of precip
+    ts_pre = nc_ts_pre.get_vardata('pre', as_xarray=True)
+    ts_pre_avg = ts_pre.sel(time=slice('1961-01-01', '1990-12-01'))
+    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre = ts_pre.groupby('time.month') - ts_pre_avg
+
+    # interpolate to HR grid
+    if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
+        # Extreme case, middle pix is not valid
+        # take any valid pix from the 3*3 (and hope theres one)
+        found_it = False
+        for idi in range(2):
+            for idj in range(2):
+                if np.all(np.isfinite(ts_tmp[:, idj, idi])):
+                    ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
+                    ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
+                    found_it = True
+        if not found_it:
+            msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+            raise RuntimeError(msg)
+    elif np.any(~np.isfinite(ts_tmp)):
+        # maybe the side is nan, but we can do nearest
+        ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                               interp='nearest')
+        ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                               interp='nearest')
+    else:
+        # We can do bilinear
+        ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
+                                               interp='linear')
+        ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
+                                               interp='linear')
+
+    # take the center pixel and add it to the CRU CL clim
+    # for temp
+    loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
+                           coords={'month':ts_pre_avg.month})
+    ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
+                           coords={'time':time})
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    # for prcp
+    loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
+                           coords={'month':ts_pre_avg.month})
+    ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
+                           coords={'time':time})
+    ts_pre = ts_pre.groupby('time.month') + loc_pre * prcp_scaling_factor
+
+    # done
+    loc_hgt = loc_hgt[1, 1]
+    assert np.isfinite(loc_hgt)
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+    assert np.all(np.isfinite(ts_grad))
+    gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
+                                    ts_grad, loc_hgt)
+    ncclim._nc.close()
+    nc_ts_tmp._nc.close()
+    nc_ts_pre._nc.close()
+
+
 def distribute_climate_data(gdirs):
     """Reads the climate data and distributes to each glacier.
 
@@ -205,7 +328,7 @@ def distribute_climate_data(gdirs):
         _distribute_histalp_syle(gdirs, cfg.PATHS['climate_file'])
     else:
         # OK, so use the default CRU "high-resolution" method
-        _distribute_cru_style(gdirs)
+        _distribute_cru_style_nonparallel(gdirs)
 
 
 def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):

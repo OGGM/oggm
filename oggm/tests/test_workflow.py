@@ -19,6 +19,7 @@ from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS
 from oggm.core.models import flowline, massbalance
+from oggm import tasks
 from oggm import graphics
 
 # Globals
@@ -83,7 +84,10 @@ def up_to_inversion(reset=False):
         cfg.PATHS['climate_file'] = '~'
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        workflow.climate_tasks(gdirs)
+        workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
+        # workflow.climate_tasks(gdirs)
 
         # Use histalp for the actual test
         cfg.PARAMS['temp_use_local_gradient'] = True
