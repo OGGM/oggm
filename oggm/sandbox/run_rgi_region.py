@@ -77,9 +77,10 @@ cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = True
 
 # Other params
-cfg.PARAMS['invert_with_sliding'] = False
-cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['border'] = 80
+cfg.PARAMS['temp_use_local_gradient'] = False
+cfg.PARAMS['invert_with_sliding'] = False
+cfg.PARAMS['bed_shape'] = 'mixed'
 
 # Download RGI files
 rgi_dir = utils.get_rgi_dir()
@@ -109,7 +110,6 @@ for task in task_list:
 # Climate related tasks - this will download
 # see if we can distribute
 workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
-# tasks.distribute_climate_data(gdirs)
 tasks.compute_ref_t_stars(gdirs)
 tasks.distribute_t_stars(gdirs)
 
@@ -117,12 +117,6 @@ tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 tasks.optimize_inversion_params(gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
-
-# Write out glacier statistics
-log.info('Glacier characteristics')
-df = utils.glacier_characteristics(gdirs)
-fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
-df.to_csv(fpath)
 
 # Random dynamics
 execute_entity_task(tasks.init_present_time_glacier, gdirs)

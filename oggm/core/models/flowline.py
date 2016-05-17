@@ -838,7 +838,7 @@ def init_present_time_glacier(gdir):
     In a first stage we assume that all divides CAN be merged as for HEF,
     so that the concept of divide is not necessary anymore.
 
-    This task is horribly coded and needs work
+    This task is horribly coded and needs more work
 
     Parameters
     ----------
@@ -858,6 +858,9 @@ def init_present_time_glacier(gdir):
 
     # Smooth window
     sw = cfg.PARAMS['flowline_height_smooth']
+
+    # Default bed shape
+    defshape = 0.003
 
     # Map
     map_dx = gdir.grid.dx
@@ -902,7 +905,7 @@ def init_present_time_glacier(gdir):
             bed_shape = (4*inv['thick'])/(w**2)
             bed_shape = bed_shape.clip(0, max_shape)
             bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
-            bed_shape = utils.interp_nans(bed_shape)
+            bed_shape = utils.interp_nans(bed_shape, default=defshape)
             nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
                                     bed_h, bed_shape)
             flows_to_ids.append(fls_list.index(fl.flows_to))
@@ -929,7 +932,7 @@ def init_present_time_glacier(gdir):
         bed_shape = (4*inv['thick'])/(w**2)
         bed_shape = bed_shape.clip(0, max_shape)
         bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
-        bed_shape = utils.interp_nans(bed_shape)
+        bed_shape = utils.interp_nans(bed_shape, default=defshape)
 
         # But forbid too small shape close to the end
         if cfg.PARAMS['bed_shape'] == 'mixed':
