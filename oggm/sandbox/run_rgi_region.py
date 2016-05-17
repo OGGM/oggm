@@ -13,24 +13,20 @@ log = logging.getLogger(__name__)
 import os
 from glob import glob
 import shutil
-from functools import partial
 # Libs
-import pandas as pd
 import geopandas as gpd
 import numpy as np
-import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 # Locals
 import oggm
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 
 # This will run OGGM on the RGI region of your choice
-# After preprocessing, the glaciers are run for 500 years with a random climate
+# After preprocessing, the glaciers are run for 1000 years in a random climate
 
 # Regions:
 # Alaska 01
@@ -98,6 +94,11 @@ rgidf = gpd.read_file(rgi_shp[0])
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))
 
+# Download other files if needed
+_ = utils.get_cru_file(var='tmp')
+_ = utils.get_cru_file(var='pre')
+_ = utils.get_demo_file('Hintereisferner.shp')
+
 # Go - initialize working directories
 # gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 gdirs = workflow.init_glacier_regions(rgidf)
@@ -117,7 +118,7 @@ if RUN_GIS_PREPRO:
         execute_entity_task(task, gdirs)
 
 if RUN_CLIMATE_PREPRO:
-    # Climate related tasks - this will download
+    # Climate related tasks
     # see if we can distribute
     workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
     tasks.compute_ref_t_stars(gdirs)

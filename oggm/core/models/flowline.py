@@ -1235,7 +1235,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=500):
+def random_glacier_evolution(gdir, nyears=1000):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
