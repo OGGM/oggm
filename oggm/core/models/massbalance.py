@@ -447,7 +447,8 @@ class RandomMassBalanceModel(MassBalanceModel):
             itemp = self.temp_s[1] * randn(12) + self.temp_s[0]
             iprcp = self.prcp_s[1] * randn(12) + self.prcp_s[0]
             igrad = self.grad_s[1] * randn(12) + self.grad_s[0]
-            # gradient has limits
+            # gradient and prcp have limits
+            iprcp = iprcp.clip(0)
             g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
             igrad = igrad.clip(g_minmax[0], g_minmax[1])
             self._cyears[year] = (itemp, iprcp, igrad)

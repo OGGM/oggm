@@ -531,7 +531,6 @@ class TestMassBalance(unittest.TestCase):
             mb_ts2.append(np.average(mb_mod.get_mb(h, yr) * 365 * 24 * 3600, weights=w))
         np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
 
-
     def test_mb_performance(self):
 
         gdir = init_hef(border=DOM_BORDER)
