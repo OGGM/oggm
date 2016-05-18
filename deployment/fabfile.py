@@ -539,7 +539,7 @@ def install_node_software(nn=''):
     install_node_apt('', inst)
     install_node_pip('', inst)
 
-    run('sudo shutdown -r now')
+    run('sudo shutdown -r 1')
 
 
 @task
