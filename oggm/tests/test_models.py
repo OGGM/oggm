@@ -25,7 +25,7 @@ from oggm.tests.test_graphics import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import ConstantBalanceModel
 from oggm.tests import is_slow, requires_working_conda
-from oggm.tests import HAS_NEW_GDAL
+from oggm.tests import HAS_NEW_GDAL, assertDatasetAllClose
 
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
@@ -138,8 +138,16 @@ def dummy_mixed_bed():
 
     coords = np.arange(0, nx-0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
-    return [flowline.MixedFlowline(line, dx, map_dx, surface_h,
-                                   bed_h, shape, lambdas=3.5)]
+    fls = [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
+                                      bed_h, shape)]
+
+    cfg.PARAMS['trapezoid_lambdas'] = 3.5
+    cfg.PARAMS['mixed_min_shape'] = 0.0015
+    fls = flowline.convert_to_mixed_flowline(fls)
+    del cfg.PARAMS['trapezoid_lambdas']
+    del cfg.PARAMS['mixed_min_shape']
+
+    return fls
 
 
 def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
@@ -563,6 +571,100 @@ class TestMassBalance(unittest.TestCase):
         except AssertionError:
             # no big deal
             unittest.skip('Allowed failure')
+
+
+class TestIO(unittest.TestCase):
+
+    def setUp(self):
+        self.test_dir = os.path.join(current_dir, 'tmp_io')
+        if not os.path.exists(self.test_dir):
+            os.makedirs(self.test_dir)
+
+        self.gdir = init_hef(border=DOM_BORDER)
+
+    def test_flowline_to_dataset(self):
+
+        beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
+                dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
+                dummy_mixed_bed]
+
+        for bed in beds:
+            fl = bed()[0]
+            ds = fl.to_dataset()
+            fl_ = flowline.flowline_from_dataset(ds)
+            ds_ = fl_.to_dataset()
+            self.assertTrue(ds_.equals(ds))
+
+    def test_model_to_file(self):
+
+        p = os.path.join(self.test_dir, 'grp.nc')
+        if os.path.isfile(p):
+            os.remove(p)
+
+        fls = dummy_width_bed_tributary()
+        model = flowline.FluxBasedModel(fls)
+        model.to_netcdf(p)
+        fls_ = flowline.glacier_from_netcdf(p)
+
+        for fl, fl_ in zip(fls, fls_):
+            ds = fl.to_dataset()
+            ds_ = fl_.to_dataset()
+            self.assertTrue(ds_.equals(ds))
+
+        self.assertTrue(fls_[0].flows_to is fls_[1])
+        self.assertEqual(fls[0].flows_to_indice, fls_[0].flows_to_indice)
+
+        # They should be sorted
+        to_test = [fl.order for fl in fls_]
+        assert np.array_equal(np.sort(to_test), to_test)
+
+    def test_hef(self):
+
+        p = os.path.join(self.test_dir, 'grp_hef.nc')
+        if os.path.isfile(p):
+            os.remove(p)
+
+        flowline.init_present_time_glacier(self.gdir)
+
+        fls = self.gdir.read_pickle('model_flowlines')
+        model = flowline.FluxBasedModel(fls)
+
+        model.to_netcdf(p)
+        fls_ = flowline.glacier_from_netcdf(p)
+
+        for fl, fl_ in zip(fls, fls_):
+            ds = fl.to_dataset()
+            ds_ = fl_.to_dataset()
+            self.assertTrue(ds_.equals(ds))
+
+        for fl, fl_ in zip(fls[:-1], fls_[:-1]):
+            self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
+
+        # mixed flowline
+        fls = self.gdir.read_pickle('model_flowlines')
+        fls = flowline.convert_to_mixed_flowline(fls)
+        model = flowline.FluxBasedModel(fls)
+
+        p = os.path.join(self.test_dir, 'grp_hef_mix.nc')
+        if os.path.isfile(p):
+            os.remove(p)
+        model.to_netcdf(p)
+        fls_ = flowline.glacier_from_netcdf(p)
+
+        np.testing.assert_allclose(fls[0].section, fls_[0].section)
+        np.testing.assert_allclose(fls[0]._ptrap, fls_[0]._ptrap)
+        np.testing.assert_allclose(fls[0].bed_h, fls_[0].bed_h)
+
+        for fl, fl_ in zip(fls, fls_):
+            ds = fl.to_dataset()
+            ds_ = fl_.to_dataset()
+            np.testing.assert_allclose(fl.section, fl_.section)
+            np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
+            np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
+            assertDatasetAllClose(ds, ds_)
+
+        for fl, fl_ in zip(fls[:-1], fls_[:-1]):
+            self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
 
 
 class TestIdealisedCases(unittest.TestCase):
@@ -1154,7 +1256,6 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
-
     def test_mixed_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -1165,9 +1266,9 @@ class TestIdealisedCases(unittest.TestCase):
         volume = []
         widths = []
         yrs = np.arange(1, 700, 2)
+        # yrs = np.arange(1, 100, 2)
         for model, fls in zip(models, flss):
             mb = ConstantBalanceModel(2800.)
-
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -1185,23 +1286,26 @@ class TestIdealisedCases(unittest.TestCase):
             surface_h.append(fls[-1].surface_h.copy())
 
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-2)
-
         if do_plot:  # pragma: no cover
-            plt.plot(lens[0], 'r')
-            plt.plot(lens[1], 'b')
+            plt.plot(lens[0], 'r', label='normal')
+            plt.plot(lens[1], 'b', label='mixed')
+            plt.legend()
             plt.show()
 
-            plt.plot(volume[0], 'r')
-            plt.plot(volume[1], 'b')
+            plt.plot(volume[0], 'r', label='normal')
+            plt.plot(volume[1], 'b', label='mixed')
+            plt.legend()
             plt.show()
 
             plt.plot(fls[-1].bed_h, 'k')
-            plt.plot(surface_h[0], 'r')
-            plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[0], 'r', label='normal')
+            plt.plot(surface_h[1], 'b', label='mixed')
+            plt.legend()
             plt.show()
 
-            plt.plot(widths[0], 'r')
-            plt.plot(widths[1], 'b')
+            plt.plot(widths[0], 'r', label='normal')
+            plt.plot(widths[1], 'b', label='mixed')
+            plt.legend()
             plt.show()
 
     def test_optim(self):
@@ -1358,11 +1462,7 @@ class TestHEF(unittest.TestCase):
     @requires_working_conda
     def test_equilibrium(self):
 
-        #TODO: equilibrium test only working with parabolic bed
-        _tmp = cfg.PARAMS['bed_shape']
-        cfg.PARAMS['bed_shape'] = 'parabolic'
         flowline.init_present_time_glacier(self.gdir)
-        cfg.PARAMS['bed_shape'] = _tmp
 
         mb_mod = massbalance.TstarMassBalanceModel(self.gdir)
 
@@ -1391,10 +1491,7 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_commitment(self):
 
-        _tmp = cfg.PARAMS['mixed_min_shape']
-        cfg.PARAMS['mixed_min_shape'] = 0.
         flowline.init_present_time_glacier(self.gdir)
-        cfg.PARAMS['mixed_min_shape'] = _tmp
 
         mb_mod = massbalance.TodayMassBalanceModel(self.gdir)
 
@@ -1454,10 +1551,7 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_random(self):
 
-        _tmp = cfg.PARAMS['mixed_min_shape']
-        cfg.PARAMS['mixed_min_shape'] = 0.
         flowline.init_present_time_glacier(self.gdir)
-        cfg.PARAMS['mixed_min_shape'] = _tmp
         flowline.random_glacier_evolution(self.gdir, nyears=200)
 
     @is_slow

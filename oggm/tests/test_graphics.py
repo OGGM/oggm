@@ -269,7 +269,8 @@ def test_plot_model():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
+    fls = flowline.convert_to_mixed_flowline(gdir.read_pickle('model_flowlines'))
+    model = flowline.FlowlineModel(fls)
     graphics.plot_modeloutput_section(gdir, model=model)
     graphics.plot_modeloutput_map(gdir, model=model)
 
