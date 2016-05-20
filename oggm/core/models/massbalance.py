@@ -8,11 +8,12 @@ import pandas as pd
 import netCDF4
 import warnings
 from scipy.interpolate import interp1d
-from numpy.random import randn
+from numpy import random
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS, SEC_IN_DAY
 from oggm.core.preprocessing import climate
+from oggm import utils
 
 
 class MassBalanceModel(object):
@@ -344,13 +345,15 @@ class BiasedMassBalanceModel(MassBalanceModel):
 
 
 class RandomMassBalanceModel(MassBalanceModel):
-    """Normally distributed MB based on central value and deviation of a
-    given 30yr period. Both temperature and precipitation are random, and you
-    can add a bias. The bias and random values are added to the monthly
-    averages of the 30 yrs time period, following the monthly distributions.
+    """This returns a mass-balance which is simply a random shuffle of all
+    years within a 31 years period.
 
     This is useful for finding a possible past glacier state or for sensitivity
     experiments.
+
+    Note that this is going to be sensitive to extreme years in certain
+    periods, but it is by far more physically reasonable than other
+    approaches based on gaussian assumptions.
     """
 
     def __init__(self, gdir, year=None, use_tstar=False, bias=None):
@@ -410,15 +413,13 @@ class RandomMassBalanceModel(MassBalanceModel):
             ny = yr_range[1] - yr_range[0] + 1
 
             # Read timeseries and store the stats
-            tmp = nc.variables['temp'][p0:p1].reshape((ny, 12))
-            self.temp_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
-            tmp = nc.variables['prcp'][p0:p1].reshape((ny, 12))
-            self.prcp_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
-            tmp = nc.variables['grad'][p0:p1].reshape((ny, 12))
-            self.grad_s = (np.mean(tmp, axis=0), np.std(tmp, axis=0))
+            self.temp_s = nc.variables['temp'][p0:p1].reshape((ny, 12))
+            self.prcp_s = nc.variables['prcp'][p0:p1].reshape((ny, 12))
+            self.grad_s = nc.variables['grad'][p0:p1].reshape((ny, 12))
             self.ref_hgt = nc.ref_hgt
 
         # Ny
+        assert ny == 31
         self.ny = ny
 
         # For optimisation
@@ -444,18 +445,40 @@ class RandomMassBalanceModel(MassBalanceModel):
 
         if year not in self._cyears:
             # random timeseries
-            itemp = self.temp_s[1] * randn(12) + self.temp_s[0]
-            iprcp = self.prcp_s[1] * randn(12) + self.prcp_s[0]
-            igrad = self.grad_s[1] * randn(12) + self.grad_s[0]
-            # gradient and prcp have limits
-            iprcp = iprcp.clip(0)
-            g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-            igrad = igrad.clip(g_minmax[0], g_minmax[1])
+            r = random.randint(self.ny)
+            itemp = self.temp_s[r, :]
+            iprcp = self.prcp_s[r, :]
+            igrad = self.grad_s[r, :]
             self._cyears[year] = (itemp, iprcp, igrad)
 
         return self._cyears[year]
 
     def get_mb(self, heights, year=None):
+        """Returns the mass-balance at given altitudes
+        for a given moment in time."""
+
+        y, m = utils.year_to_date(year)
+        itemp, iprcp, igrad = self._get_syr(y)
+        itemp, iprcp, igrad = itemp[m-1], iprcp[m-1], igrad[m-1]
+
+        # For each height pixel:
+        # Compute temp and tempformelt (temperature above melting threshold)
+        npix = len(heights)
+        grad_temp = igrad * (heights - self.ref_hgt)
+        temp = np.ones(npix) * itemp + grad_temp
+        tempformelt = temp - self.temp_melt
+        tempformelt = np.clip(tempformelt, 0, tempformelt.max())
+
+        # Compute solid precipitation from total precipitation
+        prcpsol = np.ones(npix) * iprcp
+        fac = 1 - (temp - self.temp_all_solid) / \
+                  (self.temp_all_liq - self.temp_all_solid)
+        prcpsol *= np.clip(fac, 0, 1)
+
+        mb_month = prcpsol - self.mu_star * tempformelt
+        return mb_month / SEC_IN_MONTHS[m-1] / cfg.RHO
+
+    def get_annual_mb(self, heights, year=None):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
@@ -548,7 +571,9 @@ class HistalpMassBalanceModel(MassBalanceModel):
             if r != 0:
                 raise ValueError('Climate data should be N full years exclusively')
             # Last year gives the tone of the hydro year
-            self.years = np.arange(time[-1].year-ny+1, time[-1].year+1, 1)
+            self.years = np.repeat(np.arange(time[-1].year-ny+1,
+                                             time[-1].year+1), 12)
+            self.months = np.tile(np.arange(1, 13), ny)
             # Read timeseries
             self.temp = nc.variables['temp'][:]
             self.prcp = nc.variables['prcp'][:]
@@ -559,12 +584,42 @@ class HistalpMassBalanceModel(MassBalanceModel):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
 
-        pok = np.where(self.years == np.floor(year))[0][0]
+        y, m = utils.year_to_date(year)
+
+        pok = np.where((self.years == y) & (self.months == m))[0][0]
 
         # Read timeseries
-        itemp = self.temp[12*pok:12*pok+12]
-        iprcp = self.prcp[12*pok:12*pok+12]
-        igrad = self.grad[12*pok:12*pok+12]
+        itemp = self.temp[pok]
+        iprcp = self.prcp[pok]
+        igrad = self.grad[pok]
+
+        # For each height pixel:
+        # Compute temp and tempformelt (temperature above melting threshold)
+        npix = len(heights)
+        grad_temp = igrad * (heights - self.ref_hgt)
+        temp = np.ones(npix) * itemp + grad_temp
+        tempformelt = temp - self.temp_melt
+        tempformelt = np.clip(tempformelt, 0, tempformelt.max())
+
+        # Compute solid precipitation from total precipitation
+        prcpsol = np.ones(npix) * iprcp
+        fac = 1 - (temp - self.temp_all_solid) / \
+                  (self.temp_all_liq - self.temp_all_solid)
+        prcpsol *= np.clip(fac, 0, 1)
+
+        mb_month = prcpsol - self.mu_star * tempformelt
+        return mb_month / SEC_IN_MONTHS[m-1] / cfg.RHO
+
+    def get_annual_mb(self, heights, year=None):
+        """Returns the annual mass-balance at given altitudes
+        for a given moment in time."""
+
+        pok = np.where(self.years == np.floor(year))[0]
+
+        # Read timeseries
+        itemp = self.temp[pok]
+        iprcp = self.prcp[pok]
+        igrad = self.grad[pok]
 
         # For each height pixel:
         # Compute temp and tempformelt (temperature above melting threshold)

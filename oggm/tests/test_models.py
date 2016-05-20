@@ -28,7 +28,7 @@ from oggm.tests import is_slow, requires_working_conda
 from oggm.tests import HAS_NEW_GDAL, assertDatasetAllClose
 
 from oggm import utils, cfg
-from oggm.cfg import N, SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR
+from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -456,17 +456,27 @@ class TestMassBalance(unittest.TestCase):
             h = np.append(h, fl.surface_h)
             w = np.append(w, fl.widths)
 
-        ref_mbh = mb_mod.get_mb(h, None) * 365 * 24 * 3600
+        ref_mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
 
         mb_mod = massbalance.HistalpMassBalanceModel(gdir)
 
         # Climate period
         yrs = np.arange(1973, 2003.1, 1)
-
         my_mb = ref_mbh * 0.
         for yr in yrs:
-            my_mb += mb_mod.get_mb(h, yr)
-        my_mb = my_mb / len(yrs) * 365 * 24 * 3600
+            my_mb += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
+        my_mb = my_mb / 31
+
+        np.testing.assert_allclose(ref_mbh, my_mb, rtol=0.01)
+
+        # Month
+        time = pd.date_range('1/1/1973', periods=31*12, freq='MS')
+        yrs = utils.date_to_year(time.year, time.month)
+
+        my_mb = ref_mbh * 0.
+        for yr, m in zip(yrs, time.month):
+            my_mb += mb_mod.get_mb(h, yr) * SEC_IN_MONTHS[m-1]
+        my_mb = my_mb / 31
 
         np.testing.assert_allclose(ref_mbh, my_mb, rtol=0.01)
 
@@ -487,16 +497,16 @@ class TestMassBalance(unittest.TestCase):
             h = np.append(h, fl.surface_h)
             w = np.append(w, fl.widths)
 
-        ref_mbh = ref_mod.get_mb(h, None) * 365 * 24 * 3600
+        ref_mbh = ref_mod.get_mb(h, None) * SEC_IN_YEAR
 
         # two years shoudn't be equal
-        r_mbh1 = mb_mod.get_mb(h, 1) * 365 * 24 * 3600
-        r_mbh2 = mb_mod.get_mb(h, 2) * 365 * 24 * 3600
+        r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
+        r_mbh2 = mb_mod.get_annual_mb(h, 2) * SEC_IN_YEAR
         assert not np.all(np.allclose(r_mbh1, r_mbh2))
 
         # the same year should be equal
-        r_mbh1 = mb_mod.get_mb(h, 1) * 365 * 24 * 3600
-        r_mbh2 = mb_mod.get_mb(h, 1) * 365 * 24 * 3600
+        r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
+        r_mbh2 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
         np.testing.assert_allclose(r_mbh1, r_mbh2)
 
         # After many trials the mb should be close to the same
@@ -504,14 +514,14 @@ class TestMassBalance(unittest.TestCase):
         yrs = np.arange(ny)
         r_mbh = 0.
         for yr in yrs:
-            r_mbh += mb_mod.get_mb(h, yr) * 365 * 24 * 3600
+            r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
 
         mb_mod.set_temp_bias(-0.5)
         r_mbh_b = 0.
         for yr in yrs:
-            r_mbh_b += mb_mod.get_mb(h, yr) * 365 * 24 * 3600
+            r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh_b /= ny
         self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
 
@@ -519,14 +529,14 @@ class TestMassBalance(unittest.TestCase):
         mb_mod.set_prcp_factor(0.7)
         r_mbh_b = 0.
         for yr in yrs:
-            r_mbh_b += mb_mod.get_mb(h, yr) * 365 * 24 * 3600
+            r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh_b /= ny
         self.assertTrue(np.mean(r_mbh) > np.mean(r_mbh_b))
 
         mb_mod = massbalance.RandomMassBalanceModel(gdir, use_tstar=True)
         r_mbh_b = 0.
         for yr in yrs:
-            r_mbh_b += mb_mod.get_mb(h, yr) * 365 * 24 * 3600
+            r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh_b /= ny
         self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
 
@@ -537,9 +547,23 @@ class TestMassBalance(unittest.TestCase):
         mb_ts2 = []
         yrs = np.arange(1973, 2003, 1)
         for yr in yrs:
-            mb_ts.append(np.average(mb_ref.get_mb(h, yr) * 365 * 24 * 3600, weights=w))
-            mb_ts2.append(np.average(mb_mod.get_mb(h, yr) * 365 * 24 * 3600, weights=w))
+            mb_ts.append(np.average(mb_ref.get_annual_mb(h, yr) * SEC_IN_YEAR, weights=w))
+            mb_ts2.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR, weights=w))
         np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
+
+        # Monthly
+        time = pd.date_range('1/1/1973', periods=31*12, freq='MS')
+        yrs = utils.date_to_year(time.year, time.month)
+
+        ref_mb = np.zeros(12)
+        my_mb = np.zeros(12)
+        for yr, m in zip(yrs, time.month):
+            ref_mb[m-1] += np.average(mb_ref.get_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
+            my_mb[m-1] += np.average(mb_mod.get_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
+        my_mb = my_mb / 31
+        ref_mb = ref_mb / 31
+        self.assertTrue(utils.rmsd(ref_mb, my_mb) < 0.1)
+
 
     def test_mb_performance(self):
 
@@ -862,7 +886,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
                   flowline.MUSCLSuperBeeModel]
-        steps = [SEC_IN_MONTH, None, None]
+        steps = [31*SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
         volume = []

@@ -45,6 +45,7 @@ import multiprocessing as mp
 
 # Locals
 import oggm.cfg as cfg
+from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
@@ -580,6 +581,37 @@ def nicenumber(number, binsize, lower=False):
         return e * binsize
     else:
         return (e+1) * binsize
+
+
+def year_to_date(yr):
+    """Converts a float year to an actual (year, month) tuple.
+
+    Note that this doesn't account for leap years.
+    """
+
+    try:
+        sec, out_y = math.modf(yr)
+        out_y = int(out_y)
+        sec = sec * SEC_IN_YEAR
+        out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
+    except TypeError:
+        #TODO: inefficient but no time right now
+        out_y = np.zeros(len(yr), np.int64)
+        out_m = np.zeros(len(yr), np.int64)
+        for i, y in enumerate(yr):
+            y, m = year_to_date(y)
+            out_y[i] = y
+            out_m[i] = m
+    return out_y, out_m
+
+
+def date_to_year(y, m):
+    """Converts an integer (year, month) to a float year.
+
+    Note that this doesn't account for leap years.
+    """
+
+    return y + BEGINSEC_IN_MONTHS[np.asarray(m) - 1] / SEC_IN_YEAR
 
 
 @MEMORY.cache

@@ -59,6 +59,8 @@ def is_download(test):
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
 
+# the code below is copy/pasted from xarray
+# TODO: go back to xarray when https://github.com/pydata/xarray/issues/754
 def assertEqual(a1, a2):
     assert a1 == a2 or (a1 != a1 and a2 != a2)
 

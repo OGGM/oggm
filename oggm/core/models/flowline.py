@@ -28,7 +28,7 @@ import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR, TWO_THIRDS
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS
 from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
@@ -526,7 +526,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -549,7 +549,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -663,7 +663,7 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -697,7 +697,7 @@ class FluxBasedModel(FlowlineModel):
             e = np.zeros(nx)
             self._stags.append((a, b, c, d, e))
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -811,7 +811,7 @@ class KarthausModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -837,7 +837,7 @@ class KarthausModel(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -895,7 +895,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
        The equation references in the comments refer to the paper for clarity
     """
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None, fd=None,
-                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH,
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=True):
 
         """ Instanciate.
@@ -932,7 +932,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         
         return val_phi
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
