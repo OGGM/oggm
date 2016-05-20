@@ -985,7 +985,7 @@ def _get_cru_file_unlocked(var=None):
     # Be sure the user gave a sensible path to the climate dir
     cru_dir = cfg.PATHS['cru_dir']
     if not os.path.exists(cru_dir):
-        raise ValueError('The CRU data directory does not exist!')
+        raise ValueError('The CRU data directory({}) does not exist!'.format(cru_dir))
 
     # Be sure input makes sense
     if var not in ['tmp', 'pre']:
