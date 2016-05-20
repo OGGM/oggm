@@ -24,9 +24,12 @@ mppool = None
 download_lock = mp.Lock()
 
 
-def _init_pool_globals(_dl_lock):
+def _init_pool_globals(_dl_lock, _cfg_contents):
     global download_lock
     download_lock = _dl_lock
+
+    for v, c in _cfg_contents:
+        setattr(cfg, v, c)
 
 
 def _init_pool():
@@ -34,7 +37,19 @@ def _init_pool():
 
     global mppool
     if cfg.PARAMS['use_multiprocessing']:
-        mppool = mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock,))
+        cfg_variables = [
+            'IS_INITIALIZED',
+            'CONTINUE_ON_ERROR',
+            'PARAMS',
+            'PATHS',
+            'BASENAMES'
+        ]
+
+        cfg_contents = []
+        for v in cfg_variables:
+            cfg_contents.append((v, getattr(cfg, v)))
+
+        mppool = mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
 
 
 def execute_entity_task(task, gdirs):
