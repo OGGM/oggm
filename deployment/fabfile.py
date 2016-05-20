@@ -119,8 +119,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-6177f712' #eu Ubuntu 14.04 LTS
-def_ami['us-east-1'] = 'ami-2b594f41' #us Ubuntu 14.04 LTS
+def_ami['eu-west-1'] = 'ami-7a138709' #eu Ubuntu 16.04 LTS
+def_ami['us-east-1'] = 'ami-13be557e' #us Ubuntu 16.04 LTS
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
@@ -241,7 +241,7 @@ def list_ubuntu_amis(regions=def_regions):
     for region in regions:
         print("Region:", region)
         cloud = boto.ec2.connect_to_region(region,profile_name=ec2Profile)
-        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-*'})
+        imgs = cloud.get_all_images(owners=['099720109477'], filters={'architecture': 'x86_64', 'name': 'ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*'})
         for img in sorted(imgs, key=lambda v: v.name):
             print(img.id,':',img.name)
         print()
@@ -539,7 +539,7 @@ def install_node_software(nn=''):
     install_node_apt('', inst)
     install_node_pip('', inst)
 
-    run('sudo shutdown -r now')
+    run('sudo shutdown -r 1')
 
 
 @task
@@ -561,9 +561,9 @@ def install_node_pip(nn='', inst=None):
     pip install scipy &&
     pip install pandas shapely cython &&
     pip install matplotlib &&
-    pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
+    pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
-    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray nose &&
+    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray nose progressbar2 &&
     pip install git+https://github.com/fmaussion/motionless.git &&
     pip install git+https://github.com/fmaussion/salem.git &&
     pip install git+https://github.com/fmaussion/cleo.git &&
@@ -583,9 +583,10 @@ def install_node_apt(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
-    sudo apt-get update &&
+    export DEBIAN_FRONTEND=noninteractive &&
+    sudo apt-get -y update &&
     sudo apt-get -y dist-upgrade &&
-    sudo apt-get install -y build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python-netcdf tk-dev python3-tk python3-dev ttf-bitstream-vera python-pip git awscli virtualenvwrapper
+    sudo apt-get -y install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python3-netcdf4 tk-dev python3-tk python3-dev python3-numpy-dev ttf-bitstream-vera python3-pip git awscli virtualenvwrapper
     """, pty=False)
 
     copy_files = ['~/.aws/credentials', '~/.aws/config', '~/.screenrc', '~/.gitconfig']
