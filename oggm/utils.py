@@ -460,6 +460,7 @@ def mkdir(path, reset=False):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
 
@@ -989,8 +990,14 @@ def _get_cru_file_unlocked(var=None):
     path to the CRU file
     """
 
-    # Be sure the user gave a sensible path to the climate dir
     cru_dir = cfg.PATHS['cru_dir']
+
+    # Handle ~ special case
+    if cru_dir == '~':
+        cru_dir = os.path.join(cfg.PATHS['working_dir'], 'cru')
+        mkdir(cru_dir)
+
+    # Be sure the user gave a sensible path to the climate dir
     if not os.path.exists(cru_dir):
         raise ValueError('The CRU data directory({}) does not exist!'.format(cru_dir))
 
