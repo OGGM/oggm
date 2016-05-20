@@ -44,6 +44,7 @@ from rasterio.tools.merge import merge as merge_tool
 
 # Locals
 import oggm.cfg as cfg
+import oggm.workflow.download_lock as download_lock
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
@@ -95,6 +96,10 @@ def empty_cache():  # pragma: no cover
 
 
 def _download_oggm_files():
+    with download_lock:
+        return _download_oggm_files_unlocked()
+
+def _download_oggm_files_unlocked():
     """Checks if the demo data is already on the cache and downloads it."""
 
     master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
@@ -160,6 +165,11 @@ def _download_oggm_files():
 
 
 def _download_srtm_file(zone):
+    with download_lock:
+        return _download_srtm_file_unlocked(zone)
+
+
+def _download_srtm_file_unlocked(zone):
     """Checks if the srtm data is in the directory and if not, download it.
     """
 
@@ -204,6 +214,11 @@ def _download_srtm_file(zone):
 
 
 def _download_dem3_viewpano(zone, specialzones):
+    with download_lock:
+        return _download_dem3_viewpano_unlocked(zone, specialzones)
+
+
+def _download_dem3_viewpano_unlocked(zone, specialzones):
     """Checks if the srtm data is in the directory and if not, download it.
     """
 
@@ -292,6 +307,11 @@ def _download_dem3_viewpano(zone, specialzones):
 
 
 def _download_aster_file(zone, unit):
+    with download_lock:
+        return _download_aster_file_unlocked(zone, unit)
+
+
+def _download_aster_file_unlocked(zone, unit):
     """Checks if the aster data is in the directory and if not, download it.
 
     You need AWS cli and AWS credentials for this. Quoting Timo:
@@ -327,6 +347,11 @@ def _download_aster_file(zone, unit):
 
 
 def _download_alternate_topo_file(fname):
+    with download_lock:
+        return _download_alternate_topo_file_unlocked(fname)
+
+
+def _download_alternate_topo_file_unlocked(fname):
     """Checks if the special topo data is in the directory and if not,
     download it from AWS.
 
@@ -384,6 +409,11 @@ def _get_centerline_lonlat(gdir):
 
 
 def aws_file_download(aws_path, local_path, reset=False):
+    with download_lock:
+        return _aws_file_download_unlocked(aws_path, local_path, reset)
+
+
+def _aws_file_download_unlocked(aws_path, local_path, reset=False):
     """Download a file from the AWS drive s3://astgtmv2/
 
     **Note:** you need AWS credentials for this to work.
@@ -883,6 +913,11 @@ def get_glathida_file():
 
 
 def get_rgi_dir():
+    with download_lock:
+        return _get_rgi_dir_unlocked()
+
+
+def _get_rgi_dir_unlocked():
     """
     Returns a path to the RGI directory.
 
@@ -925,6 +960,11 @@ def get_rgi_dir():
 
 
 def get_cru_file(var=None):
+    with download_lock:
+        return _get_cru_file_unlocked(var)
+
+
+def _get_cru_file_unlocked(var=None):
     """
     Returns a path to the desired CRU TS file.
 
