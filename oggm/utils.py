@@ -98,9 +98,16 @@ def empty_cache():  # pragma: no cover
     os.makedirs(cfg.CACHE_DIR)
 
 
+def expand_path(p):
+    """Helper function for os.path.expanduser and os.path.expandvars"""
+
+    return os.path.expandvars(os.path.expanduser(p))
+
+
 def _download_oggm_files():
     with download_lock:
         return _download_oggm_files_unlocked()
+
 
 def _download_oggm_files_unlocked():
     """Checks if the demo data is already on the cache and downloads it."""
