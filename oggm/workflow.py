@@ -20,13 +20,21 @@ log = logging.getLogger(__name__)
 # Multiprocessing pool
 mppool = None
 
+# File Download lock
+download_lock = mp.Lock()
+
+
+def _init_pool_globals(_dl_lock):
+    global download_lock
+    download_lock = _dl_lock
+
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
 
     global mppool
     if cfg.PARAMS['use_multiprocessing']:
-        mppool = mp.Pool(cfg.PARAMS['mp_processes'])
+        mppool = mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock,))
 
 
 def execute_entity_task(task, gdirs):
