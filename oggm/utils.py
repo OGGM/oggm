@@ -41,10 +41,10 @@ from salem import wgs84
 import xarray as xr
 import rasterio
 from rasterio.tools.merge import merge as merge_tool
+import multiprocessing as mp
 
 # Locals
 import oggm.cfg as cfg
-import oggm.workflow.download_lock as download_lock
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
@@ -54,6 +54,9 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
+
+# File Download lock
+download_lock = mp.Lock()
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):

@@ -12,6 +12,7 @@ import multiprocessing as mp
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
+from oggm.utils import download_lock
 
 
 # Module logger
@@ -19,9 +20,6 @@ log = logging.getLogger(__name__)
 
 # Multiprocessing pool
 mppool = None
-
-# File Download lock
-download_lock = mp.Lock()
 
 
 def _init_pool_globals(_dl_lock, _cfg_contents):
