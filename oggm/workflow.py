@@ -18,9 +18,6 @@ from oggm.utils import download_lock
 # Module logger
 log = logging.getLogger(__name__)
 
-# Multiprocessing pool
-mppool = None
-
 
 def _init_pool_globals(_dl_lock, _cfg_contents):
     global download_lock
@@ -33,21 +30,19 @@ def _init_pool_globals(_dl_lock, _cfg_contents):
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
 
-    global mppool
-    if cfg.PARAMS['use_multiprocessing']:
-        cfg_variables = [
-            'IS_INITIALIZED',
-            'CONTINUE_ON_ERROR',
-            'PARAMS',
-            'PATHS',
-            'BASENAMES'
-        ]
+    cfg_variables = [
+        'IS_INITIALIZED',
+        'CONTINUE_ON_ERROR',
+        'PARAMS',
+        'PATHS',
+        'BASENAMES'
+    ]
 
-        cfg_contents = []
-        for v in cfg_variables:
-            cfg_contents.append((v, getattr(cfg, v)))
+    cfg_contents = []
+    for v in cfg_variables:
+        cfg_contents.append((v, getattr(cfg, v)))
 
-        mppool = mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
+    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
 
 
 def execute_entity_task(task, gdirs):
@@ -64,10 +59,8 @@ def execute_entity_task(task, gdirs):
     """
 
     if cfg.PARAMS['use_multiprocessing']:
-        if mppool is None:
-            _init_pool()
-        poolargs = gdirs
-        mppool.map(task, poolargs, chunksize=1)
+        mppool = _init_pool()
+        mppool.map(task, gdirs, chunksize=1)
     else:
         for gdir in gdirs:
             task(gdir)
