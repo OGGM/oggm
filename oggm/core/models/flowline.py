@@ -120,7 +120,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
         ds.coords['c'] = [0, 1]
         ds['coords'] = (['x', 'c'], np.asarray(self.line.coords))
         ds['surface_h'] = (['year', 'x'],  np.atleast_2d(h).reshape(1, nx))
-        ds['bed_h'] = (['year', 'x'],  np.atleast_2d(self.bed_h).reshape(1, nx))
+        ds['bed_h'] = (['x'],  self.bed_h)
         ds.attrs['class'] = type(self).__name__
         ds.attrs['map_dx'] = self.map_dx
         ds.attrs['dx'] = self.dx
@@ -1049,7 +1049,7 @@ def flowline_from_dataset(ds):
     line = shpg.LineString(ds['coords'].values)
     args = dict(line=line, dx=ds.dx, map_dx=ds.map_dx,
                 surface_h=ds['surface_h'].values[0, :],
-                bed_h=ds['bed_h'].values[0, :])
+                bed_h=ds['bed_h'].values)
 
     have = {'c', 'x', 'surface_h', 'coords', 'bed_h', 'year', 'z', 'p', 'n'}
     missing_vars = set(ds.variables.keys()).difference(have)
