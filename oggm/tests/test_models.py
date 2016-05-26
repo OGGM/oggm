@@ -208,6 +208,7 @@ def dummy_width_bed_tributary():
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
 
+
 class TestInitFlowline(unittest.TestCase):
 
     def setUp(self):
@@ -291,7 +292,7 @@ class TestInitFlowline(unittest.TestCase):
         grads = hgts * 0
         for yr, mb in mbdf.iterrows():
             refmb.append(mb['ANNUAL_BALANCE'])
-            mbh = mb_mod.get_mb(hgts, yr) * SEC_IN_YEAR * cfg.RHO
+            mbh = mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR * cfg.RHO
             grads += mbh
             tot_mb.append(np.average(mbh, weights=widths))
         grads /= len(tot_mb)
@@ -605,6 +606,7 @@ class TestIO(unittest.TestCase):
             os.makedirs(self.test_dir)
 
         self.gdir = init_hef(border=DOM_BORDER)
+        self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
     def test_flowline_to_dataset(self):
 
@@ -641,6 +643,74 @@ class TestIO(unittest.TestCase):
         # They should be sorted
         to_test = [fl.order for fl in fls_]
         assert np.array_equal(np.sort(to_test), to_test)
+
+        # They should be able to start a run
+        mb = ConstantBalanceModel(2600.)
+        model = flowline.FluxBasedModel(fls_, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        model.run_until(100)
+
+    def test_run(self):
+        mb = ConstantBalanceModel(2600.)
+
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        ds = model.run_until_and_store(500)[0]
+
+
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+
+        years = utils.monthly_timeseries(0, 500)
+        vol_ref = []
+        a_ref = []
+        l_ref = []
+        for yr in years:
+            model.run_until(yr)
+            vol_ref.append(model.volume_m3)
+            a_ref.append(model.area_m2)
+            l_ref.append(model.length_m)
+
+        np.testing.assert_allclose(ds.ts_section.isel(time=-1),
+                                   model.fls[0].section)
+
+        fls = dummy_constant_bed()
+        path = os.path.join(self.test_dir, 'ts_ideal.nc')
+        if os.path.isfile(path):
+            os.remove(path)
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        _ = model.run_until_and_store(500, path=path)
+
+        fmodel = flowline.FileModel(path)
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this is sloooooow so we test a little bit only
+                fmodel.run_until(yr)
+                np.testing.assert_allclose(model.fls[0].section,
+                                           fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                           fmodel.fls[0].widths_m)
+
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.length_m_ts().iloc[1:], l_ref[1:],
+                                   atol=101)
+
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                                        glen_a=self.glen_a)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                   fmodel.fls[0].section)
 
     def test_hef(self):
 
@@ -770,6 +840,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
 
+    @is_slow
     def test_constant_bed_cliff(self):
         """ a test case for mass conservation in the flowline models
             the idea is to introduce a cliff in the sloping bed and see
@@ -836,7 +907,7 @@ class TestIdealisedCases(unittest.TestCase):
         # "to do" in the code.
 
         # Unit-testing perspective:
-        # verify that indeed the models are wrong of more than 50%
+        # "verify" that indeed the models are wrong of more than 50%
         self.assertTrue(volume[1][-1] > volume[2][-1] * 1.5)
         # Karthaus is even worse
         self.assertTrue(volume[0][-1] > volume[1][-1])
@@ -1575,8 +1646,25 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_random(self):
 
+        np.random.seed(1)
+
         flowline.init_present_time_glacier(self.gdir)
         flowline.random_glacier_evolution(self.gdir, nyears=200)
+        path = self.gdir.get_filepath('past_model')
+
+        with flowline.FileModel(path) as model:
+            vol = model.volume_km3_ts()
+            len = model.length_m_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
+            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+
+            if do_plot:
+                vol.plot()
+                plt.title('Volume')
+                plt.figure()
+                len.plot()
+                plt.title('Length')
+                plt.show()
 
     @is_slow
     def test_find_t0(self):
@@ -1591,23 +1679,22 @@ class TestHEF(unittest.TestCase):
 
         vol_ref = flowline.FlowlineModel(glacier).volume_km3
 
-        init_bias = 80.  # 100 so that "went too far" comes once on travis
+        init_bias = 94.  # so that "went too far" comes once on travis
         rtol = 0.005
 
         flowline.find_inital_glacier(gdir, y0=df.index[0], init_bias=init_bias,
-                                     rtol=rtol, write_steps=False)
+                                     rtol=rtol, write_steps=True)
 
-        past_model = gdir.read_pickle('past_model')
+        past_model = flowline.FileModel(gdir.get_filepath('past_model'))
 
         vol_start = past_model.volume_km3
         bef_fls = copy.deepcopy(past_model.fls)
 
-        mylen = []
-        for y in df.index:
-            past_model.run_until(y)
-            mylen.append(past_model.fls[-1].length_m)
-        df['oggm'] = mylen
+        mylen = past_model.length_m_ts()
+        df['oggm'] = mylen[12::12].values
         df = df-df.iloc[-1]
+
+        past_model.run_until(2003)
 
         vol_end = past_model.volume_km3
         np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)

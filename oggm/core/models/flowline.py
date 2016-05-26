@@ -80,14 +80,9 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 
     @property
     def length_m(self):
-        # TODO: cliffs imply a cut in the middle of the glacier
-        pok = np.where(self.thick == 0.)[0]
-        if len(pok) == self.nx:
-            return 0.
-        else:
-            # We define the length a bit differently: but more robust
-            pok = np.where(self.thick != 0.)[0]
-            return len(pok) * self.dx_meter
+        # We define the length a bit differently: but more robust
+        pok = np.where(self.thick > 0.)[0]
+        return len(pok) * self.dx_meter
 
     @property
     def volume_m3(self):
@@ -109,17 +104,16 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
         """Add bed specific parameters."""
         raise NotImplementedError()
 
-    def to_dataset(self, year=0):
+    def to_dataset(self):
         """Makes an xarray Dataset out of the flowline."""
 
         h = self.surface_h
         nx = len(h)
         ds = xr.Dataset()
-        ds.coords['year'] = [year]
         ds.coords['x'] = np.arange(nx)
         ds.coords['c'] = [0, 1]
         ds['coords'] = (['x', 'c'], np.asarray(self.line.coords))
-        ds['surface_h'] = (['year', 'x'],  np.atleast_2d(h).reshape(1, nx))
+        ds['surface_h'] = (['x'],  h)
         ds['bed_h'] = (['x'],  self.bed_h)
         ds.attrs['class'] = type(self).__name__
         ds.attrs['map_dx'] = self.map_dx
@@ -470,7 +464,7 @@ class FlowlineModel(object):
         ds['flows_to_id'] = ('fls', flows_to_id)
         ds.to_netcdf(path)
         for i, fl in enumerate(self.fls):
-            ds = fl.to_dataset(year=self.yr)
+            ds = fl.to_dataset()
             ds.to_netcdf(path, 'a', group='fl_{}'.format(i))
 
     def check_domain_end(self):
@@ -487,20 +481,60 @@ class FlowlineModel(object):
         while self.t < t:
             self.step(dt=t-self.t)
 
-        # Check for domains
-        if not np.isclose(self.fls[-1].thick[-1], 0):
+        # Check for domain bounds
+        if self.fls[-1].thick[-1] > 10:
             raise RuntimeError('Glacier exceeds domain boundaries.')
 
-    def run_until_and_output(self, y1):
-        """Runs the model and writes intermediate steps in a dict."""
+    def run_until_and_store(self, y1, path=None):
+        """Runs the model and returns intermediate steps in a dataset.
 
-        years = np.arange(self.yr, y1+1)
-        out = OrderedDict()
-        for yr in years:
-            self.run_until(yr)
-            out[yr] = copy.deepcopy(self)
+        You can store the whole in a netcdf file, too.
+        """
 
-        return out
+        # time
+        time = utils.monthly_timeseries(self.yr, y1)
+        yr, mo = utils.year_to_date(time)
+
+        # init output
+        sects = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
+        widths = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
+        if path is not None:
+            self.to_netcdf(path)
+
+        # Run
+        for i, y in enumerate(time):
+            self.run_until(y)
+            for s, w, fl in zip(sects, widths, self.fls):
+                s[i, :] = fl.section
+                w[i, :] = fl.widths_m
+
+        # to datasets
+        dss = []
+        for (s, w) in zip(sects, widths):
+            ds = xr.Dataset()
+            x = np.arange(s.shape[1])
+            ds.coords['time'] = time
+            ds.coords['x'] = x
+            varcoords = {'time': time, 'x': x,
+                         'year': ('time', yr),
+                         'month': ('time', mo),
+                         }
+            ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),
+                                            coords=varcoords)
+            ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
+                                            coords=varcoords)
+            dss.append(ds)
+
+        # write output?
+        if path is not None:
+            encode = {'ts_section': {'zlib': True, 'complevel': 5},
+                      'ts_width_m': {'zlib': True, 'complevel': 5},
+                      }
+            for i, ds in enumerate(dss):
+                ds.to_netcdf(path, 'a', group='fl_{}'.format(i),
+                             encoding=encode)
+
+        return dss
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
@@ -1042,16 +1076,124 @@ class MUSCLSuperBeeModel(FlowlineModel):
         self.t += dt
 
 
+class FileModel(object):
+    """Duck FlowlineModel which actually reads the stuff out of a nc file."""
+
+    def __init__(self, path):
+        """ Instanciate.
+
+        Parameters
+        ----------
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+
+        self.fls = glacier_from_netcdf(path)
+        dss = []
+        for flid, fl in enumerate(self.fls):
+            ds = xr.open_dataset(path, group='fl_{}'.format(flid))
+            ds.load()
+            dss.append(ds)
+        self.dss = dss
+        self.reset_y0()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for ds in self.dss:
+            ds.close()
+
+    def reset_y0(self, y0=None):
+        """Reset the initial model time"""
+
+        if y0 is None:
+            y0 = self.dss[0].time[0]
+        self.y0 = y0
+        self.yr = y0
+
+    @property
+    def area_m2(self):
+        return np.sum([f.area_m2 for f in self.fls])
+
+    @property
+    def volume_m3(self):
+        return np.sum([f.volume_m3 for f in self.fls])
+
+    @property
+    def volume_km3(self):
+        return self.volume_m3 * 1e-9
+
+    @property
+    def area_km2(self):
+        return self.area_m2 * 1e-6
+
+    @property
+    def length_m(self):
+        return self.fls[-1].length_m
+
+    def run_until(self, year=None, month=None):
+
+        if month is not None:
+            for fl, ds in zip(self.fls, self.dss):
+                sel = ds.ts_section.isel(time=(ds.year==year) &
+                                              (ds.month==month))
+                fl.section = sel.values
+        else:
+            for fl, ds in zip(self.fls, self.dss):
+                sel = ds.ts_section.sel(time=year)
+                fl.section = sel.values
+        self.yr = sel.time.values
+
+    def area_m2_ts(self):
+
+        sel = 0
+        for fl, ds in zip(self.fls, self.dss):
+            widths = ds.ts_width_m.copy()
+            widths[:] = np.where(ds.ts_section > 0., ds.ts_width_m, 0.)
+            sel += widths.sum(dim='x') * fl.dx_meter
+        return sel.to_series()
+
+    def area_km2_ts(self):
+
+        return self.area_m2_ts() * 1e-6
+
+    def volume_m3_ts(self):
+
+        sel = 0
+        for fl, ds in zip(self.fls, self.dss):
+            sel += ds.ts_section.sum(dim='x') * fl.dx_meter
+        return sel.to_series()
+
+    def volume_km3_ts(self):
+
+        return self.volume_m3_ts() * 1e-9
+
+    def length_m_ts(self):
+
+        fl = self.fls[-1]
+        ds = self.dss[-1]
+        sel = ds.ts_section.copy()
+        sel[:] = ds.ts_section != 0.
+        sel = sel.sum(dim='x') * fl.dx_meter
+        sel = sel.to_series().rolling(12).min()
+        sel.iloc[0:12] = sel.iloc[12]
+        return sel
+
+
 def flowline_from_dataset(ds):
     """Instanciates a flowline from an xarray Dataset."""
 
     cl = globals()[ds.attrs['class']]
     line = shpg.LineString(ds['coords'].values)
     args = dict(line=line, dx=ds.dx, map_dx=ds.map_dx,
-                surface_h=ds['surface_h'].values[0, :],
+                surface_h=ds['surface_h'].values,
                 bed_h=ds['bed_h'].values)
 
-    have = {'c', 'x', 'surface_h', 'coords', 'bed_h', 'year', 'z', 'p', 'n'}
+    have = {'c', 'x', 'surface_h', 'coords', 'bed_h', 'z', 'p', 'n',
+            'time', 'month', 'year', 'ts_width_m', 'ts_section'}
     missing_vars = set(ds.variables.keys()).difference(have)
     for k in missing_vars:
         data = ds[k].values
@@ -1064,16 +1206,15 @@ def flowline_from_dataset(ds):
 def glacier_from_netcdf(path):
     """Instanciates a list of flowlines from an xarray Dataset."""
 
-    ds = xr.open_dataset(path)
+    with xr.open_dataset(path) as ds:
+        fls = []
+        for flid in ds['flowlines'].values:
+            with xr.open_dataset(path, group='fl_{}'.format(flid)) as _ds:
+                fls.append(flowline_from_dataset(_ds))
 
-    fls = []
-    for flid in ds['flowlines'].values:
-        _ds = xr.open_dataset(path, group='fl_{}'.format(flid))
-        fls.append(flowline_from_dataset(_ds))
-
-    for i, fid in enumerate(ds['flows_to_id'].values):
-        if fid != -1:
-            fls[i].set_flows_to(fls[fid])
+        for i, fid in enumerate(ds['flows_to_id'].values):
+            if fid != -1:
+                fls[i].set_flows_to(fls[fid])
 
     # Adds the line level
     for fl in fls:
@@ -1377,12 +1518,13 @@ def random_glacier_evolution(gdir, nyears=1000):
 
     y0 = 1800
     y1 = y0 + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir)
+    mb = mbmods.RandomMassBalanceModel(gdir, use_tstar=True)
     fls = gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
 
     # run
-    model.run_until(y1)
+    path = gdir.get_filepath('past_model', delete=True)
+    model.run_until_and_store(y1, path=path)
 
 
 @entity_task(log, writes=['past_model'])
@@ -1433,7 +1575,8 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
 
     # Write the data
     gdir.write_pickle(params, 'find_initial_glacier_params')
-    gdir.write_pickle(past_model, 'past_model')
+    path = gdir.get_filepath('past_model', delete=True)
     if write_steps:
-        past_models = past_model.run_until_and_output(y1)
-        gdir.write_pickle(past_models, 'past_models')
+        _ = past_model.run_until_and_store(y1, path=path)
+    else:
+        past_model.to_netcdf(path)

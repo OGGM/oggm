@@ -180,10 +180,7 @@ BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
 
 _doc = ''
-BASENAMES['past_model'] = ('past_model.pkl', _doc)
-
-_doc = ''
-BASENAMES['past_models'] = ('past_models.pkl', _doc)
+BASENAMES['past_model'] = ('past_model.nc', _doc)
 
 
 def initialize(file=None):

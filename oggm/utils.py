@@ -614,6 +614,21 @@ def date_to_year(y, m):
     return y + BEGINSEC_IN_MONTHS[np.asarray(m) - 1] / SEC_IN_YEAR
 
 
+def monthly_timeseries(y0, y1=None, ny=None):
+    """Creates a monthly timeseries in units of floating years.
+    """
+
+    if y1 is not None:
+        years = np.arange(np.floor(y0), np.floor(y1)+1)
+    elif ny is not None:
+        years = np.arange(np.floor(y0), np.floor(y0)+ny)
+    else:
+        raise ValueError("Need at least two positional arguments.")
+    months = np.tile(np.arange(12)+1, len(years))
+    years = years.repeat(12)
+    return date_to_year(years, months)
+
+
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
                         prcp_scaling_factor, use_grad):
@@ -1024,13 +1039,8 @@ def _get_cru_file_unlocked(var=None):
 
     cru_dir = cfg.PATHS['cru_dir']
 
-    # Handle ~ special case
-    if cru_dir == '~':
-        cru_dir = os.path.join(cfg.PATHS['working_dir'], 'cru')
-        mkdir(cru_dir)
-
     # Be sure the user gave a sensible path to the climate dir
-    if not os.path.exists(cru_dir):
+    if cru_dir == '~' or not os.path.exists(cru_dir):
         raise ValueError('The CRU data directory({}) does not exist!'.format(cru_dir))
 
     # Be sure input makes sense
@@ -1261,13 +1271,13 @@ def glacier_characteristics(gdirs):
 
         # Climate
         if gdir.has_file('climate_monthly', div_id=0):
-            cds = xr.open_dataset(gdir.get_filepath('climate_monthly'))
-            d['clim_alt'] = cds.ref_hgt
-            t = cds.temp.mean(dim='time').values
-            t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
-                cfg.PARAMS['temp_default_gradient']
-            d['clim_temp_avgh'] = t
-            d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+            with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cds:
+                d['clim_alt'] = cds.ref_hgt
+                t = cds.temp.mean(dim='time').values
+                t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
+                    cfg.PARAMS['temp_default_gradient']
+                d['clim_temp_avgh'] = t
+                d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
 
         # Inversion
         if gdir.has_file('inversion_output', div_id=1):
@@ -1526,7 +1536,7 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids."""
         return range(1, self.n_divides+1)
 
-    def get_filepath(self, filename, div_id=0):
+    def get_filepath(self, filename, div_id=0, delete=False):
         """Absolute path to a specific file.
 
         Parameters
@@ -1535,6 +1545,8 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         div_id: int
             the divide for which you want to get the file path
+        delete: bool
+            delete the file if exists
 
         Returns
         -------
@@ -1545,8 +1557,10 @@ class GlacierDirectory(object):
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
         dir = self.divide_dirs[div_id]
-
-        return os.path.join(dir, cfg.BASENAMES[filename])
+        out = os.path.join(dir, cfg.BASENAMES[filename])
+        if delete and os.path.isfile(out):
+            os.remove(out)
+        return out
 
     def has_file(self, filename, div_id=0):
 

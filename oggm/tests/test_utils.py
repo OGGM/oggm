@@ -75,11 +75,23 @@ class TestTime(unittest.TestCase):
         np.testing.assert_array_equal(m, [2, 3])
 
         time = pd.date_range('1/1/1800', periods=300*12, freq='MS')
-
         yr = utils.date_to_year(time.year, time.month)
         y, m = utils.year_to_date(yr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
+
+        myr = utils.monthly_timeseries(1800, 2099)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+        myr = utils.monthly_timeseries(1800, ny=300)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+        with self.assertRaises(ValueError):
+            utils.monthly_timeseries(1)
 
 
 class TestDataFiles(unittest.TestCase):
