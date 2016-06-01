@@ -1416,9 +1416,7 @@ class GlacierDirectory(object):
             self.rgi_region = rgi_entity.O1REGION
             self.name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
-            # this is for the tests which are still in V4
-            self.glacier_type = 'Glacier'
-            self.terminus_type = 'Land-terminating'
+            gtype = rgi_entity.GLACTYPE
         except AttributeError:
             # Should be V5
             self.rgi_id = rgi_entity.RGIId
@@ -1429,26 +1427,25 @@ class GlacierDirectory(object):
             self.rgi_region = rgi_entity.O1Region
             self.name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
+            gtype = rgi_entity.GlacType
 
-            # Read glacier attrs
-            gt = rgi_entity.GlacType
-            keys = {'0': 'Glacier',
-                    '1': 'Ice cap',
-                    '2': 'Perennial snowfield',
-                    '3': 'Seasonal snowfield',
-                    '9': 'Not assigned',
-                    }
-
-            self.glacier_type = keys[gt[0]]
-            keys = {'0': 'Land-terminating',
-                    '1': 'Marine-terminating',
-                    '2': 'Lake-terminating',
-                    '3': 'Dry calving',
-                    '4': 'Regenerated',
-                    '5': 'Shelf-terminating',
-                    '9': 'Not assigned',
-                    }
-            self.terminus_type = keys[gt[1]]
+        # Read glacier attrs
+        keys = {'0': 'Glacier',
+                '1': 'Ice cap',
+                '2': 'Perennial snowfield',
+                '3': 'Seasonal snowfield',
+                '9': 'Not assigned',
+                }
+        self.glacier_type = keys[gtype[0]]
+        keys = {'0': 'Land-terminating',
+                '1': 'Marine-terminating',
+                '2': 'Lake-terminating',
+                '3': 'Dry calving',
+                '4': 'Regenerated',
+                '5': 'Shelf-terminating',
+                '9': 'Not assigned',
+                }
+        self.terminus_type = keys[gtype[1]]
 
         # convert the date
         try:
