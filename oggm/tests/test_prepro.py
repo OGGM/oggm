@@ -222,6 +222,7 @@ class TestCenterlines(unittest.TestCase):
             entity.O1REGION = 0
             entity.BGNDATE = 0
             entity.NAME = 'Baltoro'
+            entity.GLACTYPE = '0000'
             gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
