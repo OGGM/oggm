@@ -216,12 +216,42 @@ def distribute_cru_style(gdir):
     # This is guaranteed to work because I prepared the file (I hope)
     ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
 
-    # get monthly gradient ...
+    # get climatology data
     loc_hgt = ncclim.get_vardata('elev')
     loc_tmp = ncclim.get_vardata('temp')
     loc_pre = ncclim.get_vardata('prcp')
+
+    # see if the center is ok
+    if not np.isfinite(loc_hgt[1, 1]):
+        # take another candidate where finite
+        isok = np.isfinite(loc_hgt)
+
+        # wait: some areas are entirely NaNs, make the subset larger
+        _margin = 1
+        while not np.any(isok):
+            _margin += 1
+            ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=_margin)
+            loc_hgt = ncclim.get_vardata('elev')
+            isok = np.isfinite(loc_hgt)
+        if _margin > 1:
+            log.debug('%s: I had to look up for far climate pixels: %s',
+                      gdir.rgi_id, _margin)
+
+        # Take the first candidate (doesn't matter which)
+        lon, lat = ncclim.grid.ll_coordinates
+        lon = lon[isok][0]
+        lat = lat[isok][0]
+        # Resubset
+        ncclim.set_subset()
+        ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+        loc_hgt = ncclim.get_vardata('elev')
+        loc_tmp = ncclim.get_vardata('temp')
+        loc_pre = ncclim.get_vardata('prcp')
+
+    assert np.isfinite(loc_hgt[1, 1])
     isok = np.isfinite(loc_hgt)
     hgt_f = loc_hgt[isok].flatten()
+    assert len(hgt_f) > 0.
     ts_grad = np.zeros(12) + def_grad
     if use_grad and len(hgt_f) >= 5:
         for i in range(12):
@@ -629,7 +659,7 @@ def calving_mb(gdir):
     somthing better!
     """
 
-    if gdir.terminus_type != 'Marine-terminating':
+    if not gdir.is_tidewater:
         return 0.
 
     if 'Columbia' not in gdir.name:

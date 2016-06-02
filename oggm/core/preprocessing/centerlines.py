@@ -421,8 +421,7 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
     perc = cfg.PARAMS['terminus_search_percentile']
     deltah = cfg.PARAMS['terminus_search_altitude_range']
 
-    termtyp = ['Marine-terminating', 'Lake-terminating']
-    if (gdir.terminus_type in termtyp) and (perc > 0):
+    if gdir.is_tidewater and (perc > 0):
         # There is calving
 
         # find the lowest percentile
@@ -636,6 +635,15 @@ def compute_downstream_lines(gdir):
             break
         if min_thresold < 0:
             raise RuntimeError('Downstream line not found')
+
+    if gdir.is_tidewater:
+        # for tidewater glaciers the line can be very long and chaotic.
+        # we clip it for now
+        cl = gdir.read_pickle('centerlines', div_id=div_ids[major_id])[-1]
+        len_gl = cl.dis_on_line[-1]
+        dis = [line.project(shpg.Point(co)) for co in line.coords]
+        new_coords = np.array(line.coords)[np.nonzero(dis <= 0.5 * len_gl)]
+        line = shpg.LineString(new_coords)
 
     # Write the data
     mdiv = div_ids[major_id]

@@ -1446,6 +1446,8 @@ class GlacierDirectory(object):
                 '9': 'Not assigned',
                 }
         self.terminus_type = keys[gtype[1]]
+        self.is_tidewater = self.terminus_type in ['Marine-terminating',
+                                                   'Lake-terminating']
 
         # convert the date
         try:

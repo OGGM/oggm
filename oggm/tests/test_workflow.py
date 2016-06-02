@@ -64,7 +64,7 @@ def up_to_inversion(reset=False):
 
     # Params
     cfg.PARAMS['border'] = 70
-    cfg.PARAMS['use_inversion_params'] = True
+    cfg.PARAMS['use_optimized_inversion_params'] = True
 
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
