@@ -1365,6 +1365,8 @@ class GlacierDirectory(object):
 
     A glacier entity has one or more divides. See :ref:`glacierdir`
     for more information.
+
+    TODO: document properties
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False):
@@ -1448,6 +1450,7 @@ class GlacierDirectory(object):
         self.terminus_type = keys[gtype[1]]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
+        self.inversion_calving_rate = 0.
 
         # convert the date
         try:

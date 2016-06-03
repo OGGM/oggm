@@ -61,17 +61,17 @@ cfg.PARAMS['bed_shape'] = 'parabolic'
 # Some globals for more control on what to run
 RUN_GIS_PREPRO = False  # run GIS preprocessing tasks (before climate)
 RUN_CLIMATE_PREPRO = False  # run climate preprocessing tasks
-RUN_INVERSION = True  # run bed inversion
+RUN_INVERSION = False  # run bed inversion
 RUN_DYNAMICS = False  # run dybnamics
 
 # Read RGI file
 rgidf = salem.utils.read_shapefile(RGI_FILE, cached=True)
 
 # Select some glaciers
-
 # Get ref glaciers (all glaciers with MB)
 flink, mbdatadir = utils.get_wgms_files()
 ids_with_mb = pd.read_csv(flink)['RGI_ID'].values
+# get some tw-glaciers that we want to test inside alaska region
 keep_ids = ['RGI50-01.20791', 'RGI50-01.00037', 'RGI50-01.10402']
 keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
 rgidf = rgidf.iloc[keep_indexes]
@@ -116,6 +116,54 @@ if RUN_INVERSION:
     tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
 
+
+# Reinit climate and inversion without calving to be sure
+tasks.distribute_t_stars(gdirs)
+execute_entity_task(tasks.prepare_for_inversion, gdirs)
+execute_entity_task(tasks.volume_inversion, gdirs)
+
+# CAREFUL: the invert_parabolic_bed() task is making tests on the shape of the
+# bed, and if the bed shape is not realistic, it will change it to more
+# realistic values. This might be undersirable for tidewater glaciers, and
+# it is possible to add special conditions for tidewater glaciers in the
+# function. For example: if gdir.is_tidewater: etc.
+
+gdir = gdirs[-1]
+
+# Test that frontal H is close to zero
+cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
+width = cl['width'][-1]
+thick = cl['volume'][-1] / cl['dx'] / width
+print('Without calving the width is {} m and the thick is {} m'.format(width, thick))
+
+# Try many C's (they should make sense in comparison to the size of the glacier)
+c_candidates = np.linspace(0, 0.1, 10)
+for c in c_candidates:
+
+    # First guess calving
+    gdir.inversion_calving_rate = c
+
+    # Recompute mu
+    tasks.distribute_t_stars([gdir])
+
+    # Inversion
+    tasks.prepare_for_inversion(gdir)
+    tasks.volume_inversion(gdir)
+
+    # We read the output, last pixel of the inversion
+    cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
+    width = cl['width'][-1]
+    thick = cl['volume'][-1] / cl['dx'] / width
+    print('With calving of {} km3 a-1 the width is {} m  and the thick is {} m'.format(gdir.inversion_calving_rate, width, thick))
+
+    # Now compute the calving rate that would come from H and width
+    # Compare to the old calving and see if it has to be reduced or increased
+
+
+# And in the very end, alle these steps should be automatized with
+# an optimisation function
+
+
 # if RUN_DYNAMICS:
 #     # Random dynamics
 #     execute_entity_task(tasks.init_present_time_glacier, gdirs)
@@ -123,6 +171,7 @@ if RUN_INVERSION:
 
 # Plots (if you want)
 PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+PLOTS_DIR = ''
 if PLOTS_DIR == '':
     exit()
 utils.mkdir(PLOTS_DIR)

@@ -662,15 +662,9 @@ def calving_mb(gdir):
     if not gdir.is_tidewater:
         return 0.
 
-    if 'Columbia' not in gdir.name:
-        return 0.
-
-    if 'calving_rate' not in cfg.PARAMS:
-        return 0.
-
     # Ok. Just take the caving rate from cfg and change its units
-    # Original units: km3 a-1, to change to mm a-1
-    return cfg.PARAMS['calving_rate'] * 1e12 / gdir.rgi_area_m2
+    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
+    return gdir.inversion_calving_rate * 1e9 * cfg.RHO / gdir.rgi_area_m2
 
 
 @entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
@@ -704,7 +698,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
                                                                year_range=yr)
         assert len(years) == (2 * mu_hp + 1)
 
-        # mustar is taking calving into account
+        # mustar is taking calving into account (units of specific MB)
         mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
         if not np.isfinite(mustar):
             raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
@@ -742,15 +736,14 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
 
         # Check
         if div_id >= 1:
+            aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-                log.warning('%s: flux should be zero, but is: %.2f',
-                            gdir.rgi_id,
-                            fls[-1].flux[-1])
+                log.warning('%s: flux should be zero, but is: %.4f km3 ice yr-1',
+                            gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
-                msg = '{}: flux should be zero, but is: {:.2f}'.format(
-                            gdir.rgi_id,
-                            fls[-1].flux[-1])
+                msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
+                       .format(gdir.rgi_id, aflux)
                 raise RuntimeError(msg)
 
         # Overwrite
