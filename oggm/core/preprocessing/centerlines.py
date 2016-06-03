@@ -412,6 +412,38 @@ def _make_costgrid(mask, ext, z):
     return np.where(mask, cost, np.Inf)
 
 
+def _get_terminus_coord(gdir, ext_yx, zoutline):
+    """This finds the terminus coordinate of the glacier.
+
+     There is a special case for marine terminating glaciers/
+     """
+
+    perc = cfg.PARAMS['terminus_search_percentile']
+    deltah = cfg.PARAMS['terminus_search_altitude_range']
+
+    if gdir.is_tidewater and (perc > 0):
+        # There is calving
+
+        # find the lowest percentile
+        plow = np.percentile(zoutline, perc).astype(np.int64)
+
+        # the minimum altitude in the glacier
+        mini = np.min(zoutline)
+
+        # indices of where in the outline the altitude is lower than the qth
+        # percentile and lower than 100m higher, than the minimum altitude
+        ind = np.where((zoutline < plow) & (zoutline < (mini + deltah)))[0]
+
+        # We take the middle of this area
+        ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+
+    else:
+        # easy: just the minimum
+        ind_term = np.argmin(zoutline)
+
+    return np.asarray(ext_yx)[:, ind_term].astype(np.int64)
+
+
 @entity_task(log, writes=['centerlines', 'gridded_data'])
 @divide_task(log, add_0=False)
 def compute_centerlines(gdir, div_id=None):
@@ -486,7 +518,7 @@ def compute_centerlines(gdir, div_id=None):
     costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
 
     # Terminus
-    t_coord = np.asarray(ext_yx)[:, np.argmin(zoutline)].astype(np.int64)
+    t_coord = _get_terminus_coord(gdir, ext_yx, zoutline)
 
     # Compute the routes
     lines = []
@@ -524,10 +556,15 @@ def compute_centerlines(gdir, div_id=None):
 
     # Netcdf
     with netCDF4.Dataset(grids_file, 'a') as nc:
-        v = nc.createVariable('cost_grid', 'f4', ('y', 'x', ), zlib=True)
-        v.units = '-'
-        v.long_name = 'Centerlines cost grid'
-        v[:] = costgrid
+        if 'cost_grid' in nc.variables:
+            # Overwrite
+            nc.variables['cost_grid'][:] = costgrid
+        else:
+            # Create
+            v = nc.createVariable('cost_grid', 'f4', ('y', 'x', ), zlib=True)
+            v.units = '-'
+            v.long_name = 'Centerlines cost grid'
+            v[:] = costgrid
 
 
 @entity_task(log, writes=['downstream_line', 'major_divide'])
@@ -598,6 +635,15 @@ def compute_downstream_lines(gdir):
             break
         if min_thresold < 0:
             raise RuntimeError('Downstream line not found')
+
+    if gdir.is_tidewater:
+        # for tidewater glaciers the line can be very long and chaotic.
+        # we clip it for now
+        cl = gdir.read_pickle('centerlines', div_id=div_ids[major_id])[-1]
+        len_gl = cl.dis_on_line[-1]
+        dis = [line.project(shpg.Point(co)) for co in line.coords]
+        new_coords = np.array(line.coords)[np.nonzero(dis <= 0.5 * len_gl)]
+        line = shpg.LineString(new_coords)
 
     # Write the data
     mdiv = div_ids[major_id]

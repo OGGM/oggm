@@ -1241,7 +1241,7 @@ def random_glacier_evolution(gdir, nyears=1000):
      This runs the random mass-balance model for a certain number of years.
      """
 
-    if cfg.PARAMS['use_inversion_params']:
+    if cfg.PARAMS['use_optimized_inversion_params']:
         d = gdir.read_pickle('inversion_params')
         fs = d['fs']
         glen_a = d['glen_a']
@@ -1275,7 +1275,7 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
         - past_model.p: a ModelFlowline object
     """
 
-    if cfg.PARAMS['use_inversion_params']:
+    if cfg.PARAMS['use_optimized_inversion_params']:
         d = gdir.read_pickle('inversion_params')
         fs = d['fs']
         glen_a = d['glen_a']

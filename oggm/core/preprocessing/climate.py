@@ -216,12 +216,42 @@ def distribute_cru_style(gdir):
     # This is guaranteed to work because I prepared the file (I hope)
     ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
 
-    # get monthly gradient ...
+    # get climatology data
     loc_hgt = ncclim.get_vardata('elev')
     loc_tmp = ncclim.get_vardata('temp')
     loc_pre = ncclim.get_vardata('prcp')
+
+    # see if the center is ok
+    if not np.isfinite(loc_hgt[1, 1]):
+        # take another candidate where finite
+        isok = np.isfinite(loc_hgt)
+
+        # wait: some areas are entirely NaNs, make the subset larger
+        _margin = 1
+        while not np.any(isok):
+            _margin += 1
+            ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=_margin)
+            loc_hgt = ncclim.get_vardata('elev')
+            isok = np.isfinite(loc_hgt)
+        if _margin > 1:
+            log.debug('%s: I had to look up for far climate pixels: %s',
+                      gdir.rgi_id, _margin)
+
+        # Take the first candidate (doesn't matter which)
+        lon, lat = ncclim.grid.ll_coordinates
+        lon = lon[isok][0]
+        lat = lat[isok][0]
+        # Resubset
+        ncclim.set_subset()
+        ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+        loc_hgt = ncclim.get_vardata('elev')
+        loc_tmp = ncclim.get_vardata('temp')
+        loc_pre = ncclim.get_vardata('prcp')
+
+    assert np.isfinite(loc_hgt[1, 1])
     isok = np.isfinite(loc_hgt)
     hgt_f = loc_hgt[isok].flatten()
+    assert len(hgt_f) > 0.
     ts_grad = np.zeros(12) + def_grad
     if use_grad and len(hgt_f) >= 5:
         for i in range(12):
@@ -629,18 +659,12 @@ def calving_mb(gdir):
     somthing better!
     """
 
-    if gdir.terminus_type != 'Marine-terminating':
-        return 0.
-
-    if 'Columbia' not in gdir.name:
-        return 0.
-
-    if 'calving_rate' not in cfg.PARAMS:
+    if not gdir.is_tidewater:
         return 0.
 
     # Ok. Just take the caving rate from cfg and change its units
-    # Original units: km3 a-1, to change to mm a-1
-    return cfg.PARAMS['calving_rate'] * 1e12 / gdir.rgi_area_m2
+    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
+    return gdir.inversion_calving_rate * 1e9 * cfg.RHO / gdir.rgi_area_m2
 
 
 @entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
@@ -674,7 +698,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
                                                                year_range=yr)
         assert len(years) == (2 * mu_hp + 1)
 
-        # mustar is taking calving into account
+        # mustar is taking calving into account (units of specific MB)
         mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
         if not np.isfinite(mustar):
             raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
@@ -712,15 +736,14 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
 
         # Check
         if div_id >= 1:
+            aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-                log.warning('%s: flux should be zero, but is: %.2f',
-                            gdir.rgi_id,
-                            fls[-1].flux[-1])
+                log.warning('%s: flux should be zero, but is: %.4f km3 ice yr-1',
+                            gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
-                msg = '{}: flux should be zero, but is: {:.2f}'.format(
-                            gdir.rgi_id,
-                            fls[-1].flux[-1])
+                msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
+                       .format(gdir.rgi_id, aflux)
                 raise RuntimeError(msg)
 
         # Overwrite

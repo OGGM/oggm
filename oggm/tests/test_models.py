@@ -177,8 +177,10 @@ def dummy_width_bed():
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
 
+
 def dummy_width_bed_tributary():
 
+    # bed with tributary glacier
     map_dx = 100.
     dx = 1.
     nx = 200

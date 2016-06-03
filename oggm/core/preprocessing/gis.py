@@ -500,6 +500,9 @@ def glacier_masks(gdir):
     assert x0 == gdir.grid.corner_grid.x0
     dem_ds = None  # to be sure...
 
+    # Clip topography to 0 m a.s.l.
+    dem = dem.clip(0)
+
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)

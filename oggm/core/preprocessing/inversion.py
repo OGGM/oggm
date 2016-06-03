@@ -178,7 +178,7 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 ratio = utils.interp_nans(ratio, default=max_ratio)
                 out_thick = w * ratio
 
-            # Very last heights can be rough sometimes: interpolate
+            # TODO: last thicknesses can be noisy sometimes: interpolate?
             if cl['is_last']:
                 out_thick[-4:-1] = np.NaN
                 out_thick = utils.interp_nans(out_thick)
@@ -221,6 +221,11 @@ def optimize_inversion_params(gdirs):
     ----------
     gdirs: list of oggm.GlacierDirectory objects
     """
+
+    # Do we even need to do this?
+    if not cfg.PARAMS['optimize_inversion_params']:
+        log.info('User did not want to optimize the inversion params')
+        return
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
@@ -366,6 +371,9 @@ def volume_inversion(gdir, use_cfg_params=None):
     if use_cfg_params is not None:
         fs = use_cfg_params['fs']
         glen_a = use_cfg_params['glen_a']
+    elif not cfg.PARAMS['optimize_inversion_params']:
+        fs = cfg.PARAMS['inversion_fs']
+        glen_a =cfg.PARAMS['inversion_glen_a']
     else:
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')

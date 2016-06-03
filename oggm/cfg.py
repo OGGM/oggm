@@ -244,10 +244,13 @@ def initialize(file=None):
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
+    _k = 'optimize_inversion_params'
+    PARAMS[_k] = cp.as_bool(_k)
 
     # Flowline model
     PARAMS['bed_shape'] = cp['bed_shape']
-    PARAMS['use_inversion_params'] = cp.as_bool('use_inversion_params')
+    _k = 'use_optimized_inversion_params'
+    PARAMS[_k] = cp.as_bool(_k)
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
@@ -255,8 +258,9 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_inversion_params', 'invert_with_sliding', 'rgi_dir',
-           'use_multiple_flowlines', 'leclercq_rgi_links', 'optimize_thick']
+           'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
+           'optimize_inversion_params' , 'use_multiple_flowlines',
+           'leclercq_rgi_links', 'optimize_thick']
     for k in ltr:
         del cp[k]
 
