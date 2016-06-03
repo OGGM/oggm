@@ -179,9 +179,9 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 out_thick = w * ratio
 
             # TODO: last thicknesses can be noisy sometimes: interpolate?
-            # if cl['is_last']:
-            #     out_thick[-4:-1] = np.NaN
-            #     out_thick = utils.interp_nans(out_thick)
+            if cl['is_last']:
+                out_thick[-4:-1] = np.NaN
+                out_thick = utils.interp_nans(out_thick)
 
             # Check for the shape parameter (should not be too large)
             out_shape = (4*out_thick)/(w**2)
