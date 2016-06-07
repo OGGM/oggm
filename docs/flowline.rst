@@ -163,7 +163,7 @@ ParabolicFlowline
         :width: 40%
 
 
-Parabolic shape with one degree of freedom, which makes it particulary
+Parabolic shape with one degree of freedom, which makes it particularly
 useful for the bed inversion: if :math:`S` and :math:`w` are known:
 
 .. math::
