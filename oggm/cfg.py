@@ -277,8 +277,8 @@ def initialize(file=None):
 def set_divides_db(path=None):
     """Read the divides database.
 
-    Currently the only divides available are for HEF:
-    ``utils.get_demo_file('HEF_divided.shp')``
+    Currently the only divides available are for HEF and Kesselwand:
+    ``utils.get_demo_file('divides_workflow.shp')``
     """
 
     if PARAMS['use_divides'] and path is not None:

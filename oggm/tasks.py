@@ -24,7 +24,7 @@ from oggm.core.preprocessing.inversion import volume_inversion
 from oggm.core.preprocessing.inversion import distribute_thickness
 from oggm.core.models.flowline import init_present_time_glacier
 from oggm.core.models.flowline import random_glacier_evolution
-from oggm.core.models.flowline import find_inital_glacier
+from oggm.core.models.flowline import iterative_initial_glacier_search
 
 # Global tasks
 from oggm.core.preprocessing.climate import distribute_climate_data

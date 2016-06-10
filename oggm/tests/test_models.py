@@ -14,6 +14,7 @@ import unittest
 import os
 import copy
 import time
+import shutil
 
 import shapely.geometry as shpg
 import numpy as np
@@ -24,8 +25,7 @@ import matplotlib.pyplot as plt
 from oggm.tests.test_graphics import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import ConstantBalanceModel
-from oggm.tests import is_slow, requires_working_conda
-from oggm.tests import HAS_NEW_GDAL, assertDatasetAllClose
+from oggm.tests import is_slow, assertDatasetAllClose
 
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
@@ -39,6 +39,9 @@ testdir = os.path.join(current_dir, 'tmp')
 do_plot = False
 
 DOM_BORDER = 80
+
+# raise unittest.SkipTest("Such-and-such failed. Skipping all tests in foo.py")
+
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
 
@@ -224,8 +227,7 @@ class TestInitFlowline(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,
-                                                                         2, 3]]
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1, 2, 3]]
         ofl = gdir.read_pickle('inversion_flowlines',
                                div_id=np.argmax(lens)+1)[-1]
 
@@ -253,10 +255,9 @@ class TestInitFlowline(unittest.TestCase):
             area += fl.area_km2
 
             if refo == 1:
-                rtol = 0.07
-                np.testing.assert_allclose(ofl.widths * gdir.grid.dx,
-                                           fl.widths_m[0:len(ofl.widths)],
-                                           rtol=rtol)
+                rmsd = utils.rmsd(ofl.widths * gdir.grid.dx,
+                                  fl.widths_m[0:len(ofl.widths)])
+                self.assertTrue(rmsd < 5.)
 
         np.testing.assert_allclose(0.573, vol, rtol=0.001)
         np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
@@ -311,6 +312,104 @@ class TestInitFlowline(unittest.TestCase):
         slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
         slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
         np.testing.assert_allclose(slope_obs, slope_our, rtol=0.1)
+
+
+class TestOtherDivides(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(current_dir, 'tmp_div')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        # self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
+        cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
+        cfg.PATHS['climate_file'] = utils.get_demo_file('histalp_merged_hef.nc')
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_define_divides(self):
+
+        from oggm.core.preprocessing import gis, centerlines, geometry, climate, inversion
+        from oggm import GlacierDirectory
+        import geopandas as gpd
+
+        hef_file = utils.get_demo_file('rgi_oetztal.shp')
+        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+
+        # loop because for some reason indexing wont work
+        for index, entity in rgidf.iterrows():
+            if '00719' not in entity.RGIID:
+                continue
+            gdir = GlacierDirectory(entity, base_dir=self.testdir)
+            gis.define_glacier_region(gdir, entity=entity)
+            gis.glacier_masks(gdir)
+            centerlines.compute_centerlines(gdir)
+            centerlines.compute_downstream_lines(gdir)
+            geometry.initialize_flowlines(gdir)
+            geometry.catchment_area(gdir)
+            geometry.catchment_width_geom(gdir)
+            geometry.catchment_width_correction(gdir)
+            climate.distribute_climate_data([gdir])
+            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0)
+            inversion.prepare_for_inversion(gdir)
+            v, ainv = inversion.invert_parabolic_bed(gdir)
+            flowline.init_present_time_glacier(gdir)
+
+        myarea = 0.
+        for did in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_flowlines', div_id=did)
+            for cl in cls:
+                myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+
+        np.testing.assert_allclose(ainv, gdir.rgi_area_m2, rtol=1e-2)
+        np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
+        self.assertTrue(len(gdir.divide_ids) == 2)
+
+        myarea = 0.
+        for did in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_flowlines', div_id=did)
+            for cl in cls:
+                myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+
+        np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
+        self.assertTrue(len(gdir.divide_ids) == 2)
+
+        fls = gdir.read_pickle('model_flowlines')
+        glacier = flowline.FlowlineModel(fls)
+        self.assertTrue(len(fls) == 4)
+        vol = 0.
+        area = 0.
+        for fl in fls:
+            ref = np.arange(len(fl.surface_h)) * fl.dx
+            np.testing.assert_allclose(ref, fl.dis_on_line,
+                                       rtol=0.001,
+                                       atol=0.01)
+            self.assertTrue(len(fl.surface_h) ==
+                            len(fl.bed_h) ==
+                            len(fl.bed_shape) ==
+                            len(fl.dis_on_line) ==
+                            len(fl.widths))
+
+            self.assertTrue(np.all(fl.bed_shape >= 0))
+            self.assertTrue(np.all(fl.widths >= 0))
+            vol += fl.volume_km3
+            area += fl.area_km2
+
+        rtol = 0.01
+        np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
 
 
 class TestMassBalance(unittest.TestCase):
@@ -699,7 +798,7 @@ class TestIO(unittest.TestCase):
                                            fmodel.fls[0].widths_m)
 
         np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(rollmin=0), a_ref)
         np.testing.assert_allclose(fmodel.length_m_ts().iloc[1:], l_ref[1:],
                                    atol=101)
 
@@ -773,6 +872,7 @@ class TestIdealisedCases(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @is_slow
     def test_constant_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -924,8 +1024,9 @@ class TestIdealisedCases(unittest.TestCase):
             self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-3)
             self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
             self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
-            
-    @requires_working_conda
+
+
+    @is_slow
     def test_equilibrium(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -1472,6 +1573,7 @@ class TestBackwardsIdealized(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @is_slow
     def test_iterative_back(self):
 
         y0 = 0.
@@ -1554,7 +1656,7 @@ class TestHEF(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @requires_working_conda
+    @is_slow
     def test_equilibrium(self):
 
         flowline.init_present_time_glacier(self.gdir)
@@ -1564,7 +1666,8 @@ class TestHEF(unittest.TestCase):
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=self.fs,
-                                        glen_a=self.glen_a)
+                                        glen_a=self.glen_a,
+                                        min_dt=SEC_IN_DAY/2.)
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -1655,19 +1758,26 @@ class TestHEF(unittest.TestCase):
         with flowline.FileModel(path) as model:
             vol = model.volume_km3_ts()
             len = model.length_m_ts()
+            area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
             np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
 
             if do_plot:
-                vol.plot()
-                plt.title('Volume')
-                plt.figure()
-                len.plot()
-                plt.title('Length')
+                fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                vol.plot(ax=ax1)
+                ax1.set_title('Volume')
+                area.plot(ax=ax2)
+                ax2.set_title('Area')
+                len.plot(ax=ax3)
+                ax3.set_title('Length')
+                plt.tight_layout()
                 plt.show()
 
     @is_slow
     def test_find_t0(self):
+
+        self.skipTest('This test is too unstable')
 
         gdir = init_hef(border=DOM_BORDER, invert_with_sliding=False)
 
@@ -1682,8 +1792,8 @@ class TestHEF(unittest.TestCase):
         init_bias = 94.  # so that "went too far" comes once on travis
         rtol = 0.005
 
-        flowline.find_inital_glacier(gdir, y0=df.index[0], init_bias=init_bias,
-                                     rtol=rtol, write_steps=True)
+        flowline.iterative_initial_glacier_search(gdir, y0=df.index[0], init_bias=init_bias,
+                                                  rtol=rtol, write_steps=True)
 
         past_model = flowline.FileModel(gdir.get_filepath('past_model'))
 

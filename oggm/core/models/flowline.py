@@ -1135,6 +1135,10 @@ class FileModel(object):
         return self.fls[-1].length_m
 
     def run_until(self, year=None, month=None):
+        """Mimics the model's behavior.
+
+        Is quite slow, I must say.
+        """
 
         if month is not None:
             for fl, ds in zip(self.fls, self.dss):
@@ -1147,39 +1151,41 @@ class FileModel(object):
                 fl.section = sel.values
         self.yr = sel.time.values
 
-    def area_m2_ts(self):
-
+    def area_m2_ts(self, rollmin=36):
+        """rollmin is the numebr of months you want to smooth onto"""
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
             widths = ds.ts_width_m.copy()
             widths[:] = np.where(ds.ts_section > 0., ds.ts_width_m, 0.)
             sel += widths.sum(dim='x') * fl.dx_meter
-        return sel.to_series()
+        sel = sel.to_series()
+        if rollmin != 0:
+            sel = sel.rolling(rollmin).min()
+            sel.iloc[0:rollmin] = sel.iloc[rollmin]
+        return sel
 
-    def area_km2_ts(self):
-
-        return self.area_m2_ts() * 1e-6
+    def area_km2_ts(self, **kwargs):
+        return self.area_m2_ts(**kwargs) * 1e-6
 
     def volume_m3_ts(self):
-
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
             sel += ds.ts_section.sum(dim='x') * fl.dx_meter
         return sel.to_series()
 
     def volume_km3_ts(self):
-
         return self.volume_m3_ts() * 1e-9
 
-    def length_m_ts(self):
-
+    def length_m_ts(self, rollmin=36):
         fl = self.fls[-1]
         ds = self.dss[-1]
         sel = ds.ts_section.copy()
         sel[:] = ds.ts_section != 0.
         sel = sel.sum(dim='x') * fl.dx_meter
-        sel = sel.to_series().rolling(12).min()
-        sel.iloc[0:12] = sel.iloc[12]
+        sel = sel.to_series()
+        if rollmin != 0:
+            sel = sel.rolling(rollmin).min()
+            sel.iloc[0:rollmin] = sel.iloc[rollmin]
         return sel
 
 
@@ -1250,9 +1256,6 @@ def init_present_time_glacier(gdir):
           np.arange(0, gdir.grid.nx-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo)
 
-    # Smooth window
-    sw = cfg.PARAMS['flowline_height_smooth']
-
     # Default bed shape
     defshape = 0.003
 
@@ -1318,8 +1321,8 @@ def init_present_time_glacier(gdir):
         bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
         bed_shape = utils.interp_nans(bed_shape, default=defshape)
 
-        # But forbid too small shape close to the end
-        bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
+        # TODO: forbid too small shape close to the end?
+        # bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
 
         # Take the median of the last 30%
         ashape = np.median(bed_shape[-np.floor(len(bed_shape)/3.).astype(np.int64):])
@@ -1401,7 +1404,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
-    log.info('find_inital_glacier in year %d. Ref area to catch: %.3f km2. '
+    log.info('iterative_initial_glacier_search in year %d. Ref area to catch: %.3f km2. '
              'Tolerance: %.2f %%' ,
              np.int64(y0), ref_area*1e-6, rtol*100)
 
@@ -1416,24 +1419,24 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('find_inital_glacier: inital starting glacier converges '
+        log.info('iterative_initial_glacier_search: inital starting glacier converges '
                  'to itself with a final dif of %.2f %%',
                  utils.rel_err(ref_area, prev_area) * 100)
         return 0, None, model
 
     if prev_area < ref_area:
         sign_mb = 1.
-        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'small of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
     else:
-        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'big of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = -1.
 
     # Log prefix
-    logtxt = 'find_inital_glacier'
+    logtxt = 'iterative_initial_glacier_search'
 
     # Loop until 100 iterations
     c = 0
@@ -1528,9 +1531,11 @@ def random_glacier_evolution(gdir, nyears=1000):
 
 
 @entity_task(log, writes=['past_model'])
-def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
-                        write_steps=True):
-    """Search for the glacier in year y0
+def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
+                                     write_steps=True):
+    """Iterative search for the glacier in year y0.
+
+    this doesn't really work.
 
     Parameters
     ----------

@@ -26,7 +26,6 @@ Entity tasks
     volume_inversion
     distribute_thickness
     init_present_time_glacier
-    find_inital_glacier
 
 Global tasks
 ============

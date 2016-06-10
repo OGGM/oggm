@@ -64,7 +64,7 @@ class TestGIS(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
@@ -133,7 +133,7 @@ class TestCenterlines(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -286,7 +286,7 @@ class TestGeometry(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -437,7 +437,7 @@ class TestClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -818,7 +818,7 @@ class TestInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -920,9 +920,9 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=21)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
-
+    @is_slow
     def test_distribute(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -1054,8 +1054,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        atol = 30 if HAS_NEW_GDAL else 10
-        np.testing.assert_allclose(242, maxs, atol=atol)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1085,7 +1084,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=atol)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
 
 class TestGrindelInvert(unittest.TestCase):
@@ -1141,7 +1140,6 @@ class TestGrindelInvert(unittest.TestCase):
     def test_ideal_glacier(self):
 
         # we are making a
-
         glen_a = cfg.A * 1
         from oggm.core.models import flowline, massbalance
 
@@ -1190,7 +1188,6 @@ class TestGrindelInvert(unittest.TestCase):
 
         cl = gdir.read_pickle('inversion_output', div_id=1)[0]
         assert utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])]) < 10.
-        # print(v_km3, model.volume_km3, v_vas)
 
     @requires_py3
     def test_invert_and_run(self):
@@ -1234,7 +1231,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = current_dir
 
