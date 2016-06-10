@@ -6,6 +6,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 import os
 import shutil
 import unittest
+from functools import partial
 
 import pandas as pd
 import geopandas as gpd
@@ -21,16 +22,15 @@ from oggm.tests import is_slow, ON_TRAVIS
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import graphics
+from oggm import utils
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
 
-
 def clean_dir(testdir):
     shutil.rmtree(testdir)
     os.makedirs(testdir)
-
 
 def up_to_inversion(reset=False):
     """Run the tasks you want."""
@@ -50,17 +50,19 @@ def up_to_inversion(reset=False):
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
 
-    cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
 
     # Set up the paths and other stuffs
-    cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
     cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
     cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oetztal.csv')
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
+
+    # Be sure data is downloaded because lock doesn't work
+    cl = utils.get_cru_cl_file()
 
     # Params
     cfg.PARAMS['border'] = 70
@@ -87,7 +89,6 @@ def up_to_inversion(reset=False):
         workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-        # workflow.climate_tasks(gdirs)
 
         # Use histalp for the actual test
         cfg.PARAMS['temp_use_local_gradient'] = True
@@ -104,18 +105,41 @@ def up_to_inversion(reset=False):
 class TestWorkflow(unittest.TestCase):
 
     @is_slow
-    def test_grow(self):
+    def test_random(self):
 
         gdirs = up_to_inversion()
 
-        for gd in gdirs[0:2]:
+        workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+        rand_glac = partial(flowline.random_glacier_evolution, nyears=200)
+        workflow.execute_entity_task(rand_glac, gdirs)
 
-            if gd.rgi_id in ['RGI40-11.00719']:
-                # Bad bad glacier
-                continue
+        for gd in gdirs:
 
-            flowline.init_present_time_glacier(gd)
-            flowline.find_inital_glacier(gd)
+            path = gd.get_filepath('past_model')
+
+            # See that we are running ok
+            with flowline.FileModel(path) as model:
+                vol = model.volume_km3_ts()
+                area = model.area_km2_ts()
+                len = model.length_m_ts()
+
+                self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
+                self.assertTrue(np.all(np.isfinite(area) & area != 0.))
+                self.assertTrue(np.all(np.isfinite(len) & len != 0.))
+
+                # graphics.plot_modeloutput_map(gd, model=model)
+                # model.run_until(np.floor(area.argmax()))
+                # graphics.plot_modeloutput_map(gd, model=model)
+                #
+                # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                # vol.plot(ax=ax1)
+                # ax1.set_title('{}: Volume'.format(gd.rgi_id))
+                # area.plot(ax=ax2)
+                # ax2.set_title('Area')
+                # len.plot(ax=ax3)
+                # ax3.set_title('Length')
+                # plt.tight_layout()
+                # plt.show()
 
 
     @is_slow
@@ -172,7 +196,7 @@ class TestWorkflow(unittest.TestCase):
             _vol = model.volume_km3
             _area = model.area_km2
             gldf = df.loc[gdir.rgi_id]
-            assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.01)
+            assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.03)
             assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
             maxo = max([fl.order for fl in model.fls])
             for fl in model.fls:

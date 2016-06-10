@@ -72,7 +72,7 @@ cfg.PARAMS['optimize_thick'] = True
 cfg.PARAMS['force_one_flowline'] = ['RGI50-11.01270']
 
 # Divides
-cfg.set_divides_db(utils.get_demo_file('HEF_divided.shp'))
+cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
 
 # Read in the Alps RGI file
 rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_ref_alps.pkl')

@@ -60,7 +60,7 @@ cfg.PATHS['dem_file'] = '/home/mowglie/disk/Dropbox/Share/oggm-data/topo/alterna
 rgidf = pd.read_pickle('/home/mowglie/synthetic_rgi.pkl')
 
 # Set the newly created divides (quick n dirty fix)
-df = gpd.GeoDataFrame.from_file(get_demo_file('HEF_divided.shp'))
+df = gpd.GeoDataFrame.from_file(get_demo_file('divides_workflow.shp'))
 dfi = pd.read_pickle(cfg.PATHS['itmix_divs'])
 dfi['RGIID'] = dfi['RGIId']
 df = pd.concat([df, dfi])

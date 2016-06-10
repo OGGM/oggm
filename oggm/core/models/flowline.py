@@ -17,6 +17,7 @@ import numpy as np
 import netCDF4
 from scipy.interpolate import RegularGridInterpolator
 import shapely.geometry as shpg
+import xarray as xr
 
 # Locals
 import oggm.cfg as cfg
@@ -27,7 +28,7 @@ import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_MONTH, SEC_IN_YEAR, TWO_THIRDS
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS
 from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
@@ -79,14 +80,9 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
 
     @property
     def length_m(self):
-        # TODO: cliffs imply a cut in the middle of the glacier
-        pok = np.where(self.thick == 0.)[0]
-        if len(pok) == self.nx:
-            return 0.
-        else:
-            # We define the length a bit differently: but more robust
-            pok = np.where(self.thick != 0.)[0]
-            return len(pok) * self.dx_meter
+        # We define the length a bit differently: but more robust
+        pok = np.where(self.thick > 0.)[0]
+        return len(pok) * self.dx_meter
 
     @property
     def volume_m3(self):
@@ -103,6 +99,27 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     @property
     def area_km2(self):
         return self.area_m2 * 1e-6
+
+    def _add_attrs_to_dataset(self, ds):
+        """Add bed specific parameters."""
+        raise NotImplementedError()
+
+    def to_dataset(self):
+        """Makes an xarray Dataset out of the flowline."""
+
+        h = self.surface_h
+        nx = len(h)
+        ds = xr.Dataset()
+        ds.coords['x'] = np.arange(nx)
+        ds.coords['c'] = [0, 1]
+        ds['coords'] = (['x', 'c'], np.asarray(self.line.coords))
+        ds['surface_h'] = (['x'],  h)
+        ds['bed_h'] = (['x'],  self.bed_h)
+        ds.attrs['class'] = type(self).__name__
+        ds.attrs['map_dx'] = self.map_dx
+        ds.attrs['dx'] = self.dx
+        self._add_attrs_to_dataset(ds)
+        return ds
 
 
 class ParabolicFlowline(ModelFlowline):
@@ -138,6 +155,10 @@ class ParabolicFlowline(ModelFlowline):
     @section.setter
     def section(self, val):
         self.thick = (0.75 * val * np.sqrt(self.bed_shape))**TWO_THIRDS
+
+    def _add_attrs_to_dataset(self, ds):
+        """Add bed specific parameters."""
+        ds['bed_shape'] = (['x'],  self.bed_shape)
 
 
 class VerticalWallFlowline(ModelFlowline):
@@ -177,6 +198,10 @@ class VerticalWallFlowline(ModelFlowline):
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
+
+    def _add_attrs_to_dataset(self, ds):
+        """Add bed specific parameters."""
+        ds['widths'] = (['x'],  self._widths)
 
 
 class TrapezoidalFlowline(ModelFlowline):
@@ -220,13 +245,20 @@ class TrapezoidalFlowline(ModelFlowline):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
 
+    def _add_attrs_to_dataset(self, ds):
+        """Add bed specific parameters."""
+        ds['widths'] = (['x'],  self.widths)
+        ds['lambdas'] = (['x'],  self._lambdas)
+
 
 class MixedFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None, bed_shape=None,
-                 min_shape=0.0015, lambdas=0.2):
+                 surface_h=None, bed_h=None,
+                 section=None, bed_shape=None,
+                 where_trapezoid=None, lambdas=None,
+                 widths_m=None):
         """ Instanciate.
 
         Parameters
@@ -237,74 +269,82 @@ class MixedFlowline(ModelFlowline):
         ----------
         #TODO: document properties
         """
-        self._dot = False
+
+        self._do_trapeze = False
         super(MixedFlowline, self).__init__(line, dx, map_dx,
-                                                surface_h.copy(), bed_h.copy())
+                                            surface_h.copy(), bed_h.copy())
 
+        # The parabola is easy
         assert np.all(np.isfinite(bed_shape))
-
         self.bed_shape = bed_shape
         self._sqrt_bed = np.sqrt(bed_shape)
 
-        # Where we will have to use the other\
-        totest = bed_shape.copy()
-        if self.flows_to is None:
-            totest[-np.floor(len(totest)/3.).astype(np.int64):] = min_shape + 1
-        pt = np.nonzero(totest < min_shape)
+        # where to trapeze
+        if len(np.asarray(where_trapezoid).shape) == 2:
+            where_trapezoid = where_trapezoid[0]
+        ptrap = where_trapezoid
+        ref_section = section.copy()
+        _w0_m = widths_m[ptrap]
 
-        # correct bed_h
-        for_assert = self.section.copy()
-        for_later = self.widths_m[pt]
-
-        sec = self.section[pt]
-        b = - 2 * self.widths_m[pt]
-        det = b ** 2 - 4 * lambdas * 2 * sec
-        h = (- b - np.sqrt(det)) / (2 * lambdas)
+        sec = section[ptrap]
+        b = - 2 * widths_m[ptrap]
+        det = b ** 2 - 4 * lambdas[ptrap] * 2 * sec
+        h = (- b - np.sqrt(det)) / (2 * lambdas[ptrap])
         assert np.alltrue(h >= 0)
-        self.bed_h[pt] = surface_h[pt] - h.clip(0)
-        self._thick[pt] = h.clip(0)
+        self.bed_h[ptrap] = surface_h[ptrap] - h.clip(0)
+        self._thick[ptrap] = h.clip(0)
+
         # This doesnt work because of interp at the tongue
         # assert np.allclose(surface_h, self.surface_h)
 
-        _w0_m = for_later - lambdas * self.thick[pt]
+        # compute _w0_m
+        _w0_m = _w0_m - lambdas[ptrap] * self.thick[ptrap]
         assert np.alltrue(_w0_m >= 0)
 
         self._w0_m = _w0_m
         self._lambdas = lambdas
-        self._pt = pt
-        self._dot = len(pt[0]) > 0
-        assert np.allclose(self.thick[pt], h.clip(0))
-
-        assert np.allclose(for_assert, self.section)
+        self._ptrap = ptrap
+        self._do_trapeze = len(sec) > 0
+        assert np.allclose(self.thick[ptrap], h.clip(0))
+        assert np.allclose(ref_section, self.section)
 
     @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         out = np.sqrt(4*self.thick/self.bed_shape)
-        if self._dot:
-            out[self._pt] = self._w0_m + self._lambdas * self.thick[self._pt]
+        if self._do_trapeze:
+            out[self._ptrap] = self._w0_m + self._lambdas[self._ptrap] * self.thick[self._ptrap]
         return out
 
     @property
     def section(self):
         out = TWO_THIRDS * self.widths_m * self.thick
-        if self._dot:
-            out[self._pt] = (self.widths_m[self._pt] + self._w0_m) / 2 * self.thick[self._pt]
+        if self._do_trapeze:
+            out[self._ptrap] = (self.widths_m[self._ptrap] + self._w0_m) / 2 * self.thick[self._ptrap]
         return out
 
     @section.setter
     def section(self, val):
         out = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
-        if self._dot:
+        if self._do_trapeze:
             b = 2 * self._w0_m
-            a = 2 * self._lambdas
-            out[self._pt] = (np.sqrt(b**2 + 4 * a * val[self._pt]) - b) / a
+            a = 2 * self._lambdas[self._ptrap]
+            out[self._ptrap] = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
         self.thick = out
 
     @property
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
+
+    def _add_attrs_to_dataset(self, ds):
+        """Add bed specific parameters."""
+
+        ds['section'] = (['x'],  self.section)
+        ds['widths_m'] = (['x'],  self.widths_m)
+        ds['bed_shape'] = (['x'],  self.bed_shape)
+        ds['where_trapezoid'] = (['p'], self._ptrap)
+        ds['lambdas'] = (['x'],  self._lambdas)
 
 
 class FlowlineModel(object):
@@ -412,6 +452,21 @@ class FlowlineModel(object):
     def length_m(self):
         return self.fls[-1].length_m
 
+    def to_netcdf(self, path):
+        """Creates a netcdf group file storing the state of the model."""
+
+        flows_to_id = []
+        for trib in self._trib:
+            flows_to_id.append(trib[0] if trib[0] is not None else -1)
+
+        ds = xr.Dataset()
+        ds['flowlines'] = ('fls', np.arange(len(flows_to_id)))
+        ds['flows_to_id'] = ('fls', flows_to_id)
+        ds.to_netcdf(path)
+        for i, fl in enumerate(self.fls):
+            ds = fl.to_dataset()
+            ds.to_netcdf(path, 'a', group='fl_{}'.format(i))
+
     def check_domain_end(self):
         """Returns False if the glacier reaches the domains bound."""
         return np.isclose(self.fls[-1].thick[-1], 0)
@@ -426,20 +481,60 @@ class FlowlineModel(object):
         while self.t < t:
             self.step(dt=t-self.t)
 
-        # Check for domains
-        if not np.isclose(self.fls[-1].thick[-1], 0):
+        # Check for domain bounds
+        if self.fls[-1].thick[-1] > 10:
             raise RuntimeError('Glacier exceeds domain boundaries.')
 
-    def run_until_and_output(self, y1):
-        """Runs the model and writes intermediate steps in a dict."""
+    def run_until_and_store(self, y1, path=None):
+        """Runs the model and returns intermediate steps in a dataset.
 
-        years = np.arange(self.yr, y1+1)
-        out = OrderedDict()
-        for yr in years:
-            self.run_until(yr)
-            out[yr] = copy.deepcopy(self)
+        You can store the whole in a netcdf file, too.
+        """
 
-        return out
+        # time
+        time = utils.monthly_timeseries(self.yr, y1)
+        yr, mo = utils.year_to_date(time)
+
+        # init output
+        sects = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
+        widths = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
+        if path is not None:
+            self.to_netcdf(path)
+
+        # Run
+        for i, y in enumerate(time):
+            self.run_until(y)
+            for s, w, fl in zip(sects, widths, self.fls):
+                s[i, :] = fl.section
+                w[i, :] = fl.widths_m
+
+        # to datasets
+        dss = []
+        for (s, w) in zip(sects, widths):
+            ds = xr.Dataset()
+            x = np.arange(s.shape[1])
+            ds.coords['time'] = time
+            ds.coords['x'] = x
+            varcoords = {'time': time, 'x': x,
+                         'year': ('time', yr),
+                         'month': ('time', mo),
+                         }
+            ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),
+                                            coords=varcoords)
+            ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
+                                            coords=varcoords)
+            dss.append(ds)
+
+        # write output?
+        if path is not None:
+            encode = {'ts_section': {'zlib': True, 'complevel': 5},
+                      'ts_width_m': {'zlib': True, 'complevel': 5},
+                      }
+            for i, ds in enumerate(dss):
+                ds.to_netcdf(path, 'a', group='fl_{}'.format(i),
+                             encoding=encode)
+
+        return dss
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
@@ -465,7 +560,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -488,7 +583,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -602,7 +697,7 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -636,7 +731,7 @@ class FluxBasedModel(FlowlineModel):
             e = np.zeros(nx)
             self._stags.append((a, b, c, d, e))
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -750,7 +845,7 @@ class KarthausModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=SEC_IN_MONTH, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
 
@@ -776,7 +871,7 @@ class KarthausModel(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -834,7 +929,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
        The equation references in the comments refer to the paper for clarity
     """
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None, fd=None,
-                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=SEC_IN_MONTH,
+                 fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=True):
 
         """ Instanciate.
@@ -871,7 +966,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         
         return val_phi
 
-    def step(self, dt=SEC_IN_MONTH):
+    def step(self, dt=31*SEC_IN_DAY):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -980,6 +1075,161 @@ class MUSCLSuperBeeModel(FlowlineModel):
         # Next step
         self.t += dt
 
+
+class FileModel(object):
+    """Duck FlowlineModel which actually reads the stuff out of a nc file."""
+
+    def __init__(self, path):
+        """ Instanciate.
+
+        Parameters
+        ----------
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+
+        self.fls = glacier_from_netcdf(path)
+        dss = []
+        for flid, fl in enumerate(self.fls):
+            ds = xr.open_dataset(path, group='fl_{}'.format(flid))
+            ds.load()
+            dss.append(ds)
+        self.dss = dss
+        self.reset_y0()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for ds in self.dss:
+            ds.close()
+
+    def reset_y0(self, y0=None):
+        """Reset the initial model time"""
+
+        if y0 is None:
+            y0 = self.dss[0].time[0]
+        self.y0 = y0
+        self.yr = y0
+
+    @property
+    def area_m2(self):
+        return np.sum([f.area_m2 for f in self.fls])
+
+    @property
+    def volume_m3(self):
+        return np.sum([f.volume_m3 for f in self.fls])
+
+    @property
+    def volume_km3(self):
+        return self.volume_m3 * 1e-9
+
+    @property
+    def area_km2(self):
+        return self.area_m2 * 1e-6
+
+    @property
+    def length_m(self):
+        return self.fls[-1].length_m
+
+    def run_until(self, year=None, month=None):
+        """Mimics the model's behavior.
+
+        Is quite slow, I must say.
+        """
+
+        if month is not None:
+            for fl, ds in zip(self.fls, self.dss):
+                sel = ds.ts_section.isel(time=(ds.year==year) &
+                                              (ds.month==month))
+                fl.section = sel.values
+        else:
+            for fl, ds in zip(self.fls, self.dss):
+                sel = ds.ts_section.sel(time=year)
+                fl.section = sel.values
+        self.yr = sel.time.values
+
+    def area_m2_ts(self, rollmin=36):
+        """rollmin is the numebr of months you want to smooth onto"""
+        sel = 0
+        for fl, ds in zip(self.fls, self.dss):
+            widths = ds.ts_width_m.copy()
+            widths[:] = np.where(ds.ts_section > 0., ds.ts_width_m, 0.)
+            sel += widths.sum(dim='x') * fl.dx_meter
+        sel = sel.to_series()
+        if rollmin != 0:
+            sel = sel.rolling(rollmin).min()
+            sel.iloc[0:rollmin] = sel.iloc[rollmin]
+        return sel
+
+    def area_km2_ts(self, **kwargs):
+        return self.area_m2_ts(**kwargs) * 1e-6
+
+    def volume_m3_ts(self):
+        sel = 0
+        for fl, ds in zip(self.fls, self.dss):
+            sel += ds.ts_section.sum(dim='x') * fl.dx_meter
+        return sel.to_series()
+
+    def volume_km3_ts(self):
+        return self.volume_m3_ts() * 1e-9
+
+    def length_m_ts(self, rollmin=36):
+        fl = self.fls[-1]
+        ds = self.dss[-1]
+        sel = ds.ts_section.copy()
+        sel[:] = ds.ts_section != 0.
+        sel = sel.sum(dim='x') * fl.dx_meter
+        sel = sel.to_series()
+        if rollmin != 0:
+            sel = sel.rolling(rollmin).min()
+            sel.iloc[0:rollmin] = sel.iloc[rollmin]
+        return sel
+
+
+def flowline_from_dataset(ds):
+    """Instanciates a flowline from an xarray Dataset."""
+
+    cl = globals()[ds.attrs['class']]
+    line = shpg.LineString(ds['coords'].values)
+    args = dict(line=line, dx=ds.dx, map_dx=ds.map_dx,
+                surface_h=ds['surface_h'].values,
+                bed_h=ds['bed_h'].values)
+
+    have = {'c', 'x', 'surface_h', 'coords', 'bed_h', 'z', 'p', 'n',
+            'time', 'month', 'year', 'ts_width_m', 'ts_section'}
+    missing_vars = set(ds.variables.keys()).difference(have)
+    for k in missing_vars:
+        data = ds[k].values
+        if ds[k].dims[0] == 'z':
+            data = data[0]
+        args[k] = data
+    return cl(**args)
+
+
+def glacier_from_netcdf(path):
+    """Instanciates a list of flowlines from an xarray Dataset."""
+
+    with xr.open_dataset(path) as ds:
+        fls = []
+        for flid in ds['flowlines'].values:
+            with xr.open_dataset(path, group='fl_{}'.format(flid)) as _ds:
+                fls.append(flowline_from_dataset(_ds))
+
+        for i, fid in enumerate(ds['flows_to_id'].values):
+            if fid != -1:
+                fls[i].set_flows_to(fls[fid])
+
+    # Adds the line level
+    for fl in fls:
+        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
+
+    return fls
+
+
+
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
     """First task after inversion. Merges the data from the various
@@ -1006,9 +1256,6 @@ def init_present_time_glacier(gdir):
           np.arange(0, gdir.grid.nx-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo)
 
-    # Smooth window
-    sw = cfg.PARAMS['flowline_height_smooth']
-
     # Default bed shape
     defshape = 0.003
 
@@ -1032,16 +1279,6 @@ def init_present_time_glacier(gdir):
         invs = gdir.read_pickle('inversion_output', div_id=div_id)
         inversion_per_divide.append(invs)
 
-    # Which kind of bed?
-    if cfg.PARAMS['bed_shape'] == 'mixed':
-        flobject = partial(MixedFlowline,
-                           min_shape=cfg.PARAMS['mixed_min_shape'],
-                           lambdas=cfg.PARAMS['trapezoid_lambdas'])
-    elif cfg.PARAMS['bed_shape'] == 'parabolic':
-        flobject = ParabolicFlowline
-    else:
-        raise NotImplementedError('bed: {}'.format(cfg.PARAMS['bed_shape']))
-
     max_shape = cfg.PARAMS['max_shape_param']
 
     # Extend the flowlines with the downstream lines, make a new object
@@ -1056,7 +1293,7 @@ def init_present_time_glacier(gdir):
             bed_shape = bed_shape.clip(0, max_shape)
             bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
             bed_shape = utils.interp_nans(bed_shape, default=defshape)
-            nfl = flobject(fl.line, fl.dx, map_dx, fl.surface_h,
+            nfl = ParabolicFlowline(fl.line, fl.dx, map_dx, fl.surface_h,
                                     bed_h, bed_shape)
             flows_to_ids.append(fls_list.index(fl.flows_to))
             new_fls.append(nfl)
@@ -1084,19 +1321,16 @@ def init_present_time_glacier(gdir):
         bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
         bed_shape = utils.interp_nans(bed_shape, default=defshape)
 
-        # But forbid too small shape close to the end
-        if cfg.PARAMS['bed_shape'] == 'mixed':
-            bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
+        # TODO: forbid too small shape close to the end?
+        # bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
 
         # Take the median of the last 30%
         ashape = np.median(bed_shape[-np.floor(len(bed_shape)/3.).astype(np.int64):])
-
         # But forbid too small shape
-        if cfg.PARAMS['bed_shape'] == 'mixed':
-            ashape = ashape.clip(cfg.PARAMS['mixed_min_shape'])
+        ashape = ashape.clip(cfg.PARAMS['mixed_min_shape'])
 
         bed_shape = np.append(bed_shape, np.ones(len(bed_h)-len(bed_shape))*ashape)
-        nfl = flobject(long_line, fl.dx, map_dx, hgts, bed_h, bed_shape)
+        nfl = ParabolicFlowline(long_line, fl.dx, map_dx, hgts, bed_h, bed_shape)
 
         if major_id is None:
             flid = -1
@@ -1125,6 +1359,42 @@ def init_present_time_glacier(gdir):
     gdir.write_pickle(fls, 'model_flowlines')
 
 
+def convert_to_mixed_flowline(fls):
+    """Replaces parabolic flowlines with a mixed type."""
+
+    new_fls = []
+    flows_to_ids = []
+    fls = copy.deepcopy(fls)
+    for fl in fls:
+
+        lambdas = fl.bed_shape * 0.
+        lambdas[:] = cfg.PARAMS['trapezoid_lambdas']
+
+        ptrap = np.nonzero(fl.bed_shape < cfg.PARAMS['mixed_min_shape'])
+
+        fl_ = MixedFlowline(line=fl.line, dx=fl.dx, map_dx=fl.map_dx,
+                            surface_h=fl.surface_h, bed_h=fl.bed_h,
+                            section=fl.section, bed_shape=fl.bed_shape,
+                            where_trapezoid=ptrap, lambdas=lambdas,
+                            widths_m=fl.widths_m)
+
+        new_fls.append(fl_)
+
+        if fl.flows_to is None:
+            flows_to_ids.append(-1)
+        else:
+            flows_to_ids.append(fls.index(fl.flows_to))
+
+    for i, fid in enumerate(flows_to_ids):
+        if fid != -1:
+            new_fls[i].set_flows_to(new_fls[fid])
+
+    # Adds the line level
+    for fl in new_fls:
+        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
+
+    return new_fls
+
 def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
                          rtol=0.01, atol=10, max_ite=100,
                          init_bias=0., equi_rate=0.0005,
@@ -1134,7 +1404,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
-    log.info('find_inital_glacier in year %d. Ref area to catch: %.3f km2. '
+    log.info('iterative_initial_glacier_search in year %d. Ref area to catch: %.3f km2. '
              'Tolerance: %.2f %%' ,
              np.int64(y0), ref_area*1e-6, rtol*100)
 
@@ -1149,24 +1419,24 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('find_inital_glacier: inital starting glacier converges '
+        log.info('iterative_initial_glacier_search: inital starting glacier converges '
                  'to itself with a final dif of %.2f %%',
                  utils.rel_err(ref_area, prev_area) * 100)
         return 0, None, model
 
     if prev_area < ref_area:
         sign_mb = 1.
-        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'small of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
     else:
-        log.info('find_inital_glacier, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'big of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = -1.
 
     # Log prefix
-    logtxt = 'find_inital_glacier'
+    logtxt = 'iterative_initial_glacier_search'
 
     # Loop until 100 iterations
     c = 0
@@ -1251,18 +1521,21 @@ def random_glacier_evolution(gdir, nyears=1000):
 
     y0 = 1800
     y1 = y0 + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir)
+    mb = mbmods.RandomMassBalanceModel(gdir, use_tstar=True)
     fls = gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
 
     # run
-    model.run_until(y1)
+    path = gdir.get_filepath('past_model', delete=True)
+    model.run_until_and_store(y1, path=path)
 
 
 @entity_task(log, writes=['past_model'])
-def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
-                        write_steps=True):
-    """Search for the glacier in year y0
+def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
+                                     write_steps=True):
+    """Iterative search for the glacier in year y0.
+
+    this doesn't really work.
 
     Parameters
     ----------
@@ -1288,6 +1561,9 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
     y1 = gdir.rgi_date.year
     mb = mbmods.HistalpMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
+    if cfg.PARAMS['bed_shape'] == 'mixed':
+        fls = convert_to_mixed_flowline(fls)
+
     model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, glen_a=glen_a)
     assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
 
@@ -1304,7 +1580,8 @@ def find_inital_glacier(gdir, y0=None, init_bias=0., rtol=0.005,
 
     # Write the data
     gdir.write_pickle(params, 'find_initial_glacier_params')
-    gdir.write_pickle(past_model, 'past_model')
+    path = gdir.get_filepath('past_model', delete=True)
     if write_steps:
-        past_models = past_model.run_until_and_output(y1)
-        gdir.write_pickle(past_models, 'past_models')
+        _ = past_model.run_until_and_store(y1, path=path)
+    else:
+        past_model.to_netcdf(path)

@@ -8,12 +8,9 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning,
                         message=r'.*guessing baseline image.*')
 
-import unittest
 import nose
 
 import os
-from six.moves.urllib.request import urlopen
-from six.moves.urllib.error import URLError
 import pandas as pd
 import geopandas as gpd
 
@@ -24,56 +21,19 @@ import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
 from oggm.core.models import flowline
-from oggm.tests import HAS_NEW_GDAL, is_slow
+from oggm.tests import requires_mpltest, requires_internet
+
+# this should be no problem since caught in __init__
+try:
+    from matplotlib.testing.decorators import image_comparison
+except ImportError:
+    pass
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
+SUFFIX = '_1.5+'
 
-# Because mpl was broken on conda
-# https://github.com/matplotlib/matplotlib/issues/5487
-try:
-    from matplotlib.testing.decorators import image_comparison
-    HAS_MPL_TEST = True
-except ImportError:
-    HAS_MPL_TEST = False
-
-
-def requires_mpltest(test):
-    # Decorator
-    msg = 'requires matplotlib.testing.decorators'
-    return test if HAS_MPL_TEST else unittest.skip(msg)(test)
-
-
-import matplotlib as mpl
-suffix = '_' + mpl.__version__
-if mpl.__version__ >= '1.5':
-    suffix = '_1.5+'
-
-if HAS_NEW_GDAL:
-    suffix += '_conda'
-
-def internet_on():
-    # Not so recommended it seems
-    try:
-        _ = urlopen('http://www.google.com', timeout=1)
-        return True
-    except URLError:
-        pass
-    return False
-
-HAS_INTERNET = internet_on()
-
-def requires_internet(test):
-    # Decorator
-    msg = 'requires internet'
-    return test if HAS_INTERNET else unittest.skip(msg)(test)
-
-
-def requires_mpl15(test):
-    # Decorator
-    msg = 'requires mpl V 1.5+'
-    return test if mpl.__version__ >= '1.5' else unittest.skip(msg)(test)
 
 # ----------------------------------------------------------
 # Lets go
@@ -96,7 +56,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
 
     # Init
     cfg.initialize()
-    cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
@@ -181,7 +141,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     return gdir
 
 
-@image_comparison(baseline_images=['test_googlestatic' + suffix],
+@image_comparison(baseline_images=['test_googlestatic' + SUFFIX],
                   extensions=['png'], tol=15)
 @requires_internet
 @requires_mpltest
@@ -191,10 +151,10 @@ def test_googlemap():
     graphics.plot_googlemap(gdir)
 
 
-@image_comparison(baseline_images=['test_centerlines' + suffix,
-                                   'test_flowlines' + suffix,
-                                   'test_downstream' + suffix,
-                                   'test_downstream_cls' + suffix,
+@image_comparison(baseline_images=['test_centerlines' + SUFFIX,
+                                   'test_flowlines' + SUFFIX,
+                                   'test_downstream' + SUFFIX,
+                                   'test_downstream_cls' + SUFFIX,
                                    ],
                   extensions=['png'])
 @requires_mpltest
@@ -207,8 +167,8 @@ def test_centerlines():
     graphics.plot_centerlines(gdir, add_downstream=True)
 
 
-@image_comparison(baseline_images=['test_width' + suffix,
-                                   'test_width_corrected' + suffix
+@image_comparison(baseline_images=['test_width' + SUFFIX,
+                                   'test_width_corrected' + SUFFIX
                                    ],
                   extensions=['png'])
 @requires_mpltest
@@ -219,7 +179,7 @@ def test_width():
     graphics.plot_catchment_width(gdir, corrected=True)
 
 
-@image_comparison(baseline_images=['test_inversion' + suffix],
+@image_comparison(baseline_images=['test_inversion' + SUFFIX],
                   extensions=['png'])
 @requires_mpltest
 def test_inversion():
@@ -228,10 +188,9 @@ def test_inversion():
     graphics.plot_inversion(gdir)
 
 
-@image_comparison(baseline_images=['test_nodivide' + suffix],
+@image_comparison(baseline_images=['test_nodivide' + SUFFIX],
                   extensions=['png'])
 @requires_mpltest
-@requires_mpl15
 def test_nodivide():
 
     # test directory
@@ -259,27 +218,26 @@ def test_nodivide():
     graphics.plot_centerlines(gdir)
 
 
-@image_comparison(baseline_images=['test_modelsection' + suffix,
-                                   'test_modelmap' + suffix,
+@image_comparison(baseline_images=['test_modelsection' + SUFFIX,
+                                   'test_modelmap' + SUFFIX,
                                    ],
                   extensions=['png'])
 @requires_mpltest
-@requires_mpl15
 def test_plot_model():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    model = flowline.FlowlineModel(gdir.read_pickle('model_flowlines'))
+    fls = flowline.convert_to_mixed_flowline(gdir.read_pickle('model_flowlines'))
+    model = flowline.FlowlineModel(fls)
     graphics.plot_modeloutput_section(gdir, model=model)
     graphics.plot_modeloutput_map(gdir, model=model)
 
 
-@image_comparison(baseline_images=['test_thick_alt' + suffix,
-                                   'test_thick_interp' + suffix,
+@image_comparison(baseline_images=['test_thick_alt' + SUFFIX,
+                                   'test_thick_interp' + SUFFIX,
                                    ],
                   extensions=['png'])
 @requires_mpltest
-@requires_mpl15
 def test_plot_distrib():
 
     gdir = init_hef()

@@ -484,9 +484,9 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
     ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
 
     # Where trapezoid change color
-    if hasattr(cls, '_dot') and cls._dot:
+    if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
         bed_t = cls.bed_h * np.NaN
-        bed_t[cls._pt] = cls.bed_h[cls._pt]
+        bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
         ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
 
     # Plot glacier
@@ -562,9 +562,9 @@ def plot_modeloutput_section_withtrib(gdir, model=None, title=''):  # pragma: no
         ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
 
         # Where trapezoid change color
-        if hasattr(cls, '_dot') and cls._dot:
+        if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
             bed_t = cls.bed_h * np.NaN
-            bed_t[cls._pt] = cls.bed_h[cls._pt]
+            bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
             ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
 
         # Plot glacier

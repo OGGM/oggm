@@ -64,7 +64,7 @@ class TestGIS(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
@@ -116,10 +116,9 @@ class TestGIS(unittest.TestCase):
             gis.define_glacier_region(gdir, entity=entity)
             gis.glacier_masks(gdir)
 
-        nc = netCDF4.Dataset(gdir.get_filepath('gridded_data'))
-        area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
-        np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
-        nc.close()
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
+            np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
 
 
 class TestCenterlines(unittest.TestCase):
@@ -134,7 +133,7 @@ class TestCenterlines(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -287,7 +286,7 @@ class TestGeometry(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -319,9 +318,8 @@ class TestGeometry(unittest.TestCase):
             cis = gdir.read_pickle('catchment_indices', div_id=div_id)
 
             # The catchment area must be as big as expected
-            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id))
-            mask = nc.variables['glacier_mask'][:]
-            nc.close()
+            with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id)) as nc:
+                mask = nc.variables['glacier_mask'][:]
 
             mymask_a = mask * 0
             mymask_b = mask * 0
@@ -401,14 +399,12 @@ class TestGeometry(unittest.TestCase):
                 harea.extend(list(cl.widths * cl.dx))
                 hgt.extend(list(cl.surface_h))
                 area += np.sum(cl.widths * cl.dx)
-            nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=i))
-            otherarea += np.sum(nc.variables['glacier_mask'][:])
-            nc.close()
+            with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=i)) as nc:
+                otherarea += np.sum(nc.variables['glacier_mask'][:])
 
-        nc = netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0))
-        mask = nc.variables['glacier_mask'][:]
-        topo = nc.variables['topo_smoothed'][:]
-        nc.close()
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
@@ -441,7 +437,7 @@ class TestClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -535,13 +531,12 @@ class TestClimate(unittest.TestCase):
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
-        nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
-        ref_h = nc_r.variables['hgt'][1, 1]
-        ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.PARAMS['prcp_scaling_factor']
-        ref_t = nc_r.variables['temp'][:, 1, 1]
-        ref_t = np.where(ref_t < 0, 0, ref_t)
-        nc_r.close()
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_h = nc_r.variables['hgt'][1, 1]
+            ref_p = nc_r.variables['prcp'][:, 1, 1]
+            ref_p *= cfg.PARAMS['prcp_scaling_factor']
+            ref_t = nc_r.variables['temp'][:, 1, 1]
+            ref_t = np.where(ref_t < 0, 0, ref_t)
 
         hgts = np.array([ref_h, ref_h, -8000, 8000])
         time, temp, prcp = climate.mb_climate_on_height(gdir, hgts)
@@ -598,13 +593,12 @@ class TestClimate(unittest.TestCase):
             gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
-        nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
-        ref_h = nc_r.variables['hgt'][1, 1]
-        ref_p = nc_r.variables['prcp'][:, 1, 1]
-        ref_p *= cfg.PARAMS['prcp_scaling_factor']
-        ref_t = nc_r.variables['temp'][:, 1, 1]
-        ref_t = np.where(ref_t < 0, 0, ref_t)
-        nc_r.close()
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_h = nc_r.variables['hgt'][1, 1]
+            ref_p = nc_r.variables['prcp'][:, 1, 1]
+            ref_p *= cfg.PARAMS['prcp_scaling_factor']
+            ref_t = nc_r.variables['temp'][:, 1, 1]
+            ref_t = np.where(ref_t < 0, 0, ref_t)
 
         # NORMAL --------------------------------------------------------------
         hgts = np.array([ref_h, ref_h, -8000, 8000])
@@ -699,9 +693,8 @@ class TestClimate(unittest.TestCase):
 
         # Check that the moovin average of temp is negatively correlated
         # with the mus
-        nc_r = netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc'))
-        ref_t = nc_r.variables['temp'][:, 1, 1]
-        nc_r.close()
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_t = nc_r.variables['temp'][:, 1, 1]
         ref_t = np.mean(ref_t.reshape((len(df), 12)), 1)
         ma = np.convolve(ref_t, np.ones(31) / float(31), 'same')
         df['temp'] = ma
@@ -825,7 +818,7 @@ class TestInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -927,9 +920,9 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=21)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
-
+    @is_slow
     def test_distribute(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -1061,8 +1054,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        atol = 30 if HAS_NEW_GDAL else 10
-        np.testing.assert_allclose(242, maxs, atol=atol)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1092,7 +1084,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=atol)
+        np.testing.assert_allclose(242, maxs, atol=25)
 
 
 class TestGrindelInvert(unittest.TestCase):
@@ -1148,7 +1140,6 @@ class TestGrindelInvert(unittest.TestCase):
     def test_ideal_glacier(self):
 
         # we are making a
-
         glen_a = cfg.A * 1
         from oggm.core.models import flowline, massbalance
 
@@ -1197,7 +1188,6 @@ class TestGrindelInvert(unittest.TestCase):
 
         cl = gdir.read_pickle('inversion_output', div_id=1)[0]
         assert utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])]) < 10.
-        # print(v_km3, model.volume_km3, v_vas)
 
     @requires_py3
     def test_invert_and_run(self):
@@ -1241,7 +1231,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('HEF_divided.shp'))
+        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = current_dir
 

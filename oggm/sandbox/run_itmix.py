@@ -68,7 +68,7 @@ cfg.PATHS['glathida_rgi_links'] = _path
 rgidf = itmix.get_rgi_df(reset=False)
 
 # Set the newly created divides (quick n dirty fix)
-df = gpd.GeoDataFrame.from_file(get_demo_file('HEF_divided.shp'))
+df = gpd.GeoDataFrame.from_file(get_demo_file('divides_workflow.shp'))
 df = pd.concat([df, pd.read_pickle(cfg.PATHS['itmix_divs'])])
 cfg.PARAMS['divides_gdf'] = df.set_index('RGIID')
 

@@ -69,9 +69,13 @@ BASENAMES = DocumentedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
-SEC_IN_MONTH = 31*24*3600
 SEC_IN_DAY = 24*3600
 SEC_IN_HOUR = 3600
+DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+SEC_IN_MONTHS = [d * SEC_IN_DAY for d in DAYS_IN_MONTH]
+CUMSEC_IN_MONTHS = np.cumsum(SEC_IN_MONTHS)
+BEGINSEC_IN_MONTHS = np.cumsum([0] + [(d + 1) * SEC_IN_DAY for d in DAYS_IN_MONTH[:-1]])
+
 RHO = 900.  # ice density
 G = 9.81  # gravity
 N = 3.  # Glen's law's exponent
@@ -176,10 +180,7 @@ BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
 
 _doc = ''
-BASENAMES['past_model'] = ('past_model.pkl', _doc)
-
-_doc = ''
-BASENAMES['past_models'] = ('past_models.pkl', _doc)
+BASENAMES['past_model'] = ('past_model.nc', _doc)
 
 
 def initialize(file=None):
@@ -276,8 +277,8 @@ def initialize(file=None):
 def set_divides_db(path=None):
     """Read the divides database.
 
-    Currently the only divides available are for HEF:
-    ``utils.get_demo_file('HEF_divided.shp')``
+    Currently the only divides available are for HEF and Kesselwand:
+    ``utils.get_demo_file('divides_workflow.shp')``
     """
 
     if PARAMS['use_divides'] and path is not None:
