@@ -349,7 +349,7 @@ class TestOtherDivides(unittest.TestCase):
         hef_file = utils.get_demo_file('rgi_oetztal.shp')
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
 
-        # loop because for some reason indexing wont work
+        # This is another glacier with divides
         for index, entity in rgidf.iterrows():
             if '00719' not in entity.RGIID:
                 continue
@@ -707,6 +707,7 @@ class TestIO(unittest.TestCase):
         self.gdir = init_hef(border=DOM_BORDER)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
+    @is_slow
     def test_flowline_to_dataset(self):
 
         beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
@@ -1088,6 +1089,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
 
+    @is_slow
     def test_bumpy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -1153,6 +1155,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1])<5)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<5)
 
+    @is_slow
     def test_noisy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -1219,6 +1222,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1])<10)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<10)
 
+    @is_slow
     def test_varying_width(self):
         """This test is for a flowline glacier of variying width, i.e with an
          accumulation area twice as wide as the tongue."""
@@ -1288,6 +1292,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
                                    atol=5)
 
+    @is_slow
     def test_tributary(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -1337,6 +1342,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(surface_h[1], 'b')
             plt.show()
 
+    @is_slow
     def test_trapezoidal_bed(self):
 
         tb = dummy_trapezoidal_bed()[0]
@@ -1404,6 +1410,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
+    @is_slow
     def test_parabolic_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -1452,6 +1459,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
+    @is_slow
     def test_mixed_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -1504,6 +1512,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.legend()
             plt.show()
 
+    @is_slow
     def test_optim(self):
 
         models = [flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
@@ -1632,6 +1641,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
                                    rtol=rtol)
 
+    @is_slow
     def test_fails(self):
 
         y0 = 0.

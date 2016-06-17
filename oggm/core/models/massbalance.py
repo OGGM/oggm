@@ -110,11 +110,6 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
         super(BackwardsMassBalanceModel, self).__init__(bias)
 
-        from oggm.tests import ON_TRAVIS
-        if not ON_TRAVIS:
-            warnings.warn(DeprecationWarning('BackwardsMassBalanceModel'
-                                             ' is deprecated'))
-
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
 

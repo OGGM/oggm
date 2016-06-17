@@ -80,12 +80,9 @@ class TestGIS(unittest.TestCase):
     def test_define_region(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
-
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
@@ -94,12 +91,9 @@ class TestGIS(unittest.TestCase):
     def test_glacierdir(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
-
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
 
         # this should simply run
         mygdir = oggm.GlacierDirectory(entity.RGIID, base_dir=self.testdir)
@@ -108,13 +102,11 @@ class TestGIS(unittest.TestCase):
 
         # The GIS was double checked externally with IDL.
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
 
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
@@ -170,14 +162,12 @@ class TestCenterlines(unittest.TestCase):
     def test_centerlines(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
 
         for div_id in gdir.divide_ids:
             cls = gdir.read_pickle('centerlines', div_id=div_id)
@@ -193,39 +183,35 @@ class TestCenterlines(unittest.TestCase):
     def test_downstream(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            centerlines.compute_downstream_lines(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.compute_downstream_lines(gdir)
 
     @is_slow
     def test_baltoro_centerlines(self):
 
         cfg.PARAMS['border'] = 2
-        cfg.PATHS['dem_file'] =  get_demo_file('baltoro_srtm_clip.tif')
+        cfg.PATHS['dem_file'] = get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
-        rgidf = gpd.GeoDataFrame.from_file(b_file)
+        entity = gpd.GeoDataFrame.from_file(b_file).iloc[0]
 
         kienholz_file = get_demo_file('centerlines_baltoro_wgs84.shp')
         kdf = gpd.read_file(kienholz_file)
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            # add fake attribs
-            entity.O1REGION = 0
-            entity.BGNDATE = 0
-            entity.NAME = 'Baltoro'
-            entity.GLACTYPE = '0000'
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
+        # add fake attribs
+        entity.O1REGION = 0
+        entity.BGNDATE = 0
+        entity.NAME = 'Baltoro'
+        entity.GLACTYPE = '0000'
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         cls = gdir.read_pickle('centerlines', div_id=1)
@@ -303,15 +289,13 @@ class TestGeometry(unittest.TestCase):
     def test_catchment_area(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.catchment_area(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.catchment_area(gdir)
 
         for div_id in gdir.divide_ids:
 
@@ -332,15 +316,13 @@ class TestGeometry(unittest.TestCase):
     def test_flowlines(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.initialize_flowlines(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
 
         for div_id in gdir.divide_ids:
             cls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
@@ -361,33 +343,29 @@ class TestGeometry(unittest.TestCase):
     def test_geom_width(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.initialize_flowlines(gdir)
-            geometry.catchment_area(gdir)
-            geometry.catchment_width_geom(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
 
     def test_width(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.initialize_flowlines(gdir)
-            geometry.catchment_area(gdir)
-            geometry.catchment_width_geom(gdir)
-            geometry.catchment_width_correction(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
 
         area = 0.
         otherarea = 0.
@@ -457,15 +435,13 @@ class TestClimate(unittest.TestCase):
     def test_distribute_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
@@ -482,19 +458,16 @@ class TestClimate(unittest.TestCase):
     def test_distribute_climate_cru(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gdirs.append(gdir)
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
-            gis.define_glacier_region(gdir, entity=entity)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
 
         climate.distribute_climate_data([gdirs[0]])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
@@ -521,14 +494,12 @@ class TestClimate(unittest.TestCase):
     def test_mb_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
         gdirs = []
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
@@ -583,14 +554,12 @@ class TestClimate(unittest.TestCase):
     def test_yearly_mb_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
         gdirs = []
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
@@ -667,20 +636,18 @@ class TestClimate(unittest.TestCase):
     def test_mu_candidates(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
         gdirs = []
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.initialize_flowlines(gdir)
-            geometry.catchment_area(gdir)
-            geometry.catchment_width_geom(gdir)
-            geometry.catchment_width_correction(gdir)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
@@ -704,20 +671,18 @@ class TestClimate(unittest.TestCase):
     def test_find_tstars(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
         gdirs = []
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            geometry.initialize_flowlines(gdir)
-            geometry.catchment_area(gdir)
-            geometry.catchment_width_geom(gdir)
-            geometry.catchment_width_correction(gdir)
-            gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        gdirs.append(gdir)
         climate.distribute_climate_data(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
@@ -744,11 +709,9 @@ class TestClimate(unittest.TestCase):
     def test_local_mustar(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -836,11 +799,9 @@ class TestInversion(unittest.TestCase):
     def test_invert_hef(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -926,11 +887,9 @@ class TestInversion(unittest.TestCase):
     def test_distribute(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -987,15 +946,13 @@ class TestInversion(unittest.TestCase):
         if not HAS_NEW_GDAL:
             np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
 
-
+    @is_slow
     def test_invert_hef_nofs(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -1248,14 +1205,12 @@ class TestCatching(unittest.TestCase):
     def test_log(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         # Make it large to raise an error
         cfg.PARAMS['border'] = 250
         cfg.CONTINUE_ON_ERROR = True
 
-        # loop because for some reason indexing wont work
-        for index, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
