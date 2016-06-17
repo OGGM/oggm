@@ -28,9 +28,11 @@ from oggm import utils
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
 
+
 def clean_dir(testdir):
     shutil.rmtree(testdir)
     os.makedirs(testdir)
+
 
 def up_to_inversion(reset=False):
     """Run the tasks you want."""
@@ -86,7 +88,10 @@ def up_to_inversion(reset=False):
         cfg.PATHS['climate_file'] = '~'
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+        with warnings.catch_warnings():
+            # There is a warning from salem
+            warnings.simplefilter("ignore")
+            workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
 

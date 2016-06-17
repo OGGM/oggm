@@ -345,7 +345,12 @@ def define_glacier_region(gdir, entity=None):
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
     # save transformed geometry to disk
+    entity = entity.copy()
     entity['geometry'] = geometry
+    # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
+    for k, s in entity.iteritems():
+        if type(s) in [np.int32, np.int64]:
+            entity[k] = int(s)
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
     towrite.to_file(gdir.get_filepath('outlines'))

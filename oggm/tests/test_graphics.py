@@ -61,11 +61,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
 
-    # loop because for some reason indexing wont work
     hef_file = get_demo_file('Hintereisferner.shp')
-    rgidf = gpd.GeoDataFrame.from_file(hef_file)
-    for index, entity in rgidf.iterrows():
-        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
 
     if not reset:
         return gdir
@@ -205,11 +203,9 @@ def test_nodivide():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
 
-    # loop because for some reason indexing wont work
     hef_file = get_demo_file('Hintereisferner.shp')
-    rgidf = gpd.GeoDataFrame.from_file(hef_file)
-    for index, entity in rgidf.iterrows():
-        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
 
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
