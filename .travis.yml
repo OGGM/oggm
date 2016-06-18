@@ -26,10 +26,16 @@ addons:
       - gdal-bin
       - libgdal-dev
 matrix:
+  fast_finish: true
   include:
     - python: 2.7
     - python: 3.4
     - python: 3.5
+      env: OGGM_ENV=prepro
+    - python: 3.5
+      env: OGGM_ENV=models
+    - python: 3.5
+      env: OGGM_ENV=workflow
 before_install:
   - pip install -U pip
   - pip install wheel

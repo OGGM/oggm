@@ -25,10 +25,14 @@ import matplotlib.pyplot as plt
 from oggm.tests.test_graphics import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import ConstantBalanceModel
-from oggm.tests import is_slow, assertDatasetAllClose
+from oggm.tests import is_slow, assertDatasetAllClose, RUN_MODEL_TESTS
 
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
+
+# do we event want to run the tests?
+if not RUN_MODEL_TESTS:
+    raise unittest.SkipTest('Skipping all model tests.')
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))

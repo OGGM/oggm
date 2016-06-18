@@ -24,7 +24,11 @@ from oggm.core.preprocessing import centerlines
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3
+from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
+
+# do we event want to run the tests?
+if not RUN_PREPRO_TESTS:
+    raise unittest.SkipTest('Skipping all prepro tests.')
 
 # Globals
 current_dir = os.path.dirname(os.path.abspath(__file__))

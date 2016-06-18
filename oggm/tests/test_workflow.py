@@ -18,11 +18,15 @@ import matplotlib.pyplot as plt
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, ON_TRAVIS
+from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import graphics
 from oggm import utils
+
+# do we event want to run the tests?
+if not RUN_WORKFLOW_TESTS:
+    raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))

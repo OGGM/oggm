@@ -1,6 +1,7 @@
 import six
 import osgeo.gdal
 import os
+import sys
 import unittest
 import logging
 import matplotlib as mpl
@@ -36,15 +37,42 @@ except ImportError:
 ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
+RUN_PREPRO_TESTS = True
+RUN_MODEL_TESTS = True
+RUN_WORKFLOW_TESTS = True
 if os.environ.get('TRAVIS') is not None:
+    # sepcific to travis to reduce global test time
     ON_TRAVIS = True
-    RUN_SLOW_TESTS = True
     RUN_DOWNLOAD_TESTS = False
 
-# if os.environ.get('OGGM_SLOW_TESTS') is not None:
-#     RUN_SLOW_TESTS = True
-# if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
-#     RUN_DOWNLOAD_TESTS = True
+    # Minimal tests
+    if sys.version_info <= (3, 4):
+        RUN_SLOW_TESTS = False
+        RUN_PREPRO_TESTS = True
+        RUN_MODEL_TESTS = True
+        RUN_WORKFLOW_TESTS = True
+    else:
+        # distribute the tests
+        RUN_SLOW_TESTS = True
+        env = os.environ.get('OGGM_ENV')
+        if env == 'prepro':
+            RUN_PREPRO_TESTS = True
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = False
+        if env == 'models':
+            RUN_PREPRO_TESTS = False
+            RUN_MODEL_TESTS = True
+            RUN_WORKFLOW_TESTS = False
+        if env == 'workflow':
+            RUN_PREPRO_TESTS = False
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = True
+
+# give user some control
+if os.environ.get('OGGM_SLOW_TESTS') is not None:
+    RUN_SLOW_TESTS = True
+if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
+    RUN_DOWNLOAD_TESTS = True
 
 # quick n dirty method to see if internet is on
 try:
