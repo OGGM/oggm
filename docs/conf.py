@@ -17,41 +17,41 @@ import shutil
 import sys
 
 # If we are on a proper oggm install, we should be able to import all modules
-try:
-    import oggm
-    import oggm.utils
-    import oggm.core.preprocessing.gis
-    import oggm.core.preprocessing.centerlines
-    import oggm.core.preprocessing.climate
-    import oggm.core.preprocessing.geometry
-    import oggm.core.preprocessing.inversion
-    import oggm.core.models.massbalance
-    import oggm.core.models.flowline
-    import oggm.tasks
-except ImportError:
-    # Mock the modules which are just too hard to install (all)
-    try:
-        from unittest.mock import MagicMock
-    except ImportError:
-        from mock import Mock as MagicMock
-
-    class Mock(MagicMock):
-        @classmethod
-        def __getattr__(cls, name):
-                return Mock()
-
-    MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
-                    'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
-                    'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
-                    'cleo', 'motionless', 'rasterio', 'osgeo', 'shapely.ops',
-                    'skimage', 'skimage.draw', 'shapely.geometry',
-                    'scipy.signal', 'scipy.ndimage', 'skimage.graph',
-                    'scipy.ndimage.measurements', 'scipy.ndimage.morphology',
-                    'matplotlib._cntr', 'scipy.ndimage.filters',
-                    'scipy.interpolate', 'xarray', 'rasterio.tools',
-                    'rasterio.tools.merge', 'salem.utils']
-    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
-    from oggm.tasks import *
+# try:
+import oggm
+import oggm.utils
+import oggm.core.preprocessing.gis
+import oggm.core.preprocessing.centerlines
+import oggm.core.preprocessing.climate
+import oggm.core.preprocessing.geometry
+import oggm.core.preprocessing.inversion
+import oggm.core.models.massbalance
+import oggm.core.models.flowline
+import oggm.tasks
+# except ImportError:
+#     # Mock the modules which are just too hard to install (all)
+#     try:
+#         from unittest.mock import MagicMock
+#     except ImportError:
+#         from mock import Mock as MagicMock
+#
+#     class Mock(MagicMock):
+#         @classmethod
+#         def __getattr__(cls, name):
+#                 return Mock()
+#
+#     MOCK_MODULES = ['numpy', 'pandas', 'configobj', 'geopandas', 'netCDF4',
+#                     'salem', 'scipy', 'scikit-image', 'pillow', 'matplotlib',
+#                     'pandas', 'joblib', 'gdal', 'shapely', 'pyproj', 'nose',
+#                     'cleo', 'motionless', 'rasterio', 'osgeo', 'shapely.ops',
+#                     'skimage', 'skimage.draw', 'shapely.geometry',
+#                     'scipy.signal', 'scipy.ndimage', 'skimage.graph',
+#                     'scipy.ndimage.measurements', 'scipy.ndimage.morphology',
+#                     'matplotlib._cntr', 'scipy.ndimage.filters',
+#                     'scipy.interpolate', 'xarray', 'rasterio.tools',
+#                     'rasterio.tools.merge', 'salem.utils']
+#     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+#     from oggm.tasks import *
 
 # -- General configuration ------------------------------------------------
 

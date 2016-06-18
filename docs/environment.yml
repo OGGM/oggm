@@ -1,0 +1,11 @@
+name: oggm
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pandas
+  - numpydoc
+  - ipython
+  - sphinx=1.2.3
+  - sphinxcontrib-images
