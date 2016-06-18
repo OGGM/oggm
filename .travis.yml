@@ -1,7 +1,8 @@
 language: python
 sudo: false
-# blacklist
-branches:
+notifications:
+  email: false
+branches:  # blacklist
   except:
     - appveyor
     - docs
@@ -12,7 +13,6 @@ env:
   global:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
-    - OLDER_PACKAGES=false
 addons:
   apt:
     packages:
@@ -36,6 +36,8 @@ matrix:
       env: OGGM_ENV=models
     - python: 3.5
       env: OGGM_ENV=workflow
+    - python: 3.5
+      env: OGGM_ENV=graphics
 before_install:
   - pip install -U pip
   - pip install wheel

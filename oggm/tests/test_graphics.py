@@ -1,7 +1,7 @@
 from __future__ import division
 
+import unittest
 import warnings
-
 import oggm.utils
 
 warnings.filterwarnings("once", category=DeprecationWarning)
@@ -21,13 +21,17 @@ import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import graphics
 from oggm.core.models import flowline
-from oggm.tests import requires_mpltest, requires_internet
+from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
 
 # this should be no problem since caught in __init__
 try:
     from matplotlib.testing.decorators import image_comparison
 except ImportError:
     pass
+
+# do we event want to run the tests?
+if not RUN_GRAPHIC_TESTS:
+    raise unittest.SkipTest('Skipping all graphic tests.')
 
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
