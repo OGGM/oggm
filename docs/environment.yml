@@ -18,7 +18,7 @@ dependencies:
   - xarray
   - numpydoc
   - ipython
-  - sphinx=1.2.3
+  - sphinx
   - pip:
     - git+https://github.com/fmaussion/motionless.git
     - git+https://github.com/fmaussion/salem.git
