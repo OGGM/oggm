@@ -4,13 +4,17 @@ branches:
   except:
     - docs
 
-environment:
+notifications:
+  - provider: Email
+    on_build_success: false
+    on_build_failure: false
+    on_build_status_changed: false
 
+environment:
   matrix:
     - PYTHON: "C:\\Python27-conda32"
       PYTHON_VERSION: "2.7"
       PYTHON_ARCH: "32"
-
     - PYTHON: "C:\\Python35-conda64"
       PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "64"
