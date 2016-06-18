@@ -1,7 +1,8 @@
 language: python
 sudo: false
-# blacklist
-branches:
+notifications:
+  email: false
+branches:  # blacklist
   except:
     - appveyor
     - docs
@@ -12,7 +13,6 @@ env:
   global:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
-    - OLDER_PACKAGES=false
 addons:
   apt:
     packages:
@@ -26,10 +26,17 @@ addons:
       - gdal-bin
       - libgdal-dev
 matrix:
+  fast_finish: true
   include:
     - python: 2.7
-    - python: 3.4
     - python: 3.5
+      env: OGGM_ENV=prepro
+    - python: 3.5
+      env: OGGM_ENV=models
+    - python: 3.5
+      env: OGGM_ENV=workflow
+    - python: 3.5
+      env: OGGM_ENV=graphics
 before_install:
   - pip install -U pip
   - pip install wheel
@@ -49,6 +56,6 @@ install:
   - pip install -e .
   - "sed -i 's/^backend.*/backend : Agg/' /home/travis/virtualenv/*/lib/python*/site-packages/matplotlib/mpl-data/matplotlibrc"
 script:
-  - nosetests --with-coverage --cover-package oggm --logging-level=INFO
+  - nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
 after_success:
   - coveralls
