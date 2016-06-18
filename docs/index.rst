@@ -30,9 +30,8 @@ Documentation
     getting-started
     centerlines
     mass-balance
-    flowline
+    ice-dynamics
     glacierdir-gen
-    itmix
     api
 
 
