@@ -23,6 +23,7 @@ glaciers they are modelling.
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/0_globmap.png?raw=1
     :width: 100%
+    :download: true
 
 The deadline for the experiment was February 29th. Definitely too early
 for OGGM, with which we had performed the inversion for the European Alps
@@ -46,16 +47,22 @@ marine-terminating...
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Devon.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Elbrus.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Unteraar.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Aqqutikitsoq.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Austfonna.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Urumqi.png?raw=1
     :width: 49%
+    :download: true
 
 *Blue: ITMIX outlines, Black: RGI outlines. White means that ITMIX didn't
 provide the topography.*
@@ -96,8 +103,10 @@ glaciers. Take for example the DEM for two glaciers in Iceland:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/wgms_dyngjujoekull_rgi50-06.00477_dom.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/rgi50-07.01394.png?raw=1
     :width: 49%
+    :download: true
 
 Note that the hypsometry provided in RGI V5 also contains these errors.
 While the problems with the right plot are obvious, the glacier on the left
@@ -107,6 +116,7 @@ Huss:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/hypso_rgi50-06.00477.png?raw=1
     :width: 60%
+    :download: true
 
 Up to a few discrepancies due to projection issues, we both have the problem
 of non-zero bins below 750 m a.s.l. Fortunately, thanks to the work by
@@ -116,6 +126,7 @@ of non-zero bins below 750 m a.s.l. Fortunately, thanks to the work by
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/w_dyngjujoekull_rgi50-06.00477_cls.png?raw=1
     :width: 60%
+    :download: true
 
 There is potential for even better coverage of corrected DEM, but this would
 require a bit more work (J. de Ferranti's data is not always logically
@@ -143,14 +154,16 @@ the sake of the experiment ("blind run"):
 These leaves us with 201861 WGMS glaciers with at least 5 years of mass-balance
 data available for calibration of the mass-balance:
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/globmap_wgms.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/globmap_wgms.png?raw=1
     :width: 100%
+    :download: true
 
 And 133 GlaThiDa glaciers with glacier-wide average thickness estimates. The
 coverage of GlaThiDa is not very good, which is probably a problem:
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/globmap_glathida.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/globmap_glathida.png?raw=1
     :width: 100%
+    :download: true
 
 
 Inversion procedure
@@ -176,8 +189,9 @@ marine-terminating glaciers from the dataset in
 order to avoid these specific cases (135 glaciers left). Here are the
 results of the calibration (left: volume-area scaling, right: OGGM):
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/scatter_all_glaciers.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/scatter_all_glaciers.png?raw=1
     :width: 100%
+    :download: true
 
 We can see that OGGM has a slightly lower score than volume-area scaling
 (VAS). This is due to the presence of a couple of outliers. In particular,
@@ -196,13 +210,15 @@ depends mostly on precipitation, but also on temperature and its seasonal
 cycle. Here I show the apparent mass-balance gradient in the ablation area
 of all GlaThiDa glaciers:
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/mb_grad.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/mb_grad.png?raw=1
     :width: 100%
+    :download: true
 
 Is the MB gradient related to the error OGGM makes in comparison to GlaThiDa?
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/rel_error.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/rel_error.png?raw=1
     :width: 100%
+    :download: true
 
 No not really. And this is similar with all other glacier characteristics I
 could look at until now. The error that OGGM makes is not easily
@@ -217,8 +233,9 @@ I don't want the calibration to be too altered by the Black Rapids outlier,
 so I removed it from the calibration set. The plot now looks better, and
 after this little hack OGGM is even *slightly* better than VAS:
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/scatter_all_glaciers_no_rapids.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/scatter_all_glaciers_no_rapids.png?raw=1
     :width: 100%
+    :download: true
 
 What is really interesting however is that OGGM and VAS are incredibly
 similar in their dissimilarity with GlaThiDa. So similar that if we plot the
@@ -226,8 +243,9 @@ two approaches together on a scatter, one could argue that the thousands of
 lines of code of OGGM really aren't worth the effort ;). I think that I have
 to talk to David Bahr about this, he will surely be pleased.
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/vas_vs_oggm.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/vas_vs_oggm.png?raw=1
     :width: 50%
+    :download: true
 
 
 A problem with large glaciers?
@@ -239,8 +257,9 @@ little bit and I decided to have a closer look. In the figure below I compare
 the OGGM inversion results with VAS for all glaciers I have at hand for the
 experiment (ITMIX + WGMS + GlaThiDa, land-terminating, no ice-caps).
 
-.. figure:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/vas_vs_oggm_large.png?raw=1
+.. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/vas_vs_oggm_large.png?raw=1
     :width: 50%
+    :download: true
 
 After many hours (days?) of searching for a reasonable explanation for this
 behavior, I had to renounce. I will have to make a test under controlled
@@ -291,16 +310,22 @@ meant to provide the intput to a flowline model:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Elbrus_RGI50-12.00042_inv.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Hellstugubreen_RGI50-08.02182_inv.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Tasman_RGI50-18.02342_inv.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Unteraar_RGI50-11.01328_inv.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:NorthGlacier_RGI50-01.16835_inv.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:SouthGlacier_RGI50-01.16195_inv.png?raw=1
     :width: 49%
+    :download: true
 
 
 Distributed ice thickness
@@ -329,8 +354,10 @@ An example of the interpolation for Columbia glacier with (left) or without
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Columbia_RGI50-01.10689_d1_8.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Columbia_RGI50-01.10689_d2_8.png?raw=1
     :width: 49%
+    :download: true
 
 For the ice caps, the interpolation methods lead to similar results.
 However, it is very likely that the flowline methodology used by OGGM is not
@@ -338,8 +365,10 @@ working properly.
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Academy_RGI50-09.00910_d1.png?raw=1
     :width: 49%
+    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Austfonna_RGI50-07.00025_d1.png?raw=1
     :width: 49%
+    :download: true
 
 
 Conclusions
