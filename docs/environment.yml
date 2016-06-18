@@ -6,7 +6,6 @@ dependencies:
   - numpy
   - pandas
   - geopandas
-  - matplotlib
   - Pillow
   - joblib
   - netCDF4
@@ -17,10 +16,9 @@ dependencies:
   - rasterio
   - xarray
   - numpydoc
-  - ipython
-  - sphinx
+  - ipython=4.0.1
+  - sphinx=1.2.3  # pin to avoid https://github.com/sphinx-doc/sphinx/issues/1822
   - pip:
     - git+https://github.com/fmaussion/motionless.git
     - git+https://github.com/fmaussion/salem.git
     - git+https://github.com/fmaussion/cleo.git
-    - sphinxcontrib-images
