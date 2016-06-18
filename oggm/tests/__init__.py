@@ -5,13 +5,25 @@ import sys
 import unittest
 import logging
 import matplotlib as mpl
+import pandas as pd
+import geopandas as gpd
 import numpy as np
+import scipy.optimize as optimization
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
+from oggm.core.preprocessing import gis, centerlines, geometry
+from oggm.core.preprocessing import climate, inversion
+import oggm
+import oggm.cfg as cfg
+from oggm.utils import get_demo_file
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
+
+# test dirs
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
 
 # Some logic to see which environment we are running on
 
@@ -159,3 +171,101 @@ def assertDatasetAllClose(d1, d2, rtol=1e-05, atol=1e-08):
         v1 = d1.variables[k]
         v2 = d2.variables[k]
         assertVariableAllClose(v1, v2, rtol=rtol, atol=atol)
+
+
+def init_hef(reset=False, border=40, invert_with_sliding=True):
+
+    # test directory
+    testdir = TESTDIR_BASE + '_border{}'.format(border)
+    if not invert_with_sliding:
+        testdir += '_withoutslide'
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+        reset = True
+    if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897')):
+        reset = True
+    if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897',
+                                       'inversion_params.pkl')):
+        reset = True
+
+    # Init
+    cfg.initialize()
+    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = border
+
+    hef_file = get_demo_file('Hintereisferner.shp')
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+
+    if not reset:
+        return gdir
+
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+    centerlines.compute_downstream_lines(gdir)
+    geometry.initialize_flowlines(gdir)
+    geometry.catchment_area(gdir)
+    geometry.catchment_width_geom(gdir)
+    geometry.catchment_width_correction(gdir)
+    climate.distribute_climate_data([gdir])
+    climate.mu_candidates(gdir, div_id=0)
+    hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
+    mbdf = pd.read_csv(hef_file).set_index('YEAR')
+    t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+    climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1])
+
+    inversion.prepare_for_inversion(gdir)
+    ref_v = 0.573 * 1e9
+
+    if invert_with_sliding:
+        def to_optimize(x):
+            # For backwards compat
+            _fd = 1.9e-24 * x[0]
+            glen_a = (cfg.N+2) * _fd / 2.
+            fs = 5.7e-20 * x[1]
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                                  glen_a=glen_a)
+            return (v - ref_v)**2
+
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-4)['x']
+        _fd = 1.9e-24 * out[0]
+        glen_a = (cfg.N+2) * _fd / 2.
+        fs = 5.7e-20 * out[1]
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
+    else:
+        def to_optimize(x):
+            glen_a = cfg.A * x[0]
+            v, _ = inversion.invert_parabolic_bed(gdir, fs=0.,
+                                                  glen_a=glen_a)
+            return (v - ref_v)**2
+
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.01, 10),),
+                                    tol=1e-4)['x']
+        glen_a = cfg.A * out[0]
+        fs = 0.
+        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
+    d = dict(fs=fs, glen_a=glen_a)
+    d['factor_glen_a'] = out[0]
+    try:
+        d['factor_fs'] = out[1]
+    except IndexError:
+        d['factor_fs'] = 0.
+    gdir.write_pickle(d, 'inversion_params')
+
+    inversion.distribute_thickness(gdir, how='per_altitude',
+                                   add_nc_name=True)
+    inversion.distribute_thickness(gdir, how='per_interpolation',
+                                   add_slope=False, smooth=False,
+                                   add_nc_name=True)
+
+    return gdir

@@ -22,7 +22,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Local imports
-from oggm.tests.test_graphics import init_hef
+from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import ConstantBalanceModel
 from oggm.tests import is_slow, assertDatasetAllClose, RUN_MODEL_TESTS
