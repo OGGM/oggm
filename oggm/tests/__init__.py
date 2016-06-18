@@ -42,7 +42,7 @@ RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
 if os.environ.get('TRAVIS') is not None:
-    # sepcific to travis to reduce global test time
+    # specific to travis to reduce global test time
     ON_TRAVIS = True
     RUN_DOWNLOAD_TESTS = False
 

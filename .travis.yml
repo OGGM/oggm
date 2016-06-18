@@ -29,7 +29,6 @@ matrix:
   fast_finish: true
   include:
     - python: 2.7
-    - python: 3.4
     - python: 3.5
       env: OGGM_ENV=prepro
     - python: 3.5
@@ -57,6 +56,6 @@ install:
   - pip install -e .
   - "sed -i 's/^backend.*/backend : Agg/' /home/travis/virtualenv/*/lib/python*/site-packages/matplotlib/mpl-data/matplotlibrc"
 script:
-  - nosetests --with-coverage --cover-package oggm --logging-level=INFO
+  - nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
 after_success:
   - coveralls
