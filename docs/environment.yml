@@ -8,4 +8,3 @@ dependencies:
   - numpydoc
   - ipython
   - sphinx=1.2.3
-  - sphinxcontrib-images

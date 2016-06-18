@@ -23,7 +23,6 @@ glaciers they are modelling.
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/0_globmap.png?raw=1
     :width: 100%
-    :download: true
 
 The deadline for the experiment was February 29th. Definitely too early
 for OGGM, with which we had performed the inversion for the European Alps
@@ -47,22 +46,16 @@ marine-terminating...
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Devon.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Elbrus.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Unteraar.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Aqqutikitsoq.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Austfonna.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/itmix_orig_glaciers/Urumqi.png?raw=1
     :width: 49%
-    :download: true
 
 *Blue: ITMIX outlines, Black: RGI outlines. White means that ITMIX didn't
 provide the topography.*
@@ -103,10 +96,8 @@ glaciers. Take for example the DEM for two glaciers in Iceland:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/wgms_dyngjujoekull_rgi50-06.00477_dom.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/rgi50-07.01394.png?raw=1
     :width: 49%
-    :download: true
 
 Note that the hypsometry provided in RGI V5 also contains these errors.
 While the problems with the right plot are obvious, the glacier on the left
@@ -116,7 +107,6 @@ Huss:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/hypso_rgi50-06.00477.png?raw=1
     :width: 60%
-    :download: true
 
 Up to a few discrepancies due to projection issues, we both have the problem
 of non-zero bins below 750 m a.s.l. Fortunately, thanks to the work by
@@ -126,7 +116,6 @@ of non-zero bins below 750 m a.s.l. Fortunately, thanks to the work by
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/w_dyngjujoekull_rgi50-06.00477_cls.png?raw=1
     :width: 60%
-    :download: true
 
 There is potential for even better coverage of corrected DEM, but this would
 require a bit more work (J. de Ferranti's data is not always logically
@@ -302,22 +291,16 @@ meant to provide the intput to a flowline model:
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Elbrus_RGI50-12.00042_inv.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Hellstugubreen_RGI50-08.02182_inv.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Tasman_RGI50-18.02342_inv.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:Unteraar_RGI50-11.01328_inv.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:NorthGlacier_RGI50-01.16835_inv.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_raw/I:SouthGlacier_RGI50-01.16195_inv.png?raw=1
     :width: 49%
-    :download: true
 
 
 Distributed ice thickness
@@ -346,10 +329,8 @@ An example of the interpolation for Columbia glacier with (left) or without
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Columbia_RGI50-01.10689_d1_8.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Columbia_RGI50-01.10689_d2_8.png?raw=1
     :width: 49%
-    :download: true
 
 For the ice caps, the interpolation methods lead to similar results.
 However, it is very likely that the flowline methodology used by OGGM is not
@@ -357,10 +338,8 @@ working properly.
 
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Academy_RGI50-09.00910_d1.png?raw=1
     :width: 49%
-    :download: true
 .. thumbnail:: https://dl.dropboxusercontent.com/u/20930277/itmix_public/invert_d/I:Austfonna_RGI50-07.00025_d1.png?raw=1
     :width: 49%
-    :download: true
 
 
 Conclusions
