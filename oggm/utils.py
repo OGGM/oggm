@@ -157,8 +157,18 @@ def _download_oggm_files_unlocked():
     # download only if necessary
     if not os.path.exists(ofile):
         progress_urlretrieve(master_zip_url, ofile)
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(odir)
+
+        # Trying to make the download more robust
+        try:
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        except zipfile.BadZipfile:
+            # try another time
+            if os.path.exists(ofile):
+                os.remove(ofile)
+            progress_urlretrieve(master_zip_url, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
 
     # sha did change, replace
     if write_sha:
