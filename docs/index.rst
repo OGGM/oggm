@@ -1,4 +1,4 @@
-.. image:: ../files/logo.png
+.. image:: _static/logo.png
 
 |
 

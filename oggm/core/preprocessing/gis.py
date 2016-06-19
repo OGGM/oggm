@@ -292,16 +292,26 @@ def _mask_per_divide(gdir, div_id, dem, smoothed_dem):
 @entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
 def define_glacier_region(gdir, entity=None):
     """
-    Very first task: define the glacier's grid.
+    Very first task: define the glacier's local grid.
 
-    Defines the local glacier projection (Transverse Mercator), chooses a
-    resolution for the grid, and transforms the DEM as well as the RGI shape
-    into it.
+    Defines the local projection (Transverse Mercator), centered on the
+    glacier. The resolution of the local grid depends on the size of the
+    glacier::
+
+        dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
+
+    See ``params.cfg`` for setting these options. Default values lead to a
+    resolution of 50 m for Hintereisferner, which is approx. 8 km2 large.
+
+    After defining the grid, the topography and the outlines of the glacier
+    are transformed into the local projection. The default interpolation for
+    the topography is `cubic`.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
-    entity : geopandas entity
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    entity : geopandas GeoSeries
         the glacier geometry to process
     """
 
@@ -462,11 +472,15 @@ def define_glacier_region(gdir, entity=None):
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
 def glacier_masks(gdir):
-    """Converts the glacier vector geometries to grids.
+    """Makes a gridded mask of the glacier outlines.
+
+    Additionally, it prepares the divide directories and further gridded data
+    needed for subsequent tasks.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # open srtm tif-file:

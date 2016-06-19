@@ -157,8 +157,18 @@ def _download_oggm_files_unlocked():
     # download only if necessary
     if not os.path.exists(ofile):
         progress_urlretrieve(master_zip_url, ofile)
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(odir)
+
+        # Trying to make the download more robust
+        try:
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+        except zipfile.BadZipfile:
+            # try another time
+            if os.path.exists(ofile):
+                os.remove(ofile)
+            progress_urlretrieve(master_zip_url, ofile)
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
 
     # sha did change, replace
     if write_sha:
@@ -1401,14 +1411,44 @@ class GlacierDirectory(object):
 
     It handles a glacier directory created in a base directory (default
     is the "per_glacier" folder in the working directory). The role of a
-    GlacierDirectory is to give access to file paths and to I/O operations
-    in a transparent way. The user should not care about *where* the files are
+    GlacierDirectory is to give access to file paths and to I/O operations.
+    The user should not care about *where* the files are
     located, but should know their name (see :ref:`basenames`).
+
+    If the directory does not exist, it will be created.
 
     A glacier entity has one or more divides. See :ref:`glacierdir`
     for more information.
 
-    TODO: document properties
+    Attributes
+    ----------
+    dir : str
+        path to the directory
+    rgi_id : str
+        The glacier's RGI identifier
+    glims_id : str
+        The glacier's GLIMS identifier (when available)
+    rgi_area_km2 : float
+        The glacier's RGI area (km2)
+    cenlon, cenlat : float
+        The glacier centerpoint's lon/lat
+    rgi_date : datetime
+        The RGI's BGNDATE attribute if available. Otherwise, defaults to
+        2003-01-01
+    rgi_region : str
+        The RGI region name
+    name : str
+        The RGI glacier name (if Available)
+    glacier_type : str
+        The RGI glacier type ('Glacier', 'Ice cap', 'Perennial snowfield',
+        'Seasonal snowfield')
+    terminus_type : str
+        The RGI terminus type ('Land-terminating', 'Marine-terminating',
+        'Lake-terminating', 'Dry calving', 'Regenerated', 'Shelf-terminating')
+    is_tidewater : bool
+        Is the glacier a caving glacier?
+    inversion_calving_rate : float
+        Calving rate used for the inversion
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False):
@@ -1416,30 +1456,15 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity: glacier entity read from the shapefile  or a valid RGI ID
-        base_dir: path to the directory where to open the directory
-            defaults to "conf.PATHPATHS['working_dir'] + /per_glacier/"
-        reset: emtpy the directory at construction (careful!)
+        rgi_entity : a `GeoSeries <http://geopandas.org/data_structures.html#geoseries>`_ or str
+            glacier entity read from the shapefile (or a valid RGI ID if the
+            directory exists)
+        base_dir : str
+            path to the directory where to open the directory.
+            Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
+        reset : bool, default=False
+            empties the directory at construction (careful!)
 
-        Attributes
-        ----------
-        dir : str
-            path to the directory
-        rgi_id : str
-            The glacier's RGI identifier
-        glims_id : str
-            The glacier's GLIMS identifier (when available)
-        rgi_area_km2 : float
-            The glacier's RGI area (km2)
-        cenlon : float
-            The glacier's RGI central longitude
-        rgi_date : datetime
-            The RGI's BGNDATE attribute if available. Otherwise, defaults to
-            2003-01-01
-        rgi_region : str
-            The RGI region name
-        name : str
-            The RGI glacier name (if Available)
         """
 
         if base_dir is None:
@@ -1512,7 +1537,7 @@ class GlacierDirectory(object):
 
     @lazy_property
     def grid(self):
-        """A ``salem.Grid`` handling the georeferencing of the local grid."""
+        """A ``salem.Grid`` handling the georeferencing of the local grid"""
         return self.read_pickle('glacier_grid')
 
     @lazy_property
@@ -1522,18 +1547,18 @@ class GlacierDirectory(object):
 
     @property
     def divide_dirs(self):
-        """list of the glacier divides directories."""
+        """List of the glacier divides directories"""
         dirs = [self.dir] + list(glob.glob(os.path.join(self.dir, 'divide_*')))
         return dirs
 
     @property
     def n_divides(self):
-        """Number of glacier divides."""
+        """Number of glacier divides"""
         return len(self.divide_dirs)-1
 
     @property
     def divide_ids(self):
-        """Iterator over the glacier divides ids."""
+        """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
     def get_filepath(self, filename, div_id=0, delete=False):
@@ -1541,11 +1566,11 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id: int
+        div_id : int
             the divide for which you want to get the file path
-        delete: bool
+        delete : bool, default=False
             delete the file if exists
 
         Returns
@@ -1563,17 +1588,26 @@ class GlacierDirectory(object):
         return out
 
     def has_file(self, filename, div_id=0):
+        """Checks if a file exists.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        div_id : int
+            the divide for which you want to get the file path
+        """
 
         return os.path.exists(self.get_filepath(filename, div_id=div_id))
 
     def read_pickle(self, filename, div_id=0):
-        """ Reads a pickle located in the directory.
+        """Reads a pickle located in the directory.
 
         Parameters
         ----------
-        filename: str
+        filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id: int
+        div_id : int
             the divide for which you want to get the file path
 
         Returns
@@ -1592,11 +1626,11 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        var: object
+        var : object
             the variable to write to disk
-        filename: str
+        filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id: int
+        div_id : int
             the divide for which you want to get the file path
         """
 
@@ -1612,9 +1646,9 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        filename: str
+        filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id: int
+        div_id : int
             the divide for which you want to get the file path
 
         Returns
@@ -1706,17 +1740,33 @@ class GlacierDirectory(object):
             v[:] = grad
 
     def log(self, func, err=None):
+        """Logs a message to the glacier directory.
 
+        It is usually called by the :py:class:`entity_task` decorator, normally
+        you shouldn't take care about that.
+
+        Parameters
+        ----------
+        func : a function
+            the function which wants to log
+        err : Exception
+            the exception which has been raised by func (if no exception was
+            raised, a success is logged)
+        """
+
+        # logging directory
         fpath = os.path.join(self.dir, 'log')
         if not os.path.exists(fpath):
             os.makedirs(fpath)
-        fpath = os.path.join(fpath, func.__name__)
 
+        # a file per function name
+        fpath = os.path.join(fpath, func.__name__)
         if err is not None:
             fpath += '.ERROR'
         else:
             fpath += '.SUCCESS'
 
+        # in case an exception was raised, write the log message too
         with open(fpath, 'w') as f:
             f.write(func.__name__ + '\n')
             if err is not None:
