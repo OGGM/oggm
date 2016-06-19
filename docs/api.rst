@@ -6,6 +6,9 @@ Here we will add the documentation for selected modules.
 
 .. currentmodule:: oggm.tasks
 
+
+.. _apientitytasks:
+
 Entity tasks
 ============
 

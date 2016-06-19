@@ -9,23 +9,9 @@ Getting started
 .. ipython:: python
    :suppress:
 
+    import os
     import numpy as np
     np.set_printoptions(threshold=10)
-
-    # try download a couple of times
-    from oggm.utils import get_demo_file
-    try:
-        get_demo_file('Hintereisferner.shp')
-    except:
-        pass
-    try:
-        get_demo_file('Hintereisferner.shp')
-    except:
-        pass
-    try:
-        get_demo_file('Hintereisferner.shp')
-    except:
-        pass
 
 The ultimate goal of OGGM will be to hide the python workflow behind the model
 entirely, and run it only using configuration files and scripts. We are not
@@ -54,14 +40,14 @@ Initialisation and GlacierDirectories
 
 The first thing to do when running OGGM is to initialise it. This function
 will read the `default configuration file <https://github.com/OGGM/oggm/blob/master/oggm/params.cfg>`_
-which contains all user defined parameters.
+which contains all user defined parameters:
 
 .. ipython:: python
 
     cfg.initialize()
 
 These parameters are now accessible to all OGGM routines. For example, the
-`cfg.PARAMS` dict contains some runtime parameters, while `cfg.PATHS` stores
+``cfg.PARAMS`` dict contains some runtime parameters, while ``cfg.PATHS`` stores
 the paths to the input files and the working directory (where the model output
 will be written):
 
@@ -110,24 +96,35 @@ its terminus type:
     gdir.dir
     gdir.terminus_type
 
+GlacierDirectories are the input to most OGGM functions. In fact, they are the
+only required input to all :ref:`apientitytasks`. These entity tasks are
+processes which can run on one glacier at a time (the vast majority of OGGM
+tasks are entity tasks). The first task to apply to an empty GlacierDirectory
+is :py:func:`tasks.define_glacier_region`, which sets the local glacier map
+and topography, and :py:func:`tasks.glacier_masks`, which prepares gridded
+data for the divides:
 
 .. ipython:: python
 
     tasks.define_glacier_region(gdir, entity=entity)
     tasks.glacier_masks(gdir)
+    os.listdir(gdir.dir)
 
-And this makes a plot:
+The directory is now filled with data. Other tasks can build upon these, for
+example the plotting functions:
 
 .. ipython:: python
 
-    @savefig plot_domain.png
+    @savefig plot_domain.png width=80%
     graphics.plot_domain(gdir)
 
-Do it yourself
---------------
+What next?
+---------
 
-A good place to start is the ``oggm/docs/notebooks`` directory. You will find
-two notebooks:
+We will try to fill out the next chapters of this documentation soon. In the
+meantine, a good place to start is the ``oggm/docs/notebooks`` directory.
+
+You will find two notebooks:
 
 - ``getting_started.ipynb``, which set-ups an entire OGGM run
   in the Ötztal region.
