@@ -31,6 +31,7 @@ Initalising a glacier directory
     from oggm.utils import get_demo_file
     cfg.initialize()
     cfg.PARAMS['border'] = 20
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     path = os.path.join(os.path.expanduser('~'), 'GlacierDir_Example')
     if os.path.exists(path):
         shutil.rmtree(path)
