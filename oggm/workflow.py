@@ -45,7 +45,20 @@ def _init_pool():
     return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
 
 
-def execute_entity_task(task, gdirs):
+class _pickle_copier(object):
+    """Pickleable alternative to functools.partial,
+    Which is not pickleable in python2 and thus doesn't work
+    with Multiprocessing."""
+
+    def __init__(self, func, **kwargs):
+        self.call_func = func
+        self.out_kwargs = kwargs
+
+    def __call__(self, gdir):
+        return self.call_func(gdir, **self.out_kwargs)
+
+
+def execute_entity_task(task, gdirs, **kwargs):
     """Execute a task on gdirs.
 
     If you asked for multiprocessing, it will do it.
@@ -60,10 +73,10 @@ def execute_entity_task(task, gdirs):
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = _init_pool()
-        mppool.map(task, gdirs, chunksize=1)
+        mppool.map(_pickle_copier(task, **kwargs), gdirs, chunksize=1)
     else:
         for gdir in gdirs:
-            task(gdir)
+            task(gdir, **kwargs)
 
 
 def init_glacier_regions(rgidf, reset=False, force=False):
