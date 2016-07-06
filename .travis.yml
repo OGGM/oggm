@@ -1,61 +1,41 @@
-language: python
-sudo: false
+sudo: required
+dist: trusty
+services:
+  - docker
+
 notifications:
   email: false
+
 branches:  # blacklist
   except:
     - appveyor
     - docs
-cache:
-  directories:
-    - ~/.cache/pip
-env:
-  global:
-    - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
-    - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
-addons:
-  apt:
-    packages:
-      # copied those from scipy
-      - libatlas-dev
-      - libatlas-base-dev
-      - liblapack-dev
-      - gfortran
-      # copied those from rasterio
-      - libgdal1h
-      - gdal-bin
-      - libgdal-dev
+
 matrix:
   fast_finish: true
   include:
-    - python: 2.7
-    - python: 3.5
-      env: OGGM_ENV=prepro
-    - python: 3.5
-      env: OGGM_ENV=models
-    - python: 3.5
-      env: OGGM_ENV=workflow
-    - python: 3.5
-      env: OGGM_ENV=graphics
+    - env: OGGM_ENV=prepro
+    - env: OGGM_ENV=models
+    - env: OGGM_ENV=workflow
+    - env: OGGM_ENV=graphics
+
 before_install:
-  - pip install -U pip
-  - pip install wheel
+  - docker pull oggm/base:latest
 install:
-  - travis_wait pip wheel -r ci/requirements.txt
-  - travis_wait pip install --upgrade --force-reinstall -r ci/requirements.txt
-  - pip wheel scikit-image
-  - pip install scikit-image
-  - pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
-  - pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
-  - pip install geopandas
-  - pip install git+https://github.com/fmaussion/motionless.git
-  - pip install git+https://github.com/fmaussion/salem.git
-  - pip install git+https://github.com/fmaussion/cleo.git
-  - pip install coveralls
-  - pip install nose
-  - pip install -e .
-  - "sed -i 's/^backend.*/backend : Agg/' /home/travis/virtualenv/*/lib/python*/site-packages/matplotlib/mpl-data/matplotlibrc"
+  - |
+    cat <<EOF >test.sh
+    set -x
+    set -e
+    pip3 install coveralls
+    cd /root/oggm
+    pip3 install -e .
+    nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
+    coveralls || true
+    exit 0
+    EOF
+  - docker create --name oggm_travis -ti -e OGGM_ENV -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/base:latest /bin/bash /root/oggm/test.sh
+  - docker cp $PWD oggm_travis:/root/oggm
 script:
-  - nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
-after_success:
-  - coveralls
+  - docker start -ai oggm_travis
+after_script:
+  - docker rm oggm_travis

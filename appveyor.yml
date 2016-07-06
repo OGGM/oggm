@@ -12,21 +12,20 @@ notifications:
 
 environment:
   matrix:
-    - PYTHON: "C:\\Python27-conda32"
+    - PYTHON: "C:\\Python2-conda32"
       PYTHON_VERSION: "2.7"
       PYTHON_ARCH: "32"
-    - PYTHON: "C:\\Python35-conda64"
-      PYTHON_VERSION: "3.5"
+    - PYTHON: "C:\\Python3-conda64"
+      PYTHON_VERSION: "3.4"
       PYTHON_ARCH: "64"
 
 install:
   # Install miniconda Python
   - "powershell ./ci/install_python.ps1"
 
-  # Prepend newly installed Python to the PATH of this build (this cannot be
-  # done from inside the powershell script as it would require to restart
-  # the parent CMD process).
+  # Create environment with desired python version and activate it
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "conda install --yes --quiet python=%PYTHON_VERSION%"
 
   # Check that we have the expected version and architecture for Python
   - "python --version"
