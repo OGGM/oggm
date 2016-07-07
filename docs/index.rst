@@ -31,6 +31,7 @@ Documentation
     centerlines
     mass-balance
     ice-dynamics
+    inversion
     glacierdir-gen
     api
 
