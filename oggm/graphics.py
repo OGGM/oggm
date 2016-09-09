@@ -390,7 +390,7 @@ def plot_distributed_thickness(gdir, ax=None, cleomap=None, how=None):
             cleomap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
     cleomap.set_cmap(plt.get_cmap('viridis'))
-    cleomap.set_plot_params(nlevels=256)
+    cleomap.set_plot_params(nlevels=256, vmax=1100)
     cleomap.set_data(thick)
 
     cleomap.plot(ax)

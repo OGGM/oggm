@@ -18,6 +18,7 @@ import geopandas as gpd
 import numpy as np
 import salem
 import pandas as pd
+import netCDF4
 import matplotlib.pyplot as plt
 # Locals
 import oggm
@@ -26,6 +27,7 @@ from oggm import workflow
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
+from oggm.utils import tuple2int
 
 # This will run OGGM in alaska
 
@@ -72,7 +74,7 @@ rgidf = salem.utils.read_shapefile(RGI_FILE, cached=True)
 flink, mbdatadir = utils.get_wgms_files()
 ids_with_mb = pd.read_csv(flink)['RGI_ID'].values
 # get some tw-glaciers that we want to test inside alaska region
-keep_ids = ['RGI50-01.20791', 'RGI50-01.00037', 'RGI50-01.10402']
+keep_ids = ['RGI50-01.10689', 'RGI50-01.20791', 'RGI50-01.00037', 'RGI50-01.10402']
 keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
 rgidf = rgidf.iloc[keep_indexes]
 
@@ -115,9 +117,10 @@ if RUN_INVERSION:
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
     tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
+    workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
 
 
-# Reinit climate and inversion without calving to be sure
+#Re-initializing climate tasks and inversion without calving just to be sure
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
@@ -127,65 +130,237 @@ execute_entity_task(tasks.volume_inversion, gdirs)
 # realistic values. This might be undersirable for tidewater glaciers, and
 # it is possible to add special conditions for tidewater glaciers in the
 # function. For example: if gdir.is_tidewater: etc.
+# FOR THIS TEST THE FUNCTION HAS BEEN COMMENTED !!! FOR NOW
 
-gdir = gdirs[-1]
-
-# Test that frontal H is close to zero
+gdir = gdirs[3]
+#
+## Test that frontal H is close to zero
 cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
 width = cl['width'][-1]
 thick = cl['volume'][-1] / cl['dx'] / width
+print('For the glacier', gdir.name)
 print('Without calving the width is {} m and the thick is {} m'.format(width, thick))
 
-# Try many C's (they should make sense in comparison to the size of the glacier)
-c_candidates = np.linspace(0, 0.1, 10)
-for c in c_candidates:
+# Defining a calving function
+def calving_from_depth(gdir):
+    """ Finds a calving flux based on the approaches proposed by
+        Huss and Hock, (2015) and Oerlemans and Nick (2005)
 
-    # First guess calving
-    gdir.inversion_calving_rate = c
+    We take the initial output of the model and surface elevation data
+    to calculate the water depth of the calving front.
+    The same criteria of the 10th lowest percentile is used to find the
+    elevation at the terminus.
+    """
+    # Opens all the files we need
+    geom = gdir.read_pickle('geometries', div_id=1)
+    grids_file = gdir.get_filepath('gridded_data', div_id=1)
+    with netCDF4.Dataset(grids_file) as nc:
+        # Variables
+        glacier_mask = nc.variables['glacier_mask'][:]
+        glacier_ext = nc.variables['glacier_ext'][:]
+        topo = nc.variables['topo_smoothed'][:]
+        poly_pix = geom['polygon_pix']
 
-    # Recompute mu
-    tasks.distribute_t_stars([gdir])
+    # Finding the outline altitudes
+    x, y = tuple2int(poly_pix.exterior.xy)
+    ext_yx = tuple(reversed(poly_pix.exterior.xy))
+    zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
-    # Inversion
-    tasks.prepare_for_inversion(gdir)
-    tasks.volume_inversion(gdir)
+    # Finds the altitude at the terminus in the same way as in the centerlines
+    # code
+    # Getting the lowest 10th percentile
+    perc = cfg.PARAMS['terminus_search_percentile']
+    deltah = cfg.PARAMS['terminus_search_altitude_range']
 
-    # We read the output, last pixel of the inversion
+    plow = np.percentile(zoutline, perc).astype(np.int64)
+
+    # the minimum altitude in the glacier
+    mini = np.min(zoutline)
+
+    # indices of where in the outline the altitude is lower than the qth
+    # percentile and lower than 100m higher, than the minimum altitude
+    ind = np.where((zoutline < plow) & (zoutline < (mini + deltah)))[0]
+
+    # We take the middle of this area
+    ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+
+    # Getting the termminus altitude
+    t_altitude = zoutline[ind_term]
+
+    # We read the model output, of the last pixel of the inversion
     cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
     width = cl['width'][-1]
     thick = cl['volume'][-1] / cl['dx'] / width
-    print('With calving of {} km3 a-1 the width is {} m  and the thick is {} m'.format(gdir.inversion_calving_rate, width, thick))
 
-    # Now compute the calving rate that would come from H and width
-    # Compare to the old calving and see if it has to be reduced or increased
+    # We calculate the water_depth and Hf
+    w_depth = thick - t_altitude
+    H_f = thick
+    #or F_calving = np.amax(0, 2*H_free*w_depth) * width
+    print('t_altitude', t_altitude)
+    print('H_f', H_f)
+    print('depth', w_depth)
+
+    return np.absolute(((2*H_f*w_depth)*width)/1e9), w_depth, thick
+
+#Starting the calving loop, with a maximum of 50 cycles
+i = 0
+data_calving = []
+w_depth = []
+thick = []
+
+while i < 50:
+    #TRUE
+    #First calculates a calving flux from model output with no calving
+    F_calving, new_depth, new_thick = calving_from_depth(gdir)
+
+    #Stores the data, and we see it
+    data_calving += [F_calving]
+    w_depth += [new_depth]
+    thick += [new_thick]
+    print('Calving rate calculated', F_calving)
+
+    #We put the calving function output into the Model
+    gdir.inversion_calving_rate = F_calving
+
+    #Recompute mu with calving
+    tasks.distribute_t_stars([gdir])
+
+    # Inversion with calving
+    tasks.prepare_for_inversion(gdir)
+    tasks.volume_inversion(gdir)
+    tasks.distribute_thickness(gdir, how='per_altitude')
+
+    i += 1
+    print('At the bottom i is', i)
+    #calculating depth averages, to compare them, the loop is cut when it meets
+    #the condition in the if statement
+    avg_one = np.average(data_calving[-4:])
+    avg_two = np.average(data_calving[-5:-1])
+    difference = abs(avg_two - avg_one)
+    if difference < 0.05*avg_two and i>5:
+        break
+
+#This is not really needed is just for you to see whats going on
+print('All calving', data_calving)
+print('All water depth', w_depth)
+print('avg one', avg_one)
+print('avg two', avg_two)
+print('difference avg', difference)
+print('All Hi', thick)
+
+#We write everything
+gdir.write_pickle(data_calving, 'calving_fluxes', div_id=1)
+gdir.write_pickle(w_depth, 'water_depth', div_id=1)
+gdir.write_pickle(thick, 'H_ice', div_id=1)
+
+#We read everything
+all_calving_data = gdir.read_pickle('calving_fluxes', div_id=1)
+all_data_depth = gdir.read_pickle('water_depth', div_id=1)
+all_data_H_i = gdir.read_pickle('H_ice', div_id=1)
+
+# Uncomment this if you want to see the ice thickness output with the
+# calculated calving flux
+# Taking the last calving flux
+
+# last_calving = all_calving_data[-1]
+# print('last calving value', last_calving)
+#
+# # Reinilialize everything
+# gdir.inversion_calving_rate = 0
+# tasks.distribute_t_stars(gdirs)
+# execute_entity_task(tasks.prepare_for_inversion, gdirs)
+# execute_entity_task(tasks.volume_inversion, gdirs)
+#
+# # Check if it is really doing it
+# cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
+# width = cl['width'][-1]
+# thick = cl['volume'][-1] / cl['dx'] / width
+# print('For the glacier', gdir.name)
+# print('Without calving the width is {} m and the thick is {} m'.format(width, thick))
+#
+# # Do the inversion with the last calving flux
+# gdir.inversion_calving_rate = last_calving
+# tasks.distribute_t_stars(gdirs)
+# execute_entity_task(tasks.prepare_for_inversion, gdirs)
+# execute_entity_task(tasks.volume_inversion, gdirs)
+# workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
+#
+# # Check how much it changes
+# cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
+# width = cl['width'][-1]
+# thick = cl['volume'][-1] / cl['dx'] / width
+# print('For the glacier', gdir.name)
+# print('With calving the width is {} m and the thick is {} m'.format(width, thick))
+#
+# print('All calving', all_calving_data)
+# print('All water depth', all_data_depth)
+# print('All Hi', all_data_H_i)
 
 
-# And in the very end, alle these steps should be automatized with
-# an optimisation function
+# Uncomment the plots that you would like to see
 
+
+PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+# PLOTS_DIR = ''
+# if PLOTS_DIR == '':
+#    exit()
+# utils.mkdir(PLOTS_DIR)
+
+# We plot calving flux vs water depth
+bname = os.path.join(PLOTS_DIR, gdir.name + '_' + gdir.rgi_id + '_withcalving')
+fig = plt.figure()
+ax1 = fig.add_subplot(111)
+ax1.plot(np.arange(0, i, 1), all_calving_data, 'g-', linestyle='--', linewidth=3)
+ax1.set_ylabel('Calving Flux (Km³/yr)')
+
+ax2 = ax1.twinx()
+ax2.plot(np.arange(0, i, 1), all_data_depth, 'r-', linewidth=1)
+ax2.set_ylabel('Water depth (m)', color='r')
+for tl in ax2.get_yticklabels():
+    tl.set_color('r')
+#plt.plot(np.arange(0, 20, 1), all_calving_data, 'r--', np.arange(0, 20, 1), all_data_H_i, 'g--')
+plt.savefig(bname + 'stuff.png')
+plt.show()
+
+# Inversion
+# graphics.plot_inversion(gdir)
+# plt.savefig(bname + 'invI.png')
+# plt.close()
+
+# Distribute thickness
+# graphics.plot_distributed_thickness(gdir)
+# plt.savefig(bname + 'inv_corI.png')
+# plt.close()
+
+
+# OTHER STUFF!!! that was in this script before but that I haven't touch
 
 # if RUN_DYNAMICS:
 #     # Random dynamics
 #     execute_entity_task(tasks.init_present_time_glacier, gdirs)
 #     execute_entity_task(tasks.random_glacier_evolution, gdirs)
-
-# Plots (if you want)
-PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
-PLOTS_DIR = ''
-if PLOTS_DIR == '':
-    exit()
-utils.mkdir(PLOTS_DIR)
-for gd in gdirs:
-    bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_')
-    # graphics.plot_googlemap(gd)
-    # plt.savefig(bname + 'ggl.png')
-    # plt.close()
-    # graphics.plot_centerlines(gd, add_downstream=True)
-    # plt.savefig(bname + 'cls.png')
-    # plt.close()
-    # graphics.plot_catchment_width(gd, corrected=True)
-    # plt.savefig(bname + 'w.png')
-    # plt.close()
-    graphics.plot_inversion(gd)
-    plt.savefig(bname + 'inv.png')
-    plt.close()
+#
+#Plots (if you want)
+#PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+# PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+# #PLOTS_DIR = ''
+# if PLOTS_DIR == '':
+#    exit()
+# utils.mkdir(PLOTS_DIR)
+# for gd in gdirs:
+#     bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_')
+# #    graphics.plot_googlemap(gd)
+# #    plt.savefig(bname + 'ggl.png')
+# #    plt.close()
+#     graphics.plot_centerlines(gd, add_downstream=True)
+#     plt.savefig(bname + 'cls.png')
+#     plt.close()
+#     #graphics.plot_catchment_width(gd, corrected=True)
+#     #plt.savefig(bname + 'w.png')
+#     #plt.close()
+#     graphics.plot_inversion(gd)
+#     plt.savefig(bname + 'inv.png')
+#     plt.close()
+#     graphics.plot_distributed_thickness(gd)
+#     plt.savefig(bname + 'inv_cor.png')
+#     plt.close()
