@@ -170,26 +170,27 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 else:
                     out_thick[i] = 0.
 
-            # Check for thick to width ratio (should ne be too large)
-            # ratio = out_thick / w  # there's no 0 width so we're good
-            # pno = np.where(ratio > max_ratio)
-            # if len(pno[0]) > 0:
-            #     ratio[pno] = np.NaN
-            #     ratio = utils.interp_nans(ratio, default=max_ratio)
-            #     out_thick = w * ratio
+            if gdir.glacier_type == 'Land-terminating':
+                # Check for thick to width ratio (should ne be too large)
+                ratio = out_thick / w  # there's no 0 width so we're good
+                pno = np.where(ratio > max_ratio)
+                if len(pno[0]) > 0:
+                    ratio[pno] = np.NaN
+                    ratio = utils.interp_nans(ratio, default=max_ratio)
+                    out_thick = w * ratio
 
-            # TODO: last thicknesses can be noisy sometimes: interpolate?
-            if cl['is_last']:
-                out_thick[-4:-1] = np.NaN
-                out_thick = utils.interp_nans(out_thick)
+                # TODO: last thicknesses can be noisy sometimes: interpolate?
+                if cl['is_last']:
+                   out_thick[-4:-1] = np.NaN
+                   out_thick = utils.interp_nans(out_thick)
 
-            # Check for the shape parameter (should not be too large)
-            # out_shape = (4*out_thick)/(w**2)
-            # pno = np.where(out_shape > max_shape)
-            # if len(pno[0]) > 0:
-            #     out_shape[pno] = np.NaN
-            #     out_shape = utils.interp_nans(out_shape, default=max_shape)
-            #     out_thick = (out_shape * w**2) / 4
+                # Check for the shape parameter (should not be too large)
+                out_shape = (4*out_thick)/(w**2)
+                pno = np.where(out_shape > max_shape)
+                if len(pno[0]) > 0:
+                    out_shape[pno] = np.NaN
+                    out_shape = utils.interp_nans(out_shape, default=max_shape)
+                    out_thick = (out_shape * w**2) / 4
 
             # smooth section
             if sec_smooth != 0.:
