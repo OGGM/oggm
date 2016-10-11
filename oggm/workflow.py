@@ -22,26 +22,12 @@ log = logging.getLogger(__name__)
 def _init_pool_globals(_dl_lock, _cfg_contents):
     global download_lock
     download_lock = _dl_lock
-
-    for v, c in _cfg_contents:
-        setattr(cfg, v, c)
+    cfg.unpack_config(_cfg_contents)
 
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
-
-    cfg_variables = [
-        'IS_INITIALIZED',
-        'CONTINUE_ON_ERROR',
-        'PARAMS',
-        'PATHS',
-        'BASENAMES'
-    ]
-
-    cfg_contents = []
-    for v in cfg_variables:
-        cfg_contents.append((v, getattr(cfg, v)))
-
+    cfg_contents = cfg.pack_config()
     return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
 
 
