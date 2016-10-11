@@ -309,7 +309,7 @@ def pack_config():
         'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
         'PARAMS': PARAMS,
         'PATHS': PATHS,
-        'BASENAMES': BASENAMES
+        'BASENAMES': dict(BASENAMES)
     }
 
 def unpack_config(cfg_dict):
@@ -321,4 +321,8 @@ def unpack_config(cfg_dict):
     CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
-    BASENAMES = cfg_dict['BASENAMES']
+
+    # BASENAMES is a DocumentedDict, which cannot be pickled because set intentionally mismatches with get
+    BASENAMES = DocumentedDict()
+    for k in cfg_dict['BASENAMES']:
+        BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')

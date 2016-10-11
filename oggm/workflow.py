@@ -14,6 +14,12 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.utils import download_lock
 
+# MPI
+try:
+    import oggm.mpi as ogmpi
+    _have_ogmpi = True
+except ImportError:
+    _have_ogmpi = False
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -56,6 +62,11 @@ def execute_entity_task(task, gdirs, **kwargs):
     gdirs: list
         the list of oggm.GlacierDirectory to process
     """
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            ogmpi.mpi_master_spin_tasks(_pickle_copier(task, **kwargs), gdirs)
+            return
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = _init_pool()

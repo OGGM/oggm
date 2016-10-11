@@ -28,3 +28,9 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 logging.getLogger("Fiona").setLevel(logging.WARNING)
 logging.getLogger("shapely").setLevel(logging.WARNING)
 logging.getLogger("rasterio").setLevel(logging.WARNING)
+
+try:
+    from oggm.mpi import _init_oggm_mpi
+    _init_oggm_mpi()
+except ImportError:
+    pass
