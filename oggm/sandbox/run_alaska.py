@@ -171,6 +171,7 @@ i = 0
 data_calving = []
 w_depth = []
 thick = []
+forwrite = []
 
 while i < 50:
     #TRUE
@@ -205,27 +206,32 @@ while i < 50:
         break
 
 #This is not really needed is just for you to see whats going on
-print('All calving', data_calving)
-print('All water depth', w_depth)
-print('avg one', avg_one)
-print('avg two', avg_two)
-print('difference avg', difference)
-print('All Hi', thick)
+# print('All calving', data_calving)
+# print('All water depth', w_depth)
+# print('avg one', avg_one)
+# print('avg two', avg_two)
+# print('difference avg', difference)
+# print('All Hi', thick)
 
-#We write everything
-gdir.write_pickle(data_calving, 'calving_fluxes', div_id=1)
-gdir.write_pickle(w_depth, 'water_depth', div_id=1)
-gdir.write_pickle(thick, 'H_ice', div_id=1)
+# Making a dictionary for calving
+cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth, H_ice=thick)
+forwrite.append(cal_dic)
+# We write out everything
+gdir.write_pickle(forwrite, 'calving_output', div_id=1)
 
-#We read everything
-all_calving_data = gdir.read_pickle('calving_fluxes', div_id=1)
-all_data_depth = gdir.read_pickle('water_depth', div_id=1)
-all_data_H_i = gdir.read_pickle('H_ice', div_id=1)
+# We read everything
+calving_output = gdir.read_pickle('calving_output', div_id=1)
+for objt in calving_output:
+    all_calving_data = objt['calving_fluxes']
+    all_data_depth = objt['water_depth']
+    all_data_H_i = objt['H_ice']
+
 
 # Uncomment this if you want to see the ice thickness output with the
 # calculated calving flux
 last_calving = all_calving_data[-1]
 print('last calving value', last_calving)
+
 
 # Reinilialize everything
 gdir.inversion_calving_rate = 0
@@ -264,27 +270,27 @@ print('All Hi', all_data_H_i)
 # Uncomment the plots that you would like to see
 
 
-PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
-# PLOTS_DIR = ''
-# if PLOTS_DIR == '':
-#    exit()
-# utils.mkdir(PLOTS_DIR)
-
-# We plot calving flux vs water depth
-bname = os.path.join(PLOTS_DIR, gdir.name + '_' + gdir.rgi_id + '_withcalving')
-fig = plt.figure()
-ax1 = fig.add_subplot(111)
-ax1.plot(np.arange(0, i, 1), all_calving_data, 'g-', linestyle='--', linewidth=3)
-ax1.set_ylabel('Calving Flux (Km³/yr)')
-
-ax2 = ax1.twinx()
-ax2.plot(np.arange(0, i, 1), all_data_depth, 'r-', linewidth=1)
-ax2.set_ylabel('Water depth (m)', color='r')
-for tl in ax2.get_yticklabels():
-    tl.set_color('r')
-#plt.plot(np.arange(0, 20, 1), all_calving_data, 'r--', np.arange(0, 20, 1), all_data_H_i, 'g--')
-plt.savefig(bname + '_calvingflux_vs_wdepth.png')
-plt.show()
+# PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+# # PLOTS_DIR = ''
+# # if PLOTS_DIR == '':
+# #    exit()
+# # utils.mkdir(PLOTS_DIR)
+#
+# # We plot calving flux vs water depth
+# bname = os.path.join(PLOTS_DIR, gdir.name + '_' + gdir.rgi_id + '_withcalving')
+# fig = plt.figure()
+# ax1 = fig.add_subplot(111)
+# ax1.plot(np.arange(0, i, 1), all_calving_data, 'g-', linestyle='--', linewidth=3)
+# ax1.set_ylabel('Calving Flux (Km³/yr)')
+#
+# ax2 = ax1.twinx()
+# ax2.plot(np.arange(0, i, 1), all_data_depth, 'r-', linewidth=1)
+# ax2.set_ylabel('Water depth (m)', color='r')
+# for tl in ax2.get_yticklabels():
+#     tl.set_color('r')
+# #plt.plot(np.arange(0, 20, 1), all_calving_data, 'r--', np.arange(0, 20, 1), all_data_H_i, 'g--')
+# plt.savefig(bname + '_calvingflux_vs_wdepth.png')
+# plt.show()
 
 # Inversion
 # graphics.plot_inversion(gdir)
@@ -292,9 +298,9 @@ plt.show()
 # plt.close()
 
 # Distribute thickness
-graphics.plot_distributed_thickness(gdir)
-plt.savefig(bname + 'final.png')
-plt.close()
+# graphics.plot_distributed_thickness(gdir)
+# plt.savefig(bname + 'final.png')
+# plt.close()
 
 
 # OTHER STUFF!!! that was in this script before but that I haven't touch

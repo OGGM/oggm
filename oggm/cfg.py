@@ -182,14 +182,8 @@ BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
 _doc = ''
 BASENAMES['past_model'] = ('past_model.nc', _doc)
 
-_doc = 'Calving flux values'
-BASENAMES['calving_fluxes'] = ('calving_fluxes.pkl', _doc)
-
-_doc = 'Water depth'
-BASENAMES['water_depth'] = ('water_depth.pkl', _doc)
-
-_doc = 'Thickness at the calving front'
-BASENAMES['H_ice'] = ('H_ice.pkl', _doc)
+_doc = 'Calving output'
+BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
 def initialize(file=None):
     """Read the configuration file containing the run's parameters."""

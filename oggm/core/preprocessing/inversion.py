@@ -170,7 +170,7 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 else:
                     out_thick[i] = 0.
 
-            if gdir.glacier_type == 'Land-terminating':
+            if gdir.terminus_type == 'Land-terminating':
                 # Check for thick to width ratio (should ne be too large)
                 ratio = out_thick / w  # there's no 0 width so we're good
                 pno = np.where(ratio > max_ratio)
