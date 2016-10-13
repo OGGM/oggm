@@ -81,6 +81,7 @@ def _urlretrieve(url, ofile, *args, **kwargs):
 
 def progress_urlretrieve(url, ofile):
     print("Downloading %s ..." % url)
+    sys.stdout.flush()
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
@@ -91,6 +92,7 @@ def progress_urlretrieve(url, ofile):
                 else:
                     pbar.start(UnknownLength)
             pbar.update(min(count * size, total))
+            sys.stdout.flush()
         res = _urlretrieve(url, ofile, reporthook=_upd)
         try:
             pbar.finish()
