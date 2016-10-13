@@ -33,6 +33,7 @@ Documentation
     ice-dynamics
     inversion
     glacierdir-gen
+    mpi
     api
 
 

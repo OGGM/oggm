@@ -12,37 +12,26 @@ import multiprocessing as mp
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
-from oggm.utils import download_lock
 
+# MPI
+try:
+    import oggm.mpi as ogmpi
+    _have_ogmpi = True
+except ImportError:
+    _have_ogmpi = False
 
 # Module logger
 log = logging.getLogger(__name__)
 
 
-def _init_pool_globals(_dl_lock, _cfg_contents):
-    global download_lock
-    download_lock = _dl_lock
-
-    for v, c in _cfg_contents:
-        setattr(cfg, v, c)
+def _init_pool_globals(_cfg_contents):
+    cfg.unpack_config(_cfg_contents)
 
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
-
-    cfg_variables = [
-        'IS_INITIALIZED',
-        'CONTINUE_ON_ERROR',
-        'PARAMS',
-        'PATHS',
-        'BASENAMES'
-    ]
-
-    cfg_contents = []
-    for v in cfg_variables:
-        cfg_contents.append((v, getattr(cfg, v)))
-
-    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
+    cfg_contents = cfg.pack_config()
+    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(cfg_contents,))
 
 
 class _pickle_copier(object):
@@ -70,6 +59,11 @@ def execute_entity_task(task, gdirs, **kwargs):
     gdirs: list
         the list of oggm.GlacierDirectory to process
     """
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            ogmpi.mpi_master_spin_tasks(_pickle_copier(task, **kwargs), gdirs)
+            return
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = _init_pool()

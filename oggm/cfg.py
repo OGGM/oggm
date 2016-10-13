@@ -299,3 +299,30 @@ def reset_working_dir():
     if os.path.exists(PATHS['working_dir']):
         shutil.rmtree(PATHS['working_dir'])
     os.makedirs(PATHS['working_dir'])
+
+
+def pack_config():
+    """Pack the entire configuration in one pickleable dict."""
+
+    return {
+        'IS_INITIALIZED': IS_INITIALIZED,
+        'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
+        'PARAMS': PARAMS,
+        'PATHS': PATHS,
+        'BASENAMES': dict(BASENAMES)
+    }
+
+def unpack_config(cfg_dict):
+    """Unpack and apply the config packed via pack_config."""
+
+    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, BASENAMES
+
+    IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
+    CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
+    PARAMS = cfg_dict['PARAMS']
+    PATHS = cfg_dict['PATHS']
+
+    # BASENAMES is a DocumentedDict, which cannot be pickled because set intentionally mismatches with get
+    BASENAMES = DocumentedDict()
+    for k in cfg_dict['BASENAMES']:
+        BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')
