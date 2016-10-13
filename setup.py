@@ -114,7 +114,8 @@ req_packages = ['six',
                 'configobj',
                 'nose',
                 'xarray',
-                'progressbar2']
+                'progressbar2',
+                'filelock']
 check_dependencies(req_packages)
 
 

@@ -60,6 +60,7 @@ Testing:
     - nose
 
 Other libraries:
+    - filelock
     - `salem <https://github.com/fmaussion/salem>`_
     - `cleo <https://github.com/fmaussion/cleo>`_
     - `motionless (py3) <https://github.com/fmaussion/motionless>`_
@@ -125,7 +126,7 @@ Packages
 
 Install the packages from the `conda-forge`_ channel::
 
-    conda install -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray
+    conda install -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray filelock
 
 .. warning::
 
@@ -327,7 +328,7 @@ using the system binaries::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2
 
 And the external libraries::
 

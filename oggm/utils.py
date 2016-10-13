@@ -42,6 +42,7 @@ import xarray as xr
 import rasterio
 from rasterio.tools.merge import merge as merge_tool
 import multiprocessing as mp
+import filelock
 
 # Locals
 import oggm.cfg as cfg
@@ -56,8 +57,17 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
 
-# File Download lock
-download_lock = mp.Lock()
+
+def _get_download_lock():
+    try:
+        lock_dir = cfg.PATHS['working_dir']
+    except:
+        lock_dir = os.getcwd()
+    mkdir(lock_dir)
+    try:
+        return filelock.FileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
+    except:
+        return filelock.SoftFileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):
@@ -106,7 +116,7 @@ def expand_path(p):
 
 
 def _download_oggm_files():
-    with download_lock:
+    with _get_download_lock():
         return _download_oggm_files_unlocked()
 
 
@@ -186,7 +196,7 @@ def _download_oggm_files_unlocked():
 
 
 def _download_srtm_file(zone):
-    with download_lock:
+    with _get_download_lock():
         return _download_srtm_file_unlocked(zone)
 
 
@@ -235,7 +245,7 @@ def _download_srtm_file_unlocked(zone):
 
 
 def _download_dem3_viewpano(zone, specialzones):
-    with download_lock:
+    with _get_download_lock():
         return _download_dem3_viewpano_unlocked(zone, specialzones)
 
 
@@ -328,7 +338,7 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
 
 
 def _download_aster_file(zone, unit):
-    with download_lock:
+    with _get_download_lock():
         return _download_aster_file_unlocked(zone, unit)
 
 
@@ -368,7 +378,7 @@ def _download_aster_file_unlocked(zone, unit):
 
 
 def _download_alternate_topo_file(fname):
-    with download_lock:
+    with _get_download_lock():
         return _download_alternate_topo_file_unlocked(fname)
 
 
@@ -430,7 +440,7 @@ def _get_centerline_lonlat(gdir):
 
 
 def aws_file_download(aws_path, local_path, reset=False):
-    with download_lock:
+    with _get_download_lock():
         return _aws_file_download_unlocked(aws_path, local_path, reset)
 
 
@@ -981,7 +991,7 @@ def get_glathida_file():
 
 
 def get_rgi_dir():
-    with download_lock:
+    with _get_download_lock():
         return _get_rgi_dir_unlocked()
 
 
@@ -1028,7 +1038,7 @@ def _get_rgi_dir_unlocked():
 
 
 def get_cru_file(var=None):
-    with download_lock:
+    with _get_download_lock():
         return _get_cru_file_unlocked(var)
 
 
