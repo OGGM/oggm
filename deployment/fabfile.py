@@ -575,7 +575,7 @@ def install_node_software(nn=''):
     install_node_apt('', inst)
     install_node_pip('', inst)
 
-    run('sudo shutdown -r 1')
+    run('echo Rebooting... && sleep 1 && sudo shutdown -r now')
 
 
 @task
@@ -599,6 +599,7 @@ def install_node_pip(nn='', inst=None):
     pip install matplotlib &&
     pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
+    pip install mpi4py &&
     pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock nose progressbar2 &&
     pip install git+https://github.com/fmaussion/motionless.git &&
     pip install git+https://github.com/fmaussion/salem.git &&
@@ -622,7 +623,7 @@ def install_node_apt(nn='', inst=None):
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y update &&
     sudo apt-get -y dist-upgrade &&
-    sudo apt-get -y install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python3-netcdf4 tk-dev python3-tk python3-dev python3-numpy-dev ttf-bitstream-vera python3-pip git awscli virtualenvwrapper
+    sudo apt-get -y install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python3-netcdf4 tk-dev python3-tk python3-dev python3-numpy-dev ttf-bitstream-vera python3-pip git awscli virtualenvwrapper openmpi-bin libopenmpi-dev
     """, pty=False)
 
     copy_files = ['~/.aws/credentials', '~/.aws/config', '~/.screenrc', '~/.gitconfig']
@@ -656,6 +657,67 @@ def install_node_apt(nn='', inst=None):
         mkvirtualenv oggm_env -p /usr/bin/python3
     fi
     """)
+
+
+@task
+def install_node_nfs_master(nn='', inst=None):
+    """
+    Setup the node to act as NFS server, serving /home and /work
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    export DEBIAN_FRONTEND=noninteractive &&
+    sudo apt-get -y install nfs-kernel-server &&
+    sudo mkdir -p /work/ubuntu /export/work /export/home &&
+    sudo chown ubuntu:ubuntu /work/ubuntu &&
+    echo '/export      *(rw,fsid=0,insecure,no_subtree_check,async)' > /tmp/exports &&
+    echo '/export/work *(rw,nohide,insecure,no_subtree_check,async)' >> /tmp/exports &&
+    echo '/export/home *(rw,nohide,insecure,no_subtree_check,async)' >> /tmp/exports &&
+    sudo cp --no-preserve=all /tmp/exports /etc/exports &&
+    cp /etc/fstab /tmp/fstab &&
+    echo '/work /export/work none bind 0 0' >> /tmp/fstab &&
+    echo '/home /export/home none bind 0 0' >> /tmp/fstab &&
+    sudo cp --no-preserve=all /tmp/fstab /etc/fstab &&
+    sudo mount /export/work &&
+    sudo mount /export/home &&
+    sudo sed -i 's/NEED_SVCGSSD=.*/NEED_SVCGSSD="no"/' /etc/default/nfs-kernel-server &&
+    sudo service nfs-kernel-server restart &&
+    echo "%s slots=$(( $(grep '^processor' /proc/cpuinfo | tail -n1 | cut -d ':' -f2 | xargs) + 1 ))" > /work/ubuntu/mpi_hostfile &&
+    ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N "" &&
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys &&
+    echo Done
+    """ % inst.private_ip_address)
+
+
+@task
+def install_node_nfs_client(master_ip, nn='', inst=None):
+    """
+    Setup the node to act as NFS client on the given master_ip.
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    cd / &&
+    sudo mkdir /work &&
+    export DEBIAN_FRONTEND=noninteractive &&
+    sudo apt-get -y install nfs-common &&
+    cp /etc/fstab /tmp/fstab &&
+    echo '%s:/work /work nfs4 _netdev,auto 0 0' >> /tmp/fstab
+    echo '%s:/home /home nfs4 _netdev,auto 0 0' >> /tmp/fstab
+    sudo cp --no-preserve=all /tmp/fstab /etc/fstab &&
+    sudo mount /work &&
+    echo "%s slots=$(( $(grep '^processor' /proc/cpuinfo | tail -n1 | cut -d ':' -f2 | xargs) + 1 ))" >> /work/ubuntu/mpi_hostfile &&
+    echo Rebooting... && sleep 1 && sudo shutdown -r now
+    """ % (master_ip, master_ip, inst.private_ip_address))
 
 
 @task
