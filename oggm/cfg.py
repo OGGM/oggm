@@ -237,6 +237,7 @@ def initialize(file=None):
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
+    PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
 
@@ -263,7 +264,7 @@ def initialize(file=None):
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
            'optimize_inversion_params' , 'use_multiple_flowlines',
-           'leclercq_rgi_links', 'optimize_thick']
+           'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size']
     for k in ltr:
         del cp[k]
 

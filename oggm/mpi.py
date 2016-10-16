@@ -85,8 +85,13 @@ def _mpi_slave_bcast(comm):
     return task_func
 
 def _mpi_slave_sendrecv(comm):
+    try:
+        bufsize = int(cfg.PARAMS['mpi_recv_buf_size'])
+    except:
+        bufsize = None
+
     sreq = comm.isend(1, dest=OGGM_MPI_ROOT)
-    rreq = comm.irecv(source=OGGM_MPI_ROOT)
+    rreq = comm.irecv(source=OGGM_MPI_ROOT, buf=bufsize)
     return sreq, rreq
 
 def _mpi_slave():
