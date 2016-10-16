@@ -107,11 +107,14 @@ def init_glacier_regions(rgidf, reset=False, force=False):
             rmtree(fpath)
 
     gdirs = []
+    new_gdirs = []
     for _, entity in rgidf.iterrows():
         gdir = oggm.GlacierDirectory(entity, reset=reset)
         if not os.path.exists(gdir.get_filepath('dem')):
-            tasks.define_glacier_region(gdir, entity=entity)
+            new_gdirs.append((gdir, dict(entity=entity)))
         gdirs.append(gdir)
+
+    execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs
 
