@@ -477,19 +477,10 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         else:
             raise
 
+    # Authorize all Intra-VPC traffic
     if vpc is not None:
         try:
-            group.authorize('tcp', 0, 65535, vpc.cidr_block)
-        except cloud.ResponseError as e:
-            if e.code != 'InvalidPermission.Duplicate':
-                raise
-        try:
-            group.authorize('udp', 0, 65535, vpc.cidr_block)
-        except cloud.ResponseError as e:
-            if e.code != 'InvalidPermission.Duplicate':
-                raise
-        try:
-            group.authorize('icmp', 0, 255, vpc.cidr_block)
+            group.authorize('-1', -1, -1, vpc.cidr_block)
         except cloud.ResponseError as e:
             if e.code != 'InvalidPermission.Duplicate':
                 raise
