@@ -84,6 +84,16 @@ def _mpi_slave_bcast(comm):
         cfg.unpack_config(cfg_store)
     return task_func
 
+def _mpi_slave_sendrecv(comm):
+    try:
+        bufsize = int(cfg.PARAMS['mpi_recv_buf_size'])
+    except:
+        bufsize = None
+
+    sreq = comm.isend(1, dest=OGGM_MPI_ROOT)
+    rreq = comm.irecv(source=OGGM_MPI_ROOT, buf=bufsize)
+    return sreq, rreq
+
 def _mpi_slave():
     comm = OGGM_MPI_COMM
     rank = comm.Get_rank()
@@ -91,11 +101,19 @@ def _mpi_slave():
     _imprint("MPI worker %s ready!" % rank)
 
     task_func = _mpi_slave_bcast(comm)
-    for task in iter(lambda: comm.sendrecv("dummy", dest=OGGM_MPI_ROOT), StopIteration):
+    sreq, rreq = _mpi_slave_sendrecv(comm)
+
+    while True:
+        sreq.wait()
+        task = rreq.wait()
         if task is None:
             comm.gather(sendobj="TASK_DONE", root=OGGM_MPI_ROOT)
             task_func = _mpi_slave_bcast(comm)
+            sreq, rreq = _mpi_slave_sendrecv(comm)
             continue
+        elif task is StopIteration:
+            break
+        sreq, rreq = _mpi_slave_sendrecv(comm)
         task_func(task)
     comm.gather(sendobj="WORKER_SHUTDOWN", root=OGGM_MPI_ROOT)
 

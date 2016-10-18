@@ -9,6 +9,7 @@
 from __future__ import with_statement, print_function
 from fabric.api import *
 import boto.ec2
+from boto.vpc import VPCConnection
 from boto.ec2.blockdevicemapping import EBSBlockDeviceType, BlockDeviceMapping
 import os
 import time
@@ -119,8 +120,14 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-0ae77879' #eu Ubuntu 16.04 LTS
-def_ami['us-east-1'] = 'ami-f652979b' #us Ubuntu 16.04 LTS
+def_ami['eu-west-1'] = 'ami-c593deb6' #eu Ubuntu 16.04 LTS
+def_ami['us-east-1'] = 'ami-fd6e3bea' #us Ubuntu 16.04 LTS
+
+# Subnet to use per AVZ, expects a tuple (vpc-id, subnet-id)
+def_subnet = dict()
+def_subnet['eu-west-1a'] = ('vpc-61f04204', 'subnet-306ff847')
+def_subnet['eu-west-1b'] = ('vpc-61f04204', 'subnet-6ad17933')
+def_subnet['us-west-1c'] = ('vpc-61f04204', 'subnet-2e2f414b')
 
 # Size of the rootfs of created instances
 rootfs_size_gb = 50
@@ -299,6 +306,7 @@ def print_instance(inst):
             inst.tags.get('billable_hours'), \
             inst.tags.get('terminate_time'), \
             inst.placement, \
+            'Subnet:%s' % inst.subnet_id, \
             'Owner:%s' % inst.tags.get('node-owner'))
     print("running for: ", hours,'h', minutes, "min")
 
@@ -428,6 +436,15 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
     # FSO---connect
     cloud = boto.ec2.connect_to_region(avz[:-1],profile_name=ec2Profile)
     aminfo = cloud.get_image(def_ami[avz[:-1]])
+    vpcconn = VPCConnection(region=cloud.region)
+
+    try:
+        vpc_id, subnet_id = def_subnet[avz]
+        vpc = vpcconn.get_all_vpcs(vpc_ids=[vpc_id])[0]
+    except:
+        vpc_id = None
+        subnet_id = None
+        vpc = None
 
     # FSO---check if node with same name already exists
     if node_exists(cn + '_node' + str(idn)):
@@ -460,6 +477,23 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         else:
             raise
 
+    if vpc is not None:
+        try:
+            group.authorize('tcp', 0, 65535, vpc.cidr_block)
+        except cloud.ResponseError as e:
+            if e.code != 'InvalidPermission.Duplicate':
+                raise
+        try:
+            group.authorize('udp', 0, 65535, vpc.cidr_block)
+        except cloud.ResponseError as e:
+            if e.code != 'InvalidPermission.Duplicate':
+                raise
+        try:
+            group.authorize('icmp', 0, 255, vpc.cidr_block)
+        except cloud.ResponseError as e:
+            if e.code != 'InvalidPermission.Duplicate':
+                raise
+
     # Add a rule to the security group to authorize SSH traffic
     # on the specified port.
     try:
@@ -479,9 +513,10 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
                       def_ami[avz[:-1]],
                       count=1,
                       type='one-time',
-                      security_groups=[group_name],
+                      security_group_ids=[group.id],
                       key_name=key_name,
                       placement=avz,
+                      subnet_id=subnet_id,
                       instance_type=instance_infos[inst_type_idx]['type'],
                       block_device_map=bdm)
         req_ids = [request.id for request in requests]
@@ -493,10 +528,11 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
         print("placing node in ",avz)
         reservation = cloud.run_instances(image_id=def_ami[avz[:-1]],
                 key_name=key_name,
-                placement = avz,
-                security_groups=[group_name],
+                placement=avz,
+                subnet_id=subnet_id,
+                security_group_ids=[group.id],
                 instance_type=instance_infos[inst_type_idx]['type'],
-                block_device_map= bdm)
+                block_device_map=bdm)
         node = reservation.instances[0]
         log_with_ts("fullfilled ondemand node "+str(idn))
 
@@ -539,7 +575,7 @@ def install_node_software(nn=''):
     install_node_apt('', inst)
     install_node_pip('', inst)
 
-    run('sudo shutdown -r 1')
+    run('echo Rebooting... && sleep 1 && sudo shutdown -r now')
 
 
 @task
@@ -563,7 +599,8 @@ def install_node_pip(nn='', inst=None):
     pip install matplotlib &&
     pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
-    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray nose progressbar2 &&
+    pip install mpi4py &&
+    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock nose progressbar2 &&
     pip install git+https://github.com/fmaussion/motionless.git &&
     pip install git+https://github.com/fmaussion/salem.git &&
     pip install git+https://github.com/fmaussion/cleo.git &&
@@ -586,7 +623,7 @@ def install_node_apt(nn='', inst=None):
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y update &&
     sudo apt-get -y dist-upgrade &&
-    sudo apt-get -y install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python3-netcdf4 tk-dev python3-tk python3-dev python3-numpy-dev ttf-bitstream-vera python3-pip git awscli virtualenvwrapper
+    sudo apt-get -y install build-essential liblapack-dev gfortran libproj-dev gdal-bin libgdal-dev netcdf-bin ncview python3-netcdf4 tk-dev python3-tk python3-dev python3-numpy-dev ttf-bitstream-vera python3-pip git awscli virtualenvwrapper openmpi-bin libopenmpi-dev
     """, pty=False)
 
     copy_files = ['~/.aws/credentials', '~/.aws/config', '~/.screenrc', '~/.gitconfig']
@@ -620,6 +657,67 @@ def install_node_apt(nn='', inst=None):
         mkvirtualenv oggm_env -p /usr/bin/python3
     fi
     """)
+
+
+@task
+def install_node_nfs_master(nn='', inst=None):
+    """
+    Setup the node to act as NFS server, serving /home and /work
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    export DEBIAN_FRONTEND=noninteractive &&
+    sudo apt-get -y install nfs-kernel-server &&
+    sudo mkdir -p /work/ubuntu /export/work /export/home &&
+    sudo chown ubuntu:ubuntu /work/ubuntu &&
+    echo '/export      *(rw,fsid=0,insecure,no_subtree_check,async)' > /tmp/exports &&
+    echo '/export/work *(rw,nohide,insecure,no_subtree_check,async)' >> /tmp/exports &&
+    echo '/export/home *(rw,nohide,insecure,no_subtree_check,async)' >> /tmp/exports &&
+    sudo cp --no-preserve=all /tmp/exports /etc/exports &&
+    cp /etc/fstab /tmp/fstab &&
+    echo '/work /export/work none bind 0 0' >> /tmp/fstab &&
+    echo '/home /export/home none bind 0 0' >> /tmp/fstab &&
+    sudo cp --no-preserve=all /tmp/fstab /etc/fstab &&
+    sudo mount /export/work &&
+    sudo mount /export/home &&
+    sudo sed -i 's/NEED_SVCGSSD=.*/NEED_SVCGSSD="no"/' /etc/default/nfs-kernel-server &&
+    sudo service nfs-kernel-server restart &&
+    echo "%s slots=$(( $(grep '^processor' /proc/cpuinfo | tail -n1 | cut -d ':' -f2 | xargs) + 1 ))" > /work/ubuntu/mpi_hostfile &&
+    ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N "" &&
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys &&
+    echo Done
+    """ % inst.private_ip_address)
+
+
+@task
+def install_node_nfs_client(master_ip, nn='', inst=None):
+    """
+    Setup the node to act as NFS client on the given master_ip.
+    """
+    if inst is None:
+        inst = select_instance(nn)
+    update_key_filename(inst.region.name)
+    env.host_string = inst.dns_name
+    env.user = 'ubuntu'
+
+    run("""
+    cd / &&
+    sudo mkdir /work &&
+    export DEBIAN_FRONTEND=noninteractive &&
+    sudo apt-get -y install nfs-common &&
+    cp /etc/fstab /tmp/fstab &&
+    echo '%s:/work /work nfs4 _netdev,auto 0 0' >> /tmp/fstab
+    echo '%s:/home /home nfs4 _netdev,auto 0 0' >> /tmp/fstab
+    sudo cp --no-preserve=all /tmp/fstab /etc/fstab &&
+    sudo mount /work &&
+    echo "%s slots=$(( $(grep '^processor' /proc/cpuinfo | tail -n1 | cut -d ':' -f2 | xargs) + 1 ))" >> /work/ubuntu/mpi_hostfile &&
+    echo Rebooting... && sleep 1 && sudo shutdown -r now
+    """ % (master_ip, master_ip, inst.private_ip_address))
 
 
 @task

@@ -5,6 +5,7 @@ from __future__ import division
 import logging
 import os
 from shutil import rmtree
+import collections
 # External libs
 import pandas as pd
 import multiprocessing as mp
@@ -34,17 +35,29 @@ def _init_pool():
     return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(cfg_contents,))
 
 
+def _merge_dicts(*dicts):
+    r = {}
+    for d in dicts:
+        r.update(d)
+    return r
+
+
 class _pickle_copier(object):
     """Pickleable alternative to functools.partial,
     Which is not pickleable in python2 and thus doesn't work
     with Multiprocessing."""
 
-    def __init__(self, func, **kwargs):
+    def __init__(self, func, kwargs):
         self.call_func = func
         self.out_kwargs = kwargs
 
     def __call__(self, gdir):
-        return self.call_func(gdir, **self.out_kwargs)
+        if isinstance(gdir, collections.Sequence):
+            gdir, gdir_kwargs = gdir
+            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
+            return self.call_func(gdir, **gdir_kwargs)
+        else:
+            return self.call_func(gdir, **self.out_kwargs)
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -58,19 +71,24 @@ def execute_entity_task(task, gdirs, **kwargs):
         the entity task to apply
     gdirs: list
         the list of oggm.GlacierDirectory to process
+        optionally, each list element can be a tuple, with the first element being
+        the oggm.GlacierDirectory, and the second element a dict that will be passed
+        to the task function as **kwargs.
     """
+
+    pc = _pickle_copier(task, kwargs)
 
     if _have_ogmpi:
         if ogmpi.OGGM_MPI_COMM is not None:
-            ogmpi.mpi_master_spin_tasks(_pickle_copier(task, **kwargs), gdirs)
+            ogmpi.mpi_master_spin_tasks(pc, gdirs)
             return
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = _init_pool()
-        mppool.map(_pickle_copier(task, **kwargs), gdirs, chunksize=1)
+        mppool.map(pc, gdirs, chunksize=1)
     else:
         for gdir in gdirs:
-            task(gdir, **kwargs)
+            pc(gdir)
 
 
 def init_glacier_regions(rgidf, reset=False, force=False):
@@ -89,11 +107,14 @@ def init_glacier_regions(rgidf, reset=False, force=False):
             rmtree(fpath)
 
     gdirs = []
+    new_gdirs = []
     for _, entity in rgidf.iterrows():
         gdir = oggm.GlacierDirectory(entity, reset=reset)
         if not os.path.exists(gdir.get_filepath('dem')):
-            tasks.define_glacier_region(gdir, entity=entity)
+            new_gdirs.append((gdir, dict(entity=entity)))
         gdirs.append(gdir)
+
+    execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs
 
