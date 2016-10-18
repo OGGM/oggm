@@ -508,6 +508,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
                       key_name=key_name,
                       placement=avz,
                       subnet_id=subnet_id,
+                      ebs_optimized=True,
                       instance_type=instance_infos[inst_type_idx]['type'],
                       block_device_map=bdm)
         req_ids = [request.id for request in requests]
@@ -522,6 +523,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
                 placement=avz,
                 subnet_id=subnet_id,
                 security_group_ids=[group.id],
+                ebs_optimized=True,
                 instance_type=instance_infos[inst_type_idx]['type'],
                 block_device_map=bdm)
         node = reservation.instances[0]
