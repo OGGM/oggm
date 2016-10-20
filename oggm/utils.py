@@ -1371,17 +1371,16 @@ class entity_task(object):
                 self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
-            if cfg.CONTINUE_ON_ERROR:
-                try:
-                    out = task_func(gdir, **kwargs)
-                    gdir.log(task_func)
-                except Exception as err:
-                    # Something happened
-                    out = None
-                    gdir.log(task_func, err=err)
-                    pipe_log(gdir, task_func, err=err)
-            else:
+            try:
                 out = task_func(gdir, **kwargs)
+                gdir.log(task_func)
+            except Exception as err:
+                # Something happened
+                out = None
+                gdir.log(task_func, err=err)
+                pipe_log(gdir, task_func, err=err)
+                if not cfg.CONTINUE_ON_ERROR:
+                    raise
             return out
         return _entity_task
 
