@@ -17,7 +17,7 @@ you want to contribute.
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 
-.. image:: docs/_static/ex_tasman.png
+.. image:: docs/_static/ex_tasman.jpg
 
 
 Installation, documentation
