@@ -1,3 +1,5 @@
+.. _installing.oggm:
+
 Installing OGGM
 ===============
 
@@ -168,7 +170,7 @@ OGGM
 ~~~~
 
 We recommend to clone the git repository (or a fork if you want
-to participate to the development)::
+to participate to the development, see also :ref:`contributing`)::
 
    git clone https://github.com/OGGM/oggm.git
 
@@ -187,8 +189,7 @@ And install OGGM in development mode::
     code repository will be taken into account the next time you will
     ``import oggm``. This means that you are going to
     be able to update OGGM with a simple `git pull`_ from the head of the
-    cloned repository (but also that if you make changes in this repository,
-    this might brake things).
+    cloned repository.
 
 .. _git pull: https://git-scm.com/docs/git-pull
 

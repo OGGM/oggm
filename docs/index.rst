@@ -34,6 +34,7 @@ Documentation
     inversion
     glacierdir-gen
     mpi
+    contributing
     api
 
 
@@ -43,17 +44,19 @@ Get in touch
 - To ask questions or discuss OGGM, send us an `e-mail`_.
 - Report bugs, share your ideas or view the source code `on GitHub`_.
 
-.. _e-mail: fabien.maussion@uibk.ac.at
+.. _e-mail: http://www.fabienmaussion.info/
 .. _on GitHub: https://github.com/OGGM/oggm
 
 
 License
 -------
 
+.. image:: _static/gpl.png
+   :width: 140 px
+
 OGGM is available under the open source `GNU GPLv3 license`_.
 
 .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
-
 
 About
 -----
@@ -65,12 +68,8 @@ About
     GNU GPLv3
 
 :Authors:
-    Fabien Maussion, Alexander H. Jarosch, Felix Oesterle, Timo
-    Rothenpieler, Ben Marzeion
 
-    See `whats-new`_ for a list of all contributors.
-
-    .. _whats-new: http://oggm.readthedocs.org/en/latest/whats-new.html
+    See :ref:`whats-new` for a list of all contributors.
 
 :Funding:
     Austrian Research Foundation FWF, Projects P22443-N21 and P25362-N26
@@ -79,4 +78,3 @@ About
 
     .. image:: http://www.uni-bremen.de/fileadmin/images/logo-uni-bremen-EXZELLENT.png
         :align: right
-
