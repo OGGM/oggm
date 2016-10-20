@@ -17,39 +17,13 @@ you want to contribute.
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 
-Example
--------
-
-We use the `Hintereisferner`_ as benchmark:
-
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_googlestatic_1.5+.png
-   :width: 200 px
-
-We first define a local grid and compute the centerlines (`Kienholz et al., 2014`_) as well as the downstream flowlines:
-
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_downstream_cls_1.5+.png
-   :width: 200 px
-
-The glacier is then represented as several flowlines of varying width:
-
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_width_corrected_1.5+.png
-   :width: 200 px
-
-Finally, following an inversion algorithm based on mass-balance (`Marzeion et al., 2012`_) and ice-flow dynamics (`Farinotti et al., 2009`_), we derive the ice thickness of the glacier:
-
-.. image:: ./oggm/tests/baseline_images/test_graphics/test_inversion_1.5+.png
-   :width: 200 px
-
-.. _Hintereisferner: http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef
-.. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
-.. _Kienholz et al., 2014 : http://www.the-cryosphere.net/8/503/2014/tc-8-503-2014.html
-.. _Farinotti et al., 2009 : http://www.igsoc.org/journal/55/191/
+.. image:: docs/_static/ex_tasman.png
 
 
 Installation, documentation
 ---------------------------
 
-A documentation draft is hosted on ReadTheDocs: http://oggm.org
+A documentation draft is hosted on ReadTheDocs: http://oggm.readthedocs.io
 
 
 Get in touch
