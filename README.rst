@@ -87,9 +87,9 @@ About
 
 :License:
 
-OGGM is available under the open source `GNU GPLv3 license`_.
+    OGGM is available under the open source `GNU GPLv3 license`_.
 
-   .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
+    .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
 
 :Authors:
 
