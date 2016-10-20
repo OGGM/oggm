@@ -1379,9 +1379,12 @@ class entity_task(object):
                 out = None
                 gdir.log(task_func, err=err)
                 pipe_log(gdir, task_func, err=err)
+                self.log.error('%s occured during task %s on %s!',
+                        type(err).__name__, task_func.__name__, gdir.rgi_id)
                 if not cfg.CONTINUE_ON_ERROR:
                     raise
             return out
+        _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
 
 
