@@ -7,7 +7,7 @@ License: GPLv3+
 from __future__ import absolute_import, division
 import logging
 
-from oggm.utils import GlacierDirectory, entity_task, divide_task
+from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
 
 
 try:
