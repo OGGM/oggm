@@ -1,4 +1,4 @@
-.. image:: .docs/_static/logo.png
+.. image:: docs/_static/logo.png
 
 |
 
@@ -87,7 +87,7 @@ About
 
 :License:
 
-.. image:: .docs/_static/gpl.png
+.. image:: docs/_static/gpl.png
    :width: 140 px
 
 OGGM is available under the open source `GNU GPLv3 license`_.
