@@ -603,7 +603,6 @@ def install_node_pip(nn='', inst=None):
     pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock nose progressbar2 &&
     pip install git+https://github.com/fmaussion/motionless.git &&
     pip install git+https://github.com/fmaussion/salem.git &&
-    pip install git+https://github.com/fmaussion/cleo.git &&
     sed -i 's/^backend.*/backend      : Agg/' "${WORKON_HOME}"/oggm_env/lib/python?.?/site-packages/matplotlib/mpl-data/matplotlibrc
     """, pty=False)
 

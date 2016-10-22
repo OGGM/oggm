@@ -22,4 +22,3 @@ dependencies:
   - pip:
     - git+https://github.com/fmaussion/motionless.git
     - git+https://github.com/fmaussion/salem.git
-    - git+https://github.com/fmaussion/cleo.git

@@ -67,7 +67,7 @@ RUN_INVERSION = False  # run bed inversion
 RUN_DYNAMICS = False  # run dybnamics
 
 # Read RGI file
-rgidf = salem.utils.read_shapefile(RGI_FILE, cached=True)
+rgidf = salem.read_shapefile(RGI_FILE, cached=True)
 
 # Select some glaciers
 # Get ref glaciers (all glaciers with MB)

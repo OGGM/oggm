@@ -111,7 +111,7 @@ class TestDataFiles(unittest.TestCase):
         f = utils.get_demo_file('Hintereisferner.shp')
         self.assertTrue(os.path.exists(f))
 
-        sh = salem.utils.read_shapefile(f)
+        sh = salem.read_shapefile(f)
         self.assertTrue(hasattr(sh, 'geometry'))
 
         # Data files
