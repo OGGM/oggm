@@ -5,8 +5,7 @@ After the successful 1st OGGM workshop in Obergurgl, Austria, in February 2016, 
 Save the date
 -------------
 
-March 29 2017 (arrival)
-April 02 2017 (departure)
+March 29 2017 (arrival) to April 02 2017 (departure)
 
 Topics
 ------
@@ -20,7 +19,7 @@ We will discuss all issues regarding the current state of OGGM, including:
 - handling debris cover
 - calving/ocean-ice interaction
 - running OGGM on long time scales (reconstruction and commitment experiments)
-- converting numerical core to C or Fortran
+- converting the numerical core to C or Fortran
 - funding strategies
 - general scientific goals and rationale
 
