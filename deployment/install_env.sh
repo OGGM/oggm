@@ -21,7 +21,6 @@ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj jobl
 echo "Installing git packages..."
 pip install git+https://github.com/fmaussion/motionless.git
 pip install git+https://github.com/fmaussion/salem.git
-pip install git+https://github.com/fmaussion/cleo.git
 
 echo "Done installing pip packages"
 

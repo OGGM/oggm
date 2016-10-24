@@ -30,8 +30,7 @@ import subprocess
 # External libs
 import geopandas as gpd
 import pandas as pd
-from salem import lazy_property
-from salem.utils import read_shapefile
+from salem import lazy_property, read_shapefile
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -1182,6 +1181,9 @@ def get_topo_file(lon_ex, lat_ex, region=None):
             sources.append(_download_srtm_file(z))
         source_str = 'SRTM'
 
+    # filter for None (e.g. oceans)
+    sources = [s for s in sources if s is not None]
+
     if len(sources) < 1:
         raise RuntimeError('No topography file available!')
         # for the very last cases a very coarse dataset ?
@@ -1195,6 +1197,12 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         # merge
         zone_str = '+'.join(zones)
         bname = source_str.lower() + '_merged_' + zone_str + '.tif'
+
+        if len(bname) > 255:  # file name way too long
+            import hashlib
+            hash_object = hashlib.md5(bname.encode())
+            bname = hash_object.hexdigest() + '.tif'
+
         merged_file = os.path.join(topodir, source_str.lower(),
                                    bname)
         if not os.path.exists(merged_file):

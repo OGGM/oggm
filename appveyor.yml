@@ -36,7 +36,6 @@ install:
   - "conda install --yes --quiet -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy rasterio krb5 xarray filelock"
   - "pip install git+https://github.com/fmaussion/motionless.git"
   - "pip install git+https://github.com/fmaussion/salem.git"
-  - "pip install git+https://github.com/fmaussion/cleo.git"
   - "pip install -e ."
 
 build: false

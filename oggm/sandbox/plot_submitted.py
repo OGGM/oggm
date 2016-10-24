@@ -2,7 +2,6 @@ import glob
 import os
 
 import salem
-import cleo
 import matplotlib.pyplot as plt
 
 from oggm.sandbox.itmix_cfg import DATA_DIR, ITMIX_ODIR, PLOTS_DIR
@@ -28,7 +27,7 @@ for dgn in glob.glob(os.path.join(ITMIX_ODIR, '*')):
 
         thick = itmix_topo - oggm_topo
 
-        cm = cleo.Map(ds.grid)
+        cm = salem.Map(ds.grid)
         cm.set_plot_params(nlevels=256)
         cm.set_cmap(plt.get_cmap('viridis'))
         cm.set_data(thick)

@@ -64,7 +64,6 @@ Testing:
 Other libraries:
     - filelock
     - `salem <https://github.com/fmaussion/salem>`_
-    - `cleo <https://github.com/fmaussion/cleo>`_
     - `motionless (py3) <https://github.com/fmaussion/motionless>`_
 
 Optional:
@@ -158,7 +157,6 @@ After success, install the following packages from Fabien's github::
 
     pip install git+https://github.com/fmaussion/motionless.git
     pip install git+https://github.com/fmaussion/salem.git
-    pip install git+https://github.com/fmaussion/cleo.git
 
 
 .. _conda-forge: https://conda-forge.github.io/
@@ -335,7 +333,6 @@ And the external libraries::
 
     $ pip install git+https://github.com/fmaussion/motionless.git
     $ pip install git+https://github.com/fmaussion/salem.git
-    $ pip install git+https://github.com/fmaussion/cleo.git
 
 OGGM and tests
 ~~~~~~~~~~~~~~

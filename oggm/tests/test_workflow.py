@@ -160,7 +160,7 @@ class TestWorkflow(unittest.TestCase):
         write_centerlines_to_shape(gdirs, fpath)
 
         import salem
-        shp = salem.utils.read_shapefile(fpath)
+        shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
 
     @is_slow
