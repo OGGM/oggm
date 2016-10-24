@@ -36,6 +36,7 @@ Documentation
     mpi
     contributing
     api
+    workshop
 
 
 Get in touch
