@@ -24,7 +24,7 @@ News
 
 - **24.10.2016**: Registration to the :ref:`workshop` is now open!
 - **20.04.2016**: Fabien presented OGGM at the
-  `European Geosciences Union General Assembly 2016 <http://meetingorganizer.copernicus.org/EGU2016/orals/20092>`_
+  `European Geosciences Union General Assembly <http://meetingorganizer.copernicus.org/EGU2016/orals/20092>`_
 - **29.03.2016**: OGGM participated to the
   `Ice Thickness Models Intercomparison eXperiment <http://fabienmaussion.info/2016/06/18/itmix-experiment-phase1/>`_
 - **11.02.2016**: The 1st OGGM workshop took place in Obergurgl, Austrian Alps
