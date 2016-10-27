@@ -39,7 +39,11 @@ from shapely.ops import transform as shp_trafo
 from salem import wgs84
 import xarray as xr
 import rasterio
-from rasterio.tools.merge import merge as merge_tool
+try:
+    from rasterio.tools.merge import merge as merge_tool
+except ImportError:
+    # rasterio V > 1.0
+    from rasterio.merge import merge as merge_tool
 import multiprocessing as mp
 import filelock
 
