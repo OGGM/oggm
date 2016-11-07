@@ -129,7 +129,7 @@ def plot_googlemap(gdir, ax=None):
     s = salem.read_shapefile(gdir.get_filepath('outlines'))
     gm = salem.GoogleVisibleMap(np.array(s.geometry[0].exterior.xy[0]),
                                 np.array(s.geometry[0].exterior.xy[1]),
-                                src=s.crs)
+                                crs=s.crs)
 
     img = gm.get_vardata()[..., 0:3]  # sometimes there is an alpha
     cmap = salem.Map(gm.grid, countries=False, nx=gm.grid.nx)
