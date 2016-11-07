@@ -171,6 +171,10 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                     out_thick[i] = 0.
 
             if gdir.terminus_type == 'Land-terminating':
+                # this filtering stuff below is not explained in Farinotti's
+                # paper. I did this because it looks better, but I'm not sure
+                # (yet) that this is a good idea
+
                 # Check for thick to width ratio (should ne be too large)
                 ratio = out_thick / w  # there's no 0 width so we're good
                 pno = np.where(ratio > max_ratio)
