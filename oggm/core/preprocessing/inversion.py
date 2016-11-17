@@ -40,7 +40,7 @@ from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
-from oggm import entity_task, divide_task
+from oggm import entity_task, divide_task, global_task
 from oggm.core.preprocessing.gis import gaussian_blur
 
 # Module logger
@@ -215,6 +215,7 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
     return out_volume, gdir.rgi_area_km2 * 1e6
 
 
+@global_task
 def optimize_inversion_params(gdirs):
     """Optimizes fs and fd based on GlaThiDa thicknesses.
 

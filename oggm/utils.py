@@ -1371,18 +1371,20 @@ class entity_task(object):
                 self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
-            if cfg.CONTINUE_ON_ERROR:
-                try:
-                    out = task_func(gdir, **kwargs)
-                    gdir.log(task_func)
-                except Exception as err:
-                    # Something happened
-                    out = None
-                    gdir.log(task_func, err=err)
-                    pipe_log(gdir, task_func, err=err)
-            else:
+            try:
                 out = task_func(gdir, **kwargs)
+                gdir.log(task_func)
+            except Exception as err:
+                # Something happened
+                out = None
+                gdir.log(task_func, err=err)
+                pipe_log(gdir, task_func, err=err)
+                self.log.error('%s occured during task %s on %s!',
+                        type(err).__name__, task_func.__name__, gdir.rgi_id)
+                if not cfg.CONTINUE_ON_ERROR:
+                    raise
             return out
+        _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
 
 
@@ -1428,6 +1430,18 @@ class divide_task(object):
         # For the logger later on
         _divide_task.__dict__['divide_task'] = True
         return _divide_task
+
+
+def global_task(task_func):
+    """
+    Decorator for common job-controlling logic.
+
+    Indicates that this task expects a list of all GlacierDirs as parameter
+    instead of being called once per dir.
+    """
+
+    task_func.__dict__['global_task'] = True
+    return task_func
 
 
 class GlacierDirectory(object):

@@ -127,7 +127,12 @@ Packages
 
 Install the packages from the `conda-forge`_ channel::
 
-    conda install -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray filelock
+    conda install -c oggm -c conda-forge oggm-deps
+
+The oggm-deps package is a meta package. It does not contain any actual code,
+but only depends on all packages oggm needs, in order to simplify setting up
+an environment.
+If you want to install the actual oggm, install oggm instead of oggm-deps.
 
 .. warning::
 
@@ -137,26 +142,17 @@ Install the packages from the `conda-forge`_ channel::
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ per default, as suggested on their
+You might consider setting `conda-forge`_ (and oggm) per default, as suggested on their
 documentation page::
 
     conda config --add channels conda-forge
+    conda config --add channels oggm
     conda install <package-name>
-
-If you want progress reports when downloading data files you can optionally
-install progressbar2::
-
-    pip install progressbar2
 
 No scientific python installation is complete without installing
 `ipython`_ and `jupyter`_::
 
     conda install -c conda-forge ipython jupyter
-
-After success, install the following packages from Fabien's github::
-
-    pip install git+https://github.com/fmaussion/motionless.git
-    pip install git+https://github.com/fmaussion/salem.git
 
 
 .. _conda-forge: https://conda-forge.github.io/
@@ -170,7 +166,7 @@ OGGM
 We recommend to clone the git repository (or a fork if you want
 to participate to the development, see also :ref:`contributing`)::
 
-   git clone https://github.com/OGGM/oggm.git
+    git clone https://github.com/OGGM/oggm.git
 
 Then go to the project root directory::
 
