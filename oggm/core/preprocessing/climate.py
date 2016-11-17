@@ -15,7 +15,7 @@ import salem
 # Locals
 from oggm import cfg
 from oggm import utils
-from oggm import entity_task, divide_task
+from oggm import entity_task, divide_task, global_task
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -335,6 +335,7 @@ def distribute_cru_style(gdir):
     nc_ts_pre._nc.close()
 
 
+@global_task
 def distribute_climate_data(gdirs):
     """Reads the climate data and distributes to each glacier.
 
@@ -750,6 +751,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
+@global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers.
 
@@ -848,6 +850,7 @@ def compute_ref_t_stars(gdirs):
     df.sort_index().to_csv(file)
 
 
+@global_task
 def distribute_t_stars(gdirs):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.

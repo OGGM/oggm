@@ -76,6 +76,9 @@ def execute_entity_task(task, gdirs, **kwargs):
         to the task function as **kwargs.
     """
 
+    if task.__dict__.get('global_task', False):
+        return task(gdirs, **kwargs)
+
     pc = _pickle_copier(task, kwargs)
 
     if _have_ogmpi:
