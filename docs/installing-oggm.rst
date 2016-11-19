@@ -7,8 +7,10 @@ OGGM itself is a pure python package, but it has several dependencies wich
 are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
-OGGM is `tested`_ with the python `versions`_ 2.7, 3.4 and 3.5. We
-`strongly recommend`_ to use python 3.5.
+OGGM is fully `tested`_ with the python `version`_ 3.5 on linux and partially
+tested with python 3.4 on `windows`_ (for development purposes only). OGGM
+might work with python version 2.7, but it isn't tested any more and we
+`strongly recommend`_ to use python 3+.
 
 .. note::
 
@@ -23,6 +25,7 @@ with experience with `pip`_ can follow the specific instructions
 
 
 .. _tested: https://travis-ci.org/OGGM/oggm
+.. _windows: https://ci.appveyor.com/project/fmaussion/oggm
 .. _versions: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
@@ -64,14 +67,16 @@ Testing:
 Other libraries:
     - filelock
     - `salem <https://github.com/fmaussion/salem>`_
-    - `motionless (py3) <https://github.com/fmaussion/motionless>`_
+    - `motionless <https://github.com/ryancox/motionless/>`_
 
 Optional:
-    - progressbar2 (Display download progress)
+    - progressbar2 (displays the download progress)
 
 
 Install with conda (all platforms)
 ----------------------------------
+
+This is the recommended way to install OGGM.
 
 Prerequisites
 ~~~~~~~~~~~~~
@@ -82,7 +87,7 @@ recommended)  or `anaconda`_ (the full suite - with many packages you wont
 need).
 
 
-**Linux** users should install a couple of packages (not all of them are
+**Linux** users should install a couple of linux packages (not all of them are
 required but it's good to have them anyway)::
 
     $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf ttf-bitstream-vera
@@ -125,14 +130,12 @@ Don't forget to activate it before going on::
 Packages
 ~~~~~~~~
 
-Install the packages from the `conda-forge`_ channel::
+Install the packages from the `conda-forge`_ and oggm channels::
 
     conda install -c oggm -c conda-forge oggm-deps
 
-The oggm-deps package is a meta package. It does not contain any actual code,
-but only depends on all packages oggm needs, in order to simplify setting up
-an environment.
-If you want to install the actual oggm, install oggm instead of oggm-deps.
+The oggm-deps package is a "meta package". It does not contain any code but
+will insall all the packages oggm needs automatically.
 
 .. warning::
 
@@ -162,6 +165,11 @@ No scientific python installation is complete without installing
 
 OGGM
 ~~~~
+
+You can install OGGM as a normal python package (in that case you will be able
+to use the model but not change its code)::
+
+    conda install -c oggm -c conda-forge oggm
 
 We recommend to clone the git repository (or a fork if you want
 to participate to the development, see also :ref:`contributing`)::
