@@ -712,6 +712,10 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
+        mb_file = get_demo_file('RGI_WGMS_oetztal.csv')
+        mb_file = os.path.join(os.path.dirname(mb_file), 'mbdata',
+                               'mbdata_RGI40-11.00897.csv')
+
         gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -725,8 +729,7 @@ class TestClimate(unittest.TestCase):
         climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
-        hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        mbdf = pd.read_csv(mb_file).set_index('YEAR')
         t_stars, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
 
         y, t, p = climate.mb_yearly_climate_on_glacier(gdir, div_id=0)
@@ -744,6 +747,35 @@ class TestClimate(unittest.TestCase):
             self.assertTrue(np.abs(md/np.mean(mbdf['ANNUAL_BALANCE'])) < 0.1)
             r = utils.corrcoef(mbdf['ANNUAL_BALANCE'], mb_per_mu)
             self.assertTrue(r > 0.8)
+
+        _t_s = t_s
+        _rmd = rmd
+
+        # test crop years
+        cfg.PARAMS['tstar_search_window'] = [1902, 0]
+        climate.mu_candidates(gdir, div_id=0)
+        t_stars, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)
+        for t_s, rmd in zip(t_stars, bias):
+            mb_per_mu = p - mu_yr_clim.loc[t_s] * t
+            md = utils.md(mbdf['ANNUAL_BALANCE'], mb_per_mu)
+            np.testing.assert_allclose(md, rmd)
+            self.assertTrue(np.abs(md/np.mean(mbdf['ANNUAL_BALANCE'])) < 0.1)
+            r = utils.corrcoef(mbdf['ANNUAL_BALANCE'], mb_per_mu)
+            self.assertTrue(r > 0.8)
+            self.assertTrue(t_s >= 1902)
+            self.assertEqual(t_s, _t_s)
+            self.assertEqual(rmd, _rmd)
+
+        # test distribute
+        cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
+        climate.compute_ref_t_stars(gdirs)
+        climate.distribute_t_stars(gdirs)
+        cfg.PARAMS['tstar_search_window'] = [0, 0]
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        np.testing.assert_allclose(df['t_star'], _t_s)
+        np.testing.assert_allclose(df['bias'], _rmd)
 
     def test_local_mustar(self):
 

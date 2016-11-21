@@ -195,7 +195,14 @@ def _download_oggm_files_unlocked():
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
-            out[filename] = os.path.join(root, filename)
+            if filename in out:
+                # This was a stupid thing, and should not happen
+                # TODO: duplicates in sample data...
+                k = os.path.join(os.path.dirname(root), filename)
+                assert k not in out
+                out[k] = os.path.join(root, filename)
+            else:
+                out[filename] = os.path.join(root, filename)
 
     return out
 
@@ -606,6 +613,27 @@ def nicenumber(number, binsize, lower=False):
         return e * binsize
     else:
         return (e+1) * binsize
+
+
+def signchange(ts):
+    """Detect sign changes in a time series.
+
+    http://stackoverflow.com/questions/2652368/how-to-detect-a-sign-change-
+    for-elements-in-a-numpy-array
+
+    Returns
+    -------
+    An array with 0s everywhere and 1's when the sign changes
+    """
+    asign = np.sign(ts)
+    sz = asign == 0
+    while sz.any():
+        asign[sz] = np.roll(asign, 1)[sz]
+        sz = asign == 0
+    out = ((np.roll(asign, 1) - asign) != 0).astype(int)
+    if asign.iloc[0] == asign.iloc[1]:
+        out.iloc[0] = 0
+    return out
 
 
 def year_to_date(yr):
