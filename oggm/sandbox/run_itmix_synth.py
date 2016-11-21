@@ -108,13 +108,11 @@ if do_calib:
     for task in task_list:
         execute_entity_task(task, gdirs)
 
-    # # Climate related tasks
-    # tasks.distribute_climate_data(gdirs)
-    # tasks.compute_ref_t_stars(gdirs)
+    # "Climate related tasks"
     for gd in gdirs:
         itmix.synth_apparent_mb(gd)
-    #
-    # # Inversion
+
+    # Inversion
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
     fac = 3.22268124479468
     use_cfg_params = {'glen_a':fac * cfg.A, 'fs':0.}

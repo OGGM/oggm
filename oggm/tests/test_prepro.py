@@ -446,7 +446,38 @@ class TestClimate(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
-        climate.distribute_climate_data(gdirs)
+        climate.process_histalp_nonparallel(gdirs)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1802)
+        self.assertEqual(ci['hydro_yr_1'], 2003)
+
+        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+            ref_h = nc_r.variables['hgt'][1, 1]
+            ref_p = nc_r.variables['prcp'][:, 1, 1]
+            ref_p *= cfg.PARAMS['prcp_scaling_factor']
+            ref_t = nc_r.variables['temp'][:, 1, 1]
+
+        with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+            self.assertTrue(ref_h == nc_r.ref_hgt)
+            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
+            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+
+    def test_distribute_climate_parallel(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_custom_climate_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1802)
+        self.assertEqual(ci['hydro_yr_1'], 2003)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -473,14 +504,18 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
 
-        climate.distribute_climate_data([gdirs[0]])
+        climate.process_histalp_nonparallel([gdirs[0]])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = '~'
         cfg.PATHS['cru_dir'] = cru_dir
-        climate.distribute_climate_data([gdirs[1]])
+        climate.process_cru_data(gdirs[1])
         cfg.PATHS['cru_dir'] = '~'
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -504,7 +539,7 @@ class TestClimate(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
-        climate.distribute_climate_data(gdirs)
+        climate.process_histalp_nonparallel(gdirs)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -564,7 +599,7 @@ class TestClimate(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
-        climate.distribute_climate_data(gdirs)
+        climate.process_histalp_nonparallel(gdirs)
 
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -652,7 +687,7 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         gdirs.append(gdir)
-        climate.distribute_climate_data(gdirs)
+        climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
         se = gdir.read_pickle('mu_candidates')
@@ -687,7 +722,7 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         gdirs.append(gdir)
-        climate.distribute_climate_data(gdirs)
+        climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
@@ -723,7 +758,7 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
+        climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir, div_id=0)
 
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
@@ -813,7 +848,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
+        climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
@@ -901,7 +936,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
+        climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
@@ -964,7 +999,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
+        climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
@@ -1023,7 +1058,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.distribute_climate_data([gdir])
+        climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')

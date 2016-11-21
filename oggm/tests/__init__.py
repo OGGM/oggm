@@ -210,7 +210,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     geometry.catchment_area(gdir)
     geometry.catchment_width_geom(gdir)
     geometry.catchment_width_correction(gdir)
-    climate.distribute_climate_data([gdir])
+    climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir, div_id=0)
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
     mbdf = pd.read_csv(hef_file).set_index('YEAR')

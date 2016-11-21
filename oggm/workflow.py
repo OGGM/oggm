@@ -141,8 +141,16 @@ def gis_prepro_tasks(gdirs):
 def climate_tasks(gdirs):
     """Prepare the climate data."""
 
-    # Only global tasks
-    tasks.distribute_climate_data(gdirs)
+    # I don't know where this logic is best placed...
+    if ('climate_file' in cfg.PATHS) and \
+            os.path.exists(cfg.PATHS['climate_file']):
+        _process_task = tasks.process_custom_climate_data
+    else:
+        # OK, so use the default CRU "high-resolution" method
+        _process_task = tasks.process_cru_data
+    execute_entity_task(_process_task, gdirs)
+
+    # Then, only global tasks
     tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 

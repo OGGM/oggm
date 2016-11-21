@@ -21,12 +21,23 @@ from oggm import entity_task, divide_task, global_task
 log = logging.getLogger(__name__)
 
 
-def _distribute_histalp_syle(gdirs, fpath):
-    """This is the way OGGM does it for the Alps.
+@global_task
+def process_histalp_nonparallel(gdirs, fpath=None):
+    """This is the way OGGM used to do it (deprecated).
 
     It requires an input file with a specific format, and uses lazy
     optimisation (computing time dependant gradients can be slow)
     """
+
+    # Did the user specify a specific climate data file?
+    if fpath is None:
+        if ('climate_file' in cfg.PATHS):
+                fpath = cfg.PATHS['climate_file']
+
+    if not os.path.exists(fpath):
+        raise IOError('Custom climate file not found')
+
+    log.info('process_histalp_nonparallel')
 
     # read the file and data entirely (faster than many I/O)
     with netCDF4.Dataset(fpath, mode='r') as nc:
@@ -39,6 +50,7 @@ def _distribute_histalp_syle(gdirs, fpath):
         ny, r = divmod(len(time), 12)
         if r != 0:
             raise ValueError('Climate data should be N full years exclusively')
+        y0, y1 = time[0].year, time[-1].year
 
         # Units
         assert nc.variables['hgt'].units == 'm'
@@ -54,140 +66,86 @@ def _distribute_histalp_syle(gdirs, fpath):
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
         ilat = np.argmin(np.abs(lat - gdir.cenlat))
+        ref_pix_lon = lon[ilon]
+        ref_pix_lat = lat[ilat]
         iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
                                                               ilat, def_grad,
                                                               g_minmax,
                                                               sf, use_grad)
-        gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt)
-
-
-def _distribute_cru_style_nonparallel(gdirs):
-    """More general solution for OGGM globally.
-
-    It uses the CRU CL2 ten-minutes climatology as baseline
-    (provided with OGGM)
-    """
-
-    # read the climatology
-    clfile = utils.get_cru_cl_file()
-    ncclim = salem.GeoNetcdf(clfile)
-    # and the TS data
-    nc_ts_tmp = salem.GeoNetcdf(utils.get_cru_file('tmp'), monthbegin=True)
-    nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
-
-    # set temporal subset for the ts data (hydro years)
-    nc_ts_tmp.set_period(t0='1901-10-01', t1='2014-09-01')
-    nc_ts_pre.set_period(t0='1901-10-01', t1='2014-09-01')
-    time = nc_ts_pre.time
-    ny, r = divmod(len(time), 12)
-    assert r == 0
-
-    # gradient default params
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    def_grad = cfg.PARAMS['temp_default_gradient']
-    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-    prcp_scaling_factor = cfg.PARAMS['prcp_scaling_factor']
-
-    for gdir in gdirs:
-        log.info('%s: %s', gdir.rgi_id, 'distribute_cru_style')
-        lon = gdir.cenlon
-        lat = gdir.cenlat
-
-        # This is guaranteed to work because I prepared the file (I hope)
-        ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
-
-        # get monthly gradient ...
-        loc_hgt = ncclim.get_vardata('elev')
-        loc_tmp = ncclim.get_vardata('temp')
-        loc_pre = ncclim.get_vardata('prcp')
-        isok = np.isfinite(loc_hgt)
-        hgt_f = loc_hgt[isok].flatten()
-        ts_grad = np.zeros(12) + def_grad
-        if use_grad and len(hgt_f) >= 5:
-            for i in range(12):
-                loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
-                slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
-                ts_grad[i] = slope if (p_val < 0.01) else def_grad
-        # ... but dont exaggerate too much
-        ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
-        # convert to timeserie and hydroyears
-        ts_grad = ts_grad.tolist()
-        ts_grad = ts_grad[9:] + ts_grad[0:9]
-        ts_grad = np.asarray(ts_grad * ny)
-
-        # maybe this will throw out of bounds warnings
-        nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
-        nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
-
-        # compute monthly anomalies
-        # of temp
-        ts_tmp = nc_ts_tmp.get_vardata('tmp', as_xarray=True)
-        ts_tmp_avg = ts_tmp.sel(time=slice('1961-01-01', '1990-12-01'))
-        ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
-        ts_tmp = ts_tmp.groupby('time.month') - ts_tmp_avg
-        # of precip
-        ts_pre = nc_ts_pre.get_vardata('pre', as_xarray=True)
-        ts_pre_avg = ts_pre.sel(time=slice('1961-01-01', '1990-12-01'))
-        ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
-        ts_pre = ts_pre.groupby('time.month') - ts_pre_avg
-
-        # interpolate to HR grid
-        if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
-            # Extreme case, middle pix is not valid
-            # take any valid pix from the 3*3 (and hope theres one)
-            found_it = False
-            for idi in range(2):
-                for idj in range(2):
-                    if np.all(np.isfinite(ts_tmp[:, idj, idi])):
-                        ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
-                        ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
-                        found_it = True
-            if not found_it:
-                msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
-                raise RuntimeError(msg)
-        elif np.any(~np.isfinite(ts_tmp)):
-            # maybe the side is nan, but we can do nearest
-            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                                   interp='nearest')
-            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                                   interp='nearest')
-        else:
-            # We can do bilinear
-            ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                                   interp='linear')
-            ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                                   interp='linear')
-
-        # take the center pixel and add it to the CRU CL clim
-        # for temp
-        loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
-                               coords={'month':ts_pre_avg.month})
-        ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
-                               coords={'time':time})
-        ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
-        # for prcp
-        loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
-                               coords={'month':ts_pre_avg.month})
-        ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
-                               coords={'time':time})
-        ts_pre = ts_pre.groupby('time.month') + loc_pre * prcp_scaling_factor
-
-        # done
-        loc_hgt = loc_hgt[1, 1]
-        assert np.isfinite(loc_hgt)
-        assert np.all(np.isfinite(ts_pre.values))
-        assert np.all(np.isfinite(ts_tmp.values))
-        assert np.all(np.isfinite(ts_grad))
-        gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                        ts_grad, loc_hgt)
+        gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
+                                        ref_pix_lon, ref_pix_lat)
+        # metadata
+        out = {'climate_source': fpath,
+               'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
+        gdir.write_pickle(out, 'climate_info')
 
 
 @entity_task(log, writes=['climate_monthly'])
-def distribute_cru_style(gdir):
-    """Testing distribute cru style in parallel to see.
+def process_custom_climate_data(gdir):
+    """Processes and writes the climate data from a user-defined climate file.
 
-    It uses the CRU CL2 ten-minutes climatology as baseline
-    (provided with OGGM)
+    The input file must have a specific format (see
+    oggm-sample-data/test-files/histalp_merged_hef.nc for an example).
+
+    Uses caching for faster retrieval.
+
+    This is the way OGGM does it for the Alps (HISTALP).
+    """
+
+    if not (('climate_file' in cfg.PATHS) and \
+                    os.path.exists(cfg.PATHS['climate_file'])):
+        raise IOError('Custom climate file not found')
+
+
+    # read the file
+    fpath = cfg.PATHS['climate_file']
+    nc_ts = salem.GeoNetcdf(fpath)
+
+    # set temporal subset for the ts data (hydro years)
+    yrs = nc_ts.time.year
+    y0, y1 = yrs[0], yrs[-1]
+    nc_ts.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    time = nc_ts.time
+    ny, r = divmod(len(time), 12)
+    if r != 0:
+        raise ValueError('Climate data should be N full years exclusively')
+
+    # Units
+    assert nc_ts._nc.variables['hgt'].units == 'm'
+    assert nc_ts._nc.variables['temp'].units == 'degC'
+    assert nc_ts._nc.variables['prcp'].units == 'kg m-2'
+
+    # geoloc
+    lon = nc_ts._nc.variables['lon'][:]
+    lat = nc_ts._nc.variables['lat'][:]
+
+    # Gradient defaults
+    use_grad = cfg.PARAMS['temp_use_local_gradient']
+    def_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    sf = cfg.PARAMS['prcp_scaling_factor']
+
+    ilon = np.argmin(np.abs(lon - gdir.cenlon))
+    ilat = np.argmin(np.abs(lat - gdir.cenlat))
+    ref_pix_lon = lon[ilon]
+    ref_pix_lat = lat[ilat]
+    iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
+                                                          ilat, def_grad,
+                                                          g_minmax,
+                                                          sf, use_grad)
+    gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
+                                    ref_pix_lon, ref_pix_lat)
+    # metadata
+    out = {'climate_source': fpath, 'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
+    gdir.write_pickle(out, 'climate_info')
+
+
+@entity_task(log, writes=['climate_monthly'])
+def process_cru_data(gdir):
+    """Processes and writes the climate data for this glacier.
+
+    Interpolates the CRU TS data to the high-resolution CL2 climatologies
+    (provided with OGGM) and writes everything to a NetCDF file.
     """
 
     # read the climatology
@@ -198,8 +156,10 @@ def distribute_cru_style(gdir):
     nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
-    nc_ts_tmp.set_period(t0='1901-10-01', t1='2014-09-01')
-    nc_ts_pre.set_period(t0='1901-10-01', t1='2014-09-01')
+    yrs = nc_ts_pre.time.year
+    y0, y1 = yrs[0], yrs[-1]
+    nc_ts_tmp.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    nc_ts_pre.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
     time = nc_ts_pre.time
     ny, r = divmod(len(time), 12)
     assert r == 0
@@ -220,6 +180,8 @@ def distribute_cru_style(gdir):
     loc_hgt = ncclim.get_vardata('elev')
     loc_tmp = ncclim.get_vardata('temp')
     loc_pre = ncclim.get_vardata('prcp')
+    loc_lon = ncclim.get_vardata('lon')
+    loc_lat = ncclim.get_vardata('lat')
 
     # see if the center is ok
     if not np.isfinite(loc_hgt[1, 1]):
@@ -247,6 +209,8 @@ def distribute_cru_style(gdir):
         loc_hgt = ncclim.get_vardata('elev')
         loc_tmp = ncclim.get_vardata('temp')
         loc_pre = ncclim.get_vardata('prcp')
+        loc_lon = ncclim.get_vardata('lon')
+        loc_lat = ncclim.get_vardata('lat')
 
     assert np.isfinite(loc_hgt[1, 1])
     isok = np.isfinite(loc_hgt)
@@ -284,7 +248,7 @@ def distribute_cru_style(gdir):
     # interpolate to HR grid
     if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
         # Extreme case, middle pix is not valid
-        # take any valid pix from the 3*3 (and hope theres one)
+        # take any valid pix from the 3*3 (and hope there's one)
         found_it = False
         for idi in range(2):
             for idj in range(2):
@@ -324,42 +288,20 @@ def distribute_cru_style(gdir):
 
     # done
     loc_hgt = loc_hgt[1, 1]
+    loc_lon = loc_lon[1]
+    loc_lat = loc_lat[1]
     assert np.isfinite(loc_hgt)
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
     assert np.all(np.isfinite(ts_grad))
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                    ts_grad, loc_hgt)
+                                    ts_grad, loc_hgt, loc_lon, loc_lat)
     ncclim._nc.close()
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
-
-
-@global_task
-def distribute_climate_data(gdirs):
-    """Reads the climate data and distributes to each glacier.
-
-    Generates a NetCDF file in the root glacier directory (climate_monthly.nc)
-    It contains the timeseries of temperature, temperature gradient, and
-    precipitation at the nearest grid point. The climate data reference height
-    is provided as global attribute.
-
-    Not to be multi-processed.
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
-    """
-
-    log.info('distribute_climate_data')
-
-    # Did the user specify a specific climate data file?
-    if ('climate_file' in cfg.PATHS) and \
-        os.path.exists(cfg.PATHS['climate_file']):
-        _distribute_histalp_syle(gdirs, cfg.PATHS['climate_file'])
-    else:
-        # OK, so use the default CRU "high-resolution" method
-        _distribute_cru_style_nonparallel(gdirs)
+    # metadata
+    out = {'climate_source': 'CRU data', 'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
+    gdir.write_pickle(out, 'climate_info')
 
 
 def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
