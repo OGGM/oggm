@@ -8,6 +8,7 @@ import shutil
 import salem
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 
 from oggm.tests import is_download
 from oggm import utils
@@ -20,13 +21,21 @@ if not os.path.exists(TEST_DIR):
     os.makedirs(TEST_DIR)
 
 
-class TestTime(unittest.TestCase):
+class TestFuncs(unittest.TestCase):
 
     def setUp(self):
         pass
 
     def tearDown(self):
         pass
+
+    def test_signchange(self):
+        ts = pd.Series([-2., -1., 1., 2., 3], index=np.arange(5))
+        sc = utils.signchange(ts)
+        assert_array_equal(sc, [0, 0, 1, 0, 0])
+        ts = pd.Series([-2., -1., 1., 2., 3][::-1], index=np.arange(5))
+        sc = utils.signchange(ts)
+        assert_array_equal(sc, [0, 0, 0, 1, 0])
 
     def test_year_to_date(self):
 

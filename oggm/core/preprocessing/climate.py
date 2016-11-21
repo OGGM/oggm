@@ -497,8 +497,15 @@ def mu_candidates(gdir, div_id=None):
 
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
 
+    # Only get the years were we consider looking for tstar
+    y0, y1 = cfg.PARAMS['tstar_search_window']
+    ci = gdir.read_pickle('climate_info')
+    y0 = y0 or ci['hydro_yr_0']
+    y1 = y1 or ci['hydro_yr_1']
+
     years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
-                                                           div_id=div_id)
+                                                           div_id=div_id,
+                                                           year_range=[y0, y1])
 
     # Be sure we have no marine terminating glacier
     assert gdir.terminus_type == 'Land-terminating'
@@ -556,16 +563,7 @@ def t_star_from_refmb(gdir, mbdf):
     # Diff to reference
     diff = mb_per_mu - ref_mb
     diff = diff.dropna()
-
-    # Solution to detect sign changes
-    # http://stackoverflow.com/questions/2652368/how-to-detect-a-sign-change-
-    # for-elements-in-a-numpy-array
-    asign = np.sign(diff)
-    sz = asign == 0
-    while sz.any():
-        asign[sz] = np.roll(asign, 1)[sz]
-        sz = asign == 0
-    signchange = ((np.roll(asign, 1) - asign) != 0).astype(int)
+    signchange = utils.signchange(diff)
 
     # If sign changes save them
     # TODO: ideas to do this better: apply a smooth (take noise into account)
@@ -681,8 +679,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
         if div_id >= 1:
             aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-                log.warning('%s: flux should be zero, but is: %.4f km3 ice yr-1',
-                            gdir.rgi_id, aflux)
+                log.warning('%s: flux should be zero, but is: '
+                            '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
                 msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
@@ -734,13 +732,14 @@ def compute_ref_t_stars(gdirs):
     # know how to start
     if len(only_one) == 0:
         if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
-            # TODO: hardcoded shit here, for the test workflow
+            # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00887')
             gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
-            per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]], [res_bias[-1]])
+            per_glacier['RGI40-11.00887'] = (
+            gdir, [t_star[-1]], [res_bias[-1]])
         else:
-            raise RuntimeError('Didnt expect to be here.')
-
+            raise RuntimeError('We need at least one glacier with one '
+                               'tstar only.')
 
     log.info('%d out of %d have only one possible t*. Start from here',
              len(only_one), len(ref_gdirs))
