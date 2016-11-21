@@ -98,8 +98,8 @@ task_list = [
 for task in task_list:
     execute_entity_task(task, gdirs)
 
-# Climate related tasks - this will download
-tasks.distribute_climate_data(gdirs)
+# Climate related task
+execute_entity_task(tasks.process_custom_climate_data, gdirs)
 tasks.compute_ref_t_stars(gdirs)
 tasks.distribute_t_stars(gdirs)
 

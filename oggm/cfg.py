@@ -157,6 +157,10 @@ _doc = 'The monthly climate timeseries for this glacier, stored in a netCDF ' \
        'file.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
+_doc = 'Some information (dictionary) about the climate data for this ' \
+       'glacier, avoiding many useless accesses to the netCDF file.'
+BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
+
 _doc = 'A pandas.Series with the (year, mu) data.'
 BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
 
@@ -245,6 +249,8 @@ def initialize(file=None):
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'tstar_search_window'
+    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -264,7 +270,8 @@ def initialize(file=None):
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
            'optimize_inversion_params' , 'use_multiple_flowlines',
-           'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size']
+           'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
+           'tstar_search_window']
     for k in ltr:
         del cp[k]
 

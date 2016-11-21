@@ -1738,10 +1738,11 @@ class GlacierDirectory(object):
 
         return nc
 
-    def write_monthly_climate_file(self, time, prcp, temp, grad, hgt):
+    def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
+                                   ref_pix_lon, ref_pix_lat):
         """Creates a netCDF4 file with climate data.
 
-        See :py:func:`oggm.tasks.distribute_climate_data`.
+        See :py:func:`~oggm.tasks.process_cru_data`.
         """
 
         # overwrite as default
@@ -1750,7 +1751,11 @@ class GlacierDirectory(object):
             os.remove(fpath)
 
         with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
-            nc.ref_hgt = hgt
+            nc.ref_hgt = ref_pix_hgt
+            nc.ref_pix_lon = ref_pix_lon
+            nc.ref_pix_lat = ref_pix_lat
+            nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
+                                       ref_pix_lon, ref_pix_lat)
 
             dtime = nc.createDimension('time', None)
 
@@ -1764,7 +1769,7 @@ class GlacierDirectory(object):
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'
-            v.long_name = 'total precipitation amount'
+            v.long_name = 'total monthly precipitation amount'
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=True)

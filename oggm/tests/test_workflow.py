@@ -95,7 +95,7 @@ def up_to_inversion(reset=False):
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")
-            workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+            workflow.execute_entity_task(tasks.process_cru_data, gdirs)
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
 

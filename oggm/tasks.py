@@ -18,7 +18,8 @@ from oggm.core.preprocessing.geometry import initialize_flowlines
 from oggm.core.preprocessing.geometry import catchment_width_geom
 from oggm.core.preprocessing.geometry import catchment_width_correction
 from oggm.core.preprocessing.climate import mu_candidates
-from oggm.core.preprocessing.climate import distribute_cru_style
+from oggm.core.preprocessing.climate import process_cru_data
+from oggm.core.preprocessing.climate import process_custom_climate_data
 from oggm.core.preprocessing.inversion import prepare_for_inversion
 from oggm.core.preprocessing.inversion import volume_inversion
 from oggm.core.preprocessing.inversion import distribute_thickness
@@ -27,7 +28,7 @@ from oggm.core.models.flowline import random_glacier_evolution
 from oggm.core.models.flowline import iterative_initial_glacier_search
 
 # Global tasks
-from oggm.core.preprocessing.climate import distribute_climate_data
+from oggm.core.preprocessing.climate import process_histalp_nonparallel
 from oggm.core.preprocessing.climate import compute_ref_t_stars
 from oggm.core.preprocessing.climate import distribute_t_stars
 from oggm.core.preprocessing.inversion import optimize_inversion_params
