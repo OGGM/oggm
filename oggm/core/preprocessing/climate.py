@@ -728,6 +728,8 @@ def compute_ref_t_stars(gdirs):
         reff = os.path.join(mbdatadir, 'mbdata_' + gdir.rgi_id + '.csv')
         mbdf = pd.read_csv(reff).set_index('YEAR')
         t_star, res_bias = t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        # store the mb (could be useful later)
+        gdir.write_pickle(mbdf.ANNUAL_BALANCE, 'ref_massbalance')
 
         # if we have just one candidate this is good
         if len(t_star) == 1:
