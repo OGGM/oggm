@@ -42,6 +42,7 @@ Global tasks
     process_histalp_nonparallel
     compute_ref_t_stars
     distribute_t_stars
+    crossval_t_stars
     optimize_inversion_params
 
 .. currentmodule:: oggm

@@ -6,6 +6,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 import os
 import shutil
 import unittest
+import pickle
 from functools import partial
 
 import pandas as pd
@@ -31,6 +32,7 @@ if not RUN_WORKFLOW_TESTS:
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
+CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 
 def clean_dir(testdir):
@@ -38,7 +40,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_inversion(reset=False):
+def up_to_climate(reset=False):
     """Run the tasks you want."""
 
     # test directory
@@ -46,6 +48,10 @@ def up_to_inversion(reset=False):
         os.makedirs(TEST_DIR)
     if reset:
         clean_dir(TEST_DIR)
+
+    if not os.path.exists(CLI_LOGF):
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
 
     # Init
     cfg.initialize()
@@ -79,7 +85,7 @@ def up_to_inversion(reset=False):
     gdirs = workflow.init_glacier_regions(rgidf)
 
     try:
-        flowline.init_present_time_glacier(gdirs[0])
+        tasks.catchment_width_correction(gdirs[0])
     except Exception:
         reset = True
 
@@ -87,8 +93,58 @@ def up_to_inversion(reset=False):
         # First preprocessing tasks
         workflow.gis_prepro_tasks(gdirs)
 
-        # Climate related tasks
-        # See if CRU is running
+    return gdirs
+
+
+def up_to_inversion(reset=False):
+    """Run the tasks you want."""
+
+    gdirs = up_to_climate(reset=reset)
+
+    with open(CLI_LOGF, 'rb') as f:
+        clilog = pickle.load(f)
+
+    if clilog != 'histalp':
+        reset = True
+    else:
+        try:
+            tasks.prepare_for_inversion(gdirs[0])
+        except Exception:
+            reset = True
+
+    if reset:
+        # Use histalp for the actual inversion test
+        cfg.PARAMS['temp_use_local_gradient'] = True
+        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
+        cfg.PATHS['cru_dir'] = '~'
+        workflow.climate_tasks(gdirs)
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('histalp', f)
+
+        # Inversion
+        workflow.inversion_tasks(gdirs)
+
+    return gdirs
+
+
+def up_to_distrib(reset=False):
+    # for cross val basically
+
+    gdirs = up_to_climate(reset=reset)
+
+    with open(CLI_LOGF, 'rb') as f:
+        clilog = pickle.load(f)
+
+    if clilog != 'cru':
+        reset = True
+    else:
+        try:
+            tasks.compute_ref_t_stars(gdirs)
+        except Exception:
+            reset = True
+
+    if reset:
+        # Use CRU
         cfg.PARAMS['temp_use_local_gradient'] = False
         cfg.PATHS['climate_file'] = '~'
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
@@ -99,70 +155,13 @@ def up_to_inversion(reset=False):
             workflow.execute_entity_task(tasks.process_cru_data, gdirs)
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-
-        # Use histalp for the actual test
-        cfg.PARAMS['temp_use_local_gradient'] = True
-        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
-        cfg.PATHS['cru_dir'] = '~'
-        workflow.climate_tasks(gdirs)
-
-        # Inversion
-        workflow.inversion_tasks(gdirs)
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('cru', f)
 
     return gdirs
 
 
 class TestWorkflow(unittest.TestCase):
-
-    @is_slow
-    def test_random(self):
-
-        gdirs = up_to_inversion()
-
-        workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        rand_glac = partial(flowline.random_glacier_evolution, nyears=200)
-        workflow.execute_entity_task(rand_glac, gdirs)
-
-        for gd in gdirs:
-
-            path = gd.get_filepath('past_model')
-
-            # See that we are running ok
-            with flowline.FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                area = model.area_km2_ts()
-                len = model.length_m_ts()
-
-                self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
-                self.assertTrue(np.all(np.isfinite(area) & area != 0.))
-                self.assertTrue(np.all(np.isfinite(len) & len != 0.))
-
-                # graphics.plot_modeloutput_map(gd, model=model)
-                # model.run_until(np.floor(area.argmax()))
-                # graphics.plot_modeloutput_map(gd, model=model)
-                #
-                # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                # vol.plot(ax=ax1)
-                # ax1.set_title('{}: Volume'.format(gd.rgi_id))
-                # area.plot(ax=ax2)
-                # ax2.set_title('Area')
-                # len.plot(ax=ax3)
-                # ax3.set_title('Length')
-                # plt.tight_layout()
-                # plt.show()
-
-
-    @is_slow
-    def test_shapefile_output(self):
-
-        # Just to increase coveralls, hehe
-        gdirs = up_to_inversion()
-        fpath = os.path.join(TEST_DIR, 'centerlines.shp')
-        write_centerlines_to_shape(gdirs, fpath)
-
-        import salem
-        shp = salem.read_shapefile(fpath)
-        self.assertTrue(shp is not None)
 
     @is_slow
     def test_init_present_time_glacier(self):
@@ -215,3 +214,48 @@ class TestWorkflow(unittest.TestCase):
                 if len(model.fls) > 1:
                     if fl.order == (maxo-1):
                         self.assertTrue(fl.flows_to is fls[-1])
+
+    @is_slow
+    def test_crossval(self):
+
+        gdirs = up_to_distrib()
+        tasks.crossval_t_stars(gdirs)
+        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+        df = pd.read_csv(file)
+        self.assertTrue(np.mean(np.abs(df.diff_muinterp)) >
+                        np.mean(np.abs(df.diff_tinterp))*2)
+
+    @is_slow
+    def test_shapefile_output(self):
+
+        # Just to increase coveralls, hehe
+        gdirs = up_to_inversion()
+        fpath = os.path.join(TEST_DIR, 'centerlines.shp')
+        write_centerlines_to_shape(gdirs, fpath)
+
+        import salem
+        shp = salem.read_shapefile(fpath)
+        self.assertTrue(shp is not None)
+
+    @is_slow
+    def test_random(self):
+
+        gdirs = up_to_inversion()
+
+        workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+        rand_glac = partial(flowline.random_glacier_evolution, nyears=200)
+        workflow.execute_entity_task(rand_glac, gdirs)
+
+        for gd in gdirs:
+
+            path = gd.get_filepath('past_model')
+
+            # See that we are running ok
+            with flowline.FileModel(path) as model:
+                vol = model.volume_km3_ts()
+                area = model.area_km2_ts()
+                len = model.length_m_ts()
+
+                self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
+                self.assertTrue(np.all(np.isfinite(area) & area != 0.))
+                self.assertTrue(np.all(np.isfinite(len) & len != 0.))
