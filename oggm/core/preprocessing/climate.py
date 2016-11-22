@@ -609,7 +609,8 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
-def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
+def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
+                             compute_apparent_mb=True):
     """Compute local mustar and apparent mb from tstar.
 
     Parameters
@@ -619,6 +620,9 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
         the year where the glacier should be equilibrium
     bias: int
         the associated reference bias
+    compute_apparent_mb: bool
+        if you want to compute the referenc MB at the same time (recommended,
+        unless you are cross-validating for example).
     """
 
     # Climate period
@@ -652,6 +656,9 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None):
         df['bias'] = [bias]
         df.to_csv(gdir.get_filepath('local_mustar', div_id=div_id),
                   index=False)
+
+        if not compute_apparent_mb:
+            continue
 
         # For each flowline compute the apparent MB
         # For div 0 it is kind of artificial but this is for validation
@@ -783,10 +790,10 @@ def compute_ref_t_stars(gdirs):
         lats.append(gdir.cenlat)
         lons.append(gdir.cenlon)
     df = pd.DataFrame(index=rgis_ids)
-    df['tstar'] = t_stars
-    df['bias'] = biases
     df['lon'] = lons
     df['lat'] = lats
+    df['tstar'] = t_stars
+    df['bias'] = biases
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
 
@@ -827,3 +834,111 @@ def distribute_t_stars(gdirs):
 
         # Go
         local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias)
+
+
+@global_task
+def distribute_t_stars(gdirs):
+    """After the computation of the reference tstars, apply
+    the interpolation to each individual glacier.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('Distribute t* and mu*')
+
+    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                      'ref_tstars.csv'))
+
+    for gdir in gdirs:
+
+        # Compute the distance to each glacier
+        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
+                                    ref_df.lon, ref_df.lat)
+
+        # Take the 10 closests
+        aso = np.argsort(distances)[0:9]
+        amin = ref_df.iloc[aso]
+        distances = distances[aso]**2
+
+        # If really close no need to divide, else weighted average
+        if distances.iloc[0] <= 0.1:
+            tstar = amin.tstar.iloc[0]
+            bias = amin.bias.iloc[0]
+        else:
+            tstar = int(np.average(amin.tstar, weights=1./distances))
+            bias = np.average(amin.bias, weights=1./distances)
+
+        # Go
+        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias)
+
+
+@global_task
+def crossval_t_stars(gdirs):
+    """Cross-validate the interpolation of tstar to each individual glacier.
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('Cross-validate the t* and mu* determination')
+
+    full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                      'ref_tstars.csv'), index_col=0)
+
+    rgdirs = [g for g in gdirs if (g.rgi_id in full_ref_df.index and
+                                   g.terminus_type == 'Land-terminating')]
+
+    for rid in full_ref_df.index:
+        ref_df = full_ref_df.drop(rid, axis=0)
+
+        gdir = [g for g in rgdirs if g.rgi_id == rid][0]
+
+        # Compute the distance to each glacier
+        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
+                                    ref_df.lon, ref_df.lat)
+
+        # Take the 10 closests
+        aso = np.argsort(distances)[0:9]
+        amin = ref_df.iloc[aso]
+        distances = distances[aso]**2
+
+        # Weighted average
+        tstar = int(np.average(amin.tstar, weights=1./distances))
+        bias = np.average(amin.bias, weights=1./distances)
+
+        # For fun (Marzeion et al 2012), get the interpolated mu
+        agdirs = [g for g in rgdirs if g.rgi_id in amin.index]
+        amustars = []
+        for agdir in agdirs:
+            tdf = pd.read_csv(agdir.get_filepath('local_mustar'))
+            amustars.append(tdf['mu_star'].values[0])
+        mu_interp = np.average(amustars, weights=1./distances)
+
+        # Go, but store the previous calib first
+        bef_df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
+                                 compute_apparent_mb=False)
+
+        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+        full_ref_df.loc[rid, 'mustar'] = bef_df['mu_star'].values[0]
+        full_ref_df.loc[rid, 'cv_muinterp'] = mu_interp
+        full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
+        full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
+        full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
+        assert tstar == rdf['t_star'].values[0]
+
+        # Restore the calib
+        local_mustar_apparent_mb(gdir, tstar=bef_df['t_star'].values[0],
+                                 bias=bef_df['bias'].values[0],
+                                 compute_apparent_mb=False)
+
+    # stats and write
+    full_ref_df['diff_muinterp'] = full_ref_df['cv_muinterp'] - \
+                                   full_ref_df['mustar']
+    full_ref_df['diff_tinterp'] = full_ref_df['cv_mustar'] - \
+                                   full_ref_df['mustar']
+    file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+    full_ref_df.to_csv(file)
