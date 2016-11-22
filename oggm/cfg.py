@@ -161,6 +161,10 @@ _doc = 'Some information (dictionary) about the climate data for this ' \
        'glacier, avoiding many useless accesses to the netCDF file.'
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
+_doc = 'For reference glaciers only: the yearly mass-balance stored in a ' \
+       'pandas series.'
+BASENAMES['ref_massbalance'] = ('ref_massbalance.pkl', _doc)
+
 _doc = 'A pandas.Series with the (year, mu) data.'
 BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
 
@@ -269,7 +273,7 @@ def initialize(file=None):
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
-           'optimize_inversion_params' , 'use_multiple_flowlines',
+           'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window']
     for k in ltr:

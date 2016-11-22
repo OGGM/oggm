@@ -1810,6 +1810,21 @@ class GlacierDirectory(object):
             v.long_name = 'temperature gradient'
             v[:] = grad
 
+    def get_flowline_hw(self):
+        """ Shortcut function to read the heights and widths of the glacier.
+
+        Returns
+        -------
+        (height, widths) in units of m
+        """
+        fls = self.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in fls:
+            w = np.append(w, fl.widths)
+            h = np.append(h, fl.surface_h)
+        return h, w * fl.dx * self.grid.dx
+
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
 

@@ -279,7 +279,7 @@ class TestInitFlowline(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
@@ -562,7 +562,7 @@ class TestMassBalance(unittest.TestCase):
 
         ref_mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
 
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
 
         # Climate period
         yrs = np.arange(1973, 2003.1, 1)
@@ -645,7 +645,7 @@ class TestMassBalance(unittest.TestCase):
         self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
 
         # Compare sigma from real climate and mine
-        mb_ref = massbalance.HistalpMassBalanceModel(gdir)
+        mb_ref = massbalance.PastMassBalanceModel(gdir)
         mb_mod = massbalance.RandomMassBalanceModel(gdir)
         mb_ts = []
         mb_ts2 = []
@@ -682,7 +682,7 @@ class TestMassBalance(unittest.TestCase):
 
         # models
         mb1 = massbalance.TodayMassBalanceModel(gdir)
-        mb2 = massbalance.HistalpMassBalanceModel(gdir)
+        mb2 = massbalance.PastMassBalanceModel(gdir)
 
         start_time = time.time()
         for yr in yrs:

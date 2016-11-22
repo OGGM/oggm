@@ -34,6 +34,16 @@ class MassBalanceModel(object):
         for a given moment in time."""
         raise NotImplementedError()
 
+    def get_annual_mb(self, heights, year=None):
+        """Returns the annual mass-balance at given altitudes
+        for a given moment in time."""
+        raise NotImplementedError()
+
+    def get_specific_mb(self, heights, widths, year=None):
+        """Specific mb for this year (units: mm w.e. yr-1)."""
+        mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
+        return np.average(mbs, weights=widths)
+
 
 class ConstantBalanceModel(MassBalanceModel):
     """Simple gradient MB model."""
@@ -545,14 +555,16 @@ class TodayMassBalanceModel(MassBalanceModel):
         return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
-class HistalpMassBalanceModel(MassBalanceModel):
+class PastMassBalanceModel(MassBalanceModel):
     """Mass balance during the HISTALP period."""
 
-    def __init__(self, gdir):
+    def __init__(self, gdir, mu_star=None):
         """ Instanciate."""
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
-        self.mu_star = df['mu_star'][0]
+        if mu_star is None:
+            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            mu_star = df['mu_star'][0]
+        self.mu_star = mu_star
 
         # Parameters
         self.temp_all_solid = cfg.PARAMS['temp_all_solid']

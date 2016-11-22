@@ -70,4 +70,4 @@ Mass-balance models in the ``oggm.core.models.massbalance`` module
     TstarMassBalanceModel
     BackwardsMassBalanceModel
     TodayMassBalanceModel
-    HistalpMassBalanceModel
+    PastMassBalanceModel

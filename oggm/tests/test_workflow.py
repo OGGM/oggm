@@ -145,6 +145,7 @@ def up_to_distrib(reset=False):
 
     if reset:
         # Use CRU
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['temp_use_local_gradient'] = False
         cfg.PATHS['climate_file'] = '~'
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
@@ -219,11 +220,38 @@ class TestWorkflow(unittest.TestCase):
     def test_crossval(self):
 
         gdirs = up_to_distrib()
+
+        # assert things not change
+        refmustars = []
+        for gdir in gdirs:
+            tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+            refmustars.append(tdf['mu_star'].values[0])
+
         tasks.crossval_t_stars(gdirs)
         file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, index_col=0)
         self.assertTrue(np.mean(np.abs(df.diff_muinterp)) >
-                        np.mean(np.abs(df.diff_tinterp))*2)
+                        np.mean(np.abs(df.diff_tinterp)))
+
+        mustars = []
+        for gdir in gdirs:
+            tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+            mustars.append(tdf['mu_star'].values[0])
+        np.testing.assert_allclose(refmustars, mustars)
+
+        # make some mb tests
+        from oggm.core.models.massbalance import PastMassBalanceModel
+        for rid in df.index:
+            gdir = [g for g in gdirs if g.rgi_id == rid][0]
+            h, w = gdir.get_flowline_hw()
+            mbmod = PastMassBalanceModel(gdir)
+            mbdf = gdir.read_pickle('ref_massbalance').to_frame(name='ref')
+            for yr in mbdf.index:
+                mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
+            mm = mbdf.mean()
+            np.testing.assert_allclose(df.loc[rid].bias,
+                                       mm['mine'] - mm['ref'], atol=1e-3)
+
 
     @is_slow
     def test_shapefile_output(self):
