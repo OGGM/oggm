@@ -297,11 +297,14 @@ def set_divides_db(path=None):
 
     if PARAMS['use_divides'] and path is not None:
         df = gpd.GeoDataFrame.from_file(path)
-        # dirty fix for RGIV5
-        r5 = df.copy()
-        r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
-        df = pd.concat([df, r5])
-        PARAMS['divides_gdf'] = df.set_index('RGIID')
+        try:
+            # dirty fix for RGIV5
+            r5 = df.copy()
+            r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
+            df = pd.concat([df, r5])
+            PARAMS['divides_gdf'] = df.set_index('RGIID')
+        except AttributeError:
+            PARAMS['divides_gdf'] = df.set_index('RGIId')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()
 
