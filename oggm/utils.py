@@ -65,7 +65,7 @@ def _get_download_lock():
     try:
         lock_dir = cfg.PATHS['working_dir']
     except:
-        lock_dir = os.getcwd()
+        lock_dir = cfg.CACHE_DIR
     mkdir(lock_dir)
     try:
         return filelock.FileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
@@ -437,8 +437,8 @@ def _get_centerline_lonlat(gdir):
     olist = []
     for i in gdir.divide_ids:
         cls = gdir.read_pickle('centerlines', div_id=i)
-        for i, cl in enumerate(cls):
-            mm = 1 if i==0 else 0
+        for j, cl in enumerate(cls[::-1]):
+            mm = 1 if j==0 else 0
             gs = gpd.GeoSeries()
             gs['RGIID'] = gdir.rgi_id
             gs['DIVIDE'] = i

@@ -252,18 +252,21 @@ class TestWorkflow(unittest.TestCase):
             np.testing.assert_allclose(df.loc[rid].bias,
                                        mm['mine'] - mm['ref'], atol=1e-3)
 
-
     @is_slow
     def test_shapefile_output(self):
 
         # Just to increase coveralls, hehe
-        gdirs = up_to_inversion()
+        gdirs = up_to_climate()
         fpath = os.path.join(TEST_DIR, 'centerlines.shp')
         write_centerlines_to_shape(gdirs, fpath)
 
         import salem
         shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
+        shp = shp.loc[shp.RGIID == 'RGI40-11.00897']
+        self.assertEqual(len(shp), 5)
+        self.assertEqual(shp.MAIN.sum(), 3)
+        self.assertEqual(shp.loc[shp.LE_SEGMENT.argmax()].MAIN, 1)
 
     @is_slow
     def test_random(self):
