@@ -251,6 +251,14 @@ class TestWorkflow(unittest.TestCase):
             mm = mbdf.mean()
             np.testing.assert_allclose(df.loc[rid].bias,
                                        mm['mine'] - mm['ref'], atol=1e-3)
+            cfg.PARAMS['use_bias_for_run'] = True
+            mbmod = PastMassBalanceModel(gdir)
+            mbdf = gdir.read_pickle('ref_massbalance').to_frame(name='ref')
+            for yr in mbdf.index:
+                mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
+            mm = mbdf.mean()
+            np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
+            cfg.PARAMS['use_bias_for_run'] = False
 
     @is_slow
     def test_shapefile_output(self):

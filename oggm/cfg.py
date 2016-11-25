@@ -233,6 +233,9 @@ def initialize(file=None):
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
     PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
+    # run params
+    PARAMS['run_period'] = [int(vk) for vk in cp.as_list('run_period')]
+
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
@@ -255,6 +258,7 @@ def initialize(file=None):
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
+    PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -275,7 +279,7 @@ def initialize(file=None):
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
-           'tstar_search_window']
+           'tstar_search_window', 'use_bias_for_run', 'run_period']
     for k in ltr:
         del cp[k]
 

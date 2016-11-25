@@ -96,7 +96,6 @@ def process_custom_climate_data(gdir):
                     os.path.exists(cfg.PATHS['climate_file'])):
         raise IOError('Custom climate file not found')
 
-
     # read the file
     fpath = cfg.PATHS['climate_file']
     nc_ts = salem.GeoNetcdf(fpath)
@@ -698,6 +697,23 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
+def _get_ref_glaciers(gdirs):
+    """Get the list of glaciers we have valid data for."""
+
+    flink, mbdatadir = utils.get_wgms_files()
+    dfids = pd.read_csv(flink)['RGI_ID'].values
+
+    # TODO: we removed marine glaciers here. Is it ok?
+    ref_gdirs = []
+    for g in gdirs:
+        if g.rgi_id not in dfids or g.terminus_type != 'Land-terminating':
+            continue
+        mbdf = g.get_ref_mb_data()
+        if len(mbdf) >= 5:
+            ref_gdirs.append(g)
+    return ref_gdirs
+
+
 @global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers.
@@ -709,14 +725,8 @@ def compute_ref_t_stars(gdirs):
 
     log.info('Compute the reference t* and mu* for WGMS glaciers')
 
-    # Get ref glaciers (all glaciers with MB)
-    flink, mbdatadir = utils.get_wgms_files()
-    dfids = pd.read_csv(flink)['RGI_ID'].values
-
-    # Reference glaciers only if in the list
-    # TODO: we removed marine glaciers here. Is it ok?
-    ref_gdirs = [g for g in gdirs if (g.rgi_id in dfids and
-                                      g.terminus_type=='Land-terminating')]
+    # Reference glaciers only if in the list and period is good
+    ref_gdirs = _get_ref_glaciers(gdirs)
 
     # Loop
     only_one = []  # start to store the glaciers with just one t*
@@ -725,8 +735,7 @@ def compute_ref_t_stars(gdirs):
         # all possible mus
         mu_candidates(gdir)
         # list of mus compatibles with refmb
-        reff = os.path.join(mbdatadir, 'mbdata_' + gdir.rgi_id + '.csv')
-        mbdf = pd.read_csv(reff).set_index('YEAR')
+        mbdf = gdir.get_ref_mb_data()
         t_star, res_bias = t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         # store the mb (could be useful later)
         gdir.write_pickle(mbdf.ANNUAL_BALANCE, 'ref_massbalance')
@@ -740,6 +749,7 @@ def compute_ref_t_stars(gdirs):
     # At least of of the X glaciers should have a single t*, otherwise we dont
     # know how to start
     if len(only_one) == 0:
+        flink, mbdatadir = utils.get_wgms_files()
         if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
             # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00887')
@@ -839,44 +849,6 @@ def distribute_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs):
-    """After the computation of the reference tstars, apply
-    the interpolation to each individual glacier.
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
-    """
-
-    log.info('Distribute t* and mu*')
-
-    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                      'ref_tstars.csv'))
-
-    for gdir in gdirs:
-
-        # Compute the distance to each glacier
-        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
-                                    ref_df.lon, ref_df.lat)
-
-        # Take the 10 closests
-        aso = np.argsort(distances)[0:9]
-        amin = ref_df.iloc[aso]
-        distances = distances[aso]**2
-
-        # If really close no need to divide, else weighted average
-        if distances.iloc[0] <= 0.1:
-            tstar = amin.tstar.iloc[0]
-            bias = amin.bias.iloc[0]
-        else:
-            tstar = int(np.average(amin.tstar, weights=1./distances))
-            bias = np.average(amin.bias, weights=1./distances)
-
-        # Go
-        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias)
-
-
-@global_task
 def crossval_t_stars(gdirs):
     """Cross-validate the interpolation of tstar to each individual glacier.
 
@@ -888,10 +860,9 @@ def crossval_t_stars(gdirs):
     log.info('Cross-validate the t* and mu* determination')
 
     full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                      'ref_tstars.csv'), index_col=0)
+                                           'ref_tstars.csv'), index_col=0)
 
-    rgdirs = [g for g in gdirs if (g.rgi_id in full_ref_df.index and
-                                   g.terminus_type == 'Land-terminating')]
+    rgdirs = _get_ref_glaciers(gdirs)
 
     for rid in full_ref_df.index:
         ref_df = full_ref_df.drop(rid, axis=0)
@@ -941,6 +912,6 @@ def crossval_t_stars(gdirs):
     full_ref_df['diff_muinterp'] = full_ref_df['cv_muinterp'] - \
                                    full_ref_df['mustar']
     full_ref_df['diff_tinterp'] = full_ref_df['cv_mustar'] - \
-                                   full_ref_df['mustar']
+                                  full_ref_df['mustar']
     file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
     full_ref_df.to_csv(file)
