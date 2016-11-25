@@ -1825,6 +1825,22 @@ class GlacierDirectory(object):
             h = np.append(h, fl.surface_h)
         return h, w * fl.dx * self.grid.dx
 
+    def get_ref_mb_data(self):
+        """Get the reference mb data from WGMS (for some glaciers only!)."""
+
+        flink, mbdatadir = get_wgms_files()
+
+        # list of years
+        reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
+        mbdf = pd.read_csv(reff).set_index('YEAR')
+
+        # logic for period
+        y0, y1 = cfg.PARAMS['run_period']
+        ci = self.read_pickle('climate_info')
+        y0 = y0 or ci['hydro_yr_0']
+        y1 = y1 or ci['hydro_yr_1']
+        return mbdf.loc[y0:y1]
+
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
 
@@ -1842,8 +1858,7 @@ class GlacierDirectory(object):
 
         # logging directory
         fpath = os.path.join(self.dir, 'log')
-        if not os.path.exists(fpath):
-            os.makedirs(fpath)
+        mkdir(fpath)
 
         # a file per function name
         fpath = os.path.join(fpath, func.__name__)

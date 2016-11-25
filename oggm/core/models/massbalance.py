@@ -556,20 +556,36 @@ class TodayMassBalanceModel(MassBalanceModel):
 
 
 class PastMassBalanceModel(MassBalanceModel):
-    """Mass balance during the HISTALP period."""
+    """Mass balance during the climate data period."""
 
-    def __init__(self, gdir, mu_star=None):
-        """ Instanciate."""
+    def __init__(self, gdir, mu_star=None, bias=None):
+        """Initialize
+
+        Parameters
+        ----------
+        gdir : the glacier directory
+        mu_star : set to the alternative value of mustar you want to use
+            (the default is to use the calibrated value)
+        bias : set to the alternative value of the annual bias (mm we yr-1)
+            you want to use (the default is to use the calibrated value)
+        """
 
         if mu_star is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
             mu_star = df['mu_star'][0]
+        if bias is None:
+            if cfg.PARAMS['use_bias_for_run']:
+                df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+                bias = df['bias'][0]
+            else:
+                bias = 0.
         self.mu_star = mu_star
+        self.bias = bias
 
         # Parameters
-        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
-        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
-        self.temp_melt = cfg.PARAMS['temp_melt']
+        self.t_solid = cfg.PARAMS['temp_all_solid']
+        self.t_liq = cfg.PARAMS['temp_all_liq']
+        self.t_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         fpath = gdir.get_filepath('climate_monthly')
@@ -608,16 +624,15 @@ class PastMassBalanceModel(MassBalanceModel):
         npix = len(heights)
         grad_temp = igrad * (heights - self.ref_hgt)
         temp = np.ones(npix) * itemp + grad_temp
-        tempformelt = temp - self.temp_melt
+        tempformelt = temp - self.t_melt
         tempformelt = np.clip(tempformelt, 0, tempformelt.max())
 
         # Compute solid precipitation from total precipitation
         prcpsol = np.ones(npix) * iprcp
-        fac = 1 - (temp - self.temp_all_solid) / \
-                  (self.temp_all_liq - self.temp_all_solid)
+        fac = 1 - (temp - self.t_solid) / (self.t_liq - self.t_solid)
         prcpsol *= np.clip(fac, 0, 1)
 
-        mb_month = prcpsol - self.mu_star * tempformelt
+        mb_month = prcpsol - self.mu_star * tempformelt + self.bias / 12.
         return mb_month / SEC_IN_MONTHS[m-1] / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
@@ -638,14 +653,15 @@ class PastMassBalanceModel(MassBalanceModel):
         grad_temp *= (heights.repeat(12).reshape(grad_temp.shape) -
                       self.ref_hgt)
         temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
-        temp2dformelt = temp2d - self.temp_melt
+        temp2dformelt = temp2d - self.t_melt
         temp2dformelt = np.clip(temp2dformelt, 0, temp2dformelt.max())
 
         # Compute solid precipitation from total precipitation
         prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
-        fac = 1 - (temp2d - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
+        fac = 1 - (temp2d - self.t_solid) / (self.t_liq - self.t_solid)
         fac = np.clip(fac, 0, 1)
         prcpsol = prcpsol * fac
 
-        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
+        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1) \
+                    - self.bias
         return mb_annual / SEC_IN_YEAR / cfg.RHO
