@@ -84,6 +84,8 @@ complex".
 .. ipython:: python
 
     cfg.set_divides_db()
+    gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
+    tasks.define_glacier_region(gdir, entity=entity)
     tasks.glacier_masks(gdir)
     tasks.compute_centerlines(gdir)
     @savefig gdir_plot_cls_nodivide.png width=80%

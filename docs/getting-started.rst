@@ -55,7 +55,6 @@ will be written):
 
     cfg.PARAMS['topo_interp']
     cfg.PARAMS['temp_default_gradient']
-    cfg.PARAMS['border'] = 20  # set this parameter
     cfg.PATHS
 
 We'll use some demo files
