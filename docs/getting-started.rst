@@ -64,7 +64,6 @@ input:
 
 .. ipython:: python
 
-    cfg.set_divides_db(get_demo_file('divides_workflow.shp')) # glacier divides
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif') # topography
 
 The starting point of a run is always a valid `RGI <http://www.glims.org/RGI/>`_ file.

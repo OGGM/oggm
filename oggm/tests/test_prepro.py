@@ -68,7 +68,6 @@ class TestGIS(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
     def tearDown(self):
@@ -129,7 +128,6 @@ class TestCenterlines(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -182,7 +180,7 @@ class TestCenterlines(unittest.TestCase):
                     self.assertTrue(cl.line.coords[ob.flows_to_indice] == ip.coords[0])
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        self.assertTrue(sorted(lens) == [1, 1, 3])
+        self.assertTrue(sorted(lens) == [1, 1, 2])
 
     def test_downstream(self):
 
@@ -276,7 +274,6 @@ class TestGeometry(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -337,7 +334,7 @@ class TestGeometry(unittest.TestCase):
                     self.assertTrue(cl.line.coords[ob.flows_to_indice] == ip.coords[0])
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        self.assertTrue(sorted(lens) == [1, 1, 3])
+        self.assertTrue(sorted(lens) == [1, 1, 2])
 
         x, y = map(np.array, cls[0].line.xy)
         dis = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
@@ -419,7 +416,6 @@ class TestClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -852,7 +848,6 @@ class TestInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -952,7 +947,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=40)
 
     @is_slow
     def test_distribute(self):
@@ -1259,7 +1254,6 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = current_dir
 

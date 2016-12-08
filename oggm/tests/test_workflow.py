@@ -13,7 +13,6 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from numpy.testing import assert_allclose
-import matplotlib.pyplot as plt
 
 # Locals
 import oggm.cfg as cfg
@@ -22,7 +21,6 @@ from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
-from oggm import graphics
 from oggm import utils
 
 # do we event want to run the tests?
@@ -65,7 +63,6 @@ def up_to_climate(reset=False):
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
 
     # Set up the paths and other stuffs
-    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
     cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
     cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oetztal.csv')
 
@@ -272,7 +269,7 @@ class TestWorkflow(unittest.TestCase):
         shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
         shp = shp.loc[shp.RGIID == 'RGI40-11.00897']
-        self.assertEqual(len(shp), 5)
+        self.assertEqual(len(shp), 4)
         self.assertEqual(shp.MAIN.sum(), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.argmax()].MAIN, 1)
 

@@ -83,6 +83,7 @@ complex".
 
 .. ipython:: python
 
+    cfg.set_divides_db()
     tasks.glacier_masks(gdir)
     tasks.compute_centerlines(gdir)
     @savefig gdir_plot_cls_nodivide.png width=80%
@@ -98,7 +99,7 @@ divides for HEF:
 
 .. ipython:: python
 
-    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
+    cfg.set_divides_db(get_demo_file('divides_alps.shp'))
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
     tasks.define_glacier_region(gdir, entity=entity)
     tasks.glacier_masks(gdir)
