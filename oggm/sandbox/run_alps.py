@@ -71,9 +71,6 @@ cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['optimize_thick'] = True
 cfg.PARAMS['force_one_flowline'] = ['RGI50-11.01270']
 
-# Divides
-cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
-
 # Read in the Alps RGI file
 rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_ref_alps.pkl')
 utils.aws_file_download('alps/rgi_ref_alps.pkl', rgi_pkl_path, reset=False)

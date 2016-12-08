@@ -1,4 +1,4 @@
-"""Mass-balance stuffs"""
+"""Mass-balance models"""
 from __future__ import division
 
 # Built ins
@@ -6,7 +6,6 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 import netCDF4
-import warnings
 from scipy.interpolate import interp1d
 from numpy import random
 # Locals

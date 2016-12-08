@@ -14,13 +14,13 @@ import os
 import geopandas as gpd
 
 # Local imports
+from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
+from oggm.tests import init_hef
+from oggm import graphics
 from oggm.core.preprocessing import gis, centerlines
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
-from oggm import graphics
 from oggm.core.models import flowline
-from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
-from oggm.tests import init_hef
 
 # this should be no problem since caught in __init__
 try:

@@ -288,19 +288,21 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Empty defaults
-    set_divides_db()
+    from oggm.utils import get_demo_file
+    set_divides_db(get_demo_file('divides_alps.shp'))
     IS_INITIALIZED = True
 
 
 def set_divides_db(path=None):
     """Read the divides database.
 
-    Currently the only divides available are for HEF and Kesselwand:
-    ``utils.get_demo_file('divides_workflow.shp')``
+    Currently the only divides available are for the Alps:
+    ``utils.get_demo_file('divides_alps.shp')``
+
     """
 
     if PARAMS['use_divides'] and path is not None:
-        df = gpd.GeoDataFrame.from_file(path)
+        df = gpd.read_file(path)
         try:
             # dirty fix for RGIV5
             r5 = df.copy()
@@ -308,6 +310,10 @@ def set_divides_db(path=None):
             df = pd.concat([df, r5])
             PARAMS['divides_gdf'] = df.set_index('RGIID')
         except AttributeError:
+            # dirty fix for RGIV4
+            r4 = df.copy()
+            r4.RGIId = [r.replace('RGI50', 'RGI40') for r in r5.RGIId.values]
+            df = pd.concat([df, r4])
             PARAMS['divides_gdf'] = df.set_index('RGIId')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()
