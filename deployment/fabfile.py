@@ -436,7 +436,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
     # FSO---connect
     cloud = boto.ec2.connect_to_region(avz[:-1],profile_name=ec2Profile)
     aminfo = cloud.get_image(def_ami[avz[:-1]])
-    vpcconn = VPCConnection(region=cloud.region)
+    vpcconn = VPCConnection(region=cloud.region, profile_name=ec2Profile)
 
     try:
         vpc_id, subnet_id = def_subnet[avz]
