@@ -576,12 +576,10 @@ def t_star_from_refmb(gdir, mbdf):
         bias = []
         for p in pchange:
             # Check the side with the smallest bias
-            if np.abs(diff[p-1]) < np.abs(diff[p]):
-                t_stars.append(years[p-1])
-                bias.append(diff[p-1])
-            else:
-                t_stars.append(years[p])
-                bias.append(diff[p])
+            ide = p-1 if np.abs(diff[p-1]) < np.abs(diff[p]) else p
+            if years[ide] not in t_stars:
+                t_stars.append(years[ide])
+                bias.append(diff[ide])
     else:
         amin = np.argmin(np.abs(diff))
         t_stars = [years[amin]]
