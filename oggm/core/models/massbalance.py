@@ -82,6 +82,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
         t_star = df['t_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -93,7 +94,8 @@ class TstarMassBalanceModel(MassBalanceModel):
             h = np.append(h, fl.surface_h)
         h = np.linspace(np.min(h)-200, np.max(h)+1200, 1000)
 
-        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, year_range=yr)
+        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+                                                      year_range=yr)
         t = np.mean(t, axis=1)
         p = np.mean(p, axis=1)
         mb_on_h = p - mu_star * t
@@ -111,7 +113,7 @@ class TstarMassBalanceModel(MassBalanceModel):
 class BackwardsMassBalanceModel(MassBalanceModel):
     """Constant mass balance: MB for [1983, 2003] with temperature bias.
 
-    This is useful for finding a possible past galcier state.
+    This is useful for finding a possible past glacier state.
     """
 
     def __init__(self, gdir, use_tstar=False, bias=0.):
@@ -121,6 +123,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -156,7 +159,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
             # Read timeseries
             self.temp = nc.variables['temp'][p0:p1]
-            self.prcp = nc.variables['prcp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1] * prcp_fac
             self.grad = nc.variables['grad'][p0:p1]
             self.ref_hgt = nc.ref_hgt
 
@@ -241,6 +244,7 @@ class BiasedMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -279,7 +283,7 @@ class BiasedMassBalanceModel(MassBalanceModel):
 
             # Read timeseries
             self.temp = nc.variables['temp'][p0:p1]
-            self.prcp = nc.variables['prcp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1] * prcp_fac
             self.grad = nc.variables['grad'][p0:p1]
             self.ref_hgt = nc.ref_hgt
 
@@ -382,6 +386,7 @@ class RandomMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -421,7 +426,8 @@ class RandomMassBalanceModel(MassBalanceModel):
 
             # Read timeseries and store the stats
             self.temp_s = nc.variables['temp'][p0:p1].reshape((ny, 12))
-            self.prcp_s = nc.variables['prcp'][p0:p1].reshape((ny, 12))
+            self.prcp_s = nc.variables['prcp'][p0:p1].reshape((ny, 12)) * \
+                          prcp_fac
             self.grad_s = nc.variables['grad'][p0:p1].reshape((ny, 12))
             self.ref_hgt = nc.ref_hgt
 
@@ -522,6 +528,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
         t_star = df['t_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         # TODO temporary solution until https://github.com/OGGM/oggm/issues/88
@@ -540,7 +547,8 @@ class TodayMassBalanceModel(MassBalanceModel):
             h = np.append(h, fl.surface_h)
         h = np.linspace(np.min(h)-100, np.max(h)+200, 1000)
 
-        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, year_range=yr)
+        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+                                                      year_range=yr)
         t = np.mean(t, axis=1)
         p = np.mean(p, axis=1)
         mb_on_h = p - mu_star * t
@@ -557,7 +565,7 @@ class TodayMassBalanceModel(MassBalanceModel):
 class PastMassBalanceModel(MassBalanceModel):
     """Mass balance during the climate data period."""
 
-    def __init__(self, gdir, mu_star=None, bias=None):
+    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None):
         """Initialize
 
         Parameters
@@ -578,6 +586,9 @@ class PastMassBalanceModel(MassBalanceModel):
                 bias = df['bias'][0]
             else:
                 bias = 0.
+        if prcp_fac is None:
+            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            prcp_fac = df['prcp_fac'][0]
         self.mu_star = mu_star
         self.bias = bias
 
@@ -601,7 +612,7 @@ class PastMassBalanceModel(MassBalanceModel):
             self.months = np.tile(np.arange(1, 13), ny)
             # Read timeseries
             self.temp = nc.variables['temp'][:]
-            self.prcp = nc.variables['prcp'][:]
+            self.prcp = nc.variables['prcp'][:] * prcp_fac
             self.grad = nc.variables['grad'][:]
             self.ref_hgt = nc.ref_hgt
 
