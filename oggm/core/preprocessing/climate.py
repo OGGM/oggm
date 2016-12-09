@@ -61,7 +61,6 @@ def process_histalp_nonparallel(gdirs, fpath=None):
     use_grad = cfg.PARAMS['temp_use_local_gradient']
     def_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-    sf = cfg.PARAMS['prcp_scaling_factor']
 
     for gdir in gdirs:
         ilon = np.argmin(np.abs(lon - gdir.cenlon))
@@ -71,7 +70,7 @@ def process_histalp_nonparallel(gdirs, fpath=None):
         iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
                                                               ilat, def_grad,
                                                               g_minmax,
-                                                              sf, use_grad)
+                                                              use_grad)
         gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
                                         ref_pix_lon, ref_pix_lat)
         # metadata
@@ -122,7 +121,6 @@ def process_custom_climate_data(gdir):
     use_grad = cfg.PARAMS['temp_use_local_gradient']
     def_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-    sf = cfg.PARAMS['prcp_scaling_factor']
 
     ilon = np.argmin(np.abs(lon - gdir.cenlon))
     ilat = np.argmin(np.abs(lat - gdir.cenlat))
@@ -131,7 +129,7 @@ def process_custom_climate_data(gdir):
     iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
                                                           ilat, def_grad,
                                                           g_minmax,
-                                                          sf, use_grad)
+                                                          use_grad)
     gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
                                     ref_pix_lon, ref_pix_lat)
     # metadata
@@ -167,7 +165,6 @@ def process_cru_data(gdir):
     use_grad = cfg.PARAMS['temp_use_local_gradient']
     def_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-    prcp_scaling_factor = cfg.PARAMS['prcp_scaling_factor']
 
     lon = gdir.cenlon
     lat = gdir.cenlat
@@ -283,7 +280,7 @@ def process_cru_data(gdir):
                            coords={'month':ts_pre_avg.month})
     ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
                            coords={'time':time})
-    ts_pre = ts_pre.groupby('time.month') + loc_pre * prcp_scaling_factor
+    ts_pre = ts_pre.groupby('time.month') + loc_pre
 
     # done
     loc_hgt = loc_hgt[1, 1]
@@ -303,17 +300,21 @@ def process_cru_data(gdir):
     gdir.write_pickle(out, 'climate_info')
 
 
-def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
+def mb_climate_on_height(gdir, heights, prcp_fac,
+                         time_range=None, year_range=None):
     """Mass-balance climate of the glacier at a specific height
 
     Reads the glacier's monthly climate data file and computes the
     temperature "energies" (temp above 0) and solid precipitation at the
     required height.
 
+    The precipitation time series are not corrected!
+
     Parameters:
     -----------
     gdir: the glacier directory
     heights: a 1D array of the heights (in meter) where you want the data
+    prcp_fac: the correction factor for precipitation
     time_range (optional): default is to read all data but with this you
     can provide a [datetime, datetime] bounds (inclusive).
     year_range (optional): maybe more useful than the time bounds above.
@@ -331,7 +332,8 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
     if year_range is not None:
         t0 = datetime.datetime(year_range[0]-1, 10, 1)
         t1 = datetime.datetime(year_range[1], 9, 1)
-        return mb_climate_on_height(gdir, heights, time_range=[t0, t1])
+        return mb_climate_on_height(gdir, heights, prcp_fac,
+                                    time_range=[t0, t1])
 
     # Parameters
     temp_all_solid = cfg.PARAMS['temp_all_solid']
@@ -366,6 +368,9 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
         igrad = nc.variables['grad'][p0:p1+1]
         ref_hgt = nc.ref_hgt
 
+    # Correct precipitation
+    iprcp *= prcp_fac
+
     # For each height pixel:
     # Compute temp and tempformelt (temperature above melting threshold)
     npix = len(heights)
@@ -383,13 +388,17 @@ def mb_climate_on_height(gdir, heights, time_range=None, year_range=None):
     return time, temp2dformelt, prcpsol
 
 
-def mb_yearly_climate_on_height(gdir, heights, year_range=None, flatten=False):
+def mb_yearly_climate_on_height(gdir, heights, prcp_fac,
+                                year_range=None, flatten=False):
     """Yearly mass-balance climate of the glacier at a specific height
+
+    The precipitation time series are not corrected!
 
     Parameters:
     -----------
     gdir: the glacier directory
     heights: a 1D array of the heights (in meter) where you want the data
+    prcp_fac: the correction factor for precipitation
     year_range (optional): a [y0, y1] year range to get the data for specific (
     hydrological) years only
     flatten: for some applications (glacier average MB) it's ok to flatten  the
@@ -405,7 +414,7 @@ def mb_yearly_climate_on_height(gdir, heights, year_range=None, flatten=False):
         is set)
     """
 
-    time, temp, prcp = mb_climate_on_height(gdir, heights,
+    time, temp, prcp = mb_climate_on_height(gdir, heights, prcp_fac,
                                             year_range=year_range)
 
     ny, r = divmod(len(time), 12)
@@ -434,13 +443,16 @@ def mb_yearly_climate_on_height(gdir, heights, year_range=None, flatten=False):
     return years, temp_yr, prcp_yr
 
 
-def mb_yearly_climate_on_glacier(gdir, div_id=None, year_range=None):
+def mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=None, year_range=None):
     """Yearly mass-balance climate at all glacier heights,
     multiplied with the flowlines widths. (all in pix coords.)
+
+    The precipitation time series are not corrected!
 
     Parameters:
     -----------
     gdir: the glacier directory
+    prcp_fac: the correction factor for precipitation
     year_range (optional): a [y0, y1] year range to get the data for specific
     (hydrological) years only
 
@@ -449,7 +461,7 @@ def mb_yearly_climate_on_glacier(gdir, div_id=None, year_range=None):
     (years, tempformelt, prcpsol)::
         - years: array of shape (ny,)
         - tempformelt:  array of shape (len(heights), ny)
-        - prcpsol:  array of shape (len(heights), ny)
+        - prcpsol:  array of shape (len(heights), ny) (not corrected!)
     """
 
     flowlines = []
@@ -468,7 +480,7 @@ def mb_yearly_climate_on_glacier(gdir, div_id=None, year_range=None):
         heights = np.append(heights, fl.surface_h)
         widths = np.append(widths, fl.widths)
 
-    years, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
+    years, temp, prcp = mb_yearly_climate_on_height(gdir, heights, prcp_fac,
                                                     year_range=year_range,
                                                     flatten=False)
 
@@ -502,30 +514,39 @@ def mu_candidates(gdir, div_id=None):
     y0 = y0 or ci['hydro_yr_0']
     y1 = y1 or ci['hydro_yr_1']
 
-    years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
+    years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, 1.,
                                                            div_id=div_id,
                                                            year_range=[y0, y1])
 
     # Be sure we have no marine terminating glacier
     assert gdir.terminus_type == 'Land-terminating'
 
-    # Compute mu for each 31-yr climatological period
+    # prcp scaling factor
+    if cfg.PARAMS['prcp_auto_scaling_factor']:
+        raise NotImplementedError
+    else:
+        sf = np.asarray([cfg.PARAMS['prcp_scaling_factor']])
+
+    # Compute mu for each 31-yr climatological period and each prcp factor
     ny = len(years)
-    mu_yr_clim = np.zeros(ny) * np.NaN
-    for i, y in enumerate(years):
-        # Ignore begin and end
-        if ((i-mu_hp) < 0) or ((i+mu_hp) >= ny):
-            continue
-        t_avg = np.mean(temp_yr[i-mu_hp:i+mu_hp+1])
-        if t_avg > 1e-3 :
-            mu_yr_clim[i] = np.mean(prcp_yr[i-mu_hp:i+mu_hp+1]) / t_avg
+    nsf = len(sf)
+    mu_yr_clim = np.zeros((ny, nsf)) * np.NaN
+    for j, fac in enumerate(sf):
+        for i, y in enumerate(years):
+            # Ignore begin and end
+            if ((i-mu_hp) < 0) or ((i+mu_hp) >= ny):
+                continue
+            t_avg = np.mean(temp_yr[i-mu_hp:i+mu_hp+1])
+            if t_avg > 1e-3 :  # if too cold no melt possible
+                prcp_ts = prcp_yr[i-mu_hp:i+mu_hp+1]*fac
+                mu_yr_clim[i, j] = np.mean(prcp_ts) / t_avg
 
     # Check mu's
-    if np.sum(np.isfinite(mu_yr_clim)) < (len(years) / 2.):
+    if np.sum(np.isfinite(mu_yr_clim)) < (len(years) / 2. * nsf):
         raise RuntimeError('{}: has no normal climate'.format(gdir.rgi_id))
 
     # Write
-    df = pd.Series(data=mu_yr_clim, index=years)
+    df = pd.DataFrame(data=mu_yr_clim, index=years, columns=sf)
     gdir.write_pickle(df, 'mu_candidates', div_id=div_id)
 
 
@@ -541,51 +562,56 @@ def t_star_from_refmb(gdir, mbdf):
 
     Returns:
     --------
-    (mu_star, bias, rmsd): lists of mu*, their associated bias and rmsd
+    (t_star, bias, prcp_fac): lists of t*, their associated bias and a prcp fac
     """
 
     # Only divide 0, we believe the original RGI entities to be the ref...
-    years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, div_id=0)
+    years, temp_yr_ts, prcp_yr_ts = mb_yearly_climate_on_glacier(gdir, 1.,
+                                                                 div_id=0)
 
     # which years to look at
     selind = np.searchsorted(years, mbdf.index)
-    temp_yr = np.mean(temp_yr[selind])
-    prcp_yr = np.mean(prcp_yr[selind])
+    temp_yr = np.mean(temp_yr_ts[selind])
+    prcp_yr = np.mean(prcp_yr_ts[selind])
 
     # Average oberved mass-balance
     ref_mb = np.mean(mbdf)
 
-    # Average mass-balance per mu
-    mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)
-    mb_per_mu = prcp_yr - mu_yr_clim * temp_yr
+    # Average mass-balance per mu and fac
+    mu_yr_clim_df = gdir.read_pickle('mu_candidates', div_id=0)
 
-    # Diff to reference
-    diff = mb_per_mu - ref_mb
-    diff = diff.dropna()
-    signchange = utils.signchange(diff)
+    for prcp_fac in mu_yr_clim_df:
 
-    # If sign changes save them
-    # TODO: ideas to do this better: apply a smooth (take noise into account)
-    # TODO: ideas to do this better: take longer stable periods into account
-    # TODO: these stuffs could be proven better (or not) with cross-val
-    pchange = np.where(signchange == 1)[0]
-    years = diff.index
-    diff = diff.values
-    if len(pchange) > 0:
-        t_stars = []
-        bias = []
-        for p in pchange:
-            # Check the side with the smallest bias
-            ide = p-1 if np.abs(diff[p-1]) < np.abs(diff[p]) else p
-            if years[ide] not in t_stars:
-                t_stars.append(years[ide])
-                bias.append(diff[ide])
-    else:
-        amin = np.argmin(np.abs(diff))
-        t_stars = [years[amin]]
-        bias = [diff[amin]]
+        mu_yr_clim = mu_yr_clim_df[prcp_fac]
+        mb_per_mu = prcp_yr * prcp_fac - mu_yr_clim * temp_yr
 
-    return t_stars, bias
+        # Diff to reference
+        diff = (mb_per_mu - ref_mb).dropna()
+        signchange = utils.signchange(diff)
+
+        # If sign changes save them
+        # TODO: ideas to do this better:
+        #  - apply a smooth (take noise into account)
+        #  - take longer stable periods into account
+        # these stuffs could be proven better (or not) with cross-val
+        pchange = np.where(signchange == 1)[0]
+        years = diff.index
+        diff = diff.values
+        if len(pchange) > 0:
+            t_stars = []
+            bias = []
+            for p in pchange:
+                # Check the side with the smallest bias
+                ide = p-1 if np.abs(diff[p-1]) < np.abs(diff[p]) else p
+                if years[ide] not in t_stars:
+                    t_stars.append(years[ide])
+                    bias.append(diff[ide])
+        else:
+            amin = np.argmin(np.abs(diff))
+            t_stars = [years[amin]]
+            bias = [diff[amin]]
+
+    return t_stars, bias, prcp_fac
 
 
 def calving_mb(gdir):
@@ -606,7 +632,7 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
-def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
+def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                              compute_apparent_mb=True):
     """Compute local mustar and apparent mb from tstar.
 
@@ -617,10 +643,16 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
         the year where the glacier should be equilibrium
     bias: int
         the associated reference bias
+    prcp_fac: int
+        the associated precipitation factor
     compute_apparent_mb: bool
-        if you want to compute the referenc MB at the same time (recommended,
+        if you want to compute the apparent MB at the same time (recommended,
         unless you are cross-validating for example).
     """
+
+    assert bias is not None
+    assert prcp_fac is not None
+    assert tstar is not None
 
     # Climate period
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -635,7 +667,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
                  gdir.rgi_id, tstar, div_id)
 
         # Get the corresponding mu
-        years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir,
+        years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, prcp_fac,
                                                                div_id=div_id,
                                                                year_range=yr)
         assert len(years) == (2 * mu_hp + 1)
@@ -650,6 +682,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
         df['rgi_id'] = [gdir.rgi_id]
         df['t_star'] = [tstar]
         df['mu_star'] = [mustar]
+        df['prcp_fac'] = [prcp_fac]
         df['bias'] = [bias]
         df.to_csv(gdir.get_filepath('local_mustar', div_id=div_id),
                   index=False)
@@ -671,10 +704,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None,
             fl.flux = np.zeros(len(fl.surface_h))
 
         # Flowlines in order to be sure
-        # TODO: here it would be possible to test for a minimum mb gradient
-        # and change prcp factor if judged useful
         for fl in fls:
-            y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
+            y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h, prcp_fac,
                                                   year_range=yr,
                                                   flatten=False)
             fl.set_apparent_mb(np.mean(p, axis=1) - mustar*np.mean(t, axis=1))
@@ -733,16 +764,16 @@ def compute_ref_t_stars(gdirs):
         # all possible mus
         mu_candidates(gdir)
         # list of mus compatibles with refmb
-        mbdf = gdir.get_ref_mb_data()
-        t_star, res_bias = t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+        t_star, res_bias, prcp_fac = t_star_from_refmb(gdir, mbdf)
         # store the mb (could be useful later)
-        gdir.write_pickle(mbdf.ANNUAL_BALANCE, 'ref_massbalance')
+        gdir.write_pickle(mbdf, 'ref_massbalance')
 
         # if we have just one candidate this is good
         if len(t_star) == 1:
             only_one.append(gdir.rgi_id)
         # this might be more than one, we'll have to select them later
-        per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias)
+        per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias, prcp_fac)
 
     # At least of of the X glaciers should have a single t*, otherwise we dont
     # know how to start
@@ -751,9 +782,9 @@ def compute_ref_t_stars(gdirs):
         if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
             # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00887')
-            gdir, t_star, res_bias = per_glacier['RGI40-11.00887']
-            per_glacier['RGI40-11.00887'] = (
-            gdir, [t_star[-1]], [res_bias[-1]])
+            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00887']
+            per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]],
+                                             [res_bias[-1]], prcp_fac)
         else:
             raise RuntimeError('We need at least one glacier with one '
                                'tstar only.')
@@ -770,32 +801,35 @@ def compute_ref_t_stars(gdirs):
         # Compute the summed distance to all glaciers with one t*
         distances = []
         for id in ids_left:
-            gdir, t_star, res_bias = per_glacier[id]
+            gdir = per_glacier[id][0]
             lon, lat = gdir.cenlon, gdir.cenlat
             ldis = 0.
             for id_o in only_one:
-                ogdir, _, _ = per_glacier[id_o]
+                ogdir = per_glacier[id_o][0]
                 ldis += utils.haversine(lon, lat, ogdir.cenlon, ogdir.cenlat)
             distances.append(ldis)
 
         # Take the shortest and choose the best t*
-        gdir, t_star, res_bias = per_glacier[ids_left[np.argmin(distances)]]
+        pg = per_glacier[ids_left[np.argmin(distances)]]
+        gdir, t_star, res_bias, prcp_fac = pg
         distances = []
         for tt in t_star:
             ldis = 0.
             for id_o in only_one:
-                _, ot_star, _ = per_glacier[id_o]
+                _, ot_star, _, _ = per_glacier[id_o]
                 ldis += np.abs(tt - ot_star)
             distances.append(ldis)
         amin = np.argmin(distances)
-        per_glacier[gdir.rgi_id] = (gdir, [t_star[amin]], [res_bias[amin]])
+        per_glacier[gdir.rgi_id] = (gdir, [t_star[amin]], [res_bias[amin]],
+                                    prcp_fac)
         only_one.append(gdir.rgi_id)
 
     # Write out the data
-    rgis_ids, t_stars,  biases, lons, lats = [], [], [], [], []
-    for id, (gdir, t_star, res_bias) in per_glacier.items():
+    rgis_ids, t_stars, prcp_facs,  biases, lons, lats = [], [], [], [], [], []
+    for id, (gdir, t_star, res_bias, prcp_fac) in per_glacier.items():
         rgis_ids.append(id)
         t_stars.append(t_star[0])
+        prcp_facs.append(prcp_fac)
         biases.append(res_bias[0])
         lats.append(gdir.cenlat)
         lons.append(gdir.cenlon)
@@ -803,6 +837,7 @@ def compute_ref_t_stars(gdirs):
     df['lon'] = lons
     df['lat'] = lats
     df['tstar'] = t_stars
+    df['prcp_fac'] = prcp_facs
     df['bias'] = biases
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
@@ -837,13 +872,16 @@ def distribute_t_stars(gdirs):
         # If really close no need to divide, else weighted average
         if distances.iloc[0] <= 0.1:
             tstar = amin.tstar.iloc[0]
+            prcp_fac = amin.prcp_fac.iloc[0]
             bias = amin.bias.iloc[0]
         else:
             tstar = int(np.average(amin.tstar, weights=1./distances))
+            prcp_fac = np.average(amin.prcp_fac, weights=1./distances)
             bias = np.average(amin.bias, weights=1./distances)
 
         # Go
-        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias)
+        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
+                                 prcp_fac=prcp_fac)
 
 
 @global_task
@@ -878,6 +916,7 @@ def crossval_t_stars(gdirs):
 
         # Weighted average
         tstar = int(np.average(amin.tstar, weights=1./distances))
+        prcp_fac = np.average(amin.prcp_fac, weights=1./distances)
         bias = np.average(amin.bias, weights=1./distances)
 
         # For fun (Marzeion et al 2012), get the interpolated mu
@@ -891,19 +930,21 @@ def crossval_t_stars(gdirs):
         # Go, but store the previous calib first
         bef_df = pd.read_csv(gdir.get_filepath('local_mustar'))
         local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
-                                 compute_apparent_mb=False)
+                                 prcp_fac=prcp_fac, compute_apparent_mb=False)
 
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
         full_ref_df.loc[rid, 'mustar'] = bef_df['mu_star'].values[0]
         full_ref_df.loc[rid, 'cv_muinterp'] = mu_interp
         full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
         full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
+        full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
         full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
         assert tstar == rdf['t_star'].values[0]
 
         # Restore the calib
         local_mustar_apparent_mb(gdir, tstar=bef_df['t_star'].values[0],
                                  bias=bef_df['bias'].values[0],
+                                 prcp_fac=bef_df['prcp_fac'].values[0],
                                  compute_apparent_mb=False)
 
     # stats and write

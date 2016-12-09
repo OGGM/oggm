@@ -684,7 +684,7 @@ def monthly_timeseries(y0, y1=None, ny=None):
 
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        prcp_scaling_factor, use_grad):
+                        use_grad):
     """Prevent to re-compute a timeserie if it was done before.
 
     TODO: dirty solution, should be replaced by proper input.
@@ -701,7 +701,7 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
         thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
         ihgt = thgt[1, 1]
         thgt = thgt.flatten()
-        iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+        iprcp = prcp[:, ilat, ilon]
 
     # Now the gradient
     if use_grad:

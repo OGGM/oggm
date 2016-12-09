@@ -367,7 +367,8 @@ class TestOtherDivides(unittest.TestCase):
             geometry.catchment_width_geom(gdir)
             geometry.catchment_width_correction(gdir)
             climate.process_histalp_nonparallel([gdir])
-            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0)
+            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
+                                             prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
             v, ainv = inversion.invert_parabolic_bed(gdir)
             flowline.init_present_time_glacier(gdir)

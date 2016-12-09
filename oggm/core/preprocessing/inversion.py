@@ -421,6 +421,7 @@ def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
             pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
             if len(pok) != 0:
                 break
+        # TODO: this raises a divzero warning, and I think this is bad
         dis_w = 1 / np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
         thick[y, x] = np.average(ts[pok], weights=dis_w)
 

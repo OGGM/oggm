@@ -259,6 +259,7 @@ def initialize(file=None):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
+    PARAMS['prcp_auto_scaling_factor'] = cp.as_bool('prcp_auto_scaling_factor')
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -279,7 +280,8 @@ def initialize(file=None):
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
-           'tstar_search_window', 'use_bias_for_run', 'run_period']
+           'tstar_search_window', 'use_bias_for_run', 'run_period',
+           'prcp_auto_scaling_factor']
     for k in ltr:
         del cp[k]
 

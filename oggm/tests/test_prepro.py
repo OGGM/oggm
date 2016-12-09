@@ -451,7 +451,6 @@ class TestClimate(unittest.TestCase):
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_p *= cfg.PARAMS['prcp_scaling_factor']
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
         with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
@@ -478,7 +477,6 @@ class TestClimate(unittest.TestCase):
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_p *= cfg.PARAMS['prcp_scaling_factor']
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
         with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
@@ -540,12 +538,11 @@ class TestClimate(unittest.TestCase):
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_p *= cfg.PARAMS['prcp_scaling_factor']
             ref_t = nc_r.variables['temp'][:, 1, 1]
             ref_t = np.where(ref_t < 0, 0, ref_t)
 
         hgts = np.array([ref_h, ref_h, -8000, 8000])
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts)
+        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts, 1.)
 
         ref_nt = 202*12
         self.assertTrue(len(time) == ref_nt)
@@ -559,7 +556,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(temp[3, :], ref_p*0)
 
         yr = [1802, 1802]
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts,
+        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts, 1.,
                                                         year_range=yr)
         ref_nt = 1*12
         self.assertTrue(len(time) == ref_nt)
@@ -573,7 +570,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(temp[3, :], ref_p[0:12]*0)
 
         yr = [1803, 1804]
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts,
+        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts, 1.,
                                                         year_range=yr)
         ref_nt = 2*12
         self.assertTrue(len(time) == ref_nt)
@@ -600,13 +597,12 @@ class TestClimate(unittest.TestCase):
         with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_p *= cfg.PARAMS['prcp_scaling_factor']
             ref_t = nc_r.variables['temp'][:, 1, 1]
             ref_t = np.where(ref_t < 0, 0, ref_t)
 
         # NORMAL --------------------------------------------------------------
         hgts = np.array([ref_h, ref_h, -8000, 8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts)
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1)
 
         ref_nt = 202
         self.assertTrue(len(years) == ref_nt)
@@ -614,7 +610,7 @@ class TestClimate(unittest.TestCase):
         self.assertTrue(prcp.shape == (4, ref_nt))
 
         yr = [1802, 1802]
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1,
                                                                 year_range=yr)
         ref_nt = 1
         self.assertTrue(len(years) == ref_nt)
@@ -629,7 +625,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(temp[3, :], np.sum(ref_p[0:12])*0)
 
         yr = [1803, 1804]
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1,
                                                                 year_range=yr)
         ref_nt = 2
         self.assertTrue(len(years) == ref_nt)
@@ -641,7 +637,7 @@ class TestClimate(unittest.TestCase):
 
         # FLATTEN -------------------------------------------------------------
         hgts = np.array([ref_h, ref_h, -8000, 8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1,
                                                                 flatten=True)
 
         ref_nt = 202
@@ -651,7 +647,7 @@ class TestClimate(unittest.TestCase):
 
         yr = [1802, 1802]
         hgts = np.array([ref_h])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1,
                                                                 year_range=yr,
                                                                 flatten=True)
         ref_nt = 1
@@ -663,7 +659,7 @@ class TestClimate(unittest.TestCase):
 
         yr = [1802, 1802]
         hgts = np.array([8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
+        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts, 1,
                                                                 year_range=yr,
                                                                 flatten=True)
         np.testing.assert_allclose(prcp[:], np.sum(ref_p[0:12]))
@@ -686,7 +682,7 @@ class TestClimate(unittest.TestCase):
         climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir, div_id=0)
 
-        se = gdir.read_pickle('mu_candidates')
+        se = gdir.read_pickle('mu_candidates')[2.5]
         self.assertTrue(se.index[0] == 1802)
         self.assertTrue(se.index[-1] == 2003)
 
@@ -726,20 +722,21 @@ class TestClimate(unittest.TestCase):
         climate.mu_candidates(gdir, div_id=0)
 
         mbdf = pd.read_csv(mb_file).set_index('YEAR')
-        t_stars, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, div_id=0)
+        t_stars, bias, prcp_fac = climate.t_star_from_refmb(gdir,
+                                                            mbdf['ANNUAL_BALANCE'])
+        self.assertEqual(prcp_fac, 2.5)
+        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=0)
 
         # which years to look at
         selind = np.searchsorted(y, mbdf.index)
         t = t[selind]
         p = p[selind]
 
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)
+        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
         for t_s, rmd in zip(t_stars, bias):
             mb_per_mu = p - mu_yr_clim.loc[t_s] * t
             md = utils.md(mbdf['ANNUAL_BALANCE'], mb_per_mu)
-            np.testing.assert_allclose(md, rmd)
+            np.testing.assert_allclose(md, rmd, rtol=1e-5)
             self.assertTrue(np.abs(md/np.mean(mbdf['ANNUAL_BALANCE'])) < 0.1)
             r = utils.corrcoef(mbdf['ANNUAL_BALANCE'], mb_per_mu)
             self.assertTrue(r > 0.8)
@@ -750,12 +747,12 @@ class TestClimate(unittest.TestCase):
         # test crop years
         cfg.PARAMS['tstar_search_window'] = [1902, 0]
         climate.mu_candidates(gdir, div_id=0)
-        t_stars, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)
+        t_stars, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        self.assertEqual(prcp_fac, 2.5)
         for t_s, rmd in zip(t_stars, bias):
             mb_per_mu = p - mu_yr_clim.loc[t_s] * t
             md = utils.md(mbdf['ANNUAL_BALANCE'], mb_per_mu)
-            np.testing.assert_allclose(md, rmd)
+            np.testing.assert_allclose(md, rmd, rtol=1e-5)
             self.assertTrue(np.abs(md/np.mean(mbdf['ANNUAL_BALANCE'])) < 0.1)
             r = utils.corrcoef(mbdf['ANNUAL_BALANCE'], mb_per_mu)
             self.assertTrue(r > 0.8)
@@ -772,6 +769,7 @@ class TestClimate(unittest.TestCase):
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
         np.testing.assert_allclose(df['t_star'], _t_s)
         np.testing.assert_allclose(df['bias'], _rmd)
+        np.testing.assert_allclose(df['prcp_fac'], 2.5)
 
     def test_local_mustar(self):
 
@@ -791,15 +789,17 @@ class TestClimate(unittest.TestCase):
 
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        self.assertEqual(prcp_fac, 2.5)
 
         t_star = t_star[-1]
         bias = bias[-1]
 
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
+                                         prcp_fac=prcp_fac)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
-        mu_ref = gdir.read_pickle('mu_candidates', div_id=0).loc[t_star]
+        mu_ref = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac].loc[t_star]
         np.testing.assert_allclose(mu_ref, df['mu_star'][0], atol=1e-3)
 
         # Check for apparent mb to be zeros
@@ -819,7 +819,8 @@ class TestClimate(unittest.TestCase):
         mb_on_h = np.array([])
         h = np.array([])
         for fl in fls:
-            y, t, p = climate.mb_yearly_climate_on_height(gdir, fl.surface_h)
+            y, t, p = climate.mb_yearly_climate_on_height(gdir, fl.surface_h,
+                                                          prcp_fac)
             selind = np.searchsorted(y, mbdf.index)
             t = np.mean(t[:, selind], axis=1)
             p = np.mean(p[:, selind], axis=1)
@@ -879,10 +880,11 @@ class TestInversion(unittest.TestCase):
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
+                                         prcp_fac=prcp_fac)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -967,10 +969,11 @@ class TestInversion(unittest.TestCase):
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
+                                         prcp_fac=prcp_fac)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -1030,10 +1033,11 @@ class TestInversion(unittest.TestCase):
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
+                                         prcp_fac=prcp_fac)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -1089,10 +1093,11 @@ class TestInversion(unittest.TestCase):
         climate.mu_candidates(gdir, div_id=0)
         hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
         mbdf = pd.read_csv(hef_file).set_index('YEAR')
-        t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+        t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias)
+        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
+                                         prcp_fac=prcp_fac)
         inversion.prepare_for_inversion(gdir)
         v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
                                               glen_a=glen_a,
@@ -1227,7 +1232,7 @@ class TestGrindelInvert(unittest.TestCase):
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
-        climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0.)
+        climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
         inversion.prepare_for_inversion(gdir)
         v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
         cfg.PARAMS['bed_shape'] = 'parabolic'
