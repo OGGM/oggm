@@ -523,7 +523,7 @@ def mu_candidates(gdir, div_id=None):
 
     # prcp scaling factor
     if cfg.PARAMS['prcp_auto_scaling_factor']:
-        raise NotImplementedError
+        sf = np.arange(0.5, 5.01, 0.05)
     else:
         sf = np.asarray([cfg.PARAMS['prcp_scaling_factor']])
 
@@ -571,22 +571,33 @@ def t_star_from_refmb(gdir, mbdf):
 
     # which years to look at
     selind = np.searchsorted(years, mbdf.index)
-    temp_yr = np.mean(temp_yr_ts[selind])
-    prcp_yr = np.mean(prcp_yr_ts[selind])
+    temp_yr_ts = temp_yr_ts[selind]
+    prcp_yr_ts = prcp_yr_ts[selind]
+    temp_yr = np.mean(temp_yr_ts)
+    prcp_yr = np.mean(prcp_yr_ts)
 
     # Average oberved mass-balance
     ref_mb = np.mean(mbdf)
+    ref_mb_std = np.std(mbdf)
 
     # Average mass-balance per mu and fac
     mu_yr_clim_df = gdir.read_pickle('mu_candidates', div_id=0)
 
+    odf = pd.DataFrame(index=mu_yr_clim_df.columns)
+    out = dict()
     for prcp_fac in mu_yr_clim_df:
 
         mu_yr_clim = mu_yr_clim_df[prcp_fac]
+        nmu = len(mu_yr_clim)
         mb_per_mu = prcp_yr * prcp_fac - mu_yr_clim * temp_yr
+        mbts_per_mu = np.atleast_2d(prcp_yr_ts * prcp_fac).repeat(nmu, 0) - \
+                      np.atleast_2d(mu_yr_clim).T * \
+                      np.atleast_2d(temp_yr_ts).repeat(nmu, 0)
+        std_per_mu = mb_per_mu*0 + np.std(mbts_per_mu, axis=1)
 
         # Diff to reference
         diff = (mb_per_mu - ref_mb).dropna()
+        diff_std = (std_per_mu - ref_mb_std).dropna()
         signchange = utils.signchange(diff)
 
         # If sign changes save them
@@ -597,21 +608,36 @@ def t_star_from_refmb(gdir, mbdf):
         pchange = np.where(signchange == 1)[0]
         years = diff.index
         diff = diff.values
+        diff_std = diff_std.values
         if len(pchange) > 0:
             t_stars = []
             bias = []
+            std_bias = []
             for p in pchange:
                 # Check the side with the smallest bias
                 ide = p-1 if np.abs(diff[p-1]) < np.abs(diff[p]) else p
                 if years[ide] not in t_stars:
                     t_stars.append(years[ide])
                     bias.append(diff[ide])
+                    std_bias.append(diff_std[ide])
         else:
             amin = np.argmin(np.abs(diff))
             t_stars = [years[amin]]
             bias = [diff[amin]]
+            std_bias = [diff_std[amin]]
 
-    return t_stars, bias, prcp_fac
+        # (prcp_fac, t_stars, bias, std_bias)
+        odf.loc[prcp_fac, 'avg_bias'] = np.mean(bias)
+        odf.loc[prcp_fac, 'avg_std_bias'] = np.mean(std_bias)
+        odf.loc[prcp_fac, 'n_tstar'] = len(std_bias)
+        out[prcp_fac] = t_stars, bias, prcp_fac
+
+    # write
+    gdir.write_pickle(odf, 'prcp_fac_optim')
+
+    # we take the closest result and see later if it needs cleverer handling
+    amin = np.argmin(np.abs(odf.avg_std_bias))  # this gives back an index!
+    return out[amin]
 
 
 def calving_mb(gdir):
@@ -781,9 +807,9 @@ def compute_ref_t_stars(gdirs):
         flink, mbdatadir = utils.get_wgms_files()
         if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
             # TODO: hardcoded stuff here, for the test workflow
-            only_one.append('RGI40-11.00887')
-            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00887']
-            per_glacier['RGI40-11.00887'] = (gdir, [t_star[-1]],
+            only_one.append('RGI40-11.00897')
+            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00897']
+            per_glacier['RGI40-11.00897'] = (gdir, [t_star[-1]],
                                              [res_bias[-1]], prcp_fac)
         else:
             raise RuntimeError('We need at least one glacier with one '
@@ -934,6 +960,10 @@ def crossval_t_stars(gdirs):
 
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
         full_ref_df.loc[rid, 'mustar'] = bef_df['mu_star'].values[0]
+        np.testing.assert_allclose(full_ref_df.loc[rid, 'bias'],
+                                   bef_df['bias'].values[0])
+        np.testing.assert_allclose(full_ref_df.loc[rid, 'prcp_fac'],
+                                   bef_df['prcp_fac'].values[0])
         full_ref_df.loc[rid, 'cv_muinterp'] = mu_interp
         full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
         full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]

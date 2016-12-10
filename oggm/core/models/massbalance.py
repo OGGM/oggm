@@ -40,6 +40,12 @@ class MassBalanceModel(object):
 
     def get_specific_mb(self, heights, widths, year=None):
         """Specific mb for this year (units: mm w.e. yr-1)."""
+
+        if len(np.atleast_1d(year)) > 1:
+            out = [self.get_specific_mb(heights, widths, year=yr)
+                   for yr in year]
+            return np.asarray(out)
+
         mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
         return np.average(mbs, weights=widths)
 
