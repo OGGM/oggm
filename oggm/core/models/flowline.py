@@ -1559,7 +1559,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     if y0 is None:
         y0 = cfg.PARAMS['y0']
     y1 = gdir.rgi_date.year
-    mb = mbmods.HistalpMassBalanceModel(gdir)
+    mb = mbmods.PastMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
     if cfg.PARAMS['bed_shape'] == 'mixed':
         fls = convert_to_mixed_flowline(fls)

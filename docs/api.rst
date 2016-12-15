@@ -24,6 +24,8 @@ Entity tasks
     initialize_flowlines
     catchment_width_geom
     catchment_width_correction
+    process_custom_climate_data
+    process_cru_data
     mu_candidates
     prepare_for_inversion
     volume_inversion
@@ -37,9 +39,10 @@ Global tasks
     :toctree: generated/
     :nosignatures:
 
-    distribute_climate_data
+    process_histalp_nonparallel
     compute_ref_t_stars
     distribute_t_stars
+    crossval_t_stars
     optimize_inversion_params
 
 .. currentmodule:: oggm
@@ -67,4 +70,4 @@ Mass-balance models in the ``oggm.core.models.massbalance`` module
     TstarMassBalanceModel
     BackwardsMassBalanceModel
     TodayMassBalanceModel
-    HistalpMassBalanceModel
+    PastMassBalanceModel

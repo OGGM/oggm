@@ -19,16 +19,17 @@ import shutil
 import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Local imports
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import ConstantBalanceModel
 from oggm.tests import is_slow, assertDatasetAllClose, RUN_MODEL_TESTS
-
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
+
+# after oggm.test
+import matplotlib.pyplot as plt
 
 # do we event want to run the tests?
 if not RUN_MODEL_TESTS:
@@ -236,7 +237,7 @@ class TestInitFlowline(unittest.TestCase):
                                div_id=np.argmax(lens)+1)[-1]
 
         self.assertTrue(gdir.rgi_date.year == 2003)
-        self.assertTrue(len(fls) == 5)
+        self.assertTrue(len(fls) == 4)
 
         vol = 0.
         area = 0.
@@ -279,7 +280,7 @@ class TestInitFlowline(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
@@ -315,7 +316,7 @@ class TestInitFlowline(unittest.TestCase):
         from scipy.stats import linregress
         slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
         slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
-        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.1)
+        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
 
 
 class TestOtherDivides(unittest.TestCase):
@@ -330,7 +331,6 @@ class TestOtherDivides(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = utils.get_demo_file('histalp_merged_hef.nc')
 
@@ -366,8 +366,9 @@ class TestOtherDivides(unittest.TestCase):
             geometry.catchment_area(gdir)
             geometry.catchment_width_geom(gdir)
             geometry.catchment_width_correction(gdir)
-            climate.distribute_climate_data([gdir])
-            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0)
+            climate.process_histalp_nonparallel([gdir])
+            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
+                                             prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
             v, ainv = inversion.invert_parabolic_bed(gdir)
             flowline.init_present_time_glacier(gdir)
@@ -393,7 +394,7 @@ class TestOtherDivides(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        self.assertTrue(len(fls) == 4)
+        self.assertEqual(len(fls), 5)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -562,7 +563,7 @@ class TestMassBalance(unittest.TestCase):
 
         ref_mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
 
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
 
         # Climate period
         yrs = np.arange(1973, 2003.1, 1)
@@ -645,7 +646,7 @@ class TestMassBalance(unittest.TestCase):
         self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
 
         # Compare sigma from real climate and mine
-        mb_ref = massbalance.HistalpMassBalanceModel(gdir)
+        mb_ref = massbalance.PastMassBalanceModel(gdir)
         mb_mod = massbalance.RandomMassBalanceModel(gdir)
         mb_ts = []
         mb_ts2 = []
@@ -682,7 +683,7 @@ class TestMassBalance(unittest.TestCase):
 
         # models
         mb1 = massbalance.TodayMassBalanceModel(gdir)
-        mb2 = massbalance.HistalpMassBalanceModel(gdir)
+        mb2 = massbalance.PastMassBalanceModel(gdir)
 
         start_time = time.time()
         for yr in yrs:
@@ -1698,7 +1699,7 @@ class TestHEF(unittest.TestCase):
 
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.03)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=300.01)
 
     @is_slow
     def test_commitment(self):

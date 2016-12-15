@@ -10,14 +10,10 @@ import functools
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib import cm as colormap
-from matplotlib import transforms
 import matplotlib.colors as colors
 from matplotlib.ticker import NullFormatter
 
-from descartes import PolygonPatch
 import shapely.geometry as shpg
-import glob
-import os
 import numpy as np
 import netCDF4
 import salem
@@ -129,9 +125,10 @@ def plot_googlemap(gdir, ax=None):
     s = salem.read_shapefile(gdir.get_filepath('outlines'))
     gm = salem.GoogleVisibleMap(np.array(s.geometry[0].exterior.xy[0]),
                                 np.array(s.geometry[0].exterior.xy[1]),
-                                crs=s.crs)
+                                crs=s.crs,
+                                key='AIzaSyDWG_aTgfU7CeErtIzWfdGxpStTlvDXV_o')
 
-    img = gm.get_vardata()[..., 0:3]  # sometimes there is an alpha
+    img = gm.get_vardata()
     cmap = salem.Map(gm.grid, countries=False, nx=gm.grid.nx)
     cmap.set_rgb(img)
 
@@ -298,6 +295,12 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
     salemmap.plot(ax)
 
     return {}
+
+
+@entity_task(log)
+def plot_ref_climate_calib(gdir, ax=None):
+    """Plot the time series of mus and biases for a reference glacier."""
+    pass
 
 
 @entity_task(log)

@@ -1,4 +1,4 @@
-"""Mass-balance stuffs"""
+"""Mass-balance models"""
 from __future__ import division
 
 # Built ins
@@ -6,7 +6,6 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 import netCDF4
-import warnings
 from scipy.interpolate import interp1d
 from numpy import random
 # Locals
@@ -33,6 +32,22 @@ class MassBalanceModel(object):
         """Returns the mass-balance at given altitudes
         for a given moment in time."""
         raise NotImplementedError()
+
+    def get_annual_mb(self, heights, year=None):
+        """Returns the annual mass-balance at given altitudes
+        for a given moment in time."""
+        raise NotImplementedError()
+
+    def get_specific_mb(self, heights, widths, year=None):
+        """Specific mb for this year (units: mm w.e. yr-1)."""
+
+        if len(np.atleast_1d(year)) > 1:
+            out = [self.get_specific_mb(heights, widths, year=yr)
+                   for yr in year]
+            return np.asarray(out)
+
+        mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
+        return np.average(mbs, weights=widths)
 
 
 class ConstantBalanceModel(MassBalanceModel):
@@ -73,6 +88,7 @@ class TstarMassBalanceModel(MassBalanceModel):
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
         t_star = df['t_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -84,7 +100,8 @@ class TstarMassBalanceModel(MassBalanceModel):
             h = np.append(h, fl.surface_h)
         h = np.linspace(np.min(h)-200, np.max(h)+1200, 1000)
 
-        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, year_range=yr)
+        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+                                                      year_range=yr)
         t = np.mean(t, axis=1)
         p = np.mean(p, axis=1)
         mb_on_h = p - mu_star * t
@@ -102,7 +119,7 @@ class TstarMassBalanceModel(MassBalanceModel):
 class BackwardsMassBalanceModel(MassBalanceModel):
     """Constant mass balance: MB for [1983, 2003] with temperature bias.
 
-    This is useful for finding a possible past galcier state.
+    This is useful for finding a possible past glacier state.
     """
 
     def __init__(self, gdir, use_tstar=False, bias=0.):
@@ -112,6 +129,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -147,7 +165,7 @@ class BackwardsMassBalanceModel(MassBalanceModel):
 
             # Read timeseries
             self.temp = nc.variables['temp'][p0:p1]
-            self.prcp = nc.variables['prcp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1] * prcp_fac
             self.grad = nc.variables['grad'][p0:p1]
             self.ref_hgt = nc.ref_hgt
 
@@ -232,6 +250,7 @@ class BiasedMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -270,7 +289,7 @@ class BiasedMassBalanceModel(MassBalanceModel):
 
             # Read timeseries
             self.temp = nc.variables['temp'][p0:p1]
-            self.prcp = nc.variables['prcp'][p0:p1]
+            self.prcp = nc.variables['prcp'][p0:p1] * prcp_fac
             self.grad = nc.variables['grad'][p0:p1]
             self.ref_hgt = nc.ref_hgt
 
@@ -373,6 +392,7 @@ class RandomMassBalanceModel(MassBalanceModel):
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         self.mu_star = df['mu_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         if use_tstar:
@@ -412,7 +432,8 @@ class RandomMassBalanceModel(MassBalanceModel):
 
             # Read timeseries and store the stats
             self.temp_s = nc.variables['temp'][p0:p1].reshape((ny, 12))
-            self.prcp_s = nc.variables['prcp'][p0:p1].reshape((ny, 12))
+            self.prcp_s = nc.variables['prcp'][p0:p1].reshape((ny, 12)) * \
+                          prcp_fac
             self.grad_s = nc.variables['grad'][p0:p1].reshape((ny, 12))
             self.ref_hgt = nc.ref_hgt
 
@@ -513,6 +534,7 @@ class TodayMassBalanceModel(MassBalanceModel):
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
         t_star = df['t_star'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         # TODO temporary solution until https://github.com/OGGM/oggm/issues/88
@@ -531,7 +553,8 @@ class TodayMassBalanceModel(MassBalanceModel):
             h = np.append(h, fl.surface_h)
         h = np.linspace(np.min(h)-100, np.max(h)+200, 1000)
 
-        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, year_range=yr)
+        y, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+                                                      year_range=yr)
         t = np.mean(t, axis=1)
         p = np.mean(p, axis=1)
         mb_on_h = p - mu_star * t
@@ -545,19 +568,40 @@ class TodayMassBalanceModel(MassBalanceModel):
         return (self.interp(heights) + self._bias) / SEC_IN_YEAR / cfg.RHO
 
 
-class HistalpMassBalanceModel(MassBalanceModel):
-    """Mass balance during the HISTALP period."""
+class PastMassBalanceModel(MassBalanceModel):
+    """Mass balance during the climate data period."""
 
-    def __init__(self, gdir):
-        """ Instanciate."""
+    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None):
+        """Initialize
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
-        self.mu_star = df['mu_star'][0]
+        Parameters
+        ----------
+        gdir : the glacier directory
+        mu_star : set to the alternative value of mustar you want to use
+            (the default is to use the calibrated value)
+        bias : set to the alternative value of the annual bias (mm we yr-1)
+            you want to use (the default is to use the calibrated value)
+        """
+
+        if mu_star is None:
+            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            mu_star = df['mu_star'][0]
+        if bias is None:
+            if cfg.PARAMS['use_bias_for_run']:
+                df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+                bias = df['bias'][0]
+            else:
+                bias = 0.
+        if prcp_fac is None:
+            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            prcp_fac = df['prcp_fac'][0]
+        self.mu_star = mu_star
+        self.bias = bias
 
         # Parameters
-        self.temp_all_solid = cfg.PARAMS['temp_all_solid']
-        self.temp_all_liq = cfg.PARAMS['temp_all_liq']
-        self.temp_melt = cfg.PARAMS['temp_melt']
+        self.t_solid = cfg.PARAMS['temp_all_solid']
+        self.t_liq = cfg.PARAMS['temp_all_liq']
+        self.t_melt = cfg.PARAMS['temp_melt']
 
         # Read file
         fpath = gdir.get_filepath('climate_monthly')
@@ -574,7 +618,7 @@ class HistalpMassBalanceModel(MassBalanceModel):
             self.months = np.tile(np.arange(1, 13), ny)
             # Read timeseries
             self.temp = nc.variables['temp'][:]
-            self.prcp = nc.variables['prcp'][:]
+            self.prcp = nc.variables['prcp'][:] * prcp_fac
             self.grad = nc.variables['grad'][:]
             self.ref_hgt = nc.ref_hgt
 
@@ -596,16 +640,15 @@ class HistalpMassBalanceModel(MassBalanceModel):
         npix = len(heights)
         grad_temp = igrad * (heights - self.ref_hgt)
         temp = np.ones(npix) * itemp + grad_temp
-        tempformelt = temp - self.temp_melt
+        tempformelt = temp - self.t_melt
         tempformelt = np.clip(tempformelt, 0, tempformelt.max())
 
         # Compute solid precipitation from total precipitation
         prcpsol = np.ones(npix) * iprcp
-        fac = 1 - (temp - self.temp_all_solid) / \
-                  (self.temp_all_liq - self.temp_all_solid)
+        fac = 1 - (temp - self.t_solid) / (self.t_liq - self.t_solid)
         prcpsol *= np.clip(fac, 0, 1)
 
-        mb_month = prcpsol - self.mu_star * tempformelt
+        mb_month = prcpsol - self.mu_star * tempformelt + self.bias / 12.
         return mb_month / SEC_IN_MONTHS[m-1] / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
@@ -626,14 +669,15 @@ class HistalpMassBalanceModel(MassBalanceModel):
         grad_temp *= (heights.repeat(12).reshape(grad_temp.shape) -
                       self.ref_hgt)
         temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
-        temp2dformelt = temp2d - self.temp_melt
+        temp2dformelt = temp2d - self.t_melt
         temp2dformelt = np.clip(temp2dformelt, 0, temp2dformelt.max())
 
         # Compute solid precipitation from total precipitation
         prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
-        fac = 1 - (temp2d - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
+        fac = 1 - (temp2d - self.t_solid) / (self.t_liq - self.t_solid)
         fac = np.clip(fac, 0, 1)
         prcpsol = prcpsol * fac
 
-        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
+        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1) \
+                    - self.bias
         return mb_annual / SEC_IN_YEAR / cfg.RHO

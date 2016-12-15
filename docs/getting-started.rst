@@ -55,7 +55,6 @@ will be written):
 
     cfg.PARAMS['topo_interp']
     cfg.PARAMS['temp_default_gradient']
-    cfg.PARAMS['border'] = 20  # set this parameter
     cfg.PATHS
 
 We'll use some demo files
@@ -64,7 +63,6 @@ input:
 
 .. ipython:: python
 
-    cfg.set_divides_db(get_demo_file('divides_workflow.shp')) # glacier divides
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif') # topography
 
 The starting point of a run is always a valid `RGI <http://www.glims.org/RGI/>`_ file.

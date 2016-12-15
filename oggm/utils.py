@@ -65,7 +65,7 @@ def _get_download_lock():
     try:
         lock_dir = cfg.PATHS['working_dir']
     except:
-        lock_dir = os.getcwd()
+        lock_dir = cfg.CACHE_DIR
     mkdir(lock_dir)
     try:
         return filelock.FileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
@@ -195,7 +195,14 @@ def _download_oggm_files_unlocked():
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
-            out[filename] = os.path.join(root, filename)
+            if filename in out:
+                # This was a stupid thing, and should not happen
+                # TODO: duplicates in sample data...
+                k = os.path.join(os.path.dirname(root), filename)
+                assert k not in out
+                out[k] = os.path.join(root, filename)
+            else:
+                out[filename] = os.path.join(root, filename)
 
     return out
 
@@ -430,8 +437,8 @@ def _get_centerline_lonlat(gdir):
     olist = []
     for i in gdir.divide_ids:
         cls = gdir.read_pickle('centerlines', div_id=i)
-        for i, cl in enumerate(cls):
-            mm = 1 if i==0 else 0
+        for j, cl in enumerate(cls[::-1]):
+            mm = 1 if j==0 else 0
             gs = gpd.GeoSeries()
             gs['RGIID'] = gdir.rgi_id
             gs['DIVIDE'] = i
@@ -608,6 +615,27 @@ def nicenumber(number, binsize, lower=False):
         return (e+1) * binsize
 
 
+def signchange(ts):
+    """Detect sign changes in a time series.
+
+    http://stackoverflow.com/questions/2652368/how-to-detect-a-sign-change-
+    for-elements-in-a-numpy-array
+
+    Returns
+    -------
+    An array with 0s everywhere and 1's when the sign changes
+    """
+    asign = np.sign(ts)
+    sz = asign == 0
+    while sz.any():
+        asign[sz] = np.roll(asign, 1)[sz]
+        sz = asign == 0
+    out = ((np.roll(asign, 1) - asign) != 0).astype(int)
+    if asign.iloc[0] == asign.iloc[1]:
+        out.iloc[0] = 0
+    return out
+
+
 def year_to_date(yr):
     """Converts a float year to an actual (year, month) tuple.
 
@@ -656,7 +684,7 @@ def monthly_timeseries(y0, y1=None, ny=None):
 
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        prcp_scaling_factor, use_grad):
+                        use_grad):
     """Prevent to re-compute a timeserie if it was done before.
 
     TODO: dirty solution, should be replaced by proper input.
@@ -673,7 +701,7 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
         thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
         ihgt = thgt[1, 1]
         thgt = thgt.flatten()
-        iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+        iprcp = prcp[:, ilat, ilon]
 
     # Now the gradient
     if use_grad:
@@ -1738,10 +1766,11 @@ class GlacierDirectory(object):
 
         return nc
 
-    def write_monthly_climate_file(self, time, prcp, temp, grad, hgt):
+    def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
+                                   ref_pix_lon, ref_pix_lat):
         """Creates a netCDF4 file with climate data.
 
-        See :py:func:`oggm.tasks.distribute_climate_data`.
+        See :py:func:`~oggm.tasks.process_cru_data`.
         """
 
         # overwrite as default
@@ -1750,7 +1779,11 @@ class GlacierDirectory(object):
             os.remove(fpath)
 
         with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
-            nc.ref_hgt = hgt
+            nc.ref_hgt = ref_pix_hgt
+            nc.ref_pix_lon = ref_pix_lon
+            nc.ref_pix_lat = ref_pix_lat
+            nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
+                                       ref_pix_lon, ref_pix_lat)
 
             dtime = nc.createDimension('time', None)
 
@@ -1764,7 +1797,7 @@ class GlacierDirectory(object):
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'
-            v.long_name = 'total precipitation amount'
+            v.long_name = 'total monthly precipitation amount'
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
@@ -1776,6 +1809,37 @@ class GlacierDirectory(object):
             v.units = 'degC m-1'
             v.long_name = 'temperature gradient'
             v[:] = grad
+
+    def get_flowline_hw(self):
+        """ Shortcut function to read the heights and widths of the glacier.
+
+        Returns
+        -------
+        (height, widths) in units of m
+        """
+        fls = self.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in fls:
+            w = np.append(w, fl.widths)
+            h = np.append(h, fl.surface_h)
+        return h, w * fl.dx * self.grid.dx
+
+    def get_ref_mb_data(self):
+        """Get the reference mb data from WGMS (for some glaciers only!)."""
+
+        flink, mbdatadir = get_wgms_files()
+
+        # list of years
+        reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
+        mbdf = pd.read_csv(reff).set_index('YEAR')
+
+        # logic for period
+        y0, y1 = cfg.PARAMS['run_period']
+        ci = self.read_pickle('climate_info')
+        y0 = y0 or ci['hydro_yr_0']
+        y1 = y1 or ci['hydro_yr_1']
+        return mbdf.loc[y0:y1]
 
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
@@ -1794,8 +1858,7 @@ class GlacierDirectory(object):
 
         # logging directory
         fpath = os.path.join(self.dir, 'log')
-        if not os.path.exists(fpath):
-            os.makedirs(fpath)
+        mkdir(fpath)
 
         # a file per function name
         fpath = os.path.join(fpath, func.__name__)
