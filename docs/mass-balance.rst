@@ -74,7 +74,7 @@ see the HISTALP data file in the `sample-data`_ folder for an example.
     ax = temp.plot(figsize=(8, 4), label='Annual temp');
     temp.rolling(31, center=True, min_periods=15).mean().plot(label='31-yr avg');
     plt.legend(loc='best'); plt.title('HISTALP annual temperature, Hintereisferner')
-    plt.ylabel('°C');
+    plt.ylabel(r'degC');
     @savefig plot_temp_ts.png width=100%
     plt.tight_layout();
 
@@ -144,9 +144,9 @@ glacier geometry fixed at the RGI date** (in that case, 2003).
 .. ipython:: python
    :suppress:
 
-    ax = mu_yr_clim.plot(figsize=(8, 4), label='$\mu (t)$');
-    plt.legend(loc='best'); plt.title('$\mu$ candidates Hintereisferner');
-    plt.ylabel('$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
+    ax = mu_yr_clim.plot(figsize=(8, 4), label=r'$\mu (t)$');
+    plt.legend(loc='best'); plt.title(r'$\mu$ candidates Hintereisferner');
+    plt.ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
     @savefig plot_mu_ts.png width=100%
     plt.tight_layout();
 
@@ -172,9 +172,9 @@ with the expected mass-balance and compute the model bias:
     plt.hlines(0, 1800, 2015, linestyles='-')
     plt.vlines(t_stars, -2000, 2000, linestyles=':')
 
-    ax.set_ylabel('$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
-    ax.set_title('$\mu$ candidates HEF');
-    plt.ylabel('bias (mm yr$^{-1}$)')
+    ax.set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
+    ax.set_title(r'$\mu$ candidates HEF');
+    plt.ylabel(r'bias (mm yr$^{-1}$)')
     plt.tight_layout()
     @savefig plot_bias_ts.png width=100%
     plt.show()

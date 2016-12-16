@@ -8,9 +8,9 @@ are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
 OGGM is fully `tested`_ with the python `version`_ 3.5 on linux and partially
-tested with python 3.4 on `windows`_ (for development purposes only). OGGM
-might work with python version 2.7, but it isn't tested any more and we
-`strongly recommend`_ to use python 3+.
+tested with python 3.4 on `windows`_ (windows should be used for development
+purposes only). OGGM might work with python version 2.7, but it isn't tested
+any more and we `strongly recommend`_ to use python 3+.
 
 .. note::
 
@@ -26,7 +26,7 @@ with experience with `pip`_ can follow the specific instructions
 
 .. _tested: https://travis-ci.org/OGGM/oggm
 .. _windows: https://ci.appveyor.com/project/fmaussion/oggm
-.. _versions: https://wiki.python.org/moin/Python2orPython3
+.. _version: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _strongly recommend: http://python3statement.github.io/

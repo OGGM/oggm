@@ -13,7 +13,8 @@ from oggm.core.preprocessing.climate import mb_yearly_climate_on_glacier, \
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
-cfg.PARAMS['prcp_scaling_factor'] = 2.6
+pcp_fac = 2.6
+cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 
 base_dir = os.path.join(os.path.expanduser('~'), 'Climate')
 entity = gpd.read_file(get_demo_file('Hintereisferner.shp')).iloc[0]
@@ -33,9 +34,9 @@ tasks.process_custom_climate_data(gdir)
 tasks.mu_candidates(gdir)
 
 # For plots
-mu_yr_clim = gdir.read_pickle('mu_candidates')
+mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]
 mbdf = gdir.get_ref_mb_data()
-years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, div_id=0)
+years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, pcp_fac, div_id=0)
 
 # which years to look at
 selind = np.searchsorted(years, mbdf.index)
@@ -49,6 +50,6 @@ mb_per_mu = prcp_yr - mu_yr_clim * temp_yr
 # Diff to reference
 diff = mb_per_mu - ref_mb
 pdf = pd.DataFrame()
-pdf['$\mu (t)$'] = mu_yr_clim
+pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
-t_stars, bias = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+t_stars, bias, _ = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)

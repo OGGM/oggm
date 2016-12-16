@@ -17,8 +17,8 @@ dependencies:
   - xarray
   - filelock
   - numpydoc
-  - ipython=4.0.1
-  - sphinx=1.2.3  # pin to avoid https://github.com/sphinx-doc/sphinx/issues/1822
+  - ipython=4.0.3
+  - sphinx
   - pip:
-    - git+https://github.com/fmaussion/motionless.git
+    - motionless
     - git+https://github.com/fmaussion/salem.git
