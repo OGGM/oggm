@@ -50,6 +50,6 @@ mb_per_mu = prcp_yr - mu_yr_clim * temp_yr
 # Diff to reference
 diff = mb_per_mu - ref_mb
 pdf = pd.DataFrame()
-pdf['$\mu (t)$'] = mu_yr_clim
+pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
 t_stars, bias, _ = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
