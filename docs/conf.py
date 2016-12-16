@@ -13,16 +13,59 @@ from __future__ import print_function
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import sys
+import warnings
 import os
 import shutil
 
-# see if matplotlib is there
+print("python exec:", sys.executable)
+print("sys.path:", sys.path)
+try:
+    import IPython
+    print("ipython: %s, %s" % (IPython.__version__, IPython.__file__))
+except ImportError:
+    print("no ipython")
+try:
+    import numpy
+    print("numpy: %s, %s" % (numpy.__version__, numpy.__file__))
+except ImportError:
+    print("no numpy")
+try:
+    import scipy
+    print("scipy: %s, %s" % (scipy.__version__, scipy.__file__))
+except ImportError:
+    print("no scipy")
+try:
+    import pandas
+    print("pandas: %s, %s" % (pandas.__version__, pandas.__file__))
+except ImportError:
+    print("no pandas")
+try:
+    import geopandas
+    print("geopandas: %s, %s" % (geopandas.__version__, geopandas.__file__))
+except ImportError:
+    print("no geopandas")
+try:
+    import xarray
+    print("xarray: %s, %s" % (xarray.__version__, xarray.__file__))
+except ImportError:
+    print("no xarray")
 try:
     import matplotlib
     matplotlib.use('Agg')
     print("matplotlib: %s, %s" % (matplotlib.__version__, matplotlib.__file__))
 except ImportError:
     print("no matplotlib")
+try:
+    import rasterio
+    print("rasterio: %s, %s" % (rasterio.__version__, rasterio.__file__))
+except ImportError:
+    print("no rasterio")
+try:
+    import netCDF4
+    print("netCDF4: %s, %s" % (netCDF4.__version__, netCDF4.__file__))
+except ImportError:
+    print("no netCDF4")
 
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm
@@ -35,6 +78,7 @@ import oggm.core.preprocessing.inversion
 import oggm.core.models.massbalance
 import oggm.core.models.flowline
 import oggm.tasks
+print("oggm: %s, %s" % (oggm.__version__, oggm.__file__))
 
 # -- General configuration ------------------------------------------------
 
