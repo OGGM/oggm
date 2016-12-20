@@ -55,6 +55,9 @@ Classes
     :nosignatures:
 
     GlacierDirectory
+    Centerline
+    InversionFlowline
+
 
 .. currentmodule:: oggm.core.models.massbalance
 

@@ -41,7 +41,7 @@ Documentation
     whats-new
     installing-oggm
     getting-started
-    centerlines
+    flowlines
     mass-balance
     ice-dynamics
     inversion

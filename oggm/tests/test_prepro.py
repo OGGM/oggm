@@ -193,6 +193,9 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.compute_downstream_lines(gdir)
 
+        fls = gdir.read_pickle('centerlines', div_id='major')
+        self.assertIs(fls[0].flows_to, fls[-1])
+
     @is_slow
     def test_baltoro_centerlines(self):
 

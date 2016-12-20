@@ -7,9 +7,6 @@ License: GPLv3+
 from __future__ import absolute_import, division
 import logging
 
-from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
-
-
 try:
     from .version import version as __version__
 except ImportError:  # pragma: no cover
@@ -33,3 +30,8 @@ try:
     _init_oggm_mpi()
 except ImportError:
     pass
+
+# API
+from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
+from oggm.core.preprocessing.centerlines import Centerline
+from oggm.core.preprocessing.geometry import InversionFlowline
