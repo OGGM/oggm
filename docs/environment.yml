@@ -2,21 +2,21 @@ name: oggm
 channels:
   - conda-forge
 dependencies:
-  - python=3.5
-  - numpy=1.11.2
-  - scipy=0.18.1
+  - python
+  - numpy
+  - scipy
   - gdal
   - matplotlib=1.5.3
-  - pandas=0.19.1
-  - geopandas=0.2.1
+  - pandas
+  - geopandas
   - Pillow
   - joblib
-  - netCDF4=1.2.6
+  - netCDF4
   - scikit-image
   - configobj
   - pyproj
   - krb5
-  - rasterio=1.0
+  - rasterio
   - xarray
   - filelock
   - numpydoc
