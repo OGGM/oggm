@@ -63,22 +63,6 @@ according to a simple rule:
     graphics.plot_centerlines(gdir, use_flowlines=True)
 
 
-Catchment areas
----------------
-
-Each tributary flowline has it's own "catchment area". These areas are computed
-using similar flow routing methods as the one used for determining the
-flowlines. Their role is to attribute each glacier pixel to the right
-tributory (this will also influence the later computation of the glacier
-widths).
-
-.. ipython:: python
-
-    tasks.catchment_area(gdir)
-    @savefig plot_fls_catchments.png width=80%
-    graphics.plot_catchment_areas(gdir)
-
-
 Downstream lines
 ----------------
 
@@ -97,6 +81,22 @@ Note that the task also determines the new tributaries originating from the
 glacier divides (while the concept of divides is necessary for the
 preprocessing, all divides are then merged to make one glacier for the
 actual run).
+
+
+Catchment areas
+---------------
+
+Each tributary flowline has it's own "catchment area". These areas are computed
+using similar flow routing methods as the one used for determining the
+flowlines. Their role is to attribute each glacier pixel to the right
+tributory (this will also influence the later computation of the glacier
+widths).
+
+.. ipython:: python
+
+    tasks.catchment_area(gdir)
+    @savefig plot_fls_catchments.png width=80%
+    graphics.plot_catchment_areas(gdir)
 
 
 Flowline widths
