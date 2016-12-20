@@ -142,5 +142,14 @@ def test_plot_distrib():
     graphics.plot_distributed_thickness(gdir, how='per_altitude')
     graphics.plot_distributed_thickness(gdir, how='per_interpolation')
 
+
+@image_comparison(baseline_images=['test_catch_areas' + SUFFIX],
+                  extensions=['png'])
+@requires_mpltest
+def test_catch_areas():
+
+    gdir = init_hef()
+    graphics.plot_catchment_areas(gdir)
+
 if __name__ == '__main__':  # pragma: no cover
     nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)

@@ -202,7 +202,7 @@ Glacier tributaries
 
 Glaciers in OGGM have a main centerline and, sometimes, one or more
 tributaries (which can themsleves also have tributaries, see
-:ref:`centerlines`). The number of these tributaries depends on many
+:ref:`flowlines`). The number of these tributaries depends on many
 factors, but most of the time the algorithm works well.
 
 The main flowline and its tributaries are all handled the same way and

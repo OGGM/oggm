@@ -47,6 +47,7 @@ LABEL_STRUCT = np.array([[0, 1, 0],
                          [1, 1, 1],
                          [0, 1, 0]])
 
+
 class InversionFlowline(oggm.core.preprocessing.centerlines.Centerline):
     """An advanced centerline, with widths and apparent MB."""
 

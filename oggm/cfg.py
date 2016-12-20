@@ -139,7 +139,7 @@ BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 _doc = 'The apparent mass-balance data needed for the inversion.'
 BASENAMES['apparent_mb'] = ('apparent_mb.nc', _doc)
 
-_doc = 'A list of :py:class:oggm.Centerline instances, sorted by flow order.'
+_doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
 _doc = "A list of len n_centerlines, each element conaining a numpy array " \

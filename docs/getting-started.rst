@@ -120,7 +120,7 @@ What next?
 ----------
 
 We will try to fill out the next chapters of this documentation soon. In the
-meantine, a good place to start is the ``oggm/docs/notebooks`` directory.
+meantime, a good place to start is the ``oggm/docs/notebooks`` directory.
 
 You will find two notebooks:
 
