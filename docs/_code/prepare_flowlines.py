@@ -13,3 +13,6 @@ gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
+tasks.compute_centerlines(gdir)
+tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_lines(gdir)

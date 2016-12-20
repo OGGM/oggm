@@ -30,7 +30,6 @@ The relevant task is :py:func:`tasks.compute_centerlines`:
 
 .. ipython:: python
 
-    tasks.compute_centerlines(gdir)
     @savefig plot_fls_centerlines.png width=80%
     graphics.plot_centerlines(gdir)
 
@@ -43,7 +42,7 @@ outflow (only one or none) is facilitated by the ``inflows`` and
 
 .. ipython:: python
 
-    fls = gdir.read_pickle('centerlines', div_id=2)
+    fls = gdir.read_pickle('centerlines', div_id='major')
     fls[0]  # a Centerline object
     # make sure the first flowline flows into the major one:
     assert fls[0].flows_to is fls[-1]
@@ -58,7 +57,6 @@ according to a simple rule:
 
 .. ipython:: python
 
-    tasks.initialize_flowlines(gdir)
     @savefig plot_fls_flowlines.png width=80%
     graphics.plot_centerlines(gdir, use_flowlines=True)
 
@@ -73,7 +71,6 @@ downstream of the current glacier geometry. This is done by the
 
 .. ipython:: python
 
-    tasks.compute_downstream_lines(gdir)
     @savefig plot_fls_downstream.png width=80%
     graphics.plot_centerlines(gdir, add_downstream=True)
 

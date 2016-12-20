@@ -1634,8 +1634,10 @@ class GlacierDirectory(object):
         ----------
         filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id : int
-            the divide for which you want to get the file path
+        div_id : int or str
+            the divide for which you want to get the file path (set to
+            'major' to get the major divide according to
+            compute_downstream_lines)
         delete : bool, default=False
             delete the file if exists
 
@@ -1646,6 +1648,9 @@ class GlacierDirectory(object):
 
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
+
+        if div_id == 'major':
+            div_id = self.read_pickle('major_divide', div_id=0)
 
         dir = self.divide_dirs[div_id]
         out = os.path.join(dir, cfg.BASENAMES[filename])

@@ -648,7 +648,6 @@ def compute_downstream_lines(gdir):
     # Write the data
     mdiv = div_ids[major_id]
     gdir.write_pickle(mdiv, 'major_divide', div_id=0)
-    fn = gdir.get_filepath('major_divide')
     gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
     if len(div_ids) == 1:
         return
