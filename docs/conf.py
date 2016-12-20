@@ -62,6 +62,12 @@ try:
 except ImportError:
     print("no rasterio")
 try:
+    import gdal
+    import osgeo.gdal
+    print("gdal: %s, %s" % (osgeo.gdal.__version__, gdal.__file__))
+except ImportError:
+    print("no gdal")
+try:
     import netCDF4
     print("netCDF4: %s, %s" % (netCDF4.__version__, netCDF4.__file__))
 except ImportError:
