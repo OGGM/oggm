@@ -2,7 +2,7 @@ name: oggm
 channels:
   - conda-forge
 dependencies:
-  - python=3.5
+  - python
   - numpy
   - scipy
   - gdal
