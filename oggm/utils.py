@@ -54,6 +54,25 @@ from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
              '.1506241137.v3.23/'
+
+DEM3REG = {'ISL': [-25., -12., 63., 67.],  # Iceland
+           'SVALBARD': [10., 34., 76., 81.],
+           'JANMAYEN': [-10., -7., 70., 72.],
+           'FJ': [36., 66., 79., 82.],  # Franz Josef Land
+           'FAR': [-8., -6., 61., 63.],  # Faroer
+           'BEAR': [18., 20., 74., 75.],  # Bear Island
+           'SHL': [-3., 0., 60., 61.],  # Shetland
+           '01-15': [-180., -91., -90, -60.],
+           # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+           '16-30': [-91., -1., -90., -60.],
+           '31-45': [-1., 89., -90., -60.],
+           '46-60': [89., 189., -90., -60.],
+           # Greenland tiles
+           'GL-North': [-78., -11., 75., 84.],
+           'GL-West': [-68., -42., 64., 76.],
+           'GL-South': [-52., -40., 59., 64.],
+           'GL-East': [-42., -17., 64., 76.]}
+
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -256,15 +275,14 @@ def _download_srtm_file_unlocked(zone):
     return out
 
 
-def _download_dem3_viewpano(zone, specialzones):
+def _download_dem3_viewpano(zone):
     with _get_download_lock():
-        return _download_dem3_viewpano_unlocked(zone, specialzones)
+        return _download_dem3_viewpano_unlocked(zone)
 
 
-def _download_dem3_viewpano_unlocked(zone, specialzones):
+def _download_dem3_viewpano_unlocked(zone):
     """Checks if the srtm data is in the directory and if not, download it.
     """
-
     odir = os.path.join(cfg.PATHS['topo_dir'], 'dem3')
 
     if not os.path.exists(odir):
@@ -277,8 +295,9 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
         return outpath
 
     # some files have a newer version 'v2'
-    if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34', 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40',
-                'P31', 'P32', 'P33', 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
+    if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34',
+                'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
+                'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in ['01-15', '16-30', '31-45', '46-60']:
         ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
@@ -301,8 +320,10 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
                 if err.code == 404:
                     # Ok so this *should* be an ocean tile
                     return None
-                elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
-                    print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" %
+                elif (err.code >= 500) and (err.code < 600) and \
+                     (retry_counter <= retry_max):
+                    print("Downloading dem data failed with HTTP error %s, "
+                          "retrying in 10 seconds... %s/%s" %
                           (err.code, retry_counter, retry_max))
                     time.sleep(10)
                     continue
@@ -313,26 +334,31 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
                 # Ok so this *should* be an ocean tile
                 return None
 
-    # Serious issue: sometimes, if a southern hemisphere URL is queried for download and there is none
-    # a NH zip file os downloaded. Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
-    # BUT: There are southern hemisphere files that download properly. However, the unzipped folder has the file name of
+    # Serious issue: sometimes, if a southern hemisphere URL is queried for
+    # download and there is none, a NH zip file os downloaded.
+    # Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
+    # BUT: There are southern hemisphere files that download properly. However,
+    # the unzipped folder has the file name of
     # the northern hemisphere file. Some checks if correct file exists:
 
     if len(zone)==4 and zone.startswith('S'):
         zonedir = os.path.join(odir, zone[1:])
-        globlist = glob.glob(zonedir+'\\S*.hgt') #'S' is important: cloud be confused with NH files otherwise
+        # 'S' is important: cloud be confused with NH files otherwise
+        globlist = glob.glob(os.path.join(zonedir, 'S*.hgt'))
     else:
         zonedir = os.path.join(odir, zone)
-        globlist = glob.glob(zonedir+'\\*.hgt')
+        globlist = glob.glob(os.path.join(zonedir, '*.hgt'))
 
     # take care of the special file naming cases (very ineffective...)
-    if zone in specialzones.keys():
+    if zone in DEM3REG.keys():
+        raise NotImplementedError()
         globlist = glob.glob(odir+'\\*\\*.hgt')
 
     if not globlist:
-        return None
+        raise RuntimeError("We should have some files here, but we don't")
 
-    # merge the single HGT files (can be a bit ineffective, bcz not every single file might be exactly within extent...)
+    # merge the single HGT files (can be a bit ineffective, because not every
+    # single file might be exactly within extent...)
     rfiles = [rasterio.open(s) for s in globlist]
     dest, output_transform = merge_tool(rfiles)
     profile = rfiles[0].profile
@@ -803,17 +829,20 @@ def srtm_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
-def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
-    """Returns a list of corrected SRTM zones from
-    http://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm covering the desired extent.
+def dem3_viewpano_zone(lon_ex, lat_ex):
+    """Returns a list of DEM3 zones covering the desired extent.
+
+    http://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm
     """
 
-    for _f in specialfiles.keys():  # Python version independent iteration through dictionary
+    for _f in DEM3REG.keys():
 
-        if (np.min(lon_ex) >= specialfiles[_f][0]) and (np.max(lon_ex) <= specialfiles[_f][1]) and \
-           (np.min(lat_ex) >= specialfiles[_f][2]) and (np.max(lat_ex) <= specialfiles[_f][3]):
+        if (np.min(lon_ex) >= DEM3REG[_f][0]) and \
+           (np.max(lon_ex) <= DEM3REG[_f][1]) and \
+           (np.min(lat_ex) >= DEM3REG[_f][2]) and \
+           (np.max(lat_ex) <= DEM3REG[_f][3]):
 
-            # test some weired inset files in Antarctica
+            # test some weird inset files in Antarctica
             if (np.min(lon_ex) >= -91.) and (np.max(lon_ex) <= -90.) and \
                (np.min(lat_ex) >= -72.) and (np.max(lat_ex) <= -68.):
                 return ['SR15']
@@ -842,17 +871,18 @@ def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
             else:
                 return [_f]
 
-    # if the tile does *not* have a special name, its name can be found like this:
+    # if the tile doesn't have a special name, its name can be found like this:
     # corrected SRTMs are sorted in tiles of 6 deg longitude and 4 deg latitude
     srtm_x0 = -180.
     srtm_y0 = 0.
     srtm_dx = 6.
     srtm_dy = 4.
 
-
     # quick n dirty solution to be sure that we will cover the whole range
     mi, ma = np.min(lon_ex), np.max(lon_ex)
-    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dy)+3) # +3 is just for the number to become still a bit larger
+    # TODO: Fabien, find out what Johannes wanted with this +3
+    # +3 is just for the number to become still a bit larger
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dy)+3)
     mi, ma = np.min(lat_ex), np.max(lat_ex)
     lat_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dx)+3)
 
@@ -861,10 +891,9 @@ def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
         for lat in lat_ex:
             dx = lon - srtm_x0
             dy = lat - srtm_y0
-
             zx = np.ceil(dx / srtm_dx)
-            zy = chr(int(abs(dy / srtm_dy)) + ord('A'))  # convert number to letter
-
+            # convert number to letter
+            zy = chr(int(abs(dy / srtm_dy)) + ord('A'))
             if lat >= 0:
                 zones.append('%s%02.0f' % (zy, zx))
             else:
@@ -1117,7 +1146,7 @@ def _get_cru_file_unlocked(var=None):
     return ofile
 
 
-def get_topo_file(lon_ex, lat_ex, region=None):
+def get_topo_file(lon_ex, lat_ex, rgi_region=None):
     """
     Returns a path to the DEM file covering the desired extent.
 
@@ -1129,8 +1158,9 @@ def get_topo_file(lon_ex, lat_ex, region=None):
 
     Parameters
     ----------
-    lon_ex: (min_lon, max_lon)
-    lat_ex: (min_lat, max_lat)
+    lon_ex : (min_lon, max_lon)
+    lat_ex : (min_lat, max_lat)
+    rgi_region : the RGI region number
 
     Returns
     -------
@@ -1147,7 +1177,7 @@ def get_topo_file(lon_ex, lat_ex, region=None):
     # TODO: GIMP is in polar stereographic, not easy to test
     # would be possible with a salem grid but this is a bit more expensive
     # than just asking RGI for the region
-    if region is not None and int(region) == 5:
+    if rgi_region is not None and int(rgi_region) == 5:
         gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
         return gimp_file, 'GIMP'
 
@@ -1173,39 +1203,22 @@ def get_topo_file(lon_ex, lat_ex, region=None):
             return r_file, 'REGIO'
 
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        # TODO: https://github.com/OGGM/oggm/pull/79 does not work properly yet
-        # # Use corrected viewpanoramas.org SRTM!
-        # # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
-        # specialfiles = {'ISL': [-25., -12., 63., 67.],       # Iceland
-        #                 'SVALBARD': [10., 34., 76., 81.],
-        #                 'JANMAYEN': [-10., -7., 70., 72.],
-        #                 'FJ': [36., 66., 79., 82.],          # Franz Josef Land
-        #                 'FAR': [-8., -6., 61., 63.],         # Faroer
-        #                 'BEAR': [18., 20., 74., 75.],        # Bear Island
-        #                 'SHL': [-3., 0., 60., 61.],          # Shetland
-        #                 '01-15': [-180., -91., -90, -60.],   # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-        #                 '16-30': [-91., -1., -90., -60.],
-        #                 '31-45': [-1., 89., -90., -60.],
-        #                 '46-60': [89., 189., -90., -60.],
-        #                 'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
-        #                 'GL-West': [-68., -42., 64., 76.],
-        #                 'GL-South': [-52., -40., 59., 64.],
-        #                 'GL-East': [-42., -17., 64., 76.]}
-        # zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
-        # sources = []
-        # for z in zones:
-        #     sources.append(_download_dem3_viewpano(z, specialfiles))
-        # source_str = 'DEM3'
-        #
-        # # if download failed for some reason, use ASTER
-        # if len(sources) < 1:
-        zones, units = aster_zone(lon_ex, lat_ex)
+        # Use corrected viewpanoramas.org SRTM!
+        zones = dem3_viewpano_zone(lon_ex, lat_ex)
         sources = []
-        for z, u in zip(zones, units):
-            sf = _download_aster_file(z, u)
-            if sf is not None:
-                sources.append(sf)
-        source_str = 'ASTER'
+        for z in zones:
+            sources.append(_download_dem3_viewpano(z))
+        source_str = 'DEM3'
+
+        # if download failed for some reason, use ASTER
+        if len(sources) < 1:
+            zones, units = aster_zone(lon_ex, lat_ex)
+            sources = []
+            for z, u in zip(zones, units):
+                sf = _download_aster_file(z, u)
+                if sf is not None:
+                    sources.append(sf)
+            source_str = 'ASTER'
     else:
         zones = srtm_zone(lon_ex, lat_ex)
         sources = []
