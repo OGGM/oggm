@@ -185,15 +185,17 @@ class TestDataFiles(unittest.TestCase):
                     'FAR': [-8., -6., 61., 63.],  # Faroer
                     'BEAR': [18., 20., 74., 75.],  # Bear Island
                     'SHL': [-3., 0., 60., 61.],  # Shetland
-                    '01-15': [-180., -91., -90, -60.],
                     # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-                    '16-30': [-91., -1., -90., -60.],
-                    '31-45': [-1., 89., -90., -60.],
-                    '46-60': [89., 189., -90., -60.],
-                    'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
-                    'GL-West': [-68., -42., 64., 76.],
-                    'GL-South': [-52., -40., 59., 64.],
-                    'GL-East': [-42., -17., 64., 76.]}
+                    # '01-15': [-180., -91., -90, -60.],
+                    # '16-30': [-91., -1., -90., -60.],
+                    # '31-45': [-1., 89., -90., -60.],
+                    # '46-60': [89., 189., -90., -60.],
+                    # Greenland tiles
+                    # 'GL-North': [-78., -11., 75., 84.],
+                    # 'GL-West': [-68., -42., 64., 76.],
+                    # 'GL-South': [-52., -40., 59., 64.],
+                    # 'GL-East': [-42., -17., 64., 76.]
+        }
         # special names
         for key in test_loc:
             z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]],
@@ -203,9 +205,9 @@ class TestDataFiles(unittest.TestCase):
             self.assertEqual(key, z[0])
 
         # weird Antarctica tile
-        z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.])
-        self.assertTrue(len(z) == 1)
-        self.assertEqual('SR15', z[0])
+        # z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.])
+        # self.assertTrue(len(z) == 1)
+        # self.assertEqual('SR15', z[0])
 
         # normal tile
         z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.])
