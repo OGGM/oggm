@@ -366,8 +366,10 @@ def define_glacier_region(gdir, entity=None):
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Open DEM
+    source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     dem_file, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         region=gdir.rgi_region)
+                                         rgi_region=gdir.rgi_region,
+                                         source=source)
     log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
     dem = gdal.Open(dem_file)
     geo_t = dem.GetGeoTransform()
