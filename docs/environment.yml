@@ -2,7 +2,7 @@ name: oggm
 channels:
   - conda-forge
 dependencies:
-  - python
+  - python=3.5
   - numpy
   - scipy
   - gdal
@@ -20,7 +20,7 @@ dependencies:
   - xarray
   - filelock
   - numpydoc
-  - ipython=4.0.3
+  - ipython=4.0.3  # https://github.com/ipython/ipython/issues/8733
   - sphinx=1.5
   - pip:
     - motionless
