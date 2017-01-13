@@ -30,6 +30,7 @@ import subprocess
 # External libs
 import geopandas as gpd
 import pandas as pd
+import salem
 from salem import lazy_property, read_shapefile
 import numpy as np
 import netCDF4
@@ -1645,7 +1646,7 @@ class GlacierDirectory(object):
     @lazy_property
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
-        return self.read_pickle('glacier_grid')
+        return salem.Grid.from_json(self.get_filepath('glacier_grid'))
 
     @lazy_property
     def rgi_area_m2(self):

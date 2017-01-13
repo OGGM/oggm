@@ -107,7 +107,7 @@ _doc = 'The glacier outlines in the local projection.'
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
-BASENAMES['glacier_grid'] = ('glacier_grid.pkl', _doc)
+BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
 _doc = 'A netcdf file containing several gridded data variables such as ' \
        'topography, the glacier masks and more (see the netCDF file metadata).'
