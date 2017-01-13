@@ -1222,7 +1222,7 @@ class TestGrindelInvert(unittest.TestCase):
 
     def clean_dir(self):
         self.rm_dir()
-        tfile = get_demo_file('dem.tif')
+        tfile = get_demo_file('glacier_grid.json')
         gpath = os.path.dirname(tfile)
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
