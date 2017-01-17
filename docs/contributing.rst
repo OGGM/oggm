@@ -111,8 +111,8 @@ Test-driven development/code writing
 
 OGGM is serious about testing and strongly encourages contributors to embrace
 `test-driven development (TDD) <http://en.wikipedia.org/wiki/Test-driven_development>`_.
-Like many packages, OGGM uses the `Nose testing system
-<https://nose.readthedocs.io/en/latest/index.html>`_
+Like many packages, OGGM uses the `pytest testing system
+<http://doc.pytest.org/en/latest/>`_
 and the convenient
 extensions in `numpy.testing
 <http://docs.scipy.org/doc/numpy/reference/routines.testing.html>`_.
@@ -127,16 +127,25 @@ Running the test suite
 
 The tests can then be run directly inside your Git clone by typing::
 
-    nosetests .
+    pytest .
 
 The tests can run for several minutes. If everything worked fine, you
 should see something like::
 
-    ...............S.S..................S......................SSS..SSS.SSSSS.SSS
-    ----------------------------------------------------------------------
-    Ran 77 tests in 401.080s
+    ==== test session starts ====
+    platform linux -- Python 3.4.3, pytest-3.0.5, py-1.4.31, pluggy-0.4.0
+    rootdir:
+    plugins:
+    collected 92 items
 
-    OK (SKIP=17)
+    oggm/tests/test_graphics.py ..............
+    oggm/tests/test_models.py .........s....sssssssssssssssss
+    oggm/tests/test_prepro.py ...s................s.s...
+    oggm/tests/test_utils.py ...sss..ss.sssss.
+    oggm/tests/test_workflow.py ssss
+
+    ===== 57 passed, 35 skipped in 102.50 seconds ====
+
 
 You can safely ignore deprecation warnings and other DLL messages as long as
 the tests end with ``OK``.
@@ -145,9 +154,9 @@ Often it is worth running only a subset of tests first around your changes
 before running the entire suite.
 This is done using one of the following constructs::
 
-    nosetests oggm/tests/[test-module].py
-    nosetests oggm/tests/[test-module].py:[TestClass]
-    nosetests oggm/tests/[test-module].py:[TestClass].[test_method]
+    pytest oggm/tests/[test-module].py
+    pytest oggm/tests/[test-module].py:[TestClass]
+    pytest oggm/tests/[test-module].py:[TestClass].[test_method]
 
 
 Contributing to the documentation

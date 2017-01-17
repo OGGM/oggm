@@ -62,7 +62,7 @@ GIS tools:
     - geopandas
 
 Testing:
-    - nose
+    - pytest
 
 Other libraries:
     - filelock
@@ -202,16 +202,25 @@ Testing
 You are almost there! The last step is to check if everything works as
 expected. From the oggm directory, type::
 
-    nosetests .
+    pytest .
 
 The tests can run for several minutes. If everything worked fine, you
 should see something like::
 
-    ...............S.S..................S......................SSS..SSS.SSSSS.SSS
-    ----------------------------------------------------------------------
-    Ran 77 tests in 401.080s
+    ==== test session starts ====
+    platform linux -- Python 3.4.3, pytest-3.0.5, py-1.4.31, pluggy-0.4.0
+    rootdir:
+    plugins:
+    collected 92 items
 
-    OK (SKIP=17)
+    oggm/tests/test_graphics.py ..............
+    oggm/tests/test_models.py .........s....sssssssssssssssss
+    oggm/tests/test_prepro.py ...s................s.s...
+    oggm/tests/test_utils.py ...sss..ss.sssss.
+    oggm/tests/test_workflow.py ssss
+
+    ===== 57 passed, 35 skipped in 102.50 seconds ====
+
 
 You can safely ignore deprecation warnings and other DLL messages as long as
 the tests end with ``OK``.
@@ -237,11 +246,7 @@ For building stuffs::
 
     $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev
 
-For matplolib to work on **python 2**::
-
-    $ sudo apt-get install python-gtk2-dev
-
-And on **python 3**::
+For matplolib::
 
     $ sudo apt-get install tk-dev python3-tk python3-dev
 
@@ -275,11 +280,7 @@ Reset your profile::
 
     $ . ~/.profile
 
-Make a new environment with **python 2**::
-
-    $ mkvirtualenv oggm_env -p /usr/bin/python
-
-Or **python 3**::
+Make a new environment with **python 3**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python3
 
@@ -295,26 +296,7 @@ Be sure to be on the working environment::
 
 Install one by one the easy stuff::
 
-   $ pip install numpy scipy pandas shapely
-
-For Matplotlib and **python 2** we need to link the libs in the virtual env::
-
-    $ ln -sf /usr/lib/python2.7/dist-packages/{glib,gobject,cairo,gtk-2.0,pygtk.py,pygtk.pth} $VIRTUAL_ENV/lib/python2.7/site-packages
-    $ pip install matplotlib
-
-(Details: http://www.stevenmaude.co.uk/2013/09/installing-matplotlib-in-virtualenv.html )
-
-For Matplotlib and **python 3** it doesn't seem to be necessary::
-
-    $ pip install matplotlib
-
-Check if plotting works by running these three lines in python::
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.plot([1,2,3])
-    >>> plt.show()
-
-If nothing shows-up, something got wrong.
+   $ pip install numpy scipy pandas shapely matplotlib
 
 For **GDAL**, it's also not straight forward. First, check which version of
 GDAL is installed::
@@ -331,11 +313,10 @@ using the system binaries::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2 pytest motionless
 
-And the external libraries::
+And the salem library::
 
-    $ pip install git+https://github.com/fmaussion/motionless.git
     $ pip install git+https://github.com/fmaussion/salem.git
 
 OGGM and tests

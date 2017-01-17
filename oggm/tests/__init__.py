@@ -1,4 +1,5 @@
 import six
+from distutils.version import LooseVersion
 import osgeo.gdal
 import os
 import sys
@@ -12,6 +13,7 @@ import numpy as np
 import scipy.optimize as optimization
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
+from oggm import cfg
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -30,8 +32,11 @@ if osgeo.gdal.__version__ >= '1.11':
 
 # Matplotlib version changes plots, too
 HAS_MPL_FOR_TESTS = False
-if matplotlib.__version__ >= '1.5':
+if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
+    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
+                                'baseline_images', '2.0.x')
+
 
 # Some control on which tests to run (useful to avoid too long tests)
 # defaults everywhere else than travis

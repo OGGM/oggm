@@ -89,10 +89,11 @@ def _get_download_lock():
     except:
         lock_dir = cfg.CACHE_DIR
     mkdir(lock_dir)
+    lockfile = os.path.join(lock_dir, 'oggm_data_download.lock')
     try:
-        return filelock.FileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
+        return filelock.FileLock(lockfile).acquire()
     except:
-        return filelock.SoftFileLock(os.path.join(lock_dir, 'oggm_data_download.lock')).acquire()
+        return filelock.SoftFileLock(lockfile).acquire()
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):

@@ -783,7 +783,7 @@ class TestIO(unittest.TestCase):
 
         fls = dummy_constant_bed()
         path = os.path.join(self.test_dir, 'ts_ideal.nc')
-        if os.path.isfile(path):
+        if os.path.exists(path):
             os.remove(path)
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
