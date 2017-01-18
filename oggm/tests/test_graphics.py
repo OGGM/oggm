@@ -178,7 +178,7 @@ def test_modelmap():
     model = flowline.FlowlineModel(fls)
 
     fig, ax = plt.subplots()
-    graphics.plot_modeloutput_map(gdir, ax=ax, model=model, tolerance=TOLERANCE)
+    graphics.plot_modeloutput_map(gdir, ax=ax, model=model)
     fig.tight_layout()
     return fig
 
