@@ -368,7 +368,8 @@ def _download_dem3_viewpano_unlocked(zone):
     rfiles = [rasterio.open(s) for s in globlist]
     dest, output_transform = merge_tool(rfiles)
     profile = rfiles[0].profile
-    profile.pop('affine')
+    if 'affine' in profile:
+        profile.pop('affine')
     profile['transform'] = output_transform
     profile['height'] = dest.shape[1]
     profile['width'] = dest.shape[2]
@@ -1287,7 +1288,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             rfiles = [rasterio.open(s) for s in sources]
             dest, output_transform = merge_tool(rfiles)
             profile = rfiles[0].profile
-            profile.pop('affine')
+            if 'affine' in profile:
+                profile.pop('affine')
             profile['transform'] = output_transform
             profile['height'] = dest.shape[1]
             profile['width'] = dest.shape[2]
