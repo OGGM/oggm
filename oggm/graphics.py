@@ -226,7 +226,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
             salemmap.set_geometry(l.head, crs=gdir.grid, marker='o',
-                                 markersize=60, alpha=0.8, color=c, zorder=99)
+                                  markersize=60, alpha=0.8, color=c, zorder=99)
 
             for j in l.inflow_points:
                 salemmap.set_geometry(j, crs=crs, marker='o',
@@ -502,6 +502,8 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
         dofig = True
+    else:
+        fig = plt.gcf()
 
     # Compute area histo
     area = np.array([])

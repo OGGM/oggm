@@ -112,7 +112,7 @@ req_packages = ['six',
                 'shapely',
                 'rasterio',
                 'configobj',
-                'nose',
+                'pytest',
                 'xarray',
                 'progressbar2',
                 'filelock']

@@ -14,10 +14,10 @@ branches:  # blacklist
 matrix:
   fast_finish: true
   include:
-    - env: OGGM_ENV=prepro
-    - env: OGGM_ENV=models
-    - env: OGGM_ENV=workflow
-    - env: OGGM_ENV=graphics
+    - env: OGGM_ENV=prepro MPL=
+    - env: OGGM_ENV=models MPL=
+    - env: OGGM_ENV=workflow MPL=
+    - env: OGGM_ENV=graphics MPL=--mpl
 
 before_install:
   - docker pull oggm/untested_base:latest
@@ -29,7 +29,7 @@ install:
     pip3 install coveralls
     cd /root/oggm
     pip3 install -e .
-    nosetests --verbose --with-coverage --cover-package oggm --logging-level=INFO
+    pytest oggm $MPL --cov=oggm --cov-report term-missing
     coveralls || true
     exit 0
     EOF
