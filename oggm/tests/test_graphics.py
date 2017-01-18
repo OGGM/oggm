@@ -36,7 +36,7 @@ TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
 # Lets go
 
 # TODO: temporary tolerance
-TOLERANCE=10
+TOLERANCE=20
 
 
 @requires_internet
