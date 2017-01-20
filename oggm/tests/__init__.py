@@ -219,8 +219,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir, div_id=0)
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-    mbdf = pd.read_csv(hef_file).set_index('YEAR')
-    t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
+    mbdf = pd.read_csv(hef_file).set_index('YEAR')['ANNUAL_BALANCE']
+    t_star, bias, _, prcp_fac = climate.t_star_from_refmb(gdir, mbdf)
     climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1],
                                      prcp_fac=prcp_fac)
 

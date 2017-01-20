@@ -34,7 +34,7 @@ tasks.process_custom_climate_data(gdir)
 tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
-tstar, bias, prcp_fac = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+tstar, bias, _, prcp_fac = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 local_mustar_apparent_mb(gdir, tstar=tstar[-1], bias=bias[-1], prcp_fac=prcp_fac)
 
 # For plots
@@ -55,7 +55,7 @@ diff = mb_per_mu - ref_mb
 pdf = pd.DataFrame()
 pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
-t_stars, bias, _ = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+t_stars, bias, _, _ = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 
 # plot functions
 def example_plot_temp_ts():

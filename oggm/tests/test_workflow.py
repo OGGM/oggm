@@ -218,7 +218,7 @@ class TestWorkflow(unittest.TestCase):
 
         gdirs = up_to_distrib()
 
-        # assert things not change
+        # before crossval
         refmustars = []
         for gdir in gdirs:
             tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -227,9 +227,12 @@ class TestWorkflow(unittest.TestCase):
         tasks.crossval_t_stars(gdirs)
         file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
         df = pd.read_csv(file, index_col=0)
-        self.assertTrue(np.mean(np.abs(df.diff_muinterp)) >
-                        np.mean(np.abs(df.diff_tinterp)))
 
+        # after crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
+
+        # see if the process didn't brake anything
         mustars = []
         for gdir in gdirs:
             tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -242,7 +245,7 @@ class TestWorkflow(unittest.TestCase):
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
             h, w = gdir.get_flowline_hw()
             mbmod = PastMassBalanceModel(gdir)
-            mbdf = gdir.read_pickle('ref_massbalance').to_frame(name='ref')
+            mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
@@ -250,7 +253,7 @@ class TestWorkflow(unittest.TestCase):
                                        mm['mine'] - mm['ref'], atol=1e-3)
             cfg.PARAMS['use_bias_for_run'] = True
             mbmod = PastMassBalanceModel(gdir)
-            mbdf = gdir.read_pickle('ref_massbalance').to_frame(name='ref')
+            mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
