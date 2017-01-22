@@ -564,9 +564,9 @@ def t_star_from_refmb(gdir, mbdf):
     gdirs: the list of oggm.GlacierDirectory objects where to write the data.
     mbdf: a pd.Series containing the observed MB data indexed by year
 
-    Returns:
-    --------
-    (t_star, bias, prcp_fac): lists of t*, their associated bias and a prcp fac
+    Returns
+    -------
+    A dict: {t_star:[], bias:[], bias_std:[], prcp_fac:float}
     """
 
     # Only divide 0, we believe the original RGI entities to be the ref...
@@ -634,7 +634,8 @@ def t_star_from_refmb(gdir, mbdf):
         odf.loc[prcp_fac, 'avg_bias'] = np.mean(bias)
         odf.loc[prcp_fac, 'avg_std_bias'] = np.mean(std_bias)
         odf.loc[prcp_fac, 'n_tstar'] = len(std_bias)
-        out[prcp_fac] = t_stars, bias, std_bias, prcp_fac
+        out[prcp_fac] = {'t_star': t_stars, 'bias': bias, 'std_bias': std_bias,
+                         'prcp_fac': prcp_fac}
 
     # write
     gdir.write_pickle(odf, 'prcp_fac_optim')
@@ -786,8 +787,8 @@ def _get_optimal_scaling_factor(ref_gdirs):
             mu_candidates(gdir, prcp_sf=sf)
             # list of mus compatibles with refmb
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-            _, _, std_bias, prcp_fac = t_star_from_refmb(gdir, mbdf)
-            abs_std.append(np.mean(std_bias))
+            res = t_star_from_refmb(gdir, mbdf)
+            abs_std.append(np.mean(res['std_bias']))
         return np.mean(abs_std)**2
 
     with utils.DisableLogger():
@@ -825,13 +826,14 @@ def compute_ref_t_stars(gdirs):
         mu_candidates(gdir, prcp_sf=sf)
         # list of mus compatibles with refmb
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        t_star, res_bias, _, prcp_fac = t_star_from_refmb(gdir, mbdf)
+        res = t_star_from_refmb(gdir, mbdf)
 
         # if we have just one candidate this is good
-        if len(t_star) == 1:
+        if len(res['t_star']) == 1:
             only_one.append(gdir.rgi_id)
         # this might be more than one, we'll have to select them later
-        per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias, prcp_fac)
+        per_glacier[gdir.rgi_id] = (gdir, res['t_star'], res['bias'],
+                                    res['prcp_fac'])
 
     # At least one of the glaciers should have a single t*, otherwise we don't
     # know how to start

@@ -34,8 +34,9 @@ tasks.process_custom_climate_data(gdir)
 tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
-tstar, bias, _, prcp_fac = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
-local_mustar_apparent_mb(gdir, tstar=tstar[-1], bias=bias[-1], prcp_fac=prcp_fac)
+res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+                         prcp_fac=res['prcp_fac'])
 
 # For plots
 mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]
@@ -55,7 +56,7 @@ diff = mb_per_mu - ref_mb
 pdf = pd.DataFrame()
 pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
-t_stars, bias, _, _ = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 
 # plot functions
 def example_plot_temp_ts():
@@ -80,9 +81,12 @@ def example_plot_mu_ts():
 def example_plot_bias_ts():
     ax = pdf.plot(figsize=(8, 4), secondary_y='bias')
     plt.hlines(0, 1800, 2015, linestyles='-')
-    [plt.axvline(ts, linestyle=':', color='k') for ts in t_stars]
     ax.set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
     ax.set_title(r'$\mu$ candidates HEF');
     plt.ylabel(r'bias (mm yr$^{-1}$)')
+    yl = plt.gca().get_ylim()
+    for ts in res['t_star']:
+        plt.plot((ts, ts), (yl[0], 0), linestyle=':', color='grey')
+    plt.ylim(yl)
     plt.tight_layout()
     plt.show()
