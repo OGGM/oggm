@@ -53,8 +53,8 @@ import oggm.cfg as cfg
 from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
-             '.1506241137.v3.23/'
+CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24/cruts' \
+             '.1609301803.v3.24/'
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
