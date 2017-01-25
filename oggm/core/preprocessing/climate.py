@@ -492,7 +492,7 @@ def mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=None, year_range=None):
 
 @entity_task(log, writes=['mu_candidates'])
 @divide_task(log, add_0=True)
-def mu_candidates(gdir, div_id=None):
+def mu_candidates(gdir, div_id=None, prcp_sf=None):
     """Computes the mu candidates.
 
     For each 31 year-period centered on the year of interest, mu is is the
@@ -504,6 +504,8 @@ def mu_candidates(gdir, div_id=None):
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
+    prcp_sf : float (optional)
+        force to a certain prcp scaling factor
     """
 
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -521,9 +523,11 @@ def mu_candidates(gdir, div_id=None):
     # Be sure we have no marine terminating glacier
     assert gdir.terminus_type == 'Land-terminating'
 
-    # prcp scaling factor
-    if cfg.PARAMS['prcp_auto_scaling_factor']:
+    # prcp scaling factor - one or more?
+    if cfg.PARAMS['prcp_scaling_factor'] == 'stddev_perglacier':
         sf = np.arange(0.5, 5.01, 0.05)
+    elif cfg.PARAMS['prcp_scaling_factor'] == 'stddev':
+        sf = [float(prcp_sf)]
     else:
         sf = np.asarray([cfg.PARAMS['prcp_scaling_factor']])
 
@@ -560,9 +564,9 @@ def t_star_from_refmb(gdir, mbdf):
     gdirs: the list of oggm.GlacierDirectory objects where to write the data.
     mbdf: a pd.Series containing the observed MB data indexed by year
 
-    Returns:
-    --------
-    (t_star, bias, prcp_fac): lists of t*, their associated bias and a prcp fac
+    Returns
+    -------
+    A dict: {t_star:[], bias:[], bias_std:[], prcp_fac:float}
     """
 
     # Only divide 0, we believe the original RGI entities to be the ref...
@@ -630,7 +634,8 @@ def t_star_from_refmb(gdir, mbdf):
         odf.loc[prcp_fac, 'avg_bias'] = np.mean(bias)
         odf.loc[prcp_fac, 'avg_std_bias'] = np.mean(std_bias)
         odf.loc[prcp_fac, 'n_tstar'] = len(std_bias)
-        out[prcp_fac] = t_stars, bias, prcp_fac
+        out[prcp_fac] = {'t_star': t_stars, 'bias': bias, 'std_bias': std_bias,
+                         'prcp_fac': prcp_fac}
 
     # write
     gdir.write_pickle(odf, 'prcp_fac_optim')
@@ -769,6 +774,32 @@ def _get_ref_glaciers(gdirs):
     return ref_gdirs
 
 
+def _get_optimal_scaling_factor(ref_gdirs):
+    """Get the precipitation scaling factor that minimizes the std dev error.
+    """
+
+    from scipy import optimize as optimization
+
+    def to_optimize(sf):
+        abs_std = []
+        for gdir in ref_gdirs:
+            # all possible mus
+            mu_candidates(gdir, prcp_sf=sf)
+            # list of mus compatibles with refmb
+            mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+            res = t_star_from_refmb(gdir, mbdf)
+            abs_std.append(np.mean(res['std_bias']))
+        return np.mean(abs_std)**2
+
+    with utils.DisableLogger():
+        opti = optimization.minimize(to_optimize, [1.],
+                                     bounds=((0.01, 10),),
+                                     tol=1)
+
+    fac = opti['x'][0]
+    log.info('Optimal prcp factor: {:.2f}'.format(fac))
+    return fac
+
 @global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers.
@@ -783,25 +814,28 @@ def compute_ref_t_stars(gdirs):
     # Reference glaciers only if in the list and period is good
     ref_gdirs = _get_ref_glaciers(gdirs)
 
+    sf = None
+    if cfg.PARAMS['prcp_scaling_factor'] == 'stddev':
+        sf = _get_optimal_scaling_factor(ref_gdirs)
+
     # Loop
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
     for gdir in ref_gdirs:
         # all possible mus
-        mu_candidates(gdir)
+        mu_candidates(gdir, prcp_sf=sf)
         # list of mus compatibles with refmb
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        t_star, res_bias, prcp_fac = t_star_from_refmb(gdir, mbdf)
-        # store the mb (could be useful later)
-        gdir.write_pickle(mbdf, 'ref_massbalance')
+        res = t_star_from_refmb(gdir, mbdf)
 
         # if we have just one candidate this is good
-        if len(t_star) == 1:
+        if len(res['t_star']) == 1:
             only_one.append(gdir.rgi_id)
         # this might be more than one, we'll have to select them later
-        per_glacier[gdir.rgi_id] = (gdir, t_star, res_bias, prcp_fac)
+        per_glacier[gdir.rgi_id] = (gdir, res['t_star'], res['bias'],
+                                    res['prcp_fac'])
 
-    # At least of of the X glaciers should have a single t*, otherwise we dont
+    # At least one of the glaciers should have a single t*, otherwise we don't
     # know how to start
     if len(only_one) == 0:
         flink, mbdatadir = utils.get_wgms_files()
@@ -870,13 +904,14 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs):
+def distribute_t_stars(gdirs, compute_apparent_mb=True):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
     Parameters
     ----------
-    gdirs: list of oggm.GlacierDirectory objects
+    gdirs : list of oggm.GlacierDirectory objects
+    compute_apparent_mb : bool (defaults to True)
     """
 
     log.info('Distribute t* and mu*')
@@ -907,7 +942,8 @@ def distribute_t_stars(gdirs):
 
         # Go
         local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
-                                 prcp_fac=prcp_fac)
+                                 prcp_fac=prcp_fac,
+                                 compute_apparent_mb=compute_apparent_mb)
 
 
 @global_task
@@ -927,60 +963,24 @@ def crossval_t_stars(gdirs):
     rgdirs = _get_ref_glaciers(gdirs)
 
     for rid in full_ref_df.index:
-        ref_df = full_ref_df.drop(rid, axis=0)
-
+        # the glacier to look at
         gdir = [g for g in rgdirs if g.rgi_id == rid][0]
 
-        # Compute the distance to each glacier
-        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
-                                    ref_df.lon, ref_df.lat)
+        # the reference glaciers
+        ref_gdirs = [g for g in rgdirs if g.rgi_id != rid]
 
-        # Take the 10 closests
-        aso = np.argsort(distances)[0:9]
-        amin = ref_df.iloc[aso]
-        distances = distances[aso]**2
+        # redo the computations
+        with utils.DisableLogger():
+            compute_ref_t_stars(ref_gdirs)
+            distribute_t_stars([gdir], compute_apparent_mb=True)
 
-        # Weighted average
-        tstar = int(np.average(amin.tstar, weights=1./distances))
-        prcp_fac = np.average(amin.prcp_fac, weights=1./distances)
-        bias = np.average(amin.bias, weights=1./distances)
-
-        # For fun (Marzeion et al 2012), get the interpolated mu
-        agdirs = [g for g in rgdirs if g.rgi_id in amin.index]
-        amustars = []
-        for agdir in agdirs:
-            tdf = pd.read_csv(agdir.get_filepath('local_mustar'))
-            amustars.append(tdf['mu_star'].values[0])
-        mu_interp = np.average(amustars, weights=1./distances)
-
-        # Go, but store the previous calib first
-        bef_df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
-                                 prcp_fac=prcp_fac, compute_apparent_mb=False)
-
+        # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-        full_ref_df.loc[rid, 'mustar'] = bef_df['mu_star'].values[0]
-        np.testing.assert_allclose(full_ref_df.loc[rid, 'bias'],
-                                   bef_df['bias'].values[0])
-        np.testing.assert_allclose(full_ref_df.loc[rid, 'prcp_fac'],
-                                   bef_df['prcp_fac'].values[0])
-        full_ref_df.loc[rid, 'cv_muinterp'] = mu_interp
         full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
         full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
         full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
         full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
-        assert tstar == rdf['t_star'].values[0]
 
-        # Restore the calib
-        local_mustar_apparent_mb(gdir, tstar=bef_df['t_star'].values[0],
-                                 bias=bef_df['bias'].values[0],
-                                 prcp_fac=bef_df['prcp_fac'].values[0],
-                                 compute_apparent_mb=False)
-
-    # stats and write
-    full_ref_df['diff_muinterp'] = full_ref_df['cv_muinterp'] - \
-                                   full_ref_df['mustar']
-    full_ref_df['diff_tinterp'] = full_ref_df['cv_mustar'] - \
-                                  full_ref_df['mustar']
+    # write
     file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
     full_ref_df.to_csv(file)

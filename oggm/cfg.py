@@ -165,10 +165,6 @@ _doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
        'factor. This is useful for testing mostly.'
 BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)
 
-_doc = 'For reference glaciers only: the yearly mass-balance stored in a ' \
-       'pandas series.'
-BASENAMES['ref_massbalance'] = ('ref_massbalance.pkl', _doc)
-
 _doc = 'A pandas.Series with the (year, mu) data.'
 BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
 
@@ -263,7 +259,10 @@ def initialize(file=None):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    PARAMS['prcp_auto_scaling_factor'] = cp.as_bool('prcp_auto_scaling_factor')
+    _factor = cp['prcp_scaling_factor']
+    if _factor not in ['stddev', 'stddev_perglacier']:
+        _factor = cp.as_float('prcp_scaling_factor')
+    PARAMS['prcp_scaling_factor'] = _factor
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -285,7 +284,7 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_auto_scaling_factor']
+           'prcp_scaling_factor']
     for k in ltr:
         del cp[k]
 

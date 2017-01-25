@@ -19,7 +19,7 @@ import shutil
 import zipfile
 import sys
 import math
-from shutil import copyfile
+import logging
 from collections import OrderedDict
 from functools import partial, wraps
 import json
@@ -1403,6 +1403,14 @@ def glacier_characteristics(gdirs):
     return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
 
 
+class DisableLogger():
+    """Context manager to temporarily disable all loggers."""
+    def __enter__(self):
+        logging.disable(logging.ERROR)
+    def __exit__(self, a, b, c):
+        logging.disable(logging.NOTSET)
+
+
 class entity_task(object):
     """Decorator for common job-controlling logic.
 
@@ -1935,4 +1943,3 @@ class GlacierDirectory(object):
             f.write(func.__name__ + '\n')
             if err is not None:
                 f.write(err.__class__.__name__ + ': {}'.format(err))
-
