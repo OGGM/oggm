@@ -512,10 +512,8 @@ class FlowlineModel(object):
         dss = []
         for (s, w) in zip(sects, widths):
             ds = xr.Dataset()
-            x = np.arange(s.shape[1])
             ds.coords['time'] = time
-            ds.coords['x'] = x
-            varcoords = {'time': time, 'x': x,
+            varcoords = {'time': time,
                          'year': ('time', yr),
                          'month': ('time', mo),
                          }
