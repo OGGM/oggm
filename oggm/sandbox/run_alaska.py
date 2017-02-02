@@ -163,34 +163,6 @@ execute_entity_task(tasks.volume_inversion, gdirs)
 # function. For example: if gdir.is_tidewater: etc.
 # (To fix this for now everything has been put after an if in the inversion.py)
 
-# Selecting the glacier on which we will work
-gdir = gdirs[3]
-
-#Plot the glacier before calving for one glacier only
-# PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
-#
-# if PLOTS_DIR == '':
-#    exit()
-# utils.mkdir(PLOTS_DIR)
-# bname = os.path.join(PLOTS_DIR, gdir.name + '_' + gdir.rgi_id + '_')
-#
-# graphics.plot_inversion(gdir)
-# plt.savefig(bname + 'inv.png')
-# plt.close()
-# graphics.plot_distributed_thickness(gdir)
-# plt.savefig(bname + 'inv_cor.png')
-# plt.close()
-
-
-# Test that frontal H is close to zero
-cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
-width = cl['width'][-1]
-# we take this thickness because cl['thick'] assumes a parabolic bed
-# cl['volume'] its a more "correct" measurement of the geometry of the glacier
-thick = cl['volume'][-1] / cl['dx'] / width
-print('For the glacier', gdir.name)
-print('Without calving the width is {} m and the thick is {} m'.format(width, thick))
-
 # Defining a calving function
 def calving_from_depth(gdir):
     """ Finds a calving flux based on the approaches proposed by
@@ -208,132 +180,107 @@ def calving_from_depth(gdir):
     # We calculate the water_depth
     w_depth = thick - t_altitude
     # or F_calving = np.amax(0, 2*H_free*w_depth) * width
-    print('t_altitude', t_altitude)
-    print('depth', w_depth)
-    print('thick',thick)
-
+#    print('t_altitude', t_altitude)
+#    print('depth', w_depth)
+#    print('thick',thick)
     return np.absolute(((2*thick*w_depth)*width)/1e9), w_depth, thick
 
-# Starting the calving loop, with a maximum of 50 cycles
-i = 0
-data_calving = []
-w_depth = []
-thick = []
-forwrite = []
+# Selecting the tidewater glaciers on the region
 
-while i < 50:
-    # First calculates a calving flux from model output with no calving
-    F_calving, new_depth, new_thick = calving_from_depth(gdir)
+for gdir in gdirs:
+    if gdir.is_tidewater:
+        # Starting the calving loop, with a maximum of 50 cycles
+        i = 0
+        data_calving = []
+        w_depth = []
+        thick = []
+        forwrite = []
 
-    # Stores the data, and we see it
-    data_calving += [F_calving]
-    w_depth += [new_depth]
-    thick += [new_thick]
-    print('Calving rate calculated', F_calving)
+        while i < 50:
+            # First calculates a calving flux from model output with no calving
+            F_calving, new_depth, new_thick = calving_from_depth(gdir)
 
-    # We put the calving function output into the Model
-    gdir.inversion_calving_rate = F_calving
+            # Stores the data, and we see it
+            data_calving += [F_calving]
+            w_depth += [new_depth]
+            thick += [new_thick]
+            #print('Calving rate calculated', F_calving)
 
-    # Recompute mu with calving
-    tasks.distribute_t_stars([gdir])
+            # We put the calving function output into the Model
+            gdir.inversion_calving_rate = F_calving
 
-    # Inversion with calving, inv optimization is not iterative
-    tasks.prepare_for_inversion(gdir)
-    tasks.volume_inversion(gdir)
-    tasks.distribute_thickness(gdir, how='per_altitude')
+            # Recompute mu with calving
+            tasks.distribute_t_stars([gdir])
 
-    i += 1
-    #print('At the bottom i is', i)
-    # calculating depth avg. to compare them, the loop is cut when it meets
-    # the condition in the if statement
-    avg_one = np.average(data_calving[-4:])
-    avg_two = np.average(data_calving[-5:-1])
-    difference = abs(avg_two - avg_one)
-    if difference < 0.05*avg_two and i>5:
-        break
+            # Inversion with calving, inv optimization is not iterative
+            tasks.prepare_for_inversion(gdir)
+            tasks.volume_inversion(gdir)
+            tasks.distribute_thickness(gdir, how='per_altitude')
 
-# Making a dictionary for calving
-cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth, H_ice=thick)
-forwrite.append(cal_dic)
-# We write out everything
-gdir.write_pickle(forwrite, 'calving_output', div_id=1)
+            i += 1
+            avg_one = np.average(data_calving[-4:])
+            avg_two = np.average(data_calving[-5:-1])
+            difference = abs(avg_two - avg_one)
+            if difference < 0.05*avg_two and i>5:
+                break
+        # Making a dictionary for calving
+        cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth, H_ice=thick)
+        forwrite.append(cal_dic)
+        # We write out everything
+        gdir.write_pickle(forwrite, 'calving_output', div_id=1)
 
-# We read everything
-calving_output = gdir.read_pickle('calving_output', div_id=1)
-for objt in calving_output:
-    all_calving_data = objt['calving_fluxes']
-    all_data_depth = objt['water_depth']
-    all_data_H_i = objt['H_ice']
-
-
-# we see the final calculated calving flux
-last_calving = all_calving_data[-1]
-print('last calving value', last_calving)
+    gdir.inversion_calving_rate = 0
 
 # Reinitialize everything
-gdir.inversion_calving_rate = 0
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 tasks.optimize_inversion_params(gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
 
-# Check if it is really doing it
-# Un-comment it is not necessary to see it all the time
-cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
-width = cl['width'][-1]
-thick = cl['volume'][-1] / cl['dx'] / width
-print('For the glacier', gdir.name)
-print('Without calving the width is {} m and the thick is {} m'.format(width, thick))
+for gdir in gdirs:
+    if gdir.is_tidewater:
+        calving_output = gdir.read_pickle('calving_output', div_id=1)
+        for objt in calving_output:
+            all_calving_data = objt['calving_fluxes']
+            all_data_depth = objt['water_depth']
+            all_data_H_i = objt['H_ice']
+        # we see the final calculated calving flux
+        last_calving = all_calving_data[-1]
+        print('For the glacier', gdir.name)
+        print('last calving value is:', last_calving)
+        gdir.inversion_calving_rate = last_calving
 
-# Do the inversion with the last calving flux
-gdir.inversion_calving_rate = last_calving
+
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
 workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
 
-# Check how much it changes
-cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
-width = cl['width'][-1]
-thick = cl['volume'][-1] / cl['dx'] / width
-w_depth = thick - cl['hgt'][-1]
 
-print('For the glacier', gdir.name)
-print('With calving the water depth is {} m and the thick is {} m'.format(w_depth, thick))
-
-print('All calving', all_calving_data)
-print('All water depth', all_data_depth)
-print('All Hi', all_data_H_i)
-
-
-# Uncomment the plots that you would like to see
-
-# We plot calving flux vs water depth
-# bname = os.path.join(PLOTS_DIR, gdir.name + '_' + gdir.rgi_id + '_withcalving')
-# fig = plt.figure()
-# ax1 = fig.add_subplot(111)
-# ax1.plot(np.arange(0, i, 1), all_calving_data, 'g-', linestyle='--', linewidth=3)
-# ax1.set_ylabel('Calving Flux (Km³/yr)')
-#
-# ax2 = ax1.twinx()
-# ax2.plot(np.arange(0, i, 1), all_data_depth, 'r-', linewidth=1)
-# ax2.set_ylabel('Water depth (m)', color='r')
-# for tl in ax2.get_yticklabels():
-#     tl.set_color('r')
-# #plt.plot(np.arange(0, 20, 1), all_calving_data, 'r--', np.arange(0, 20, 1), all_data_H_i, 'g--')
-# plt.savefig(bname + '_calvingflux_vs_wdepth.png')
-# plt.show()
-
-# Inversion
-# graphics.plot_inversion(gdir)
-# plt.savefig(bname + 'inv.png')
-# plt.close()
-# #
-# # # Distribute thickness
-# graphics.plot_distributed_thickness(gdir)
-# plt.savefig(bname + 'inv_cor.png')
-# plt.close()
-
+#Plotting things after the calving for all glaciers
+# PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
+# #PLOTS_DIR = ''
+# if PLOTS_DIR == '':
+#     exit()
+# utils.mkdir(PLOTS_DIR)
+# # #
+# for gd in gdirs:
+#     bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_withcalving')
+#     # graphics.plot_googlemap(gd)
+#     # plt.savefig(bname + 'ggl.png')
+#     # plt.close()
+#     # graphics.plot_centerlines(gd, add_downstream=True)
+#     # plt.savefig(bname + 'cls.png')
+#     # plt.close()
+#     # graphics.plot_catchment_width(gd, corrected=True)
+#     # plt.savefig(bname + 'w.png')
+#     # plt.close()
+#     graphics.plot_inversion(gd)
+#     plt.savefig(bname + 'inv.png')
+#     plt.close()
+#     graphics.plot_distributed_thickness(gd)
+#     plt.savefig(bname + 'inv_cor.png')
+#     plt.close()
 
 # OTHER STUFF!!! that was in this script before but that I haven't touch
 
