@@ -237,6 +237,7 @@ execute_entity_task(tasks.prepare_for_inversion, gdirs)
 tasks.optimize_inversion_params(gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
 
+# Assigning to each tidewater glacier its own last_calving flux calculated
 for gdir in gdirs:
     if gdir.is_tidewater:
         calving_output = gdir.read_pickle('calving_output', div_id=1)
@@ -250,7 +251,7 @@ for gdir in gdirs:
         print('last calving value is:', last_calving)
         gdir.inversion_calving_rate = last_calving
 
-
+# Calculating everything again with a calving flux assigned
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs)
