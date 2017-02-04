@@ -90,7 +90,7 @@ need).
 **Linux** users should install a couple of linux packages (not all of them are
 required but it's good to have them anyway)::
 
-    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf ttf-bitstream-vera
+    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf4 ttf-bitstream-vera
 
 .. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 .. _miniconda: http://conda.pydata.org/miniconda.html
@@ -244,7 +244,7 @@ Linux packages
 
 For building stuffs::
 
-    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev
+    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev python-setuptools
 
 For matplolib::
 
@@ -256,7 +256,7 @@ For GDAL::
 
 For NETCDF::
 
-    $ sudo apt-get install netcdf-bin ncview python-netcdf
+    $ sudo apt-get install netcdf-bin ncview python-netcdf4
 
 
 Virtual environment
