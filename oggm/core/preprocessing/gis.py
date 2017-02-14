@@ -350,7 +350,7 @@ def define_glacier_region(gdir, entity=None):
     ny = np.int((uly - lry) / dx)
 
     # Back to lon, lat for DEM download/preparation
-    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), ul_corner=(ulx, uly),
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
@@ -421,9 +421,8 @@ def define_glacier_region(gdir, entity=None):
     dest = None # the memfree above is necessary, this one is to be sure...
 
     # Glacier grid
-    ul_corner = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
-                              ul_corner=ul_corner)
+                              x0y0=(ulx+dx/2, uly-dx/2))
     gdir.write_pickle(glacier_grid, 'glacier_grid')
     gdir.write_pickle(dem_source, 'dem_source')
 

@@ -10,36 +10,80 @@ from scipy.interpolate import interp1d
 from numpy import random
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS, SEC_IN_DAY
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate
 from oggm import utils
 
 
 class MassBalanceModel(object):
-    """An interface for mass balance."""
+    """An interface for mass balance models.
 
-    def __init__(self, bias=0.):
-        """ Instanciate."""
-
-        self._bias = 0.
-        self.set_bias(bias=bias)
-        pass
-
-    def set_bias(self, bias=0):
-        self._bias = bias
+    All mass-balance models should implement this interface.
+    """
 
     def get_mb(self, heights, year=None):
-        """Returns the mass-balance at given altitudes
-        for a given moment in time."""
+        """Mass-balance at given altitude(s) for a given moment in time.
+
+        Units: [m s-1], or meters of ice per second
+
+        Note: `year` is optional because some simpler models have no time
+        component.
+
+        Parameters
+        ----------
+        heights: ndarray
+            the atitudes at which the mass-balance will be computed
+        year: float, optional
+            the time (in the "floating year" convention)
+
+        Returns
+        -------
+        the mass-balance (same dim as `heights`) (units: [m s-1])
+        """
         raise NotImplementedError()
 
     def get_annual_mb(self, heights, year=None):
-        """Returns the annual mass-balance at given altitudes
-        for a given moment in time."""
+        """Like `self.get_mb()`, but averaging the seasonal/monthly effects.
+
+        For some simpler mass-balance models, get_mb() and
+        get_annual_mb() can be equivalent.
+
+        Units: [m s-1], or meters of ice per second
+
+        Note: `year` is optional because some simpler models have no time
+        component.
+
+        Parameters
+        ----------
+        heights: ndarray
+            the atitudes at which the mass-balance will be computed
+        year: float, optional
+            the time (in the "floating year" convention)
+
+        Returns
+        -------
+        the mass-balance (same dim as `heights`) (units: [m s-1])
+        """
         raise NotImplementedError()
 
     def get_specific_mb(self, heights, widths, year=None):
-        """Specific mb for this year (units: mm w.e. yr-1)."""
+        """Specific mb for this year and a specific glacier geometry.
+
+         Units: [mm w.e. yr-1], or millimeter water equivalent per year
+
+        Parameters
+        ----------
+        heights: ndarray
+            the atitudes at which the mass-balance will be computed
+        widths: ndarray
+            the widths of the flowline (necessary for the weighted average)
+        year: float, optional
+            the time (in the "floating year" convention)
+
+        Returns
+        -------
+        the specific mass-balance (units: mm w.e. yr-1)
+        """
 
         if len(np.atleast_1d(year)) > 1:
             out = [self.get_specific_mb(heights, widths, year=yr)
@@ -50,31 +94,31 @@ class MassBalanceModel(object):
         return np.average(mbs, weights=widths)
 
 
-class ConstantBalanceModel(MassBalanceModel):
-    """Simple gradient MB model."""
+class LinearMassBalanceModel(MassBalanceModel):
+    """Simple MB model as a linear function of altitude."""
 
     def __init__(self, ela_h, grad=3., bias=0.):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
-        ---------
+        ----------
         ela_h: float
-            Equilibrium line altitude
+            Equilibrium line altitude (units: [m])
         grad: float
-            Mass-balance gradient (unit: mm m-1)
+            Mass-balance gradient (unit: [mm yr-1 m-1])
+        bias: float
+            If you want to add a bias (unit: [mm yr-1 m-1])
         """
-
-        super(ConstantBalanceModel, self).__init__(bias)
-
         self.ela_h = ela_h
         self.grad = grad
+        self.bias = bias
 
     def get_mb(self, heights, year=None):
-        """Returns the mass-balance at given altitudes
-        for a given moment in time."""
-
-        mb = (heights - self.ela_h) * self.grad + self._bias
+        mb = (heights - self.ela_h) * self.grad + self.bias
         return mb / SEC_IN_YEAR / 1000.
+
+    def get_annual_mb(self, heights, year=None):
+        return self.get_mb(heights, year=year)
 
 
 class TstarMassBalanceModel(MassBalanceModel):

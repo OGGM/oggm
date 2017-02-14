@@ -76,7 +76,7 @@ SEC_IN_MONTHS = [d * SEC_IN_DAY for d in DAYS_IN_MONTH]
 CUMSEC_IN_MONTHS = np.cumsum(SEC_IN_MONTHS)
 BEGINSEC_IN_MONTHS = np.cumsum([0] + [(d + 1) * SEC_IN_DAY for d in DAYS_IN_MONTH[:-1]])
 
-RHO = 900.  # ice density
+RHO = 900.  # ice density (kg m-3)
 G = 9.81  # gravity
 N = 3.  # Glen's law's exponent
 A = 2.4e-24  # Glen's default creep's parameter

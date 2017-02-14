@@ -648,7 +648,7 @@ def year_to_date(yr):
         sec = sec * SEC_IN_YEAR
         out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
     except TypeError:
-        #TODO: inefficient but no time right now
+        # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
