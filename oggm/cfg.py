@@ -76,7 +76,7 @@ SEC_IN_MONTHS = [d * SEC_IN_DAY for d in DAYS_IN_MONTH]
 CUMSEC_IN_MONTHS = np.cumsum(SEC_IN_MONTHS)
 BEGINSEC_IN_MONTHS = np.cumsum([0] + [(d + 1) * SEC_IN_DAY for d in DAYS_IN_MONTH[:-1]])
 
-RHO = 900.  # ice density (kg m-3)
+RHO = 900.  # ice density
 G = 9.81  # gravity
 N = 3.  # Glen's law's exponent
 A = 2.4e-24  # Glen's default creep's parameter
@@ -107,7 +107,7 @@ _doc = 'The glacier outlines in the local projection.'
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
-BASENAMES['glacier_grid'] = ('glacier_grid.pkl', _doc)
+BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
 _doc = 'A netcdf file containing several gridded data variables such as ' \
        'topography, the glacier masks and more (see the netCDF file metadata).'
@@ -139,7 +139,7 @@ BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 _doc = 'The apparent mass-balance data needed for the inversion.'
 BASENAMES['apparent_mb'] = ('apparent_mb.nc', _doc)
 
-_doc = 'A list of :py:class:oggm.Centerline instances, sorted by flow order.'
+_doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
 _doc = "A list of len n_centerlines, each element conaining a numpy array " \
@@ -164,10 +164,6 @@ BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 _doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
        'factor. This is useful for testing mostly.'
 BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)
-
-_doc = 'For reference glaciers only: the yearly mass-balance stored in a ' \
-       'pandas series.'
-BASENAMES['ref_massbalance'] = ('ref_massbalance.pkl', _doc)
 
 _doc = 'A pandas.Series with the (year, mu) data.'
 BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
@@ -263,7 +259,10 @@ def initialize(file=None):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    PARAMS['prcp_auto_scaling_factor'] = cp.as_bool('prcp_auto_scaling_factor')
+    _factor = cp['prcp_scaling_factor']
+    if _factor not in ['stddev', 'stddev_perglacier']:
+        _factor = cp.as_float('prcp_scaling_factor')
+    PARAMS['prcp_scaling_factor'] = _factor
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -285,7 +284,7 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_auto_scaling_factor']
+           'prcp_scaling_factor']
     for k in ltr:
         del cp[k]
 

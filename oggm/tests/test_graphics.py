@@ -2,31 +2,27 @@ from __future__ import division
 
 import unittest
 import warnings
-import oggm.utils
 
 warnings.filterwarnings("once", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning,
                         message=r'.*guessing baseline image.*')
 
-import nose
+import pytest
 
 import os
 import geopandas as gpd
+import matplotlib.pyplot as plt
 
 # Local imports
+import oggm.utils
 from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
-from oggm.tests import init_hef
+from oggm.tests import init_hef, BASELINE_DIR
 from oggm import graphics
 from oggm.core.preprocessing import gis, centerlines
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm.core.models import flowline
 
-# this should be no problem since caught in __init__
-try:
-    from matplotlib.testing.decorators import image_comparison
-except ImportError:
-    pass
 
 # do we event want to run the tests?
 if not RUN_GRAPHIC_TESTS:
@@ -35,62 +31,98 @@ if not RUN_GRAPHIC_TESTS:
 # Globals
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
-SUFFIX = '_1.5+'
-
 
 # ----------------------------------------------------------
 # Lets go
 
-@image_comparison(baseline_images=['test_googlestatic' + SUFFIX],
-                  extensions=['png'], tol=15)
+# TODO: temporary tolerance
+TOLERANCE=20
+
+
 @requires_internet
 @requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_googlemap():
-
+    fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_googlemap(gdir)
+    graphics.plot_googlemap(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
 
 
-@image_comparison(baseline_images=['test_centerlines' + SUFFIX,
-                                   'test_flowlines' + SUFFIX,
-                                   'test_downstream' + SUFFIX,
-                                   'test_downstream_cls' + SUFFIX,
-                                   ],
-                  extensions=['png'])
 @requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_centerlines():
-
+    fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_centerlines(gdir)
-    graphics.plot_centerlines(gdir, use_flowlines=True)
-    graphics.plot_centerlines(gdir, add_downstream=True, use_flowlines=True)
-    graphics.plot_centerlines(gdir, add_downstream=True)
+    graphics.plot_centerlines(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
 
 
-@image_comparison(baseline_images=['test_width' + SUFFIX,
-                                   'test_width_corrected' + SUFFIX
-                                   ],
-                  extensions=['png'])
 @requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_flowlines():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_centerlines(gdir, ax=ax, use_flowlines=True)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_downstream():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True,
+                              use_flowlines=True)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_downstream_cls():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_width():
-
+    fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_catchment_width(gdir)
-    graphics.plot_catchment_width(gdir, corrected=True)
+    graphics.plot_catchment_width(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
 
 
-@image_comparison(baseline_images=['test_inversion' + SUFFIX],
-                  extensions=['png'])
 @requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_width_corrected():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_catchment_width(gdir, ax=ax, corrected=True)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_inversion():
-
+    fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_inversion(gdir)
+    graphics.plot_inversion(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
 
 
-@image_comparison(baseline_images=['test_nodivide' + SUFFIX],
-                  extensions=['png'])
 @requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_nodivide():
 
     # test directory
@@ -113,34 +145,69 @@ def test_nodivide():
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
 
-    graphics.plot_centerlines(gdir)
+    fig, ax = plt.subplots()
+    graphics.plot_centerlines(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
 
 
-@image_comparison(baseline_images=['test_modelsection' + SUFFIX,
-                                   'test_modelmap' + SUFFIX,
-                                   ],
-                  extensions=['png'])
 @requires_mpltest
-def test_plot_model():
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_modelsection():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    fls = flowline.convert_to_mixed_flowline(gdir.read_pickle('model_flowlines'))
+    fls = gdir.read_pickle('model_flowlines')
+    fls = flowline.convert_to_mixed_flowline(fls)
     model = flowline.FlowlineModel(fls)
-    graphics.plot_modeloutput_section(gdir, model=model)
-    graphics.plot_modeloutput_map(gdir, model=model)
+
+    fig = plt.figure(figsize=(12, 6))
+    ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
+    graphics.plot_modeloutput_section(gdir, ax=ax, model=model)
+    return fig
 
 
-@image_comparison(baseline_images=['test_thick_alt' + SUFFIX,
-                                   'test_thick_interp' + SUFFIX,
-                                   ],
-                  extensions=['png'])
 @requires_mpltest
-def test_plot_distrib():
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_modelmap():
 
     gdir = init_hef()
-    graphics.plot_distributed_thickness(gdir, how='per_altitude')
-    graphics.plot_distributed_thickness(gdir, how='per_interpolation')
+    flowline.init_present_time_glacier(gdir)
+    fls = gdir.read_pickle('model_flowlines')
+    fls = flowline.convert_to_mixed_flowline(fls)
+    model = flowline.FlowlineModel(fls)
 
-if __name__ == '__main__':  # pragma: no cover
-    nose.runmodule(argv=['-s', '-v', '--with-doctest'], exit=False)
+    fig, ax = plt.subplots()
+    graphics.plot_modeloutput_map(gdir, ax=ax, model=model)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_thick_alt():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_distributed_thickness(gdir, ax=ax, how='per_altitude')
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_thick_interp():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_distributed_thickness(gdir, ax=ax, how='per_interpolation')
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_catch_areas():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_catchment_areas(gdir, ax=ax)
+    fig.tight_layout()
+    return fig

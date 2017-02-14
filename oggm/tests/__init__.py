@@ -1,4 +1,5 @@
 import six
+from distutils.version import LooseVersion
 import osgeo.gdal
 import os
 import sys
@@ -12,6 +13,7 @@ import numpy as np
 import scipy.optimize as optimization
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
+from oggm import cfg
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -30,8 +32,11 @@ if osgeo.gdal.__version__ >= '1.11':
 
 # Matplotlib version changes plots, too
 HAS_MPL_FOR_TESTS = False
-if matplotlib.__version__ >= '1.5':
+if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
+    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
+                                'baseline_images', '2.0.x')
+
 
 # Some control on which tests to run (useful to avoid too long tests)
 # defaults everywhere else than travis
@@ -214,10 +219,11 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir, div_id=0)
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-    mbdf = pd.read_csv(hef_file).set_index('YEAR')
-    t_star, bias, prcp_fac = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-    climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1],
-                                     prcp_fac=prcp_fac)
+    mbdf = pd.read_csv(hef_file).set_index('YEAR')['ANNUAL_BALANCE']
+    res = climate.t_star_from_refmb(gdir, mbdf)
+    climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
+                                     bias=res['bias'][-1],
+                                     prcp_fac=res['prcp_fac'])
 
     inversion.prepare_for_inversion(gdir)
     ref_v = 0.573 * 1e9

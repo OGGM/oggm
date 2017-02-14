@@ -7,12 +7,11 @@ Mass-balance
 
 The mass-balance (MB) model implemented in OGGM is an extended version of the
 temperature index model presented by `Marzeion et al., (2012)`_.
+While the equation governing the mass-balance is that of a traditional
+temperature index model, our approach to calibration requires that we spend
+some time describing it.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
-
-While the equation governing the mass-balance is that of a traditional
-temperature index model, the strength of our method relies on our approach to
-calibration.
 
 .. ipython:: python
    :suppress:
@@ -66,17 +65,10 @@ see the HISTALP data file in the `sample-data`_ folder for an example.
 
 
 .. ipython:: python
-   :suppress:
 
-    d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
-    temp = d.temp.resample(freq='12MS', dim='time', how=np.mean).to_series()
-    del temp.index.name
-    ax = temp.plot(figsize=(8, 4), label='Annual temp');
-    temp.rolling(31, center=True, min_periods=15).mean().plot(label='31-yr avg');
-    plt.legend(loc='best'); plt.title('HISTALP annual temperature, Hintereisferner')
-    plt.ylabel('°C');
     @savefig plot_temp_ts.png width=100%
-    plt.tight_layout();
+    example_plot_temp_ts()  # the code for these examples is posted below
+
 
 Elevation dependency
 ~~~~~~~~~~~~~~~~~~~~
@@ -139,16 +131,13 @@ For each of these glaciers, time-dependent "candidate" temperature sensitivities
 :math:`\mu (t)` are estimated by requiring that the average specific
 mass-balance :math:`B_{31}` is equal to zero. :math:`B_{31}` is computed
 for a 31 yr period centered around the year :math:`t` **and for a constant
-glacier geometry fixed at the RGI date** (in that case, 2003).
+glacier geometry fixed at the RGI date** (e.g. 2003 for most glaciers in the
+European Alps).
 
 .. ipython:: python
-   :suppress:
 
-    ax = mu_yr_clim.plot(figsize=(8, 4), label='$\mu (t)$');
-    plt.legend(loc='best'); plt.title('$\mu$ candidates Hintereisferner');
-    plt.ylabel('$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
     @savefig plot_mu_ts.png width=100%
-    plt.tight_layout();
+    example_plot_mu_ts()  # the code for these examples is posted below
 
 Around 1900, the climate was cold and wet. As a consequence, the
 temperature sensitivity required to maintain the 2003 glacier geometry is high.
@@ -166,32 +155,24 @@ were we have observations. We then compare the model output
 with the expected mass-balance and compute the model bias:
 
 .. ipython:: python
-   :suppress:
 
-    ax = pdf.plot(figsize=(8, 4), secondary_y='bias')
-    plt.hlines(0, 1800, 2015, linestyles='-')
-    plt.vlines(t_stars, -2000, 2000, linestyles=':')
-
-    ax.set_ylabel('$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
-    ax.set_title('$\mu$ candidates HEF');
-    plt.ylabel('bias (mm yr$^{-1}$)')
-    plt.tight_layout()
     @savefig plot_bias_ts.png width=100%
-    plt.show()
+    example_plot_bias_ts()  # the code for these examples is posted below
 
 The bias is positive when :math:`\mu` is too low, and negative when :math:`\mu`
 is too high. The vertical dashed lines mark the times where the bias is
-closest to zero. Since the temperature index model is linear, they all correspond to
-approximately the same :math:`\mu`. These dates at which the :math:`\mu` candidates
+closest to zero. They all correspond to approximately the same :math:`\mu` (but
+not exactly, as precipitation and temperature both influence :math:`\mu`).
+These dates at which the :math:`\mu` candidates
 are close to the real :math:`\mu` are called :math:`t^*` (the associated sensitivities
-:math:`\mu (t^*)`are called :math:`\mu^*`).
+:math:`\mu (t^*)` are called :math:`\mu^*`).
 
 At the glaciers where observations are available, this detour via the :math:`\mu`
 candidates is not necessary to find the correct :math:`\mu^*`. Indeed, the goal
 of these computations are in fact to find :math:`t^*`, **which is the actual
 value to be interpolated to glaciers where no observations are available**.
 
-The benefices of this approach is best shown with the results of a cross-validation
+The benefit of this approach is best shown with the results of a cross-validation
 study realized by `Marzeion et al., (2012)`_ (and confirmed by OGGM):
 
 .. figure:: _static/marzeion_mus.png
@@ -207,39 +188,38 @@ This substantial improvement in model performance is due to several factors:
 
 - the equilibrium constraint applied on :math:`\mu` implies that the
   sensitivity cannot vary much during the last century.
-  In fact, :math:`\mu` varies far
+  In fact, :math:`\mu` at one glacier varies far
   less in one century than between neighboring glaciers,
-  because of all the influencing factors mentioned above.
+  because of all the factors mentioned above.
   In particular, it will vary comparatively little around a given year
-  :math:`t`: errors in :math:`t^*` (even large) will result in small errors in
+  :math:`t` : errors in :math:`t^*` (even large) will result in small errors in
   :math:`\mu^*`.
 - the equilibrium constraint will also imply that systematic biases in
   temperature and precipitation (no matter how large) will automatically be
-  compensated by all :math:`\mu (t)`, and therefore by :math:`\mu^*`. In that
-  sense, the calibration procedure can be seen as a empirically driven
+  compensated by all :math:`\mu (t)`, and therefore also by :math:`\mu^*`.
+  In that sense, the calibration procedure can be seen as a empirically driven
   downscaling strategy: if a glacier is here, then the local climate (or the
-  glacier temperature sensitivity!) must allow a glacier to be there. For
-  example, a glacier fed by avalanches or a negative bias in precipitation will
-  have the same impact on the calibration: :math:`\mu^*` should be reduced to
+  glacier temperature sensitivity) *must* allow a glacier to be there. For
+  example, the effect of avalanches or a negative bias in precipitation input
+  will have the same impact on calibration: :math:`\mu^*` should be reduced to
   take these effects into account, even though they are not resolved by
   the mass-balance model.
 
 The most important drawback of this calibration method is that it assumes that
 two neighboring glaciers should have a similar :math:`t^*`. This is not
 necessarily the case, as other factors than climate (such as the glacier size)
-will influence :math:`t^*` too. Our results (and the arguments explained above)
+will influence :math:`t^*` too. Our results (and the arguments listed above)
 show however that this is an approximation we can cope with.
 
 In a final note, it is important to mention that the :math:`\mu^*` and
-:math:`t^*` should not be easily over-interpreted in terms of "real"
+:math:`t^*` should not be over-interpreted in terms of "real"
 temperature sensitivities or "real" response time of the glacier.
-This procedure is above all a
-calibration procedure, and as such it can be statistically scrutinized
-(in our case, with cross-validation). It can also be noted that the
-MB observations play a
+This procedure is primarily a calibration method, and as such it can be
+statistically scrutinized (for example with cross-validation).
+It can also be noted that the MB observations play a
 relatively minor role in the calibration: they could be entirely avoided by
 fixing a :math:`t^*` for all glaciers in a region (or even worldwide). The
-resulting changes in calibrated  :math:`\mu^*` will also very small
+resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
 
@@ -251,6 +231,10 @@ If you had the courage to read until here, it means that you have concrete
 questions about the implementation of the mass-balance model in OGGM.
 Here are some more details:
 
+- the mass-balance in OGGM is computed from the altitudes and widths
+  of the flowlines grid points (see :ref:`flowlines`). The easiest way to let
+  OGGM compute the mass-balance for you is to use the
+  :py:class:`core.models.massbalance.PastMassBalanceModel`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
   algorithm (see :py:func:`tasks.distribute_t_stars`)
 - if more than one :math:`t^*` is found for some reference glaciers, than the
@@ -258,9 +242,14 @@ Here are some more details:
   for the other glaciers (see :py:func:`tasks.compute_ref_t_stars`)
 - yes, the temperature gradients and the precipitation scaling factor will have
   an influence on the results, but it is small since any change will automatically
-  be compensated by :math:`\mu^*`. We are currently in the process of quantifying
-  these effects.
+  be compensated by :math:`\mu^*`. We are currently quantifying these effects
+  more precisely.
 - the cross-validation procedure is done systematically
   (:py:func:`tasks.crossval_t_stars`). Currently, this cross-validation is done
   with fixed geometry (it will be extended to a full validation
-  with the dynamical model soon).
+  with the dynamical model at a later stage).
+
+
+Code used to generate these examples:
+
+.. literalinclude:: _code/prepare_climate.py

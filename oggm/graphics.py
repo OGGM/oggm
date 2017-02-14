@@ -226,7 +226,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
             salemmap.set_geometry(l.head, crs=gdir.grid, marker='o',
-                                 markersize=60, alpha=0.8, color=c, zorder=99)
+                                  markersize=60, alpha=0.8, color=c, zorder=99)
 
             for j in l.inflow_points:
                 salemmap.set_geometry(j, crs=crs, marker='o',
@@ -245,6 +245,48 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
     salemmap.plot(ax)
 
     return dict(cbar_label='Alt. [m]')
+
+
+@entity_task(log)
+@_plot_map
+def plot_catchment_areas(gdir, ax=None, salemmap=None):
+    """Plots the catchments out of a glacier directory.
+    """
+
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
+        mask = nc.variables['glacier_mask'][:] * np.NaN
+
+    salemmap.set_topography(topo)
+
+    # TODO: center grid or corner grid???
+    crs = gdir.grid.center_grid
+    for i in gdir.divide_ids:
+        geom = gdir.read_pickle('geometries', div_id=i)
+
+        # Plot boundaries
+        poly_pix = geom['polygon_pix']
+        salemmap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
+                             linewidth=.2)
+        for l in poly_pix.interiors:
+            salemmap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+        # plot Centerlines
+        cls = gdir.read_pickle('centerlines', div_id=i)[::-1]
+        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        for l, c in zip(cls, color):
+            salemmap.set_geometry(l.line, crs=crs, color=c,
+                                 linewidth=2.5, zorder=50)
+
+        # catchment areas
+        cis = gdir.read_pickle('catchment_indices', div_id=i)
+        for j, ci in enumerate(cis[::-1]):
+            mask[tuple(ci.T)] = j+1
+    salemmap.set_cmap('Set2')
+    salemmap.set_data(mask)
+    salemmap.plot(ax)
+
+    return {}
 
 
 @entity_task(log)
@@ -466,6 +508,8 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
         dofig = True
+    else:
+        fig = plt.gcf()
 
     # Compute area histo
     area = np.array([])

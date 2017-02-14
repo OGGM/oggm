@@ -22,6 +22,9 @@ you want to contribute.
 News
 ----
 
+- **30.11.2016**: the paper summarizing the ITMIX experiment is online for
+  review! Visit `this link <http://www.the-cryosphere-discuss.net/tc-2016-250/>`_
+  to read and discuss the manuscript.
 - **24.10.2016**: Registration to the :ref:`workshop` is now open!
 - **20.04.2016**: Fabien presented OGGM at the
   `European Geosciences Union General Assembly <http://meetingorganizer.copernicus.org/EGU2016/orals/20092>`_
@@ -38,7 +41,7 @@ Documentation
     whats-new
     installing-oggm
     getting-started
-    centerlines
+    flowlines
     mass-balance
     ice-dynamics
     inversion

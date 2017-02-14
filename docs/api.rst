@@ -66,6 +66,9 @@ TODO: add the flowline classes, the model classes, etc.
     :nosignatures:
 
     GlacierDirectory
+    Centerline
+    InversionFlowline
+
 
 Mass-balance
 ============

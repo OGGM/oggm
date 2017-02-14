@@ -460,8 +460,8 @@ class FlowlineModel(object):
             flows_to_id.append(trib[0] if trib[0] is not None else -1)
 
         ds = xr.Dataset()
-        ds['flowlines'] = ('fls', np.arange(len(flows_to_id)))
-        ds['flows_to_id'] = ('fls', flows_to_id)
+        ds['flowlines'] = ('flowlines', np.arange(len(flows_to_id)))
+        ds['flows_to_id'] = ('flowlines', flows_to_id)
         ds.to_netcdf(path)
         for i, fl in enumerate(self.fls):
             ds = fl.to_dataset()
@@ -512,10 +512,8 @@ class FlowlineModel(object):
         dss = []
         for (s, w) in zip(sects, widths):
             ds = xr.Dataset()
-            x = np.arange(s.shape[1])
             ds.coords['time'] = time
-            ds.coords['x'] = x
-            varcoords = {'time': time, 'x': x,
+            varcoords = {'time': time,
                          'year': ('time', yr),
                          'month': ('time', mo),
                          }

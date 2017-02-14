@@ -436,7 +436,7 @@ def node_install(cn=def_cn,inst_type_idx=def_inst_type,idn=0,
     # FSO---connect
     cloud = boto.ec2.connect_to_region(avz[:-1],profile_name=ec2Profile)
     aminfo = cloud.get_image(def_ami[avz[:-1]])
-    vpcconn = VPCConnection(region=cloud.region)
+    vpcconn = VPCConnection(region=cloud.region, profile_name=ec2Profile)
 
     try:
         vpc_id, subnet_id = def_subnet[avz]
@@ -593,8 +593,7 @@ def install_node_pip(nn='', inst=None):
     pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install mpi4py &&
-    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock nose progressbar2 &&
-    pip install git+https://github.com/fmaussion/motionless.git &&
+    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock motionless pytest progressbar2 &&
     pip install git+https://github.com/fmaussion/salem.git &&
     sed -i 's/^backend.*/backend      : Agg/' "${WORKON_HOME}"/oggm_env/lib/python?.?/site-packages/matplotlib/mpl-data/matplotlibrc
     """, pty=False)

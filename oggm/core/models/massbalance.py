@@ -85,6 +85,13 @@ class MassBalanceModel(object):
         the specific mass-balance (units: mm w.e. yr-1)
         """
 
+    def get_annual_mb(self, heights, year=None):
+        """Returns the annual mass-balance at given altitudes
+        for a given moment in time."""
+        raise NotImplementedError()
+
+    def get_specific_mb(self, heights, widths, year=None):
+        """Specific mb for this year (units: mm w.e. yr-1)."""
         if len(np.atleast_1d(year)) > 1:
             out = [self.get_specific_mb(heights, widths, year=yr)
                    for yr in year]
