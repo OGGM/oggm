@@ -340,12 +340,6 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
 
 
 @entity_task(log)
-def plot_ref_climate_calib(gdir, ax=None):
-    """Plot the time series of mus and biases for a reference glacier."""
-    pass
-
-
-@entity_task(log)
 @_plot_map
 def plot_inversion(gdir, ax=None, salemmap=None):
     """Plots the result of the inversion out of a glacier directory."""
