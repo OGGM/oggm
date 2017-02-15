@@ -1658,10 +1658,10 @@ class GlacierDirectory(object):
 
         # convert the date
         try:
-            rgi_date = pd.to_datetime(rgi_datestr[0:6],
-                                      errors='raise', format='%Y%m')
+            rgi_date = pd.to_datetime(rgi_datestr[0:4],
+                                      errors='raise', format='%Y')
         except:
-            rgi_date = pd.to_datetime('200301', format='%Y%m')
+            rgi_date = None
         self.rgi_date = rgi_date
 
         self.dir = os.path.join(base_dir, self.rgi_id)
