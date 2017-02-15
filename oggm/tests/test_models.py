@@ -483,6 +483,7 @@ class TestMassBalance(unittest.TestCase):
             w = np.append(w, fl.widths)
 
         mbdf = gdir.get_ref_mb_data()
+        mbdf.loc[yr, 'MY_MB'] = np.NaN
         mb_mod = massbalance.PastMassBalanceModel(gdir)
         for yr in mbdf.index.values:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
@@ -564,8 +565,8 @@ class TestMassBalance(unittest.TestCase):
         np.testing.assert_allclose(0, nobiasotmb + bias, atol=0.2)
 
         months = np.arange(12)
-        monthly_1 = months * 0
-        monthly_2 = months * 0
+        monthly_1 = months * 0.
+        monthly_2 = months * 0.
         for m in months:
             yr = utils.date_to_year(0, m+1)
             cmb_mod.temp_bias = 0
@@ -576,7 +577,7 @@ class TestMassBalance(unittest.TestCase):
             monthly_2[m] = np.average(tmp, weights=w)
 
         # check that the winter months are close but summer months no
-        np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5])
+        np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
         self.assertTrue(np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100))
 
         if do_plot:  # pragma: no cover

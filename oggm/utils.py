@@ -716,8 +716,8 @@ def date_to_year(y, m):
 
     Note that this doesn't account for leap years.
     """
-
-    return y + BEGINSEC_IN_MONTHS[np.asarray(m) - 1] / SEC_IN_YEAR
+    ids = np.asarray(m, dtype=np.int) - 1
+    return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
 def monthly_timeseries(y0, y1=None, ny=None):
