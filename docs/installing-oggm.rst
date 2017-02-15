@@ -7,10 +7,10 @@ OGGM itself is a pure python package, but it has several dependencies wich
 are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
-OGGM is fully `tested`_ with the python `version`_ 3.5 on linux and partially
+OGGM is fully `tested`_ with python `version`_ 3.5 on linux and partially
 tested with python 3.4 on `windows`_ (windows should be used for development
 purposes only). OGGM might work with python version 2.7, but it isn't tested
-any more and we `strongly recommend`_ to use python 3+.
+any more and we `strongly recommend`_ to use python 3.
 
 .. note::
 
@@ -233,8 +233,8 @@ Install with virtualenv (linux/debian)
 
 .. note::
 
-   The installation with pip requires to compile the packages one by one: it
-   can take a long time. Unless you have a good reason to be here,
+   The installation with pip requires a few more steps than with conda.
+   Unless you have a good reason to be here,
    `Install with conda (all platforms)`_ is probably what you want do do.
 
 The instructions below are for Debian / Ubuntu / Mint systems only!
@@ -293,6 +293,10 @@ Python Packages
 Be sure to be on the working environment::
 
     $ workon oggm_env
+
+Update pip (important!)::
+
+    $ pip install --upgrade pip
 
 Install one by one the easy stuff::
 
