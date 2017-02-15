@@ -143,6 +143,23 @@ def expand_path(p):
     return os.path.expandvars(os.path.expanduser(p))
 
 
+class SuperclassMeta(type):
+    """Metaclass for abstract base classes.
+
+    http://stackoverflow.com/questions/40508492/python-sphinx-inherit-
+    method-documentation-from-superclass
+    """
+    def __new__(mcls, classname, bases, cls_dict):
+        cls = super().__new__(mcls, classname, bases, cls_dict)
+        for name, member in cls_dict.items():
+            if not getattr(member, '__doc__'):
+                try:
+                    member.__doc__ = getattr(bases[-1], name).__doc__
+                except AttributeError:
+                    pass
+        return cls
+
+
 def _download_oggm_files():
     with _get_download_lock():
         return _download_oggm_files_unlocked()
@@ -1901,8 +1918,11 @@ class GlacierDirectory(object):
 
         flink, mbdatadir = get_wgms_files()
 
-        # list of years
+        # file
         reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
+        if not os.path.exists(reff):
+            reff = reff.replace('RGI40-', 'RGI50-')
+        # list of years
         mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period

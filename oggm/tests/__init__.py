@@ -48,6 +48,7 @@ RUN_PREPRO_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
+RUN_PERFORMANCE_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     # specific to travis to reduce global test time
     ON_TRAVIS = True
@@ -134,6 +135,10 @@ def is_download(test):
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
+def is_performance_test(test):
+    # Test decorator
+    msg = "requires explicit environment for performance tests"
+    return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
 
 # the code below is copy/pasted from xarray
 # TODO: go back to xarray when https://github.com/pydata/xarray/issues/754

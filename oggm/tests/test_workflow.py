@@ -196,7 +196,7 @@ class TestWorkflow(unittest.TestCase):
         maxs = cfg.PARAMS['max_shape_param']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
-            mb_mod = massbalance.TstarMassBalanceModel(gdir)
+            mb_mod = massbalance.ConstantMassBalanceModel(gdir)
             fls = gdir.read_pickle('model_flowlines')
             model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                             fs=fs, glen_a=glen_a)

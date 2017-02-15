@@ -308,8 +308,6 @@ def mb_climate_on_height(gdir, heights, prcp_fac,
     temperature "energies" (temp above 0) and solid precipitation at the
     required height.
 
-    The precipitation time series are not corrected!
-
     Parameters:
     -----------
     gdir: the glacier directory
