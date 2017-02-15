@@ -196,7 +196,7 @@ class TestWorkflow(unittest.TestCase):
         maxs = cfg.PARAMS['max_shape_param']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
-            mb_mod = massbalance.TstarMassBalanceModel(gdir)
+            mb_mod = massbalance.ConstantMassBalanceModel(gdir)
             fls = gdir.read_pickle('model_flowlines')
             model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                             fs=fs, glen_a=glen_a)
@@ -244,6 +244,7 @@ class TestWorkflow(unittest.TestCase):
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
             h, w = gdir.get_flowline_hw()
+            cfg.PARAMS['use_bias_for_run'] = False
             mbmod = PastMassBalanceModel(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
@@ -258,7 +259,7 @@ class TestWorkflow(unittest.TestCase):
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
             np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
-            cfg.PARAMS['use_bias_for_run'] = False
+
 
     @is_slow
     def test_shapefile_output(self):

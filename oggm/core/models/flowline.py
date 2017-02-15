@@ -1423,7 +1423,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         return 0, None, model
 
     if prev_area < ref_area:
-        sign_mb = 1.
+        sign_mb = -1.
         log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'small of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
@@ -1431,19 +1431,19 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
                  'big of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
-        sign_mb = -1.
+        sign_mb = 1.
 
     # Log prefix
     logtxt = 'iterative_initial_glacier_search'
 
     # Loop until 100 iterations
     c = 0
-    bias_step = 50.
+    bias_step = 0.1
     mb_bias = init_bias - bias_step
-    reduce_step = 5.
+    reduce_step = 0.01
 
     mb = copy.deepcopy(firstguess_mb)
-    mb.set_bias(sign_mb * mb_bias)
+    mb.temp_bias = sign_mb * mb_bias
     grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb_model=mb,
                                 fs=final_model.fs,
                                 glen_a=final_model.glen_a,
@@ -1454,8 +1454,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
         # Grow
         mb_bias += bias_step
-        mb.set_bias(sign_mb * mb_bias)
-        log.info(logtxt + ', ite: %d. New bias: %.0f', c, sign_mb * mb_bias)
+        mb.temp_bias = sign_mb * mb_bias
+        log.info(logtxt + ', ite: %d. New bias: %.2f', c, sign_mb * mb_bias)
         grow_model.reset_flowlines(copy.deepcopy(prev_fls))
         grow_model.reset_y0(0.)
         grow_model.run_until_equilibrium(rate=equi_rate)
@@ -1481,8 +1481,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
             return c, mb_bias, new_model
 
         # See if we did a step to far or if we have to continue growing
-        do_cont_1 = (sign_mb > 0.) and (new_area < ref_area)
-        do_cont_2 = (sign_mb < 0.) and (new_area > ref_area)
+        do_cont_1 = (sign_mb < 0.) and (new_area < ref_area)
+        do_cont_2 = (sign_mb > 0.) and (new_area > ref_area)
         if do_cont_1 or do_cont_2:
             # Reset the previous state and continue
             prev_fls = new_fls
@@ -1503,7 +1503,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000):
+def random_glacier_evolution(gdir, nyears=1000, seed=None):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
@@ -1519,7 +1519,7 @@ def random_glacier_evolution(gdir, nyears=1000):
 
     y0 = 1800
     y1 = y0 + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, use_tstar=True)
+    mb = mbmods.RandomMassBalanceModel(gdir, seed=seed)
     fls = gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
 

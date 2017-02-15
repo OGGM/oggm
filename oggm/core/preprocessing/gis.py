@@ -423,9 +423,9 @@ def define_glacier_region(gdir, entity=None):
     dest = None # the memfree above is necessary, this one is to be sure...
 
     # Glacier grid
-    ul_corner = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
+    x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
-                              x0y0=ul_corner)
+                              x0y0=x0y0)
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
     gdir.write_pickle(dem_source, 'dem_source')
 

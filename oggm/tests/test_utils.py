@@ -99,6 +99,12 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
+        time = pd.period_range('0001-01', '3000-12', freq='M')
+        myr = utils.monthly_timeseries(1, 3000)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
         with self.assertRaises(ValueError):
             utils.monthly_timeseries(1)
 

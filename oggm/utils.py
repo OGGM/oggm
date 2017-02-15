@@ -143,6 +143,23 @@ def expand_path(p):
     return os.path.expandvars(os.path.expanduser(p))
 
 
+class SuperclassMeta(type):
+    """Metaclass for abstract base classes.
+
+    http://stackoverflow.com/questions/40508492/python-sphinx-inherit-
+    method-documentation-from-superclass
+    """
+    def __new__(mcls, classname, bases, cls_dict):
+        cls = super().__new__(mcls, classname, bases, cls_dict)
+        for name, member in cls_dict.items():
+            if not getattr(member, '__doc__'):
+                try:
+                    member.__doc__ = getattr(bases[-1], name).__doc__
+                except AttributeError:
+                    pass
+        return cls
+
+
 def _download_oggm_files():
     with _get_download_lock():
         return _download_oggm_files_unlocked()
@@ -684,7 +701,7 @@ def year_to_date(yr):
         sec = sec * SEC_IN_YEAR
         out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
     except TypeError:
-        #TODO: inefficient but no time right now
+        # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
@@ -699,8 +716,8 @@ def date_to_year(y, m):
 
     Note that this doesn't account for leap years.
     """
-
-    return y + BEGINSEC_IN_MONTHS[np.asarray(m) - 1] / SEC_IN_YEAR
+    ids = np.asarray(m, dtype=np.int) - 1
+    return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
 def monthly_timeseries(y0, y1=None, ny=None):
@@ -1901,8 +1918,11 @@ class GlacierDirectory(object):
 
         flink, mbdatadir = get_wgms_files()
 
-        # list of years
+        # file
         reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
+        if not os.path.exists(reff):
+            reff = reff.replace('RGI40-', 'RGI50-')
+        # list of years
         mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period
