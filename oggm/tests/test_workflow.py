@@ -244,6 +244,7 @@ class TestWorkflow(unittest.TestCase):
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
             h, w = gdir.get_flowline_hw()
+            cfg.PARAMS['use_bias_for_run'] = False
             mbmod = PastMassBalanceModel(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
@@ -258,7 +259,7 @@ class TestWorkflow(unittest.TestCase):
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
             np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
-            cfg.PARAMS['use_bias_for_run'] = False
+
 
     @is_slow
     def test_shapefile_output(self):
