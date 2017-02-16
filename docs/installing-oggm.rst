@@ -108,15 +108,6 @@ window, type::
 
 You can of course use any other name for your environment.
 
-.. warning::
-
-    The windows build of one of OGGM dependencies is not working properly
-    with python 3.5. The only solution until `this problem`_ is resolved is
-    to install OGGM in a python 3.4 environment. That is: type ``python=3.4``
-    instead of ``python=3.5`` in the command above. All the rest should
-    hopefully work the same.
-
-
 Don't forget to activate it before going on::
 
     source activate oggm_env
