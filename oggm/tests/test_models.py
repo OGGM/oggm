@@ -287,8 +287,7 @@ class TestInitFlowline(unittest.TestCase):
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
 
-        hef_file = utils.get_demo_file('mbdata_RGI40-11.00897.csv')
-        mbdf = pd.read_csv(hef_file).set_index('YEAR')
+        mbdf = gdir.get_ref_mb_data()
 
         hgts = np.array([])
         widths = np.array([])
