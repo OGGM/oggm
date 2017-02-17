@@ -13,7 +13,6 @@ from oggm.core.models.massbalance import PastMassBalanceModel
 
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
 pcp_fac = 2.6
 cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 

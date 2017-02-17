@@ -758,8 +758,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
 def _get_ref_glaciers(gdirs):
     """Get the list of glaciers we have valid data for."""
 
-    flink, mbdatadir = utils.get_wgms_files()
-    dfids = pd.read_csv(flink)['RGI_ID'].values
+    flink, _ = utils.get_wgms_files()
+    dfids = pd.read_csv(flink)[gdirs[0].rgi_version + '_ID'].values
 
     # TODO: we removed marine glaciers here. Is it ok?
     ref_gdirs = []
@@ -836,8 +836,13 @@ def compute_ref_t_stars(gdirs):
     # At least one of the glaciers should have a single t*, otherwise we don't
     # know how to start
     if len(only_one) == 0:
-        flink, mbdatadir = utils.get_wgms_files()
-        if os.path.basename(os.path.dirname(flink)) == 'test-workflow':
+        if 'RGI50-11.00897' in per_glacier:
+            # TODO: hardcoded stuff here, for the test workflow
+            only_one.append('RGI50-11.00897')
+            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI50-11.00897']
+            per_glacier['RGI50-11.00897'] = (gdir, [t_star[-1]],
+                                             [res_bias[-1]], prcp_fac)
+        elif 'RGI40-11.00897' in per_glacier:
             # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00897')
             gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00897']
