@@ -1274,8 +1274,8 @@ def glacier_characteristics(gdirs):
             pacc = np.where(amb >= 0)
             pab = np.where(amb < 0)
             d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
-            mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
-            d['mb_grad'] = mb_slope
+            #mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+            #d['mb_grad'] = mb_slope
             d['avg_width'] = np.mean(widths)
             d['avg_slope'] = np.mean(slope)
 
@@ -1301,6 +1301,17 @@ def glacier_characteristics(gdirs):
             d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
             d['vas_volume_km3'] = 0.034*(area**1.375)
             d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+
+        # Calving
+        if gdir.has_file('calving_output', div_id=1):
+            all_calving_data = []
+            for i in gdir.divide_ids:
+                cl = gdir.read_pickle('calving_output', div_id=i)
+                for c in cl:
+                    all_calving_data = c['calving_fluxes'][-1]
+            d['calving_flux'] = all_calving_data
+        else:
+            d['calving_flux'] = 0
 
         out_df.append(d)
 

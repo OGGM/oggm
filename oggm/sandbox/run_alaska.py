@@ -258,6 +258,12 @@ execute_entity_task(tasks.volume_inversion, gdirs)
 workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
 
 
+# Write out glacier statistics
+df = utils.glacier_characteristics(gdirs)
+fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
+df.to_csv(fpath)
+
+
 #Plotting things after the calving for all glaciers
 # PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
 # #PLOTS_DIR = ''
