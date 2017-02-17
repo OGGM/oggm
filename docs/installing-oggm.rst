@@ -1,3 +1,5 @@
+.. _installing.oggm:
+
 Installing OGGM
 ===============
 
@@ -5,8 +7,10 @@ OGGM itself is a pure python package, but it has several dependencies wich
 are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
-OGGM is `tested`_ with the python `versions`_ 2.7, 3.4 and 3.5. We
-`strongly recommend`_ to use python 3.5.
+OGGM is fully `tested`_ with python `version`_ 3.5 on linux and partially
+tested with python 3.4 on `windows`_ (windows should be used for development
+purposes only). OGGM might work with python version 2.7, but it isn't tested
+any more and we `strongly recommend`_ to use python 3.
 
 .. note::
 
@@ -21,7 +25,8 @@ with experience with `pip`_ can follow the specific instructions
 
 
 .. _tested: https://travis-ci.org/OGGM/oggm
-.. _versions: https://wiki.python.org/moin/Python2orPython3
+.. _windows: https://ci.appveyor.com/project/fmaussion/oggm
+.. _version: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _strongly recommend: http://python3statement.github.io/
@@ -57,19 +62,21 @@ GIS tools:
     - geopandas
 
 Testing:
-    - nose
+    - pytest
 
 Other libraries:
+    - filelock
     - `salem <https://github.com/fmaussion/salem>`_
-    - `cleo <https://github.com/fmaussion/cleo>`_
-    - `motionless (py3) <https://github.com/fmaussion/motionless>`_
+    - `motionless <https://github.com/ryancox/motionless/>`_
 
 Optional:
-    - progressbar2 (Display download progress)
+    - progressbar2 (displays the download progress)
 
 
 Install with conda (all platforms)
 ----------------------------------
+
+This is the recommended way to install OGGM.
 
 Prerequisites
 ~~~~~~~~~~~~~
@@ -80,10 +87,10 @@ recommended)  or `anaconda`_ (the full suite - with many packages you wont
 need).
 
 
-**Linux** users should install a couple of packages (not all of them are
+**Linux** users should install a couple of linux packages (not all of them are
 required but it's good to have them anyway)::
 
-    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf ttf-bitstream-vera
+    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf4 ttf-bitstream-vera
 
 .. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 .. _miniconda: http://conda.pydata.org/miniconda.html
@@ -98,22 +105,37 @@ window, type::
 
     conda create --name oggm_env python=3.5
 
+
 You can of course use any other name for your environment.
+
+.. warning::
+
+    The windows build of one of OGGM dependencies is not working properly
+    with python 3.5. The only solution until `this problem`_ is resolved is
+    to install OGGM in a python 3.4 environment. That is: type ``python=3.4``
+    instead of ``python=3.5`` in the command above. All the rest should
+    hopefully work the same.
+
+
 Don't forget to activate it before going on::
 
     source activate oggm_env
 
-(on windows: `activate oggm_env`)
+(on windows: ``activate oggm_env``)
 
 .. _environment: http://conda.pydata.org/docs/using/envs.html
+.. _this problem: https://github.com/conda-forge/geopandas-feedstock/issues/9
 
 
 Packages
 ~~~~~~~~
 
-Install the packages from the `conda-forge`_ channel::
+Install the packages from the `conda-forge`_ and oggm channels::
 
-    conda install -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj nose pyproj numpy krb5 rasterio xarray
+    conda install -c oggm -c conda-forge oggm-deps
+
+The oggm-deps package is a "meta package". It does not contain any code but
+will insall all the packages oggm needs automatically.
 
 .. warning::
 
@@ -123,27 +145,17 @@ Install the packages from the `conda-forge`_ channel::
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ per default, as suggested on their
+You might consider setting `conda-forge`_ (and oggm) per default, as suggested on their
 documentation page::
 
     conda config --add channels conda-forge
+    conda config --add channels oggm
     conda install <package-name>
-
-If you want progress reports when downloading data files you can optionally
-install progressbar2::
-
-    pip install progressbar2
 
 No scientific python installation is complete without installing
 `ipython`_ and `jupyter`_::
 
     conda install -c conda-forge ipython jupyter
-
-After success, install the following packages from Fabien's github::
-
-    pip install git+https://github.com/fmaussion/motionless.git
-    pip install git+https://github.com/fmaussion/salem.git
-    pip install git+https://github.com/fmaussion/cleo.git
 
 
 .. _conda-forge: https://conda-forge.github.io/
@@ -154,10 +166,15 @@ After success, install the following packages from Fabien's github::
 OGGM
 ~~~~
 
-We recommend to clone the git repository (or a fork if you want
-to participate to the development)::
+You can install OGGM as a normal python package (in that case you will be able
+to use the model but not change its code)::
 
-   git clone https://github.com/OGGM/oggm.git
+    conda install -c oggm -c conda-forge oggm
+
+We recommend to clone the git repository (or a fork if you want
+to participate to the development, see also :ref:`contributing`)::
+
+    git clone https://github.com/OGGM/oggm.git
 
 Then go to the project root directory::
 
@@ -174,8 +191,7 @@ And install OGGM in development mode::
     code repository will be taken into account the next time you will
     ``import oggm``. This means that you are going to
     be able to update OGGM with a simple `git pull`_ from the head of the
-    cloned repository (but also that if you make changes in this repository,
-    this might brake things).
+    cloned repository.
 
 .. _git pull: https://git-scm.com/docs/git-pull
 
@@ -186,16 +202,25 @@ Testing
 You are almost there! The last step is to check if everything works as
 expected. From the oggm directory, type::
 
-    nosetests .
+    pytest .
 
 The tests can run for several minutes. If everything worked fine, you
 should see something like::
 
-    ...............S.S..................S......................SSS..SSS.SSSSS.SSS
-    ----------------------------------------------------------------------
-    Ran 77 tests in 401.080s
+    ==== test session starts ====
+    platform linux -- Python 3.4.3, pytest-3.0.5, py-1.4.31, pluggy-0.4.0
+    rootdir:
+    plugins:
+    collected 92 items
 
-    OK (SKIP=17)
+    oggm/tests/test_graphics.py ..............
+    oggm/tests/test_models.py .........s....sssssssssssssssss
+    oggm/tests/test_prepro.py ...s................s.s...
+    oggm/tests/test_utils.py ...sss..ss.sssss.
+    oggm/tests/test_workflow.py ssss
+
+    ===== 57 passed, 35 skipped in 102.50 seconds ====
+
 
 You can safely ignore deprecation warnings and other DLL messages as long as
 the tests end with ``OK``.
@@ -208,8 +233,8 @@ Install with virtualenv (linux/debian)
 
 .. note::
 
-   The installation with pip requires to compile the packages one by one: it
-   can take a long time. Unless you have a good reason to be here,
+   The installation with pip requires a few more steps than with conda.
+   Unless you have a good reason to be here,
    `Install with conda (all platforms)`_ is probably what you want do do.
 
 The instructions below are for Debian / Ubuntu / Mint systems only!
@@ -219,13 +244,9 @@ Linux packages
 
 For building stuffs::
 
-    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev
+    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev python-setuptools
 
-For matplolib to work on **python 2**::
-
-    $ sudo apt-get install python-gtk2-dev
-
-And on **python 3**::
+For matplolib::
 
     $ sudo apt-get install tk-dev python3-tk python3-dev
 
@@ -235,7 +256,7 @@ For GDAL::
 
 For NETCDF::
 
-    $ sudo apt-get install netcdf-bin ncview python-netcdf
+    $ sudo apt-get install netcdf-bin ncview python-netcdf4
 
 
 Virtual environment
@@ -259,11 +280,7 @@ Reset your profile::
 
     $ . ~/.profile
 
-Make a new environment with **python 2**::
-
-    $ mkvirtualenv oggm_env -p /usr/bin/python
-
-Or **python 3**::
+Make a new environment with **python 3**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python3
 
@@ -277,28 +294,13 @@ Be sure to be on the working environment::
 
     $ workon oggm_env
 
+Update pip (important!)::
+
+    $ pip install --upgrade pip
+
 Install one by one the easy stuff::
 
-   $ pip install numpy scipy pandas shapely
-
-For Matplotlib and **python 2** we need to link the libs in the virtual env::
-
-    $ ln -sf /usr/lib/python2.7/dist-packages/{glib,gobject,cairo,gtk-2.0,pygtk.py,pygtk.pth} $VIRTUAL_ENV/lib/python2.7/site-packages
-    $ pip install matplotlib
-
-(Details: http://www.stevenmaude.co.uk/2013/09/installing-matplotlib-in-virtualenv.html )
-
-For Matplotlib and **python 3** it doesn't seem to be necessary::
-
-    $ pip install matplotlib
-
-Check if plotting works by running these three lines in python::
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.plot([1,2,3])
-    >>> plt.show()
-
-If nothing shows-up, something got wrong.
+   $ pip install numpy scipy pandas shapely matplotlib
 
 For **GDAL**, it's also not straight forward. First, check which version of
 GDAL is installed::
@@ -315,13 +317,11 @@ using the system binaries::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2 pytest motionless
 
-And the external libraries::
+And the salem library::
 
-    $ pip install git+https://github.com/fmaussion/motionless.git
     $ pip install git+https://github.com/fmaussion/salem.git
-    $ pip install git+https://github.com/fmaussion/cleo.git
 
 OGGM and tests
 ~~~~~~~~~~~~~~

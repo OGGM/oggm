@@ -11,7 +11,7 @@ v0.1 (29 March 2016)
 --------------------
 
 Initial release, used to prepare the data submitted to ITMIX (see
-:ref:`itmix_2016`).
+`here <http://www.fabienmaussion.info/2016/06/18/itmix-experiment-phase1/>`_).
 
 
 This release is the result of several months of development (outside of GitHub
@@ -40,10 +40,3 @@ for a large part). Several people have contributed to this release:
 .. _OGGR: http://oggr.org/
 .. _links between databases: https://github.com/OGGM/databases-links
 .. _installation: https://github.com/OGGM/OGGM-Anaconda
-
-
-
-
-
-
-

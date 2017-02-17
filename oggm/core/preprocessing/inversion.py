@@ -40,7 +40,7 @@ from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
-from oggm import entity_task, divide_task
+from oggm import entity_task, divide_task, global_task
 from oggm.core.preprocessing.gis import gaussian_blur
 
 # Module logger
@@ -171,6 +171,11 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                     out_thick[i] = 0.
 
             if gdir.terminus_type == 'Land-terminating':
+
+                # this filtering stuff below is not explained in Farinotti's
+                # paper. I did this because it looks better, but I'm not sure
+                # (yet) that this is a good idea
+
                 # Check for thick to width ratio (should ne be too large)
                 ratio = out_thick / w  # there's no 0 width so we're good
                 pno = np.where(ratio > max_ratio)
@@ -211,6 +216,7 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
     return out_volume, gdir.rgi_area_km2 * 1e6
 
 
+@global_task
 def optimize_inversion_params(gdirs):
     """Optimizes fs and fd based on GlaThiDa thicknesses.
 
@@ -416,8 +422,14 @@ def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
             pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
             if len(pok) != 0:
                 break
-        dis_w = 1 / np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
-        thick[y, x] = np.average(ts[pok], weights=dis_w)
+        sqr = np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
+        pzero = np.where(sqr == 0)
+        if len(pzero[0]) == 0:
+            thick[y, x] = np.average(ts[pok], weights=1 / sqr)
+        elif len(pzero[0]) == 1:
+            thick[y, x] = ts[pzero]
+        else:
+            raise RuntimeError('We should not be there')
 
     # Smooth
     if smooth:

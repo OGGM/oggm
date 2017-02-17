@@ -23,7 +23,7 @@ Let :math:`S` be the area of a cross-section perpendicular to the
 flowline. It has a width :math:`w` and a thickness :math:`h` and, in this
 example, a parabolic bed shape.
 
-    .. figure:: ../files/hef_flowline.jpg
+    .. figure:: _static/hef_flowline.jpg
         :width: 80%
 
         Example of a cross-section along the glacier flowline. Background
@@ -135,7 +135,7 @@ VerticalWallFlowline
 ~~~~~~~~~~~~~~~~~~~~
 
 
-    .. figure:: ../files/bed_vertical.png
+    .. figure:: _static/bed_vertical.png
         :width: 40%
 
 
@@ -146,7 +146,7 @@ TrapezoidalFlowline
 ~~~~~~~~~~~~~~~~~~~
 
 
-    .. figure:: ../files/bed_trapezoidal.png
+    .. figure:: _static/bed_trapezoidal.png
         :width: 40%
 
 
@@ -159,7 +159,7 @@ ParabolicFlowline
 ~~~~~~~~~~~~~~~~~
 
 
-    .. figure:: ../files/bed_parabolic.png
+    .. figure:: _static/bed_parabolic.png
         :width: 40%
 
 
@@ -202,7 +202,7 @@ Glacier tributaries
 
 Glaciers in OGGM have a main centerline and, sometimes, one or more
 tributaries (which can themsleves also have tributaries, see
-:ref:`centerlines`). The number of these tributaries depends on many
+:ref:`flowlines`). The number of these tributaries depends on many
 factors, but most of the time the algorithm works well.
 
 The main flowline and its tributaries are all handled the same way and

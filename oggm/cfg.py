@@ -107,7 +107,7 @@ _doc = 'The glacier outlines in the local projection.'
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
-BASENAMES['glacier_grid'] = ('glacier_grid.pkl', _doc)
+BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
 _doc = 'A netcdf file containing several gridded data variables such as ' \
        'topography, the glacier masks and more (see the netCDF file metadata).'
@@ -139,7 +139,7 @@ BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 _doc = 'The apparent mass-balance data needed for the inversion.'
 BASENAMES['apparent_mb'] = ('apparent_mb.nc', _doc)
 
-_doc = 'A list of :py:class:oggm.Centerline instances, sorted by flow order.'
+_doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
 _doc = "A list of len n_centerlines, each element conaining a numpy array " \
@@ -156,6 +156,14 @@ BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 _doc = 'The monthly climate timeseries for this glacier, stored in a netCDF ' \
        'file.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
+
+_doc = 'Some information (dictionary) about the climate data for this ' \
+       'glacier, avoiding many useless accesses to the netCDF file.'
+BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
+
+_doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
+       'factor. This is useful for testing mostly.'
+BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)
 
 _doc = 'A pandas.Series with the (year, mu) data.'
 BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
@@ -225,6 +233,9 @@ def initialize(file=None):
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
     PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
+    # run params
+    PARAMS['run_period'] = [int(vk) for vk in cp.as_list('run_period')]
+
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
@@ -237,6 +248,7 @@ def initialize(file=None):
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
+    PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
 
@@ -244,6 +256,13 @@ def initialize(file=None):
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'tstar_search_window'
+    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
+    PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
+    _factor = cp['prcp_scaling_factor']
+    if _factor not in ['stddev', 'stddev_perglacier']:
+        _factor = cp.as_float('prcp_scaling_factor')
+    PARAMS['prcp_scaling_factor'] = _factor
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -262,8 +281,10 @@ def initialize(file=None):
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
-           'optimize_inversion_params' , 'use_multiple_flowlines',
-           'leclercq_rgi_links', 'optimize_thick']
+           'optimize_inversion_params', 'use_multiple_flowlines',
+           'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
+           'tstar_search_window', 'use_bias_for_run', 'run_period',
+           'prcp_scaling_factor']
     for k in ltr:
         del cp[k]
 
@@ -272,24 +293,33 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Empty defaults
-    set_divides_db()
+    from oggm.utils import get_demo_file
+    set_divides_db(get_demo_file('divides_alps.shp'))
     IS_INITIALIZED = True
 
 
 def set_divides_db(path=None):
     """Read the divides database.
 
-    Currently the only divides available are for HEF and Kesselwand:
-    ``utils.get_demo_file('divides_workflow.shp')``
+    Currently the only divides available are for the Alps:
+    ``utils.get_demo_file('divides_alps.shp')``
+
     """
 
     if PARAMS['use_divides'] and path is not None:
-        df = gpd.GeoDataFrame.from_file(path)
-        # dirty fix for RGIV5
-        r5 = df.copy()
-        r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
-        df = pd.concat([df, r5])
-        PARAMS['divides_gdf'] = df.set_index('RGIID')
+        df = gpd.read_file(path)
+        try:
+            # dirty fix for RGIV5
+            r5 = df.copy()
+            r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
+            df = pd.concat([df, r5])
+            PARAMS['divides_gdf'] = df.set_index('RGIID')
+        except AttributeError:
+            # dirty fix for RGIV4
+            r4 = df.copy()
+            r4.RGIId = [r.replace('RGI50', 'RGI40') for r in r5.RGIId.values]
+            df = pd.concat([df, r4])
+            PARAMS['divides_gdf'] = df.set_index('RGIId')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()
 
@@ -299,3 +329,30 @@ def reset_working_dir():
     if os.path.exists(PATHS['working_dir']):
         shutil.rmtree(PATHS['working_dir'])
     os.makedirs(PATHS['working_dir'])
+
+
+def pack_config():
+    """Pack the entire configuration in one pickleable dict."""
+
+    return {
+        'IS_INITIALIZED': IS_INITIALIZED,
+        'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
+        'PARAMS': PARAMS,
+        'PATHS': PATHS,
+        'BASENAMES': dict(BASENAMES)
+    }
+
+def unpack_config(cfg_dict):
+    """Unpack and apply the config packed via pack_config."""
+
+    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, BASENAMES
+
+    IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
+    CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
+    PARAMS = cfg_dict['PARAMS']
+    PATHS = cfg_dict['PATHS']
+
+    # BASENAMES is a DocumentedDict, which cannot be pickled because set intentionally mismatches with get
+    BASENAMES = DocumentedDict()
+    for k in cfg_dict['BASENAMES']:
+        BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')

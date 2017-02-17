@@ -13,16 +13,65 @@ from __future__ import print_function
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import sys
+import warnings
 import os
 import shutil
 
-# see if matplotlib is there
+print("python exec:", sys.executable)
+print("sys.path:", sys.path)
+try:
+    import IPython
+    print("ipython: %s, %s" % (IPython.__version__, IPython.__file__))
+except ImportError:
+    print("no ipython")
+try:
+    import numpy
+    print("numpy: %s, %s" % (numpy.__version__, numpy.__file__))
+except ImportError:
+    print("no numpy")
+try:
+    import scipy
+    print("scipy: %s, %s" % (scipy.__version__, scipy.__file__))
+except ImportError:
+    print("no scipy")
+try:
+    import pandas
+    print("pandas: %s, %s" % (pandas.__version__, pandas.__file__))
+except ImportError:
+    print("no pandas")
+try:
+    import geopandas
+    print("geopandas: %s, %s" % (geopandas.__version__, geopandas.__file__))
+except ImportError:
+    print("no geopandas")
+try:
+    import xarray
+    print("xarray: %s, %s" % (xarray.__version__, xarray.__file__))
+except ImportError:
+    print("no xarray")
 try:
     import matplotlib
     matplotlib.use('Agg')
     print("matplotlib: %s, %s" % (matplotlib.__version__, matplotlib.__file__))
 except ImportError:
     print("no matplotlib")
+try:
+    import rasterio
+    print("rasterio: %s, %s" % (rasterio.__version__, rasterio.__file__))
+except ImportError:
+    print("no rasterio")
+try:
+    import gdal
+    import osgeo.gdal
+    print("gdal: %s, %s" % (osgeo.gdal.__version__, gdal.__file__))
+except ImportError:
+    print("no gdal")
+try:
+    import netCDF4
+    print("netCDF4: %s, %s" % (netCDF4.__version__, netCDF4.__file__))
+except ImportError:
+    print("no netCDF4")
 
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm
@@ -35,6 +84,7 @@ import oggm.core.preprocessing.inversion
 import oggm.core.models.massbalance
 import oggm.core.models.flowline
 import oggm.tasks
+print("oggm: %s, %s" % (oggm.__version__, oggm.__file__))
 
 # -- General configuration ------------------------------------------------
 
@@ -181,6 +231,15 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# Sometimes the savefig directory doesn't exist and needs to be created
+# https://github.com/ipython/ipython/issues/8733
+# becomes obsolete when ipython 5.2 is out
+ipython_savefig_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   '_build','html','_static')
+if not os.path.exists(ipython_savefig_dir):
+    os.makedirs(ipython_savefig_dir)
+
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied

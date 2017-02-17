@@ -350,7 +350,7 @@ def define_glacier_region(gdir, entity=None):
     ny = np.int((uly - lry) / dx)
 
     # Back to lon, lat for DEM download/preparation
-    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), ul_corner=(ulx, uly),
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
@@ -366,8 +366,10 @@ def define_glacier_region(gdir, entity=None):
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Open DEM
+    source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     dem_file, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         region=gdir.rgi_region)
+                                         rgi_region=gdir.rgi_region,
+                                         source=source)
     log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
     dem = gdal.Open(dem_file)
     geo_t = dem.GetGeoTransform()
@@ -421,10 +423,10 @@ def define_glacier_region(gdir, entity=None):
     dest = None # the memfree above is necessary, this one is to be sure...
 
     # Glacier grid
-    ul_corner = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
+    x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
-                              ul_corner=ul_corner)
-    gdir.write_pickle(glacier_grid, 'glacier_grid')
+                              x0y0=x0y0)
+    glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
     gdir.write_pickle(dem_source, 'dem_source')
 
     # Looks in the database if the glacier has divides.

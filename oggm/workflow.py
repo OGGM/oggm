@@ -5,6 +5,7 @@ from __future__ import division
 import logging
 import os
 from shutil import rmtree
+import collections
 # External libs
 import pandas as pd
 import multiprocessing as mp
@@ -12,37 +13,33 @@ import multiprocessing as mp
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
-from oggm.utils import download_lock
 
+# MPI
+try:
+    import oggm.mpi as ogmpi
+    _have_ogmpi = True
+except ImportError:
+    _have_ogmpi = False
 
 # Module logger
 log = logging.getLogger(__name__)
 
 
-def _init_pool_globals(_dl_lock, _cfg_contents):
-    global download_lock
-    download_lock = _dl_lock
-
-    for v, c in _cfg_contents:
-        setattr(cfg, v, c)
+def _init_pool_globals(_cfg_contents):
+    cfg.unpack_config(_cfg_contents)
 
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
+    cfg_contents = cfg.pack_config()
+    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(cfg_contents,))
 
-    cfg_variables = [
-        'IS_INITIALIZED',
-        'CONTINUE_ON_ERROR',
-        'PARAMS',
-        'PATHS',
-        'BASENAMES'
-    ]
 
-    cfg_contents = []
-    for v in cfg_variables:
-        cfg_contents.append((v, getattr(cfg, v)))
-
-    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(download_lock, cfg_contents))
+def _merge_dicts(*dicts):
+    r = {}
+    for d in dicts:
+        r.update(d)
+    return r
 
 
 class _pickle_copier(object):
@@ -50,12 +47,17 @@ class _pickle_copier(object):
     Which is not pickleable in python2 and thus doesn't work
     with Multiprocessing."""
 
-    def __init__(self, func, **kwargs):
+    def __init__(self, func, kwargs):
         self.call_func = func
         self.out_kwargs = kwargs
 
     def __call__(self, gdir):
-        return self.call_func(gdir, **self.out_kwargs)
+        if isinstance(gdir, collections.Sequence):
+            gdir, gdir_kwargs = gdir
+            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
+            return self.call_func(gdir, **gdir_kwargs)
+        else:
+            return self.call_func(gdir, **self.out_kwargs)
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -69,14 +71,27 @@ def execute_entity_task(task, gdirs, **kwargs):
         the entity task to apply
     gdirs: list
         the list of oggm.GlacierDirectory to process
+        optionally, each list element can be a tuple, with the first element being
+        the oggm.GlacierDirectory, and the second element a dict that will be passed
+        to the task function as **kwargs.
     """
+
+    if task.__dict__.get('global_task', False):
+        return task(gdirs, **kwargs)
+
+    pc = _pickle_copier(task, kwargs)
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            ogmpi.mpi_master_spin_tasks(pc, gdirs)
+            return
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = _init_pool()
-        mppool.map(_pickle_copier(task, **kwargs), gdirs, chunksize=1)
+        mppool.map(pc, gdirs, chunksize=1)
     else:
         for gdir in gdirs:
-            task(gdir, **kwargs)
+            pc(gdir)
 
 
 def init_glacier_regions(rgidf, reset=False, force=False):
@@ -95,11 +110,14 @@ def init_glacier_regions(rgidf, reset=False, force=False):
             rmtree(fpath)
 
     gdirs = []
+    new_gdirs = []
     for _, entity in rgidf.iterrows():
         gdir = oggm.GlacierDirectory(entity, reset=reset)
         if not os.path.exists(gdir.get_filepath('dem')):
-            tasks.define_glacier_region(gdir, entity=entity)
+            new_gdirs.append((gdir, dict(entity=entity)))
         gdirs.append(gdir)
+
+    execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs
 
@@ -123,8 +141,16 @@ def gis_prepro_tasks(gdirs):
 def climate_tasks(gdirs):
     """Prepare the climate data."""
 
-    # Only global tasks
-    tasks.distribute_climate_data(gdirs)
+    # I don't know where this logic is best placed...
+    if ('climate_file' in cfg.PATHS) and \
+            os.path.exists(cfg.PATHS['climate_file']):
+        _process_task = tasks.process_custom_climate_data
+    else:
+        # OK, so use the default CRU "high-resolution" method
+        _process_task = tasks.process_cru_data
+    execute_entity_task(_process_task, gdirs)
+
+    # Then, only global tasks
     tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 

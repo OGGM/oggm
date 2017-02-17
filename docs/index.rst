@@ -19,6 +19,19 @@ you want to contribute.
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 
+News
+----
+
+- **30.11.2016**: the paper summarizing the ITMIX experiment is online for
+  review! Visit `this link <http://www.the-cryosphere-discuss.net/tc-2016-250/>`_
+  to read and discuss the manuscript.
+- **24.10.2016**: Registration to the :ref:`workshop` is now open!
+- **20.04.2016**: Fabien presented OGGM at the
+  `European Geosciences Union General Assembly <http://meetingorganizer.copernicus.org/EGU2016/orals/20092>`_
+- **29.03.2016**: OGGM participated to the
+  `Ice Thickness Models Intercomparison eXperiment <http://fabienmaussion.info/2016/06/18/itmix-experiment-phase1/>`_
+- **11.02.2016**: The 1st OGGM workshop took place in Obergurgl, Austrian Alps
+
 Documentation
 -------------
 
@@ -28,11 +41,13 @@ Documentation
     whats-new
     installing-oggm
     getting-started
-    centerlines
+    flowlines
     mass-balance
     ice-dynamics
     inversion
     glacierdir-gen
+    mpi
+    contributing
     api
 
 
@@ -42,17 +57,19 @@ Get in touch
 - To ask questions or discuss OGGM, send us an `e-mail`_.
 - Report bugs, share your ideas or view the source code `on GitHub`_.
 
-.. _e-mail: fabien.maussion@uibk.ac.at
+.. _e-mail: http://www.fabienmaussion.info/
 .. _on GitHub: https://github.com/OGGM/oggm
 
 
 License
 -------
 
+.. image:: _static/gpl.png
+   :width: 140 px
+
 OGGM is available under the open source `GNU GPLv3 license`_.
 
 .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
-
 
 About
 -----
@@ -64,12 +81,8 @@ About
     GNU GPLv3
 
 :Authors:
-    Fabien Maussion, Alexander H. Jarosch, Felix Oesterle, Timo
-    Rothenpieler, Ben Marzeion
 
-    See `whats-new`_ for a list of all contributors.
-
-    .. _whats-new: http://oggm.readthedocs.org/en/latest/whats-new.html
+    See :ref:`whats-new` for a list of all contributors.
 
 :Funding:
     Austrian Research Foundation FWF, Projects P22443-N21 and P25362-N26
@@ -78,4 +91,3 @@ About
 
     .. image:: http://www.uni-bremen.de/fileadmin/images/logo-uni-bremen-EXZELLENT.png
         :align: right
-

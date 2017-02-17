@@ -1,21 +1,19 @@
 import six
+from distutils.version import LooseVersion
 import osgeo.gdal
 import os
 import sys
+import socket
 import unittest
 import logging
-import matplotlib as mpl
+import matplotlib
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import scipy.optimize as optimization
 from six.moves.urllib.request import urlopen
 from six.moves.urllib.error import URLError
-from oggm.core.preprocessing import gis, centerlines, geometry
-from oggm.core.preprocessing import climate, inversion
-import oggm
-import oggm.cfg as cfg
-from oggm.utils import get_demo_file
+from oggm import cfg
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -34,18 +32,15 @@ if osgeo.gdal.__version__ >= '1.11':
 
 # Matplotlib version changes plots, too
 HAS_MPL_FOR_TESTS = False
-if mpl.__version__ >= '1.5':
+if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
+    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
+                                'baseline_images', '2.0.x')
 
-# Because mpl was broken on conda
-# https://github.com/matplotlib/matplotlib/issues/5487
-try:
-    from matplotlib.testing.decorators import image_comparison
-except ImportError:
-    HAS_MPL_FOR_TESTS = False
 
 # Some control on which tests to run (useful to avoid too long tests)
 # defaults everywhere else than travis
+ON_AWS = False
 ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
@@ -53,10 +48,12 @@ RUN_PREPRO_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
+RUN_PERFORMANCE_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     # specific to travis to reduce global test time
     ON_TRAVIS = True
     RUN_DOWNLOAD_TESTS = False
+    matplotlib.use('Agg')
 
     if sys.version_info < (3, 5):
         # Minimal tests
@@ -89,6 +86,11 @@ if os.environ.get('TRAVIS') is not None:
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = True
+elif 'ip-' in socket.gethostname():
+    # we are on AWS (hacky way)
+    ON_AWS = True
+    RUN_SLOW_TESTS = True
+    matplotlib.use('Agg')
 
 # give user some control
 if os.environ.get('OGGM_SLOW_TESTS') is not None:
@@ -133,6 +135,10 @@ def is_download(test):
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
+def is_performance_test(test):
+    # Test decorator
+    msg = "requires explicit environment for performance tests"
+    return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
 
 # the code below is copy/pasted from xarray
 # TODO: go back to xarray when https://github.com/pydata/xarray/issues/754
@@ -175,6 +181,12 @@ def assertDatasetAllClose(d1, d2, rtol=1e-05, atol=1e-08):
 
 def init_hef(reset=False, border=40, invert_with_sliding=True):
 
+    from oggm.core.preprocessing import gis, centerlines, geometry
+    from oggm.core.preprocessing import climate, inversion
+    import oggm
+    import oggm.cfg as cfg
+    from oggm.utils import get_demo_file
+
     # test directory
     testdir = TESTDIR_BASE + '_border{}'.format(border)
     if not invert_with_sliding:
@@ -190,7 +202,6 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
 
     # Init
     cfg.initialize()
-    cfg.set_divides_db(get_demo_file('divides_workflow.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
@@ -210,12 +221,14 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     geometry.catchment_area(gdir)
     geometry.catchment_width_geom(gdir)
     geometry.catchment_width_correction(gdir)
-    climate.distribute_climate_data([gdir])
+    climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir, div_id=0)
     hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-    mbdf = pd.read_csv(hef_file).set_index('YEAR')
-    t_star, bias = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
-    climate.local_mustar_apparent_mb(gdir, tstar=t_star[-1], bias=bias[-1])
+    mbdf = pd.read_csv(hef_file).set_index('YEAR')['ANNUAL_BALANCE']
+    res = climate.t_star_from_refmb(gdir, mbdf)
+    climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
+                                     bias=res['bias'][-1],
+                                     prcp_fac=res['prcp_fac'])
 
     inversion.prepare_for_inversion(gdir)
     ref_v = 0.573 * 1e9

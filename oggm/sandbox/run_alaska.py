@@ -70,13 +70,14 @@ RUN_INVERSION = True  # run bed inversion
 RUN_DYNAMICS = False  # run dynamics
 
 # Read RGI file
-rgidf = salem.utils.read_shapefile(RGI_FILE, cached=True)
+rgidf = salem.read_shapefile(RGI_FILE, cached=True)
 
 # Select some glaciers
 # Get ref glaciers (all glaciers with MB)
 flink, mbdatadir = utils.get_wgms_files()
 
 ids_with_mb = pd.read_csv(flink)['RGI_ID'].values
+
 # get some tw-glaciers that we want to test inside alaska region, also that are
 # inside GlathiDa
 keep_ids = ['RGI50-01.10689', 'RGI50-01.20791', 'RGI50-01.00037', 'RGI50-01.10402', 'RGI50-01.22193', 'RGI50-01.22699']
@@ -144,6 +145,7 @@ if RUN_INVERSION:
 #     plt.savefig(bname + 'inv_cor.png')
 #     plt.close()
 
+
 # if RUN_DYNAMICS:
 #     # Random dynamics
 #     execute_entity_task(tasks.init_present_time_glacier, gdirs)
@@ -161,6 +163,7 @@ execute_entity_task(tasks.volume_inversion, gdirs)
 # realistic values. This might be undesirable for tidewater glaciers, and
 # it is possible to add special conditions for tidewater glaciers in the
 # function. For example: if gdir.is_tidewater: etc.
+
 # (To fix this for now everything has been put after an if in the inversion.py)
 
 # Defining a calving function

@@ -8,6 +8,7 @@ import shutil
 import salem
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 
 from oggm.tests import is_download
 from oggm import utils
@@ -20,13 +21,21 @@ if not os.path.exists(TEST_DIR):
     os.makedirs(TEST_DIR)
 
 
-class TestTime(unittest.TestCase):
+class TestFuncs(unittest.TestCase):
 
     def setUp(self):
         pass
 
     def tearDown(self):
         pass
+
+    def test_signchange(self):
+        ts = pd.Series([-2., -1., 1., 2., 3], index=np.arange(5))
+        sc = utils.signchange(ts)
+        assert_array_equal(sc, [0, 0, 1, 0, 0])
+        ts = pd.Series([-2., -1., 1., 2., 3][::-1], index=np.arange(5))
+        sc = utils.signchange(ts)
+        assert_array_equal(sc, [0, 0, 0, 1, 0])
 
     def test_year_to_date(self):
 
@@ -90,6 +99,12 @@ class TestTime(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
+        time = pd.period_range('0001-01', '3000-12', freq='M')
+        myr = utils.monthly_timeseries(1, 3000)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
         with self.assertRaises(ValueError):
             utils.monthly_timeseries(1)
 
@@ -111,7 +126,7 @@ class TestDataFiles(unittest.TestCase):
         f = utils.get_demo_file('Hintereisferner.shp')
         self.assertTrue(os.path.exists(f))
 
-        sh = salem.utils.read_shapefile(f)
+        sh = salem.read_shapefile(f)
         self.assertTrue(hasattr(sh, 'geometry'))
 
         # Data files
@@ -169,42 +184,46 @@ class TestDataFiles(unittest.TestCase):
 
     def test_dem3_viewpano_zone(self):
 
-        test_loc = {'ISL': [-25., -12., 63., 67.],      # Iceland
-                        'SVALBARD': [10., 34., 76., 81.],
-                        'JANMAYEN': [-10., -7., 70., 72.],
-                        'FJ': [36., 66., 79., 82.],         # Franz Josef Land
-                        'FAR': [-8., -6., 61., 63.],        # Faroer
-                        'BEAR': [18., 20., 74., 75.],       # Bear Island
-                        'SHL': [-3., 0., 60., 61.],         # Shetland
-                        '01-15': [-180., -91., -90, -60.],  # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-                        '16-30': [-91., -1., -90., -60.],
-                        '31-45': [-1., 89., -90., -60.],
-                        '46-60': [89., 189., -90., -60.],
-                        'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
-                        'GL-West': [-68., -42., 64., 76.],
-                        'GL-South': [-52., -40., 59., 64.],
-                        'GL-East': [-42., -17., 64., 76.]}
+        test_loc = {'ISL': [-25., -12., 63., 67.],  # Iceland
+                    'SVALBARD': [10., 34., 76., 81.],
+                    'JANMAYEN': [-10., -7., 70., 72.],
+                    'FJ': [36., 66., 79., 82.],  # Franz Josef Land
+                    'FAR': [-8., -6., 61., 63.],  # Faroer
+                    'BEAR': [18., 20., 74., 75.],  # Bear Island
+                    'SHL': [-3., 0., 60., 61.],  # Shetland
+                    # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
+                    # '01-15': [-180., -91., -90, -60.],
+                    # '16-30': [-91., -1., -90., -60.],
+                    # '31-45': [-1., 89., -90., -60.],
+                    # '46-60': [89., 189., -90., -60.],
+                    # Greenland tiles
+                    # 'GL-North': [-78., -11., 75., 84.],
+                    # 'GL-West': [-68., -42., 64., 76.],
+                    # 'GL-South': [-52., -40., 59., 64.],
+                    # 'GL-East': [-42., -17., 64., 76.]
+        }
         # special names
         for key in test_loc:
-            z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]], [test_loc[key][2], test_loc[key][3]],
-                                       test_loc)
+            z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]],
+                                         [test_loc[key][2], test_loc[key][3]])
             self.assertTrue(len(z) == 1)
 
             self.assertEqual(key, z[0])
 
-        # weired Antarctica tile
-        z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.], test_loc)
-        self.assertTrue(len(z) == 1)
-        self.assertEqual('SR15', z[0])
+        # weird Antarctica tile
+        # z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.])
+        # self.assertTrue(len(z) == 1)
+        # self.assertEqual('SR15', z[0])
 
         # normal tile
-        z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.], test_loc)
+        z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.])
         self.assertTrue(len(z) == 1)
         self.assertEqual('Q01', z[0])
 
         # Alps
-        ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32', 'L33', 'M31', 'M32', 'M33'])
-        z = utils.dem3_viewpano_zone([6, 14], [41, 48], test_loc)
+        ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32',
+                      'L33', 'M31', 'M32', 'M33'])
+        z = utils.dem3_viewpano_zone([6, 14], [41, 48])
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
 
@@ -225,23 +244,6 @@ class TestDataFiles(unittest.TestCase):
         zone = '41_20'
         self.assertTrue(utils._download_srtm_file(zone) is None)
 
-    def test_download_dem3_viewpano(self):
-
-        # this zone does exist and file should be small enough for download
-        zone = 'L32'
-        fp = utils._download_dem3_viewpano(zone, {})
-        self.assertTrue(os.path.exists(fp))
-        zone = 'U44'
-        fp = utils._download_dem3_viewpano(zone, {})
-        self.assertTrue(os.path.exists(fp))
-
-
-    def test_download_dem3_viewpano_fails(self):
-
-        # this zone does not exist
-        zone = 'SZ20'
-        self.assertTrue(utils._download_dem3_viewpano(zone, {}) is None)
-
     @is_download
     def test_asterdownload(self):
 
@@ -253,7 +255,7 @@ class TestDataFiles(unittest.TestCase):
 
     @is_download
     def test_gimp(self):
-        fp, z = utils.get_topo_file([], [], region=5)
+        fp, z = utils.get_topo_file([], [], rgi_region=5)
         self.assertTrue(os.path.exists(fp))
 
     @is_download
@@ -308,15 +310,8 @@ class TestDataFiles(unittest.TestCase):
 
         # this zone does exist and file should be small enough for download
         zone = 'L32'
-        fp = utils._download_dem3_viewpano(zone, {})
+        fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
         zone = 'U44'
-        fp = utils._download_dem3_viewpano(zone, {})
+        fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
-
-    @is_download
-    def test_download_dem3_viewpano_fails(self):
-
-        # this zone does not exist
-        zone = 'SZ20'
-        self.assertTrue(utils._download_dem3_viewpano(zone, {}) is None)

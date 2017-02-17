@@ -19,16 +19,19 @@ import shutil
 import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Local imports
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
-from oggm.core.models.massbalance import ConstantBalanceModel
-from oggm.tests import is_slow, assertDatasetAllClose, RUN_MODEL_TESTS
-
+from oggm.core.models.massbalance import LinearMassBalanceModel
+from oggm.tests import (is_slow, assertDatasetAllClose, RUN_MODEL_TESTS,
+                        is_performance_test)
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
+from oggm.core.preprocessing import climate
+
+# after oggm.test
+import matplotlib.pyplot as plt
 
 # do we event want to run the tests?
 if not RUN_MODEL_TESTS:
@@ -236,7 +239,7 @@ class TestInitFlowline(unittest.TestCase):
                                div_id=np.argmax(lens)+1)[-1]
 
         self.assertTrue(gdir.rgi_date.year == 2003)
-        self.assertTrue(len(fls) == 5)
+        self.assertTrue(len(fls) == 4)
 
         vol = 0.
         area = 0.
@@ -279,7 +282,7 @@ class TestInitFlowline(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
@@ -315,7 +318,7 @@ class TestInitFlowline(unittest.TestCase):
         from scipy.stats import linregress
         slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
         slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
-        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.1)
+        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
 
 
 class TestOtherDivides(unittest.TestCase):
@@ -330,7 +333,6 @@ class TestOtherDivides(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = utils.get_demo_file('histalp_merged_hef.nc')
 
@@ -366,8 +368,9 @@ class TestOtherDivides(unittest.TestCase):
             geometry.catchment_area(gdir)
             geometry.catchment_width_geom(gdir)
             geometry.catchment_width_correction(gdir)
-            climate.distribute_climate_data([gdir])
-            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0)
+            climate.process_histalp_nonparallel([gdir])
+            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
+                                             prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
             v, ainv = inversion.invert_parabolic_bed(gdir)
             flowline.init_present_time_glacier(gdir)
@@ -393,7 +396,7 @@ class TestOtherDivides(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        self.assertTrue(len(fls) == 4)
+        self.assertEqual(len(fls), 5)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -423,177 +426,173 @@ class TestMassBalance(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_tstar_mb(self):
+    def test_past_mb_model(self):
 
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.TstarMassBalanceModel(gdir)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        ombh = mb_mod.get_mb(h, None)
-        otmb = np.sum(ombh * w)
-        np.testing.assert_allclose(0., otmb, atol=0.26)
-
-        mb_mod = massbalance.TodayMassBalanceModel(gdir)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        mbh = mb_mod.get_mb(h, None)
-        tmb = np.sum(mbh * w)
-        self.assertTrue(tmb < otmb)
-
-        if do_plot:  # pragma: no cover
-            plt.plot(h, ombh, 'o')
-            plt.plot(h, mbh, 'o')
-            plt.show()
-
-    def test_backwards_mb(self):
-
-        gdir = init_hef(border=DOM_BORDER)
-        flowline.init_present_time_glacier(gdir)
-
-        mb_mod_ref = massbalance.TstarMassBalanceModel(gdir)
-        mb_mod = massbalance.BackwardsMassBalanceModel(gdir, use_tstar=True)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
-        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-        mb_mod.set_bias(100.)
-        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-
-        np.testing.assert_allclose(ombh, mbh, rtol=0.001)
-        self.assertTrue(np.mean(mbhb) > np.mean(mbh))
-
-        if do_plot:  # pragma: no cover
-            plt.plot(h, ombh, 'o')
-            plt.plot(h, mbh, 'x')
-            plt.plot(h, mbhb, 'x')
-            plt.show()
-
-        mb_mod_ref = massbalance.TodayMassBalanceModel(gdir)
-        mb_mod = massbalance.BackwardsMassBalanceModel(gdir)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
-        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-        mb_mod.set_bias(-100.)
-        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-
-        np.testing.assert_allclose(ombh, mbh, rtol=0.005)
-        self.assertTrue(np.mean(mbhb) < np.mean(mbh))
-
-        if do_plot:  # pragma: no cover
-            plt.plot(h, ombh, 'o')
-            plt.plot(h, mbh, 'x')
-            plt.plot(h, mbhb, 'x')
-            plt.show()
-
-    def test_biased_mb(self):
-
-        gdir = init_hef(border=DOM_BORDER)
-        flowline.init_present_time_glacier(gdir)
-
-        mb_mod_ref = massbalance.TstarMassBalanceModel(gdir)
-        mb_mod = massbalance.BiasedMassBalanceModel(gdir, use_tstar=True)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        ombh = mb_mod_ref.get_mb(h, None) * SEC_IN_YEAR
-        mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-        mb_mod.set_temp_bias(-1.)
-        mbhb = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-        mb_mod.set_temp_bias(0)
-        mb_mod.set_prcp_factor(1.2)
-        mbhbp = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-
-        np.testing.assert_allclose(ombh, mbh, rtol=0.001)
-        self.assertTrue(np.mean(mbhb) > np.mean(mbh))
-        self.assertTrue(np.mean(mbhbp) > np.mean(mbh))
-
-        if do_plot:  # pragma: no cover
-            plt.plot(h, ombh, 'o')
-            plt.plot(h, mbh, 'x')
-            plt.plot(h, mbhb, 'x')
-            plt.plot(h, mbhbp, 'x')
-            plt.show()
-
-    def test_histalp_mb(self):
-
-        gdir = init_hef(border=DOM_BORDER)
-        flowline.init_present_time_glacier(gdir)
-
-        mb_mod = massbalance.TodayMassBalanceModel(gdir)
-
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
-        ref_mbh = mb_mod.get_mb(h, None) * SEC_IN_YEAR
-
-        mb_mod = massbalance.HistalpMassBalanceModel(gdir)
+        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        mu_star = df['mu_star'][0]
+        bias = df['bias'][0]
+        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
-        yrs = np.arange(1973, 2003.1, 1)
-        my_mb = ref_mbh * 0.
-        for yr in yrs:
-            my_mb += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
-        my_mb = my_mb / 31
+        yrp = [1851, 2000]
 
-        np.testing.assert_allclose(ref_mbh, my_mb, rtol=0.01)
+        # Flowlines height
+        fls = gdir.read_pickle('model_flowlines')
+        h = np.array([])
+        for fl in fls:
+            h = np.append(h, fl.surface_h)
+        _, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+                                                      year_range=yrp)
 
-        # Month
-        time = pd.date_range('1/1/1973', periods=31*12, freq='MS')
-        yrs = utils.date_to_year(time.year, time.month)
+        mb_mod = massbalance.PastMassBalanceModel(gdir, bias=0)
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
+                                       atol=1e-2)
 
-        my_mb = ref_mbh * 0.
-        for yr, m in zip(yrs, time.month):
-            my_mb += mb_mod.get_mb(h, yr) * SEC_IN_MONTHS[m-1]
-        my_mb = my_mb / 31
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
+                                       atol=1e-2)
 
-        np.testing.assert_allclose(ref_mbh, my_mb, rtol=0.01)
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+
+            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
+            my_mb_on_h = ref_mb_on_h*0.
+            for m in np.arange(12):
+                yrm = utils.date_to_year(yr, m+1)
+                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTHS[m]*cfg.RHO
+                my_mb_on_h += tmp
+
+            np.testing.assert_allclose(ref_mb_on_h,
+                                       my_mb_on_h + bias,
+                                       atol=1e-2)
+
+        # real data
+        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in ofl:
+            h = np.append(h, fl.surface_h)
+            w = np.append(w, fl.widths)
+
+        mbdf = gdir.get_ref_mb_data()
+        mbdf.loc[yr, 'MY_MB'] = np.NaN
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
+        for yr in mbdf.index.values:
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+
+        mb_mod = massbalance.PastMassBalanceModel(gdir, bias=0)
+        for yr in mbdf.index.values:
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean() + bias,
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+
+        mb_mod = massbalance.PastMassBalanceModel(gdir)
+        for yr in mbdf.index.values:
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+            mb_mod.temp_bias = 1
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            mbdf.loc[yr, 'BIASED_MB'] = np.average(my_mb_on_h, weights=w)
+            mb_mod.temp_bias = 0
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+        self.assertTrue(mbdf['ANNUAL_BALANCE'].mean() > mbdf['BIASED_MB'].mean())
+
+    def test_constant_mb_model(self):
+
+        gdir = init_hef(border=DOM_BORDER)
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        mu_star = df['mu_star'][0]
+        bias = df['bias'][0]
+        prcp_fac = df['prcp_fac'][0]
+
+        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in ofl:
+            h = np.append(h, fl.surface_h)
+            w = np.append(w, fl.widths)
+
+        cmb_mod = massbalance.ConstantMassBalanceModel(gdir, bias=0)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        otmb = np.average(ombh, weights=w)
+        np.testing.assert_allclose(0., otmb, atol=0.2)
+
+        cmb_mod = massbalance.ConstantMassBalanceModel(gdir)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        otmb = np.average(ombh, weights=w)
+        np.testing.assert_allclose(0, otmb + bias, atol=0.2)
+
+        mb_mod = massbalance.ConstantMassBalanceModel(gdir, y0=2003-15)
+        nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        ntmb = np.average(nmbh, weights=w)
+
+        self.assertTrue(ntmb < otmb)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(h, ombh, 'o', label='tstar')
+            plt.plot(h, nmbh, 'o', label='today')
+            plt.legend()
+            plt.show()
+
+        cmb_mod.temp_bias = 1
+        biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        biasotmb = np.average(biasombh, weights=w)
+        self.assertTrue(biasotmb < (otmb - 500))
+
+        cmb_mod.temp_bias = 0
+        nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        nobiasotmb = np.average(nobiasombh, weights=w)
+        np.testing.assert_allclose(0, nobiasotmb + bias, atol=0.2)
+
+        months = np.arange(12)
+        monthly_1 = months * 0.
+        monthly_2 = months * 0.
+        for m in months:
+            yr = utils.date_to_year(0, m+1)
+            cmb_mod.temp_bias = 0
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS[m] * cfg.RHO
+            monthly_1[m] = np.average(tmp, weights=w)
+            cmb_mod.temp_bias = 1
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS[m] * cfg.RHO
+            monthly_2[m] = np.average(tmp, weights=w)
+
+        # check that the winter months are close but summer months no
+        np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
+        self.assertTrue(np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100))
+
+        if do_plot:  # pragma: no cover
+            plt.plot(monthly_1, '-', label='Normal')
+            plt.plot(monthly_2, '-', label='Temp bias')
+            plt.legend();
+            plt.show()
 
     def test_random_mb(self):
 
-        # reprod
-        np.random.seed(10)
-
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        ref_mod = massbalance.TodayMassBalanceModel(gdir)
-        mb_mod = massbalance.RandomMassBalanceModel(gdir)
+        ref_mod = massbalance.ConstantMassBalanceModel(gdir)
+        mb_mod = massbalance.RandomMassBalanceModel(gdir, seed=10)
 
         h = np.array([])
         w = np.array([])
@@ -601,7 +600,7 @@ class TestMassBalance(unittest.TestCase):
             h = np.append(h, fl.surface_h)
             w = np.append(w, fl.widths)
 
-        ref_mbh = ref_mod.get_mb(h, None) * SEC_IN_YEAR
+        ref_mbh = ref_mod.get_annual_mb(h, None) * SEC_IN_YEAR
 
         # two years shoudn't be equal
         r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
@@ -622,22 +621,7 @@ class TestMassBalance(unittest.TestCase):
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
 
-        mb_mod.set_temp_bias(-0.5)
-        r_mbh_b = 0.
-        for yr in yrs:
-            r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
-        r_mbh_b /= ny
-        self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
-
-        mb_mod.set_temp_bias(0)
-        mb_mod.set_prcp_factor(0.7)
-        r_mbh_b = 0.
-        for yr in yrs:
-            r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
-        r_mbh_b /= ny
-        self.assertTrue(np.mean(r_mbh) > np.mean(r_mbh_b))
-
-        mb_mod = massbalance.RandomMassBalanceModel(gdir, use_tstar=True)
+        mb_mod.temp_bias = -0.5
         r_mbh_b = 0.
         for yr in yrs:
             r_mbh_b += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
@@ -645,8 +629,9 @@ class TestMassBalance(unittest.TestCase):
         self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh_b))
 
         # Compare sigma from real climate and mine
-        mb_ref = massbalance.HistalpMassBalanceModel(gdir)
-        mb_mod = massbalance.RandomMassBalanceModel(gdir)
+        mb_ref = massbalance.PastMassBalanceModel(gdir)
+        mb_mod = massbalance.RandomMassBalanceModel(gdir, y0=2003-15,
+                                                    seed=10)
         mb_ts = []
         mb_ts2 = []
         yrs = np.arange(1973, 2003, 1)
@@ -662,12 +647,11 @@ class TestMassBalance(unittest.TestCase):
         ref_mb = np.zeros(12)
         my_mb = np.zeros(12)
         for yr, m in zip(yrs, time.month):
-            ref_mb[m-1] += np.average(mb_ref.get_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
-            my_mb[m-1] += np.average(mb_mod.get_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
+            ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
+            my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS[m-1], weights=w)
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         self.assertTrue(utils.rmsd(ref_mb, my_mb) < 0.1)
-
 
     def test_mb_performance(self):
 
@@ -681,16 +665,15 @@ class TestMassBalance(unittest.TestCase):
         yrs = np.arange(1850, 2003, 10/365)
 
         # models
-        mb1 = massbalance.TodayMassBalanceModel(gdir)
-        mb2 = massbalance.HistalpMassBalanceModel(gdir)
-
         start_time = time.time()
+        mb1 = massbalance.ConstantMassBalanceModel(gdir)
         for yr in yrs:
-            _ = mb1.get_mb(h, yr)
+            _ = mb1.get_monthly_mb(h, yr)
         t1 = time.time() - start_time
         start_time = time.time()
+        mb2 = massbalance.PastMassBalanceModel(gdir)
         for yr in yrs:
-            _ = mb2.get_mb(h, yr)
+            _ = mb2.get_monthly_mb(h, yr)
         t2 = time.time() - start_time
 
         # not faster as two times t2
@@ -749,13 +732,13 @@ class TestIO(unittest.TestCase):
         assert np.array_equal(np.sort(to_test), to_test)
 
         # They should be able to start a run
-        mb = ConstantBalanceModel(2600.)
+        mb = LinearMassBalanceModel(2600.)
         model = flowline.FluxBasedModel(fls_, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
         model.run_until(100)
 
     def test_run(self):
-        mb = ConstantBalanceModel(2600.)
+        mb = LinearMassBalanceModel(2600.)
 
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
@@ -782,7 +765,7 @@ class TestIO(unittest.TestCase):
 
         fls = dummy_constant_bed()
         path = os.path.join(self.test_dir, 'ts_ideal.nc')
-        if os.path.isfile(path):
+        if os.path.exists(path):
             os.remove(path)
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
@@ -889,7 +872,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         for model in models:
             fls = dummy_constant_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt=10*SEC_IN_DAY)
@@ -961,7 +944,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         for model in models:
             fls = dummy_constant_bed_cliff()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt=2*SEC_IN_DAY)
@@ -1039,7 +1022,7 @@ class TestIdealisedCases(unittest.TestCase):
         vols = []
         for model in models:
             fls = dummy_constant_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
 
@@ -1049,7 +1032,7 @@ class TestIdealisedCases(unittest.TestCase):
         ref_vols = []
         for model in models:
             fls = dummy_constant_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
@@ -1070,7 +1053,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_constant_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -1105,7 +1088,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_bumpy_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -1172,7 +1155,7 @@ class TestIdealisedCases(unittest.TestCase):
         fls_orig = dummy_noisy_bed()
         for model, step in zip(models, steps):
             fls = copy.deepcopy(fls_orig)
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -1243,7 +1226,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_width_bed()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -1307,7 +1290,7 @@ class TestIdealisedCases(unittest.TestCase):
         volume = []
         yrs = np.arange(1, 500, 2)
         for model, step, fls in zip(models, steps, flss):
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -1377,7 +1360,7 @@ class TestIdealisedCases(unittest.TestCase):
         widths = []
         yrs = np.arange(1, 700, 2)
         for model, fls in zip(models, flss):
-            mb = ConstantBalanceModel(2800.)
+            mb = LinearMassBalanceModel(2800.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -1426,7 +1409,7 @@ class TestIdealisedCases(unittest.TestCase):
         widths = []
         yrs = np.arange(1, 700, 2)
         for model, fls in zip(models, flss):
-            mb = ConstantBalanceModel(2800.)
+            mb = LinearMassBalanceModel(2800.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
@@ -1476,7 +1459,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         # yrs = np.arange(1, 100, 2)
         for model, fls in zip(models, flss):
-            mb = ConstantBalanceModel(2800.)
+            mb = LinearMassBalanceModel(2800.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -1531,7 +1514,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 200, 5)
         for model in models:
             fls = dummy_width_bed_tributary()
-            mb = ConstantBalanceModel(2600.)
+            mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           min_dt=5*SEC_IN_DAY)
@@ -1577,7 +1560,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         origfls = dummy_constant_bed(nx=120, hmin=1800)
 
-        mb = ConstantBalanceModel(self.ela)
+        mb = LinearMassBalanceModel(self.ela)
         model = flowline.FluxBasedModel(origfls, mb_model=mb,
                                         fs=self.fs, glen_a=self.glen_a)
         model.run_until(500)
@@ -1593,7 +1576,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         y1 = 150.
         rtol = 0.02
 
-        mb = ConstantBalanceModel(self.ela+50.)
+        mb = LinearMassBalanceModel(self.ela + 50.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb,
                                         fs=self.fs, glen_a=self.glen_a)
 
@@ -1614,7 +1597,7 @@ class TestBackwardsIdealized(unittest.TestCase):
             plt.legend(loc='best')
             plt.show()
 
-        mb = ConstantBalanceModel(self.ela-50.)
+        mb = LinearMassBalanceModel(self.ela - 50.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
                                         fs=self.fs, glen_a=self.glen_a)
 
@@ -1634,7 +1617,7 @@ class TestBackwardsIdealized(unittest.TestCase):
             plt.legend(loc='best')
             plt.show()
 
-        mb = ConstantBalanceModel(self.ela)
+        mb = LinearMassBalanceModel(self.ela)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
                                         fs=self.fs, glen_a=self.glen_a)
 
@@ -1651,7 +1634,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         y0 = 0.
         y1 = 100.
 
-        mb = ConstantBalanceModel(self.ela-150.)
+        mb = LinearMassBalanceModel(self.ela - 150.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
                                         fs=self.fs, glen_a=self.glen_a)
         self.assertRaises(RuntimeError, flowline._find_inital_glacier, model,
@@ -1675,7 +1658,7 @@ class TestHEF(unittest.TestCase):
 
         flowline.init_present_time_glacier(self.gdir)
 
-        mb_mod = massbalance.TstarMassBalanceModel(self.gdir)
+        mb_mod = massbalance.ConstantMassBalanceModel(self.gdir)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -1698,14 +1681,14 @@ class TestHEF(unittest.TestCase):
 
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.03)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=300.01)
 
     @is_slow
     def test_commitment(self):
 
         flowline.init_present_time_glacier(self.gdir)
 
-        mb_mod = massbalance.TodayMassBalanceModel(self.gdir)
+        mb_mod = massbalance.ConstantMassBalanceModel(self.gdir, y0=2003-15)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -1763,10 +1746,8 @@ class TestHEF(unittest.TestCase):
     @is_slow
     def test_random(self):
 
-        np.random.seed(1)
-
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=200)
+        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=1)
         path = self.gdir.get_filepath('past_model')
 
         with flowline.FileModel(path) as model:

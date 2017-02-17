@@ -9,7 +9,7 @@ from __future__ import absolute_import, division
 import six.moves.cPickle as pickle
 from six import string_types
 from six.moves.urllib.request import urlretrieve, urlopen
-from six.moves.urllib.error import HTTPError, URLError
+from six.moves.urllib.error import HTTPError, URLError, ContentTooShortError
 
 # Builtins
 import glob
@@ -19,7 +19,7 @@ import shutil
 import zipfile
 import sys
 import math
-from shutil import copyfile
+import logging
 from collections import OrderedDict
 from functools import partial, wraps
 import json
@@ -30,8 +30,8 @@ import subprocess
 # External libs
 import geopandas as gpd
 import pandas as pd
-from salem import lazy_property
-from salem.utils import read_shapefile
+import salem
+from salem import lazy_property, read_shapefile
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -40,24 +40,60 @@ from shapely.ops import transform as shp_trafo
 from salem import wgs84
 import xarray as xr
 import rasterio
-from rasterio.tools.merge import merge as merge_tool
+try:
+    from rasterio.tools.merge import merge as merge_tool
+except ImportError:
+    # rasterio V > 1.0
+    from rasterio.merge import merge as merge_tool
 import multiprocessing as mp
+import filelock
 
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.23/cruts' \
-             '.1506241137.v3.23/'
+CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24/cruts' \
+             '.1609301803.v3.24/'
+
+DEM3REG = {
+    'ISL': [-25., -12., 63., 67.],  # Iceland
+    'SVALBARD': [10., 34., 76., 81.],
+    'JANMAYEN': [-10., -7., 70., 72.],
+    'FJ': [36., 66., 79., 82.],  # Franz Josef Land
+    'FAR': [-8., -6., 61., 63.],  # Faroer
+    'BEAR': [18., 20., 74., 75.],  # Bear Island
+    'SHL': [-3., 0., 60., 61.],  # Shetland
+    # Antarctica tiles as UTM zones, large files
+    # '01-15': [-180., -91., -90, -60.],
+    # '16-30': [-91., -1., -90., -60.],
+    # '31-45': [-1., 89., -90., -60.],
+    # '46-60': [89., 189., -90., -60.],
+    # Greenland tiles
+    # 'GL-North': [-78., -11., 75., 84.],
+    # 'GL-West': [-68., -42., 64., 76.],
+    # 'GL-South': [-52., -40., 59., 64.],
+    # 'GL-East': [-42., -17., 64., 76.]
+}
+
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
 
-# File Download lock
-download_lock = mp.Lock()
+
+def _get_download_lock():
+    try:
+        lock_dir = cfg.PATHS['working_dir']
+    except:
+        lock_dir = cfg.CACHE_DIR
+    mkdir(lock_dir)
+    lockfile = os.path.join(lock_dir, 'oggm_data_download.lock')
+    try:
+        return filelock.FileLock(lockfile).acquire()
+    except:
+        return filelock.SoftFileLock(lockfile).acquire()
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):
@@ -71,6 +107,7 @@ def _urlretrieve(url, ofile, *args, **kwargs):
 
 def progress_urlretrieve(url, ofile):
     print("Downloading %s ..." % url)
+    sys.stdout.flush()
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
@@ -81,6 +118,7 @@ def progress_urlretrieve(url, ofile):
                 else:
                     pbar.start(UnknownLength)
             pbar.update(min(count * size, total))
+            sys.stdout.flush()
         res = _urlretrieve(url, ofile, reporthook=_upd)
         try:
             pbar.finish()
@@ -105,8 +143,25 @@ def expand_path(p):
     return os.path.expandvars(os.path.expanduser(p))
 
 
+class SuperclassMeta(type):
+    """Metaclass for abstract base classes.
+
+    http://stackoverflow.com/questions/40508492/python-sphinx-inherit-
+    method-documentation-from-superclass
+    """
+    def __new__(mcls, classname, bases, cls_dict):
+        cls = super().__new__(mcls, classname, bases, cls_dict)
+        for name, member in cls_dict.items():
+            if not getattr(member, '__doc__'):
+                try:
+                    member.__doc__ = getattr(bases[-1], name).__doc__
+                except AttributeError:
+                    pass
+        return cls
+
+
 def _download_oggm_files():
-    with download_lock:
+    with _get_download_lock():
         return _download_oggm_files_unlocked()
 
 
@@ -180,13 +235,20 @@ def _download_oggm_files_unlocked():
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
-            out[filename] = os.path.join(root, filename)
+            if filename in out:
+                # This was a stupid thing, and should not happen
+                # TODO: duplicates in sample data...
+                k = os.path.join(os.path.dirname(root), filename)
+                assert k not in out
+                out[k] = os.path.join(root, filename)
+            else:
+                out[filename] = os.path.join(root, filename)
 
     return out
 
 
 def _download_srtm_file(zone):
-    with download_lock:
+    with _get_download_lock():
         return _download_srtm_file_unlocked(zone)
 
 
@@ -195,8 +257,7 @@ def _download_srtm_file_unlocked(zone):
     """
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'srtm')
-    if not os.path.exists(odir):
-        os.makedirs(odir)
+    mkdir(odir)
     ofile = os.path.join(odir, 'srtm_' + zone + '.zip')
 #    ifile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/SRTM_Data_GeoTiff' \
     ifile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs' \
@@ -217,8 +278,10 @@ def _download_srtm_file_unlocked(zone):
                 if err.code == 404:
                     # Ok so this *should* be an ocean tile
                     return None
-                elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
-                    print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" %
+                elif err.code >= 500 and err.code < 600 and \
+                         retry_counter <= retry_max:
+                    print("Downloading SRTM data failed with HTTP error %s, "
+                          "retrying in 10 seconds... %s/%s" %
                           (err.code, retry_counter, retry_max))
                     time.sleep(10)
                     continue
@@ -234,19 +297,17 @@ def _download_srtm_file_unlocked(zone):
     return out
 
 
-def _download_dem3_viewpano(zone, specialzones):
-    with download_lock:
-        return _download_dem3_viewpano_unlocked(zone, specialzones)
+def _download_dem3_viewpano(zone):
+    with _get_download_lock():
+        return _download_dem3_viewpano_unlocked(zone)
 
 
-def _download_dem3_viewpano_unlocked(zone, specialzones):
+def _download_dem3_viewpano_unlocked(zone):
     """Checks if the srtm data is in the directory and if not, download it.
     """
+    odir = os.path.join(cfg.PATHS['topo_dir'], 'dem3', zone)
 
-    odir = os.path.join(cfg.PATHS['topo_dir'], 'dem3')
-
-    if not os.path.exists(odir):
-        os.makedirs(odir)
+    mkdir(odir)
     ofile = os.path.join(odir, 'dem3_' + zone + '.zip')
     outpath = os.path.join(odir, zone+'.tif')
 
@@ -255,8 +316,9 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
         return outpath
 
     # some files have a newer version 'v2'
-    if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34', 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40',
-                'P31', 'P32', 'P33', 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
+    if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34',
+                'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
+                'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in ['01-15', '16-30', '31-45', '46-60']:
         ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
@@ -270,7 +332,7 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
             # Try to download
             try:
                 retry_counter += 1
-                urlretrieve(ifile, ofile)
+                progress_urlretrieve(ifile, ofile)
                 with zipfile.ZipFile(ofile) as zf:
                     zf.extractall(odir)
                 break
@@ -279,42 +341,53 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
                 if err.code == 404:
                     # Ok so this *should* be an ocean tile
                     return None
-                elif err.code >= 500 and err.code < 600 and retry_counter <= retry_max:
-                    print("Downloading srtm data failed with HTTP error %s, retrying in 10 seconds... %s/%s" %
+                elif err.code >= 500 and err.code < 600 and  \
+                                retry_counter <= retry_max:
+                    print("Downloading DEM3 data failed with HTTP error %s, "
+                          "retrying in 10 seconds... %s/%s" %
                           (err.code, retry_counter, retry_max))
                     time.sleep(10)
                     continue
                 else:
                     raise
+            except ContentTooShortError:
+                print("Downloading DEM3 data failed with ContentTooShortError"
+                      " error %s, retrying in 10 seconds... %s/%s" %
+                      (err.code, retry_counter, retry_max))
+                time.sleep(10)
+                continue
+
             except zipfile.BadZipfile:
                 # This is for py2
                 # Ok so this *should* be an ocean tile
                 return None
 
-    # Serious issue: sometimes, if a southern hemisphere URL is queried for download and there is none
-    # a NH zip file os downloaded. Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
-    # BUT: There are southern hemisphere files that download properly. However, the unzipped folder has the file name of
+    # Serious issue: sometimes, if a southern hemisphere URL is queried for
+    # download and there is none, a NH zip file os downloaded.
+    # Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
+    # BUT: There are southern hemisphere files that download properly. However,
+    # the unzipped folder has the file name of
     # the northern hemisphere file. Some checks if correct file exists:
-
     if len(zone)==4 and zone.startswith('S'):
         zonedir = os.path.join(odir, zone[1:])
-        globlist = glob.glob(zonedir+'\\S*.hgt') #'S' is important: cloud be confused with NH files otherwise
     else:
         zonedir = os.path.join(odir, zone)
-        globlist = glob.glob(zonedir+'\\*.hgt')
+    globlist = glob.glob(os.path.join(zonedir, '*.hgt'))
 
-    # take care of the special file naming cases (very ineffective...)
-    if zone in specialzones.keys():
-        globlist = glob.glob(odir+'\\*\\*.hgt')
+    # take care of the special file naming cases
+    if zone in DEM3REG.keys():
+        globlist = glob.glob(os.path.join(odir, '*', '*.hgt'))
 
     if not globlist:
-        return None
+        raise RuntimeError("We should have some files here, but we don't")
 
-    # merge the single HGT files (can be a bit ineffective, bcz not every single file might be exactly within extent...)
+    # merge the single HGT files (can be a bit ineffective, because not every
+    # single file might be exactly within extent...)
     rfiles = [rasterio.open(s) for s in globlist]
     dest, output_transform = merge_tool(rfiles)
     profile = rfiles[0].profile
-    profile.pop('affine')
+    if 'affine' in profile:
+        profile.pop('affine')
     profile['transform'] = output_transform
     profile['height'] = dest.shape[1]
     profile['width'] = dest.shape[2]
@@ -323,12 +396,15 @@ def _download_dem3_viewpano_unlocked(zone, specialzones):
         dst.write(dest)
 
     assert os.path.exists(outpath)
+    # delete original files to spare disk space
+    for s in globlist:
+        os.remove(s)
 
     return outpath
 
 
 def _download_aster_file(zone, unit):
-    with download_lock:
+    with _get_download_lock():
         return _download_aster_file_unlocked(zone, unit)
 
 
@@ -344,8 +420,7 @@ def _download_aster_file_unlocked(zone, unit):
     """
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'aster')
-    if not os.path.exists(odir):
-        os.makedirs(odir)
+    mkdir(odir)
     fbname = 'ASTGTM2_' + zone + '.zip'
     dirbname = 'UNIT_' + unit
     ofile = os.path.join(odir, fbname)
@@ -368,7 +443,7 @@ def _download_aster_file_unlocked(zone, unit):
 
 
 def _download_alternate_topo_file(fname):
-    with download_lock:
+    with _get_download_lock():
         return _download_alternate_topo_file_unlocked(fname)
 
 
@@ -388,13 +463,13 @@ def _download_alternate_topo_file_unlocked(fname):
     # Here we had a file exists check
 
     odir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
-    if not os.path.exists(odir):
-        os.makedirs(odir)
+    mkdir(odir)
     ofile = os.path.join(odir, fzipname)
 
     cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/topo/'
     cmd = cmd + fzipname + ' ' + ofile
     if not os.path.exists(ofile):
+        print('Downloading ' + fzipname + ' from AWS s3...')
         subprocess.call(cmd, shell=True)
         if os.path.exists(ofile):
             # Ok so the tile is a valid one
@@ -415,8 +490,8 @@ def _get_centerline_lonlat(gdir):
     olist = []
     for i in gdir.divide_ids:
         cls = gdir.read_pickle('centerlines', div_id=i)
-        for i, cl in enumerate(cls):
-            mm = 1 if i==0 else 0
+        for j, cl in enumerate(cls[::-1]):
+            mm = 1 if j==0 else 0
             gs = gpd.GeoSeries()
             gs['RGIID'] = gdir.rgi_id
             gs['DIVIDE'] = i
@@ -430,7 +505,7 @@ def _get_centerline_lonlat(gdir):
 
 
 def aws_file_download(aws_path, local_path, reset=False):
-    with download_lock:
+    with _get_download_lock():
         return _aws_file_download_unlocked(aws_path, local_path, reset)
 
 
@@ -593,6 +668,27 @@ def nicenumber(number, binsize, lower=False):
         return (e+1) * binsize
 
 
+def signchange(ts):
+    """Detect sign changes in a time series.
+
+    http://stackoverflow.com/questions/2652368/how-to-detect-a-sign-change-
+    for-elements-in-a-numpy-array
+
+    Returns
+    -------
+    An array with 0s everywhere and 1's when the sign changes
+    """
+    asign = np.sign(ts)
+    sz = asign == 0
+    while sz.any():
+        asign[sz] = np.roll(asign, 1)[sz]
+        sz = asign == 0
+    out = ((np.roll(asign, 1) - asign) != 0).astype(int)
+    if asign.iloc[0] == asign.iloc[1]:
+        out.iloc[0] = 0
+    return out
+
+
 def year_to_date(yr):
     """Converts a float year to an actual (year, month) tuple.
 
@@ -605,7 +701,7 @@ def year_to_date(yr):
         sec = sec * SEC_IN_YEAR
         out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
     except TypeError:
-        #TODO: inefficient but no time right now
+        # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
@@ -620,8 +716,8 @@ def date_to_year(y, m):
 
     Note that this doesn't account for leap years.
     """
-
-    return y + BEGINSEC_IN_MONTHS[np.asarray(m) - 1] / SEC_IN_YEAR
+    ids = np.asarray(m, dtype=np.int) - 1
+    return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
 def monthly_timeseries(y0, y1=None, ny=None):
@@ -641,7 +737,7 @@ def monthly_timeseries(y0, y1=None, ny=None):
 
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        prcp_scaling_factor, use_grad):
+                        use_grad):
     """Prevent to re-compute a timeserie if it was done before.
 
     TODO: dirty solution, should be replaced by proper input.
@@ -658,7 +754,7 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
         thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
         ihgt = thgt[1, 1]
         thgt = thgt.flatten()
-        iprcp = prcp[:, ilat, ilon] * prcp_scaling_factor
+        iprcp = prcp[:, ilat, ilon]
 
     # Now the gradient
     if use_grad:
@@ -676,8 +772,7 @@ def pipe_log(gdir, task_func, err=None):
     """Log the error in a specific directory."""
 
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
-    if not os.path.exists(fpath):
-        os.makedirs(fpath)
+    mkdir(fpath)
 
     fpath = os.path.join(fpath, gdir.rgi_id)
 
@@ -760,17 +855,20 @@ def srtm_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
-def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
-    """Returns a list of corrected SRTM zones from
-    http://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm covering the desired extent.
+def dem3_viewpano_zone(lon_ex, lat_ex):
+    """Returns a list of DEM3 zones covering the desired extent.
+
+    http://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm
     """
 
-    for _f in specialfiles.keys():  # Python version independent iteration through dictionary
+    for _f in DEM3REG.keys():
 
-        if (np.min(lon_ex) >= specialfiles[_f][0]) and (np.max(lon_ex) <= specialfiles[_f][1]) and \
-           (np.min(lat_ex) >= specialfiles[_f][2]) and (np.max(lat_ex) <= specialfiles[_f][3]):
+        if (np.min(lon_ex) >= DEM3REG[_f][0]) and \
+           (np.max(lon_ex) <= DEM3REG[_f][1]) and \
+           (np.min(lat_ex) >= DEM3REG[_f][2]) and \
+           (np.max(lat_ex) <= DEM3REG[_f][3]):
 
-            # test some weired inset files in Antarctica
+            # test some weird inset files in Antarctica
             if (np.min(lon_ex) >= -91.) and (np.max(lon_ex) <= -90.) and \
                (np.min(lat_ex) >= -72.) and (np.max(lat_ex) <= -68.):
                 return ['SR15']
@@ -799,17 +897,18 @@ def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
             else:
                 return [_f]
 
-    # if the tile does *not* have a special name, its name can be found like this:
+    # if the tile doesn't have a special name, its name can be found like this:
     # corrected SRTMs are sorted in tiles of 6 deg longitude and 4 deg latitude
     srtm_x0 = -180.
     srtm_y0 = 0.
     srtm_dx = 6.
     srtm_dy = 4.
 
-
     # quick n dirty solution to be sure that we will cover the whole range
     mi, ma = np.min(lon_ex), np.max(lon_ex)
-    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dy)+3) # +3 is just for the number to become still a bit larger
+    # TODO: Fabien, find out what Johannes wanted with this +3
+    # +3 is just for the number to become still a bit larger
+    lon_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dy)+3)
     mi, ma = np.min(lat_ex), np.max(lat_ex)
     lat_ex = np.linspace(mi, ma, np.ceil((ma - mi)/srtm_dx)+3)
 
@@ -818,10 +917,9 @@ def dem3_viewpano_zone(lon_ex, lat_ex, specialfiles):
         for lat in lat_ex:
             dx = lon - srtm_x0
             dy = lat - srtm_y0
-
             zx = np.ceil(dx / srtm_dx)
-            zy = chr(int(abs(dy / srtm_dy)) + ord('A'))  # convert number to letter
-
+            # convert number to letter
+            zy = chr(int(abs(dy / srtm_dy)) + ord('A'))
             if lat >= 0:
                 zones.append('%s%02.0f' % (zy, zx))
             else:
@@ -981,7 +1079,7 @@ def get_glathida_file():
 
 
 def get_rgi_dir():
-    with download_lock:
+    with _get_download_lock():
         return _get_rgi_dir_unlocked()
 
 
@@ -1020,15 +1118,14 @@ def _get_rgi_dir_unlocked():
                 ofile = os.path.join(root, filename)
                 with zipfile.ZipFile(ofile) as zf:
                     ex_root = ofile.replace('.zip', '')
-                    if not os.path.exists(ex_root):
-                        os.makedirs(ex_root)
+                    mkdir(ex_root)
                     zf.extractall(ex_root)
 
     return rgi_dir
 
 
 def get_cru_file(var=None):
-    with download_lock:
+    with _get_download_lock():
         return _get_cru_file_unlocked(var)
 
 
@@ -1074,7 +1171,7 @@ def _get_cru_file_unlocked(var=None):
     return ofile
 
 
-def get_topo_file(lon_ex, lat_ex, region=None):
+def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     """
     Returns a path to the DEM file covering the desired extent.
 
@@ -1086,96 +1183,106 @@ def get_topo_file(lon_ex, lat_ex, region=None):
 
     Parameters
     ----------
-    lon_ex: (min_lon, max_lon)
-    lat_ex: (min_lat, max_lat)
+    lon_ex : tuple, required
+        a (min_lon, max_lon) tuple deliminating the requested area longitudes
+    lat_ex : tuple, required
+        a (min_lat, max_lat) tuple deliminating the requested area latitudes
+    rgi_region : int, optional
+        the RGI region number (required for the GIMP DEM)
+    source : str or list of str, optional
+        if you want to force the use of a certain DEM source. Available are:
+          - 'USER' : file set in cfg.PATHS['dem_file']
+          - 'SRTM' : SRTM v4.1
+          - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
+          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'DEM3' : http://viewfinderpanoramas.org/
+          - 'ASTER' : ASTER data
+          - 'ETOPO1' : last resort, a very coarse global dataset
 
     Returns
     -------
     tuple: (path to the dem file, data source)
     """
 
-    # Did the user specify a specific SRTM file?
-    if ('dem_file' in cfg.PATHS) and os.path.isfile(cfg.PATHS['dem_file']):
-        return cfg.PATHS['dem_file'], 'USER'
+    if source is not None and not isinstance(source, string_types):
+        # check all user options
+        for s in source:
+            demf, source_str = get_topo_file(lon_ex, lat_ex,
+                                             rgi_region=rgi_region,
+                                             source=s)
+            if os.path.isfile(demf):
+                return demf, source_str
+
+    # Did the user specify a specific DEM file?
+    if 'dem_file' in cfg.PATHS and os.path.isfile(cfg.PATHS['dem_file']):
+        source = 'USER' if source is None else source
+        if source == 'USER':
+            return cfg.PATHS['dem_file'], source
 
     # If not, do the job ourselves: download and merge stuffs
     topodir = cfg.PATHS['topo_dir']
 
-    # TODO: GIMP is in polar stereographic, not easy to test
-    # would be possible with a salem grid but this is a bit more expensive
-    # than just asking RGI for the region
-    if region is not None and int(region) == 5:
-        gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
-        return gimp_file, 'GIMP'
+    # GIMP is in polar stereographic, not easy to test if glacier is on the map
+    # It would be possible with a salem grid but this is a bit more expensive
+    # Instead, we are just asking RGI for the region
+    if source == 'GIMP' or (rgi_region is not None and int(rgi_region) == 5):
+        source = 'GIMP' if source is None else source
+        if source == 'GIMP':
+            gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
+            return gimp_file, source
 
-    # Some regional files I could gather
-    # Iceland http://viewfinderpanoramas.org/dem3/ISL.zip
-    # Svalbard http://viewfinderpanoramas.org/dem3/SVALBARD.zip
-    # NorthCanada (could be larger - need tiles download)
-    _exs = (
-        [-25., -12., 63., 67.],
-        [10., 34., 76., 81.],
-        [-96., -60., 76., 84.]
-    )
-    _files = (
-        'iceland.tif',
-        'svalbard.tif',
-        'northcanada.tif',
-    )
-    for _ex, _f in zip(_exs, _files):
+    # Same for Antarctica
+    if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
+        if np.max(lat_ex) > -60:
+            # special case for some distant islands
+            source = 'DEM3' if source is None else source
+        else:
+            source = 'RAMP' if source is None else source
+        if source == 'RAMP':
+            gimp_file = _download_alternate_topo_file('AntarcticDEM_wgs84.tif')
+            return gimp_file, source
 
-        if (np.min(lon_ex) >= _ex[0]) and (np.max(lon_ex) <= _ex[1]) and \
-           (np.min(lat_ex) >= _ex[2]) and (np.max(lat_ex) <= _ex[3]):
-            r_file = _download_alternate_topo_file(_f)
-            return r_file, 'REGIO'
-
-    if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.):
-        # TODO: https://github.com/OGGM/oggm/pull/79 does not work properly yet
-        # # Use corrected viewpanoramas.org SRTM!
-        # # some filenames deviate from the scheme (some do not contain glaciers, but for uniformity...)
-        # specialfiles = {'ISL': [-25., -12., 63., 67.],       # Iceland
-        #                 'SVALBARD': [10., 34., 76., 81.],
-        #                 'JANMAYEN': [-10., -7., 70., 72.],
-        #                 'FJ': [36., 66., 79., 82.],          # Franz Josef Land
-        #                 'FAR': [-8., -6., 61., 63.],         # Faroer
-        #                 'BEAR': [18., 20., 74., 75.],        # Bear Island
-        #                 'SHL': [-3., 0., 60., 61.],          # Shetland
-        #                 '01-15': [-180., -91., -90, -60.],   # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-        #                 '16-30': [-91., -1., -90., -60.],
-        #                 '31-45': [-1., 89., -90., -60.],
-        #                 '46-60': [89., 189., -90., -60.],
-        #                 'GL-North': [-78., -11., 75., 84.],  # Greenland tiles
-        #                 'GL-West': [-68., -42., 64., 76.],
-        #                 'GL-South': [-52., -40., 59., 64.],
-        #                 'GL-East': [-42., -17., 64., 76.]}
-        # zones = dem3_viewpano_zone(lon_ex, lat_ex, specialfiles)
-        # sources = []
-        # for z in zones:
-        #     sources.append(_download_dem3_viewpano(z, specialfiles))
-        # source_str = 'DEM3'
-        #
-        # # if download failed for some reason, use ASTER
-        # if len(sources) < 1:
-        zones, units = aster_zone(lon_ex, lat_ex)
-        sources = []
-        for z, u in zip(zones, units):
-            sf = _download_aster_file(z, u)
-            if sf is not None:
-                sources.append(sf)
-        source_str = 'ASTER'
+    # Anywhere else on Earth we chack for DEM3, ASTER, or SRTM
+    if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
+                    source == 'DEM3' or source == 'ASTER':
+        # default is DEM3
+        source = 'DEM3' if source is None else source
+        if source == 'DEM3':
+            # use corrected viewpanoramas.org DEM
+            zones = dem3_viewpano_zone(lon_ex, lat_ex)
+            sources = []
+            for z in zones:
+                sources.append(_download_dem3_viewpano(z))
+            source_str = source
+        if source == 'ASTER':
+            # use ASTER
+            zones, units = aster_zone(lon_ex, lat_ex)
+            sources = []
+            for z, u in zip(zones, units):
+                sf = _download_aster_file(z, u)
+                if sf is not None:
+                    sources.append(sf)
+            source_str = source
     else:
-        zones = srtm_zone(lon_ex, lat_ex)
-        sources = []
-        for z in zones:
-            sources.append(_download_srtm_file(z))
-        source_str = 'SRTM'
+        source = 'SRTM' if source is None else source
+        if source == 'SRTM':
+            zones = srtm_zone(lon_ex, lat_ex)
+            sources = []
+            for z in zones:
+                sources.append(_download_srtm_file(z))
+            source_str = source
 
-    if len(sources) < 1:
-        raise RuntimeError('No topography file available!')
-        # for the very last cases a very coarse dataset ?
+    # For the very last cases a very coarse dataset ?
+    if source == 'ETOPO1':
         t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
         assert os.path.exists(t_file)
         return t_file, 'ETOPO1'
+
+    # filter for None (e.g. oceans)
+    sources = [s for s in sources if s is not None]
+
+    if len(sources) < 1:
+        raise RuntimeError('No topography file available!')
 
     if len(sources) == 1:
         return sources[0], source_str
@@ -1183,19 +1290,24 @@ def get_topo_file(lon_ex, lat_ex, region=None):
         # merge
         zone_str = '+'.join(zones)
         bname = source_str.lower() + '_merged_' + zone_str + '.tif'
+
+        if len(bname) > 200:  # file name way too long
+            import hashlib
+            hash_object = hashlib.md5(bname.encode())
+            bname = hash_object.hexdigest() + '.tif'
+
         merged_file = os.path.join(topodir, source_str.lower(),
                                    bname)
         if not os.path.exists(merged_file):
-
             # check case where wrong zip file is downloaded from
             if all(x is None for x in sources):
                 raise ValueError('Chosen lat/lon values are not available')
-
             # write it
             rfiles = [rasterio.open(s) for s in sources]
             dest, output_transform = merge_tool(rfiles)
             profile = rfiles[0].profile
-            profile.pop('affine')
+            if 'affine' in profile:
+                profile.pop('affine')
             profile['transform'] = output_transform
             profile['height'] = dest.shape[1]
             profile['width'] = dest.shape[2]
@@ -1319,6 +1431,14 @@ def glacier_characteristics(gdirs):
     return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
 
 
+class DisableLogger():
+    """Context manager to temporarily disable all loggers."""
+    def __enter__(self):
+        logging.disable(logging.ERROR)
+    def __exit__(self, a, b, c):
+        logging.disable(logging.NOTSET)
+
+
 class entity_task(object):
     """Decorator for common job-controlling logic.
 
@@ -1358,18 +1478,20 @@ class entity_task(object):
                 self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
-            if cfg.CONTINUE_ON_ERROR:
-                try:
-                    out = task_func(gdir, **kwargs)
-                    gdir.log(task_func)
-                except Exception as err:
-                    # Something happened
-                    out = None
-                    gdir.log(task_func, err=err)
-                    pipe_log(gdir, task_func, err=err)
-            else:
+            try:
                 out = task_func(gdir, **kwargs)
+                gdir.log(task_func)
+            except Exception as err:
+                # Something happened
+                out = None
+                gdir.log(task_func, err=err)
+                pipe_log(gdir, task_func, err=err)
+                self.log.error('%s occured during task %s on %s!',
+                        type(err).__name__, task_func.__name__, gdir.rgi_id)
+                if not cfg.CONTINUE_ON_ERROR:
+                    raise
             return out
+        _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
 
 
@@ -1415,6 +1537,18 @@ class divide_task(object):
         # For the logger later on
         _divide_task.__dict__['divide_task'] = True
         return _divide_task
+
+
+def global_task(task_func):
+    """
+    Decorator for common job-controlling logic.
+
+    Indicates that this task expects a list of all GlacierDirs as parameter
+    instead of being called once per dir.
+    """
+
+    task_func.__dict__['global_task'] = True
+    return task_func
 
 
 class GlacierDirectory(object):
@@ -1509,6 +1643,9 @@ class GlacierDirectory(object):
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
 
+        # remove spurious characters and trailing blanks
+        self._filter_name()
+
         # Read glacier attrs
         keys = {'0': 'Glacier',
                 '1': 'Ice cap',
@@ -1532,24 +1669,23 @@ class GlacierDirectory(object):
 
         # convert the date
         try:
-            rgi_date = pd.to_datetime(rgi_datestr[0:6],
-                                      errors='raise', format='%Y%m')
+            rgi_date = pd.to_datetime(rgi_datestr[0:4],
+                                      errors='raise', format='%Y')
         except:
-            rgi_date = pd.to_datetime('200301', format='%Y%m')
+            rgi_date = None
         self.rgi_date = rgi_date
 
         self.dir = os.path.join(base_dir, self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
-        if not os.path.exists(self.dir):
-            os.makedirs(self.dir)
+        mkdir(self.dir)
 
         # The divides dirs are created by gis.define_glacier_region
 
     @lazy_property
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
-        return self.read_pickle('glacier_grid')
+        return salem.Grid.from_json(self.get_filepath('glacier_grid'))
 
     @lazy_property
     def rgi_area_m2(self):
@@ -1572,6 +1708,19 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
+    def _filter_name(self):
+        """remove spurious characters and trailing blanks"""
+        str = self.name
+        if str is None or len(str) == 0:
+            return
+        if str[-1] == 'À':
+            str = str[:-1]
+        if len(str) == 0:
+            return
+        if str[-1] == '3':
+            str = str[:-1]
+        self.name = str.strip()
+
     def get_filepath(self, filename, div_id=0, delete=False):
         """Absolute path to a specific file.
 
@@ -1579,8 +1728,10 @@ class GlacierDirectory(object):
         ----------
         filename : str
             file name (must be listed in cfg.BASENAME)
-        div_id : int
-            the divide for which you want to get the file path
+        div_id : int or str
+            the divide for which you want to get the file path (set to
+            'major' to get the major divide according to
+            compute_downstream_lines)
         delete : bool, default=False
             delete the file if exists
 
@@ -1591,6 +1742,9 @@ class GlacierDirectory(object):
 
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
+
+        if div_id == 'major':
+            div_id = self.read_pickle('major_divide', div_id=0)
 
         dir = self.divide_dirs[div_id]
         out = os.path.join(dir, cfg.BASENAMES[filename])
@@ -1711,10 +1865,11 @@ class GlacierDirectory(object):
 
         return nc
 
-    def write_monthly_climate_file(self, time, prcp, temp, grad, hgt):
+    def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
+                                   ref_pix_lon, ref_pix_lat):
         """Creates a netCDF4 file with climate data.
 
-        See :py:func:`oggm.tasks.distribute_climate_data`.
+        See :py:func:`~oggm.tasks.process_cru_data`.
         """
 
         # overwrite as default
@@ -1723,7 +1878,11 @@ class GlacierDirectory(object):
             os.remove(fpath)
 
         with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
-            nc.ref_hgt = hgt
+            nc.ref_hgt = ref_pix_hgt
+            nc.ref_pix_lon = ref_pix_lon
+            nc.ref_pix_lat = ref_pix_lat
+            nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
+                                       ref_pix_lon, ref_pix_lat)
 
             dtime = nc.createDimension('time', None)
 
@@ -1737,7 +1896,7 @@ class GlacierDirectory(object):
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'
-            v.long_name = 'total precipitation amount'
+            v.long_name = 'total monthly precipitation amount'
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
@@ -1749,6 +1908,40 @@ class GlacierDirectory(object):
             v.units = 'degC m-1'
             v.long_name = 'temperature gradient'
             v[:] = grad
+
+    def get_flowline_hw(self):
+        """ Shortcut function to read the heights and widths of the glacier.
+
+        Returns
+        -------
+        (height, widths) in units of m
+        """
+        fls = self.read_pickle('inversion_flowlines', div_id=0)
+        h = np.array([])
+        w = np.array([])
+        for fl in fls:
+            w = np.append(w, fl.widths)
+            h = np.append(h, fl.surface_h)
+        return h, w * fl.dx * self.grid.dx
+
+    def get_ref_mb_data(self):
+        """Get the reference mb data from WGMS (for some glaciers only!)."""
+
+        flink, mbdatadir = get_wgms_files()
+
+        # file
+        reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
+        if not os.path.exists(reff):
+            reff = reff.replace('RGI40-', 'RGI50-')
+        # list of years
+        mbdf = pd.read_csv(reff).set_index('YEAR')
+
+        # logic for period
+        y0, y1 = cfg.PARAMS['run_period']
+        ci = self.read_pickle('climate_info')
+        y0 = y0 or ci['hydro_yr_0']
+        y1 = y1 or ci['hydro_yr_1']
+        return mbdf.loc[y0:y1]
 
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
@@ -1767,8 +1960,7 @@ class GlacierDirectory(object):
 
         # logging directory
         fpath = os.path.join(self.dir, 'log')
-        if not os.path.exists(fpath):
-            os.makedirs(fpath)
+        mkdir(fpath)
 
         # a file per function name
         fpath = os.path.join(fpath, func.__name__)
@@ -1782,4 +1974,3 @@ class GlacierDirectory(object):
             f.write(func.__name__ + '\n')
             if err is not None:
                 f.write(err.__class__.__name__ + ': {}'.format(err))
-

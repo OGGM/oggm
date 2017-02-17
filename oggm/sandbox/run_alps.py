@@ -71,9 +71,6 @@ cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['optimize_thick'] = True
 cfg.PARAMS['force_one_flowline'] = ['RGI50-11.01270']
 
-# Divides
-cfg.set_divides_db(utils.get_demo_file('divides_workflow.shp'))
-
 # Read in the Alps RGI file
 rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_ref_alps.pkl')
 utils.aws_file_download('alps/rgi_ref_alps.pkl', rgi_pkl_path, reset=False)
@@ -98,8 +95,8 @@ task_list = [
 for task in task_list:
     execute_entity_task(task, gdirs)
 
-# Climate related tasks - this will download
-tasks.distribute_climate_data(gdirs)
+# Climate related task
+execute_entity_task(tasks.process_custom_climate_data, gdirs)
 tasks.compute_ref_t_stars(gdirs)
 tasks.distribute_t_stars(gdirs)
 

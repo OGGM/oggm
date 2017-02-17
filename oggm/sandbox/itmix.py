@@ -78,7 +78,7 @@ def get_rgi_df(reset=False):
 
             # read the rgi region
             rgi_shp = find_path(RGI_DIR, row['rgi_reg'] + '_rgi50_*.shp')
-            rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
+            rgi_df = salem.read_shapefile(rgi_shp, cached=True)
 
             rgi_parts = row.T['rgi_parts_ids']
             sel = rgi_df.loc[rgi_df.RGIId.isin(rgi_parts)].copy()
@@ -89,7 +89,7 @@ def get_rgi_df(reset=False):
                             'SouthGlacier', 'Tasman', 'Unteraar',
                             'Washmawapta', 'Columbia']:
                 shf = find_path(SEARCHD, '*_' + row.name + '*.shp')
-                shp = salem.utils.read_shapefile(shf)
+                shp = salem.read_shapefile(shf)
                 if row.name == 'Unteraar':
                     shp = shp.iloc[[-1]]
                 if 'LineString' == shp.iloc[0].geometry.type:
@@ -120,7 +120,7 @@ def get_rgi_df(reset=False):
             elif row.name == 'Urumqi':
                 # ITMIX Urumqi is in fact two glaciers
                 shf = find_path(SEARCHD, '*_' + row.name + '*.shp')
-                shp2 = salem.utils.read_shapefile(shf)
+                shp2 = salem.read_shapefile(shf)
                 assert len(shp2) == 2
                 for k in [0, 1]:
                     shp = shp2.iloc[[k]].copy()
@@ -214,7 +214,7 @@ def get_rgi_df(reset=False):
             reg = rid.split('-')[1].split('.')[0]
             # read the rgi region
             rgi_shp = find_path(RGI_DIR, reg + '_rgi50_*.shp')
-            rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
+            rgi_df = salem.read_shapefile(rgi_shp, cached=True)
 
             sel = rgi_df.loc[rgi_df.RGIId.isin([rid])].copy()
             assert len(sel) == 1
@@ -244,7 +244,7 @@ def get_rgi_df(reset=False):
             reg = rid.split('-')[1].split('.')[0]
             # read the rgi region
             rgi_shp = find_path(RGI_DIR, reg + '_rgi50_*.shp')
-            rgi_df = salem.utils.read_shapefile(rgi_shp, cached=True)
+            rgi_df = salem.read_shapefile(rgi_shp, cached=True)
 
             sel = rgi_df.loc[rgi_df.RGIId.isin([rid])].copy()
             assert len(sel) == 1

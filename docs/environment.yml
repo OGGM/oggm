@@ -2,8 +2,11 @@ name: oggm
 channels:
   - conda-forge
 dependencies:
-  - python
+  - python=3.5
   - numpy
+  - scipy
+  - gdal
+  - matplotlib
   - pandas
   - geopandas
   - Pillow
@@ -15,10 +18,10 @@ dependencies:
   - krb5
   - rasterio
   - xarray
+  - filelock
   - numpydoc
-  - ipython=4.0.1
-  - sphinx=1.2.3  # pin to avoid https://github.com/sphinx-doc/sphinx/issues/1822
+  - ipython
+  - sphinx=1.5
   - pip:
-    - git+https://github.com/fmaussion/motionless.git
+    - motionless
     - git+https://github.com/fmaussion/salem.git
-    - git+https://github.com/fmaussion/cleo.git
