@@ -667,3 +667,32 @@ def compute_downstream_lines(gdir):
         lids = [l for l in lids if mask[l[0], l[1]] == 0][0:-1]
         line = shpg.LineString(np.array(lids)[:, [1, 0]])
         gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
+
+
+@entity_task(log, writes=['downstream_bed'])
+def compute_downstream_bedshape(gdir):
+    """Compute the lines continuing the glacier (one per divide).
+
+    The idea is simple: starting from the glacier tail, compute all the routes
+    to all local minimas found at the domain edge. The cheapest is "the One".
+
+    The task also determines the so-called "major flowline" which is the
+    only line flowing out of the domain. The other ones are flowing into the
+    branch. The rest of the job (merging all centerlines + downstreams into
+    one single glacier is realized by
+    :py:func:`~oggm.tasks.init_present_time_glacier`).
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    # do stuffs
+
+    # get the major downstream line only
+    majid = gdir.read_pickle('major_divide', div_id=0)
+    dl = gdir.read_pickle('downstream_line', div_id=majid)
+
+    # write output
+    bedshapes = np.array([])
+    gdir.write_pickle(bedshapes, 'downstream_bed')

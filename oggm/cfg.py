@@ -193,6 +193,10 @@ BASENAMES['past_model'] = ('past_model.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
+_doc = 'Array of the parabolic coefficents of the downstream lines'
+BASENAMES['downstream_bed'] = ('downstream_bed.pkl', _doc)
+
+
 def initialize(file=None):
     """Read the configuration file containing the run's parameters."""
 
