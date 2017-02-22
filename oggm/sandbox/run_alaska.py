@@ -38,7 +38,7 @@ cfg.initialize()
 # Local paths (where to write output and where to download input)
 WORKING_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/work_dir/'
 DATA_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/'
-RGI_FILE = '/home/beatriz/Documents/global_data_base/Alaska_tidewater_andlake/01_rgi50_Alaska.shp'
+RGI_FILE = '/home/beatriz/Documents/global_data_base/Alaska_regional_run_divided/Sub_region4/Sub_region4.shp'
 GLATHIDA_FILE = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/rgi_glathida_links_2014_RGIV54.csv'
 
 cfg.PATHS['working_dir'] = WORKING_DIR
@@ -60,8 +60,10 @@ cfg.CONTINUE_ON_ERROR = False
 cfg.PARAMS['border'] = 80
 cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['optimize_inversion_params'] = True
+#cfg.PARAMS['inversion_glen_a '] = 2.4e-24 * 0.0921965677572172
 cfg.PARAMS['invert_with_sliding'] = False
 cfg.PARAMS['bed_shape'] = 'parabolic'
+
 
 # Some globals for more control on what to run
 RUN_GIS_PREPRO = False  # run GIS pre-processing tasks (before climate)
@@ -80,8 +82,12 @@ ids_with_mb = pd.read_csv(flink)['RGI_ID'].values
 
 # get some tw-glaciers that we want to test inside alaska region, also that are
 # inside GlathiDa
-keep_ids = ['RGI50-01.10689', 'RGI50-01.20791', 'RGI50-01.00037', 'RGI50-01.10402', 'RGI50-01.22193', 'RGI50-01.22699']
+keep_ids = ['RGI50-01.02228', 'RGI50-01.00037', 'RGI50-01.16316',
+            'RGI50-01.00570', 'RGI50-01.22699', 'RGI50-01.10689',
+            'RGI50-01.10612', 'RGI50-01.17348']
+
 keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
+
 rgidf = rgidf.iloc[keep_indexes]
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))
@@ -95,13 +101,13 @@ gdirs = workflow.init_glacier_regions(rgidf)
 
 # Pre-pro tasks
 task_list = [
-    tasks.glacier_masks,
-    tasks.compute_centerlines,
-    tasks.compute_downstream_lines,
-    tasks.catchment_area,
-    tasks.initialize_flowlines,
-    tasks.catchment_width_geom,
-    tasks.catchment_width_correction
+   tasks.glacier_masks,
+   tasks.compute_centerlines,
+   tasks.compute_downstream_lines,
+   tasks.catchment_area,
+   tasks.initialize_flowlines,
+   tasks.catchment_width_geom,
+   tasks.catchment_width_correction
 ]
 if RUN_GIS_PREPRO:
     for task in task_list:
@@ -109,7 +115,7 @@ if RUN_GIS_PREPRO:
 
 if RUN_CLIMATE_PREPRO:
     # Climate related tasks
-    workflow.execute_entity_task(tasks.distribute_cru_style, gdirs)
+    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
     tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 
@@ -129,21 +135,21 @@ if RUN_INVERSION:
 # #
 # for gd in gdirs:
 #     bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_')
-#     graphics.plot_googlemap(gd)
-#     plt.savefig(bname + 'ggl.png')
-#     plt.close()
-#     graphics.plot_centerlines(gd, add_downstream=True)
-#     plt.savefig(bname + 'cls.png')
-#     plt.close()
-#     graphics.plot_catchment_width(gd, corrected=True)
-#     plt.savefig(bname + 'w.png')
-#     plt.close()
-#     graphics.plot_inversion(gd)
-#     plt.savefig(bname + 'inv.png')
-#     plt.close()
-#     graphics.plot_distributed_thickness(gd)
-#     plt.savefig(bname + 'inv_cor.png')
-#     plt.close()
+    # graphics.plot_googlemap(gd)
+    # plt.savefig(bname + 'ggl.png')
+    # plt.close()
+    # graphics.plot_centerlines(gd, add_downstream=True)
+    # plt.savefig(bname + 'cls.png')
+    # plt.close()
+    # graphics.plot_catchment_width(gd, corrected=True)
+    # plt.savefig(bname + 'w.png')
+    # plt.close()
+    # graphics.plot_inversion(gd)
+    # plt.savefig(bname + 'inv.png')
+    # plt.close()
+    # graphics.plot_distributed_thickness(gd)
+    # plt.savefig(bname + 'inv_cor.png')
+    # plt.close()
 
 
 # if RUN_DYNAMICS:
@@ -151,7 +157,10 @@ if RUN_INVERSION:
 #     execute_entity_task(tasks.init_present_time_glacier, gdirs)
 #     execute_entity_task(tasks.random_glacier_evolution, gdirs)
 
-# Re-initializing climate tasks and inversion without calving just to be sure
+# # Re-initializing climate tasks and inversion without calving just to be sure
+for gdir in gdirs:
+    gdir.inversion_calving_rate = 0
+
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 tasks.optimize_inversion_params(gdirs)
@@ -183,9 +192,9 @@ def calving_from_depth(gdir):
     # We calculate the water_depth
     w_depth = thick - t_altitude
     # or F_calving = np.amax(0, 2*H_free*w_depth) * width
-#    print('t_altitude', t_altitude)
-#    print('depth', w_depth)
-#    print('thick',thick)
+    print('t_altitude', t_altitude)
+    print('depth', w_depth)
+    print('thick',thick)
     return np.absolute(((2*thick*w_depth)*width)/1e9), w_depth, thick
 
 # Selecting the tidewater glaciers on the region
@@ -291,11 +300,11 @@ df.to_csv(fpath)
 #     graphics.plot_distributed_thickness(gd)
 #     plt.savefig(bname + 'inv_cor.png')
 #     plt.close()
-
-# OTHER STUFF!!! that was in this script before but that I haven't touch
-
-# if RUN_DYNAMICS:
-#     # Random dynamics
-#     execute_entity_task(tasks.init_present_time_glacier, gdirs)
-#     execute_entity_task(tasks.random_glacier_evolution, gdirs)
 #
+# # OTHER STUFF!!! that was in this script before but that I haven't touch
+#
+# # if RUN_DYNAMICS:
+# #     # Random dynamics
+# #     execute_entity_task(tasks.init_present_time_glacier, gdirs)
+# #     execute_entity_task(tasks.random_glacier_evolution, gdirs)
+# #
