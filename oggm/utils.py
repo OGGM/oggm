@@ -1386,8 +1386,13 @@ def glacier_characteristics(gdirs):
             pacc = np.where(amb >= 0)
             pab = np.where(amb < 0)
             d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
-            #mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
-            #d['mb_grad'] = mb_slope
+            try:
+                # Try to get the slope
+                mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+                d['mb_grad'] = mb_slope
+            except:
+                # we don't mind if something goes wrong
+                d['mb_grad'] = np.NaN
             d['avg_width'] = np.mean(widths)
             d['avg_slope'] = np.mean(slope)
 

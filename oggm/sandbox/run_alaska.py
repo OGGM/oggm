@@ -40,8 +40,8 @@ RUN_inPC = True
 RUN_inAWS = False
 
 # What run we will do: without calving or with calving module
-No_calving = True
-With_calving = False
+No_calving = False
+With_calving = True
 
 
 if RUN_inPC:
@@ -49,7 +49,7 @@ if RUN_inPC:
     WORKING_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/work_dir/'
     DATA_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/'
     RGI_FILE = '/home/beatriz/Documents/global_data_base/Alaska_tidewater_andlake/01_rgi50_Alaska.shp'
-    GLATHIDA_FILE = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/rgi_glathida_links_2014_RGIV54.csv'
+    GLATHIDA_FILE = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/rgi_glathida_links_2014_RGIV55.csv'
 
 if RUN_inAWS:
     WORKING_DIR = '~/work_dir/'
@@ -77,15 +77,15 @@ cfg.CONTINUE_ON_ERROR = False
 cfg.PARAMS['border'] = 80
 cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['optimize_inversion_params'] = True
-#cfg.PARAMS['inversion_glen_a '] = 2.4e-24 * 0.0921965677572172
+#cfg.PARAMS['inversion_glen_a '] =  2.4e-24 * 0.0921965677572172
 cfg.PARAMS['invert_with_sliding'] = False
 cfg.PARAMS['bed_shape'] = 'parabolic'
 
 # Some globals for more control on what to run
 RUN_GIS_mask = False
 RUN_GIS_PREPRO = False  # run GIS pre-processing tasks (before climate)
-RUN_CLIMATE_PREPRO = False  # run climate pre-processing tasks
-RUN_INVERSION = False  # run bed inversion
+RUN_CLIMATE_PREPRO = True  # run climate pre-processing tasks
+RUN_INVERSION = True  # run bed inversion
 RUN_DYNAMICS = False  # run dynamics
 
 # Read RGI file
