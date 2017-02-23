@@ -195,10 +195,13 @@ class TestCenterlines(unittest.TestCase):
 
     def test_downstream_bedshape(self):
 
+        # dummy test to see if it runs
+        # TODO: test!
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        cfg.PARAMS['border'] = 100
+        default_b = cfg.PARAMS['border']
+        cfg.PARAMS['border'] = 80
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -207,13 +210,18 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_downstream_lines(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
+        cfg.PARAMS['border'] = default_b
+        out = gdir.read_pickle('downstream_bed')
+
+        # import gzip
+        # import pickle
+        # with gzip.open('downstream_bed.pkl', 'rb') as f:
+        #     expected = pickle.load(f)
+        # np.testing.assert_allclose(expected, out)
         # from oggm import graphics
         # import matplotlib.pyplot as plt
         # graphics.plot_centerlines(gdir, add_downstream=True)
         # plt.show()
-
-        # maybe do some tests here
-
 
     @is_slow
     def test_baltoro_centerlines(self):
