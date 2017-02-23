@@ -170,7 +170,7 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 else:
                     out_thick[i] = 0.
 
-            if gdir.terminus_type == 'Land-terminating':
+            if not gdir.is_tidewater:
 
                 # this filtering stuff below is not explained in Farinotti's
                 # paper. I did this because it looks better, but I'm not sure
