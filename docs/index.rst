@@ -8,8 +8,8 @@ An open source glacier model in Python
 The model builds upon `Marzeion et al., (2012)`_ and intends to become a
 global scale, modular, and open source model for glacier dynamics. The model
 accounts for glacier geometry (including contributory branches) and includes
-a simple (yet explicit) ice dynamics module. It can simulate past and
-future mass-balance, volume and geometry of any glacier in a fully
+a simple (yet explicit) ice dynamics module. It will be able to simulate
+past and future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
 
@@ -32,23 +32,56 @@ News
   `Ice Thickness Models Intercomparison eXperiment <http://fabienmaussion.info/2016/06/18/itmix-experiment-phase1/>`_
 - **11.02.2016**: The 1st OGGM workshop took place in Obergurgl, Austrian Alps
 
-Documentation
--------------
+
+Index
+-----
+
+**Physical principles**
+
+Description of the physical principles and underlying assumptions of the
+OGGM model.
+
+* :doc:`introduction`
+* :doc:`flowlines`
+* :doc:`mass-balance`
+* :doc:`ice-dynamics`
+* :doc:`inversion`
 
 .. toctree::
     :maxdepth: 1
+    :hidden:
+    :caption: Principles
 
-    whats-new
-    installing-oggm
-    getting-started
-    flowlines
-    mass-balance
-    ice-dynamics
-    inversion
-    glacierdir-gen
-    mpi
-    contributing
-    api
+    introduction.rst
+    flowlines.rst
+    mass-balance.rst
+    ice-dynamics.rst
+    inversion.rst
+
+**Using OGGM**
+
+The manual for users and developers.
+
+* :doc:`installing-oggm`
+* :doc:`getting-started`
+* :doc:`glacierdir-gen`
+* :doc:`mpi`
+* :doc:`api`
+* :doc:`contributing`
+* :doc:`whats-new`
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+    :caption: Using OGGM
+
+    installing-oggm.rst
+    getting-started.rst
+    glacierdir-gen.rst
+    mpi.rst
+    api.rst
+    contributing.rst
+    whats-new.rst
 
 
 Get in touch

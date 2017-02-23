@@ -76,6 +76,16 @@ DEM3REG = {
     # 'GL-East': [-42., -17., 64., 76.]
 }
 
+RGI_REG_NAME = ['01: Alaska', '02: Western Canada and US',
+                '03: Arctic Canada North', '04: Arctic Canada South',
+                '05: Greenland', '06: Iceland', '07: Svalbard',
+                '08: Scandinavia', '09: Russian Arctic', '10: North Asia',
+                '11: Central Europe', '12: Caucasus and Middle East',
+                '13: Central Asia', '14: South Asia West',
+                '15: South Asia East', '16: Low Latitudes',
+                '17: Southern Andes', '18: New Zealand',
+                '19: Antarctic and Subantarctic']
+
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -1651,6 +1661,9 @@ class GlacierDirectory(object):
         # remove spurious characters and trailing blanks
         self._filter_name()
 
+        # region
+        self.rgi_region_name = RGI_REG_NAME[int(self.rgi_region) - 1]
+
         # Read glacier attrs
         keys = {'0': 'Glacier',
                 '1': 'Ice cap',
@@ -1683,12 +1696,30 @@ class GlacierDirectory(object):
         # rgi version can be useful, too
         self.rgi_version = self.rgi_id.split('-')[0]
 
+        # The divides dirs are created by gis.define_glacier_region, but we
+        # make the root dir
         self.dir = os.path.join(base_dir, self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
 
-        # The divides dirs are created by gis.define_glacier_region
+    def __repr__(self):
+
+        summary = ['<oggm.GlacierDirectory>']
+        summary += ['  RGI id: ' + self.rgi_id]
+        summary += ['  Region: ' + self.rgi_region_name]
+        if self.name :
+            summary += ['  Name: ' + self.name]
+        summary += ['  Glacier type: ' + str(self.glacier_type)]
+        summary += ['  Terminus type: ' + str(self.terminus_type)]
+        summary += ['  Area: ' + str(self.rgi_area_km2) + ' mk2']
+        summary += ['  Lon, Lat: (' + str(self.cenlon) + ', ' +
+                    str(self.cenlat) + ')']
+        summary += ['  Grid (nx, ny): (' + str(self.grid.nx) + ', ' +
+                    str(self.grid.ny) + ')']
+        summary += ['  Grid (dx, dy): (' + str(self.grid.dx) + ', ' +
+                    str(self.grid.dy) + ')']
+        return '\n'.join(summary) + '\n'
 
     @lazy_property
     def grid(self):

@@ -32,7 +32,10 @@ def _init_pool_globals(_cfg_contents):
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
     cfg_contents = cfg.pack_config()
-    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(cfg_contents,))
+    mpp = cfg.PARAMS['mp_processes']
+    mpp = None if mpp == -1 else mpp
+    return mp.Pool(mpp, initializer=_init_pool_globals,
+                   initargs=(cfg_contents,))
 
 
 def _merge_dicts(*dicts):
@@ -123,7 +126,7 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
 
 def gis_prepro_tasks(gdirs):
-    """Prepare the flowlines."""
+    """Helper function: run all flowlines tasks."""
 
     task_list = [
         tasks.glacier_masks,
@@ -139,7 +142,7 @@ def gis_prepro_tasks(gdirs):
 
 
 def climate_tasks(gdirs):
-    """Prepare the climate data."""
+    """Helper function: run all climate tasks."""
 
     # I don't know where this logic is best placed...
     if ('climate_file' in cfg.PATHS) and \
@@ -156,7 +159,7 @@ def climate_tasks(gdirs):
 
 
 def inversion_tasks(gdirs):
-    """Invert the bed topography."""
+    """Helper function: run all bed inversion tasks."""
 
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)

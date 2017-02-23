@@ -91,6 +91,27 @@ class TestGIS(unittest.TestCase):
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
 
+    def test_repr(self):
+        from textwrap import dedent
+
+        expected = dedent("""\
+        <oggm.GlacierDirectory>
+          RGI id: RGI40-11.00897
+          Region: 11: Central Europe
+          Glacier type: Not assigned
+          Terminus type: Land-terminating
+          Area: 8.036 mk2
+          Lon, Lat: (10.7584, 46.8003)
+          Grid (nx, ny): (159, 114)
+          Grid (dx, dy): (50.0, -50.0)
+        """)
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertEqual(gdir.__repr__(), expected)
+
     def test_glacierdir(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
