@@ -63,7 +63,6 @@ def up_to_climate(reset=False):
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
 
     # Set up the paths and other stuffs
-    cfg.PATHS['wgms_rgi_links'] = get_demo_file('RGI_WGMS_oetztal.csv')
     cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oetztal.csv')
 
     # Read in the RGI file

@@ -1019,7 +1019,7 @@ def get_wgms_files():
     # Roll our own
     _download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'wgms')
-    outf = os.path.join(sdir, 'rgi_wgms_links_2015_RGIV5.csv')
+    outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
     assert os.path.exists(outf)
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
@@ -1680,6 +1680,9 @@ class GlacierDirectory(object):
             rgi_date = None
         self.rgi_date = rgi_date
 
+        # rgi version can be useful, too
+        self.rgi_version = self.rgi_id.split('-')[0]
+
         self.dir = os.path.join(base_dir, self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
@@ -1933,11 +1936,12 @@ class GlacierDirectory(object):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
         flink, mbdatadir = get_wgms_files()
+        flink = pd.read_csv(flink)
+        wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+        wid = wid.WGMS_ID.values[0]
 
         # file
-        reff = os.path.join(mbdatadir, 'mbdata_' + self.rgi_id + '.csv')
-        if not os.path.exists(reff):
-            reff = reff.replace('RGI40-', 'RGI50-')
+        reff = os.path.join(mbdatadir, 'mbdata_WGMS-{:05d}.csv'.format(wid))
         # list of years
         mbdf = pd.read_csv(reff).set_index('YEAR')
 

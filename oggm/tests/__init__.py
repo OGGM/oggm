@@ -223,8 +223,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     geometry.catchment_width_correction(gdir)
     climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir, div_id=0)
-    hef_file = get_demo_file('mbdata_RGI40-11.00897.csv')
-    mbdf = pd.read_csv(hef_file).set_index('YEAR')['ANNUAL_BALANCE']
+    mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
     res = climate.t_star_from_refmb(gdir, mbdf)
     climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
                                      bias=res['bias'][-1],
