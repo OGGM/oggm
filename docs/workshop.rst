@@ -3,7 +3,8 @@
 2nd OGGM Workshop
 =================
 
-After the successful 1st OGGM workshop in Obergurgl, Austria, in February 2016, we will hold the 2nd workshop on the East Frisian Island Spiekeroog.
+After the successful 1st OGGM workshop in Obergurgl, Austria, in February 2016,
+we will hold the 2nd workshop on the East Frisian Island Spiekeroog.
 
 Save the date
 -------------
@@ -29,19 +30,26 @@ We will discuss all issues regarding the current state of OGGM, including:
 Transfer etc.
 -------------
 
-We will organize the transfer from Bremen (airport and/or central station) to the island and back - specifics (particularly about the timing, which depends on the tides) will be announced later.
+We will organize the transfer from Bremen (airport and/or central station) to
+the island and back - specifics (particularly about the timing, which depends
+on the tides) will be announced later.
 
 Accommodation
 -------------
 
-The workshop will take place in two adjacent, self catered apartments. This will keep costs down, while unfortunately limiting the number of participants.
+The workshop will take place in two adjacent, self catered apartments.
+This will keep costs down, while unfortunately limiting the number of
+participants.
 
 Fee
 ---
 
-There is no fee, but participants will have to cover their own travel costs and their share of the costs for accommodation and meals.
+The workshop fee is **EUR 285,00**, including the costs
+for accommodation. The participants will have to cover
+their own travel costs and their share of the costs for meals.
 
 Registration
 ------------
 
-Please get in touch with Ben (ben.marzeion@uni-bremen.de) or Fabien (fabien.maussion@uibk.ac.at) for more information and registration.
+Please get in touch with Ben (ben.marzeion@uni-bremen.de) or
+Fabien (fabien.maussion@uibk.ac.at) for more information and registration.
