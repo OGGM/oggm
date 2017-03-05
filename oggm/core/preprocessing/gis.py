@@ -463,13 +463,16 @@ def define_glacier_region(gdir, entity=None):
             os.makedirs(_dir)
         linkname = os.path.join(_dir, cfg.BASENAMES['outlines'])
         sourcename = gdir.get_filepath('outlines')
-        # TODO: temporary suboptimal solution
-        try:
-            # we are on UNIX
-            os.link(sourcename, linkname)
-        except AttributeError:
-            # we are on windows
-            copyfile(sourcename, linkname)
+        for ending in ['.cpg', '.dbf', '.shp', '.shx', '.prj']:
+            _s = sourcename.replace('.shp', ending)
+            _l = linkname.replace('.shp', ending)
+            if os.path.exists(_s):
+                try:
+                    # we are on UNIX
+                    os.link(_s, _l)
+                except AttributeError:
+                    # we are on windows
+                    copyfile(_s, _l)
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])

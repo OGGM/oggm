@@ -60,11 +60,19 @@ class DocumentedDict(dict):
         return '        {}'.format(self[key]) + '\n' + '            ' + \
                self._doc[key]
 
+
+class PathOrderedDict(OrderedDict):
+    """Quick "magic" to be sure that paths are expanded correctly."""
+
+    def __setitem__(self, key, value):
+        # Overrides the original dic to expand the path
+        OrderedDict.__setitem__(self, key, os.path.expanduser(value))
+
 # Globals
 IS_INITIALIZED = False
 CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
-PATHS = OrderedDict()
+PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 
 # Constants
@@ -215,15 +223,21 @@ def initialize(file=None):
         log.critical('Config file could not be parsed (%s): %s', file, e)
         sys.exit()
 
-    homedir = os.path.expanduser("~")
+    homedir = os.path.expanduser('~')
 
+    # Some defaults
     if cp['working_dir'] == '~':
         cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
+    if cp['topo_dir'] == '~':
+        cp['topo_dir'] = os.path.join(homedir, 'OGGM_data', 'topo')
+    if cp['cru_dir'] == '~':
+        cp['cru_dir'] = os.path.join(homedir, 'OGGM_data', 'cru')
+    if cp['rgi_dir'] == '~':
+        cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
 
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     PATHS['working_dir'] = cp['working_dir']
-
     PATHS['topo_dir'] = cp['topo_dir']
     PATHS['cru_dir'] = cp['cru_dir']
     PATHS['rgi_dir'] = cp['rgi_dir']

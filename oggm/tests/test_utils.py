@@ -109,6 +109,24 @@ class TestFuncs(unittest.TestCase):
             utils.monthly_timeseries(1)
 
 
+class TestInitialize(unittest.TestCase):
+
+    def setUp(self):
+        cfg.initialize()
+        self.homedir = os.path.expanduser('~')
+
+    def test_defaults(self):
+        expected = os.path.join(self.homedir, 'OGGM_wd')
+        self.assertEqual(cfg.PATHS['working_dir'], expected)
+        expected = os.path.join(self.homedir, 'OGGM_data', 'topo')
+        self.assertEqual(cfg.PATHS['topo_dir'], expected)
+
+    def test_pathsetter(self):
+        cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
+        expected = os.path.join(self.homedir, 'my_OGGM_wd')
+        self.assertEqual(cfg.PATHS['working_dir'], expected)
+
+
 class TestDataFiles(unittest.TestCase):
 
     def setUp(self):

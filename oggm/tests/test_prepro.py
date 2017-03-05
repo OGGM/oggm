@@ -115,6 +115,26 @@ class TestGIS(unittest.TestCase):
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
             np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
 
+    def test_nodivides(self):
+
+        cfg.PARAMS['use_divides'] = False
+        cfg.set_divides_db()
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
+            np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
+
+        fp = gdir.get_filepath('outlines', div_id=1)
+        self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
+        cfg.PARAMS['use_divides'] = True
+        cfg.set_divides_db()
+
 
 class TestCenterlines(unittest.TestCase):
 

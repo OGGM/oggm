@@ -583,9 +583,29 @@ def query_yes_no(question, default="yes"):
 
 
 def haversine(lon1, lat1, lon2, lat2):
-    """
-    Calculate the great circle distance between one point
-    on the earth and an array of points (specified in decimal degrees)
+    """Great circle distance between two (or more) points on Earth
+
+    Parameters
+    ----------
+    lon1 : float
+       scalar or array of point(s) longitude
+    lat1 : float
+       scalar or array of point(s) longitude
+    lon2 : float
+       scalar or array of point(s) longitude
+    lat2 : float
+       scalar or array of point(s) longitude
+
+    Returns
+    -------
+    the distances
+
+    Examples:
+    ---------
+    >>> haversine(34, 42, 35, 42)
+    82633.464752871543
+    >>> haversine(34, 42, [35, 36], [42, 42])
+    array([  82633.46475287,  165264.11172113])
     """
 
     # convert decimal degrees to radians
@@ -1006,7 +1026,7 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['wgms_rgi_links'] != '~':
+    if cfg.PATHS['wgms_rgi_links'] != '':
         if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
             raise ValueError('wrong wgms_rgi_links path provided.')
         # User provided data
@@ -1034,7 +1054,7 @@ def get_leclercq_files():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['leclercq_rgi_links'] != '~':
+    if cfg.PATHS['leclercq_rgi_links'] != '':
         if not os.path.exists(cfg.PATHS['leclercq_rgi_links']):
             raise ValueError('wrong leclercq_rgi_links path provided.')
         # User provided data
@@ -1064,7 +1084,7 @@ def get_glathida_file():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['glathida_rgi_links'] != '~':
+    if cfg.PATHS['glathida_rgi_links'] != '':
         if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
             raise ValueError('wrong glathida_rgi_links path provided.')
         # User provided data
@@ -1147,7 +1167,7 @@ def _get_cru_file_unlocked(var=None):
     cru_dir = cfg.PATHS['cru_dir']
 
     # Be sure the user gave a sensible path to the climate dir
-    if cru_dir == '~' or not os.path.exists(cru_dir):
+    if cru_dir == '' or not os.path.exists(cru_dir):
         raise ValueError('The CRU data directory({}) does not exist!'.format(cru_dir))
 
     # Be sure input makes sense
@@ -1720,10 +1740,12 @@ class GlacierDirectory(object):
         """remove spurious characters and trailing blanks"""
         str = self.name
         if str is None or len(str) == 0:
+            self.name = ''
             return
         if str[-1] == 'À':
             str = str[:-1]
         if len(str) == 0:
+            self.name = ''
             return
         if str[-1] == '3':
             str = str[:-1]
