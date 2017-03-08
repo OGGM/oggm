@@ -112,35 +112,30 @@ OGGM is available under the open source `GNU GPLv3 license`_.
 
 .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
 
-OGGM is free softweare. This implies that you are free to use the model or
+OGGM is free software. This implies that you are free to use the model or
 copy and modify its code, under certain conditions:
 
 1. When using this software, you should refer to the original authors of this
-   contribution. Currently, we recommend to use the Zenodo citation for this
-   purpose:
-
-   We provide a Zenodo citation and DOI for this purpose:
-
-      .. image:: https://zenodo.org/badge/43965645.svg
-         :target: https://zenodo.org/badge/latestdoi/43965645
+   contribution. Currently, we recommend to use the `Zenodo citation`_ for this
+   purpose.
 
    An example BibTeX entry::
 
-    @misc{OGGM_v0.1.1,
-      author       = {Fabien Maussion and
-                      Timo Rothenpieler and
-                      Ben Marzeion and
-                      Johannes Landmann and
-                      Felix Oesterle and
-                      Alexander Jarosch and
-                      Beatriz Recinos and
-                      Anouk Vlug},
-      title        = {OGGM/oggm: v0.1.1},
-      month        = feb,
-      year         = 2017,
-      doi          = {10.5281/zenodo.292630},
-      url          = {https://doi.org/10.5281/zenodo.292630}
-    }
+        @misc{OGGM_v0.1.1,
+          author       = {Fabien Maussion and
+                          Timo Rothenpieler and
+                          Ben Marzeion and
+                          Johannes Landmann and
+                          Felix Oesterle and
+                          Alexander Jarosch and
+                          Beatriz Recinos and
+                          Anouk Vlug},
+          title        = {OGGM/oggm: v0.1.1},
+          month        = feb,
+          year         = 2017,
+          doi          = {10.5281/zenodo.292630},
+          url          = {https://doi.org/10.5281/zenodo.292630}
+        }
 
 
 2. When you use and modify the OGGM code you must publish your adaptation under
@@ -149,8 +144,9 @@ copy and modify its code, under certain conditions:
 
 See the `OGGM license`_ for more information.
 
-.. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.rstl
+.. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
 
+.. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.rst
 
 About
 -----

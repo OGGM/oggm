@@ -42,6 +42,11 @@ About
 :Status:
     Experimental - in development
 
+:Citation:
+    .. image:: https://zenodo.org/badge/43965645.svg
+        :target: https://zenodo.org/badge/latestdoi/43965645
+        :alt: Zenodo
+
 :Tests:
     .. image:: https://coveralls.io/repos/OGGM/oggm/badge.svg?branch=master&service=github
         :target: https://coveralls.io/github/OGGM/oggm?branch=master

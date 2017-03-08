@@ -13,7 +13,7 @@ v0.1.1 (16 February 2017)
 Minor release: changes in ITMIX to handle the synthetic glacier cases.
 
 It was tagged only recently for long term documentation purposes and storage
-on [Zenodo](https://zenodo.org/record/292630#.WMAwelcX77g) .
+on `Zenodo <https://zenodo.org/record/292630#.WMAwelcX77g>`_.
 
 .. _whats-new.0.1.0:
 
