@@ -62,9 +62,6 @@ def up_to_climate(reset=False):
 
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
 
-    # Set up the paths and other stuffs
-    cfg.PATHS['glathida_rgi_links'] = get_demo_file('RGI_GLATHIDA_oetztal.csv')
-
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
@@ -201,16 +198,17 @@ class TestWorkflow(unittest.TestCase):
                                             fs=fs, glen_a=glen_a)
             _vol = model.volume_km3
             _area = model.area_km2
-            gldf = df.loc[gdir.rgi_id]
-            assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.03)
-            assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
-            maxo = max([fl.order for fl in model.fls])
-            for fl in model.fls:
-                self.assertTrue(np.all(fl.bed_shape > 0))
-                self.assertTrue(np.all(fl.bed_shape <= maxs))
-                if len(model.fls) > 1:
-                    if fl.order == (maxo-1):
-                        self.assertTrue(fl.flows_to is fls[-1])
+            if gdir.rgi_id in df.index:
+                gldf = df.loc[gdir.rgi_id]
+                assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.03)
+                assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
+                maxo = max([fl.order for fl in model.fls])
+                for fl in model.fls:
+                    self.assertTrue(np.all(fl.bed_shape > 0))
+                    self.assertTrue(np.all(fl.bed_shape <= maxs))
+                    if len(model.fls) > 1:
+                        if fl.order == (maxo-1):
+                            self.assertTrue(fl.flows_to is fls[-1])
 
     @is_slow
     def test_crossval(self):
