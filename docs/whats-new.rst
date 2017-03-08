@@ -5,6 +5,16 @@ What's New
 ==========
 
 
+.. _whats-new.0.1.1:
+
+v0.1.1 (16 February 2017)
+-------------------------
+
+Minor release: changes in ITMIX to handle the synthetic glacier cases.
+
+It was tagged only recently for long term documentation purposes and storage
+on [Zenodo](https://zenodo.org/record/292630#.WMAwelcX77g) .
+
 .. _whats-new.0.1.0:
 
 v0.1 (29 March 2016)
