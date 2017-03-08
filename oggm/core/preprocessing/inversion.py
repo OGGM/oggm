@@ -243,6 +243,9 @@ def optimize_inversion_params(gdirs):
     dfids = gtd_df['RGI_ID'].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
+    if len(ref_gdirs) == 0:
+        raise RuntimeError('No reference GlaThiDa glaciers. Maybe something '
+                           'went wrong with the link list?')
     ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
     gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
 
