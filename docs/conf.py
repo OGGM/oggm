@@ -39,7 +39,7 @@ except ImportError:
     print("no scipy")
 try:
     import PIL
-    print("PIL (Pillow): %s, %s" % (PIL.__version__, PIL.__file__))
+    print("PIL (Pillow): %s, %s" % (PIL.PILLOW_VERSION, PIL.__file__))
 except ImportError:
     print("no PIL (Pillow)")
 try:
