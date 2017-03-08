@@ -16,7 +16,7 @@ dependencies:
   - configobj
   - pyproj
   - krb5
-  - geos
+  - geos=3.5.0
   - rasterio
   - xarray
   - filelock
