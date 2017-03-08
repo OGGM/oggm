@@ -269,7 +269,7 @@ class TestWorkflow(unittest.TestCase):
         import salem
         shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
-        shp = shp.loc[shp.RGIID == 'RGI40-11.00897']
+        shp = shp.loc[shp.RGIID == 'RGI50-11.00897']
         self.assertEqual(len(shp), 4)
         self.assertEqual(shp.MAIN.sum(), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.argmax()].MAIN, 1)

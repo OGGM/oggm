@@ -356,7 +356,7 @@ class TestOtherDivides(unittest.TestCase):
 
         # This is another glacier with divides
         for index, entity in rgidf.iterrows():
-            if '00719' not in entity.RGIID:
+            if '00719' not in entity.RGIId:
                 continue
             gdir = GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
