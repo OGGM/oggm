@@ -1,10 +1,6 @@
 """  Configuration file and options
 
 A number of globals are defined here to be available everywhere.
-
-Copyright: OGGM development team, 2014-2015
-
-License: GPLv3+
 """
 from __future__ import absolute_import, division
 

@@ -1,8 +1,4 @@
 """Some useful functions that did not fit into the other modules.
-
-Copyright: OGGM developers, 2014-2015
-
-License: GPLv3+
 """
 from __future__ import absolute_import, division
 

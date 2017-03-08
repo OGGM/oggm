@@ -36,10 +36,8 @@ News
 Index
 -----
 
-**Physical principles**
-
-Description of the physical principles and underlying assumptions of the
-OGGM model.
+Principles
+^^^^^^^^^^
 
 * :doc:`introduction`
 * :doc:`flowlines`
@@ -58,9 +56,8 @@ OGGM model.
     ice-dynamics.rst
     inversion.rst
 
-**Using OGGM**
-
-The manual for users and developers.
+Using OGGM
+^^^^^^^^^^
 
 * :doc:`installing-oggm`
 * :doc:`getting-started`
@@ -80,8 +77,19 @@ The manual for users and developers.
     glacierdir-gen.rst
     mpi.rst
     api.rst
-    contributing.rst
     whats-new.rst
+
+Contributing
+^^^^^^^^^^^^
+
+* :doc:`contributing`
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+    :caption: Contributing
+
+    contributing.rst
 
 
 Get in touch
@@ -103,6 +111,46 @@ License
 OGGM is available under the open source `GNU GPLv3 license`_.
 
 .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
+
+OGGM is free softweare. This implies that you are free to use the model or
+copy and modify its code, under certain conditions:
+
+1. When using this software, you should refer to the original authors of this
+   contribution. Currently, we recommend to use the Zenodo citation for this
+   purpose:
+
+   We provide a Zenodo citation and DOI for this purpose:
+
+      .. image:: https://zenodo.org/badge/43965645.svg
+         :target: https://zenodo.org/badge/latestdoi/43965645
+
+   An example BibTeX entry::
+
+    @misc{OGGM_v0.1.1,
+      author       = {Fabien Maussion and
+                      Timo Rothenpieler and
+                      Ben Marzeion and
+                      Johannes Landmann and
+                      Felix Oesterle and
+                      Alexander Jarosch and
+                      Beatriz Recinos and
+                      Anouk Vlug},
+      title        = {OGGM/oggm: v0.1.1},
+      month        = feb,
+      year         = 2017,
+      doi          = {10.5281/zenodo.292630},
+      url          = {https://doi.org/10.5281/zenodo.292630}
+    }
+
+
+2. When you use and modify the OGGM code you must publish your adaptation under
+   the same license as OGGM (the GNU General Public License as published by
+   the Free Software Foundation).
+
+See the `OGGM license`_ for more information.
+
+.. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.rstl
+
 
 About
 -----

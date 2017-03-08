@@ -1,8 +1,8 @@
 .. currentmodule:: oggm
 .. _whats-new:
 
-What's New
-==========
+Version history
+===============
 
 
 .. _whats-new.0.1.1:
