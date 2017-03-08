@@ -9,7 +9,7 @@ dependencies:
   - matplotlib=2.0.0
   - pandas=0.19.2
   - geopandas=0.2.1
-  - Pillow=3.0.05  # because RTD installs this version anyway
+  - Pillow=3.0.0  # because RTD installs this version anyway
   - joblib=0.11
   - netCDF4=1.2.7
   - scikit-image=0.12.3
