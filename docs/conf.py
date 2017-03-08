@@ -18,6 +18,8 @@ import warnings
 import os
 import shutil
 
+
+print("python version:", sys.version)
 print("python exec:", sys.executable)
 print("sys.path:", sys.path)
 try:
