@@ -22,7 +22,7 @@ of the local glacier directories and of the local topography.
 
 Our algorithm is an implementation of the procedure described by
 `Kienholz et al., (2014)`_. Appart from some minor changes (mostly the choice
-of certain parameters), we stayed very close to the original paper.
+of certain parameters), we stayed close to the original algorithm.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
 
@@ -53,7 +53,7 @@ grid, and they are not considered as "flowlines" by OGGM. A rather simple task
 :py:class:`InversionFlowline` objects. These flowlines now have a regular
 corrdinate spacing along the flowline (which they will keep for the rest of
 the workflow), and the tail of the tributaries are cut
-according to a simple rule:
+according to a distance threshold rule:
 
 .. ipython:: python
 

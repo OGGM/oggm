@@ -1,6 +1,6 @@
 """ OGGM package.
 
-Copyright: OGGM developers, 2014-2015
+Copyright: OGGM developers, 2014-2017
 
 License: GPLv3+
 """

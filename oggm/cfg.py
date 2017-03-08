@@ -1,10 +1,6 @@
 """  Configuration file and options
 
 A number of globals are defined here to be available everywhere.
-
-Copyright: OGGM development team, 2014-2015
-
-License: GPLv3+
 """
 from __future__ import absolute_import, division
 
@@ -144,9 +140,6 @@ _doc = 'A simple integer in the glacier root directory (divide 00) ' \
        'flowing into the main branch).'
 BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 
-_doc = 'The apparent mass-balance data needed for the inversion.'
-BASENAMES['apparent_mb'] = ('apparent_mb.nc', _doc)
-
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
@@ -201,6 +194,7 @@ BASENAMES['past_model'] = ('past_model.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
+
 def initialize(file=None):
     """Read the configuration file containing the run's parameters."""
 
@@ -253,9 +247,6 @@ def initialize(file=None):
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
-
-    if PARAMS['mp_processes'] == -1:
-        PARAMS['mp_processes'] = None
 
     # Some non-trivial params
     PARAMS['grid_dx_method'] = cp['grid_dx_method']

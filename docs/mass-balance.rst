@@ -58,8 +58,8 @@ User-provided dataset
 ~~~~~~~~~~~~~~~~~~~~~
 
 You can provide any other dataset to OGGM by setting the ``climate_file``
-parameter in ``params.cfg``. The format of the file is not (yet) very flexible:
-see the HISTALP data file in the `sample-data`_ folder for an example.
+parameter in ``params.cfg``. See the HISTALP data file in the `sample-data`_
+folder for an example.
 
 .. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
 
@@ -77,11 +77,15 @@ OGGM finally needs to compute the temperature and precipitation at the altitude
 of the glacier grid points. The default is to use a fixed gradient of
 -6.5K km :math:`^{-1}` and no gradient for precipitation. However, OGGM
 implements a module which computes the local gradient by linear
-regression of the 9 surrounding grid points. This implies that you trust the
-near-surface temperature lapse-rates provided by the climate dataset (which
-is probably not always a good idea). The relevant parameters are
-``temp_use_local_gradient``, ``temp_default_gradient``, and
-``temp_local_gradient_bounds``.
+regression of the 9 surrounding grid points. This method requires that the
+near-surface temperature lapse-rates provided by the climate dataset are good
+(in most of the cases you should probably use a fixed gradient).
+The default config parameters are:
+
+.. ipython:: python
+
+    cfg.PARAMS['temp_use_local_gradient']  # use the regression method?
+    cfg.PARAMS['temp_default_gradient']  # constant gradiant
 
 
 Temperature index model
@@ -118,8 +122,8 @@ We will start by making two observations:
 
 As a result, :math:`\mu ^{*}` can vary greatly between neighboring glaciers.
 The calibration procedure introduced by `Marzeion et al., (2012)`_ and
-implemented in OGGM makes full use of these two observations by turning these
-apparent handicaps into assets.
+implemented in OGGM makes full use of these apparent handicaps by turning
+them into assets.
 
 The calibration procedure starts with glaciers for which we have direct
 observations of the annual specific mass-balance SMB. We use the `WGMS FoG`_
@@ -146,8 +150,8 @@ temperature sensitivity in order to preserve its geometry.
 
 Note that these :math:`\mu (t)` are just
 hypothetical sensitivities necessary to maintain the glacier in equilibrium in
-an average climate at the year :math:`t`. We call them "candidates", as one
-of these is likely to be close to the "real" sensitivity of the glacier.
+an average climate at the year :math:`t`. We call them "candidates", since one
+(or more) of them is likely to be close to the "real" sensitivity of the glacier.
 
 This is when the mass-balance observations come into play: each of these
 candidates can be used to compute the mass-balance during the period

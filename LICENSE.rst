@@ -1,7 +1,7 @@
 OGGM - License
 ==============
 
-Copyright (c) 2014-2015 OGGM developers
+Copyright (c) 2014-2017 OGGM developers
 
 OGGM (Open Global Glacier Model) is a program collection containing the main
 OGGM script as well as auxiliary tools. If not stated otherwise explicitly,
