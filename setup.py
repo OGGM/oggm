@@ -96,7 +96,7 @@ if not ISRELEASED:
             rev = "v%s.dev-%s" % (VERSION, rev)
 
         # Strip leading v from tags format "vx.y.z" to get th version string
-        FULLVERSION = rev.lstrip('v')
+        FULLVERSION = rev.lstrip('v').replace(VERSION + '-', VERSION + '+')
 else:
     FULLVERSION += QUALIFIER
 

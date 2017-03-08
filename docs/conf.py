@@ -36,6 +36,11 @@ try:
 except ImportError:
     print("no scipy")
 try:
+    import PIL
+    print("PIL (Pillow): %s, %s" % (PIL.__version__, PIL.__file__))
+except ImportError:
+    print("no PIL (Pillow)")
+try:
     import pandas
     print("pandas: %s, %s" % (pandas.__version__, pandas.__file__))
 except ImportError:
@@ -68,10 +73,25 @@ try:
 except ImportError:
     print("no gdal")
 try:
+    import pyproj
+    print("pyproj: %s, %s" % (pyproj.__version__, pyproj.__file__))
+except ImportError:
+    print("no pyproj")
+try:
     import netCDF4
     print("netCDF4: %s, %s" % (netCDF4.__version__, netCDF4.__file__))
 except ImportError:
     print("no netCDF4")
+try:
+    import joblib
+    print("joblib: %s, %s" % (joblib.__version__, joblib.__file__))
+except ImportError:
+    print("no joblib")
+try:
+    import skimage
+    print("skimage: %s, %s" % (skimage.__version__, skimage.__file__))
+except ImportError:
+    print("no skimage")
 
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm
