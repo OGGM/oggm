@@ -9,6 +9,8 @@ import unittest
 import pickle
 from functools import partial
 
+import pytest
+
 import pandas as pd
 import geopandas as gpd
 import numpy as np
@@ -19,6 +21,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
+from oggm.tests import requires_mpltest, RUN_GRAPHIC_TESTS, BASELINE_DIR
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -296,3 +299,30 @@ class TestWorkflow(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
                 self.assertTrue(np.all(np.isfinite(len) & len != 0.))
+
+
+@is_slow
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+def test_plot_region_inversion():
+
+    import matplotlib.pyplot as plt
+    import salem
+    from oggm import graphics
+
+    gdirs = up_to_inversion()
+
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                            extent=(27000, 21000))
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+
+    # Give this to the plot function
+    fig, ax = plt.subplots()
+    graphics.plot_region_inversion(gdirs, salemmap=sm, ax=ax)
+
+    fig.tight_layout()
+    return fig

@@ -16,7 +16,7 @@ matrix:
   include:
     - env: OGGM_ENV=prepro MPL=
     - env: OGGM_ENV=models MPL=
-    - env: OGGM_ENV=workflow MPL=
+    - env: OGGM_ENV=workflow MPL=--mpl
     - env: OGGM_ENV=graphics MPL=--mpl
 
 before_install:
