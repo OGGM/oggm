@@ -306,10 +306,6 @@ class TestWorkflow(unittest.TestCase):
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
 
-    # do we event want to run the tests?
-    if not RUN_GRAPHIC_TESTS:
-        raise unittest.SkipTest('Skipping all graphic tests.')
-
     import matplotlib.pyplot as plt
     import salem
     from oggm import graphics
