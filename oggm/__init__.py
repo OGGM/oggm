@@ -34,4 +34,3 @@ except ImportError:
 # API
 from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
 from oggm.core.preprocessing.centerlines import Centerline
-from oggm.core.preprocessing.geometry import InversionFlowline

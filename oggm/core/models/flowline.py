@@ -26,6 +26,7 @@ import oggm.core.preprocessing.geometry
 import oggm.core.preprocessing.centerlines
 import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
+from oggm.core.preprocessing.centerlines import Centerline
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS
@@ -35,7 +36,7 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 log = logging.getLogger(__name__)
 
 
-class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
+class ModelFlowline(Centerline):
     """The is the input flowline for the model."""
 
     def __init__(self, line=None, dx=1, map_dx=None,
@@ -60,7 +61,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
 
-    @oggm.core.preprocessing.geometry.InversionFlowline.widths.getter
+    @Centerline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
         return self.widths_m / self.map_dx
@@ -74,7 +75,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     def thick(self, value):
         self._thick = value.clip(0)
 
-    @oggm.core.preprocessing.geometry.InversionFlowline.surface_h.getter
+    @Centerline.surface_h.getter
     def surface_h(self):
         return self._thick + self.bed_h
 
