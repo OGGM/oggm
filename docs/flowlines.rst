@@ -49,10 +49,9 @@ outflow (only one or none) is facilitated by the ``inflows`` and
 
 At this stage, the centerlines coordinates are still defined on the original
 grid, and they are not considered as "flowlines" by OGGM. A rather simple task
-(:py:func:`tasks.initialize_flowlines`) converts them to
-:py:class:`InversionFlowline` objects. These flowlines now have a regular
-corrdinate spacing along the flowline (which they will keep for the rest of
-the workflow), and the tail of the tributaries are cut
+(:py:func:`tasks.initialize_flowlines`) converts them to flowlines which
+now have a regular coordinate spacing along the flowline (which they will
+keep for the rest of the workflow). The tail of the tributaries are cut
 according to a distance threshold rule:
 
 .. ipython:: python
