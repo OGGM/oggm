@@ -91,6 +91,7 @@ class TestGIS(unittest.TestCase):
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
+        self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
 
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -190,6 +191,16 @@ class TestGIS(unittest.TestCase):
         self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
         cfg.PARAMS['use_divides'] = True
         cfg.set_divides_db()
+
+    def test_intersects(self):
+
+        rgi_file = get_demo_file('rgi_oetztal.shp')
+        rgidf = gpd.GeoDataFrame.from_file(rgi_file)
+        entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00897'].iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
 
 
 class TestCenterlines(unittest.TestCase):
