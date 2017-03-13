@@ -2025,7 +2025,7 @@ class GlacierDirectory(object):
         mkdir(fpath)
 
         # a file per function name
-        nowsrt = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S:%f')
+        nowsrt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')
         fpath = os.path.join(fpath, nowsrt + '_' + func.__name__)
         if err is not None:
             fpath += '.ERROR'
