@@ -1392,7 +1392,7 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(os.path.exists(rdir))
 
         self.assertEqual(len(glob.glob(os.path.join(rdir, '*.SUCCESS'))), 2)
-        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.ERROR'))), 11)
+        self.assertTrue(len(glob.glob(os.path.join(rdir, '*.ERROR'))) >= 10)
 
         cfg.CONTINUE_ON_ERROR = False
 
