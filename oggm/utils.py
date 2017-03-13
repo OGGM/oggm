@@ -15,6 +15,7 @@ import shutil
 import zipfile
 import sys
 import math
+import datetime
 import logging
 from collections import OrderedDict
 from functools import partial, wraps
@@ -1427,8 +1428,11 @@ def glacier_characteristics(gdirs):
             with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cds:
                 d['clim_alt'] = cds.ref_hgt
                 t = cds.temp.mean(dim='time').values
-                t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
-                    cfg.PARAMS['temp_default_gradient']
+                if 'dem_mean_elev' in d:
+                    t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
+                        cfg.PARAMS['temp_default_gradient']
+                else:
+                    t = np.NaN
                 d['clim_temp_avgh'] = t
                 d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
 
@@ -2021,7 +2025,8 @@ class GlacierDirectory(object):
         mkdir(fpath)
 
         # a file per function name
-        fpath = os.path.join(fpath, func.__name__)
+        nowsrt = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S:%f')
+        fpath = os.path.join(fpath, nowsrt + '_' + func.__name__)
         if err is not None:
             fpath += '.ERROR'
         else:

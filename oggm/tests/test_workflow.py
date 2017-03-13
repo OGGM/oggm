@@ -213,6 +213,13 @@ class TestWorkflow(unittest.TestCase):
                         if fl.order == (maxo-1):
                             self.assertTrue(fl.flows_to is fls[-1])
 
+        # Test the glacier charac
+        dfc = utils.glacier_characteristics(gdirs)
+        self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
+        cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
+        self.assertTrue(cc > 0.4)
+
+
     @is_slow
     def test_crossval(self):
 

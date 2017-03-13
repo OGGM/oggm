@@ -8,6 +8,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
+import glob
 import shutil
 
 import shapely.geometry as shpg
@@ -1358,6 +1359,47 @@ class TestInversion(unittest.TestCase):
                 maxs = _max
 
         np.testing.assert_allclose(242, maxs, atol=25)
+
+    def test_continue_on_error(self):
+
+        cfg.CONTINUE_ON_ERROR = True
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
+        entity.geometry = miniglac
+        entity.RGIID = 'RGI50-fake'
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.mu_candidates(gdir, div_id=0)
+        climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
+                                         prcp_fac=2.)
+        inversion.prepare_for_inversion(gdir)
+        inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
+
+        rdir = os.path.join(self.testdir, 'RGI50-fake')
+        self.assertTrue(os.path.exists(rdir))
+
+        rdir = os.path.join(rdir, 'log')
+        self.assertTrue(os.path.exists(rdir))
+
+        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.SUCCESS'))), 2)
+        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.ERROR'))), 11)
+
+        cfg.CONTINUE_ON_ERROR = False
+
+        # Test the glacier charac
+        dfc = utils.glacier_characteristics([gdir])
+        self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
+        self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
 
 
 class TestGrindelInvert(unittest.TestCase):
