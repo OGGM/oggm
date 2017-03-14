@@ -37,6 +37,20 @@ class TestFuncs(unittest.TestCase):
         sc = utils.signchange(ts)
         assert_array_equal(sc, [0, 0, 0, 1, 0])
 
+    def test_filter_rgi_name(self):
+
+        name = 'Tustumena Glacier                              \x9c'
+        expected = 'Tustumena Glacier'
+        self.assertTrue(utils.filter_rgi_name(name), expected)
+
+        name = 'Hintereisferner                                À'
+        expected = 'Hintereisferner'
+        self.assertTrue(utils.filter_rgi_name(name), expected)
+
+        name = 'SPECIAL GLACIER                                3'
+        expected = 'Special Glacier'
+        self.assertTrue(utils.filter_rgi_name(name), expected)
+
     def test_year_to_date(self):
 
         r = utils.year_to_date(0)
