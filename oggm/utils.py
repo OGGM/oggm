@@ -1586,6 +1586,19 @@ def global_task(task_func):
     return task_func
 
 
+def filter_rgi_name(name):
+    """Remove spurious characters and trailing blanks from RGI glacier name.
+    """
+
+    if name is None or len(name) == 0:
+        return ''
+
+    if name[-1] == 'À' or name[-1] == '\x9c' or name[-1] == '3':
+        return filter_rgi_name(name[:-1])
+
+    return name.strip().title()
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -1663,7 +1676,7 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
             self.rgi_region = rgi_entity.O1REGION
-            self.name = rgi_entity.NAME
+            name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
             gtype = rgi_entity.GLACTYPE
         except AttributeError:
@@ -1674,12 +1687,12 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
             self.rgi_region = rgi_entity.O1Region
-            self.name = rgi_entity.Name
+            name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
 
         # remove spurious characters and trailing blanks
-        self._filter_name()
+        self.name = filter_rgi_name(name)
 
         # region
         self.rgi_region_name = RGI_REG_NAME[int(self.rgi_region) - 1]
@@ -1766,21 +1779,6 @@ class GlacierDirectory(object):
     def divide_ids(self):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
-
-    def _filter_name(self):
-        """remove spurious characters and trailing blanks"""
-        str = self.name
-        if str is None or len(str) == 0:
-            self.name = ''
-            return
-        if str[-1] == 'À':
-            str = str[:-1]
-        if len(str) == 0:
-            self.name = ''
-            return
-        if str[-1] == '3':
-            str = str[:-1]
-        self.name = str.strip()
 
     def get_filepath(self, filename, div_id=0, delete=False):
         """Absolute path to a specific file.
