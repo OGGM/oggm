@@ -175,8 +175,8 @@ def process_gcm_data(gdir):
     precp = precp[9:-3, :, :] # from normal years to hydrological years
 
     precp.time # Is this line needed?
-    temp['time'] = pd.period_range('850-10', '2005-9', freq='M') # make this line more flexible, regarding the dates.
-    precp['time'] = pd.period_range('850-10', '2005-9', freq='M') # make this line more flexible, regarding the dates.
+    temp['time'] = pd.period_range('850-10', '2005-9', freq='M')
+    precp['time'] = pd.period_range('850-10', '2005-9', freq='M')
 
     # Use the year and month for selection
     year = np.array([t.year for t in temp.time.values])  # selects for each point in time the year
@@ -262,7 +262,7 @@ def process_gcm_data(gdir):
     latsel=np.where(latdif==latmin)
     latsel=np.asarray(latsel)
     latsel=latsel.squeeze()
-    temp = temp.isel(lat=((latsel-1), latsel, (latsel+1))) #is the problem in wrong lon units?
+    temp = temp.isel(lat=((latsel-1), latsel, (latsel+1))) 
     precp = precp.isel(lat=((latsel-1), latsel, (latsel+1)))
 
     longi = np.hstack((temp.lon[:73], (temp.lon[73:]-360)))
@@ -273,7 +273,7 @@ def process_gcm_data(gdir):
     lonsel=np.where(londif==lonmin)
     lonsel=np.asarray(lonsel)
     lonsel=lonsel.squeeze()
-    temp=temp.isel(lon=((lonsel-1), lonsel, (lonsel+1))) #is the problem in wrong lon units?
+    temp=temp.isel(lon=((lonsel-1), lonsel, (lonsel+1)))
     precp = precp.isel(lon=((lonsel-1), lonsel, (lonsel+1)))
 
     Ndays = np.tile([31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30], (y1 - y0))
