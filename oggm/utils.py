@@ -1980,6 +1980,53 @@ class GlacierDirectory(object):
             v.long_name = 'temperature gradient'
             v[:] = grad
 
+    def write_gcm_data_file(self, time, prcp, temp, grad, ref_pix_hgt,
+                                   ref_pix_lon, ref_pix_lat):
+        """Creates a netCDF4 file with climate data.
+
+        See :py:func:`~oggm.tasks.process_cru_data`.
+        """
+
+        # overwrite as default
+        fpath = self.get_filepath('gcm_data')
+        # fpath = self.get_filepath('climate_monthly')
+        if os.path.exists(fpath):
+            os.remove(fpath)
+
+        with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
+            nc.ref_hgt = ref_pix_hgt
+            nc.ref_pix_lon = ref_pix_lon
+            nc.ref_pix_lat = ref_pix_lat
+            nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
+                                       ref_pix_lon, ref_pix_lat)
+
+            dtime = nc.createDimension('time', None)
+
+            nc.author = 'OGGM'
+            nc.author_info = 'Open Global Glacier Model'
+
+            timev = nc.createVariable('time','i4',('time',))
+            timev.setncatts({'units':'days since 0850-01-01 00:00:00'})
+            # timev.setncatts({'units':'days since 0850-01-01'})
+            timev[:] = netCDF4.date2num([t for t in time],
+                                        'days since 0850-01-01 00:00:00')
+                                        # 'days since 0850-01-01')
+
+            v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
+            v.units = 'kg m-2'
+            v.long_name = 'total monthly precipitation amount'
+            v[:] = prcp
+
+            v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
+            v.units = 'degC'
+            v.long_name = '2m temperature at height ref_hgt'
+            v[:] = temp
+
+            v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
+            v.units = 'degC m-1'
+            v.long_name = 'temperature gradient'
+            v[:] = grad
+
     def get_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
 

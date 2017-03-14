@@ -136,6 +136,230 @@ def process_custom_climate_data(gdir):
     out = {'climate_source': fpath, 'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
 
+@entity_task(log, writes=['gcm_data'])
+def process_gcm_data(gdir):
+    """Processes and writes the climate data for this glacier.
+
+    Interpolates the GCM data to the high-resolution CL2 climatologies
+    (provided with OGGM) and writes everything to a NetCDF file.
+    """
+    # read the climatology high resolution CL2 climatologies
+    clfile = utils.get_cru_cl_file()
+    ncclim = salem.GeoNetcdf(clfile)
+
+    # GCM temperature and precipitation data
+    if not (('gcm_temp_file' in cfg.PATHS) and \
+                    os.path.exists(cfg.PATHS['gcm_temp_file'])):
+        raise IOError('GCM temp file not found')
+
+    if not (('gcm_precc_file' in cfg.PATHS) and \
+                    os.path.exists(cfg.PATHS['gcm_precc_file'])):
+        raise IOError('GCM precc file not found')
+
+    if not (('gcm_precl_file' in cfg.PATHS) and \
+                    os.path.exists(cfg.PATHS['gcm_precl_file'])):
+        raise IOError('GCM precl file not found')
+
+
+    # read the file
+    fpathTemp = cfg.PATHS['gcm_temp_file']
+    fpathPrecc = cfg.PATHS['gcm_precc_file']
+    fpathPrecl = cfg.PATHS['gcm_precl_file']
+    temp = salem.open_xr_dataset(fpathTemp)
+    temp = temp.TREFHT
+    temp.time
+    temp = temp[9:-3, :, :] # from normal years to hydrological years
+    precpC = xr.open_dataset(fpathPrecc)
+    precpL = xr.open_dataset(fpathPrecl)
+    precp = precpC.PRECC+precpL.PRECL
+    precp = precp[9:-3, :, :] # from normal years to hydrological years
+
+    precp.time # Is this line needed?
+    temp['time'] = pd.period_range('850-10', '2005-9', freq='M') # make this line more flexible, regarding the dates.
+    precp['time'] = pd.period_range('850-10', '2005-9', freq='M') # make this line more flexible, regarding the dates.
+
+    # Use the year and month for selection
+    year = np.array([t.year for t in temp.time.values])  # selects for each point in time the year
+    month = np.array([t.month for t in temp.time.values])  # selects for each point in time the month
+
+    year = np.array([t.year for t in precp.time.values])  # selects for each point in time the year
+    month = np.array([t.month for t in precp.time.values])  # selects for each point in time the month
+
+    time= temp.time
+
+    y0=year[0]
+    y1=year[-1]
+
+    ny, r = divmod(len(temp.time), 12)
+    assert r == 0
+
+    # gradient default params
+    use_grad = cfg.PARAMS['temp_use_local_gradient']
+    def_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+
+    # This is guaranteed to work because I prepared the file (I hope)
+    ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+
+    # get climatology data
+    loc_hgt = ncclim.get_vardata('elev')
+    loc_tmp = ncclim.get_vardata('temp')
+    loc_pre = ncclim.get_vardata('prcp')
+    loc_lon = ncclim.get_vardata('lon')
+    loc_lat = ncclim.get_vardata('lat')
+
+    # see if the center is ok
+    if not np.isfinite(loc_hgt[1, 1]):
+        # take another candidate where finite
+        isok = np.isfinite(loc_hgt)
+
+        # wait: some areas are entirely NaNs, make the subset larger
+        _margin = 1
+        while not np.any(isok):
+            _margin += 1
+            ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=_margin)
+            loc_hgt = ncclim.get_vardata('elev')
+            isok = np.isfinite(loc_hgt)
+        if _margin > 1:
+            log.debug('%s: I had to look up for far climate pixels: %s',
+                      gdir.rgi_id, _margin)
+
+        # Take the first candidate (doesn't matter which)
+        lon, lat = ncclim.grid.ll_coordinates
+        lon = lon[isok][0]
+        lat = lat[isok][0]
+        # Resubset
+        ncclim.set_subset()
+        ncclim.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+        loc_hgt = ncclim.get_vardata('elev')
+        loc_tmp = ncclim.get_vardata('temp')
+        loc_pre = ncclim.get_vardata('prcp')
+        loc_lon = ncclim.get_vardata('lon')
+        loc_lat = ncclim.get_vardata('lat')
+
+    assert np.isfinite(loc_hgt[1, 1])
+    isok = np.isfinite(loc_hgt)
+    hgt_f = loc_hgt[isok].flatten()
+    assert len(hgt_f) > 0.
+    ts_grad = np.zeros(12) + def_grad
+    if use_grad and len(hgt_f) >= 5:
+        for i in range(12):
+            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
+            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
+            ts_grad[i] = slope if (p_val < 0.01) else def_grad
+    # ... but dont exaggerate too much
+    ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
+    # convert to timeserie and hydroyears
+    ts_grad = ts_grad.tolist()
+    ts_grad = ts_grad[9:] + ts_grad[0:9]
+    ts_grad = np.asarray(ts_grad * ny)
+
+    latdif=abs((temp.lat)-lat)
+    latmin=min(latdif)
+    latsel=np.where(latdif==latmin)
+    latsel=np.asarray(latsel)
+    latsel=latsel.squeeze()
+    temp = temp.isel(lat=((latsel-1), latsel, (latsel+1))) #is the problem in wrong lon units?
+    precp = precp.isel(lat=((latsel-1), latsel, (latsel+1)))
+
+    longi = np.hstack((temp.lon[:73], (temp.lon[73:]-360)))
+    temp['lon'] = longi
+    precp['lon'] = longi
+    londif = abs(temp.lon - lon)
+    lonmin=min(londif)
+    lonsel=np.where(londif==lonmin)
+    lonsel=np.asarray(lonsel)
+    lonsel=lonsel.squeeze()
+    temp=temp.isel(lon=((lonsel-1), lonsel, (lonsel+1))) #is the problem in wrong lon units?
+    precp = precp.isel(lon=((lonsel-1), lonsel, (lonsel+1)))
+
+    Ndays = np.tile([31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30], (y1 - y0))
+    for i in range(0,3):
+        for j in range(0,3):
+            precp[: ,i, j] = precp[: ,i, j]* (60 * 60 * 24 * 1000) * Ndays # from [m/s] to [kg/m^2 per month]
+
+    temp.salem.grid
+    precp.salem.grid
+
+    # compute monthly anomalies
+    # of temp
+    tmp = temp
+    ts_tmp_avg = tmp.isel(time= (year >= 1961) & (year <= 1990))  #time line makes time based selection from the netcdf file.
+    ts_tmp_avg=ts_tmp_avg.groupby('time.month').mean(dim='time')
+    ts_tmp = temp.groupby('time.month')-ts_tmp_avg
+
+    # of precip
+    ts_pre_avg = precp.isel(time= (year >= 1961) & (year <= 1990))  #time line makes time based selection from the netcdf file.
+    ts_pre_avg= ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre = precp.groupby('time.month')-ts_pre_avg
+
+    # interpolate to HR grid
+    if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
+        # Extreme case, middle pix is not valid
+        # take any valid pix from the 3*3 (and hope there's one)
+        found_it = False
+        for idi in range(2):
+            for idj in range(2):
+                if np.all(np.isfinite(ts_tmp[:, idj, idi])):
+                    ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
+                    ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
+                    found_it = True
+        if not found_it:
+            msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+            raise RuntimeError(msg)
+    elif np.any(~np.isfinite(ts_tmp)):
+        # maybe the side is nan, but we can do nearest
+        ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, temp.salem.grid,
+                                              interp='nearest')
+        ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, precp.salem.grid,
+                                              interp='nearest')
+    else:
+        # We can do bilinear
+        ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, temp.salem.grid, interp='linear')
+
+        ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, precp.salem.grid,
+                                              interp='nearest')
+
+    # take the center pixel and add it to the CRU CL clim
+    # for temp
+    loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
+                           coords={'month':ts_tmp_avg.month})
+    ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
+                           coords={'time':time})
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    # for prcp
+    loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
+                           coords={'month':ts_pre_avg.month})
+    ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
+                           coords={'time':time})
+    ts_pre = ts_pre.groupby('time.month') + loc_pre
+
+    # load dates in right format to save
+    Tindex=salem.GeoNetcdf(fpathTemp, monthbegin=True)
+    time1 = Tindex.variables['time']
+    time2 = time1[9:-3] - Ndays # from normal years to hydrological years
+    time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
+
+    # done
+    loc_hgt = loc_hgt[1, 1]
+    loc_lon = loc_lon[1]
+    loc_lat = loc_lat[1]
+    assert np.isfinite(loc_hgt)
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+    assert np.all(np.isfinite(ts_grad))
+    gdir.write_gcm_data_file(time2, ts_pre.values, ts_tmp.values,
+                                    ts_grad, loc_hgt, loc_lon, loc_lat)
+
+    ncclim._nc.close()
+    Tindex._nc.close()
+
+    # metadata
+    out = {'climate_source': 'GCM data', 'hydro_yr_0': y0 + 1, 'hydro_yr_1': y1}
+    gdir.write_pickle(out, 'climate_info')
 
 @entity_task(log, writes=['climate_monthly'])
 def process_cru_data(gdir):
