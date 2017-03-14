@@ -80,6 +80,8 @@ def up_to_climate(reset=False):
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
 
+    assert gdirs[14].name == 'Hintereisferner'
+
     try:
         tasks.catchment_width_correction(gdirs[0])
     except Exception:
