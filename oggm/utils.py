@@ -2007,10 +2007,8 @@ class GlacierDirectory(object):
 
             timev = nc.createVariable('time','i4',('time',))
             timev.setncatts({'units':'days since 0850-01-01 00:00:00'})
-            # timev.setncatts({'units':'days since 0850-01-01'})
             timev[:] = netCDF4.date2num([t for t in time],
                                         'days since 0850-01-01 00:00:00')
-                                        # 'days since 0850-01-01')
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'
