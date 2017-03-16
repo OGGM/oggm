@@ -1544,6 +1544,26 @@ class TestGrindelInvert(unittest.TestCase):
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
+    @requires_py3
+    def test_catchment_intersections(self):
+        cfg.PARAMS['use_multiple_flowlines'] = True
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
+
+        # see that we have as many catchments as flowlines
+        fls = gdir.read_pickle('centerlines', div_id=1)
+        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
+                                               div_id=1))
+        self.assertEqual(len(fls), len(gdfc))
+        # and at least as many intersects
+        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                               div_id=1))
+        self.assertGreaterEqual(len(gdfc), len(fls)-1)
+
 
 class TestCatching(unittest.TestCase):
 
