@@ -583,6 +583,7 @@ def install_node_pip(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     source ~/.virtenvrc &&
     workon oggm_env &&
     pip install --upgrade pip &&
@@ -611,6 +612,7 @@ def install_node_apt(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y update &&
     sudo apt-get -y dist-upgrade &&
@@ -643,6 +645,7 @@ def install_node_apt(nn='', inst=None):
 
     # bashrc is not sourced for non-interactive shells, so source the virtenvrc explicitly
     run("""
+    export LC_ALL=C
     source ~/.virtenvrc
     if ! [ -d ${WORKON_HOME}/oggm_env ]; then
         mkvirtualenv oggm_env -p /usr/bin/python3
@@ -662,6 +665,7 @@ def install_node_nfs_master(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y install nfs-kernel-server &&
     sudo mkdir -p /work/ubuntu /export/work /export/home &&
@@ -697,6 +701,7 @@ def install_node_nfs_client(master_ip, nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     cd / &&
     sudo mkdir /work &&
     export DEBIAN_FRONTEND=noninteractive &&
