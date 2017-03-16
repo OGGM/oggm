@@ -1496,6 +1496,7 @@ class entity_task(object):
         cnt =  ['    Returns']
         cnt += ['    -------']
         cnt += ['    Files writen to the glacier directory:']
+
         for k in sorted(writes):
             cnt += [cfg.BASENAMES.doc_str(k)]
         self.iodoc = '\n'.join(cnt)
@@ -1504,6 +1505,9 @@ class entity_task(object):
         """Decorate."""
 
         # Add to the original docstring
+        if task_func.__doc__ is None:
+            raise RuntimeError('Entity tasks should have a docstring!')
+
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
