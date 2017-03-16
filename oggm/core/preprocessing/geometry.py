@@ -26,11 +26,13 @@ import numpy as np
 from skimage.graph import route_through_array
 import netCDF4
 import shapely.geometry as shpg
+from shapely.ops import linemerge
 import matplotlib._cntr as cntr
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.measurements import label
-from salem import lazy_property
+import geopandas as gpd
+import salem
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
@@ -396,6 +398,109 @@ def catchment_area(gdir, div_id=None):
 
     # Write the data
     gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
+
+
+def polygon_intersections(gdf):
+    """Computes the intersections between all polygons in a GeoDataFrame.
+
+    Parameters
+    ----------
+    gdf : Geopandas.GeoDataFrame
+
+    Returns
+    -------
+    a Geodataframe containing the intersections
+    """
+
+    out_cols = ['id_1', 'id_2', 'geometry']
+    out = gpd.GeoDataFrame(columns=out_cols)
+
+    for i, major in gdf.iterrows():
+
+        # Exterior only
+        major_poly = major.geometry.exterior
+
+        # Remove the major from the list
+        gdf = gdf.loc[gdf.index != i]
+
+        # Keep catchments which intersect
+        gdfs = gdf.loc[gdf.intersects(major_poly)]
+
+        for j, neighbor in gdfs.iterrows():
+
+            # No need to check if we already found the intersect
+            if j in out.id_1 or j in out.id_2:
+                continue
+
+            # Exterior only
+            neighbor_poly = neighbor.geometry.exterior
+
+            # Ok, the actual intersection
+            mult_intersect = major_poly.intersection(neighbor_poly)
+
+            # All what follows is to catch all possibilities
+            # Should no happen in our simple geometries but ya never know
+            if isinstance(mult_intersect, shpg.Point):
+                continue
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = [m for m in mult_intersect if
+                              not isinstance(m, shpg.Point)]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = linemerge(mult_intersect)
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            for line in mult_intersect:
+                assert isinstance(line, shpg.linestring.LineString)
+                line = gpd.GeoDataFrame([[i, j, line]],
+                                        columns=out_cols)
+                out = out.append(line)
+
+    return out
+
+
+@entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
+@divide_task(log, add_0=False)
+def catchment_intersections(gdir, div_id=None):
+    """Computes the intersections between the catchments.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    catchment_indices = gdir.read_pickle('catchment_indices', div_id=div_id)
+    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
+                               np.arange(0, gdir.grid.ny, 1))
+
+    # Loop over the lines
+    mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
+
+    gdfc = gpd.GeoDataFrame()
+    for i, ci in enumerate(catchment_indices):
+        # Catchment polygon
+        mask[:] = 0
+        mask[tuple(ci.T)] = 1
+        _, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        gdfc.loc[i, 'geometry'] = poly_no
+
+    gdfi = polygon_intersections(gdfc)
+
+    # We project them onto the mercator proj before writing. This is a bit
+    # inefficient (they'll be projected back later), but it's more sustainable
+    gdfc.crs = gdir.grid
+    gdfi.crs = gdir.grid
+    salem.transform_geopandas(gdfc, gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfi, gdir.grid.proj, inplace=True)
+    if hasattr(gdfc.crs, 'srs'):
+        # salem uses pyproj
+        gdfc.crs = gdfc.crs.srs
+        gdfi.crs = gdfi.crs.srs
+    gdfc.to_file(gdir.get_filepath('flowline_catchments', div_id=div_id))
+    gdfi.to_file(gdir.get_filepath('catchments_intersects', div_id=div_id))
 
 
 @entity_task(log, writes=['inversion_flowlines'])
