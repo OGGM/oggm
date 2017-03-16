@@ -113,6 +113,12 @@ BASENAMES['outlines'] = ('outlines.shp', _doc)
 _doc = 'The glacier intersects in the local projection.'
 BASENAMES['intersects'] = ('intersects.shp', _doc)
 
+_doc = 'The flowline catchments in the local projection.'
+BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
+
+_doc = 'The fcatchments interesctions in the local projection.'
+BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
+
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
