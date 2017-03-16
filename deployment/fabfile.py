@@ -120,8 +120,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-c593deb6' #eu Ubuntu 16.04 LTS
-def_ami['us-east-1'] = 'ami-fd6e3bea' #us Ubuntu 16.04 LTS
+def_ami['eu-west-1'] = 'ami-c32610a5' #eu Ubuntu 16.04 LTS oggm-base
+def_ami['us-east-1'] = 'ami-9f3e9689' #us Ubuntu 16.04 LTS oggm-base
 
 # Subnet to use per AVZ, expects a tuple (vpc-id, subnet-id)
 def_subnet = dict()
@@ -583,6 +583,7 @@ def install_node_pip(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     source ~/.virtenvrc &&
     workon oggm_env &&
     pip install --upgrade pip &&
@@ -611,6 +612,7 @@ def install_node_apt(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y update &&
     sudo apt-get -y dist-upgrade &&
@@ -637,12 +639,15 @@ def install_node_apt(nn='', inst=None):
         echo 'export WORKON_HOME="${HOME}/.pyvirtualenvs"' >> ~/.virtenvrc
         echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper_lazy.sh' >> ~/.virtenvrc
     fi
-    echo >> ~/.bashrc
-    echo 'source ~/.virtenvrc' >> ~/.bashrc
+    if ! grep virtenvrc ~/.bashrc; then
+        echo >> ~/.bashrc
+        echo 'source ~/.virtenvrc' >> ~/.bashrc
+    fi
     """)
 
     # bashrc is not sourced for non-interactive shells, so source the virtenvrc explicitly
     run("""
+    export LC_ALL=C
     source ~/.virtenvrc
     if ! [ -d ${WORKON_HOME}/oggm_env ]; then
         mkvirtualenv oggm_env -p /usr/bin/python3
@@ -662,6 +667,7 @@ def install_node_nfs_master(nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     export DEBIAN_FRONTEND=noninteractive &&
     sudo apt-get -y install nfs-kernel-server &&
     sudo mkdir -p /work/ubuntu /export/work /export/home &&
@@ -697,6 +703,7 @@ def install_node_nfs_client(master_ip, nn='', inst=None):
     env.user = 'ubuntu'
 
     run("""
+    export LC_ALL=C &&
     cd / &&
     sudo mkdir /work &&
     export DEBIAN_FRONTEND=noninteractive &&
