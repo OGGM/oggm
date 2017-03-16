@@ -639,8 +639,10 @@ def install_node_apt(nn='', inst=None):
         echo 'export WORKON_HOME="${HOME}/.pyvirtualenvs"' >> ~/.virtenvrc
         echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper_lazy.sh' >> ~/.virtenvrc
     fi
-    echo >> ~/.bashrc
-    echo 'source ~/.virtenvrc' >> ~/.bashrc
+    if ! grep virtenvrc ~/.bashrc; then
+        echo >> ~/.bashrc
+        echo 'source ~/.virtenvrc' >> ~/.bashrc
+    fi
     """)
 
     # bashrc is not sourced for non-interactive shells, so source the virtenvrc explicitly
