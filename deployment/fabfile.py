@@ -120,8 +120,8 @@ def_default_requesttype = 'spot'
 
 # FSO--- the AMI to use
 def_ami = dict()
-def_ami['eu-west-1'] = 'ami-c593deb6' #eu Ubuntu 16.04 LTS
-def_ami['us-east-1'] = 'ami-fd6e3bea' #us Ubuntu 16.04 LTS
+def_ami['eu-west-1'] = 'ami-971238f1' #eu Ubuntu 16.04 LTS
+def_ami['us-east-1'] = 'ami-2757f631' #us Ubuntu 16.04 LTS
 
 # Subnet to use per AVZ, expects a tuple (vpc-id, subnet-id)
 def_subnet = dict()
