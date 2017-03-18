@@ -370,7 +370,7 @@ def define_glacier_region(gdir, entity=None):
     gdf = cfg.PARAMS['intersects_gdf']
     gdf = gdf.loc[(gdf.RGIId_1 == gdir.rgi_id) | (gdf.RGIId_2 == gdir.rgi_id)]
     if len(gdf) > 0:
-        salem.transform_geopandas(gdf, to_crs=proj_out, inplace=True)
+        gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
         if hasattr(gdf.crs, 'srs'):
             # salem uses pyproj
             gdf.crs = gdf.crs.srs

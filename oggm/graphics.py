@@ -113,9 +113,6 @@ def _plot_map(plotfunc):
 def plot_googlemap(gdir, ax=None):
     """Plots the glacier over a googlemap."""
 
-    # TODO: center grid or corner grid???
-    crs = gdir.grid.center_grid
-
     dofig = False
     if ax is None:
         fig = plt.figure()
@@ -160,7 +157,6 @@ def plot_domain(gdir, ax=None, salemmap=None):  # pragma: no cover
     salemmap.set_plot_params(nlevels=256)
     salemmap.set_data(topo)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
 
     for i in gdir.divide_ids:
@@ -201,7 +197,6 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
     salemmap.set_plot_params(nlevels=256)
     salemmap.set_data(topo)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
 
     for i in gdir.divide_ids:
@@ -259,7 +254,6 @@ def plot_catchment_areas(gdir, ax=None, salemmap=None):
 
     salemmap.set_topography(topo)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
     for i in gdir.divide_ids:
         geom = gdir.read_pickle('geometries', div_id=i)
@@ -291,9 +285,9 @@ def plot_catchment_areas(gdir, ax=None, salemmap=None):
 
 @entity_task(log)
 @_plot_map
-def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
+def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
+                         add_intersects=False, add_touches=False):
     """Plots the catchment widths out of a glacier directory.
-
     """
 
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
@@ -301,7 +295,8 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
 
     salemmap.set_topography(topo)
 
-    # TODO: center grid or corner grid???
+    # Maybe plot touches
+    xis, yis, cis = [], [], []
     crs = gdir.grid.center_grid
     for i in gdir.divide_ids:
         geom = gdir.read_pickle('geometries', div_id=i)
@@ -312,6 +307,11 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
                              linewidth=.2)
         for l in poly_pix.interiors:
             salemmap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+        # Plot intersects
+        if add_intersects and gdir.has_file('intersects', div_id=0):
+            gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
+            salemmap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines', div_id=i)[::-1]
@@ -332,9 +332,18 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False):
                     col = c if np.isfinite(wi) else 'grey'
                     for w in wl:
                         salemmap.set_geometry(w, crs=crs, color=col,
-                                             linewidth=0.6, zorder=50)
+                                              linewidth=0.6, zorder=50)
+
+            if add_touches:
+                pok = np.where(l.touches_border)
+                xi, yi = l.line.xy
+                xis.append(np.asarray(xi)[pok])
+                yis.append(np.asarray(yi)[pok])
+                cis.append(c)
 
     salemmap.plot(ax)
+    for xi, yi, c in zip(xis, yis, cis):
+        ax.scatter(xi, yi, color=c, s=20, zorder=51)
 
     return {}
 
@@ -349,7 +358,6 @@ def plot_inversion(gdir, ax=None, salemmap=None):
 
     salemmap.set_topography(topo)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
 
     toplot_th = np.array([])
@@ -414,7 +422,6 @@ def plot_distributed_thickness(gdir, ax=None, salemmap=None, how=None):
 
     salemmap.set_topography(topo)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
 
     for i in gdir.divide_ids:
@@ -458,7 +465,6 @@ def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None, vmax=None):
     salemmap = salem.Map(ds.grid, countries=False, nx=gdir.grid.nx)
     salemmap.set_topography(topo, crs=gdir.grid)
 
-    # TODO: center grid or corner grid???
     crs = gdir.grid.center_grid
     salemmap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
     for l in poly_pix.interiors:
