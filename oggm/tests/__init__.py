@@ -194,9 +194,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
-    if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897')):
+    if not os.path.exists(os.path.join(testdir, 'RGI50-11.00897')):
         reset = True
-    if not os.path.exists(os.path.join(testdir, 'RGI40-11.00897',
+    if not os.path.exists(os.path.join(testdir, 'RGI50-11.00897',
                                        'inversion_params.pkl')):
         reset = True
 
@@ -206,7 +206,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
 
-    hef_file = get_demo_file('Hintereisferner.shp')
+    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
 
@@ -219,6 +219,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     centerlines.compute_downstream_lines(gdir)
     geometry.initialize_flowlines(gdir)
     geometry.catchment_area(gdir)
+    geometry.catchment_intersections(gdir)
     geometry.catchment_width_geom(gdir)
     geometry.catchment_width_correction(gdir)
     climate.process_histalp_nonparallel([gdir])

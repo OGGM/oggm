@@ -211,3 +211,14 @@ def test_catch_areas():
     graphics.plot_catchment_areas(gdir, ax=ax)
     fig.tight_layout()
     return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_intersects_borders():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_catchment_width(gdir, ax=ax, add_intersects=True,
+                                  add_touches=True)
+    fig.tight_layout()
+    return fig

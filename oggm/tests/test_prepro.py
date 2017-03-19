@@ -194,10 +194,8 @@ class TestGIS(unittest.TestCase):
 
     def test_intersects(self):
 
-        rgi_file = get_demo_file('rgi_oetztal.shp')
-        rgidf = gpd.GeoDataFrame.from_file(rgi_file)
-        entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00897'].iloc[0]
-
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
@@ -436,7 +434,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_geom_width(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -445,6 +443,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
         geometry.catchment_width_geom(gdir)
 
     def test_width(self):
@@ -1582,7 +1581,7 @@ class TestGrindelInvert(unittest.TestCase):
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
     @requires_py3
-    def test_catchment_intersections(self):
+    def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
         gis.glacier_masks(gdir)
@@ -1590,9 +1589,11 @@ class TestGrindelInvert(unittest.TestCase):
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
         geometry.catchment_intersections(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
 
         # see that we have as many catchments as flowlines
-        fls = gdir.read_pickle('centerlines', div_id=1)
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
         gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
                                                div_id=1))
         self.assertEqual(len(fls), len(gdfc))
@@ -1600,6 +1601,9 @@ class TestGrindelInvert(unittest.TestCase):
         gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
                                                div_id=1))
         self.assertGreaterEqual(len(gdfc), len(fls)-1)
+
+        # check touch borders qualitatively
+        self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
 
 
 class TestCatching(unittest.TestCase):
