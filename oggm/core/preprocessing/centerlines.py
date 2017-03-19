@@ -78,6 +78,7 @@ class Centerline(object):
         self.dx = dx  # dx in pixels (assumes the line is on constant dx
         self._surface_h = surface_h
         self._widths = None
+        self.touches_border = None
 
         # Set by external funcs
         self.geometrical_widths = None  # these are kept for plotting and such
