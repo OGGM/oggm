@@ -30,7 +30,8 @@ from shapely.ops import linemerge
 import matplotlib._cntr as cntr
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage.measurements import label
+from scipy.ndimage.measurements import label, find_objects
+import pandas as pd
 import geopandas as gpd
 import salem
 # Locals
@@ -189,7 +190,8 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
 
     Parameters
     ----------
-    aft, cur, bef: (x, y) coordinates of the current point, before, and after
+    normals: normals of the current point, before, and after
+    point: the centerline's point
     centerline: Centerline object
     poly, poly_no_nuntaks: subcatchment polygons
 
@@ -288,6 +290,32 @@ def _filter_for_altitude_range(widths, wlines, topo):
             raise RuntimeError('Problem by altitude filter.')
 
     return out_width
+
+
+def _filter_grouplen(arr, minsize=3):
+    """Filter out the groups of grid points smaller than minsize
+
+    Parameters
+    ----------
+    arr : the array to filter (should be False and Trues)
+    minsize : the minimum size of the group
+
+    Returns
+    -------
+    the array, with small groups removed
+    """
+
+    # Do it with trues
+    r, nr = label(arr)
+    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
+    arr = np.asarray([ri in nr for ri in r])
+
+    # and with Falses
+    r, nr = label(~ arr)
+    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
+    arr = ~ np.asarray([ri in nr for ri in r])
+
+    return arr
 
 
 @entity_task(log, writes=['catchment_indices'])
@@ -500,7 +528,9 @@ def catchment_intersections(gdir, div_id=None):
         gdfc.crs = gdfc.crs.srs
         gdfi.crs = gdfi.crs.srs
     gdfc.to_file(gdir.get_filepath('flowline_catchments', div_id=div_id))
-    gdfi.to_file(gdir.get_filepath('catchments_intersects', div_id=div_id))
+    if len(gdfi) > 0:
+        gdfi.to_file(gdir.get_filepath('catchments_intersects',
+                                       div_id=div_id))
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -589,7 +619,7 @@ def catchment_width_geom(gdir, div_id=None):
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
                                np.arange(0, gdir.grid.ny, 1))
 
-    # Topography is to filter the lines afterwards.
+    # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
     fpath = gdir.get_filepath('gridded_data', div_id=div_id)
@@ -599,6 +629,23 @@ def catchment_width_geom(gdir, div_id=None):
         mask_glacier = nc.variables['glacier_mask'][:]
     topo[np.where(mask_glacier == 0)] = np.NaN
     topo[np.where(mask_ext == 1)] = np.NaN
+
+    # Intersects between catchments/glaciers
+    gdfi = gpd.GeoDataFrame(columns=['geometry'])
+    if gdir.has_file('catchments_intersects', div_id=div_id):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                              div_id=div_id))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+    if gdir.has_file('intersects', div_id=0):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+
+    # apply a buffer to be sure we get the intersects right. Be generous
+    gdfi = gdfi.buffer(1.5)
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
@@ -633,6 +680,13 @@ def catchment_width_geom(gdir, div_id=None):
         # we filter the lines which have a large altitude range
         fil_widths = _filter_for_altitude_range(widths, wlines, topo)
 
+        # I take all these widths for geometrically valid, and see if they
+        # intersect with our buffered catchment/glacier intersections
+        touches_border = []
+        for wg in wlines:
+            touches_border.append(np.any(gdfi.intersects(wg)))
+        touches_border = _filter_grouplen(touches_border, minsize=5)
+
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
             i0 = np.clip(fid-jpix, jpix/2, n-jpix/2).astype(np.int64)
@@ -650,6 +704,7 @@ def catchment_width_geom(gdir, div_id=None):
         assert len(fil_widths) == n
         fl.widths = fil_widths
         fl.geometrical_widths = wlines
+        fl.touches_border = touches_border
 
     # Overwrite pickle
     gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)
@@ -672,7 +727,6 @@ def catchment_width_correction(gdir, div_id=None):
 
     # The code below makes of this task a "special" divide task.
     # We keep it as is and remove the divide task decorator
-    # TODO: could be separated in two 'cleaner' tasks without output
     if div_id is None:
         # This is the original call
         # This time instead of just looping over the divides we add a test
