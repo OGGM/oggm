@@ -50,8 +50,8 @@ import oggm.cfg as cfg
 from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24/cruts' \
-             '.1609301803.v3.24/'
+CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
+             '.1701201703.v3.24.01/'
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
@@ -1181,13 +1181,13 @@ def _get_cru_file_unlocked(var=None):
     if var not in ['tmp', 'pre']:
         raise ValueError('CRU variable {} does not exist!'.format(var))
 
-    # cru_ts3.23.1901.2014.tmp.dat.nc
-    bname = 'cru_ts3.23.1901.2014.{}.dat.nc'.format(var)
+    # cru_ts3.24.01.1901.2014.tmp.dat.nc
+    bname = 'cru_ts3.24.01.1901.2015.{}.dat.nc'.format(var)
     ofile = os.path.join(cru_dir, bname)
 
     # if not there download it
     if not os.path.exists(ofile):  # pragma: no cover
-        tf = CRU_SERVER + '{}/cru_ts3.23.1901.2014.{}.dat.nc.gz'.format(var,
+        tf = CRU_SERVER + '{}/cru_ts3.24.01.1901.2015.{}.dat.nc.gz'.format(var,
                                                                         var)
         progress_urlretrieve(tf, ofile + '.gz')
         with gzip.GzipFile(ofile + '.gz') as zf:
