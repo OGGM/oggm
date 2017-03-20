@@ -1181,12 +1181,16 @@ def _get_cru_file_unlocked(var=None):
     if var not in ['tmp', 'pre']:
         raise ValueError('CRU variable {} does not exist!'.format(var))
 
-    # cru_ts3.24.01.1901.2014.tmp.dat.nc
-    bname = 'cru_ts3.24.01.1901.2015.{}.dat.nc'.format(var)
+    # The user files may have different dates, so search for patterns
+    bname = 'cru_ts*.{}.dat.nc'.format(var)
     ofile = os.path.join(cru_dir, bname)
-
-    # if not there download it
-    if not os.path.exists(ofile):  # pragma: no cover
+    search = glob.glob(ofile)
+    if len(search) == 1:
+        ofile = search[0]
+    elif len(search) > 1:
+        raise ValueError('The CRU filename should match "{}".'.format(bname))
+    else:  # pragma: no cover
+        # if not there download it
         tf = CRU_SERVER + '{}/cru_ts3.24.01.1901.2015.{}.dat.nc.gz'.format(var,
                                                                         var)
         progress_urlretrieve(tf, ofile + '.gz')
