@@ -324,7 +324,7 @@ def define_glacier_region(gdir, entity=None):
     elif dxmethod == 'square':
         dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
     elif dxmethod == 'fixed':
-        dx = np.rint(cfg.PARAMS['dmax'])
+        dx = np.rint(cfg.PARAMS['fixed_dx'])
     else:
         raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
     # Additional trick for varying dx
