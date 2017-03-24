@@ -70,6 +70,8 @@ CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
+RGI_REG_NAMES = False
+RGI_SUBREG_NAMES = False
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -218,6 +220,13 @@ def initialize(file=None):
     global N
     global A
     global RHO
+    global RGI_REG_NAMES
+    global RGI_SUBREG_NAMES
+
+    # Make sure we have a proper cache dir
+    from oggm.utils import _download_oggm_files
+    _download_oggm_files()
+
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -241,6 +250,13 @@ def initialize(file=None):
         cp['cru_dir'] = os.path.join(homedir, 'OGGM_data', 'cru')
     if cp['rgi_dir'] == '~':
         cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
+
+    # Parse RGI metadata
+    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
+    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
+                                index_col=0)
+    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
+                                   index_col=0)
 
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 

@@ -134,6 +134,7 @@ class TestGIS(unittest.TestCase):
         <oggm.GlacierDirectory>
           RGI id: RGI40-11.00897
           Region: 11: Central Europe
+          Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
           Area: 8.036 mk2
@@ -298,6 +299,8 @@ class TestCenterlines(unittest.TestCase):
         entity.BGNDATE = 0
         entity.NAME = 'Baltoro'
         entity.GLACTYPE = '0000'
+        entity.O1REGION = '01'
+        entity.O2REGION = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -1415,7 +1418,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
         entity.geometry = miniglac
-        entity.RGIID = 'RGI50-fake'
+        entity.RGIID = 'RGI50-11.fake'
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -1432,7 +1435,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
 
-        rdir = os.path.join(self.testdir, 'RGI50-fake')
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fake')
         self.assertTrue(os.path.exists(rdir))
 
         rdir = os.path.join(rdir, 'log')
@@ -1479,7 +1482,7 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, self.testdir)
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11'))
 
     def _parabolic_bed(self):
 

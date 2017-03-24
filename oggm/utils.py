@@ -73,16 +73,6 @@ DEM3REG = {
     # 'GL-East': [-42., -17., 64., 76.]
 }
 
-RGI_REG_NAME = ['01: Alaska', '02: Western Canada and US',
-                '03: Arctic Canada North', '04: Arctic Canada South',
-                '05: Greenland', '06: Iceland', '07: Svalbard',
-                '08: Scandinavia', '09: Russian Arctic', '10: North Asia',
-                '11: Central Europe', '12: Caucasus and Middle East',
-                '13: Central Asia', '14: South Asia West',
-                '15: South Asia East', '16: Low Latitudes',
-                '17: Southern Andes', '18: New Zealand',
-                '19: Antarctic and Subantarctic']
-
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -1679,7 +1669,8 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, string_types):
-            _shp = os.path.join(base_dir, rgi_entity, 'outlines.shp')
+            _shp = os.path.join(base_dir, rgi_entity[:8],
+                                rgi_entity, 'outlines.shp')
             rgi_entity = read_shapefile(_shp).iloc[0]
 
         try:
@@ -1689,7 +1680,9 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.AREA)
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
-            self.rgi_region = rgi_entity.O1REGION
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1REGION))
+            self.rgi_subregion = self.rgi_region + '-' + \
+                                 '{:02d}'.format(int(rgi_entity.O2REGION))
             name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
             gtype = rgi_entity.GLACTYPE
@@ -1700,7 +1693,9 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.Area)
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
-            self.rgi_region = rgi_entity.O1Region
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
+            self.rgi_subregion = self.rgi_region + '-' + \
+                                 '{:02d}'.format(int(rgi_entity.O2Region))
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
@@ -1709,7 +1704,10 @@ class GlacierDirectory(object):
         self.name = filter_rgi_name(name)
 
         # region
-        self.rgi_region_name = RGI_REG_NAME[int(self.rgi_region) - 1]
+        n = cfg.RGI_REG_NAMES.loc[int(self.rgi_region)].values[0]
+        self.rgi_region_name = self.rgi_region + ': ' + n
+        n = cfg.RGI_SUBREG_NAMES.loc[self.rgi_subregion].values[0]
+        self.rgi_subregion_name = self.rgi_subregion + ': ' + n
 
         # Read glacier attrs
         keys = {'0': 'Glacier',
@@ -1745,7 +1743,7 @@ class GlacierDirectory(object):
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id)
+        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
@@ -1755,6 +1753,7 @@ class GlacierDirectory(object):
         summary = ['<oggm.GlacierDirectory>']
         summary += ['  RGI id: ' + self.rgi_id]
         summary += ['  Region: ' + self.rgi_region_name]
+        summary += ['  Subregion: ' + self.rgi_subregion_name]
         if self.name :
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
