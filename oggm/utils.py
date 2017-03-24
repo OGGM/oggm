@@ -866,9 +866,11 @@ def srtm_zone(lon_ex, lat_ex):
 
     # quick n dirty solution to be sure that we will cover the whole range
     mi, ma = np.min(lon_ex), np.max(lon_ex)
-    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning:
+    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
     mi, ma = np.min(lat_ex), np.max(lat_ex)
-    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning
+    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
 
     zones = []
     for lon in lon_ex:
@@ -935,9 +937,11 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
     mi, ma = np.min(lon_ex), np.max(lon_ex)
     # TODO: Fabien, find out what Johannes wanted with this +3
     # +3 is just for the number to become still a bit larger
-    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dy)+3))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning
+    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dy)+3))
     mi, ma = np.min(lat_ex), np.max(lat_ex)
-    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dx)+3))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning
+    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dx)+3))
 
     zones = []
     for lon in lon_ex:
@@ -964,9 +968,11 @@ def aster_zone(lon_ex, lat_ex):
 
     # quick n dirty solution to be sure that we will cover the whole range
     mi, ma = np.min(lon_ex), np.max(lon_ex)
-    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning:
+    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
     mi, ma = np.min(lat_ex), np.max(lat_ex)
-    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))  # int() to avoid Deprec warning
+    # int() to avoid Deprec warning:
+    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
 
     zones = []
     units = []
