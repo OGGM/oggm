@@ -92,6 +92,40 @@ class TestGIS(unittest.TestCase):
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
 
+    def test_dx_methods(self):
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        # Test fixed method
+        cfg.PARAMS['grid_dx_method'] = 'fixed'
+        cfg.PARAMS['fixed_dx'] = 50
+        gis.define_glacier_region(gdir, entity=entity)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
+
+        # Test linear method
+        cfg.PARAMS['grid_dx_method'] = 'linear'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * gdir.rgi_area_km2 + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
+
+        # Test square method
+        cfg.PARAMS['grid_dx_method'] = 'square'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * np.sqrt(gdir.rgi_area_km2) + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
+
     def test_repr(self):
         from textwrap import dedent
 
@@ -304,7 +338,10 @@ class TestCenterlines(unittest.TestCase):
         nd = len(np.where(rest == 0)[0])
         denom = np.float64((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
         hss = np.float64(2.) * ((na*nd)-(nb*nc)) / denom
-        self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
+            self.assertTrue(hss > 0.41)
 
 
 class TestGeometry(unittest.TestCase):
