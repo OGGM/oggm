@@ -518,6 +518,7 @@ class TestMassBalance(unittest.TestCase):
     def test_constant_mb_model(self):
 
         gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
