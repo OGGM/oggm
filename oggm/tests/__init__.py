@@ -194,11 +194,6 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
-    if not os.path.exists(os.path.join(testdir, 'RGI50-11.00897')):
-        reset = True
-    if not os.path.exists(os.path.join(testdir, 'RGI50-11.00897',
-                                       'inversion_params.pkl')):
-        reset = True
 
     # Init
     cfg.initialize()
@@ -208,7 +203,11 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+    if not gdir.has_file('inversion_params'):
+        reset = True
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
 
     if not reset:
         return gdir
