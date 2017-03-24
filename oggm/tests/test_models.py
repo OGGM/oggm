@@ -395,7 +395,12 @@ class TestOtherDivides(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':
+            self.assertEqual(len(fls), 4)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'square':
+            self.assertEqual(len(fls), 8)
         vol = 0.
         area = 0.
         for fl in fls:
