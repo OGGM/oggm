@@ -341,6 +341,7 @@ def define_glacier_region(gdir, entity=None):
     proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(pyproj.transform, proj_in, proj_out)
+    # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
     geometry = _check_geometry(geometry)
     xx, yy = geometry.exterior.xy
@@ -369,6 +370,16 @@ def define_glacier_region(gdir, entity=None):
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
     towrite.to_file(gdir.get_filepath('outlines'))
+
+    # Also transform the intersects if necessary
+    gdf = cfg.PARAMS['intersects_gdf']
+    gdf = gdf.loc[(gdf.RGIId_1 == gdir.rgi_id) | (gdf.RGIId_2 == gdir.rgi_id)]
+    if len(gdf) > 0:
+        salem.transform_geopandas(gdf, to_crs=proj_out, inplace=True)
+        if hasattr(gdf.crs, 'srs'):
+            # salem uses pyproj
+            gdf.crs = gdf.crs.srs
+        gdf.to_file(gdir.get_filepath('intersects'))
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
