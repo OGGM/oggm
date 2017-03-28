@@ -1504,7 +1504,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, seed=None):
+def random_glacier_evolution(gdir, nyears=1000, seed=None, filesuffix=None):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
@@ -1525,7 +1525,7 @@ def random_glacier_evolution(gdir, nyears=1000, seed=None):
     model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
 
     # run
-    path = gdir.get_filepath('past_model', delete=True)
+    path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
     model.run_until_and_store(y1, path=path)
 
 

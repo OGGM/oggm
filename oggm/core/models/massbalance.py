@@ -250,6 +250,7 @@ class PastMassBalanceModel(MassBalanceModel):
 
         # For each height pixel:
         # Compute temp and tempformelt (temperature above melting threshold)
+        heights = np.asarray(heights)
         npix = len(heights)
         grad_temp = np.atleast_2d(igrad).repeat(npix, 0)
         grad_temp *= (heights.repeat(12).reshape(grad_temp.shape) -

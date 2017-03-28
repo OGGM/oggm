@@ -292,12 +292,13 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        rand_glac = partial(flowline.random_glacier_evolution, nyears=200)
+        rand_glac = partial(flowline.random_glacier_evolution, nyears=200,
+                            seed=0, filesuffix='_test')
         workflow.execute_entity_task(rand_glac, gdirs)
 
         for gd in gdirs:
 
-            path = gd.get_filepath('past_model')
+            path = gd.get_filepath('past_model', filesuffix='_test')
 
             # See that we are running ok
             with flowline.FileModel(path) as model:
@@ -308,6 +309,24 @@ class TestWorkflow(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
                 self.assertTrue(np.all(np.isfinite(len) & len != 0.))
+
+    @is_slow
+    def test_random_mb_seed(self):
+        gdirs = up_to_inversion()
+        seed = None
+        years = np.arange(1800, 2201)
+        odf = pd.DataFrame(index=years)
+        for gd in gdirs[:6]:
+            mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
+            h, w = gd.get_flowline_hw()
+            odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
+        self.assertLessEqual(odf.corr().mean().mean(), 0.5)
+        seed = 1
+        for gd in gdirs[:6]:
+            mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
+            h, w = gd.get_flowline_hw()
+            odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
+        self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)
 
 
 @is_slow

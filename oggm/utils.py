@@ -1338,7 +1338,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         return merged_file, source_str + '_MERGED'
 
 
-def glacier_characteristics(gdirs):
+def glacier_characteristics(gdirs, to_csv=True):
     """Gathers as many statistics as possible about a list of glacier
     directories.
 
@@ -1349,6 +1349,7 @@ def glacier_characteristics(gdirs):
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
+    to_csv: Set to "True" in order  to store the info in the working directory
     """
 
     out_df = []
@@ -1457,7 +1458,11 @@ def glacier_characteristics(gdirs):
         out_df.append(d)
 
     cols = list(out_df[0].keys())
-    return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    if to_csv:
+        out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                   'glacier_characteristics.csv'))
+    return out
 
 
 class DisableLogger():
@@ -1787,7 +1792,7 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
-    def get_filepath(self, filename, div_id=0, delete=False):
+    def get_filepath(self, filename, div_id=0, delete=False, filesuffix=None):
         """Absolute path to a specific file.
 
         Parameters
@@ -1798,8 +1803,11 @@ class GlacierDirectory(object):
             the divide for which you want to get the file path (set to
             'major' to get the major divide according to
             compute_downstream_lines)
-        delete : bool, default=False
+        delete : bool
             delete the file if exists
+        filesuffix : str
+            append a suffix to the filename (useful for model runs). Note 
+            that the BASENAME remains same.
 
         Returns
         -------
@@ -1813,7 +1821,12 @@ class GlacierDirectory(object):
             div_id = self.read_pickle('major_divide', div_id=0)
 
         dir = self.divide_dirs[div_id]
-        out = os.path.join(dir, cfg.BASENAMES[filename])
+        fname = cfg.BASENAMES[filename]
+        if filesuffix:
+            fname = fname.split('.')
+            assert len(fname) == 2
+            fname = fname[0] + filesuffix + fname[1]
+        out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
         return out
