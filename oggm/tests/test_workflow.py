@@ -14,6 +14,7 @@ import pytest
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+import xarray as xr
 from numpy.testing import assert_allclose
 
 # Locals
@@ -304,11 +305,21 @@ class TestWorkflow(unittest.TestCase):
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
                 area = model.area_km2_ts()
-                len = model.length_m_ts()
+                length = model.length_m_ts()
 
                 self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
-                self.assertTrue(np.all(np.isfinite(len) & len != 0.))
+                self.assertTrue(np.all(np.isfinite(length) & length != 0.))
+
+        # Test output
+        utils.compile_run_output(gdirs, filesuffix='_test')
+        path = os.path.join(cfg.PATHS['working_dir'],
+                            'run_output_test.nc')
+        ds = xr.open_dataset(path)
+        assert_allclose(vol, ds.volume.sel(rgi_id=gd.rgi_id) * 1e-9)
+        assert_allclose(area, ds.area.sel(rgi_id=gd.rgi_id) * 1e-6)
+        assert_allclose(length, ds.length.sel(rgi_id=gd.rgi_id))
+
 
     @is_slow
     def test_random_mb_seed(self):

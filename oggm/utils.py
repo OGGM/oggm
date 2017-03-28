@@ -1338,6 +1338,62 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         return merged_file, source_str + '_MERGED'
 
 
+def compile_run_output(gdirs, filesuffix=''):
+    """Merge the runs output of the glacier directories into one file. 
+    
+    
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    filesuffix: the filesuffix of the run
+    """
+
+    from oggm.core.models import flowline
+
+    # Get the dimensions of all this
+    rgi_ids = [gd.rgi_id for gd in gdirs]
+    path = gdirs[0].get_filepath('past_model', filesuffix=filesuffix)
+    with flowline.FileModel(path) as model:
+        ts = model.volume_km3_ts()
+    time = ts.index
+    year, month = year_to_date(time)
+
+    ds = xr.Dataset(coords={'time': ('time', time),
+                            'year': ('time', year),
+                            'month': ('time', month),
+                            'rgi_id': ('rgi_id', rgi_ids)
+                            })
+    shape = (len(ts), len(rgi_ids))
+    vol = np.zeros(shape)
+    area = np.zeros(shape)
+    length = np.zeros(shape)
+    for i, gdir in enumerate(gdirs):
+        try:
+            path = gdir.get_filepath('past_model', filesuffix=filesuffix)
+            with flowline.FileModel(path) as model:
+                vol[:, i] = model.volume_m3_ts().values
+                area[:, i] = model.area_m2_ts().values
+                length[:, i] = model.length_m_ts().values
+        except:
+            vol[:, i] = np.NaN
+            area[:, i] = np.NaN
+            length[:, i] = np.NaN
+
+    ds['volume'] = (('time', 'rgi_id'), vol)
+    ds['volume'].attrs['units'] = 'm3'
+    ds['volume'].attrs['description'] = 'Total glacier volume'
+    ds['area'] = (('time', 'rgi_id'), area)
+    ds['area'].attrs['units'] = 'm2'
+    ds['area'].attrs['description'] = 'Total glacier area'
+    ds['length'] = (('time', 'rgi_id'), length)
+    ds['length'].attrs['units'] = 'm'
+    ds['length'].attrs['description'] = 'Glacier length'
+
+    path = os.path.join(cfg.PATHS['working_dir'],
+                        'run_output' + filesuffix + '.nc')
+    ds.to_netcdf(path)
+
+
 def glacier_characteristics(gdirs, to_csv=True):
     """Gathers as many statistics as possible about a list of glacier
     directories.
@@ -1792,7 +1848,7 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
-    def get_filepath(self, filename, div_id=0, delete=False, filesuffix=None):
+    def get_filepath(self, filename, div_id=0, delete=False, filesuffix=''):
         """Absolute path to a specific file.
 
         Parameters
@@ -1825,7 +1881,7 @@ class GlacierDirectory(object):
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + filesuffix + fname[1]
+            fname = fname[0] + filesuffix + '.' + fname[1]
         out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)

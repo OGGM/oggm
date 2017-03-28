@@ -1504,10 +1504,18 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, seed=None, filesuffix=None):
+def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
+                             filesuffix=''):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
+     
+     Parameters
+     ----------
+     nyears : length of the simulation
+     y0 : central year of the random climate period
+     seed : seed for the random generate
+     filesuffix : for the output file
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1518,15 +1526,15 @@ def random_glacier_evolution(gdir, nyears=1000, seed=None, filesuffix=None):
         fs = cfg.PARAMS['flowline_fs']
         glen_a = cfg.PARAMS['flowline_glen_a']
 
-    y0 = 1800
-    y1 = y0 + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, seed=seed)
+    ys = 1
+    ye = ys + nyears
+    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
+    model = FluxBasedModel(fls, mb_model=mb, y0=ys, fs=fs, glen_a=glen_a)
 
     # run
     path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
-    model.run_until_and_store(y1, path=path)
+    model.run_until_and_store(ye, path=path)
 
 
 @entity_task(log, writes=['past_model'])
