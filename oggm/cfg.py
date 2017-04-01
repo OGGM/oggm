@@ -162,6 +162,10 @@ _doc = 'Some information (dictionary) about the climate data for this ' \
        'glacier, avoiding many useless accesses to the netCDF file.'
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
+_doc = 'The monthly GCM climate timeseries for this glacier, stored in a netCDF ' \
+       'file.'
+BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
+
 _doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
        'factor. This is useful for testing mostly.'
 BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)

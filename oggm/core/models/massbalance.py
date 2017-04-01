@@ -151,7 +151,8 @@ class LinearMassBalanceModel(MassBalanceModel):
 class PastMassBalanceModel(MassBalanceModel):
     """Mass balance during the climate data period."""
 
-    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None):
+    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
+                 filename='climate_monthly'):
         """Initialize.
 
         Parameters
@@ -169,6 +170,9 @@ class PastMassBalanceModel(MassBalanceModel):
         prcp_fac : float, optional
             set to the alternative value of the precipitation factor
             you want to use (the default is to use the calibrated value)
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
         """
 
         if mu_star is None:
@@ -195,7 +199,7 @@ class PastMassBalanceModel(MassBalanceModel):
         self.temp_bias = 0.
 
         # Read file
-        fpath = gdir.get_filepath('climate_monthly')
+        fpath = gdir.get_filepath(filename)
         with netCDF4.Dataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']

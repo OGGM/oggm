@@ -1937,14 +1937,16 @@ class GlacierDirectory(object):
         return nc
 
     def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
-                                   ref_pix_lon, ref_pix_lat):
+                                   ref_pix_lon, ref_pix_lat,
+                                   time_unit='days since 1801-01-01 00:00:00',
+                                   file_name='climate_monthly'):
         """Creates a netCDF4 file with climate data.
 
         See :py:func:`~oggm.tasks.process_cru_data`.
         """
 
         # overwrite as default
-        fpath = self.get_filepath('climate_monthly')
+        fpath = self.get_filepath(file_name)
         if os.path.exists(fpath):
             os.remove(fpath)
 
@@ -1961,9 +1963,9 @@ class GlacierDirectory(object):
             nc.author_info = 'Open Global Glacier Model'
 
             timev = nc.createVariable('time','i4',('time',))
-            timev.setncatts({'units':'days since 1801-01-01 00:00:00'})
+            timev.setncatts({'units':time_unit})
             timev[:] = netCDF4.date2num([t for t in time],
-                                 'days since 1801-01-01 00:00:00')
+                                        time_unit)
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'
