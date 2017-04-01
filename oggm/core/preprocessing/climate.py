@@ -138,13 +138,18 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['cesm_data'])
-def process_cesm_data(gdir):
+def process_cesm_data(gdir, filesuffix=''):
     """Processes and writes the climate data for this glacier.
 
     This function is made for interpolating the Community
     Earth System Model Last Millenial Ensemble (CESM-LME) climate simulations,
     from Otto-Bliesner et al. (2016), to the high-resolution CL2 climatologies
     (provided with OGGM) and writes everything to a NetCDF file.
+
+    Parameters
+    ----------
+    filesuffix : str
+        append a suffix to the filename (useful for model runs).
     """
 
     # GCM temperature and precipitation data
@@ -244,7 +249,8 @@ def process_cesm_data(gdir):
                                     ts_grad, dscru.ref_hgt,
                                     loc_lon, precp.lat.values,
                                     time_unit=time1.units,
-                                    file_name='cesm_data')
+                                    file_name='cesm_data',
+                                    filesuffix=filesuffix)
 
     dsindex._nc.close()
     tempds.close()
