@@ -136,6 +136,7 @@ def process_custom_climate_data(gdir):
     out = {'climate_source': fpath, 'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
 
+
 @entity_task(log, writes=['cesm_data'])
 def process_cesm_data(gdir):
     """Processes and writes the climate data for this glacier.
@@ -259,6 +260,7 @@ def process_cesm_data(gdir):
 
     ncclim._nc.close()
     Tindex._nc.close()
+
 
 @entity_task(log, writes=['climate_monthly'])
 def process_cru_data(gdir):
