@@ -1937,7 +1937,8 @@ class GlacierDirectory(object):
         return nc
 
     def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
-                                   ref_pix_lon, ref_pix_lat, time_unit='days since 1801-01-01 00:00:00',
+                                   ref_pix_lon, ref_pix_lat,
+                                   time_unit='days since 1801-01-01 00:00:00',
                                    file_name='climate_monthly'):
         """Creates a netCDF4 file with climate data.
 
