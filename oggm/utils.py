@@ -1887,7 +1887,7 @@ class GlacierDirectory(object):
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + filesuffix + '.' + fname[1]
+            fname = fname[0] + '_' + filesuffix + '.' + fname[1]
         out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
@@ -2009,14 +2009,15 @@ class GlacierDirectory(object):
     def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
                                    ref_pix_lon, ref_pix_lat,
                                    time_unit='days since 1801-01-01 00:00:00',
-                                   file_name='climate_monthly'):
+                                   file_name='climate_monthly',
+                                   filesuffix=''):
         """Creates a netCDF4 file with climate data.
 
         See :py:func:`~oggm.tasks.process_cru_data`.
         """
 
         # overwrite as default
-        fpath = self.get_filepath(file_name)
+        fpath = self.get_filepath(file_name, filesuffix=filesuffix)
         if os.path.exists(fpath):
             os.remove(fpath)
 
