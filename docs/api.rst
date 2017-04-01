@@ -82,7 +82,6 @@ TODO: add the flowline classes, the model classes, etc.
 
     GlacierDirectory
     Centerline
-    InversionFlowline
 
 
 Mass-balance

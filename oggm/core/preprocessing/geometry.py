@@ -34,10 +34,9 @@ from salem import lazy_property
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
-import oggm.core.preprocessing.centerlines
+from oggm.core.preprocessing.centerlines import Centerline
 from oggm.utils import tuple2int
 from oggm import entity_task, divide_task
-from oggm.cfg import GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -46,147 +45,6 @@ log = logging.getLogger(__name__)
 LABEL_STRUCT = np.array([[0, 1, 0],
                          [1, 1, 1],
                          [0, 1, 0]])
-
-
-class InversionFlowline(oggm.core.preprocessing.centerlines.Centerline):
-    """An advanced centerline, with widths and apparent MB."""
-
-    def __init__(self, line, dx, heights):
-        """ Instanciate.
-
-        Parameters
-        ----------
-        line: Shapely LineString
-
-        Properties
-        ----------
-        #TODO: document properties
-        """
-
-        super(InversionFlowline, self).__init__(line)
-
-        self._surface_h = heights
-        self.dx = dx
-        self._widths = None
-        self.geometrical_widths = None  # these are kept for plotting and such
-
-        self.apparent_mb = None  # Apparent MB, NOT weighted by width.
-        self.flux = None  # Flux (kg m-2)
-
-    @property
-    def widths(self):
-        """Needed for overriding later"""
-        return self._widths
-
-    @widths.setter
-    def widths(self, value):
-        self._widths = value
-
-    @property
-    def surface_h(self):
-        """Needed for overriding later"""
-        return self._surface_h
-
-    @surface_h.setter
-    def surface_h(self, value):
-        self._surface_h = value
-
-    def set_apparent_mb(self, mb):
-        """Set the apparent mb and flux for the flowline.
-
-        MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
-
-        This should happen in line order, otherwise it will be wrong.
-        """
-
-        self.apparent_mb = mb
-
-        # Add MB to current flux and sum
-        # no more changes should happen after that
-        self.flux += mb * self.widths * self.dx
-        self.flux = np.cumsum(self.flux)
-
-        # Add to outflow. That's why it should happen in order
-        if self.flows_to is not None:
-            n = len(self.flows_to.line.coords)
-            ide = self.flows_to_indice
-            if n >= 9:
-                gk = GAUSSIAN_KERNEL[9]
-                self.flows_to.flux[ide-4:ide+5] += gk * self.flux[-1]
-            elif n >= 7:
-                gk = GAUSSIAN_KERNEL[7]
-                self.flows_to.flux[ide-3:ide+4] += gk * self.flux[-1]
-            elif n >= 5:
-                gk = GAUSSIAN_KERNEL[5]
-                self.flows_to.flux[ide-2:ide+3] += gk * self.flux[-1]
-
-    def set_flows_to(self, other):
-        """Find the closest point in "other" and sets all the corresponding
-        attributes. Btw, it modifies the state of "other" too.
-
-        Had to override this because of junction's safety reasons: we didnt
-        want to be too close to the tail
-
-        Parameters
-        ----------
-        other: an other centerline
-        """
-
-        self.flows_to = other
-
-        # Project the point and Check that its not too close
-        prdis = other.line.project(self.tail, normalized=False)
-        ind_closest = np.argmin(np.abs(other.dis_on_line - prdis))
-        ind_closest = np.asscalar(ind_closest)
-        n = len(other.dis_on_line)
-        if n >= 9:
-            ind_closest = np.clip(ind_closest, 4, n-5)
-        elif n >= 7:
-            ind_closest = np.clip(ind_closest, 3, n-4)
-        elif n >= 5:
-            ind_closest = np.clip(ind_closest, 2, n-3)
-        self.flows_to_point = shpg.Point(other.line.coords[int(ind_closest)])
-        other.inflow_points.append(self.flows_to_point)
-        other.inflows.append(self)
-
-    @lazy_property
-    def normals(self):
-        """List of (n1, n2) normal vectors at each point.
-
-        We use second order derivatives for smoother widths.
-        """
-
-        def _normalize(n):
-            nn = n / np.sqrt(np.sum(n*n))
-            n1 = np.array([-nn[1], nn[0]])
-            n2 = np.array([nn[1], -nn[0]])
-            return n1, n2
-
-        pcoords = np.array(self.line.coords)
-
-        normals = []
-        # First
-        normal = np.array(pcoords[1, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
-        # Second
-        normal = np.array(pcoords[2, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
-        # Others
-        for (bbef, bef, cur, aft, aaft) in zip(pcoords[:-4, :],
-                                               pcoords[1:-3, :],
-                                               pcoords[2:-2, :],
-                                               pcoords[3:-1, :],
-                                               pcoords[4:, :]):
-            normal = np.array(aaft + 2*aft - 2*bef - bbef)
-            normals.append(_normalize(normal))
-        # One before last
-        normal = np.array(pcoords[-1, :] - pcoords[-3, :])
-        normals.append(_normalize(normal))
-        # Last
-        normal = np.array(pcoords[-1, :] - pcoords[-2, :])
-        normals.append(_normalize(normal))
-
-        return normals
 
 
 def _line_interpol(line, dx):
@@ -544,7 +402,7 @@ def catchment_area(gdir, div_id=None):
 @divide_task(log, add_0=False)
 def initialize_flowlines(gdir, div_id=None):
     """ Transforms the geometrical Centerlines in the more "physical"
-    InversionFlowlines.
+    "Inversion Flowlines".
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
@@ -594,7 +452,7 @@ def initialize_flowlines(gdir, div_id=None):
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
 
-        l = InversionFlowline(new_line, dx, hgts)
+        l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order
         fls.append(l)
 
