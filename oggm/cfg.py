@@ -70,6 +70,8 @@ CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
+RGI_REG_NAMES = False
+RGI_SUBREG_NAMES = False
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -109,6 +111,15 @@ BASENAMES['dem'] = ('dem.tif', _doc)
 
 _doc = 'The glacier outlines in the local projection.'
 BASENAMES['outlines'] = ('outlines.shp', _doc)
+
+_doc = 'The glacier intersects in the local projection.'
+BASENAMES['intersects'] = ('intersects.shp', _doc)
+
+_doc = 'The flowline catchments in the local projection.'
+BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
+
+_doc = 'The fcatchments interesctions in the local projection.'
+BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
@@ -209,6 +220,13 @@ def initialize(file=None):
     global N
     global A
     global RHO
+    global RGI_REG_NAMES
+    global RGI_SUBREG_NAMES
+
+    # Make sure we have a proper cache dir
+    from oggm.utils import _download_oggm_files
+    _download_oggm_files()
+
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -233,6 +251,13 @@ def initialize(file=None):
     if cp['rgi_dir'] == '~':
         cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
 
+    # Parse RGI metadata
+    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
+    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
+                                index_col=0)
+    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
+                                   index_col=0)
+
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     PATHS['working_dir'] = cp['working_dir']
@@ -256,6 +281,7 @@ def initialize(file=None):
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
+    PARAMS['use_intersects'] = cp.as_bool('use_intersects')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
@@ -293,7 +319,7 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor']
+           'prcp_scaling_factor', 'use_intersects']
     for k in ltr:
         del cp[k]
 
@@ -304,15 +330,12 @@ def initialize(file=None):
     # Empty defaults
     from oggm.utils import get_demo_file
     set_divides_db(get_demo_file('divides_alps.shp'))
+    set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     IS_INITIALIZED = True
 
 
 def set_divides_db(path=None):
     """Read the divides database.
-
-    Currently the only divides available are for the Alps:
-    ``utils.get_demo_file('divides_alps.shp')``
-
     """
 
     if PARAMS['use_divides'] and path is not None:
@@ -331,6 +354,16 @@ def set_divides_db(path=None):
             PARAMS['divides_gdf'] = df.set_index('RGIId')
     else:
         PARAMS['divides_gdf'] = gpd.GeoDataFrame()
+
+
+def set_intersects_db(path=None):
+    """Read the intersects database.
+    """
+
+    if PARAMS['use_intersects'] and path is not None:
+        PARAMS['intersects_gdf'] = gpd.read_file(path)
+    else:
+        PARAMS['intersects_gdf'] = gpd.GeoDataFrame()
 
 
 def reset_working_dir():

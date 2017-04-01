@@ -91,6 +91,7 @@ class TestGIS(unittest.TestCase):
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
+        self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
 
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -133,6 +134,7 @@ class TestGIS(unittest.TestCase):
         <oggm.GlacierDirectory>
           RGI id: RGI40-11.00897
           Region: 11: Central Europe
+          Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
           Area: 8.036 mk2
@@ -190,6 +192,14 @@ class TestGIS(unittest.TestCase):
         self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
         cfg.PARAMS['use_divides'] = True
         cfg.set_divides_db()
+
+    def test_intersects(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
 
 
 class TestCenterlines(unittest.TestCase):
@@ -289,6 +299,8 @@ class TestCenterlines(unittest.TestCase):
         entity.BGNDATE = 0
         entity.NAME = 'Baltoro'
         entity.GLACTYPE = '0000'
+        entity.O1REGION = '01'
+        entity.O2REGION = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -425,7 +437,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_geom_width(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -434,6 +446,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
         geometry.catchment_width_geom(gdir)
 
     def test_width(self):
@@ -1405,7 +1418,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
         entity.geometry = miniglac
-        entity.RGIID = 'RGI50-fake'
+        entity.RGIID = 'RGI50-11.fake'
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -1422,7 +1435,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
 
-        rdir = os.path.join(self.testdir, 'RGI50-fake')
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fake')
         self.assertTrue(os.path.exists(rdir))
 
         rdir = os.path.join(rdir, 'log')
@@ -1469,7 +1482,7 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, self.testdir)
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11'))
 
     def _parabolic_bed(self):
 
@@ -1569,6 +1582,31 @@ class TestGrindelInvert(unittest.TestCase):
         model.run_until_equilibrium()
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+
+    @requires_py3
+    def test_intersections(self):
+        cfg.PARAMS['use_multiple_flowlines'] = True
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+
+        # see that we have as many catchments as flowlines
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
+                                               div_id=1))
+        self.assertEqual(len(fls), len(gdfc))
+        # and at least as many intersects
+        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                               div_id=1))
+        self.assertGreaterEqual(len(gdfc), len(fls)-1)
+
+        # check touch borders qualitatively
+        self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
 
 
 class TestCatching(unittest.TestCase):

@@ -73,16 +73,6 @@ DEM3REG = {
     # 'GL-East': [-42., -17., 64., 76.]
 }
 
-RGI_REG_NAME = ['01: Alaska', '02: Western Canada and US',
-                '03: Arctic Canada North', '04: Arctic Canada South',
-                '05: Greenland', '06: Iceland', '07: Svalbard',
-                '08: Scandinavia', '09: Russian Arctic', '10: North Asia',
-                '11: Central Europe', '12: Caucasus and Middle East',
-                '13: Central Asia', '14: South Asia West',
-                '15: South Asia East', '16: Low Latitudes',
-                '17: Southern Andes', '18: New Zealand',
-                '19: Antarctic and Subantarctic']
-
 # Joblib
 MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
@@ -1354,7 +1344,63 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         return merged_file, source_str + '_MERGED'
 
 
-def glacier_characteristics(gdirs):
+def compile_run_output(gdirs, filesuffix=''):
+    """Merge the runs output of the glacier directories into one file. 
+    
+    
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    filesuffix: the filesuffix of the run
+    """
+
+    from oggm.core.models import flowline
+
+    # Get the dimensions of all this
+    rgi_ids = [gd.rgi_id for gd in gdirs]
+    path = gdirs[0].get_filepath('past_model', filesuffix=filesuffix)
+    with flowline.FileModel(path) as model:
+        ts = model.volume_km3_ts()
+    time = ts.index
+    year, month = year_to_date(time)
+
+    ds = xr.Dataset(coords={'time': ('time', time),
+                            'year': ('time', year),
+                            'month': ('time', month),
+                            'rgi_id': ('rgi_id', rgi_ids)
+                            })
+    shape = (len(ts), len(rgi_ids))
+    vol = np.zeros(shape)
+    area = np.zeros(shape)
+    length = np.zeros(shape)
+    for i, gdir in enumerate(gdirs):
+        try:
+            path = gdir.get_filepath('past_model', filesuffix=filesuffix)
+            with flowline.FileModel(path) as model:
+                vol[:, i] = model.volume_m3_ts().values
+                area[:, i] = model.area_m2_ts().values
+                length[:, i] = model.length_m_ts().values
+        except:
+            vol[:, i] = np.NaN
+            area[:, i] = np.NaN
+            length[:, i] = np.NaN
+
+    ds['volume'] = (('time', 'rgi_id'), vol)
+    ds['volume'].attrs['units'] = 'm3'
+    ds['volume'].attrs['description'] = 'Total glacier volume'
+    ds['area'] = (('time', 'rgi_id'), area)
+    ds['area'].attrs['units'] = 'm2'
+    ds['area'].attrs['description'] = 'Total glacier area'
+    ds['length'] = (('time', 'rgi_id'), length)
+    ds['length'].attrs['units'] = 'm'
+    ds['length'].attrs['description'] = 'Glacier length'
+
+    path = os.path.join(cfg.PATHS['working_dir'],
+                        'run_output' + filesuffix + '.nc')
+    ds.to_netcdf(path)
+
+
+def glacier_characteristics(gdirs, to_csv=True):
     """Gathers as many statistics as possible about a list of glacier
     directories.
 
@@ -1365,6 +1411,7 @@ def glacier_characteristics(gdirs):
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
+    to_csv: Set to "True" in order  to store the info in the working directory
     """
 
     out_df = []
@@ -1473,7 +1520,11 @@ def glacier_characteristics(gdirs):
         out_df.append(d)
 
     cols = list(out_df[0].keys())
-    return pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    if to_csv:
+        out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                   'glacier_characteristics.csv'))
+    return out
 
 
 class DisableLogger():
@@ -1506,6 +1557,7 @@ class entity_task(object):
         cnt =  ['    Returns']
         cnt += ['    -------']
         cnt += ['    Files writen to the glacier directory:']
+
         for k in sorted(writes):
             cnt += [cfg.BASENAMES.doc_str(k)]
         self.iodoc = '\n'.join(cnt)
@@ -1514,6 +1566,9 @@ class entity_task(object):
         """Decorate."""
 
         # Add to the original docstring
+        if task_func.__doc__ is None:
+            raise RuntimeError('Entity tasks should have a docstring!')
+
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
@@ -1596,6 +1651,19 @@ def global_task(task_func):
     return task_func
 
 
+def filter_rgi_name(name):
+    """Remove spurious characters and trailing blanks from RGI glacier name.
+    """
+
+    if name is None or len(name) == 0:
+        return ''
+
+    if name[-1] == 'À' or name[-1] == '\x9c' or name[-1] == '3':
+        return filter_rgi_name(name[:-1])
+
+    return name.strip().title()
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -1662,7 +1730,8 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, string_types):
-            _shp = os.path.join(base_dir, rgi_entity, 'outlines.shp')
+            _shp = os.path.join(base_dir, rgi_entity[:8],
+                                rgi_entity, 'outlines.shp')
             rgi_entity = read_shapefile(_shp).iloc[0]
 
         try:
@@ -1672,8 +1741,10 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.AREA)
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
-            self.rgi_region = rgi_entity.O1REGION
-            self.name = rgi_entity.NAME
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1REGION))
+            self.rgi_subregion = self.rgi_region + '-' + \
+                                 '{:02d}'.format(int(rgi_entity.O2REGION))
+            name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
             gtype = rgi_entity.GLACTYPE
         except AttributeError:
@@ -1683,16 +1754,21 @@ class GlacierDirectory(object):
             self.rgi_area_km2 = float(rgi_entity.Area)
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
-            self.rgi_region = rgi_entity.O1Region
-            self.name = rgi_entity.Name
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
+            self.rgi_subregion = self.rgi_region + '-' + \
+                                 '{:02d}'.format(int(rgi_entity.O2Region))
+            name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
 
         # remove spurious characters and trailing blanks
-        self._filter_name()
+        self.name = filter_rgi_name(name)
 
         # region
-        self.rgi_region_name = RGI_REG_NAME[int(self.rgi_region) - 1]
+        n = cfg.RGI_REG_NAMES.loc[int(self.rgi_region)].values[0]
+        self.rgi_region_name = self.rgi_region + ': ' + n
+        n = cfg.RGI_SUBREG_NAMES.loc[self.rgi_subregion].values[0]
+        self.rgi_subregion_name = self.rgi_subregion + ': ' + n
 
         # Read glacier attrs
         keys = {'0': 'Glacier',
@@ -1728,7 +1804,7 @@ class GlacierDirectory(object):
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id)
+        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
@@ -1738,6 +1814,7 @@ class GlacierDirectory(object):
         summary = ['<oggm.GlacierDirectory>']
         summary += ['  RGI id: ' + self.rgi_id]
         summary += ['  Region: ' + self.rgi_region_name]
+        summary += ['  Subregion: ' + self.rgi_subregion_name]
         if self.name :
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
@@ -1777,22 +1854,7 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
-    def _filter_name(self):
-        """remove spurious characters and trailing blanks"""
-        str = self.name
-        if str is None or len(str) == 0:
-            self.name = ''
-            return
-        if str[-1] == 'À':
-            str = str[:-1]
-        if len(str) == 0:
-            self.name = ''
-            return
-        if str[-1] == '3':
-            str = str[:-1]
-        self.name = str.strip()
-
-    def get_filepath(self, filename, div_id=0, delete=False):
+    def get_filepath(self, filename, div_id=0, delete=False, filesuffix=''):
         """Absolute path to a specific file.
 
         Parameters
@@ -1803,8 +1865,11 @@ class GlacierDirectory(object):
             the divide for which you want to get the file path (set to
             'major' to get the major divide according to
             compute_downstream_lines)
-        delete : bool, default=False
+        delete : bool
             delete the file if exists
+        filesuffix : str
+            append a suffix to the filename (useful for model runs). Note 
+            that the BASENAME remains same.
 
         Returns
         -------
@@ -1818,7 +1883,12 @@ class GlacierDirectory(object):
             div_id = self.read_pickle('major_divide', div_id=0)
 
         dir = self.divide_dirs[div_id]
-        out = os.path.join(dir, cfg.BASENAMES[filename])
+        fname = cfg.BASENAMES[filename]
+        if filesuffix:
+            fname = fname.split('.')
+            assert len(fname) == 2
+            fname = fname[0] + filesuffix + '.' + fname[1]
+        out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
         return out

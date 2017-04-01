@@ -26,6 +26,7 @@ install:
     cat <<EOF >test.sh
     set -x
     set -e
+    pip3 install --upgrade git+https://github.com/fmaussion/salem.git
     pip3 install coveralls
     cd /root/oggm
     pip3 install -e .
