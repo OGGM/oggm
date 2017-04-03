@@ -1206,6 +1206,9 @@ class TestInversion(unittest.TestCase):
             _max = np.max(slope)
             if _max > maxs:
                 maxs = _max
+            if cl['is_last']:
+                self.assertEqual(cl['flux'][-1], 0.)
+
 
         self.assertTrue(nabove == 0)
         self.assertTrue(np.rad2deg(maxs) < 40.)
@@ -1244,6 +1247,10 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
+            # This doesn't pass because of smoothing
+            # if fl.flows_to is None:
+            #     self.assertEqual(cl['volume'][-1], 0)
+            #     self.assertEqual(cl['thick'][-1], 0)
 
         np.testing.assert_allclose(242, maxs, atol=40)
 
