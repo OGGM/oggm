@@ -177,38 +177,45 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
                 else:
                     out_thick[i] = 0.
 
-            if not gdir.is_tidewater:
+            # this filtering stuff below is not explained in Farinotti's
+            # paper. I did this because it looks better, but I'm not sure
+            # (yet) that this is a good idea
 
-                # this filtering stuff below is not explained in Farinotti's
-                # paper. I did this because it looks better, but I'm not sure
-                # (yet) that this is a good idea
+            # However for tidewater we have to be carefull at the tongue
+            if gdir.is_tidewater and cl['is_last']:
+                # store it to restore it later
+                tongue_thick = out_thick[-5:]
 
-                # Check for thick to width ratio (should ne be too large)
-                ratio = out_thick / w  # there's no 0 width so we're good
-                pno = np.where(ratio > max_ratio)
-                if len(pno[0]) > 0:
-                    ratio[pno] = np.NaN
-                    ratio = utils.interp_nans(ratio, default=max_ratio)
-                    out_thick = w * ratio
+            # Check for thick to width ratio (should ne be too large)
+            ratio = out_thick / w  # there's no 0 width so we're good
+            pno = np.where(ratio > max_ratio)
+            if len(pno[0]) > 0:
+                ratio[pno] = np.NaN
+                ratio = utils.interp_nans(ratio, default=max_ratio)
+                out_thick = w * ratio
 
-                # TODO: last thicknesses can be noisy sometimes: interpolate?
-                if cl['is_last']:
-                   out_thick[-4:-1] = np.NaN
-                   out_thick = utils.interp_nans(out_thick)
+            # TODO: last thicknesses can be noisy sometimes: interpolate?
+            if cl['is_last']:
+               out_thick[-4:-1] = np.NaN
+               out_thick = utils.interp_nans(out_thick)
 
-                # Check for the shape parameter (should not be too large)
-                out_shape = (4*out_thick)/(w**2)
-                pno = np.where(out_shape > max_shape)
-                if len(pno[0]) > 0:
-                    out_shape[pno] = np.NaN
-                    out_shape = utils.interp_nans(out_shape, default=max_shape)
-                    out_thick = (out_shape * w**2) / 4
+            # Check for the shape parameter (should not be too large)
+            out_shape = (4*out_thick)/(w**2)
+            pno = np.where(out_shape > max_shape)
+            if len(pno[0]) > 0:
+                out_shape[pno] = np.NaN
+                out_shape = utils.interp_nans(out_shape, default=max_shape)
+                out_thick = (out_shape * w**2) / 4
 
             # smooth section
             if sec_smooth != 0.:
                 section = cfg.TWO_THIRDS * w * out_thick * cl['dx']
                 section = gaussian_filter1d(section, sec_smooth)
                 out_thick = section / (w * cfg.TWO_THIRDS * cl['dx'])
+
+            if gdir.is_tidewater and cl['is_last']:
+                # restore the last thicknesses
+                out_thick[-5:] = tongue_thick
 
             # volume
             volume = cfg.TWO_THIRDS * out_thick * w * cl['dx']
