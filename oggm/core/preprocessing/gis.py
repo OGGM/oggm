@@ -295,13 +295,14 @@ def define_glacier_region(gdir, entity=None):
     Very first task: define the glacier's local grid.
 
     Defines the local projection (Transverse Mercator), centered on the
-    glacier. The resolution of the local grid depends on the size of the
-    glacier::
+    glacier. There is some options to set the resolution of the local grid.
+    It can be adapted depending on the size of the glacier with::
 
         dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
 
-    See ``params.cfg`` for setting these options. Default values lead to a
-    resolution of 50 m for Hintereisferner, which is approx. 8 km2 large.
+    or be set to a fixed value. See ``params.cfg`` for setting these options.
+    Default values of the adapted mode lead to a resolution of 50 m for
+    Hintereisferner, which is approx. 8 km2 large.
 
     After defining the grid, the topography and the outlines of the glacier
     are transformed into the local projection. The default interpolation for
@@ -322,9 +323,13 @@ def define_glacier_region(gdir, entity=None):
         dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
     elif dxmethod == 'square':
         dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
+    elif dxmethod == 'fixed':
+        dx = np.rint(cfg.PARAMS['fixed_dx'])
     else:
         raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
-    dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
+    # Additional trick for varying dx
+    if dxmethod in ['linear', 'square']:
+        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
     log.debug('%s: area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
@@ -336,6 +341,7 @@ def define_glacier_region(gdir, entity=None):
     proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(pyproj.transform, proj_in, proj_out)
+    # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
     geometry = _check_geometry(geometry)
     xx, yy = geometry.exterior.xy
@@ -364,6 +370,16 @@ def define_glacier_region(gdir, entity=None):
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
     towrite.to_file(gdir.get_filepath('outlines'))
+
+    # Also transform the intersects if necessary
+    gdf = cfg.PARAMS['intersects_gdf']
+    gdf = gdf.loc[(gdf.RGIId_1 == gdir.rgi_id) | (gdf.RGIId_2 == gdir.rgi_id)]
+    if len(gdf) > 0:
+        gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
+        if hasattr(gdf.crs, 'srs'):
+            # salem uses pyproj
+            gdf.crs = gdf.crs.srs
+        gdf.to_file(gdir.get_filepath('intersects'))
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None

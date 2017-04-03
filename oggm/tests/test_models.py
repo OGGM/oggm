@@ -395,7 +395,12 @@ class TestOtherDivides(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':
+            self.assertEqual(len(fls), 4)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'square':
+            self.assertEqual(len(fls), 8)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -518,6 +523,7 @@ class TestMassBalance(unittest.TestCase):
     def test_constant_mb_model(self):
 
         gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]

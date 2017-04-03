@@ -8,6 +8,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
+import glob
 import shutil
 
 import shapely.geometry as shpg
@@ -90,6 +91,41 @@ class TestGIS(unittest.TestCase):
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
+        self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
+
+    def test_dx_methods(self):
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        # Test fixed method
+        cfg.PARAMS['grid_dx_method'] = 'fixed'
+        cfg.PARAMS['fixed_dx'] = 50
+        gis.define_glacier_region(gdir, entity=entity)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
+
+        # Test linear method
+        cfg.PARAMS['grid_dx_method'] = 'linear'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * gdir.rgi_area_km2 + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
+
+        # Test square method
+        cfg.PARAMS['grid_dx_method'] = 'square'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * np.sqrt(gdir.rgi_area_km2) + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
 
     def test_repr(self):
         from textwrap import dedent
@@ -98,6 +134,7 @@ class TestGIS(unittest.TestCase):
         <oggm.GlacierDirectory>
           RGI id: RGI40-11.00897
           Region: 11: Central Europe
+          Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
           Area: 8.036 mk2
@@ -155,6 +192,14 @@ class TestGIS(unittest.TestCase):
         self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
         cfg.PARAMS['use_divides'] = True
         cfg.set_divides_db()
+
+    def test_intersects(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
 
 
 class TestCenterlines(unittest.TestCase):
@@ -254,6 +299,8 @@ class TestCenterlines(unittest.TestCase):
         entity.BGNDATE = 0
         entity.NAME = 'Baltoro'
         entity.GLACTYPE = '0000'
+        entity.O1REGION = '01'
+        entity.O2REGION = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -303,7 +350,10 @@ class TestCenterlines(unittest.TestCase):
         nd = len(np.where(rest == 0)[0])
         denom = np.float64((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
         hss = np.float64(2.) * ((na*nd)-(nb*nc)) / denom
-        self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
+            self.assertTrue(hss > 0.41)
 
 
 class TestGeometry(unittest.TestCase):
@@ -387,7 +437,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_geom_width(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -396,6 +446,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
         geometry.catchment_width_geom(gdir)
 
     def test_width(self):
@@ -1366,6 +1417,47 @@ class TestInversion(unittest.TestCase):
 
         np.testing.assert_allclose(242, maxs, atol=25)
 
+    def test_continue_on_error(self):
+
+        cfg.CONTINUE_ON_ERROR = True
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
+        entity.geometry = miniglac
+        entity.RGIID = 'RGI50-11.fake'
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.mu_candidates(gdir, div_id=0)
+        climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
+                                         prcp_fac=2.)
+        inversion.prepare_for_inversion(gdir)
+        inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
+
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fake')
+        self.assertTrue(os.path.exists(rdir))
+
+        rdir = os.path.join(rdir, 'log')
+        self.assertTrue(os.path.exists(rdir))
+
+        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.SUCCESS'))), 2)
+        self.assertTrue(len(glob.glob(os.path.join(rdir, '*.ERROR'))) >= 10)
+
+        cfg.CONTINUE_ON_ERROR = False
+
+        # Test the glacier charac
+        dfc = utils.glacier_characteristics([gdir])
+        self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
+        self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
+
 
 class TestGrindelInvert(unittest.TestCase):
 
@@ -1397,7 +1489,7 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, self.testdir)
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11'))
 
     def _parabolic_bed(self):
 
@@ -1497,6 +1589,31 @@ class TestGrindelInvert(unittest.TestCase):
         model.run_until_equilibrium()
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+
+    @requires_py3
+    def test_intersections(self):
+        cfg.PARAMS['use_multiple_flowlines'] = True
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+
+        # see that we have as many catchments as flowlines
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
+                                               div_id=1))
+        self.assertEqual(len(fls), len(gdfc))
+        # and at least as many intersects
+        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                               div_id=1))
+        self.assertGreaterEqual(len(gdfc), len(fls)-1)
+
+        # check touch borders qualitatively
+        self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
 
 
 class TestCatching(unittest.TestCase):
