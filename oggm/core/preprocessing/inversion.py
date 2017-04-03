@@ -82,7 +82,14 @@ def prepare_for_inversion(gdir, div_id=None):
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.warning('%s: has negative flux somewhere', gdir.rgi_id)
-            flux = flux.clip(0)
+        flux = flux.clip(0)
+
+        if fl.flows_to is None and gdir.inversion_calving_rate == 0:
+            if not np.allclose(flux[-1], 0., atol=0.1):
+                msg = '{}: flux at terminus should be zero, but is: ' \
+                      '%.4f km3 ice yr-1'.format(gdir.rgi_id, flux[-1])
+                raise RuntimeError(msg)
+            flux[-1] = 0.
 
         # add to output
         cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
