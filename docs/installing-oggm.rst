@@ -162,6 +162,10 @@ to use the model but not change its code)::
 
     conda install -c oggm -c conda-forge oggm
 
+.. warning::
+
+    Skip the step above, if you are not working with a conda environment.
+
 We recommend to clone the git repository (or a fork if you want
 to participate to the development, see also :ref:`contributing`)::
 
@@ -303,6 +307,8 @@ using the system binaries::
 
     $ pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
     $ pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+
+If no matching distribution could be found for your gdal version, try out a version from the list close to yours.
 
 (Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html )
 
