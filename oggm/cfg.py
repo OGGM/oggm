@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import sys
+import glob
 from collections import OrderedDict
 
 import numpy as np
@@ -72,6 +73,7 @@ PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 RGI_REG_NAMES = False
 RGI_SUBREG_NAMES = False
+LRUHANDLERS = OrderedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -334,6 +336,44 @@ def initialize(file=None):
     IS_INITIALIZED = True
 
 
+def get_lru_handler(tmpdir=None, maxsize=15, ending='.tif'):
+    """LRU handler for a given temporary directory (singleton).
+    
+    Parameters
+    ----------
+    tmpdir : str
+        path to the temporary directory to handle. Default is "tmp" in the 
+        working directory.
+    maxsize : int
+        the max number of files to keep in the directory
+    ending : str
+        consider only the files with a certain ending
+    """
+    global LRUHANDLERS
+
+    # see if we're set up
+    if tmpdir is None:
+        tmpdir = os.path.join(PATHS['working_dir'], 'tmp')
+    if not os.path.exists(tmpdir):
+        os.makedirs(tmpdir)
+
+    # one handler per directory and per size
+    # (in practice not very useful, but a dict is easier to handle)
+    k = (tmpdir, maxsize)
+    if k in LRUHANDLERS:
+        # was already there
+        return LRUHANDLERS[k]
+    else:
+        # we do a new one
+        from oggm.utils import LRUFileCache
+        # the files already present have to be counted, too
+        l0 = list(glob.glob(os.path.join(tmpdir, '*' + ending)))
+        l0.sort(key=os.path.getmtime)
+        lru = LRUFileCache(l0, maxsize=maxsize)
+        LRUHANDLERS[k] = lru
+        return lru
+
+
 def set_divides_db(path=None):
     """Read the divides database.
     """
@@ -367,7 +407,7 @@ def set_intersects_db(path=None):
 
 
 def reset_working_dir():
-    """Deketes the working directory."""
+    """Deletes the working directory."""
     if os.path.exists(PATHS['working_dir']):
         shutil.rmtree(PATHS['working_dir'])
     os.makedirs(PATHS['working_dir'])
@@ -381,20 +421,25 @@ def pack_config():
         'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
         'PARAMS': PARAMS,
         'PATHS': PATHS,
+        'LRUHANDLERS': LRUHANDLERS,
         'BASENAMES': dict(BASENAMES)
     }
+
 
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, BASENAMES
+    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, \
+        BASENAMES, LRUHANDLERS
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
     CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
+    LRUHANDLERS = cfg_dict['LRUHANDLERS']
 
-    # BASENAMES is a DocumentedDict, which cannot be pickled because set intentionally mismatches with get
+    # BASENAMES is a DocumentedDict, which cannot be pickled because
+    # set intentionally mismatches with get
     BASENAMES = DocumentedDict()
     for k in cfg_dict['BASENAMES']:
         BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')
