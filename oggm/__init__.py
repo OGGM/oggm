@@ -16,10 +16,11 @@ except ImportError:  # pragma: no cover
                       'and  then install it in-place by running: '
                       'pip install -e .')
 
-# Fiona, rasterio and shapely are spammers
+# Spammers
 logging.getLogger("Fiona").setLevel(logging.WARNING)
 logging.getLogger("shapely").setLevel(logging.WARNING)
 logging.getLogger("rasterio").setLevel(logging.WARNING)
+logging.getLogger("filelock").setLevel(logging.WARNING)
 
 # Basic config
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',

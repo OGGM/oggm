@@ -336,7 +336,7 @@ def initialize(file=None):
     IS_INITIALIZED = True
 
 
-def get_lru_handler(tmpdir=None, maxsize=15, ending='.tif'):
+def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
     """LRU handler for a given temporary directory (singleton).
     
     Parameters

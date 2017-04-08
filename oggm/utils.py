@@ -213,7 +213,7 @@ class LRUFileCache():
     
     The files which are no longer used are deleted from the disk.
     """
-    def __init__(self, l0=None, maxsize=15):
+    def __init__(self, l0=None, maxsize=100):
         """Instanciate.
         
         Parameters
@@ -528,12 +528,13 @@ def _download_alternate_topo_file_unlocked(fname):
     cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/topo/'
     cmd = cmd + fname + '.zip' + ' ' + dfile
     if not os.path.exists(dfile):
+        print('Downloading ' + fname + '.zip' + ' from AWS s3...')
         subprocess.call(cmd, shell=True)
 
-    # Ok so the tile is a valid one
-    with zipfile.ZipFile(dfile) as zf:
-        print('Downloading ' + fname + '.zip' + ' from AWS s3...')
-        zf.extractall(tmpdir)
+    if not os.path.exists(outpath):
+        print('Extracting ' + fname + '.zip ...')
+        with zipfile.ZipFile(dfile) as zf:
+            zf.extractall(tmpdir)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(outpath)
@@ -1307,7 +1308,6 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             return cfg.PATHS['dem_file'], source
 
     # If not, do the job ourselves: download and merge stuffs
-    topodir = cfg.PATHS['topo_dir']
 
     # GIMP is in polar stereographic, not easy to test if glacier is on the map
     # It would be possible with a salem grid but this is a bit more expensive
@@ -1374,6 +1374,11 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     if len(sources) == 1:
         return sources[0], source_str
     else:
+
+        # extract directory
+        tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
+        mkdir(tmpdir)
+
         # merge
         zone_str = '+'.join(zones)
         bname = source_str.lower() + '_merged_' + zone_str + '.tif'
@@ -1383,8 +1388,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             hash_object = hashlib.md5(bname.encode())
             bname = hash_object.hexdigest() + '.tif'
 
-        merged_file = os.path.join(topodir, source_str.lower(),
-                                   bname)
+        merged_file = os.path.join(tmpdir, bname)
         if not os.path.exists(merged_file):
             # check case where wrong zip file is downloaded from
             if all(x is None for x in sources):
@@ -1401,6 +1405,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             profile['driver'] = 'GTiff'
             with rasterio.open(merged_file, 'w', **profile) as dst:
                 dst.write(dest)
+            cfg.get_lru_handler(tmpdir).append(merged_file)
         return merged_file, source_str + '_MERGED'
 
 
