@@ -4,6 +4,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
 import shutil
+import time
 
 import salem
 import numpy as np
@@ -145,13 +146,18 @@ class TestDataFiles(unittest.TestCase):
 
     def setUp(self):
         cfg.PATHS['topo_dir'] = TEST_DIR
-
-        if os.path.exists(TEST_DIR):
-            shutil.rmtree(TEST_DIR)
-            os.makedirs(TEST_DIR)
+        cfg.PATHS['working_dir'] = TEST_DIR
+        self.reset_dir()
 
     def tearDown(self):
         del cfg.PATHS['topo_dir']
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+
+    def reset_dir(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+        os.makedirs(TEST_DIR)
 
     def test_download_demo_files(self):
 
@@ -259,6 +265,59 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
 
+    def test_lrufilecache(self):
+
+        f1 = os.path.join(TEST_DIR, 'f1.txt')
+        f2 = os.path.join(TEST_DIR, 'f2.txt')
+        f3 = os.path.join(TEST_DIR, 'f3.txt')
+        open(f1, 'a').close()
+        open(f2, 'a').close()
+        open(f3, 'a').close()
+
+        assert os.path.exists(f1)
+        lru = utils.LRUFileCache(maxsize=2)
+        lru.append(f1)
+        assert os.path.exists(f1)
+        lru.append(f2)
+        assert os.path.exists(f1)
+        lru.append(f3)
+        assert not os.path.exists(f1)
+        assert os.path.exists(f2)
+        lru.append(f2)
+        assert os.path.exists(f2)
+
+        open(f1, 'a').close()
+        lru = utils.LRUFileCache(l0=[f2, f3], maxsize=2)
+        assert os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
+        lru.append(f1)
+        assert os.path.exists(f1)
+        assert not os.path.exists(f2)
+        assert os.path.exists(f3)
+
+    def test_lruhandler(self):
+
+        self.reset_dir()
+        f1 = os.path.join(TEST_DIR, 'f1.txt')
+        f2 = os.path.join(TEST_DIR, 'f2.txt')
+        f3 = os.path.join(TEST_DIR, 'f3.txt')
+        open(f1, 'a').close()
+        time.sleep(0.1)
+        open(f2, 'a').close()
+        time.sleep(0.1)
+        open(f3, 'a').close()
+
+        l = cfg.get_lru_handler(TEST_DIR, maxsize=3, ending='.txt')
+        assert os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
+
+        l = cfg.get_lru_handler(TEST_DIR, maxsize=2, ending='.txt')
+        assert not os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
+
     @is_download
     def test_srtmdownload(self):
 
@@ -274,7 +333,7 @@ class TestDataFiles(unittest.TestCase):
 
         # this zone does not exist
         zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
+        self.assertRaises(FileNotFoundError, utils._download_srtm_file, zone)
 
     @is_download
     def test_asterdownload(self):

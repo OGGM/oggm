@@ -1,29 +1,31 @@
 from __future__ import absolute_import, division
 
+import glob
+import logging
 # Built ins
 import os
-import logging
 from shutil import copyfile
-import glob
+
+import matplotlib.pyplot as plt
+import netCDF4
+import numpy as np
+import pandas as pd
+import rasterio
 # External libs
 import salem
-from salem.datasets import EsriITMIX
-from osgeo import gdal
-import netCDF4
-import rasterio
-import pandas as pd
-import numpy as np
 import shapely.geometry as shpg
-from scipy.interpolate import griddata
-from oggm.core.preprocessing.inversion import invert_parabolic_bed
+from osgeo import gdal
+from salem.datasets import EsriITMIX
 from scipy import optimize as optimization
-import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+
+import oggm.cfg as cfg
 # Locals
 from oggm import entity_task
-import oggm.cfg as cfg
-from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
-from oggm.sandbox.itmix_cfg import DATA_DIR, ITMIX_ODIR
 from oggm import utils
+from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
+from oggm.core.preprocessing.inversion import invert_parabolic_bed
+from oggm.sandbox.itmix.itmix_cfg import DATA_DIR, ITMIX_ODIR
 
 # Module logger
 log = logging.getLogger(__name__)
