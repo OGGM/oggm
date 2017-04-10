@@ -6,6 +6,7 @@ import six.moves.cPickle as pickle
 from six import string_types
 from six.moves.urllib.request import urlretrieve, urlopen
 from six.moves.urllib.error import HTTPError, URLError, ContentTooShortError
+from six.moves.urllib.parse import urlparse
 
 # Builtins
 import glob
@@ -95,7 +96,19 @@ def _get_download_lock():
 
 def _urlretrieve(url, ofile, *args, **kwargs):
     try:
-        return urlretrieve(url, ofile, *args, **kwargs)
+        cache_dir = cfg.PATHS['dl_cache_dir']
+        if cache_dir and os.path.isdir(cache_dir):
+            p = urlparse(url)
+            p = os.path.join(cache_dir, p.netloc, p.path[1:])
+            if not os.path.exists(os.path.dirname(p)):
+                os.makedirs(os.path.dirname(p))
+            # TODO: Maybe figure out a way to verify the integrity of the cached file?
+            if not os.path.isfile(p):
+                urlretrieve(url, p, *args, **kwargs)
+            shutil.copyfile(p, ofile)
+        else:
+            urlretrieve(url, ofile, *args, **kwargs)
+        return ofile
     except:
         if os.path.exists(ofile):
             os.remove(ofile)
