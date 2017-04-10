@@ -491,12 +491,8 @@ def _download_aster_file_unlocked(zone, unit):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, 'ASTGTM2_' + zone + '_dem.tif')
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/ASTGTM_V2/'
-    cmd = cmd + dirbname + '/' + fbname + ' ' + dfile
-
-    if not os.path.exists(dfile):
-        print('Downloading ' + fbname + ' from AWS s3...')
-        subprocess.call(cmd, shell=True)
+    aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
+    _aws_file_download_unlocked(aws_path, dfile)
 
     if os.path.exists(dfile):
         # Ok so the tile is a valid one
@@ -538,11 +534,8 @@ def _download_alternate_topo_file_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/topo/'
-    cmd = cmd + fname + '.zip' + ' ' + dfile
-    if not os.path.exists(dfile):
-        print('Downloading ' + fname + '.zip' + ' from AWS s3...')
-        subprocess.call(cmd, shell=True)
+    aws_path = 'topo/' + fname + '.zip'
+    _aws_file_download_unlocked(aws_path, dfile)
 
     if not os.path.exists(outpath):
         print('Extracting ' + fname + '.zip ...')
