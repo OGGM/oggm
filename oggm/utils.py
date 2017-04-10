@@ -44,7 +44,6 @@ try:
 except ImportError:
     from rasterio.tools.merge import merge as merge_tool
 import multiprocessing as mp
-import filelock
 
 # Locals
 import oggm.cfg as cfg
@@ -80,18 +79,12 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
 
+# Global Lock
+lock = mp.Lock()
+
 
 def _get_download_lock():
-    try:
-        lock_dir = cfg.PATHS['working_dir']
-    except:
-        lock_dir = cfg.CACHE_DIR
-    mkdir(lock_dir)
-    lockfile = os.path.join(lock_dir, 'oggm_data_download.lock')
-    try:
-        return filelock.FileLock(lockfile).acquire()
-    except:
-        return filelock.SoftFileLock(lockfile).acquire()
+    return lock
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):

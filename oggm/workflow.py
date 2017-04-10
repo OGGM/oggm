@@ -25,17 +25,19 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-def _init_pool_globals(_cfg_contents):
+def _init_pool_globals(_cfg_contents, global_lock):
     cfg.unpack_config(_cfg_contents)
+    utils.lock = global_lock
 
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
     cfg_contents = cfg.pack_config()
+    global_lock = mp.Manager().Lock()
     mpp = cfg.PARAMS['mp_processes']
     mpp = None if mpp == -1 else mpp
     return mp.Pool(mpp, initializer=_init_pool_globals,
-                   initargs=(cfg_contents,))
+                   initargs=(cfg_contents, global_lock))
 
 
 def _merge_dicts(*dicts):
