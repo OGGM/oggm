@@ -584,17 +584,30 @@ def _aws_file_download_unlocked(aws_path, local_path, reset=False):
     reset: overwrite the local file
     """
 
+    while aws_path.startswith('/'):
+        aws_path = aws_path[1:]
+
     if reset and os.path.exists(local_path):
         os.remove(local_path)
 
-    if not os.path.exists(local_path):
+    dpath = local_path
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    if cache_dir and os.path.isdir(cache_dir):
+        dpath = os.path.join(cache_dir, 'astgtmv2', aws_path)
+        if not os.path.exists(os.path.dirname(dpath)):
+            os.makedirs(os.path.dirname(dpath))
+
+    if not os.path.exists(dpath):
         import boto3
         client = boto3.client('s3')
         logging.getLogger('download').info("Downloading %s from s3..." % aws_path)
-        client.download_file('astgtmv2', aws_path, local_path)
+        client.download_file('astgtmv2', aws_path, dpath)
 
-    if not os.path.exists(local_path):
+    if not os.path.exists(dpath):
         raise RuntimeError('Something went wrong with the download')
+
+    if dpath != local_path:
+        shutil.copyfile(dpath, local_path)
 
 
 def mkdir(path, reset=False):
