@@ -6,7 +6,6 @@ import logging
 
 logging.getLogger("rasterio").setLevel(logging.WARNING)
 logging.getLogger("shapely").setLevel(logging.WARNING)
-logging.getLogger("filelock").setLevel(logging.WARNING)
 
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
