@@ -222,17 +222,17 @@ class SuperclassMeta(type):
 
 class LRUFileCache():
     """A least recently used cache for temporary files.
-    
+
     The files which are no longer used are deleted from the disk.
     """
     def __init__(self, l0=None, maxsize=100):
         """Instanciate.
-        
+
         Parameters
         ----------
         l0 : list
             a list of file paths
-        maxsize : int 
+        maxsize : int
             the max number of files to keep
         """
         self.files = [] if l0 is None else l0
@@ -1417,9 +1417,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
 
 
 def compile_run_output(gdirs, filesuffix=''):
-    """Merge the runs output of the glacier directories into one file. 
-    
-    
+    """Merge the runs output of the glacier directories into one file.
+
+
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
@@ -1940,7 +1940,7 @@ class GlacierDirectory(object):
         delete : bool
             delete the file if exists
         filesuffix : str
-            append a suffix to the filename (useful for model runs). Note 
+            append a suffix to the filename (useful for model runs). Note
             that the BASENAME remains same.
 
         Returns
