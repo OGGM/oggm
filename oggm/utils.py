@@ -116,8 +116,7 @@ def _urlretrieve(url, ofile, *args, **kwargs):
 
 
 def progress_urlretrieve(url, ofile):
-    print("Downloading %s ..." % url)
-    sys.stdout.flush()
+    logging.getLogger('download').info("Downloading %s ..." % url)
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
@@ -588,10 +587,12 @@ def _aws_file_download_unlocked(aws_path, local_path, reset=False):
     if reset and os.path.exists(local_path):
         os.remove(local_path)
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/'
-    cmd = cmd + aws_path + ' ' + local_path
     if not os.path.exists(local_path):
-        subprocess.call(cmd, shell=True)
+        import boto3
+        client = boto3.client('s3')
+        logging.getLogger('download').info("Downloading %s from s3..." % aws_path)
+        client.download_file('astgtmv2', aws_path, local_path)
+
     if not os.path.exists(local_path):
         raise RuntimeError('Something went wrong with the download')
 

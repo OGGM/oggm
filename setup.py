@@ -151,7 +151,8 @@ req_packages = ['six',
                 'pytest',
                 'xarray',
                 'progressbar2',
-                'filelock']
+                'filelock',
+                'boto3']
 check_dependencies(req_packages)
 
 
