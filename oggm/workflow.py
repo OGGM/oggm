@@ -72,6 +72,18 @@ class _pickle_copier(object):
             return self.call_func(gdir, **self.out_kwargs)
 
 
+def reset_multiprocessing():
+    """Reset multiprocessing state
+
+    Call this if you changed configuration parameters mid-run and need them to
+    be re-propagated to child processes.
+    """
+    global _mp_pool
+    if _mp_pool:
+        _mp_pool.terminate()
+        _mp_pool = None
+
+
 def execute_entity_task(task, gdirs, **kwargs):
     """Execute a task on gdirs.
 
