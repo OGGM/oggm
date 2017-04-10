@@ -95,6 +95,7 @@ def _get_download_lock():
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):
+    p = None
     try:
         cache_dir = cfg.PATHS['dl_cache_dir']
         if cache_dir and os.path.isdir(cache_dir):
@@ -112,6 +113,8 @@ def _urlretrieve(url, ofile, *args, **kwargs):
     except:
         if os.path.exists(ofile):
             os.remove(ofile)
+        if p and os.path.exists(p):
+            os.remove(p)
         raise
 
 
