@@ -318,6 +318,11 @@ def _filter_grouplen(arr, minsize=3):
     return arr
 
 
+def _width_change_factor(widths):
+    fac = widths[:-1] / widths[1:]
+    return fac
+
+
 @entity_task(log, writes=['catchment_indices'])
 @divide_task(log, add_0=False)
 def catchment_area(gdir, div_id=None):
@@ -677,15 +682,15 @@ def catchment_width_geom(gdir, div_id=None):
             raise RuntimeError(errmsg)
 
         # Ok now the entire centerline is computed.
-        # we filter the lines which have a large altitude range
-        fil_widths = _filter_for_altitude_range(widths, wlines, topo)
-
         # I take all these widths for geometrically valid, and see if they
         # intersect with our buffered catchment/glacier intersections
         touches_border = []
         for wg in wlines:
             touches_border.append(np.any(gdfi.intersects(wg)))
         touches_border = _filter_grouplen(touches_border, minsize=5)
+
+        # we filter the lines which have a large altitude range
+        fil_widths = _filter_for_altitude_range(widths, wlines, topo)
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
@@ -780,10 +785,14 @@ def catchment_width_correction(gdir, div_id=None):
         widths = utils.interp_nans(fl.widths)
         widths = np.clip(widths, 0.1, np.max(widths))
 
+        # Smooth them
+        widths = utils.smooth1d(widths)
+        assert np.max(_width_change_factor(widths)[:-5]) < 2.
+
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
 
-        # Sometimes, the centerline does reach as high as each pix on the
+        # Sometimes, the centerline does not reach as high as each pix on the
         # glacier. (e.g. RGI40-11.00006)
         catch_h = np.clip(catch_h, 0, np.max(fhgt))
 
@@ -795,7 +804,7 @@ def catchment_width_correction(gdir, div_id=None):
         else:
             minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
-        # Now decide on a binsize which ensures at least one element per bin
+        # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']
         while True:
             maxb = utils.nicenumber(maxh, 1)
@@ -821,10 +830,18 @@ def catchment_width_correction(gdir, div_id=None):
 
             ref_set = set(range(len(bins)-1))
             if (_c == ref_set) and (_fl == ref_set):
-                break
+                # For each bin, the width(s) have to represent the "real" area
+                nw = widths.copy()
+                for bi in range(len(bins) - 1):
+                    bintopoarea = len(np.where(topo_digi == bi)[0])
+                    wherewiths = np.where(fl_digi == bi)
+                    binflarea = np.sum(nw[wherewiths]) * fl.dx
+                    nw[wherewiths] = (bintopoarea / binflarea) * nw[wherewiths]
+                if np.nanmax(_width_change_factor(nw)[:-5]) < 2.:
+                    break
             bsize += 5
 
-            # Add a secutity for infinite loops
+            # Add a security for infinite loops
             if bsize > 250:
                 nmin -= 1
                 bsize = cfg.PARAMS['base_binsize']
@@ -833,7 +850,7 @@ def catchment_width_correction(gdir, div_id=None):
                 if nmin == 0:
                     raise RuntimeError('NO binsize could be chosen for: '
                                        '{}'.format(gdir.rgi_id))
-        if bsize > 100:
+        if bsize > 150:
             log.warning('%s: chosen binsize %d', gdir.rgi_id, bsize)
         else:
             log.debug('%s: chosen binsize %d', gdir.rgi_id, bsize)
@@ -847,14 +864,7 @@ def catchment_width_correction(gdir, div_id=None):
         if (len(tosend) > 0) and (fl.flows_to is None):
             raise RuntimeError('This should not happen')
 
-        # For each bin, the width(s) have to represent the "real" area
-        for bi in range(len(bins)-1):
-            bintopoarea = len(np.where(topo_digi == bi)[0])
-            wherewiths = np.where(fl_digi == bi)
-            binflarea = np.sum(widths[wherewiths]) * fl.dx
-            widths[wherewiths] = (bintopoarea / binflarea) * widths[wherewiths]
-
         # Write it
-        fl.widths = widths
+        fl.widths = nw
 
     return flowlines
