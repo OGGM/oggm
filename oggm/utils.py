@@ -38,6 +38,8 @@ from shapely.ops import transform as shp_trafo
 from salem import wgs84
 import xarray as xr
 import rasterio
+from scipy.ndimage import filters
+from scipy.signal import gaussian
 try:
     # rasterio V > 1.0
     from rasterio.merge import merge as merge_tool
@@ -734,6 +736,34 @@ def interp_nans(array, default=None):
     return _tmp
 
 
+def smooth1d(array, window=None, kernel='gaussian'):
+    # TODO: documentation
+
+    # some defaults
+    if window is None:
+        if len(array) >= 9:
+            window = 9
+        elif len(array) >= 7:
+            window = 7
+        elif len(array) >= 5:
+            window = 5
+        elif len(array) >= 3:
+            window = 3
+
+    if window % 2 == 0:
+        raise ValueError('Window should be an odd number.')
+
+    if isinstance(kernel, str):
+        if kernel == 'gaussian':
+            kernel = gaussian(window, 1)
+        elif kernel == 'mean':
+            kernel = np.ones(window)
+        else:
+            raise NotImplementedError('Kernel: ' + kernel)
+    kernel = kernel / np.asarray(kernel).sum()
+    return filters.convolve1d(array, kernel, mode='mirror')
+
+
 def md(ref, data, axis=None):
     """Mean Deviation."""
     return np.mean(np.asarray(data)-ref, axis=axis)
@@ -1319,7 +1349,6 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
           - 'DEM3' : http://viewfinderpanoramas.org/
           - 'ASTER' : ASTER data
-          - 'ETOPO1' : last resort, a very coarse global dataset
 
     Returns
     -------
@@ -1391,16 +1420,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                 sources.append(_download_srtm_file(z))
             source_str = source
 
-    # For the very last cases a very coarse dataset ?
-    if source == 'ETOPO1':
-        topodir = cfg.PATHS['topo_dir']
-        t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
-        assert os.path.exists(t_file)
-        return [t_file], 'ETOPO1'
-
     # filter for None (e.g. oceans)
     sources = [s for s in sources if s]
-
     if sources:
         return sources, source_str
     else:
@@ -1970,7 +1991,7 @@ class GlacierDirectory(object):
 
         return os.path.exists(self.get_filepath(filename, div_id=div_id))
 
-    def read_pickle(self, filename, div_id=0):
+    def read_pickle(self, filename, div_id=0, use_compression=None):
         """Reads a pickle located in the directory.
 
         Parameters
@@ -1979,19 +2000,22 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         div_id : int
             the divide for which you want to get the file path
-
+        use_compression : bool
+            whether or not the file ws compressed. Default is to use 
+            cfg.PARAMS['use_compression'] for this (recommended)
         Returns
         -------
         An object read from the pickle
         """
-
-        _open = gzip.open if cfg.PARAMS['use_compression'] else open
+        use_comp = use_compression if use_compression is not None \
+            else cfg.PARAMS['use_compression']
+        _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'rb') as f:
             out = pickle.load(f)
 
         return out
 
-    def write_pickle(self, var, filename, div_id=0):
+    def write_pickle(self, var, filename, div_id=0, use_compression=None):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -2002,9 +2026,13 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         div_id : int
             the divide for which you want to get the file path
+        use_compression : bool
+            whether or not the file ws compressed. Default is to use 
+            cfg.PARAMS['use_compression'] for this (recommended)
         """
-
-        _open = gzip.open if cfg.PARAMS['use_compression'] else open
+        use_comp = use_compression if use_compression is not None \
+            else cfg.PARAMS['use_compression']
+        _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'wb') as f:
             pickle.dump(var, f, protocol=-1)
 

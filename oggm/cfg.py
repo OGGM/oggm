@@ -15,6 +15,7 @@ from distutils.util import strtobool
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
 
 # Defaults
@@ -95,18 +96,9 @@ FOUR_THIRDS = 4./3.
 ONE_FIFTH = 1./5.
 
 GAUSSIAN_KERNEL = dict()
-GAUSSIAN_KERNEL[9] = np.array([1.33830625e-04, 4.43186162e-03,
-                               5.39911274e-02, 2.41971446e-01,
-                               3.98943469e-01, 2.41971446e-01,
-                               5.39911274e-02, 4.43186162e-03,
-                               1.33830625e-04])
-GAUSSIAN_KERNEL[7] = np.array([1.78435052e-04, 1.51942011e-02,
-                               2.18673667e-01, 5.31907394e-01,
-                               2.18673667e-01, 1.51942011e-02,
-                               1.78435052e-04])
-GAUSSIAN_KERNEL[5] = np.array([2.63865083e-04, 1.06450772e-01,
-                               7.86570726e-01, 1.06450772e-01,
-                               2.63865083e-04])
+for ks in [5, 7, 9]:
+    kernel = gaussian(ks, 1)
+    GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
 # TODO: document all files
 _doc = 'A geotiff file containing the DEM (reprojected into the local grid).'

@@ -229,7 +229,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                      bias=res['bias'][-1],
                                      prcp_fac=res['prcp_fac'])
 
-    inversion.prepare_for_inversion(gdir)
+    inversion.prepare_for_inversion(gdir, add_debug_var=True)
     ref_v = 0.573 * 1e9
 
     if invert_with_sliding:
@@ -238,8 +238,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
             _fd = 1.9e-24 * x[0]
             glen_a = (cfg.N+2) * _fd / 2.
             fs = 5.7e-20 * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         out = optimization.minimize(to_optimize, [1, 1],
@@ -248,14 +248,14 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         _fd = 1.9e-24 * out[0]
         glen_a = (cfg.N+2) * _fd / 2.
         fs = 5.7e-20 * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
     else:
         def to_optimize(x):
             glen_a = cfg.A * x[0]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=0.,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=0.,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         out = optimization.minimize(to_optimize, [1],
@@ -263,9 +263,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                     tol=1e-4)['x']
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]
     try:

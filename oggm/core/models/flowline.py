@@ -545,11 +545,11 @@ class FlowlineModel(object):
             v_bef = self.volume_m3
             self.run_until(self.yr + ystep)
             v_af = self.volume_m3
-            t_rate = np.abs(v_af - v_bef) / v_bef
             if np.isclose(v_bef, 0., atol=1):
                 t_rate = 1
                 was_close_zero += 1
-
+            else:
+                t_rate = np.abs(v_af - v_bef) / v_bef
         if ite > max_ite:
             raise RuntimeError('Did not find equilibrium.')
 

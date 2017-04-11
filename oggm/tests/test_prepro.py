@@ -1161,7 +1161,7 @@ class TestInversion(unittest.TestCase):
 
     def test_invert_hef(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1187,9 +1187,9 @@ class TestInversion(unittest.TestCase):
         # meanH = 67+-7
         # Volume = 0.573+-0.063
         # maxH = 242+-13
-        inversion.prepare_for_inversion(gdir)
-
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
+                for i in [1, 2, 3]]
         pid = np.argmax(lens) + 1
 
         # Check how many clips:
@@ -1209,7 +1209,6 @@ class TestInversion(unittest.TestCase):
             if cl['is_last']:
                 self.assertEqual(cl['flux'][-1], 0.)
 
-
         self.assertTrue(nabove == 0)
         self.assertTrue(np.rad2deg(maxs) < 40.)
 
@@ -1218,8 +1217,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1232,9 +1231,9 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] < 1.1)
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1248,9 +1247,9 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
             # This doesn't pass because of smoothing
-            # if fl.flows_to is None:
-            #     self.assertEqual(cl['volume'][-1], 0)
-            #     self.assertEqual(cl['thick'][-1], 0)
+            if fl.flows_to is None:
+                self.assertEqual(cl['volume'][-1], 0)
+                self.assertEqual(cl['thick'][-1], 0)
 
         np.testing.assert_allclose(242, maxs, atol=40)
 
@@ -1289,8 +1288,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1, 1],
@@ -1298,9 +1297,9 @@ class TestInversion(unittest.TestCase):
                                     tol=1e-1)['x']
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         inversion.distribute_thickness(gdir, how='per_altitude',
@@ -1355,8 +1354,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = 0.
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1369,9 +1368,9 @@ class TestInversion(unittest.TestCase):
 
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1402,9 +1401,9 @@ class TestInversion(unittest.TestCase):
         climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
                                          prcp_fac=prcp_fac)
         inversion.prepare_for_inversion(gdir)
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
 
         np.testing.assert_allclose(ref_v, v, rtol=0.02)
         cls = gdir.read_pickle('inversion_output', div_id=pid)
@@ -1541,17 +1540,19 @@ class TestGrindelInvert(unittest.TestCase):
             widths = widths[pok]
             hgt = hgt[pok]
             flux = flux[pok]
+            flux_a0 = 1.5 * flux / widths
             angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
             # Clip flux to 0
             assert not np.any(flux < -0.1)
             # add to output
-            cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
-                          slope_angle=angle, is_last=True)
+            cl_dic = dict(dx=dx, flux=flux, flux_a0=flux_a0, width=widths,
+                          hgt=hgt, slope_angle=angle, is_last=True,
+                          is_rectangular=np.zeros(len(flux), dtype=bool))
             towrite.append(cl_dic)
 
         # Write out
         gdir.write_pickle(towrite, 'inversion_input', div_id=1)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         v_km3 = v * 1e-9
         a_km2 = np.sum(widths * dx) * 1e-6
         v_vas = 0.034*(a_km2**1.375)
@@ -1578,7 +1579,7 @@ class TestGrindelInvert(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
         inversion.prepare_for_inversion(gdir)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         cfg.PARAMS['bed_shape'] = 'parabolic'
         flowline.init_present_time_glacier(gdir)
         mb_mod = massbalance.ConstantMassBalanceModel(gdir)

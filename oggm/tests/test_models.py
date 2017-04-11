@@ -371,7 +371,7 @@ class TestOtherDivides(unittest.TestCase):
             climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
                                              prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
-            v, ainv = inversion.invert_parabolic_bed(gdir)
+            v, ainv = inversion.mass_conservation_inversion(gdir)
             flowline.init_present_time_glacier(gdir)
 
         myarea = 0.

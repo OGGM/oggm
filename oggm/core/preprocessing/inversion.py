@@ -46,9 +46,10 @@ from oggm.core.preprocessing.gis import gaussian_blur
 # Module logger
 log = logging.getLogger(__name__)
 
+
 @entity_task(log, writes=['inversion_input'])
 @divide_task(log, add_0=False)
-def prepare_for_inversion(gdir, div_id=None):
+def prepare_for_inversion(gdir, div_id=None, add_debug_var=False):
     """Prepares the data needed for the inversion.
 
     Mostly the mass flux and slope angle, the rest (width, height) was already
@@ -91,9 +92,17 @@ def prepare_for_inversion(gdir, div_id=None):
                 raise RuntimeError(msg)
             flux[-1] = 0.
 
-        # add to output
-        cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
-                      slope_angle=angle, is_last=fl.flows_to is None)
+        # Optimisation: we need to compute this term of a0 only once
+        flux_a0 = np.where(fl.touches_border, 1, 1.5)
+        flux_a0 *= flux / widths
+
+        # Add to output
+        cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
+                      slope_angle=angle, is_rectangular=fl.touches_border,
+                      is_last=fl.flows_to is None)
+        if add_debug_var:
+            cl_dic['flux'] = flux
+            cl_dic['hgt'] = hgt
         towrite.append(cl_dic)
 
     # Write out
@@ -113,16 +122,11 @@ def _inversion_simple(a3, a0):
     return (-a0)**cfg.ONE_FIFTH
 
 
-def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
+def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
-
-    The thickness estimation is computed under the assumption of a parabolic
-    bed section.
-
-    It returns (vol, thick) in (m3, m).
-
+    
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
@@ -134,6 +138,10 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
         default behavior is to compute the thickness and write the
         results in the pickle. Set to False in order to spare time
         during calibration.
+    
+    Returns
+    -------
+    (vol, thick) in [m3, m]
     """
 
     # Check input
@@ -146,11 +154,6 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
     fd = 2. / (cfg.N+2) * glen_a
     a3 = fs / fd
 
-    # sometimes the width is small and the flux is big. crop this
-    max_ratio = cfg.PARAMS['max_thick_to_width_ratio']
-    max_shape = cfg.PARAMS['max_shape_param']
-    # sigma of the smoothing window after inversion
-    sec_smooth = cfg.PARAMS['section_smoothing']
     # Clip the slope, in degrees
     clip_angle = cfg.PARAMS['min_slope']
 
@@ -164,61 +167,23 @@ def invert_parabolic_bed(gdir, glen_a=cfg.A, fs=0., write=True):
 
             # Parabolic bed rock
             w = cl['width']
-            a0s = -(3*cl['flux'])/(2*w*((cfg.RHO*cfg.G*slope)**3)*fd)
+            a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
+
             if np.any(~np.isfinite(a0s)):
-                raise RuntimeError('{}: something went wrong with '
+                raise RuntimeError('{}: something went wrong with the'
                                    'inversion'.format(gdir.rgi_id))
 
             # GO
             out_thick = np.zeros(len(slope))
-            for i, (a0, Q) in enumerate(zip(a0s, cl['flux'])):
+            for i, (a0, Q) in enumerate(zip(a0s, cl['flux_a0'])):
                 if Q > 0.:
                     out_thick[i] = _inv_function(a3, a0)
                 else:
                     out_thick[i] = 0.
 
-            # this filtering stuff below is not explained in Farinotti's
-            # paper. I did this because it looks better, but I'm not sure
-            # (yet) that this is a good idea
-
-            # However for tidewater we have to be carefull at the tongue
-            if gdir.is_tidewater and cl['is_last']:
-                # store it to restore it later
-                tongue_thick = out_thick[-5:]
-
-            # Check for thick to width ratio (should ne be too large)
-            ratio = out_thick / w  # there's no 0 width so we're good
-            pno = np.where(ratio > max_ratio)
-            if len(pno[0]) > 0:
-                ratio[pno] = np.NaN
-                ratio = utils.interp_nans(ratio, default=max_ratio)
-                out_thick = w * ratio
-
-            # TODO: last thicknesses can be noisy sometimes: interpolate?
-            if cl['is_last']:
-               out_thick[-4:-1] = np.NaN
-               out_thick = utils.interp_nans(out_thick)
-
-            # Check for the shape parameter (should not be too large)
-            out_shape = (4*out_thick)/(w**2)
-            pno = np.where(out_shape > max_shape)
-            if len(pno[0]) > 0:
-                out_shape[pno] = np.NaN
-                out_shape = utils.interp_nans(out_shape, default=max_shape)
-                out_thick = (out_shape * w**2) / 4
-
-            # smooth section
-            if sec_smooth != 0.:
-                section = cfg.TWO_THIRDS * w * out_thick * cl['dx']
-                section = gaussian_filter1d(section, sec_smooth)
-                out_thick = section / (w * cfg.TWO_THIRDS * cl['dx'])
-
-            if gdir.is_tidewater and cl['is_last']:
-                # restore the last thicknesses
-                out_thick[-5:] = tongue_thick
-
             # volume
-            volume = cfg.TWO_THIRDS * out_thick * w * cl['dx']
+            fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
+            volume = fac * out_thick * w * cl['dx']
 
             if write:
                 cl['thick'] = out_thick
@@ -289,8 +254,8 @@ def optimize_inversion_params(gdirs):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
             for i, gdir in enumerate(ref_gdirs):
-                v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
-                                            fs=fs, write=False)
+                v, a = mass_conservation_inversion(gdir, glen_a=glen_a,
+                                                   fs=fs, write=False)
                 if optim_t:
                     tmp_ref[i] = v / a
                 else:
@@ -311,8 +276,8 @@ def optimize_inversion_params(gdirs):
             tmp_ref = np.zeros(len(ref_gdirs))
             glen_a = cfg.A * x[0]
             for i, gdir in enumerate(ref_gdirs):
-                v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
-                                            fs=0., write=False)
+                v, a = mass_conservation_inversion(gdir, glen_a=glen_a,
+                                                   fs=0., write=False)
                 if optim_t:
                     tmp_ref[i] = v / a
                 else:
@@ -329,8 +294,8 @@ def optimize_inversion_params(gdirs):
     oggm_volume_m3 = np.zeros(len(ref_gdirs))
     rgi_area_m2 = np.zeros(len(ref_gdirs))
     for i, gdir in enumerate(ref_gdirs):
-        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
-                                    write=False)
+        v, a = mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs,
+                                           write=False)
         oggm_volume_m3[i] = v
         rgi_area_m2[i] = a
     assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
@@ -405,7 +370,7 @@ def volume_inversion(gdir, use_cfg_params=None):
         glen_a = d['glen_a']
 
     # go
-    return invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs, write=True)
+    return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True)
 
 
 def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
