@@ -10,6 +10,7 @@ import shutil
 import sys
 import glob
 from collections import OrderedDict
+from distutils.util import strtobool
 
 import numpy as np
 import pandas as pd
@@ -225,10 +226,6 @@ def initialize(file=None):
     global RGI_REG_NAMES
     global RGI_SUBREG_NAMES
 
-    # Make sure we have a proper cache dir
-    from oggm.utils import _download_oggm_files
-    _download_oggm_files()
-
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -252,6 +249,23 @@ def initialize(file=None):
         cp['cru_dir'] = os.path.join(homedir, 'OGGM_data', 'cru')
     if cp['rgi_dir'] == '~':
         cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
+
+    # Setup Download-Cache-Dir
+    if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
+        cp['dl_cache_readonly'] = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
+    if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
+        cp['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+
+    PATHS['dl_cache_dir'] = cp['dl_cache_dir']
+    PARAMS['dl_cache_readonly'] = cp.as_bool('dl_cache_readonly')
+
+    if PATHS['dl_cache_dir'] and not os.path.exists(PATHS['dl_cache_dir']):
+        if not PARAMS['dl_cache_readonly']:
+            os.makedirs(PATHS['dl_cache_dir'])
+
+    # Make sure we have a proper cache dir
+    from oggm.utils import _download_oggm_files
+    _download_oggm_files()
 
     # Parse RGI metadata
     _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
@@ -321,7 +335,8 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor', 'use_intersects']
+           'prcp_scaling_factor', 'use_intersects',
+           'dl_cache_dir', 'dl_cache_readonly']
     for k in ltr:
         del cp[k]
 
@@ -338,11 +353,11 @@ def initialize(file=None):
 
 def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
     """LRU handler for a given temporary directory (singleton).
-    
+
     Parameters
     ----------
     tmpdir : str
-        path to the temporary directory to handle. Default is "tmp" in the 
+        path to the temporary directory to handle. Default is "tmp" in the
         working directory.
     maxsize : int
         the max number of files to keep in the directory

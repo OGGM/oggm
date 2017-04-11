@@ -30,7 +30,7 @@ install:
 
   # install dependencies
   - "python -m pip install --upgrade pip"
-  - "conda install --yes --quiet -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pyproj numpy rasterio krb5 xarray filelock"
+  - "conda install --yes --quiet -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pyproj numpy rasterio krb5 xarray boto3"
   - "pip install motionless"
   - "pip install git+https://github.com/fmaussion/salem.git"
   - "pip install -e ."

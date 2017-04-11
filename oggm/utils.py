@@ -6,6 +6,7 @@ import six.moves.cPickle as pickle
 from six import string_types
 from six.moves.urllib.request import urlretrieve, urlopen
 from six.moves.urllib.error import HTTPError, URLError, ContentTooShortError
+from six.moves.urllib.parse import urlparse
 
 # Builtins
 import glob
@@ -43,7 +44,6 @@ try:
 except ImportError:
     from rasterio.tools.merge import merge as merge_tool
 import multiprocessing as mp
-import filelock
 
 # Locals
 import oggm.cfg as cfg
@@ -79,32 +79,46 @@ MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
 
+# Global Lock
+lock = mp.Lock()
+
 
 def _get_download_lock():
-    try:
-        lock_dir = cfg.PATHS['working_dir']
-    except:
-        lock_dir = cfg.CACHE_DIR
-    mkdir(lock_dir)
-    lockfile = os.path.join(lock_dir, 'oggm_data_download.lock')
-    try:
-        return filelock.FileLock(lockfile).acquire()
-    except:
-        return filelock.SoftFileLock(lockfile).acquire()
+    return lock
 
 
 def _urlretrieve(url, ofile, *args, **kwargs):
+    p = None
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    cache_ro = cfg.PARAMS['dl_cache_readonly']
     try:
-        return urlretrieve(url, ofile, *args, **kwargs)
+        if cache_dir and os.path.isdir(cache_dir):
+            p = urlparse(url)
+            p = os.path.join(cache_dir, p.netloc, p.path[1:])
+            if not os.path.exists(os.path.dirname(p)) and not cache_ro:
+                os.makedirs(os.path.dirname(p))
+            # TODO: Maybe figure out a way to verify the integrity of the cached file?
+            if os.path.isfile(p):
+                shutil.copyfile(p, ofile)
+            else:
+                if not cache_ro:
+                    urlretrieve(url, p, *args, **kwargs)
+                    shutil.copyfile(p, ofile)
+                else:
+                    urlretrieve(url, ofile, *args, **kwargs)
+        else:
+            urlretrieve(url, ofile, *args, **kwargs)
+        return ofile
     except:
         if os.path.exists(ofile):
             os.remove(ofile)
+        if p and os.path.exists(p) and not cache_ro:
+            os.remove(p)
         raise
 
 
 def progress_urlretrieve(url, ofile):
-    print("Downloading %s ..." % url)
-    sys.stdout.flush()
+    logging.getLogger('download').info("Downloading %s ..." % url)
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
@@ -210,17 +224,17 @@ class SuperclassMeta(type):
 
 class LRUFileCache():
     """A least recently used cache for temporary files.
-    
+
     The files which are no longer used are deleted from the disk.
     """
     def __init__(self, l0=None, maxsize=100):
         """Instanciate.
-        
+
         Parameters
         ----------
         l0 : list
             a list of file paths
-        maxsize : int 
+        maxsize : int
             the max number of files to keep
         """
         self.files = [] if l0 is None else l0
@@ -478,12 +492,8 @@ def _download_aster_file_unlocked(zone, unit):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, 'ASTGTM2_' + zone + '_dem.tif')
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/ASTGTM_V2/'
-    cmd = cmd + dirbname + '/' + fbname + ' ' + dfile
-
-    if not os.path.exists(dfile):
-        print('Downloading ' + fbname + ' from AWS s3...')
-        subprocess.call(cmd, shell=True)
+    aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
+    _aws_file_download_unlocked(aws_path, dfile)
 
     if os.path.exists(dfile):
         # Ok so the tile is a valid one
@@ -525,11 +535,8 @@ def _download_alternate_topo_file_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/topo/'
-    cmd = cmd + fname + '.zip' + ' ' + dfile
-    if not os.path.exists(dfile):
-        print('Downloading ' + fname + '.zip' + ' from AWS s3...')
-        subprocess.call(cmd, shell=True)
+    aws_path = 'topo/' + fname + '.zip'
+    _aws_file_download_unlocked(aws_path, dfile)
 
     if not os.path.exists(outpath):
         print('Extracting ' + fname + '.zip ...')
@@ -579,15 +586,33 @@ def _aws_file_download_unlocked(aws_path, local_path, reset=False):
     reset: overwrite the local file
     """
 
+    while aws_path.startswith('/'):
+        aws_path = aws_path[1:]
+
     if reset and os.path.exists(local_path):
         os.remove(local_path)
 
-    cmd = 'aws --region eu-west-1 s3 cp s3://astgtmv2/'
-    cmd = cmd + aws_path + ' ' + local_path
-    if not os.path.exists(local_path):
-        subprocess.call(cmd, shell=True)
-    if not os.path.exists(local_path):
+    dpath = local_path
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    cache_ro = cfg.PARAMS['dl_cache_readonly']
+    if cache_dir and os.path.isdir(cache_dir):
+        dpath = os.path.join(cache_dir, 'astgtmv2', aws_path)
+        if not os.path.exists(os.path.dirname(dpath)) and not cache_ro:
+            os.makedirs(os.path.dirname(dpath))
+        if cache_ro and not os.path.exists(dpath):
+            dpath = local_path
+
+    if not os.path.exists(dpath):
+        import boto3
+        client = boto3.client('s3')
+        logging.getLogger('download').info("Downloading %s from s3..." % aws_path)
+        client.download_file('astgtmv2', aws_path, dpath)
+
+    if not os.path.exists(dpath):
         raise RuntimeError('Something went wrong with the download')
+
+    if dpath != local_path:
+        shutil.copyfile(dpath, local_path)
 
 
 def mkdir(path, reset=False):
@@ -1410,9 +1435,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
 
 
 def compile_run_output(gdirs, filesuffix=''):
-    """Merge the runs output of the glacier directories into one file. 
-    
-    
+    """Merge the runs output of the glacier directories into one file.
+
+
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
@@ -1933,7 +1958,7 @@ class GlacierDirectory(object):
         delete : bool
             delete the file if exists
         filesuffix : str
-            append a suffix to the filename (useful for model runs). Note 
+            append a suffix to the filename (useful for model runs). Note
             that the BASENAME remains same.
 
         Returns

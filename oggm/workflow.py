@@ -24,18 +24,27 @@ except ImportError:
 # Module logger
 log = logging.getLogger(__name__)
 
+# Multiprocessing Pool
+_mp_pool = None
 
-def _init_pool_globals(_cfg_contents):
+
+def _init_pool_globals(_cfg_contents, global_lock):
     cfg.unpack_config(_cfg_contents)
+    utils.lock = global_lock
 
 
 def _init_pool():
     """Necessary because at import time, cfg might be unitialized"""
+    global _mp_pool
+    if _mp_pool:
+        return _mp_pool
     cfg_contents = cfg.pack_config()
+    global_lock = mp.Manager().Lock()
     mpp = cfg.PARAMS['mp_processes']
     mpp = None if mpp == -1 else mpp
-    return mp.Pool(mpp, initializer=_init_pool_globals,
-                   initargs=(cfg_contents,))
+    _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
+                       initargs=(cfg_contents, global_lock))
+    return _mp_pool
 
 
 def _merge_dicts(*dicts):
@@ -61,6 +70,18 @@ class _pickle_copier(object):
             return self.call_func(gdir, **gdir_kwargs)
         else:
             return self.call_func(gdir, **self.out_kwargs)
+
+
+def reset_multiprocessing():
+    """Reset multiprocessing state
+
+    Call this if you changed configuration parameters mid-run and need them to
+    be re-propagated to child processes.
+    """
+    global _mp_pool
+    if _mp_pool:
+        _mp_pool.terminate()
+        _mp_pool = None
 
 
 def execute_entity_task(task, gdirs, **kwargs):

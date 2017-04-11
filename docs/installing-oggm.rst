@@ -65,7 +65,7 @@ Testing:
     - pytest
 
 Other libraries:
-    - filelock
+    - boto3
     - `salem <https://github.com/fmaussion/salem>`_
     - `motionless <https://github.com/ryancox/motionless/>`_
 
@@ -314,7 +314,7 @@ If no matching distribution could be found for your gdal version, try out a vers
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2 pytest motionless
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless
 
 And the salem library::
 
