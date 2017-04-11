@@ -89,24 +89,30 @@ def _get_download_lock():
 
 def _urlretrieve(url, ofile, *args, **kwargs):
     p = None
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    cache_ro = cfg.PARAMS['dl_cache_readonly']
     try:
-        cache_dir = cfg.PATHS['dl_cache_dir']
         if cache_dir and os.path.isdir(cache_dir):
             p = urlparse(url)
             p = os.path.join(cache_dir, p.netloc, p.path[1:])
-            if not os.path.exists(os.path.dirname(p)):
+            if not os.path.exists(os.path.dirname(p)) and not cache_ro:
                 os.makedirs(os.path.dirname(p))
             # TODO: Maybe figure out a way to verify the integrity of the cached file?
-            if not os.path.isfile(p):
-                urlretrieve(url, p, *args, **kwargs)
-            shutil.copyfile(p, ofile)
+            if os.path.isfile(p):
+                shutil.copyfile(p, ofile)
+            else:
+                if not cache_ro:
+                    urlretrieve(url, p, *args, **kwargs)
+                    shutil.copyfile(p, ofile)
+                else:
+                    urlretrieve(url, ofile, *args, **kwargs)
         else:
             urlretrieve(url, ofile, *args, **kwargs)
         return ofile
     except:
         if os.path.exists(ofile):
             os.remove(ofile)
-        if p and os.path.exists(p):
+        if p and os.path.exists(p) and not cache_ro:
             os.remove(p)
         raise
 
@@ -588,10 +594,13 @@ def _aws_file_download_unlocked(aws_path, local_path, reset=False):
 
     dpath = local_path
     cache_dir = cfg.PATHS['dl_cache_dir']
+    cache_ro = cfg.PARAMS['dl_cache_readonly']
     if cache_dir and os.path.isdir(cache_dir):
         dpath = os.path.join(cache_dir, 'astgtmv2', aws_path)
-        if not os.path.exists(os.path.dirname(dpath)):
+        if not os.path.exists(os.path.dirname(dpath)) and not cache_ro:
             os.makedirs(os.path.dirname(dpath))
+        if cache_ro and not os.path.exists(dpath):
+            dpath = local_path
 
     if not os.path.exists(dpath):
         import boto3
