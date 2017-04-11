@@ -1302,13 +1302,13 @@ def _get_cru_file_unlocked(var=None):
 
 def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     """
-    Returns a path to the DEM file covering the desired extent.
+    Returns a list with path(s) to the DEM file(s) covering the desired extent.
 
-    If the file is not present, download it. If the extent covers two or
-    more files, merge them.
+    If the needed files for covering the extent are not present, download them.
 
-    Returns a downloaded SRTM file for [-60S;60N], and
-    a corrected DEM3 from viewfinderpanoramas.org elsewhere.
+    By default it will be referred to SRTM for [-60S;60N], and
+    a corrected DEM3 from viewfinderpanoramas.org elsewhere. However, a 
+    user-specified data source can be given with the ``source`` keyword.
 
     Parameters
     ----------
@@ -1319,7 +1319,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     rgi_region : int, optional
         the RGI region number (required for the GIMP DEM)
     source : str or list of str, optional
-        if you want to force the use of a certain DEM source. Available are:
+        If you want to force the use of a certain DEM source. Available are:
           - 'USER' : file set in cfg.PATHS['dem_file']
           - 'SRTM' : SRTM v4.1
           - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
@@ -1330,7 +1330,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
 
     Returns
     -------
-    tuple: (path to the dem file, data source)
+    tuple: (list with path(s) to the DEM file, data source)
     """
 
     if source is not None and not isinstance(source, string_types):
@@ -1339,16 +1339,24 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             demf, source_str = get_topo_file(lon_ex, lat_ex,
                                              rgi_region=rgi_region,
                                              source=s)
-            if os.path.isfile(demf):
-                return demf, source_str
+            if len(demf) > 1:  # in case download functions do not complain if
+                # one file is missing
+                if all([os.path.isfile(i) for i in demf]):
+                    return demf, source_str
+            elif len(demf) == 1:
+                if os.path.isfile(demf):
+                    return demf, source_str
+            else:
+                continue
 
     # Did the user specify a specific DEM file?
     if 'dem_file' in cfg.PATHS and os.path.isfile(cfg.PATHS['dem_file']):
         source = 'USER' if source is None else source
         if source == 'USER':
-            return cfg.PATHS['dem_file'], source
+            return [cfg.PATHS['dem_file']], source
 
     # If not, do the job ourselves: download and merge stuffs
+    topodir = cfg.PATHS['topo_dir']
 
     # GIMP is in polar stereographic, not easy to test if glacier is on the map
     # It would be possible with a salem grid but this is a bit more expensive
@@ -1409,45 +1417,11 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     # filter for None (e.g. oceans)
     sources = [s for s in sources if s is not None]
 
-    if len(sources) < 1:
-        raise RuntimeError('No topography file available!')
-
-    if len(sources) == 1:
+    if sources:
         return sources[0], source_str
     else:
-
-        # extract directory
-        tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
-        mkdir(tmpdir)
-
-        # merge
-        zone_str = '+'.join(zones)
-        bname = source_str.lower() + '_merged_' + zone_str + '.tif'
-
-        if len(bname) > 200:  # file name way too long
-            import hashlib
-            hash_object = hashlib.md5(bname.encode())
-            bname = hash_object.hexdigest() + '.tif'
-
-        merged_file = os.path.join(tmpdir, bname)
-        if not os.path.exists(merged_file):
-            # check case where wrong zip file is downloaded from
-            if all(x is None for x in sources):
-                raise ValueError('Chosen lat/lon values are not available')
-            # write it
-            rfiles = [rasterio.open(s) for s in sources]
-            dest, output_transform = merge_tool(rfiles)
-            profile = rfiles[0].profile
-            if 'affine' in profile:
-                profile.pop('affine')
-            profile['transform'] = output_transform
-            profile['height'] = dest.shape[1]
-            profile['width'] = dest.shape[2]
-            profile['driver'] = 'GTiff'
-            with rasterio.open(merged_file, 'w', **profile) as dst:
-                dst.write(dest)
-            cfg.get_lru_handler(tmpdir).append(merged_file)
-        return merged_file, source_str + '_MERGED'
+        raise RuntimeError('No topography file available for extent lat:{0},'
+                           'lon:{1}!'.format(lat_ex, lon_ex))
 
 
 def compile_run_output(gdirs, filesuffix=''):
