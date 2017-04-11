@@ -89,6 +89,7 @@ def _get_download_lock():
 
 def _urlretrieve(url, ofile, *args, **kwargs):
     p = None
+    log = logging.getLogger('download')
     cache_dir = cfg.PATHS['dl_cache_dir']
     cache_ro = cfg.PARAMS['dl_cache_readonly']
     try:
@@ -99,12 +100,15 @@ def _urlretrieve(url, ofile, *args, **kwargs):
                 os.makedirs(os.path.dirname(p))
             # TODO: Maybe figure out a way to verify the integrity of the cached file?
             if os.path.isfile(p):
+                log.info("%s found in cache" % url)
                 shutil.copyfile(p, ofile)
             else:
                 if not cache_ro:
+                    log.info("Caching request for %s" % url)
                     urlretrieve(url, p, *args, **kwargs)
                     shutil.copyfile(p, ofile)
                 else:
+                    log.info("%s not in cache. Cache is ro, not caching." % url)
                     urlretrieve(url, ofile, *args, **kwargs)
         else:
             urlretrieve(url, ofile, *args, **kwargs)
@@ -118,7 +122,7 @@ def _urlretrieve(url, ofile, *args, **kwargs):
 
 
 def progress_urlretrieve(url, ofile):
-    logging.getLogger('download').info("Downloading %s ..." % url)
+    logging.getLogger('download').info("Downloading %s to %s..." % (url, ofile))
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
@@ -267,6 +271,7 @@ def _download_oggm_files_unlocked():
                      SAMPLE_DATA_GH_REPO
     master_zip_url = 'https://github.com/%s/archive/master.zip' % \
                      SAMPLE_DATA_GH_REPO
+    rename_output = False
     ofile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
@@ -299,6 +304,10 @@ def _download_oggm_files_unlocked():
             # if not same, delete entire dir
             if local_sha != master_sha:
                 empty_cache()
+            # use sha based download url to avoid cache issues
+            master_zip_url = 'https://github.com/%s/archive/%s.zip' % \
+                (SAMPLE_DATA_GH_REPO, master_sha)
+            rename_output = "oggm-sample-data-%s" % master_sha
         except (HTTPError, URLError):
             master_sha = 'error'
     else:
@@ -325,9 +334,16 @@ def _download_oggm_files_unlocked():
         with open(shafile, 'w') as sfile:
             sfile.write(master_sha)
 
+    # rename dir in case of download from different url
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
+    if rename_output:
+        fdir = os.path.join(cfg.CACHE_DIR, rename_output)
+        if os.path.exists(sdir):
+            shutil.rmtree(sdir)
+        shutil.move(fdir, sdir)
+
     # list of files for output
     out = dict()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
     for root, directories, filenames in os.walk(sdir):
         for filename in filenames:
             if filename in out:
@@ -605,7 +621,7 @@ def _aws_file_download_unlocked(aws_path, local_path, reset=False):
     if not os.path.exists(dpath):
         import boto3
         client = boto3.client('s3')
-        logging.getLogger('download').info("Downloading %s from s3..." % aws_path)
+        logging.getLogger('download').info("Downloading %s from s3 to %s..." % (aws_path, dpath))
         client.download_file('astgtmv2', aws_path, dpath)
 
     if not os.path.exists(dpath):
