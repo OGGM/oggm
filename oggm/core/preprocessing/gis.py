@@ -25,9 +25,7 @@ import logging
 from shutil import copyfile
 from functools import partial
 # External libs
-from osgeo import osr
 import salem
-from osgeo import gdal
 import pyproj
 import numpy as np
 import shapely.ops
@@ -413,7 +411,9 @@ def define_glacier_region(gdir, entity=None):
         'crs': proj4_str,
         'transform': dst_transform,
         'width': nx,
-        'height': ny
+        'height': ny#,
+        #'dtype': rasterio.float32,
+        #'compress': 'lzw'
     })
 
     # Could be extended so that the cfg file takes all Resampling.* methods
@@ -509,8 +509,8 @@ def glacier_masks(gdir):
     """
 
     # open srtm tif-file:
-    dem_ds = gdal.Open(gdir.get_filepath('dem'))
-    dem = dem_ds.ReadAsArray().astype(float)
+    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+    dem = dem_dr.read(1).astype(rasterio.float32)
 
     # Correct the DEM (ASTER...)
     # Currently we just do a linear interp -- ASTER is totally shit anyway
@@ -527,22 +527,22 @@ def glacier_masks(gdir):
         raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
     # Grid
-    nx = dem_ds.RasterXSize
-    ny = dem_ds.RasterYSize
+    nx = dem_dr.width
+    ny = dem_dr.height
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
     # Proj
-    geot = dem_ds.GetGeoTransform()
-    x0 = geot[0]  # UL corner
-    y0 = geot[3]  # UL corner
-    dx = geot[1]
-    dy = geot[5]  # Negative
+    transf = dem_dr.transform
+    x0 = transf[2]  # UL corner
+    y0 = transf[5]  # UL corner
+    dx = transf[0]
+    dy = transf[4]  # Negative
     assert dx == -dy
     assert dx == gdir.grid.dx
     assert y0 == gdir.grid.corner_grid.y0
     assert x0 == gdir.grid.corner_grid.x0
-    dem_ds = None  # to be sure...
+    dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
     dem = dem.clip(0)
