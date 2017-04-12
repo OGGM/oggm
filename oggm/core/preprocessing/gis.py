@@ -25,9 +25,7 @@ import logging
 from shutil import copyfile
 from functools import partial
 # External libs
-from osgeo import osr
 import salem
-from osgeo import gdal
 import pyproj
 import numpy as np
 import shapely.ops
@@ -37,6 +35,13 @@ import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
 from scipy.interpolate import griddata
+import rasterio
+from rasterio.warp import reproject, Resampling
+try:
+    # rasterio V > 1.0
+    from rasterio.merge import merge as merge_tool
+except ImportError:
+    from rasterio.tools.merge import merge as merge_tool
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
@@ -383,60 +388,59 @@ def define_glacier_region(gdir, entity=None):
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
-    dem_file, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
+    dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
                                          source=source)
     log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
-    dem = gdal.Open(dem_file)
-    geo_t = dem.GetGeoTransform()
 
-    # Input proj
-    dem_proj = dem.GetProjection()
-    if dem_proj == '':
-        # Assume defaults
-        wgs84 = osr.SpatialReference()
-        wgs84.ImportFromEPSG(4326)
-        dem_proj = wgs84.ExportToWkt()
+    # A glacier area can cover more than one tile:
+    if len(dem_list) == 1:
+        dem = rasterio.open(dem_list[0])  # if one tile, just open it
+    else:
+        demraster = [rasterio.open(s) for s in dem_list]  # list of rasters
+        dem, _ = merge_tool(demraster)  # merged rasters
 
+    # Use Grid properties to create a transform (see rasterio cookbook)
+    dst_transform = rasterio.transform.from_origin(
+        ulx, uly, dx, dx  # sign change (2nd dx) is done by rasterio.transform
+    )
 
-    # Dest proj
-    gproj = osr.SpatialReference()
-    gproj.SetProjCS('Local transverse Mercator')
-    gproj.SetWellKnownGeogCS("WGS84")
-    gproj.SetTM(np.float(0), gdir.cenlon,
-                np.float(0.9996), np.float(0), np.float(0))
+    # Set up profile for writing output
+    profile = dem.profile
+    profile.update({
+        'crs': proj4_str,
+        'transform': dst_transform,
+        'width': nx,
+        'height': ny
+    })
 
-    # Create an in-memory raster
-    mem_drv = gdal.GetDriverByName('MEM')
-
-    # GDALDataset Create (char *pszName, int nXSize, int nYSize,
-    #                     int nBands, GDALDataType eType)
-    dest = mem_drv.Create('', nx, ny, 1, gdal.GDT_Float32)
-
-    # Calculate the new geotransform
-    new_geo = (ulx, dx, geo_t[2], uly, geo_t[4], -dx)
-
-    # Set the geotransform
-    dest.SetGeoTransform(new_geo)
-    dest.SetProjection(gproj.ExportToWkt())
-
-    # Perform the projection/resampling
+    # Could be extended so that the cfg file takes all Resampling.* methods
     if cfg.PARAMS['topo_interp'] == 'bilinear':
-        interp = gdal.GRA_Bilinear
+        interp = Resampling.bilinear
     elif cfg.PARAMS['topo_interp'] == 'cubic':
-        interp = gdal.GRA_Cubic
+        interp = Resampling.cubic
     else:
         raise ValueError('{} interpolation not understood'
                          .format(cfg.PARAMS['topo_interp']))
 
-    res = gdal.ReprojectImage(dem, dest, dem_proj,
-                              gproj.ExportToWkt(), interp)
+    dem_reproj = gdir.get_filepath('dem')
+    with rasterio.open(dem_reproj, 'w', **profile) as dest:
+        dst_array = np.empty((ny, nx), dtype=dem.dtypes[0])
+        reproject(
+            # Source parameters
+            source=rasterio.band(dem, 1),
+            src_crs=dem.crs,
+            src_transform=dem.transform,
+            # Destination parameters
+            destination=dst_array,
+            dst_transform=dst_transform,
+            dst_crs=proj4_str,
+            # Configuration
+            resampling=interp)
 
-    # Let's save it as a GeoTIFF.
-    driver = gdal.GetDriverByName("GTiff")
-    tmp = driver.CreateCopy(gdir.get_filepath('dem'), dest, 0)
-    tmp = None # without this, GDAL is getting crazy in python3
-    dest = None # the memfree above is necessary, this one is to be sure...
+        dest.write(dst_array, 1)
+
+    dem.close()
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
@@ -505,8 +509,8 @@ def glacier_masks(gdir):
     """
 
     # open srtm tif-file:
-    dem_ds = gdal.Open(gdir.get_filepath('dem'))
-    dem = dem_ds.ReadAsArray().astype(float)
+    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+    dem = dem_dr.read(1).astype(rasterio.float32)
 
     # Correct the DEM (ASTER...)
     # Currently we just do a linear interp -- ASTER is totally shit anyway
@@ -523,22 +527,22 @@ def glacier_masks(gdir):
         raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
     # Grid
-    nx = dem_ds.RasterXSize
-    ny = dem_ds.RasterYSize
+    nx = dem_dr.width
+    ny = dem_dr.height
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
     # Proj
-    geot = dem_ds.GetGeoTransform()
-    x0 = geot[0]  # UL corner
-    y0 = geot[3]  # UL corner
-    dx = geot[1]
-    dy = geot[5]  # Negative
+    transf = dem_dr.affine
+    x0 = transf[2]  # UL corner
+    y0 = transf[5]  # UL corner
+    dx = transf[0]
+    dy = transf[4]  # Negative
     assert dx == -dy
     assert dx == gdir.grid.dx
     assert y0 == gdir.grid.corner_grid.y0
     assert x0 == gdir.grid.corner_grid.x0
-    dem_ds = None  # to be sure...
+    dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
     dem = dem.clip(0)
