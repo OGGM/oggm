@@ -402,10 +402,10 @@ def define_glacier_region(gdir, entity=None):
 
     # Use Grid properties to create a transform (see rasterio cookbook)
     dst_transform = rasterio.transform.from_origin(
-        ulx, uly, dx, dx  # sign change (2nd dx) is done by rasterio.transform!
+        ulx, uly, dx, dx  # sign change (2nd dx) is done by rasterio.transform
     )
 
-    #
+    # Set up profile for writing output
     profile = dem.profile
     profile.update({
         'crs': proj4_str,
@@ -439,6 +439,8 @@ def define_glacier_region(gdir, entity=None):
             resampling=interp)
 
         dest.write(dst_array, 1)
+
+    dem.close()
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
