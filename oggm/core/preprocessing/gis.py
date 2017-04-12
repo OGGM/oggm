@@ -411,9 +411,7 @@ def define_glacier_region(gdir, entity=None):
         'crs': proj4_str,
         'transform': dst_transform,
         'width': nx,
-        'height': ny#,
-        #'dtype': rasterio.float32,
-        #'compress': 'lzw'
+        'height': ny
     })
 
     # Could be extended so that the cfg file takes all Resampling.* methods
