@@ -533,7 +533,7 @@ def glacier_masks(gdir):
     assert ny == gdir.grid.ny
 
     # Proj
-    transf = dem_dr.transform
+    transf = dem_dr.affine
     x0 = transf[2]  # UL corner
     y0 = transf[5]  # UL corner
     dx = transf[0]
