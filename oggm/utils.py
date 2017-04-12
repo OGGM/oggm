@@ -1339,24 +1339,14 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             demf, source_str = get_topo_file(lon_ex, lat_ex,
                                              rgi_region=rgi_region,
                                              source=s)
-            if len(demf) > 1:  # in case download functions do not complain if
-                # one file is missing
-                if all([os.path.isfile(i) for i in demf]):
-                    return demf, source_str
-            elif len(demf) == 1:
-                if os.path.isfile(demf):
-                    return demf, source_str
-            else:
-                continue
+            if demf:
+                return demf, source_str
 
     # Did the user specify a specific DEM file?
     if 'dem_file' in cfg.PATHS and os.path.isfile(cfg.PATHS['dem_file']):
         source = 'USER' if source is None else source
         if source == 'USER':
             return [cfg.PATHS['dem_file']], source
-
-    # If not, do the job ourselves: download and merge stuffs
-    topodir = cfg.PATHS['topo_dir']
 
     # GIMP is in polar stereographic, not easy to test if glacier is on the map
     # It would be possible with a salem grid but this is a bit more expensive
@@ -1365,7 +1355,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         source = 'GIMP' if source is None else source
         if source == 'GIMP':
             gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
-            return gimp_file, source
+            return [gimp_file], source
 
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
@@ -1376,7 +1366,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             source = 'RAMP' if source is None else source
         if source == 'RAMP':
             gimp_file = _download_alternate_topo_file('AntarcticDEM_wgs84.tif')
-            return gimp_file, source
+            return [gimp_file], source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
@@ -1410,15 +1400,16 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
 
     # For the very last cases a very coarse dataset ?
     if source == 'ETOPO1':
+        topodir = cfg.PATHS['topo_dir']
         t_file = os.path.join(topodir, 'ETOPO1_Ice_g_geotiff.tif')
         assert os.path.exists(t_file)
-        return t_file, 'ETOPO1'
+        return [t_file], 'ETOPO1'
 
     # filter for None (e.g. oceans)
-    sources = [s for s in sources if s is not None]
+    sources = [s for s in sources if s]
 
     if sources:
-        return sources[0], source_str
+        return sources, source_str
     else:
         raise RuntimeError('No topography file available for extent lat:{0},'
                            'lon:{1}!'.format(lat_ex, lon_ex))

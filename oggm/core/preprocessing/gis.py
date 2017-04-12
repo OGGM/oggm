@@ -395,27 +395,23 @@ def define_glacier_region(gdir, entity=None):
                                          source=source)
     log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
 
-    # A glacier area can cover than one tile:
+    # A glacier area can cover more than one tile:
     if len(dem_list) == 1:
-        dem = rasterio.open(dem_list[0])
+        dem = rasterio.open(dem_list[0])  # if one tile, just open it
     else:
-        demraster = [rasterio.open(s) for s in dem_list]
-        dem, output_transform = merge_tool(demraster)
-        profile = demraster[0].profile
-        if 'affine' in profile:
-            profile.pop('affine')
-        profile['transform'] = output_transform
-        profile['height'] = dem.shape[0]
-        profile['width'] = dem.shape[1]
-        profile['driver'] = 'GTiff'
+        demraster = [rasterio.open(s) for s in dem_list]  # list of rasters
+        dem, _ = merge_tool(demraster)  # merged rasters
 
-    dst_affine = rasterio.transform.from_origin(
-        ulx, uly, dx, dx  # sign change is done by rasterio.transform!
+    # Use Grid properties to create a transform (see rasterio cookbook)
+    dst_transform = rasterio.transform.from_origin(
+        ulx, uly, dx, dx  # sign change (2nd dx) is done by rasterio.transform!
     )
+
+    #
     profile = dem.profile
     profile.update({
         'crs': proj4_str,
-        'transform': dst_affine,
+        'transform': dst_transform,
         'width': nx,
         'height': ny
     })
@@ -439,7 +435,7 @@ def define_glacier_region(gdir, entity=None):
             src_transform=dem.transform,
             # Destination parameters
             destination=dst_array,
-            dst_transform=dst_affine,
+            dst_transform=dst_transform,
             dst_crs=proj4_str,
             # Configuration
             resampling=interp)
