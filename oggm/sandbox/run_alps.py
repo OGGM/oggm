@@ -42,8 +42,9 @@ cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
 
 # Climate file
 hist_path = os.path.join(DATA_DIR, 'histalp_merged_with_cru_hydro_yrs.nc')
-utils.aws_file_download('alps/histalp_merged_with_cru_hydro_yrs.nc',
-                        hist_path, reset=False)
+dl_hist_path = utils.aws_file_download('alps/histalp_merged_with_cru_hydro_yrs.nc')
+shutil.copy(dl_hist_path, hist_path)
+
 cfg.PATHS['cru_dir'] = '~'
 cfg.PATHS['climate_file'] = hist_path
 
@@ -72,8 +73,7 @@ cfg.PARAMS['optimize_thick'] = True
 cfg.PARAMS['force_one_flowline'] = ['RGI50-11.01270']
 
 # Read in the Alps RGI file
-rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_ref_alps.pkl')
-utils.aws_file_download('alps/rgi_ref_alps.pkl', rgi_pkl_path, reset=False)
+rgi_pkl_path = utils.aws_file_download('alps/rgi_ref_alps.pkl')
 rgidf = pd.read_pickle(rgi_pkl_path)
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))

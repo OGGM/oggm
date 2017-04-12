@@ -53,8 +53,7 @@ cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = False
 
 # Read in the Benchmark RGI file
-rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_benchmark.pkl')
-utils.aws_file_download('rgi_benchmark.pkl', rgi_pkl_path, reset=False)
+rgi_pkl_path = utils.aws_file_download('rgi_benchmark.pkl')
 rgidf = pd.read_pickle(rgi_pkl_path)
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))
