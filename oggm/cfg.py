@@ -263,17 +263,6 @@ def initialize(file=None):
         if not PARAMS['dl_cache_readonly']:
             os.makedirs(PATHS['dl_cache_dir'])
 
-    # Make sure we have a proper cache dir
-    from oggm.utils import _download_oggm_files
-    _download_oggm_files()
-
-    # Parse RGI metadata
-    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
-    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
-                                index_col=0)
-    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
-                                   index_col=0)
-
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     PATHS['working_dir'] = cp['working_dir']
@@ -324,6 +313,17 @@ def initialize(file=None):
     PARAMS['bed_shape'] = cp['bed_shape']
     _k = 'use_optimized_inversion_params'
     PARAMS[_k] = cp.as_bool(_k)
+
+    # Make sure we have a proper cache dir
+    from oggm.utils import _download_oggm_files
+    _download_oggm_files()
+
+    # Parse RGI metadata
+    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
+    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
+                                index_col=0)
+    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
+                                   index_col=0)
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
