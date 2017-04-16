@@ -1743,7 +1743,7 @@ def filter_rgi_name(name):
     if name is None or len(name) == 0:
         return ''
 
-    if name[-1] == 'À' or name[-1] == '\x9c' or name[-1] == '3':
+    if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°']:
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()
