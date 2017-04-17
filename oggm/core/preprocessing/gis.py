@@ -24,6 +24,7 @@ import os
 import logging
 from shutil import copyfile
 from functools import partial
+from distutils.version import LooseVersion
 # External libs
 import salem
 import pyproj
@@ -285,6 +286,12 @@ def _mask_per_divide(gdir, div_id, dem, smoothed_dem):
     v.long_name = 'Glacier external boundaries'
     v[:] = glacier_ext
 
+    # add some meta stats and close
+    nc.max_h_dem = np.max(dem)
+    nc.min_h_dem = np.min(dem)
+    dem_on_g = dem[np.where(glacier_mask)]
+    nc.max_h_glacier = np.max(dem_on_g)
+    nc.min_h_glacier = np.min(dem_on_g)
     nc.close()
 
     geometries = dict()
@@ -308,7 +315,6 @@ def define_glacier_region(gdir, entity=None):
     or be set to a fixed value. See ``params.cfg`` for setting these options.
     Default values of the adapted mode lead to a resolution of 50 m for
     Hintereisferner, which is approx. 8 km2 large.
-
     After defining the grid, the topography and the outlines of the glacier
     are transformed into the local projection. The default interpolation for
     the topography is `cubic`.
@@ -416,9 +422,9 @@ def define_glacier_region(gdir, entity=None):
 
     # Could be extended so that the cfg file takes all Resampling.* methods
     if cfg.PARAMS['topo_interp'] == 'bilinear':
-        interp = Resampling.bilinear
+        resampling = Resampling.bilinear
     elif cfg.PARAMS['topo_interp'] == 'cubic':
-        interp = Resampling.cubic
+        resampling = Resampling.cubic
     else:
         raise ValueError('{} interpolation not understood'
                          .format(cfg.PARAMS['topo_interp']))
@@ -436,7 +442,7 @@ def define_glacier_region(gdir, entity=None):
             dst_transform=dst_transform,
             dst_crs=proj4_str,
             # Configuration
-            resampling=interp)
+            resampling=resampling)
 
         dest.write(dst_array, 1)
 
@@ -533,7 +539,10 @@ def glacier_masks(gdir):
     assert ny == gdir.grid.ny
 
     # Proj
-    transf = dem_dr.affine
+    if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        transf = dem_dr.transform
+    else:
+        transf = dem_dr.affine
     x0 = transf[2]  # UL corner
     y0 = transf[5]  # UL corner
     dx = transf[0]

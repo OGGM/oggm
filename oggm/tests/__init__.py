@@ -135,51 +135,15 @@ def is_download(test):
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
+
 def is_performance_test(test):
     # Test decorator
     msg = "requires explicit environment for performance tests"
     return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
 
-# the code below is copy/pasted from xarray
-# TODO: go back to xarray when https://github.com/pydata/xarray/issues/754
-def assertEqual(a1, a2):
-    assert a1 == a2 or (a1 != a1 and a2 != a2)
 
-
-def decode_string_data(data):
-    if data.dtype.kind == 'S':
-        return np.core.defchararray.decode(data, 'utf-8', 'replace')
-
-
-def data_allclose_or_equiv(arr1, arr2, rtol=1e-05, atol=1e-08):
-    from xarray.core import ops
-
-    if any(arr.dtype.kind == 'S' for arr in [arr1, arr2]):
-        arr1 = decode_string_data(arr1)
-        arr2 = decode_string_data(arr2)
-    exact_dtypes = ['M', 'm', 'O', 'U']
-    if any(arr.dtype.kind in exact_dtypes for arr in [arr1, arr2]):
-        return ops.array_equiv(arr1, arr2)
-    else:
-        return ops.allclose_or_equiv(arr1, arr2, rtol=rtol, atol=atol)
-
-
-def assertVariableAllClose(v1, v2, rtol=1e-05, atol=1e-08):
-    assertEqual(v1.dims, v2.dims)
-    allclose = data_allclose_or_equiv(
-        v1.values, v2.values, rtol=rtol, atol=atol)
-    assert allclose, (v1.values, v2.values)
-
-
-def assertDatasetAllClose(d1, d2, rtol=1e-05, atol=1e-08):
-    assertEqual(sorted(d1, key=str), sorted(d2, key=str))
-    for k in d1:
-        v1 = d1.variables[k]
-        v2 = d2.variables[k]
-        assertVariableAllClose(v1, v2, rtol=rtol, atol=atol)
-
-
-def init_hef(reset=False, border=40, invert_with_sliding=True):
+def init_hef(reset=False, border=40, invert_with_sliding=True,
+             invert_with_rectangular=True):
 
     from oggm.core.preprocessing import gis, centerlines, geometry
     from oggm.core.preprocessing import climate, inversion
@@ -191,6 +155,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     testdir = TESTDIR_BASE + '_border{}'.format(border)
     if not invert_with_sliding:
         testdir += '_withoutslide'
+    if not invert_with_rectangular:
+        testdir += '_withoutrectangular'
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -229,7 +195,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                      bias=res['bias'][-1],
                                      prcp_fac=res['prcp_fac'])
 
-    inversion.prepare_for_inversion(gdir)
+    inversion.prepare_for_inversion(gdir, add_debug_var=True,
+                                    invert_with_rectangular=invert_with_rectangular)
     ref_v = 0.573 * 1e9
 
     if invert_with_sliding:
@@ -238,8 +205,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
             _fd = 1.9e-24 * x[0]
             glen_a = (cfg.N+2) * _fd / 2.
             fs = 5.7e-20 * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         out = optimization.minimize(to_optimize, [1, 1],
@@ -248,14 +215,14 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
         _fd = 1.9e-24 * out[0]
         glen_a = (cfg.N+2) * _fd / 2.
         fs = 5.7e-20 * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
     else:
         def to_optimize(x):
             glen_a = cfg.A * x[0]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=0.,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=0.,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         out = optimization.minimize(to_optimize, [1],
@@ -263,9 +230,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                     tol=1e-4)['x']
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]
     try:
@@ -273,6 +240,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     except IndexError:
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
+
+    # filter
+    inversion.filter_inversion_output(gdir)
 
     inversion.distribute_thickness(gdir, how='per_altitude',
                                    add_nc_name=True)

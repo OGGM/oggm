@@ -9,7 +9,7 @@ import time
 import salem
 import numpy as np
 import pandas as pd
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_equal, assert_allclose
 
 from oggm.tests import is_download
 from oggm import utils
@@ -37,6 +37,15 @@ class TestFuncs(unittest.TestCase):
         ts = pd.Series([-2., -1., 1., 2., 3][::-1], index=np.arange(5))
         sc = utils.signchange(ts)
         assert_array_equal(sc, [0, 0, 0, 1, 0])
+
+    def test_smooth(self):
+        a = np.array([1., 4, 7, 7, 4, 1])
+        b = utils.smooth1d(a, 3, kernel='mean')
+        assert_allclose(b, [3, 4, 6, 6, 4, 3])
+        kernel = [0.60653066,  1., 0.60653066]
+        b = utils.smooth1d(a, 3, kernel=kernel)
+        c = utils.smooth1d(a, 3)
+        assert_allclose(b, c)
 
     def test_filter_rgi_name(self):
 

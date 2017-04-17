@@ -24,8 +24,8 @@ import pandas as pd
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import LinearMassBalanceModel
-from oggm.tests import (is_slow, assertDatasetAllClose, RUN_MODEL_TESTS,
-                        is_performance_test)
+from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
+import xarray as xr
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate
@@ -229,7 +229,7 @@ class TestInitFlowline(unittest.TestCase):
 
     def test_init_present_time_glacier(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         flowline.init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -371,7 +371,7 @@ class TestOtherDivides(unittest.TestCase):
             climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
                                              prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
-            v, ainv = inversion.invert_parabolic_bed(gdir)
+            v, ainv = inversion.mass_conservation_inversion(gdir)
             flowline.init_present_time_glacier(gdir)
 
         myarea = 0.
@@ -847,7 +847,7 @@ class TestIO(unittest.TestCase):
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
-            assertDatasetAllClose(ds, ds_)
+            xr.testing.assert_allclose(ds, ds_)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
@@ -1650,7 +1650,7 @@ class TestHEF(unittest.TestCase):
 
     def setUp(self):
 
-        self.gdir = init_hef(border=DOM_BORDER)
+        self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
@@ -1760,7 +1760,7 @@ class TestHEF(unittest.TestCase):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(0.07, np.std(vol), atol=0.02)
             np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
 
             if do_plot:

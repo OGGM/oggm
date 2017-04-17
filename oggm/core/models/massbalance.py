@@ -314,11 +314,9 @@ class ConstantMassBalanceModel(MassBalanceModel):
             y0 = df['t_star'][0]
 
         # This is a quick'n dirty optimisation
-        fls = gdir.read_pickle('model_flowlines')
-        hbins = np.array([])
-        for fl in fls:
-            hbins = np.append(hbins, fl.surface_h)
-        self.hbins = np.arange(np.min(hbins)-50, np.max(hbins)+500, step=5)
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            zminmax = [nc.min_h_dem-50, nc.max_h_dem+500]
+        self.hbins = np.arange(*zminmax, step=5)
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @MassBalanceModel.temp_bias.setter
