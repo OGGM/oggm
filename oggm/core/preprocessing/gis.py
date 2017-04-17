@@ -414,11 +414,10 @@ def define_glacier_region(gdir, entity=None):
     profile = dem.profile
     profile.update({
         'crs': proj4_str,
-        'affine': dst_transform,
+        'transform': dst_transform,
         'width': nx,
         'height': ny
     })
-    profile.pop('transform')
 
     # Could be extended so that the cfg file takes all Resampling.* methods
     if cfg.PARAMS['topo_interp'] == 'bilinear':
@@ -436,7 +435,7 @@ def define_glacier_region(gdir, entity=None):
             # Source parameters
             source=rasterio.band(dem, 1),
             src_crs=dem.crs,
-            src_transform=dem.affine,
+            src_transform=dem.transform,
             # Destination parameters
             destination=dst_array,
             dst_transform=dst_transform,
