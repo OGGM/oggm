@@ -1383,7 +1383,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1414,7 +1414,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
 
     def test_continue_on_error(self):
 
