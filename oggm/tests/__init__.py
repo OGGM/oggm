@@ -135,48 +135,11 @@ def is_download(test):
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
+
 def is_performance_test(test):
     # Test decorator
     msg = "requires explicit environment for performance tests"
     return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
-
-# the code below is copy/pasted from xarray
-# TODO: go back to xarray when https://github.com/pydata/xarray/issues/754
-def assertEqual(a1, a2):
-    assert a1 == a2 or (a1 != a1 and a2 != a2)
-
-
-def decode_string_data(data):
-    if data.dtype.kind == 'S':
-        return np.core.defchararray.decode(data, 'utf-8', 'replace')
-
-
-def data_allclose_or_equiv(arr1, arr2, rtol=1e-05, atol=1e-08):
-    from xarray.core import ops
-
-    if any(arr.dtype.kind == 'S' for arr in [arr1, arr2]):
-        arr1 = decode_string_data(arr1)
-        arr2 = decode_string_data(arr2)
-    exact_dtypes = ['M', 'm', 'O', 'U']
-    if any(arr.dtype.kind in exact_dtypes for arr in [arr1, arr2]):
-        return ops.array_equiv(arr1, arr2)
-    else:
-        return ops.allclose_or_equiv(arr1, arr2, rtol=rtol, atol=atol)
-
-
-def assertVariableAllClose(v1, v2, rtol=1e-05, atol=1e-08):
-    assertEqual(v1.dims, v2.dims)
-    allclose = data_allclose_or_equiv(
-        v1.values, v2.values, rtol=rtol, atol=atol)
-    assert allclose, (v1.values, v2.values)
-
-
-def assertDatasetAllClose(d1, d2, rtol=1e-05, atol=1e-08):
-    assertEqual(sorted(d1, key=str), sorted(d2, key=str))
-    for k in d1:
-        v1 = d1.variables[k]
-        v2 = d2.variables[k]
-        assertVariableAllClose(v1, v2, rtol=rtol, atol=atol)
 
 
 def init_hef(reset=False, border=40, invert_with_sliding=True,

@@ -24,8 +24,8 @@ import pandas as pd
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import LinearMassBalanceModel
-from oggm.tests import (is_slow, assertDatasetAllClose, RUN_MODEL_TESTS,
-                        is_performance_test)
+from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
+import xarray as xr
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate
@@ -847,7 +847,7 @@ class TestIO(unittest.TestCase):
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
-            assertDatasetAllClose(ds, ds_)
+            xr.testing.assert_allclose(ds, ds_)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
