@@ -24,6 +24,7 @@ import os
 import logging
 from shutil import copyfile
 from functools import partial
+from distutils.version import LooseVersion
 # External libs
 import salem
 import pyproj
@@ -538,7 +539,10 @@ def glacier_masks(gdir):
     assert ny == gdir.grid.ny
 
     # Proj
-    transf = dem_dr.transform
+    if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        transf = dem_dr.transform
+    else:
+        transf = dem_dr.affine
     x0 = transf[2]  # UL corner
     y0 = transf[5]  # UL corner
     dx = transf[0]
