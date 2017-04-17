@@ -190,3 +190,6 @@ def inversion_tasks(gdirs):
 
     # Inversion for all glaciers
     execute_entity_task(tasks.volume_inversion, gdirs)
+
+    # Filter
+    execute_entity_task(tasks.filter_inversion_output, gdirs)

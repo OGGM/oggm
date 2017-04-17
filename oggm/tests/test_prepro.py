@@ -1246,12 +1246,27 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-            # This doesn't pass because of smoothing
             if fl.flows_to is None:
                 self.assertEqual(cl['volume'][-1], 0)
                 self.assertEqual(cl['thick'][-1], 0)
 
         np.testing.assert_allclose(242, maxs, atol=40)
+
+        # Filter
+        inversion.filter_inversion_output(gdir)
+        maxs = 0.
+        v = 0.
+        for div_id in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_output', div_id=div_id)
+            for cl in cls:
+                thick = cl['thick']
+                _max = np.max(thick)
+                if _max > maxs:
+                    maxs = _max
+                v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(ref_v, v)
+
 
     @is_slow
     def test_distribute(self):

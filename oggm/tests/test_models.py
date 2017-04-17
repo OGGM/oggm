@@ -229,7 +229,7 @@ class TestInitFlowline(unittest.TestCase):
 
     def test_init_present_time_glacier(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         flowline.init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -240,9 +240,6 @@ class TestInitFlowline(unittest.TestCase):
 
         self.assertTrue(gdir.rgi_date.year == 2003)
         self.assertTrue(len(fls) == 4)
-
-        # TODO: test below are broken since removed filtering
-        return
 
         vol = 0.
         area = 0.
@@ -1653,7 +1650,7 @@ class TestHEF(unittest.TestCase):
 
     def setUp(self):
 
-        self.gdir = init_hef(border=DOM_BORDER)
+        self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
@@ -1762,10 +1759,9 @@ class TestHEF(unittest.TestCase):
             vol = model.volume_km3_ts()
             len = model.length_m_ts()
             area = model.area_km2_ts()
-            # TODO: test below are broken since removed filtering
-            # np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            # np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
-            # np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
+            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
 
             if do_plot:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))

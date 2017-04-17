@@ -179,7 +179,8 @@ def assertDatasetAllClose(d1, d2, rtol=1e-05, atol=1e-08):
         assertVariableAllClose(v1, v2, rtol=rtol, atol=atol)
 
 
-def init_hef(reset=False, border=40, invert_with_sliding=True):
+def init_hef(reset=False, border=40, invert_with_sliding=True,
+             invert_with_rectangular=True):
 
     from oggm.core.preprocessing import gis, centerlines, geometry
     from oggm.core.preprocessing import climate, inversion
@@ -191,6 +192,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     testdir = TESTDIR_BASE + '_border{}'.format(border)
     if not invert_with_sliding:
         testdir += '_withoutslide'
+    if not invert_with_rectangular:
+        testdir += '_withoutrectangular'
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -229,7 +232,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
                                      bias=res['bias'][-1],
                                      prcp_fac=res['prcp_fac'])
 
-    inversion.prepare_for_inversion(gdir, add_debug_var=True)
+    inversion.prepare_for_inversion(gdir, add_debug_var=True,
+                                    invert_with_rectangular=invert_with_rectangular)
     ref_v = 0.573 * 1e9
 
     if invert_with_sliding:
@@ -273,6 +277,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True):
     except IndexError:
         d['factor_fs'] = 0.
     gdir.write_pickle(d, 'inversion_params')
+
+    # filter
+    inversion.filter_inversion_output(gdir)
 
     inversion.distribute_thickness(gdir, how='per_altitude',
                                    add_nc_name=True)

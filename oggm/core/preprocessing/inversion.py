@@ -49,7 +49,8 @@ log = logging.getLogger(__name__)
 
 @entity_task(log, writes=['inversion_input'])
 @divide_task(log, add_0=False)
-def prepare_for_inversion(gdir, div_id=None, add_debug_var=False):
+def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
+                          invert_with_rectangular=True):
     """Prepares the data needed for the inversion.
 
     Mostly the mass flux and slope angle, the rest (width, height) was already
@@ -62,6 +63,10 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False):
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+
+    # for testing only
+    if 'invert_with_rectangular' in cfg.PARAMS:
+        invert_with_rectangular = cfg.PARAM['invert_with_rectangular']
 
     towrite = []
     for fl in fls:
@@ -96,9 +101,14 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False):
         flux_a0 = np.where(fl.touches_border, 1, 1.5)
         flux_a0 *= flux / widths
 
+        # Shape
+        is_rectangular = fl.touches_border
+        if not invert_with_rectangular:
+            is_rectangular[:] = False
+
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
-                      slope_angle=angle, is_rectangular=fl.touches_border,
+                      slope_angle=angle, is_rectangular=is_rectangular,
                       is_last=fl.flows_to is None)
         if add_debug_var:
             cl_dic['flux'] = flux
@@ -371,6 +381,84 @@ def volume_inversion(gdir, use_cfg_params=None):
 
     # go
     return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True)
+
+
+@entity_task(log, writes=['inversion_output'])
+def filter_inversion_output(gdir):
+    """Overwrites the inversion output with filtered one.
+    
+    This conserves the total volume.
+    """
+
+    # sometimes the width is small and the flux is big. crop this
+    max_ratio = cfg.PARAMS['max_thick_to_width_ratio']
+    max_shape = cfg.PARAMS['max_shape_param']
+    # sigma of the smoothing window after inversion
+    sec_smooth = cfg.PARAMS['section_smoothing']
+
+    for div in gdir.divide_ids:
+        cls = gdir.read_pickle('inversion_output', div_id=div)
+        for cl in cls:
+            # this filtering stuff below is not explained in Farinotti's
+            # paper. I did this because it looks better, but I'm not sure
+            # (yet) that this is a good idea
+            fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
+            init_vol = np.nansum(cl['volume'])
+            w = cl['width']
+            out_thick = cl['thick']
+
+            # However for tidewater we have to be carefull at the tongue
+            if gdir.is_tidewater and cl['is_last']:
+                # store it to restore it later
+                tongue_thick = out_thick[-5:]
+
+            # Check for thick to width ratio (should ne be too large)
+            ratio = out_thick / w  # there's no 0 width so we're good
+            pno = np.where((~ cl['is_rectangular']) & (ratio > max_ratio))
+            if len(pno[0]) > 0:
+                ratio[pno] = np.NaN
+                ratio = utils.interp_nans(ratio, default=max_ratio)
+                out_thick[pno] = w[pno] * ratio[pno]
+
+            # TODO: last thicknesses can be noisy sometimes: interpolate?
+            if cl['is_last']:
+                out_thick[-4:-1] = np.NaN
+                out_thick = utils.interp_nans(out_thick)
+
+            # Check for the shape parameter (should not be too large)
+            out_shape = (4 * out_thick) / (w ** 2)
+            pno = np.where((~ cl['is_rectangular']) & (out_shape > max_shape))
+            if len(pno[0]) > 0:
+                out_shape[pno] = np.NaN
+                out_shape = utils.interp_nans(out_shape, default=max_shape)
+                out_thick[pno] = (out_shape[pno] * w[pno] ** 2) / 4
+
+            # smooth section
+            if sec_smooth != 0.:
+                section = out_thick * fac * w * cl['dx']
+                section = gaussian_filter1d(section, sec_smooth)
+                out_thick = section / (fac * w * cl['dx'])
+
+            if gdir.is_tidewater and cl['is_last']:
+                # restore the last thicknesses
+                out_thick[-5:] = tongue_thick
+
+            # final volume
+            volume = fac * out_thick * w * cl['dx']
+
+            # conserve it
+            new_vol = np.nansum(volume)
+            volume = init_vol / new_vol * volume
+            np.testing.assert_allclose(np.nansum(volume), init_vol)
+
+            # recompute thickness on that base
+            out_thick = volume / (fac * w * cl['dx'])
+
+            # output
+            cl['thick'] = out_thick
+            cl['volume'] = volume
+
+        gdir.write_pickle(cls, 'inversion_output', div_id=div)
 
 
 def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
