@@ -66,7 +66,7 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
 
     # for testing only
     if 'invert_with_rectangular' in cfg.PARAMS:
-        invert_with_rectangular = cfg.PARAM['invert_with_rectangular']
+        invert_with_rectangular = cfg.PARAMS['invert_with_rectangular']
 
     towrite = []
     for fl in fls:

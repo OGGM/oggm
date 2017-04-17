@@ -1760,7 +1760,7 @@ class TestHEF(unittest.TestCase):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(0.07, np.std(vol), atol=0.02)
             np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
 
             if do_plot:
