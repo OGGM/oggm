@@ -736,28 +736,42 @@ def interp_nans(array, default=None):
     return _tmp
 
 
-def smooth1d(array, window=None, kernel='gaussian'):
-    # TODO: documentation
+def smooth1d(array, window_size=None, kernel='gaussian'):
+    """Apply a centered window smoothing to a 1D array.
+    
+    Parameters
+    ----------
+    array : ndarray
+        the array to apply the smoothing to
+    window_size : int 
+        the size of the smoothing window
+    kernel : str
+        the type of smoothing (`gaussian`, `mean`)
+
+    Returns
+    -------
+    the smoothed array (same dim as input)
+    """
 
     # some defaults
-    if window is None:
+    if window_size is None:
         if len(array) >= 9:
-            window = 9
+            window_size = 9
         elif len(array) >= 7:
-            window = 7
+            window_size = 7
         elif len(array) >= 5:
-            window = 5
+            window_size = 5
         elif len(array) >= 3:
-            window = 3
+            window_size = 3
 
-    if window % 2 == 0:
+    if window_size % 2 == 0:
         raise ValueError('Window should be an odd number.')
 
     if isinstance(kernel, str):
         if kernel == 'gaussian':
-            kernel = gaussian(window, 1)
+            kernel = gaussian(window_size, 1)
         elif kernel == 'mean':
-            kernel = np.ones(window)
+            kernel = np.ones(window_size)
         else:
             raise NotImplementedError('Kernel: ' + kernel)
     kernel = kernel / np.asarray(kernel).sum()

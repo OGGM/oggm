@@ -785,10 +785,6 @@ def catchment_width_correction(gdir, div_id=None):
         widths = utils.interp_nans(fl.widths)
         widths = np.clip(widths, 0.1, np.max(widths))
 
-        # Smooth them
-        widths = utils.smooth1d(widths)
-        assert np.max(_width_change_factor(widths)[:-5]) < 2.
-
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
 
@@ -831,14 +827,18 @@ def catchment_width_correction(gdir, div_id=None):
             ref_set = set(range(len(bins)-1))
             if (_c == ref_set) and (_fl == ref_set):
                 # For each bin, the width(s) have to represent the "real" area
-                nw = widths.copy()
+                new_widths = widths.copy()
                 for bi in range(len(bins) - 1):
                     bintopoarea = len(np.where(topo_digi == bi)[0])
                     wherewiths = np.where(fl_digi == bi)
-                    binflarea = np.sum(nw[wherewiths]) * fl.dx
-                    nw[wherewiths] = (bintopoarea / binflarea) * nw[wherewiths]
-                if np.nanmax(_width_change_factor(nw)[:-5]) < 2.:
-                    break
+                    binflarea = np.sum(new_widths[wherewiths]) * fl.dx
+                    new_widths[wherewiths] = (bintopoarea / binflarea) * \
+                                             new_widths[wherewiths]
+                break
+                # # TODO: smooth them ?
+                # widths = utils.smooth1d(widths)
+                # if np.nanmax(_width_change_factor(new_widths)[:-5]) < 2.:
+                #     break
             bsize += 5
 
             # Add a security for infinite loops
@@ -865,6 +865,6 @@ def catchment_width_correction(gdir, div_id=None):
             raise RuntimeError('This should not happen')
 
         # Write it
-        fl.widths = nw
+        fl.widths = new_widths
 
     return flowlines

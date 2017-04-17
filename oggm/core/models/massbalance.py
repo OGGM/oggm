@@ -283,7 +283,7 @@ class ConstantMassBalanceModel(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 y0=None, halfsize=15, optim_zminmax=None):
+                 y0=None, halfsize=15):
         """Initialize
 
         Parameters
@@ -304,9 +304,6 @@ class ConstantMassBalanceModel(MassBalanceModel):
             is to use tstar as center.
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
-        optim_zminmax : [int, int]
-            interpolation window (for optimization purposes). Default is to
-            use the actual glacier geometry to infer the bounds (recommended).
         """
 
         self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
@@ -317,13 +314,9 @@ class ConstantMassBalanceModel(MassBalanceModel):
             y0 = df['t_star'][0]
 
         # This is a quick'n dirty optimisation
-        if not optim_zminmax:
-            fls = gdir.read_pickle('model_flowlines')
-            hbins = np.array([])
-            for fl in fls:
-                hbins = np.append(hbins, fl.surface_h)
-            optim_zminmax = [np.min(hbins)-50, np.max(hbins)+500]
-        self.hbins = np.arange(*optim_zminmax, step=5)
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            zminmax = [nc.min_h_dem-50, nc.max_h_dem+500]
+        self.hbins = np.arange(*zminmax, step=5)
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @MassBalanceModel.temp_bias.setter

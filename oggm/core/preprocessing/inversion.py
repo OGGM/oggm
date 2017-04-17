@@ -383,7 +383,7 @@ def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
     hs, ts, vs, xs, ys = [], [], [], [] ,[]
     for cl, fl in zip(cls, fls):
         # TODO: here one should see if parabola is always the best choice
-        hs = np.append(hs, cl['hgt'])
+        hs = np.append(hs, fl.surface_h)
         ts = np.append(ts, cl['thick'])
         vs = np.append(vs, cl['volume'])
         x, y = fl.line.xy

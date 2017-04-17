@@ -66,8 +66,7 @@ res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 # For the mass flux
 majid = gdir.read_pickle('major_divide', div_id=0)
 cl = gdir.read_pickle('inversion_input', div_id=majid)[-1]
-mbmod = ConstantMassBalanceModel(gdir, optim_zminmax=[np.min(cl['hgt'])-50,
-                                                      np.max(cl['hgt'])+50])
+mbmod = ConstantMassBalanceModel(gdir)
 mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.RHO
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
 fdf['Flux'] = cl['flux']
