@@ -331,10 +331,10 @@ def oggm_static_paths():
         dldir = os.path.join(os.path.expanduser('~'), 'OGGM_DOWNLOADS')
         config = ConfigObj()
         config['dl_cache_dir'] = dldir
-        config['tmp_dir'] = os.path.join(dldir, 'tmp')
-        config['topo_dir'] = os.path.join(dldir, 'topo')
-        config['cru_dir'] = os.path.join(dldir, 'cru')
-        config['rgi_dir'] = os.path.join(dldir, 'rgi')
+        config['tmp_dir'] = ''
+        config['topo_dir'] = ''
+        config['cru_dir'] = ''
+        config['rgi_dir'] = ''
         config['has_internet'] = True
         config.filename = CONFIG_FILE
         config.write()
@@ -351,16 +351,22 @@ def oggm_static_paths():
     for k in ['dl_cache_dir', 'tmp_dir', 'topo_dir',
               'cru_dir', 'rgi_dir', 'has_internet']:
         if k not in config:
-            raise RuntimeError('The oggm config file ({}) should have an'
+            raise RuntimeError('The oggm config file ({}) should have an '
                                'entry for {}.'.format(CONFIG_FILE, k))
 
-    # Override defaults with env variables
+    # Override defaults with env variables if available
     if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
         config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+
+    if not config['dl_cache_dir']:
+        raise RuntimeError('At the very least, the "dl_cache_dir" entry '
+                           'should be provided in the oggm config file '
+                           '({})'.format(CONFIG_FILE, k))
 
     # Fill the PATH dict
     for k, v in config.iteritems():
         if not v and '_dir' in k:
+            # defaults to the cache dir
             v = os.path.join(config['dl_cache_dir'], k.replace('_dir', ''))
         PATHS[k] = os.path.abspath(os.path.expanduser(v))
 
