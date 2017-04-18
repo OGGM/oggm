@@ -140,10 +140,8 @@ class TestInitialize(unittest.TestCase):
         self.homedir = os.path.expanduser('~')
 
     def test_defaults(self):
-        expected = os.path.join(self.homedir, 'OGGM_wd')
+        expected = os.path.join(self.homedir, 'OGGM_WORKING_DIRECTORY')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
-        expected = os.path.join(self.homedir, 'OGGM_data', 'topo')
-        self.assertEqual(cfg.PATHS['topo_dir'], expected)
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
@@ -154,8 +152,10 @@ class TestInitialize(unittest.TestCase):
 class TestDataFiles(unittest.TestCase):
 
     def setUp(self):
+        cfg.initialize()
         cfg.PATHS['topo_dir'] = TEST_DIR
         cfg.PATHS['working_dir'] = TEST_DIR
+        cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
         self.reset_dir()
 
     def tearDown(self):
@@ -178,9 +178,6 @@ class TestDataFiles(unittest.TestCase):
 
         # Data files
         cfg.initialize()
-
-        lf, df = utils.get_leclercq_files()
-        self.assertTrue(os.path.exists(lf))
 
         lf, df = utils.get_wgms_files()
         self.assertTrue(os.path.exists(lf))
@@ -267,6 +264,11 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 1)
         self.assertEqual('Q01', z[0])
 
+        # normal tile
+        z = utils.dem3_viewpano_zone([107, 107], [69, 69])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('R48', z[0])
+
         # Alps
         ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32',
                       'L33', 'M31', 'M32', 'M33'])
@@ -342,7 +344,7 @@ class TestDataFiles(unittest.TestCase):
 
         # this zone does not exist
         zone = '41_20'
-        self.assertRaises(FileNotFoundError, utils._download_srtm_file, zone)
+        self.assertTrue(utils._download_srtm_file(zone) is None)
 
     @is_download
     def test_asterdownload(self):
@@ -356,7 +358,8 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_gimp(self):
         fp, z = utils.get_topo_file([], [], rgi_region=5)
-        self.assertTrue(os.path.exists(fp))
+        self.assertTrue(os.path.exists(fp[0]))
+        self.assertEqual(z, 'GIMP')
 
     @is_download
     def test_iceland(self):
@@ -366,7 +369,7 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_asterdownloadfails(self):
 
-        # this zone does exist and file should be small enough for download
+        # this zone does not exist
         zone = 'bli'
         unit = 'S75E135'
         self.assertTrue(utils._download_aster_file(zone, unit) is None)
@@ -381,8 +384,6 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_download_cru(self):
 
-        cfg.initialize()
-
         tmp = cfg.PATHS['cru_dir']
         cfg.PATHS['cru_dir'] = TEST_DIR
 
@@ -393,8 +394,6 @@ class TestDataFiles(unittest.TestCase):
 
     @is_download
     def test_download_rgi(self):
-
-        cfg.initialize()
 
         tmp = cfg.PATHS['rgi_dir']
         cfg.PATHS['rgi_dir'] = TEST_DIR
@@ -415,3 +414,26 @@ class TestDataFiles(unittest.TestCase):
         zone = 'U44'
         fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
+
+    @is_download
+    def test_download_dem3_viewpano_fails(self):
+
+        # this zone does not exist
+        zone = 'dummy'
+        fp = utils._download_dem3_viewpano(zone)
+        self.assertTrue(fp is None)
+
+    @is_download
+    def test_auto_topo(self):
+        # Test for combine
+        fdem, src = utils.get_topo_file([6, 14], [41, 41])
+        self.assertEqual(src, 'SRTM')
+        self.assertEqual(len(fdem), 2)
+        for fp in fdem:
+            self.assertTrue(os.path.exists(fp))
+
+        fdem, src = utils.get_topo_file([-143, -131], [61, 61])
+        self.assertEqual(src, 'DEM3')
+        self.assertEqual(len(fdem), 3)
+        for fp in fdem:
+            self.assertTrue(os.path.exists(fp))

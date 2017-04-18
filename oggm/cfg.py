@@ -29,6 +29,8 @@ log = logging.getLogger(__name__)
 CACHE_DIR = os.path.join(os.path.expanduser('~'), '.oggm')
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+# Path to the config file
+CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 
 
 class DocumentedDict(dict):
@@ -227,40 +229,18 @@ def initialize(file=None):
     try:
         cp = ConfigObj(file, file_error=True)
     except (ConfigObjError, IOError) as e:
-        log.critical('Config file could not be parsed (%s): %s', file, e)
+        log.critical('Param file could not be parsed (%s): %s', file, e)
         sys.exit()
-
-    homedir = os.path.expanduser('~')
-
-    # Some defaults
-    if cp['working_dir'] == '~':
-        cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
-    if cp['topo_dir'] == '~':
-        cp['topo_dir'] = os.path.join(homedir, 'OGGM_data', 'topo')
-    if cp['cru_dir'] == '~':
-        cp['cru_dir'] = os.path.join(homedir, 'OGGM_data', 'cru')
-    if cp['rgi_dir'] == '~':
-        cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
-
-    # Setup Download-Cache-Dir
-    if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
-        cp['dl_cache_readonly'] = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
-    if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
-        cp['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
-
-    PATHS['dl_cache_dir'] = cp['dl_cache_dir']
-    PARAMS['dl_cache_readonly'] = cp.as_bool('dl_cache_readonly')
-
-    if PATHS['dl_cache_dir'] and not os.path.exists(PATHS['dl_cache_dir']):
-        if not PARAMS['dl_cache_readonly']:
-            os.makedirs(PATHS['dl_cache_dir'])
 
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
+    # Paths
+    oggm_static_paths()
     PATHS['working_dir'] = cp['working_dir']
-    PATHS['topo_dir'] = cp['topo_dir']
-    PATHS['cru_dir'] = cp['cru_dir']
-    PATHS['rgi_dir'] = cp['rgi_dir']
+    # Default
+    if not PATHS['working_dir']:
+        PATHS['working_dir'] = os.path.join(os.path.expanduser('~'),
+                                            'OGGM_WORKING_DIRECTORY')
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -307,8 +287,8 @@ def initialize(file=None):
     PARAMS[_k] = cp.as_bool(_k)
 
     # Make sure we have a proper cache dir
-    from oggm.utils import _download_oggm_files
-    _download_oggm_files()
+    from oggm.utils import download_oggm_files
+    download_oggm_files()
 
     # Parse RGI metadata
     _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
@@ -327,10 +307,9 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor', 'use_intersects',
-           'dl_cache_dir', 'dl_cache_readonly']
+           'prcp_scaling_factor', 'use_intersects']
     for k in ltr:
-        del cp[k]
+        cp.pop(k, None)
 
     # Other params are floats
     for k in cp:
@@ -343,14 +322,67 @@ def initialize(file=None):
     IS_INITIALIZED = True
 
 
+def oggm_static_paths():
+    """Initialise the OGGM paths from the config file."""
+
+    global PATHS, PARAMS
+
+    # See if the file is there, if not create it
+    if not os.path.exists(CONFIG_FILE):
+        dldir = os.path.join(os.path.expanduser('~'), 'OGGM_DOWNLOADS')
+        config = ConfigObj()
+        config['dl_cache_dir'] = dldir
+        config['tmp_dir'] = ''
+        config['topo_dir'] = ''
+        config['cru_dir'] = ''
+        config['rgi_dir'] = ''
+        config['has_internet'] = True
+        config.filename = CONFIG_FILE
+        config.write()
+
+    # OK, read in the file
+    try:
+        config = ConfigObj(CONFIG_FILE, file_error=True)
+    except (ConfigObjError, IOError) as e:
+        log.critical('Config file could not be parsed (%s): %s',
+                     CONFIG_FILE, e)
+        sys.exit()
+
+    # Check that all keys are here
+    for k in ['dl_cache_dir', 'tmp_dir', 'topo_dir',
+              'cru_dir', 'rgi_dir', 'has_internet']:
+        if k not in config:
+            raise RuntimeError('The oggm config file ({}) should have an '
+                               'entry for {}.'.format(CONFIG_FILE, k))
+
+    # Override defaults with env variables if available
+    if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
+        config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+
+    if not config['dl_cache_dir']:
+        raise RuntimeError('At the very least, the "dl_cache_dir" entry '
+                           'should be provided in the oggm config file '
+                           '({})'.format(CONFIG_FILE, k))
+
+    # Fill the PATH dict
+    for k, v in config.iteritems():
+        if not v and '_dir' in k:
+            # defaults to the cache dir
+            v = os.path.join(config['dl_cache_dir'], k.replace('_dir', ''))
+        PATHS[k] = os.path.abspath(os.path.expanduser(v))
+
+    # Other
+    PARAMS['has_internet'] = config.as_bool('has_internet')
+
+
 def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
     """LRU handler for a given temporary directory (singleton).
 
     Parameters
     ----------
     tmpdir : str
-        path to the temporary directory to handle. Default is "tmp" in the
-        working directory.
+        path to the temporary directory to handle. Default is 
+        ``cfg.PATHS['tmp_dir']``.
     maxsize : int
         the max number of files to keep in the directory
     ending : str
@@ -360,7 +392,7 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
 
     # see if we're set up
     if tmpdir is None:
-        tmpdir = os.path.join(PATHS['working_dir'], 'tmp')
+        tmpdir = PATHS['tmp_dir']
     if not os.path.exists(tmpdir):
         os.makedirs(tmpdir)
 

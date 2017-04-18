@@ -596,10 +596,10 @@ class TestClimate(unittest.TestCase):
         climate.process_histalp_nonparallel([gdirs[0]])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cru_dir = os.path.dirname(cru_dir)
-        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
         climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_pickle('climate_info')
@@ -1434,6 +1434,7 @@ class TestInversion(unittest.TestCase):
     def test_continue_on_error(self):
 
         cfg.CONTINUE_ON_ERROR = True
+        cfg.PATHS['working_dir'] = self.testdir
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
