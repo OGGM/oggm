@@ -1800,7 +1800,7 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, string_types):
-            _shp = os.path.join(base_dir, rgi_entity[:8],
+            _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
             rgi_entity = read_shapefile(_shp).iloc[0]
 
@@ -1874,7 +1874,8 @@ class GlacierDirectory(object):
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id)
+        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
+                                self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
