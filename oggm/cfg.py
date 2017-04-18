@@ -239,7 +239,8 @@ def initialize(file=None):
     PATHS['working_dir'] = cp['working_dir']
     # Default
     if not PATHS['working_dir']:
-        PATHS['working_dir'] = os.path.expanduser('~/OGGM_WORKING_DIRECTORY')
+        PATHS['working_dir'] = os.path.join(os.path.expanduser('~'),
+                                            'OGGM_WORKING_DIRECTORY')
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']

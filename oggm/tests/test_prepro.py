@@ -1434,6 +1434,7 @@ class TestInversion(unittest.TestCase):
     def test_continue_on_error(self):
 
         cfg.CONTINUE_ON_ERROR = True
+        cfg.PATHS['working_dir'] = self.testdir
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]

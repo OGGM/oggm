@@ -1892,10 +1892,11 @@ class GlacierDirectory(object):
         summary += ['  Area: ' + str(self.rgi_area_km2) + ' mk2']
         summary += ['  Lon, Lat: (' + str(self.cenlon) + ', ' +
                     str(self.cenlat) + ')']
-        summary += ['  Grid (nx, ny): (' + str(self.grid.nx) + ', ' +
-                    str(self.grid.ny) + ')']
-        summary += ['  Grid (dx, dy): (' + str(self.grid.dx) + ', ' +
-                    str(self.grid.dy) + ')']
+        if os.path.isfile(self.get_filepath('glacier_grid')):
+            summary += ['  Grid (nx, ny): (' + str(self.grid.nx) + ', ' +
+                        str(self.grid.ny) + ')']
+            summary += ['  Grid (dx, dy): (' + str(self.grid.dx) + ', ' +
+                        str(self.grid.dy) + ')']
         return '\n'.join(summary) + '\n'
 
     @lazy_property
