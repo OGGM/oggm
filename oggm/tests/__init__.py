@@ -65,7 +65,7 @@ if os.environ.get('TRAVIS') is not None:
     else:
         # distribute the tests
         RUN_SLOW_TESTS = True
-        env = os.environ.get('OGGM_ENV')
+        env = os.environ.get('OGGM_TEST_ENV')
         if env == 'prepro':
             RUN_PREPRO_TESTS = True
             RUN_MODEL_TESTS = False

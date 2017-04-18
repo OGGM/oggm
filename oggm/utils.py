@@ -23,7 +23,6 @@ from functools import partial, wraps
 import json
 import time
 import fnmatch
-import subprocess
 
 # External libs
 import geopandas as gpd
@@ -50,6 +49,9 @@ import multiprocessing as mp
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
@@ -89,63 +91,49 @@ def _get_download_lock():
     return lock
 
 
-def _cached_download_helper(cache_obj_name, dl_func):
+def _cached_download_helper(dest_path, dl_func):
     """Helper function for downloads.
-    Takes care of checking if the file is already cached.
-    Only calls the actuall download function when no cached version exists."""
-    cache_dir = cfg.PATHS['dl_cache_dir']
-    cache_ro = cfg.PARAMS['dl_cache_readonly']
-    fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
+    
+    Takes care of checking if the file is already downloaded.
+    Only calls the actual download function when no downloaded version exists.
+    """
 
-    if not cache_dir:
-        cache_dir = fb_cache_dir
-        cache_ro = False
+    if os.path.isfile(dest_path):
+        return dest_path
 
-    cache_path = os.path.join(cache_dir, cache_obj_name)
-    if os.path.isfile(cache_path):
-        return cache_path
-
-    fb_path = os.path.join(fb_cache_dir, cache_obj_name)
-    if os.path.isfile(fb_path):
-        return fb_path
-
-    if cache_ro:
-        cache_path = fb_path
-
-    mkdir(os.path.dirname(cache_path))
+    mkdir(os.path.dirname(dest_path))
 
     try:
-        cache_path = dl_func(cache_path)
+        dest_path = dl_func(dest_path)
     except:
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
         raise
 
-    return cache_path
+    return dest_path
 
 
-def _urlretrieve(url, *args, **kwargs):
+def _urlretrieve(url, dest_path, *args, **kwargs):
     """Wrapper around urlretrieve, to implement our caching logic.
+    
     Instead of accepting a destination path, it decided where to store the file
-    and returns the local path."""
-    log = logging.getLogger('download')
+    and returns the local path.
+    """
 
-    cache_obj_name = urlparse(url)
-    cache_obj_name = cache_obj_name.netloc + cache_obj_name.path
+    def _dlf(_dest_path):
+        logger.info("Downloading %s to %s..." % (url, _dest_path))
+        urlretrieve(url, _dest_path, *args, **kwargs)
+        return _dest_path
 
-    def _dlf(cache_path):
-        log.info("Downloading %s to %s..." % (url, cache_path))
-        urlretrieve(url, cache_path, *args, **kwargs)
-        return cache_path
-
-    return _cached_download_helper(cache_obj_name, _dlf)
+    return _cached_download_helper(dest_path, _dlf)
 
 
-def progress_urlretrieve(url):
-    """Downloads a file, returns its local path, and shows a progressbar."""
+def _progress_urlretrieve(url, dest_path):
+    """Downloads a file to dest_path if dest_path doesn't exist yet."""
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
+
         def _upd(count, size, total):
             if pbar.max_value is None:
                 if total > 0:
@@ -154,17 +142,53 @@ def progress_urlretrieve(url):
                     pbar.start(UnknownLength)
             pbar.update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, reporthook=_upd)
+        res = _urlretrieve(url, dest_path, reporthook=_upd)
         try:
             pbar.finish()
         except:
             pass
         return res
     except ImportError:
-        return _urlretrieve(url)
+        return _urlretrieve(url, dest_path)
 
 
-def file_downloader(www_path, retry_max=5):
+def aws_file_download(aws_path, dest_path):
+    with _get_download_lock():
+        return _aws_file_download_unlocked(aws_path, dest_path)
+
+
+def _aws_file_download_unlocked(aws_path, dest_path):
+    """Download a file from the AWS drive s3://astgtmv2/
+
+    **Note:** you need AWS credentials for this to work.
+
+    Parameters
+    ----------
+    aws_path: path relative to  s3://astgtmv2/
+    dest_path: where to copy the file
+    """
+
+    while aws_path.startswith('/'):
+        aws_path = aws_path[1:]
+
+    def _dlf(_dest_path):
+        import boto3
+        import botocore
+        client = boto3.client('s3')
+        logger.info("Downloading %s from s3 to %s..." % (aws_path, _dest_path))
+        try:
+            client.download_file('astgtmv2', aws_path, _dest_path)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == "404":
+                return None
+            else:
+                raise
+        return _dest_path
+
+    return _cached_download_helper(dest_path, _dlf)
+
+
+def file_downloader(www_path, dest_path, retry_max=5):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -173,7 +197,7 @@ def file_downloader(www_path, retry_max=5):
         # Try to download
         try:
             retry_counter += 1
-            local_path = progress_urlretrieve(www_path)
+            local_path = _progress_urlretrieve(www_path, dest_path)
             # if no error, exit
             break
         except HTTPError as err:
@@ -182,23 +206,23 @@ def file_downloader(www_path, retry_max=5):
                 # Ok so this *should* be an ocean tile
                 return None
             elif err.code >= 500 and err.code < 600:
-                print("Downloading %s failed with HTTP error %s, "
-                      "retrying in 10 seconds... %s/%s" %
-                      (www_path, err.code, retry_counter, retry_max))
+                logger.info("Downloading %s failed with HTTP error %s, "
+                            "retrying in 10 seconds... %s/%s" %
+                            (www_path, err.code, retry_counter, retry_max))
                 time.sleep(10)
                 continue
             else:
                 raise
         except ContentTooShortError:
-            print("Downloading %s failed with ContentTooShortError"
-                  " error %s, retrying in 10 seconds... %s/%s" %
-                  (www_path, err.code, retry_counter, retry_max))
+            logger.info("Downloading %s failed with ContentTooShortError"
+                        " error %s, retrying in 10 seconds... %s/%s" %
+                        (www_path, err.code, retry_counter, retry_max))
             time.sleep(10)
             continue
 
-    # See if we managed
+    # See if we managed (fail is allowed)
     if not local_path or not os.path.exists(local_path):
-        raise RuntimeError('Downloading %s failed.' % www_path)
+        logger.warning('Downloading %s failed.' % www_path)
 
     return local_path
 
@@ -282,7 +306,7 @@ class LRUFileCache():
         self.purge()
 
 
-def _download_oggm_files():
+def download_oggm_files():
     with _get_download_lock():
         return _download_oggm_files_unlocked()
 
@@ -295,6 +319,7 @@ def _download_oggm_files_unlocked():
     master_zip_url = 'https://github.com/%s/archive/master.zip' % \
                      SAMPLE_DATA_GH_REPO
     rename_output = False
+    dest_path = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
@@ -310,7 +335,7 @@ def _download_oggm_files_unlocked():
         last_mod = 0
 
     # test only every hour
-    if time.time() - last_mod > 3600:
+    if (time.time() - last_mod) > 3600:
         write_sha = True
         try:
             # this might fail with HTTP 403 when server overload
@@ -333,25 +358,15 @@ def _download_oggm_files_unlocked():
             rename_output = "oggm-sample-data-%s" % master_sha
         except (HTTPError, URLError):
             master_sha = 'error'
+            write_sha = False
     else:
         write_sha = False
 
     # download only if necessary
     if not os.path.exists(sdir):
-        ofile = progress_urlretrieve(master_zip_url)
-
-        # Trying to make the download more robust
-        try:
-            with zipfile.ZipFile(ofile) as zf:
-                zf.extractall(odir)
-        except zipfile.BadZipfile:
-            # try another time
-            if os.path.exists(ofile):
-                os.remove(ofile)
-            ofile = progress_urlretrieve(master_zip_url)
-            with zipfile.ZipFile(ofile) as zf:
-                zf.extractall(odir)
-
+        ofile = file_downloader(master_zip_url, dest_path)
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(odir)
         # rename dir in case of download from different url
         if rename_output:
             fdir = os.path.join(cfg.CACHE_DIR, rename_output)
@@ -388,7 +403,7 @@ def _download_srtm_file_unlocked(zone):
     """
 
     # extract directory
-    tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
+    tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, 'srtm_' + zone + '.tif')
 
@@ -397,12 +412,18 @@ def _download_srtm_file_unlocked(zone):
         return outpath
 
     # Did we download it yet?
-    ifile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_' + zone + '.zip'
-    dfile = file_downloader(ifile)
+    wwwfile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_' + zone + '.zip'
+    dest_file = os.path.join(cfg.PATHS['topo_dir'], 'srtm',
+                             'srtm_' + zone + '.zip')
+    dest_file = file_downloader(wwwfile, dest_file)
+
+    # None means we tried hard but we couldn't find it
+    if not dest_file:
+        return None
 
     # ok we have to extract it
     if not os.path.exists(outpath):
-        with zipfile.ZipFile(dfile) as zf:
+        with zipfile.ZipFile(dest_file) as zf:
             zf.extractall(tmpdir)
 
     # See if we're good, don't overfill the tmp directory
@@ -421,7 +442,7 @@ def _download_dem3_viewpano_unlocked(zone):
     """
 
     # extract directory
-    tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
+    tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, zone+'.tif')
 
@@ -430,17 +451,25 @@ def _download_dem3_viewpano_unlocked(zone):
         return outpath
 
     # OK, so see if downloaded already
+    dest_path = os.path.join(cfg.PATHS['topo_dir'], 'dem3')
     # some files have a newer version 'v2'
     if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34',
                 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
                 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
+        dest_path = os.path.join(dest_path, zone + 'v2.zip')
     elif zone in ['01-15', '16-30', '31-45', '46-60']:
         ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
+        dest_path = os.path.join(dest_path, 'antdem_' + zone + '.zip')
     else:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
+        dest_path = os.path.join(dest_path, zone + '.zip')
 
-    dfile = file_downloader(ifile)
+    dfile = file_downloader(ifile, dest_path)
+
+    # None means we tried hard but we couldn't find it
+    if not dfile:
+        return None
 
     # ok we have to extract it
     with zipfile.ZipFile(dfile) as zf:
@@ -509,12 +538,13 @@ def _download_aster_file_unlocked(zone, unit):
     fbname = 'ASTGTM2_' + zone + '.zip'
     dirbname = 'UNIT_' + unit
     # extract directory
-    tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
+    tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, 'ASTGTM2_' + zone + '_dem.tif')
 
     aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
-    dfile = _aws_file_download_unlocked(aws_path)
+    dest_path = os.path.join(cfg.PATHS['topo_dir'], 'aster', fbname)
+    dfile = _aws_file_download_unlocked(aws_path, dest_path)
 
     if dfile is not None:
         # Ok so the tile is a valid one
@@ -539,24 +569,29 @@ def _download_alternate_topo_file_unlocked(fname):
     """Checks if the special topo data is in the directory and if not,
     download it from AWS.
 
-    You need AWS cli and AWS credentials for this. Quoting Timo:
+    You need AWS cli and AWS credentials for this. Quoting Timo::
 
-    $ aws configure
-
-    Key ID und Secret you should have
-    Region is eu-west-1 and Output Format is json.
+        $ aws configure
+    
+        Key ID und Secret you should have
+        Region is eu-west-1 and Output Format is json.
+    
     """
 
     # extract directory
-    tmpdir = os.path.join(cfg.PATHS['working_dir'], 'tmp')
+    tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
+    # Download directory
+    dl_dir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
+
     aws_path = 'topo/' + fname + '.zip'
-    dfile = _aws_file_download_unlocked(aws_path)
+    dest_path = os.path.join(dl_dir, fname + '.zip')
+    dfile = _aws_file_download_unlocked(aws_path, dest_path)
 
     if not os.path.exists(outpath):
-        print('Extracting ' + fname + '.zip ...')
+        logger.info('Extracting ' + fname + '.zip to ' + outpath + '...')
         with zipfile.ZipFile(dfile) as zf:
             zf.extractall(tmpdir)
 
@@ -584,47 +619,6 @@ def _get_centerline_lonlat(gdir):
             olist.append(gs)
 
     return olist
-
-
-def aws_file_download(aws_path):
-    with _get_download_lock():
-        return _aws_file_download_unlocked(aws_path)
-
-
-def _aws_file_download_unlocked(aws_path):
-    """Download a file from the AWS drive s3://astgtmv2/
-
-    **Note:** you need AWS credentials for this to work.
-
-    Parameters
-    ----------
-    aws_path: path relative to  s3://astgtmv2/
-    local_path: where to copy the file
-    reset: overwrite the local file
-    """
-
-    log = logging.getLogger('download')
-
-    while aws_path.startswith('/'):
-        aws_path = aws_path[1:]
-
-    cache_obj_name = 'astgtmv2/' + aws_path
-
-    def _dlf(cache_path):
-        import boto3
-        import botocore
-        client = boto3.client('s3')
-        log.info("Downloading %s from s3 to %s..." % (aws_path, cache_path))
-        try:
-            client.download_file('astgtmv2', aws_path, cache_path)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                return None
-            else:
-                raise
-        return cache_path
-
-    return _cached_download_helper(cache_obj_name, _dlf)
 
 
 def mkdir(path, reset=False):
@@ -1138,7 +1132,7 @@ def aster_zone(lon_ex, lat_ex):
 def get_demo_file(fname):
     """Returns the path to the desired OGGM file."""
 
-    d = _download_oggm_files()
+    d = download_oggm_files()
     if fname in d:
         return d[fname]
     else:
@@ -1148,7 +1142,7 @@ def get_demo_file(fname):
 def get_cru_cl_file():
     """Returns the path to the unpacked CRU CL file (is in sample data)."""
 
-    _download_oggm_files()
+    download_oggm_files()
 
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'cru')
     fpath = os.path.join(sdir, 'cru_cl2.nc')
@@ -1169,9 +1163,9 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['wgms_rgi_links'] != '':
+    if cfg.PATHS['wgms_rgi_links']:
         if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
-            raise ValueError('wrong wgms_rgi_links path provided.')
+            raise ValueError('Wrong wgms_rgi_links path provided.')
         # User provided data
         outf = cfg.PATHS['wgms_rgi_links']
         datadir = os.path.join(os.path.dirname(outf), 'mbdata')
@@ -1180,7 +1174,7 @@ def get_wgms_files():
         return outf, datadir
 
     # Roll our own
-    _download_oggm_files()
+    download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'wgms')
     outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
     assert os.path.exists(outf)
@@ -1189,52 +1183,22 @@ def get_wgms_files():
     return outf, datadir
 
 
-def get_leclercq_files():
-    """Get the path to the default Leclercq-RGI link file and the data dir.
-
-    Returns
-    -------
-    (file, dir): paths to the files
-    """
-
-    if cfg.PATHS['leclercq_rgi_links'] != '':
-        if not os.path.exists(cfg.PATHS['leclercq_rgi_links']):
-            raise ValueError('wrong leclercq_rgi_links path provided.')
-        # User provided data
-        outf = cfg.PATHS['leclercq_rgi_links']
-        # TODO: This doesnt exist yet
-        datadir = os.path.join(os.path.dirname(outf), 'lendata')
-        # if not os.path.exists(datadir):
-        #     raise ValueError('The Leclercq data directory is missing')
-        return outf, datadir
-
-    # Roll our own
-    _download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'leclercq')
-    outf = os.path.join(sdir, 'rgi_leclercq_links_2012_RGIV5.csv')
-    assert os.path.exists(outf)
-    # TODO: This doesnt exist yet
-    datadir = os.path.join(sdir, 'lendata')
-    # assert os.path.exists(datadir)
-    return outf, datadir
-
-
 def get_glathida_file():
-    """Get the path to the default WGMS-RGI link file and the data dir.
+    """Get the path to the default GlaThiDa-RGI link file.
 
     Returns
     -------
-    (file, dir): paths to the files
+    file: paths to the file
     """
 
-    if cfg.PATHS['glathida_rgi_links'] != '':
+    if cfg.PATHS['glathida_rgi_links']:
         if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
-            raise ValueError('wrong glathida_rgi_links path provided.')
+            raise ValueError('Wrong glathida_rgi_links path provided.')
         # User provided data
         return cfg.PATHS['glathida_rgi_links']
 
     # Roll our own
-    _download_oggm_files()
+    download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'glathida')
     outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
     assert os.path.exists(outf)
@@ -1242,37 +1206,40 @@ def get_glathida_file():
 
 
 def get_rgi_dir():
-    with _get_download_lock():
-        return _get_rgi_dir_unlocked()
+    """Returns a path to the RGI directory.
 
-
-def _get_rgi_dir_unlocked():
-    """
-    Returns a path to the RGI directory.
-
-    If the files are not present, download them.
+    If the RGI files are not present, download them.
 
     Returns
     -------
     path to the RGI directory
     """
 
-    # Be sure the user gave a sensible path to the rgi dir
+    with _get_download_lock():
+        return _get_rgi_dir_unlocked()
+
+
+def _get_rgi_dir_unlocked():
+
     rgi_dir = cfg.PATHS['rgi_dir']
-    if not os.path.exists(rgi_dir):
-        raise ValueError('The RGI data directory does not exist!')
+
+    # Be sure the user gave a sensible path to the RGI dir
+    if not rgi_dir:
+        raise ValueError('The RGI data directory has to be'
+                         'specified explicitly.')
+    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    mkdir(rgi_dir)
 
     bname = 'rgi50.zip'
-    tf = 'http://www.glims.org/RGI/rgi50_files/' + bname
+    dfile = 'http://www.glims.org/RGI/rgi50_files/' + bname
     test_file = os.path.join(rgi_dir, '000_rgi50_manifest.txt')
-    ofile = progress_urlretrieve(tf)
 
-    # if not there download it
-    if not os.path.exists(test_file):  # pragma: no cover
+    if not os.path.exists(test_file):
+        # if not there download it
+        ofile = file_downloader(dfile, os.path.join(rgi_dir, bname))
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
-
         # Extract subdirs
         pattern = '*_rgi50_*.zip'
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
@@ -1282,18 +1249,11 @@ def _get_rgi_dir_unlocked():
                     ex_root = ofile.replace('.zip', '')
                     mkdir(ex_root)
                     zf.extractall(ex_root)
-
     return rgi_dir
 
 
 def get_cru_file(var=None):
-    with _get_download_lock():
-        return _get_cru_file_unlocked(var)
-
-
-def _get_cru_file_unlocked(var=None):
-    """
-    Returns a path to the desired CRU TS file.
+    """Returns a path to the desired CRU TS file.
 
     If the file is not present, download it.
 
@@ -1305,12 +1265,20 @@ def _get_cru_file_unlocked(var=None):
     -------
     path to the CRU file
     """
+    with _get_download_lock():
+        return _get_cru_file_unlocked(var)
+
+
+def _get_cru_file_unlocked(var=None):
 
     cru_dir = cfg.PATHS['cru_dir']
 
     # Be sure the user gave a sensible path to the climate dir
-    if cru_dir == '' or not os.path.exists(cru_dir):
-        raise ValueError('The CRU data directory({}) does not exist!'.format(cru_dir))
+    if not cru_dir:
+        raise ValueError('The CRU data directory has to be'
+                         'specified explicitly.')
+    cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
+    mkdir(cru_dir)
 
     # Be sure input makes sense
     if var not in ['tmp', 'pre']:
@@ -1324,16 +1292,17 @@ def _get_cru_file_unlocked(var=None):
         ofile = search[0]
     elif len(search) > 1:
         raise ValueError('The CRU filename should match "{}".'.format(bname))
-    else:  # pragma: no cover
+    else:
         # if not there download it
-        tf = CRU_SERVER + '{}/cru_ts3.24.01.1901.2015.{}.dat.nc.gz'.format(var,
-                                                                        var)
-        dlfile = progress_urlretrieve(tf)
+        dest_path = 'cru_ts3.24.01.1901.2015.{}.dat.nc.gz'.format(var)
+        tf = CRU_SERVER + '{}/'.format(var) + dest_path
+        dest_path = os.path.join(cru_dir, dest_path)
+        dlfile = file_downloader(tf, dest_path)
+        ofile = dlfile.replace('.gz', '')
         with gzip.GzipFile(dlfile) as zf:
             with open(ofile, 'wb') as outfile:
                 for line in zf:
                     outfile.write(line)
-
     return ofile
 
 
@@ -1343,16 +1312,18 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
 
     If the needed files for covering the extent are not present, download them.
 
-    By default it will be referred to SRTM for [-60S;60N], and
-    a corrected DEM3 from viewfinderpanoramas.org elsewhere. However, a 
-    user-specified data source can be given with the ``source`` keyword.
+    By default it will be referred to SRTM for [-60S; 60N], GIMP for Greenland,
+    RAMP for Antarctica, and a corrected DEM3 (viewfinderpanoramas.org) 
+    elsewhere. 
+    
+    A user-specified data source can be given with the ``source`` keyword.
 
     Parameters
     ----------
     lon_ex : tuple, required
-        a (min_lon, max_lon) tuple deliminating the requested area longitudes
+        a (min_lon, max_lon) tuple delimiting the requested area longitudes
     lat_ex : tuple, required
-        a (min_lat, max_lat) tuple deliminating the requested area latitudes
+        a (min_lat, max_lat) tuple delimiting the requested area latitudes
     rgi_region : int, optional
         the RGI region number (required for the GIMP DEM)
     source : str or list of str, optional
@@ -1375,7 +1346,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
             demf, source_str = get_topo_file(lon_ex, lat_ex,
                                              rgi_region=rgi_region,
                                              source=s)
-            if demf:
+            if demf[0]:
                 return demf, source_str
 
     # Did the user specify a specific DEM file?
@@ -1390,8 +1361,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     if source == 'GIMP' or (rgi_region is not None and int(rgi_region) == 5):
         source = 'GIMP' if source is None else source
         if source == 'GIMP':
-            gimp_file = _download_alternate_topo_file('gimpdem_90m.tif')
-            return [gimp_file], source
+            _file = _download_alternate_topo_file('gimpdem_90m.tif')
+            return [_file], source
 
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
@@ -1401,12 +1372,12 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         else:
             source = 'RAMP' if source is None else source
         if source == 'RAMP':
-            gimp_file = _download_alternate_topo_file('AntarcticDEM_wgs84.tif')
-            return [gimp_file], source
+            _file = _download_alternate_topo_file('AntarcticDEM_wgs84.tif')
+            return [_file], source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
-                    source == 'DEM3' or source == 'ASTER':
+            (source == 'DEM3') or (source == 'ASTER'):
         # default is DEM3
         source = 'DEM3' if source is None else source
         if source == 'DEM3':

@@ -116,7 +116,7 @@ def up_to_inversion(reset=False):
         # Use histalp for the actual inversion test
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
-        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['cru_dir'] = ''
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -147,7 +147,7 @@ def up_to_distrib(reset=False):
         # Use CRU
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['temp_use_local_gradient'] = False
-        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         with warnings.catch_warnings():
