@@ -401,10 +401,12 @@ def define_glacier_region(gdir, entity=None):
 
     # A glacier area can cover more than one tile:
     if len(dem_list) == 1:
-        dem = rasterio.open(dem_list[0])  # if one tile, just open it
+        dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
+        dem_data = rasterio.band(dem_dss[0], 1)
+        src_transform = dem_dss[0].transform
     else:
-        demraster = [rasterio.open(s) for s in dem_list]  # list of rasters
-        dem, _ = merge_tool(demraster)  # merged rasters
+        dem_dss = [rasterio.open(s) for s in dem_list]  # list of rasters
+        dem_data, src_transform = merge_tool(dem_dss)  # merged rasters
 
     # Use Grid properties to create a transform (see rasterio cookbook)
     dst_transform = rasterio.transform.from_origin(
@@ -412,7 +414,7 @@ def define_glacier_region(gdir, entity=None):
     )
 
     # Set up profile for writing output
-    profile = dem.profile
+    profile = dem_dss[0].profile
     profile.update({
         'crs': proj4_str,
         'transform': dst_transform,
@@ -431,12 +433,12 @@ def define_glacier_region(gdir, entity=None):
 
     dem_reproj = gdir.get_filepath('dem')
     with rasterio.open(dem_reproj, 'w', **profile) as dest:
-        dst_array = np.empty((ny, nx), dtype=dem.dtypes[0])
+        dst_array = np.empty((ny, nx), dtype=dem_dss[0].dtypes[0])
         reproject(
             # Source parameters
-            source=rasterio.band(dem, 1),
-            src_crs=dem.crs,
-            src_transform=dem.transform,
+            source=dem_data,
+            src_crs=dem_dss[0].crs,
+            src_transform=src_transform,
             # Destination parameters
             destination=dst_array,
             dst_transform=dst_transform,
@@ -446,7 +448,8 @@ def define_glacier_region(gdir, entity=None):
 
         dest.write(dst_array, 1)
 
-    dem.close()
+    for dem_ds in dem_dss:
+        dem_ds.close()
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates

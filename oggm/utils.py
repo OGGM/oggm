@@ -130,10 +130,14 @@ def _urlretrieve(url, dest_path, *args, **kwargs):
 
 def _progress_urlretrieve(url, dest_path):
     """Downloads a file to dest_path if dest_path doesn't exist yet."""
+
+    # Otherwise progress bar is annoying
+    if os.path.isfile(dest_path):
+        return dest_path
+
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = DataTransferBar()
-
         def _upd(count, size, total):
             if pbar.max_value is None:
                 if total > 0:
@@ -457,13 +461,13 @@ def _download_dem3_viewpano_unlocked(zone):
                 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
                 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
-        dest_path = os.path.join(dest_path, zone + 'v2.zip')
+        dest_path = os.path.join(dest_path, 'dem3_' + zone + '.zip')
     elif zone in ['01-15', '16-30', '31-45', '46-60']:
         ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
-        dest_path = os.path.join(dest_path, 'antdem_' + zone + '.zip')
+        dest_path = os.path.join(dest_path, 'antdem3_' + zone + '.zip')
     else:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
-        dest_path = os.path.join(dest_path, zone + '.zip')
+        dest_path = os.path.join(dest_path, 'dem3_' + zone + '.zip')
 
     dfile = file_downloader(ifile, dest_path)
 
@@ -1800,7 +1804,7 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, string_types):
-            _shp = os.path.join(base_dir, rgi_entity[:8],
+            _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
             rgi_entity = read_shapefile(_shp).iloc[0]
 
@@ -1874,7 +1878,8 @@ class GlacierDirectory(object):
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id)
+        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
+                                self.rgi_id)
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)

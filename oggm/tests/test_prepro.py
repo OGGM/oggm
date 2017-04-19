@@ -1457,7 +1457,8 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
 
-        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fake')
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
+                            'RGI50-11.fake')
         self.assertTrue(os.path.exists(rdir))
 
         rdir = os.path.join(rdir, 'log')
@@ -1504,7 +1505,8 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11'))
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11',
+                                            'RGI50-11.01'))
 
     def _parabolic_bed(self):
 
