@@ -544,19 +544,21 @@ def _download_aster_file_unlocked(zone, unit):
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
-    outpath = os.path.join(tmpdir, 'ASTGTM2_' + zone + '_dem.tif')
+    obname = 'ASTGTM2_' + zone + '_dem.tif'
+    outpath = os.path.join(tmpdir, obname)
 
     aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
     dest_path = os.path.join(cfg.PATHS['topo_dir'], 'aster', fbname)
     dfile = _aws_file_download_unlocked(aws_path, dest_path)
 
-    if dfile is not None:
-        # Ok so the tile is a valid one
-        with zipfile.ZipFile(dfile) as zf:
-            zf.extractall(outpath)
-    else:
+    if dfile is None:
         # Ok so this *should* be an ocean tile
         return None
+
+    if not os.path.exists(outpath):
+        # Extract
+        with zipfile.ZipFile(dfile) as zf:
+            zf.extract(obname, tmpdir)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(outpath)
@@ -940,7 +942,7 @@ def pipe_log(gdir, task_func, err=None):
     with open(fpath, 'a') as f:
         f.write(task_func.__name__ + ': ')
         if err is not None:
-            f.write(err.__class__.__name__ + ': {}'.format(err))
+            f.write(err.__class__.__name__ + ': {}\n'.format(err))
 
 
 def write_centerlines_to_shape(gdirs, filename):
@@ -1485,7 +1487,9 @@ def glacier_characteristics(gdirs, to_csv=True):
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
-    to_csv: Set to "True" in order  to store the info in the working directory
+    to_csv: 
+        Set to "True" in order  to store the info in the working directory
+        Set to a basename to rename the file to your choice
     """
 
     out_df = []
@@ -1514,6 +1518,13 @@ def glacier_characteristics(gdirs, to_csv=True):
 
         # Divides
         d['n_divides'] = len(list(gdir.divide_ids))
+
+        # Very bad folders sometimes
+        try:
+            gdir.has_file('centerlines', div_id=1)
+        except IndexError:
+            out_df.append(d)
+            continue
 
         # Centerlines
         if gdir.has_file('centerlines', div_id=1):
@@ -1596,8 +1607,11 @@ def glacier_characteristics(gdirs, to_csv=True):
     cols = list(out_df[0].keys())
     out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
     if to_csv:
-        out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                   'glacier_characteristics.csv'))
+        if to_csv == True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                       'glacier_characteristics.csv'))
+        else:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'], to_csv))
     return out
 
 
@@ -1732,7 +1746,8 @@ def filter_rgi_name(name):
     if name is None or len(name) == 0:
         return ''
 
-    if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°']:
+    if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',
+                    '\r', '\x93', '¤', '0', '`']:
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()

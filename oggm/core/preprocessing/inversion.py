@@ -50,7 +50,8 @@ log = logging.getLogger(__name__)
 @entity_task(log, writes=['inversion_input'])
 @divide_task(log, add_0=False)
 def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
-                          invert_with_rectangular=True):
+                          invert_with_rectangular=True,
+                          invert_all_rectangular=False):
     """Prepares the data needed for the inversion.
 
     Mostly the mass flux and slope angle, the rest (width, height) was already
@@ -67,6 +68,8 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
     # for testing only
     if 'invert_with_rectangular' in cfg.PARAMS:
         invert_with_rectangular = cfg.PARAMS['invert_with_rectangular']
+    if 'invert_all_rectangular' in cfg.PARAMS:
+        invert_all_rectangular = cfg.PARAMS['invert_all_rectangular']
 
     towrite = []
     for fl in fls:
@@ -105,6 +108,8 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
         is_rectangular = fl.touches_border
         if not invert_with_rectangular:
             is_rectangular[:] = False
+        if invert_all_rectangular:
+            is_rectangular[:] = True
 
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
@@ -180,7 +185,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
             a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
 
             if np.any(~np.isfinite(a0s)):
-                raise RuntimeError('{}: something went wrong with the'
+                raise RuntimeError('{}: something went wrong with the '
                                    'inversion'.format(gdir.rgi_id))
 
             # GO
@@ -229,6 +234,9 @@ def optimize_inversion_params(gdirs):
         gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
     except AttributeError:
         gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
+
+    # TODO: remove black rapids
+    gtd_df = gtd_df.loc[gtd_df.RGI_ID != 'RGI50-01.00037']
     dfids = gtd_df['RGI_ID'].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
@@ -294,8 +302,8 @@ def optimize_inversion_params(gdirs):
                     tmp_ref[i] = v * 1e-9
             return utils.rmsd(tmp_ref, ref_data)
         opti = optimization.minimize(to_optimize, [1.],
-                                    bounds=((0.01, 10), ),
-                                    tol=tol)
+                                     bounds=((0.01, 10),),
+                                     tol=tol)
         # Check results and save.
         glen_a = cfg.A * opti['x'][0]
         fs = 0.

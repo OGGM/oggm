@@ -34,14 +34,20 @@ def _init_pool_globals(_cfg_contents, global_lock):
 
 
 def _init_pool():
-    """Necessary because at import time, cfg might be unitialized"""
+    """Necessary because at import time, cfg might be uninitialized"""
     global _mp_pool
     if _mp_pool:
         return _mp_pool
     cfg_contents = cfg.pack_config()
     global_lock = mp.Manager().Lock()
     mpp = cfg.PARAMS['mp_processes']
-    mpp = None if mpp == -1 else mpp
+    if mpp == -1:
+        mpp = mp.cpu_count()
+        log.info('Multiprocessing: using all available '
+                 'processors (N={})'.format(mp.cpu_count()))
+    else:
+        log.info('Multiprocessing: using the requested number of '
+                 'processors (N={})'.format(mpp))
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
                        initargs=(cfg_contents, global_lock))
     return _mp_pool

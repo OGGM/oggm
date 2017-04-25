@@ -380,6 +380,9 @@ def define_glacier_region(gdir, entity=None):
             entity[k] = int(s)
     towrite = gpd.GeoDataFrame(entity).T
     towrite.crs = proj4_str
+    # Delete the source before writing
+    if 'DEM_SOURCE' in towrite:
+        del towrite['DEM_SOURCE']
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Also transform the intersects if necessary
