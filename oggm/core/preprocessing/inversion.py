@@ -235,8 +235,6 @@ def optimize_inversion_params(gdirs):
     except AttributeError:
         gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
 
-    # TODO: remove black rapids
-    gtd_df = gtd_df.loc[gtd_df.RGI_ID != 'RGI50-01.00037']
     dfids = gtd_df['RGI_ID'].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
