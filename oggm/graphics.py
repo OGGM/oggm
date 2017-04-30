@@ -166,10 +166,10 @@ def plot_domain(gdir, ax=None, salemmap=None):  # pragma: no cover
         poly_pix = geom['polygon_pix']
 
         salemmap.set_geometry(poly_pix, crs=crs, fc='white',
-                         alpha=0.3, zorder=2, linewidth=.2)
+                              alpha=0.3, zorder=2, linewidth=.2)
         for l in poly_pix.interiors:
             salemmap.set_geometry(l, crs=crs,
-                              color='black', linewidth=0.5)
+                                  color='black', linewidth=0.5)
 
     salemmap.plot(ax)
 

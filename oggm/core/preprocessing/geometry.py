@@ -359,7 +359,7 @@ def catchment_area(gdir, div_id=None):
     dic_catch = dict()
     for i, cl in enumerate(cls):
         x, y = tuple2int(cl.line.xy)
-        costgrid[y, x] *= cost_factor
+        costgrid[y, x] = cost_factor
         for x, y in [(int(x), int(y)) for x, y in cl.line.coords]:
             assert (y, x) not in dic_catch
             dic_catch[(y, x)] = set([(y, x)])
