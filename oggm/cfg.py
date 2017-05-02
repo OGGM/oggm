@@ -234,13 +234,15 @@ def initialize(file=None):
 
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
-    # Paths
-    oggm_static_paths()
-    PATHS['working_dir'] = cp['working_dir']
     # Default
+    PATHS['working_dir'] = cp['working_dir']
     if not PATHS['working_dir']:
         PATHS['working_dir'] = os.path.join(os.path.expanduser('~'),
                                             'OGGM_WORKING_DIRECTORY')
+
+    # Paths
+    oggm_static_paths()
+
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -299,11 +301,11 @@ def initialize(file=None):
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
-           'glathida_rgi_links', 'grid_dx_method', 'topo_dir', 'cru_dir',
+           'glathida_rgi_links', 'grid_dx_method',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
+           'use_optimized_inversion_params', 'invert_with_sliding',
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
@@ -332,6 +334,7 @@ def oggm_static_paths():
         dldir = os.path.join(os.path.expanduser('~'), 'OGGM_DOWNLOADS')
         config = ConfigObj()
         config['dl_cache_dir'] = dldir
+        config['dl_cache_readonly'] = False
         config['tmp_dir'] = ''
         config['topo_dir'] = ''
         config['cru_dir'] = ''
@@ -349,13 +352,15 @@ def oggm_static_paths():
         sys.exit()
 
     # Check that all keys are here
-    for k in ['dl_cache_dir', 'tmp_dir', 'topo_dir',
+    for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir', 'topo_dir',
               'cru_dir', 'rgi_dir', 'has_internet']:
         if k not in config:
             raise RuntimeError('The oggm config file ({}) should have an '
                                'entry for {}.'.format(CONFIG_FILE, k))
 
     # Override defaults with env variables if available
+    if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
+        config['dl_cache_readonly'] = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
     if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
         config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
 
@@ -366,13 +371,19 @@ def oggm_static_paths():
 
     # Fill the PATH dict
     for k, v in config.iteritems():
-        if not v and '_dir' in k:
-            # defaults to the cache dir
-            v = os.path.join(config['dl_cache_dir'], k.replace('_dir', ''))
+        if not k.endswith('_dir'):
+            continue
+        if not v:
+            v = os.path.join(PATHS['working_dir'], k[:-4])
         PATHS[k] = os.path.abspath(os.path.expanduser(v))
 
     # Other
     PARAMS['has_internet'] = config.as_bool('has_internet')
+    PARAMS['dl_cache_readonly'] = config.as_bool('dl_cache_readonly')
+
+    # Create cache dir if possible
+    if not os.path.exists(PATHS['dl_cache_dir']) and not PARAMS['dl_cache_readonly']:
+        os.makedirs(PATHS['dl_cache_dir'])
 
 
 def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
@@ -381,7 +392,7 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
     Parameters
     ----------
     tmpdir : str
-        path to the temporary directory to handle. Default is 
+        path to the temporary directory to handle. Default is
         ``cfg.PATHS['tmp_dir']``.
     maxsize : int
         the max number of files to keep in the directory
