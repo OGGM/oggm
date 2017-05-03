@@ -70,12 +70,20 @@ class _pickle_copier(object):
         self.out_kwargs = kwargs
 
     def __call__(self, gdir):
-        if isinstance(gdir, collections.Sequence):
-            gdir, gdir_kwargs = gdir
-            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-            return self.call_func(gdir, **gdir_kwargs)
-        else:
-            return self.call_func(gdir, **self.out_kwargs)
+        try:
+            if isinstance(gdir, collections.Sequence):
+                gdir, gdir_kwargs = gdir
+                gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
+                return self.call_func(gdir, **gdir_kwargs)
+            else:
+                return self.call_func(gdir, **self.out_kwargs)
+        except Exception as e:
+            try:
+                raise RuntimeError('{0}: exception occured while processing task {1}' \
+                        .format(gdir.rgi_id, self.call_func.__name__)) from e
+            except AttributeError:
+                pass
+            raise
 
 
 def reset_multiprocessing():
