@@ -42,7 +42,7 @@ future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
 
-The project is currently in intense development. Get in touch with us if
+The project is currently in development. Get in touch with us if
 you want to contribute.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
