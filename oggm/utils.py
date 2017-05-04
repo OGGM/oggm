@@ -91,108 +91,129 @@ def _get_download_lock():
     return lock
 
 
-def _cached_download_helper(dest_path, dl_func):
+def _cached_download_helper(cache_obj_name, dl_func):
     """Helper function for downloads.
-    
-    Takes care of checking if the file is already downloaded.
-    Only calls the actual download function when no downloaded version exists.
+
+    Takes care of checking if the file is already cached.
+    Only calls the actuall download function when no cached version exists.
     """
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    cache_ro = cfg.PARAMS['dl_cache_readonly']
+    fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
 
-    if os.path.isfile(dest_path):
-        return dest_path
+    if not cache_dir:
+        cache_dir = fb_cache_dir
+        cache_ro = False
 
-    mkdir(os.path.dirname(dest_path))
+    cache_path = os.path.join(cache_dir, cache_obj_name)
+    if os.path.isfile(cache_path):
+        return cache_path
+
+    fb_path = os.path.join(fb_cache_dir, cache_obj_name)
+    if os.path.isfile(fb_path):
+        return fb_path
+
+    if cache_ro:
+        cache_path = fb_path
+
+    mkdir(os.path.dirname(cache_path))
 
     try:
-        dest_path = dl_func(dest_path)
+        cache_path = dl_func(cache_path)
     except:
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        if os.path.exists(cache_path):
+            os.remove(cache_path)
         raise
 
-    return dest_path
+    return cache_path
 
 
-def _urlretrieve(url, dest_path, *args, **kwargs):
+def _urlretrieve(url, cache_obj_name=None, *args, **kwargs):
     """Wrapper around urlretrieve, to implement our caching logic.
-    
+
     Instead of accepting a destination path, it decided where to store the file
     and returns the local path.
     """
 
-    def _dlf(_dest_path):
-        logger.info("Downloading %s to %s..." % (url, _dest_path))
-        urlretrieve(url, _dest_path, *args, **kwargs)
-        return _dest_path
+    if cache_obj_name is None:
+        cache_obj_name = urlparse(url)
+        cache_obj_name = cache_obj_name.netloc + cache_obj_name.path
 
-    return _cached_download_helper(dest_path, _dlf)
+    def _dlf(cache_path):
+        logger.info("Downloading %s to %s..." % (url, cache_path))
+        urlretrieve(url, cache_path, *args, **kwargs)
+        return cache_path
+
+    return _cached_download_helper(cache_obj_name, _dlf)
 
 
-def _progress_urlretrieve(url, dest_path):
-    """Downloads a file to dest_path if dest_path doesn't exist yet."""
-
-    # Otherwise progress bar is annoying
-    if os.path.isfile(dest_path):
-        return dest_path
+def _progress_urlretrieve(url, cache_name=None):
+    """Downloads a file, returns its local path, and shows a progressbar."""
 
     try:
         from progressbar import DataTransferBar, UnknownLength
-        pbar = DataTransferBar()
+        pbar = [None]
         def _upd(count, size, total):
-            if pbar.max_value is None:
+            if pbar[0] is None:
+                pbar[0] = DataTransferBar()
+            if pbar[0].max_value is None:
                 if total > 0:
-                    pbar.start(total)
+                    pbar[0].start(total)
                 else:
-                    pbar.start(UnknownLength)
-            pbar.update(min(count * size, total))
+                    pbar[0].start(UnknownLength)
+            pbar[0].update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, dest_path, reporthook=_upd)
+        res = _urlretrieve(url, cache_obj_name=cache_name, reporthook=_upd)
         try:
-            pbar.finish()
+            pbar[0].finish()
         except:
             pass
         return res
     except ImportError:
-        return _urlretrieve(url, dest_path)
+        return _urlretrieve(url, cache_obj_name=cache_name)
 
 
-def aws_file_download(aws_path, dest_path):
+def aws_file_download(aws_path):
     with _get_download_lock():
-        return _aws_file_download_unlocked(aws_path, dest_path)
+        return _aws_file_download_unlocked(aws_path)
 
 
-def _aws_file_download_unlocked(aws_path, dest_path):
+def _aws_file_download_unlocked(aws_path, cache_name=None):
     """Download a file from the AWS drive s3://astgtmv2/
 
     **Note:** you need AWS credentials for this to work.
 
     Parameters
     ----------
-    aws_path: path relative to  s3://astgtmv2/
-    dest_path: where to copy the file
+    aws_path: path relative to s3://astgtmv2/
     """
 
     while aws_path.startswith('/'):
         aws_path = aws_path[1:]
 
-    def _dlf(_dest_path):
+    if cache_name is not None:
+        cache_obj_name = cache_name
+    else:
+        cache_obj_name = 'astgtmv2/' + aws_path
+
+    def _dlf(cache_path):
         import boto3
         import botocore
         client = boto3.client('s3')
-        logger.info("Downloading %s from s3 to %s..." % (aws_path, _dest_path))
+        logger.info("Downloading %s from s3 to %s..." % (aws_path, cache_path))
         try:
-            client.download_file('astgtmv2', aws_path, _dest_path)
+            client.download_file('astgtmv2', aws_path, cache_path)
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == "404":
                 return None
             else:
                 raise
-        return _dest_path
+        return cache_path
 
-    return _cached_download_helper(dest_path, _dlf)
+    return _cached_download_helper(cache_obj_name, _dlf)
 
 
-def file_downloader(www_path, dest_path, retry_max=5):
+def file_downloader(www_path, retry_max=5, cache_name=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -201,7 +222,7 @@ def file_downloader(www_path, dest_path, retry_max=5):
         # Try to download
         try:
             retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, dest_path)
+            local_path = _progress_urlretrieve(www_path, cache_name=cache_name)
             # if no error, exit
             break
         except HTTPError as err:
@@ -323,7 +344,6 @@ def _download_oggm_files_unlocked():
     master_zip_url = 'https://github.com/%s/archive/master.zip' % \
                      SAMPLE_DATA_GH_REPO
     rename_output = False
-    dest_path = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data.zip')
     shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
     odir = os.path.join(cfg.CACHE_DIR)
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
@@ -368,7 +388,7 @@ def _download_oggm_files_unlocked():
 
     # download only if necessary
     if not os.path.exists(sdir):
-        ofile = file_downloader(master_zip_url, dest_path)
+        ofile = file_downloader(master_zip_url)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
         # rename dir in case of download from different url
@@ -417,9 +437,7 @@ def _download_srtm_file_unlocked(zone):
 
     # Did we download it yet?
     wwwfile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_' + zone + '.zip'
-    dest_file = os.path.join(cfg.PATHS['topo_dir'], 'srtm',
-                             'srtm_' + zone + '.zip')
-    dest_file = file_downloader(wwwfile, dest_file)
+    dest_file = file_downloader(wwwfile)
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
@@ -448,28 +466,24 @@ def _download_dem3_viewpano_unlocked(zone):
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
-    outpath = os.path.join(tmpdir, zone+'.tif')
+    outpath = os.path.join(tmpdir, zone + '.tif')
 
     # check if extracted file exists already
     if os.path.exists(outpath):
         return outpath
 
     # OK, so see if downloaded already
-    dest_path = os.path.join(cfg.PATHS['topo_dir'], 'dem3')
     # some files have a newer version 'v2'
     if zone in ['R33', 'R34', 'R35', 'R36', 'R37', 'R38', 'Q32', 'Q33', 'Q34',
                 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
                 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
-        dest_path = os.path.join(dest_path, 'dem3_' + zone + '.zip')
     elif zone in ['01-15', '16-30', '31-45', '46-60']:
         ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
-        dest_path = os.path.join(dest_path, 'antdem3_' + zone + '.zip')
     else:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
-        dest_path = os.path.join(dest_path, 'dem3_' + zone + '.zip')
 
-    dfile = file_downloader(ifile, dest_path)
+    dfile = file_downloader(ifile)
 
     # None means we tried hard but we couldn't find it
     if not dfile:
@@ -480,7 +494,7 @@ def _download_dem3_viewpano_unlocked(zone):
         zf.extractall(tmpdir)
 
     # Serious issue: sometimes, if a southern hemisphere URL is queried for
-    # download and there is none, a NH zip file os downloaded.
+    # download and there is none, a NH zip file is downloaded.
     # Example: http://viewfinderpanoramas.org/dem3/SN29.zip yields N29!
     # BUT: There are southern hemisphere files that download properly. However,
     # the unzipped folder has the file name of
@@ -548,8 +562,7 @@ def _download_aster_file_unlocked(zone, unit):
     outpath = os.path.join(tmpdir, obname)
 
     aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
-    dest_path = os.path.join(cfg.PATHS['topo_dir'], 'aster', fbname)
-    dfile = _aws_file_download_unlocked(aws_path, dest_path)
+    dfile = _aws_file_download_unlocked(aws_path)
 
     if dfile is None:
         # Ok so this *should* be an ocean tile
@@ -575,13 +588,13 @@ def _download_alternate_topo_file_unlocked(fname):
     """Checks if the special topo data is in the directory and if not,
     download it from AWS.
 
-    You need AWS cli and AWS credentials for this. Quoting Timo::
+    You need AWS cli and AWS credentials for this. Quoting Timo:
 
         $ aws configure
-    
+
         Key ID und Secret you should have
         Region is eu-west-1 and Output Format is json.
-    
+
     """
 
     # extract directory
@@ -589,12 +602,8 @@ def _download_alternate_topo_file_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    # Download directory
-    dl_dir = os.path.join(cfg.PATHS['topo_dir'], 'alternate')
-
     aws_path = 'topo/' + fname + '.zip'
-    dest_path = os.path.join(dl_dir, fname + '.zip')
-    dfile = _aws_file_download_unlocked(aws_path, dest_path)
+    dfile = _aws_file_download_unlocked(aws_path)
 
     if not os.path.exists(outpath):
         logger.info('Extracting ' + fname + '.zip to ' + outpath + '...')
@@ -738,12 +747,12 @@ def interp_nans(array, default=None):
 
 def smooth1d(array, window_size=None, kernel='gaussian'):
     """Apply a centered window smoothing to a 1D array.
-    
+
     Parameters
     ----------
     array : ndarray
         the array to apply the smoothing to
-    window_size : int 
+    window_size : int
         the size of the smoothing window
     kernel : str
         the type of smoothing (`gaussian`, `mean`)
@@ -1242,7 +1251,7 @@ def _get_rgi_dir_unlocked():
 
     if not os.path.exists(test_file):
         # if not there download it
-        ofile = file_downloader(dfile, os.path.join(rgi_dir, bname))
+        ofile = file_downloader(dfile)
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
@@ -1300,11 +1309,10 @@ def _get_cru_file_unlocked(var=None):
         raise ValueError('The CRU filename should match "{}".'.format(bname))
     else:
         # if not there download it
-        dest_path = 'cru_ts3.24.01.1901.2015.{}.dat.nc.gz'.format(var)
-        tf = CRU_SERVER + '{}/'.format(var) + dest_path
-        dest_path = os.path.join(cru_dir, dest_path)
-        dlfile = file_downloader(tf, dest_path)
-        ofile = dlfile.replace('.gz', '')
+        cru_filename = 'cru_ts3.24.01.1901.2015.{}.dat.nc'.format(var)
+        cru_url = CRU_SERVER + '{}/'.format(var) + cru_filename + '.gz'
+        dlfile = file_downloader(cru_url)
+        ofile = os.path.join(cru_dir, cru_filename)
         with gzip.GzipFile(dlfile) as zf:
             with open(ofile, 'wb') as outfile:
                 for line in zf:
@@ -1319,9 +1327,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     If the needed files for covering the extent are not present, download them.
 
     By default it will be referred to SRTM for [-60S; 60N], GIMP for Greenland,
-    RAMP for Antarctica, and a corrected DEM3 (viewfinderpanoramas.org) 
-    elsewhere. 
-    
+    RAMP for Antarctica, and a corrected DEM3 (viewfinderpanoramas.org)
+    elsewhere.
+
     A user-specified data source can be given with the ``source`` keyword.
 
     Parameters
@@ -1487,7 +1495,7 @@ def glacier_characteristics(gdirs, to_csv=True):
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
-    to_csv: 
+    to_csv:
         Set to "True" in order  to store the info in the working directory
         Set to a basename to rename the file to your choice
     """
@@ -2007,7 +2015,7 @@ class GlacierDirectory(object):
         div_id : int
             the divide for which you want to get the file path
         use_compression : bool
-            whether or not the file ws compressed. Default is to use 
+            whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         Returns
         -------
@@ -2033,7 +2041,7 @@ class GlacierDirectory(object):
         div_id : int
             the divide for which you want to get the file path
         use_compression : bool
-            whether or not the file ws compressed. Default is to use 
+            whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         """
         use_comp = use_compression if use_compression is not None \
