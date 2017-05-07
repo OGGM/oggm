@@ -62,6 +62,7 @@ Using OGGM
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`glacierdir-gen`
+* :doc:`input-data`
 * :doc:`mpi`
 * :doc:`api`
 * :doc:`contributing`
@@ -75,6 +76,7 @@ Using OGGM
     installing-oggm.rst
     getting-started.rst
     glacierdir-gen.rst
+    input-data.rst
     mpi.rst
     api.rst
     whats-new.rst

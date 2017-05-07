@@ -105,13 +105,13 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     Parameters
     ----------
-    task: function
-        the entity task to apply
-    gdirs: list
-        the list of oggm.GlacierDirectory to process
-        optionally, each list element can be a tuple, with the first element being
-        the oggm.GlacierDirectory, and the second element a dict that will be passed
-        to the task function as **kwargs.
+    task : function
+         the entity task to apply
+    gdirs : list
+         the list of oggm.GlacierDirectory to process.
+         Optionally, each list element can be a tuple, with the first element 
+         being the ``oggm.GlacierDirectory``, and the second element a dict that
+         will be passed to the task function as ``**kwargs``.
     """
 
     if task.__dict__.get('global_task', False):

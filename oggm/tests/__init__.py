@@ -19,10 +19,6 @@ from oggm import cfg
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
-# test dirs
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
-
 # Some logic to see which environment we are running on
 
 # GDAL version changes the way interpolation is made (sigh...)
@@ -152,7 +148,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     from oggm.utils import get_demo_file
 
     # test directory
-    testdir = TESTDIR_BASE + '_border{}'.format(border)
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_border{}'.format(border))
     if not invert_with_sliding:
         testdir += '_withoutslide'
     if not invert_with_rectangular:

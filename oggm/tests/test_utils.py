@@ -3,23 +3,22 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
-import shutil
 import time
+import shutil
 
 import salem
 import numpy as np
 import pandas as pd
 from numpy.testing import assert_array_equal, assert_allclose
 
-from oggm.tests import is_download
+import oggm
 from oggm import utils
 from oggm import cfg
+from oggm.tests import is_download
 
 # Globals
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_download')
-if not os.path.exists(TEST_DIR):
-    os.makedirs(TEST_DIR)
+TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_download')
+utils.mkdir(TEST_DIR)
 
 
 class TestFuncs(unittest.TestCase):
@@ -153,20 +152,21 @@ class TestDataFiles(unittest.TestCase):
 
     def setUp(self):
         cfg.initialize()
-        cfg.PATHS['topo_dir'] = TEST_DIR
-        cfg.PATHS['working_dir'] = TEST_DIR
+        cfg.PATHS['dl_cache_dir'] = os.path.join(TEST_DIR, 'dl_cache')
+        cfg.PATHS['working_dir'] = os.path.join(TEST_DIR, 'wd')
         cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
         self.reset_dir()
 
     def tearDown(self):
-        del cfg.PATHS['topo_dir']
         if os.path.exists(TEST_DIR):
             shutil.rmtree(TEST_DIR)
 
     def reset_dir(self):
         if os.path.exists(TEST_DIR):
             shutil.rmtree(TEST_DIR)
-        os.makedirs(TEST_DIR)
+        utils.mkdir(cfg.PATHS['dl_cache_dir'])
+        utils.mkdir(cfg.PATHS['working_dir'])
+        utils.mkdir(cfg.PATHS['tmp_dir'])
 
     def test_download_demo_files(self):
 
@@ -364,7 +364,7 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_iceland(self):
         fp, z = utils.get_topo_file([-20, -20], [65, 65])
-        self.assertTrue(os.path.exists(fp))
+        self.assertTrue(os.path.exists(fp[0]))
 
     @is_download
     def test_asterdownloadfails(self):
@@ -385,7 +385,7 @@ class TestDataFiles(unittest.TestCase):
     def test_download_cru(self):
 
         tmp = cfg.PATHS['cru_dir']
-        cfg.PATHS['cru_dir'] = TEST_DIR
+        cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_extract')
 
         of = utils.get_cru_file('tmp')
         self.assertTrue(os.path.exists(of))
@@ -396,7 +396,7 @@ class TestDataFiles(unittest.TestCase):
     def test_download_rgi(self):
 
         tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = TEST_DIR
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
 
         of = utils.get_rgi_dir()
         of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
