@@ -158,13 +158,12 @@ class TestDataFiles(unittest.TestCase):
         self.reset_dir()
 
     def tearDown(self):
-        pass
-        # if os.path.exists(TEST_DIR):
-        #     shutil.rmtree(TEST_DIR)
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
 
     def reset_dir(self):
-        # if os.path.exists(TEST_DIR):
-        #     shutil.rmtree(TEST_DIR)
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
         utils.mkdir(cfg.PATHS['dl_cache_dir'])
         utils.mkdir(cfg.PATHS['working_dir'])
         utils.mkdir(cfg.PATHS['tmp_dir'])
