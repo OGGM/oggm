@@ -32,8 +32,7 @@ if not RUN_WORKFLOW_TESTS:
     raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
+TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 

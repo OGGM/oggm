@@ -29,8 +29,6 @@ if not RUN_GRAPHIC_TESTS:
     raise unittest.SkipTest('Skipping all graphic tests.')
 
 # Globals
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TESTDIR_BASE = os.path.join(CURRENT_DIR, 'tmp')
 
 # ----------------------------------------------------------
 # Lets go
@@ -126,7 +124,7 @@ def test_inversion():
 def test_nodivide():
 
     # test directory
-    testdir = TESTDIR_BASE + '_nodiv'
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_nodiv')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
 

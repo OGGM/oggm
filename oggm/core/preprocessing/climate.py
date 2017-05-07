@@ -1025,7 +1025,6 @@ def compute_ref_t_stars(gdirs):
     df['prcp_fac'] = prcp_facs
     df['bias'] = biases
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
-    utils.mkdir(cfg.PATHS['working_dir'])
     df.sort_index().to_csv(file)
 
 

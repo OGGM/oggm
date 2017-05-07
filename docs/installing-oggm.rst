@@ -308,7 +308,7 @@ GDAL version is ``1.11.3``, install the latest corresponding python version
 
     $ pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
 
-Fiona also builds upon GDAL, so let's compile it the same way:
+Fiona also builds upon GDAL, so let's compile it the same way::
 
     $ pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
 

@@ -31,9 +31,6 @@ from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
 if not RUN_PREPRO_TESTS:
     raise unittest.SkipTest('Skipping all prepro tests.')
 
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
 
 def read_svgcoords(svg_file):
     """Get the vertices coordinates out of a SVG file"""
@@ -62,7 +59,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -207,7 +204,7 @@ class TestCenterlines(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -361,7 +358,7 @@ class TestGeometry(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -501,16 +498,17 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_prepro')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(current_dir, 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -520,6 +518,7 @@ class TestClimate(unittest.TestCase):
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
+        shutil.rmtree(self.testdir_cru)
 
     def clean_dir(self):
         shutil.rmtree(self.testdir)
@@ -1138,13 +1137,14 @@ class TestInversion(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -1480,7 +1480,7 @@ class TestGrindelInvert(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_grindel')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_grindel')
         self.clean_dir()
 
         # Init
@@ -1640,7 +1640,7 @@ class TestCatching(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_errors')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1648,7 +1648,7 @@ class TestCatching(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = current_dir
+        cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
     def tearDown(self):
         self.rm_dir()

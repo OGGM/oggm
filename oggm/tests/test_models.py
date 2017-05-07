@@ -37,12 +37,6 @@ import matplotlib.pyplot as plt
 if not RUN_MODEL_TESTS:
     raise unittest.SkipTest('Skipping all model tests.')
 
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# test directory
-testdir = os.path.join(current_dir, 'tmp')
-
 do_plot = False
 
 DOM_BORDER = 80
@@ -325,7 +319,7 @@ class TestOtherDivides(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_div')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_div')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         # self.clean_dir()
@@ -692,7 +686,7 @@ class TestMassBalance(unittest.TestCase):
 class TestIO(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = os.path.join(current_dir, 'tmp_io')
+        self.test_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_io')
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 

@@ -1259,11 +1259,13 @@ def _get_rgi_dir_unlocked():
         pattern = '*_rgi50_*.zip'
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
-                ofile = os.path.join(root, filename)
-                with zipfile.ZipFile(ofile) as zf:
-                    ex_root = ofile.replace('.zip', '')
+                zfile = os.path.join(root, filename)
+                with zipfile.ZipFile(zfile) as zf:
+                    ex_root = zfile.replace('.zip', '')
                     mkdir(ex_root)
                     zf.extractall(ex_root)
+                # delete the zipfile after success
+                os.remove(zfile)
     return rgi_dir
 
 
@@ -1301,8 +1303,7 @@ def _get_cru_file_unlocked(var=None):
 
     # The user files may have different dates, so search for patterns
     bname = 'cru_ts*.{}.dat.nc'.format(var)
-    ofile = os.path.join(cru_dir, bname)
-    search = glob.glob(ofile)
+    search = glob.glob(os.path.join(cru_dir, bname))
     if len(search) == 1:
         ofile = search[0]
     elif len(search) > 1:

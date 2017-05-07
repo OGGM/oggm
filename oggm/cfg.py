@@ -331,14 +331,14 @@ def oggm_static_paths():
 
     # See if the file is there, if not create it
     if not os.path.exists(CONFIG_FILE):
-        dldir = os.path.join(os.path.expanduser('~'), 'OGGM_DOWNLOADS')
+        dldir = os.path.join(os.path.expanduser('~'), 'OGGM')
         config = ConfigObj()
-        config['dl_cache_dir'] = dldir
+        config['dl_cache_dir'] = os.path.join(dldir, 'download_cache')
         config['dl_cache_readonly'] = False
-        config['tmp_dir'] = ''
-        config['topo_dir'] = ''
-        config['cru_dir'] = ''
-        config['rgi_dir'] = ''
+        config['tmp_dir'] = os.path.join(dldir, 'tmp')
+        config['cru_dir'] = os.path.join(dldir, 'cru')
+        config['rgi_dir'] = os.path.join(dldir, 'rgi')
+        config['test_dir'] = os.path.join(dldir, 'tests')
         config['has_internet'] = True
         config.filename = CONFIG_FILE
         config.write()
@@ -352,15 +352,16 @@ def oggm_static_paths():
         sys.exit()
 
     # Check that all keys are here
-    for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir', 'topo_dir',
-              'cru_dir', 'rgi_dir', 'has_internet']:
+    for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir',
+              'cru_dir', 'rgi_dir', 'test_dir', 'has_internet']:
         if k not in config:
             raise RuntimeError('The oggm config file ({}) should have an '
                                'entry for {}.'.format(CONFIG_FILE, k))
 
     # Override defaults with env variables if available
     if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
-        config['dl_cache_readonly'] = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
+        ro = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
+        config['dl_cache_readonly'] = ro
     if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
         config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
 
@@ -374,7 +375,8 @@ def oggm_static_paths():
         if not k.endswith('_dir'):
             continue
         if not v:
-            v = os.path.join(PATHS['working_dir'], k[:-4])
+            # Default value?
+            v = os.path.join('~', 'OGGM_' + k[:-4])
         PATHS[k] = os.path.abspath(os.path.expanduser(v))
 
     # Other
@@ -382,8 +384,12 @@ def oggm_static_paths():
     PARAMS['dl_cache_readonly'] = config.as_bool('dl_cache_readonly')
 
     # Create cache dir if possible
-    if not os.path.exists(PATHS['dl_cache_dir']) and not PARAMS['dl_cache_readonly']:
-        os.makedirs(PATHS['dl_cache_dir'])
+    if not os.path.exists(PATHS['dl_cache_dir']):
+        if not PARAMS['dl_cache_readonly']:
+            os.makedirs(PATHS['dl_cache_dir'])
+
+# Always call this one!
+oggm_static_paths()
 
 
 def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
