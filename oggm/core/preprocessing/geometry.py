@@ -276,7 +276,7 @@ def _filter_small_slopes(hgt, dx, min_slope=1):
             ngap =  obj.stop - i0 - 1
             nhgt = hgt[[i0, obj.stop]]
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
-            if current_slope[0] >= min_slope:
+            if i0 <= 0 or current_slope[0] >= min_slope:
                 break
         slope_mask[i0:obj.stop] = np.NaN
     out = hgt.copy()
