@@ -17,9 +17,9 @@ except ImportError:  # pragma: no cover
                       'pip install -e .')
 
 # Spammers
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.getLogger("shapely").setLevel(logging.WARNING)
-logging.getLogger("rasterio").setLevel(logging.WARNING)
+logging.getLogger("Fiona").setLevel(logging.ERROR)
+logging.getLogger("shapely").setLevel(logging.ERROR)
+logging.getLogger("rasterio").setLevel(logging.ERROR)
 
 # Basic config
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',

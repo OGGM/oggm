@@ -58,6 +58,7 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
 
+
 def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     """
     I introduce a cliff in the bed to test the mass conservation of the models
@@ -79,6 +80,29 @@ def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
+
+
+def dummy_constant_bed_obstacle(hmax=3000., hmin=1000., nx=200):
+    """
+    I introduce an obstacle in the bed
+    """
+
+    map_dx = 100.
+    dx = 1.
+
+    surface_h = np.linspace(hmax, hmin, nx)
+
+    cliff_height = 200.0
+    surface_h[60:] = surface_h[60:] + cliff_height
+
+    bed_h = surface_h
+    widths = surface_h * 0. + 1.
+
+    coords = np.arange(0, nx-0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
+                                          bed_h, widths)]
+
 
 def dummy_bumpy_bed():
 
@@ -926,6 +950,89 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(volume[1], volume[2])<2e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
+
+    def test_min_slope(self):
+        """ Check what is the min slope a flowline model can produce
+        """
+
+        models = [flowline.KarthausModel, flowline.FluxBasedModel,
+                  flowline.MUSCLSuperBeeModel]
+        fdts = [3*SEC_IN_DAY, None, None]
+        lens = []
+        surface_h = []
+        volume = []
+        min_slope = []
+        yrs = np.arange(1, 700, 2)
+        for model, fdt in zip(models, fdts):
+            fls = dummy_constant_bed_obstacle()
+            mb = LinearMassBalanceModel(2600.)
+
+            model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
+                          fixed_dt=fdt)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            slope = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                fl = fls[-1]
+                length[i] = fl.length_m
+                vol[i] = fl.volume_km3
+
+                hgt = np.where(fl.thick > 0, fl.surface_h, np.NaN)
+                sl = np.arctan(-np.gradient(hgt, fl.dx_meter))
+                slope[i] = np.rad2deg(np.nanmin(sl))
+
+            lens.append(length)
+            volume.append(vol)
+            min_slope.append(slope)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
+
+        self.assertTrue(utils.rmsd(volume[0], volume[2])<1e-2)
+        self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-2)
+
+        if do_plot:  # pragma: no cover
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.plot(yrs, lens[2], 'g')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.plot(yrs, volume[2], 'g')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, min_slope[0], 'r')
+            plt.plot(yrs, min_slope[1], 'b')
+            plt.plot(yrs, min_slope[2], 'g')
+            plt.title('Compare min slope')
+            plt.xlabel('years')
+            plt.ylabel('[degrees]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'], loc=2)
+
+            plt.figure()
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[2], 'g')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed','Karthaus','Flux','MUSCL-SuperBee'],loc=3)
+            plt.show()
 
     @is_slow
     def test_constant_bed_cliff(self):
