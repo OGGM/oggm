@@ -23,6 +23,7 @@ import copy
 from itertools import groupby
 # External libs
 import numpy as np
+from pandas import Series as pdSeries
 import shapely.ops
 import scipy.signal
 from scipy.ndimage.morphology import distance_transform_edt
@@ -30,6 +31,7 @@ from skimage.graph import route_through_array
 import netCDF4
 import shapely.geometry as shpg
 import scipy.signal
+from scipy.interpolate import RegularGridInterpolator
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
@@ -789,3 +791,169 @@ def compute_downstream_lines(gdir):
         lids = [l for l in lids if mask[l[0], l[1]] == 0][0:-1]
         line = shpg.LineString(np.array(lids)[:, [1, 0]])
         gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
+
+
+def _approx_parabola(x, y, y0=0):
+    """Fit a parabola to the equation y = a x**2 + y0
+
+    Parameters
+    ----------
+    x : array
+       the x axis variabls
+    y : array
+       the dependant variable
+    y0 : float, optional
+       the intercept
+
+    Returns
+    -------
+    [a, 0, y0]
+    """
+    # y=ax**2+y0
+    x, y = np.array(x), np.array(y)
+    a = np.sum(x ** 2 * (y - y0)) / np.sum(x ** 4)
+    return np.array([a, 0, y0])
+
+
+def _parabola_error(x, y, f):
+    # f is an array represents polynom
+    x, y = np.array(x), np.array(y)
+    return sum(abs((np.polyval(f, x) - y) / y)) / len(x)
+
+
+@entity_task(log, writes=['downstream_bed'])
+def compute_downstream_bedshape(gdir):
+    """The bedshape obtained by fitting a parabola to the line's normals.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+    # get the major downstream line only
+    majid = gdir.read_pickle('major_divide', div_id=0)
+    dl = gdir.read_pickle('downstream_line', div_id=majid)
+    
+    # Volume area scaling formula for the ice thickness
+    h_mean = 0.034 * gdir.rgi_area_km2**0.375 * 1000
+    log.debug('%s: estimated glacier thickness: %d', gdir.rgi_id, h_mean)
+
+    bed = []
+    # Far Factor
+    r = 40
+    # number of points
+    cs_n = 20
+    
+    # make distance between point the same
+    # TODO: use a Centerline class instead
+    from .geometry import _line_interpol, InversionFlowline
+    l = shpg.LineString(_line_interpol(dl,cfg.PARAMS['flowline_dx']))
+    idl = InversionFlowline(l, cfg.PARAMS['flowline_dx'], None)
+       
+    # Topography
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+        topo = nc.variables['topo_smoothed'][:]
+        x = nc.variables['x'][:]
+        y = nc.variables['y'][:]
+    xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
+    interpolator = RegularGridInterpolator(xy, topo)
+
+    # TODO: temporary class
+    class MyPoint(shpg.Point):
+        def __hash__(self):
+            return hash(tuple((self.x, self.y)))
+
+    # normals
+    ns = [i[0] for i in idl.normals]
+    cs = []
+    try:
+        for pcoords, n in zip(idl.line.coords, ns):
+            xi, yi = pcoords
+            vx, vy = n
+            modul = np.sqrt(vx**2 + vy**2)
+            ci = []
+            for ro in np.linspace(0, r / 2.0, cs_n):
+                t = ro / modul
+                cp1 = MyPoint(xi + t * vx, yi + t * vy)
+                cp2 = MyPoint(xi - t * vx, yi - t * vy)
+
+                # check if out of the frame
+                if not (0 < cp2.y < len(y) - 1) or \
+                   not (0 < cp2.x < len(x) - 1) or \
+                   not (0 < cp1.y < len(y) - 1) or \
+                   not (0 < cp1.x < len(x) - 1):
+                    raise StopIteration()
+
+                ci.append((cp1, ro))
+                ci.append((cp2, -ro))
+
+            ci = list(set(ci))
+            cs.append(ci)
+    except StopIteration:
+        # we reached the end of the line
+        pass
+
+    log.debug('%s: length of downstream line is: %d', gdir.rgi_id, len(cs))
+
+    good = 0
+    for ic, cc in enumerate(cs):
+        z = []
+        ro = []
+        for i in cc:
+            z.append(interpolator((i[0].y, i[0].x)))
+            ro.append(i[1])
+        aso = np.argsort(ro)
+        ro, z = np.array(ro)[aso], np.array(z)[aso]
+
+        # find top of parabola
+        roHead = ro[np.argmin(z)]
+        zero = np.argmin(z)  # it is index of roHead/zHead
+        zHead = np.amin(z)
+
+        dsts = abs(h_mean + zHead - z)
+
+        # find local minima in set of distances
+        extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
+
+        # from local minima find that with the minimum |x|
+        idx = extr[0][np.argmin(abs(ro[extr]))]
+
+        # x<0 => x=0
+        # (|x|+x)/2 
+        roN = ro[int((abs(zero - abs(zero - idx)) + zero - abs(
+            zero - idx)) / 2):zero + abs(zero - idx) + 1]
+        zN = z[int((abs(zero - abs(zero - idx)) + zero - abs(
+            zero - idx)) / 2):zero + abs(zero - idx) + 1]
+        roNx = roN - roHead
+        # zN=zN-zHead#
+
+        p = _approx_parabola(roNx, zN, y0=zHead)
+
+        # shift parabola to the ds-line
+        p2 = np.copy(p)
+        p2[2] = z[ro == 0]
+
+        err = _parabola_error(roN, zN, p2) * 100
+        if err < 1.5:
+            bed.append(p2)
+            good += 1
+        else:
+            bed.append([None, 0, p2[2]])
+
+    log.debug('%s: percentage of valid parabolas: %d',
+              gdir.rgi_id, int(good/len(cs)*100))
+
+    # skip gaps
+    x_bed = [i for i, j in enumerate(bed) if j[0]]
+    bg = [bed[i][0] for i in x_bed]
+
+    # interpolation, filling the gaps
+    bed_i = np.interp(range(0, len(bed)), x_bed, bg)
+    bed_int = [[bed_i[j], i[1], i[2]] for j, i in enumerate(bed)]
+
+    # approximation - BED_Moving_Average
+    bed_ma = pdSeries([i[0] for i in bed_int])
+    bed_ma = bed_ma.rolling(window=5, center=True, min_periods=1).mean()
+    bed_ma = [[bed_ma[j], i[1], i[2]] for j, i in enumerate(bed_int)]
+
+    # write output
+    gdir.write_pickle(bed_ma, 'downstream_bed')
