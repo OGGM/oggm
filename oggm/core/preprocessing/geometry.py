@@ -592,6 +592,7 @@ def initialize_flowlines(gdir, div_id=None):
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
     ms = cfg.PARAMS['min_slope']
+    do_filter = cfg.PARAMS['filter_min_slope']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
@@ -627,18 +628,21 @@ def initialize_flowlines(gdir, div_id=None):
         hgts = gaussian_filter1d(hgts, sw)
 
         # Check for min slope issues and correct if needed
-        hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope=ms)
-        isfin = np.isfinite(hgts)
-        assert np.any(isfin)
-        perc_bad = np.sum(~isfin) / len(isfin)
-        if perc_bad > 0.1:
-            log.warning('{}: more than {:.0%} of the flowline is cropped due '
-                        'to negative slopes.'.format(gdir.rgi_id, perc_bad))
-        sp = np.min(np.where(isfin)[0])
-        hgts = utils.interp_nans(hgts[sp:])
-        assert np.all(np.isfinite(hgts))
-        assert len(hgts) > 5
-        new_line = shpg.LineString(points[sp:])
+        if do_filter:
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope=ms)
+            isfin = np.isfinite(hgts)
+            assert np.any(isfin)
+            perc_bad = np.sum(~isfin) / len(isfin)
+            if perc_bad > 0.1:
+                log.warning('{}: more than {:.0%} of the flowline is cropped '
+                            'due to negative slopes.'.format(gdir.rgi_id,
+                                                             perc_bad))
+            sp = np.min(np.where(isfin)[0])
+            hgts = utils.interp_nans(hgts[sp:])
+            assert np.all(np.isfinite(hgts))
+            assert len(hgts) > 5
+            new_line = shpg.LineString(points[sp:])
+
         l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order
         fls.append(l)
