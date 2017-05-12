@@ -845,9 +845,9 @@ def compute_downstream_bedshape(gdir):
     
     # make distance between point the same
     # TODO: use a Centerline class instead
-    from .geometry import _line_interpol, InversionFlowline
+    from .geometry import _line_interpol
     l = shpg.LineString(_line_interpol(dl,cfg.PARAMS['flowline_dx']))
-    idl = InversionFlowline(l, cfg.PARAMS['flowline_dx'], None)
+    idl = Centerline(l, cfg.PARAMS['flowline_dx'], None)
        
     # Topography
     with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
