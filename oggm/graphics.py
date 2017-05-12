@@ -322,10 +322,10 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
             if corrected:
                 for wi, cur, (n1, n2) in zip(l.widths, l.line.coords,
                                              l.normals):
-                    l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                    _l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
                                          shpg.Point(cur + wi / 2. * n2)])
 
-                    salemmap.set_geometry(l, crs=crs, color=c,
+                    salemmap.set_geometry(_l, crs=crs, color=c,
                                          linewidth=0.6, zorder=50)
             else:
                 for wl, wi in zip(l.geometrical_widths, l.widths):

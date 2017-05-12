@@ -265,6 +265,7 @@ def initialize(file=None):
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
+    PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -309,7 +310,7 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor', 'use_intersects']
+           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope']
     for k in ltr:
         cp.pop(k, None)
 

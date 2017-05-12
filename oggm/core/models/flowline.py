@@ -486,6 +486,11 @@ class FlowlineModel(object):
         if self.fls[-1].thick[-1] > 10:
             raise RuntimeError('Glacier exceeds domain boundaries.')
 
+        # Check for NaNs
+        for fl in self.fls:
+            if np.any(~np.isfinite(fl.thick)):
+                raise RuntimeError('NaN in numerical solution.')
+
     def run_until_and_store(self, y1, path=None):
         """Runs the model and returns intermediate steps in a dataset.
 
@@ -798,7 +803,9 @@ class FluxBasedModel(FlowlineModel):
             # Time crit: limit the velocity somehow
             maxu = np.max(np.abs(u_stag))
             if maxu > 0.:
-                _dt = 1./60. * dx / maxu
+                # this is arbitrary
+                # 100 is quite conservative, 60 is too low
+                _dt = 1./100. * dx / maxu
             else:
                 _dt = self.max_dt
             if _dt < dt:
@@ -807,7 +814,7 @@ class FluxBasedModel(FlowlineModel):
         # Time step
         if dt < min_dt:
             if not self.dt_warning:
-                log.warning('Unstable')
+                log.warning('Reached min dt')
             self.dt_warning = True
         dt = np.clip(dt, min_dt, self.max_dt)
 

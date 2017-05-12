@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore", category=UserWarning,
                         message=r'.*guessing baseline image.*')
 
 import pytest
+import shutil
 
 import os
 import geopandas as gpd
@@ -18,7 +19,7 @@ import oggm.utils
 from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
 from oggm.tests import init_hef, BASELINE_DIR
 from oggm import graphics
-from oggm.core.preprocessing import gis, centerlines
+from oggm.core.preprocessing import gis, centerlines, geometry
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm.core.models import flowline
@@ -146,6 +147,46 @@ def test_nodivide():
     fig, ax = plt.subplots()
     graphics.plot_centerlines(gdir, ax=ax)
     fig.tight_layout()
+
+    shutil.rmtree(testdir)
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_nodivide_corrected():
+
+    # test directory
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_nodiv')
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+
+    # Init
+    cfg.initialize()
+    cfg.set_divides_db()
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = 40
+
+    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
+
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+    geometry.initialize_flowlines(gdir)
+    geometry.catchment_area(gdir)
+    geometry.catchment_intersections(gdir)
+    geometry.catchment_width_geom(gdir)
+    geometry.catchment_width_correction(gdir)
+
+    fig, ax = plt.subplots()
+    graphics.plot_catchment_width(gdir, ax=ax, corrected=True,
+                                  add_intersects=True, add_touches=True)
+    fig.tight_layout()
+
+    shutil.rmtree(testdir)
     return fig
 
 

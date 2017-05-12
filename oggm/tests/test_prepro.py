@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division
 
+import oggm
 import warnings
 
 import oggm.utils
@@ -1473,6 +1474,60 @@ class TestInversion(unittest.TestCase):
         dfc = utils.glacier_characteristics([gdir])
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
         self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
+
+
+class TestSlopeMitigation(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        utils.mkdir(self.testdir)
+
+    def test_nodivides_correct_slope(self):
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db()
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+
+        self.assertEqual(gdir.n_divides, 1)
+
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+        for fl in fls:
+            dx = fl.dx * gdir.grid.dx
+            slope = np.arctan(-np.gradient(fl.surface_h, dx))
+            self.assertTrue(np.all(slope >= min_slope))
 
 
 class TestGrindelInvert(unittest.TestCase):

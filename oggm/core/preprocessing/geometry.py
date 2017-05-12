@@ -252,6 +252,38 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     return width, line
 
 
+def _filter_small_slopes(hgt, dx, min_slope=1):
+    """Masks out slopes with NaN until the slope if all valid points is at 
+    least min_slope (in degrees).
+    """
+
+    min_slope = np.deg2rad(min_slope)
+    slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+    # slope at the end always OK
+    slope[-1] = min_slope
+
+    # Find the locs where it doesn't work and expand till we got everything
+    slope_mask = np.where(slope >= min_slope, slope, np.NaN)
+    r, nr = label(~np.isfinite(slope_mask))
+    for objs in find_objects(r):
+        obj = objs[0]
+        i = 0
+        while True:
+            i += 1
+            i0 = objs[0].start-i
+            if i0 < 0:
+                break
+            ngap =  obj.stop - i0 - 1
+            nhgt = hgt[[i0, obj.stop]]
+            current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
+            if i0 <= 0 or current_slope[0] >= min_slope:
+                break
+        slope_mask[i0:obj.stop] = np.NaN
+    out = hgt.copy()
+    out[~np.isfinite(slope_mask)] = np.NaN
+    return out
+
+
 def _filter_for_altitude_range(widths, wlines, topo):
     """Some width lines have unrealistic lenght and go over the whole
     glacier. Filter them out."""
@@ -546,7 +578,8 @@ def initialize_flowlines(gdir, div_id=None):
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
-    realistic junctions.
+    realistic junctions. It also checks for low and negatve slopes and corrects
+    them by interpolation.
 
     Parameters
     ----------
@@ -558,6 +591,8 @@ def initialize_flowlines(gdir, div_id=None):
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
+    ms = cfg.PARAMS['min_slope']
+    do_filter = cfg.PARAMS['filter_min_slope']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
@@ -591,6 +626,22 @@ def initialize_flowlines(gdir, div_id=None):
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
+
+        # Check for min slope issues and correct if needed
+        if do_filter:
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope=ms)
+            isfin = np.isfinite(hgts)
+            assert np.any(isfin)
+            perc_bad = np.sum(~isfin) / len(isfin)
+            if perc_bad > 0.1:
+                log.warning('{}: more than {:.0%} of the flowline is cropped '
+                            'due to negative slopes.'.format(gdir.rgi_id,
+                                                             perc_bad))
+            sp = np.min(np.where(isfin)[0])
+            hgts = utils.interp_nans(hgts[sp:])
+            assert np.all(np.isfinite(hgts))
+            assert len(hgts) > 5
+            new_line = shpg.LineString(points[sp:])
 
         l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order
