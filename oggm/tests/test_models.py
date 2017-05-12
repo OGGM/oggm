@@ -951,6 +951,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
 
+    @is_slow
     def test_min_slope(self):
         """ Check what is the min slope a flowline model can produce
         """
@@ -1178,9 +1179,9 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
         self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
+        self.assertTrue(utils.rmsd(volume[2], volume[1])<1e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
     @is_slow
     def test_bumpy_bed(self):

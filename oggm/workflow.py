@@ -167,8 +167,8 @@ def gis_prepro_tasks(gdirs):
         tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.compute_downstream_lines,
-        tasks.catchment_area,
         tasks.initialize_flowlines,
+        tasks.catchment_area,
         tasks.catchment_width_geom,
         tasks.catchment_width_correction
     ]

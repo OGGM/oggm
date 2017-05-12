@@ -271,10 +271,12 @@ def _filter_small_slopes(hgt, dx, min_slope=1):
         while True:
             i += 1
             i0 = objs[0].start-i
+            if i0 < 0:
+                break
             ngap =  obj.stop - i0 - 1
             nhgt = hgt[[i0, obj.stop]]
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
-            if i0 == 0 or current_slope[0] >= min_slope:
+            if current_slope[0] >= min_slope:
                 break
         slope_mask[i0:obj.stop] = np.NaN
     out = hgt.copy()
@@ -634,6 +636,8 @@ def initialize_flowlines(gdir, div_id=None):
                         'to negative slopes.'.format(gdir.rgi_id, perc_bad))
         sp = np.min(np.where(isfin)[0])
         hgts = utils.interp_nans(hgts[sp:])
+        assert np.all(np.isfinite(hgts))
+        assert len(hgts) > 5
         new_line = shpg.LineString(points[sp:])
         l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order

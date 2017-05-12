@@ -195,6 +195,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
                     out_thick[i] = _inv_function(a3, a0)
                 else:
                     out_thick[i] = 0.
+            assert np.all(np.isfinite(out_thick))
 
             # volume
             fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
@@ -203,7 +204,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
             if write:
                 cl['thick'] = out_thick
                 cl['volume'] = volume
-            out_volume += np.nansum(volume)
+            out_volume += np.sum(volume)
         if write:
             gdir.write_pickle(cls, 'inversion_output', div_id=div)
 
@@ -247,6 +248,7 @@ def optimize_inversion_params(gdirs):
     # Account for area differences between glathida and rgi
     gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
     ref_area_km2 = gtd_df.RGI_AREA.values
+    ref_area_m2 = ref_area_km2 * 1e6
     gtd_df.VOLUME = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
     ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
     ref_volume_km3 = ref_cs * ref_area_km2**1.375
@@ -331,13 +333,13 @@ def optimize_inversion_params(gdirs):
     # This is for the working dir
     # Simple stats
     out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
-    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9 / ref_area_km2 / 1000,
+    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 / ref_area_m2,
                                    ref_thickness_m)
 
     log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
              '{factor_fs:.2f} for a thick RMSD of '
-             '{thick_rmsd:.1f} and a volume RMSD of '
-             '{vol_rmsd:.3f}'.format(**out))
+             '{thick_rmsd:.1f} m and a volume RMSD of '
+             '{vol_rmsd:.3f} km3'.format(**out))
 
     df = pd.DataFrame(out, index=[0])
     fpath = os.path.join(cfg.PATHS['working_dir'],
@@ -409,7 +411,10 @@ def filter_inversion_output(gdir):
             # paper. I did this because it looks better, but I'm not sure
             # (yet) that this is a good idea
             fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
-            init_vol = np.nansum(cl['volume'])
+            init_vol = np.sum(cl['volume'])
+            if init_vol == 0:
+                # this can happen
+                continue
             w = cl['width']
             out_thick = cl['thick']
 
