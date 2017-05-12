@@ -1,11 +1,11 @@
 import glob
 import os
 
-import salem
 import matplotlib.pyplot as plt
+import salem
 
-from oggm.sandbox.itmix_cfg import DATA_DIR, ITMIX_ODIR, PLOTS_DIR
-from oggm.sandbox.itmix import find_path
+from .itmix import find_path
+from .itmix_cfg import DATA_DIR, ITMIX_ODIR, PLOTS_DIR
 
 pdir = os.path.join(PLOTS_DIR, 'submitted') + '/'
 if not os.path.exists(pdir):

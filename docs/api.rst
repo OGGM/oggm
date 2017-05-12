@@ -2,6 +2,24 @@
 Developer documentation
 #######################
 
+.. currentmodule:: oggm
+
+
+Workflow
+========
+
+Tools to set-up and run OGGM.
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    workflow.init_glacier_regions
+    workflow.execute_entity_task
+    workflow.gis_prepro_tasks
+    workflow.climate_tasks
+    workflow.inversion_tasks
+
 
 .. _apientitytasks:
 
@@ -12,27 +30,26 @@ Entity tasks are tasks which are applied on single glaciers individually
 and do not require information from other glaciers (this encompasses
 the majority of OGGM's tasks). They are parallelizable.
 
-.. currentmodule:: oggm.tasks
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
-    define_glacier_region
-    glacier_masks
-    compute_centerlines
-    compute_downstream_lines
-    catchment_area
-    initialize_flowlines
-    catchment_width_geom
-    catchment_width_correction
-    process_custom_climate_data
-    process_cru_data
-    mu_candidates
-    prepare_for_inversion
-    volume_inversion
-    distribute_thickness
-    init_present_time_glacier
+    tasks.define_glacier_region
+    tasks.glacier_masks
+    tasks.compute_centerlines
+    tasks.compute_downstream_lines
+    tasks.catchment_area
+    tasks.initialize_flowlines
+    tasks.catchment_width_geom
+    tasks.catchment_width_correction
+    tasks.process_custom_climate_data
+    tasks.process_cru_data
+    tasks.mu_candidates
+    tasks.prepare_for_inversion
+    tasks.volume_inversion
+    tasks.distribute_thickness
+    tasks.init_present_time_glacier
 
 Global tasks
 ============
@@ -40,16 +57,14 @@ Global tasks
 Global tasks are tasks which are run on a set of glaciers (most often: all
 glaciers in the current run). They are not parallelizable.
 
-.. currentmodule:: oggm.tasks
-
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
-    compute_ref_t_stars
-    distribute_t_stars
-    crossval_t_stars
-    optimize_inversion_params
+    tasks.compute_ref_t_stars
+    tasks.distribute_t_stars
+    tasks.crossval_t_stars
+    tasks.optimize_inversion_params
 
 Classes
 =======
@@ -59,7 +74,7 @@ which are used and re-used across modules and tasks).
 
 TODO: add the flowline classes, the model classes, etc.
 
-.. currentmodule:: oggm
+
 
 .. autosummary::
     :toctree: generated/
@@ -67,13 +82,10 @@ TODO: add the flowline classes, the model classes, etc.
 
     GlacierDirectory
     Centerline
-    InversionFlowline
 
 
 Mass-balance
 ============
-
-.. currentmodule:: oggm
 
 Mass-balance models found in the ``core.models.massbalance`` module.
 
@@ -117,7 +129,7 @@ Interface
     :nosignatures:
 
     MassBalanceModel
-    MassBalanceModel.get_mb
+    MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
     MassBalanceModel.get_specific_mb
     MassBalanceModel.temp_bias

@@ -32,7 +32,7 @@ def process_histalp_nonparallel(gdirs, fpath=None):
     # Did the user specify a specific climate data file?
     if fpath is None:
         if ('climate_file' in cfg.PATHS):
-                fpath = cfg.PATHS['climate_file']
+            fpath = cfg.PATHS['climate_file']
 
     if not os.path.exists(fpath):
         raise IOError('Custom climate file not found')
@@ -135,6 +135,127 @@ def process_custom_climate_data(gdir):
     # metadata
     out = {'climate_source': fpath, 'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
+
+
+@entity_task(log, writes=['cesm_data'])
+def process_cesm_data(gdir, filesuffix=''):
+    """Processes and writes the climate data for this glacier.
+
+    This function is made for interpolating the Community
+    Earth System Model Last Millenial Ensemble (CESM-LME) climate simulations,
+    from Otto-Bliesner et al. (2016), to the high-resolution CL2 climatologies
+    (provided with OGGM) and writes everything to a NetCDF file.
+
+    Parameters
+    ----------
+    filesuffix : str
+        append a suffix to the filename (useful for model runs).
+    """
+
+    # GCM temperature and precipitation data
+    if not (('gcm_temp_file' in cfg.PATHS) and
+                    os.path.exists(cfg.PATHS['gcm_temp_file'])):
+        raise IOError('GCM temp file not found')
+
+    if not (('gcm_precc_file' in cfg.PATHS) and
+                    os.path.exists(cfg.PATHS['gcm_precc_file'])):
+        raise IOError('GCM precc file not found')
+
+    if not (('gcm_precl_file' in cfg.PATHS) and
+                    os.path.exists(cfg.PATHS['gcm_precl_file'])):
+        raise IOError('GCM precl file not found')
+
+    # read the files
+    fpath_temp = cfg.PATHS['gcm_temp_file']
+    fpath_precc = cfg.PATHS['gcm_precc_file']
+    fpath_precl = cfg.PATHS['gcm_precl_file']
+
+    tempds = xr.open_dataset(fpath_temp)
+    precpcds = xr.open_dataset(fpath_precc, decode_times=False)
+    preclpds = xr.open_dataset(fpath_precl, decode_times=False)
+
+    # select for location
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+
+    # CESM files are in 0-360
+    if lon <= 0:
+        lon += 360
+
+    # take the closest
+    # TODO: consider GCM interpolation?
+    temp = tempds.TREFHT.sel(lat=lat, lon=lon, method='nearest')
+    precp = precpcds.PRECC.sel(lat=lat, lon=lon, method='nearest') + \
+            preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
+
+    # from normal years to hydrological years
+    precp = precp[9:-3]
+    temp = temp[9:-3]
+    y0 = int(temp.time.values[0].strftime('%Y'))
+    y1 = int(temp.time.values[-1].strftime('%Y'))
+    temp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
+                                   freq='M')
+    precp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
+                                    freq='M')
+    ny, r = divmod(len(temp.time), 12)
+    assert r == 0
+
+    # Convert m s-1 to mm mth-1
+    ndays = np.tile([31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30],
+                    (y1 - y0))
+    precp = precp * ndays * (60 * 60 * 24 * 1000)
+
+    # compute monthly anomalies
+    year = np.array([t.year for t in temp.time.values])
+    # of temp
+    ts_tmp_avg = temp.isel(time=(year >= 1961) & (year <= 1990))
+    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
+    # of precip
+    ts_pre_avg = precp.isel(time=(year >= 1961) & (year <= 1990))
+    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre = precp.groupby('time.month') - ts_pre_avg
+
+    # Get CRU to apply the anomaly to
+    fpath = gdir.get_filepath('climate_monthly')
+    dscru = xr.open_dataset(fpath)
+
+    # Here we assume the gradient is a monthly average
+    ts_grad = np.tile(dscru.grad[0:12], ny)
+
+    # Add climate anomaly to CRU clim
+    dscru = dscru.sel(time=slice('1961', '1990'))
+    # for temp
+    loc_tmp = dscru.temp.groupby('time.month').mean()
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    # for prcp
+    loc_pre = dscru.prcp.groupby('time.month').mean()
+    ts_pre = ts_pre.groupby('time.month') + loc_pre
+
+    # load dates in right format to save
+    dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
+    time1 = dsindex.variables['time']
+    time2 = time1[9:-3] - ndays  # from normal years to hydrological years
+    time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
+
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+    assert np.all(np.isfinite(ts_grad))
+
+    # back to -180 - 180
+    loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
+
+    gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
+                                    ts_grad, dscru.ref_hgt,
+                                    loc_lon, precp.lat.values,
+                                    time_unit=time1.units,
+                                    file_name='cesm_data',
+                                    filesuffix=filesuffix)
+
+    dsindex._nc.close()
+    tempds.close()
+    precpcds.close()
+    preclpds.close()
 
 
 @entity_task(log, writes=['climate_monthly'])
@@ -271,7 +392,7 @@ def process_cru_data(gdir):
     # take the center pixel and add it to the CRU CL clim
     # for temp
     loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
-                           coords={'month':ts_pre_avg.month})
+                           coords={'month':ts_tmp_avg.month})
     ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
                            coords={'time':time})
     ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
@@ -746,7 +867,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                 log.warning('%s: flux should be zero, but is: '
                             '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
-            if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.1):
+            if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
                 msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
                        .format(gdir.rgi_id, aflux)
                 raise RuntimeError(msg)
@@ -797,6 +918,7 @@ def _get_optimal_scaling_factor(ref_gdirs):
     fac = opti['x'][0]
     log.info('Optimal prcp factor: {:.2f}'.format(fac))
     return fac
+
 
 @global_task
 def compute_ref_t_stars(gdirs):

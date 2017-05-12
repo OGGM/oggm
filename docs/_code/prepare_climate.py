@@ -7,9 +7,11 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from oggm import cfg, tasks
 from oggm.utils import get_demo_file
-from oggm.core.preprocessing.climate import mb_yearly_climate_on_glacier, \
-    t_star_from_refmb, local_mustar_apparent_mb
-from oggm.core.models.massbalance import PastMassBalanceModel
+from oggm.core.preprocessing.climate import (mb_yearly_climate_on_glacier,
+                                             t_star_from_refmb,
+                                             local_mustar_apparent_mb)
+from oggm.core.models.massbalance import (PastMassBalanceModel,
+                                          ConstantMassBalanceModel)
 
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
@@ -23,6 +25,7 @@ gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
+tasks.compute_downstream_lines(gdir)
 
 tasks.initialize_flowlines(gdir)
 tasks.catchment_area(gdir)
@@ -36,6 +39,9 @@ mbdf = gdir.get_ref_mb_data()
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
                          prcp_fac=res['prcp_fac'])
+
+# For flux plot
+tasks.prepare_for_inversion(gdir, add_debug_var=True)
 
 # For plots
 mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]
@@ -57,6 +63,15 @@ pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 
+# For the mass flux
+majid = gdir.read_pickle('major_divide', div_id=0)
+cl = gdir.read_pickle('inversion_input', div_id=majid)[-1]
+mbmod = ConstantMassBalanceModel(gdir)
+mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.RHO
+fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
+fdf['Flux'] = cl['flux']
+fdf['Mass balance'] = mbx
+
 # plot functions
 def example_plot_temp_ts():
     d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
@@ -70,12 +85,14 @@ def example_plot_temp_ts():
     plt.tight_layout()
     plt.show()
 
+
 def example_plot_mu_ts():
     ax = mu_yr_clim.plot(figsize=(8, 4), label=r'$\mu (t)$');
     plt.legend(loc='best'); plt.title(r'$\mu$ candidates Hintereisferner');
     plt.ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
     plt.tight_layout()
     plt.show()
+
 
 def example_plot_bias_ts():
     ax = pdf.plot(figsize=(8, 4), secondary_y='bias')
@@ -87,5 +104,18 @@ def example_plot_bias_ts():
     for ts in res['t_star']:
         plt.plot((ts, ts), (yl[0], 0), linestyle=':', color='grey')
     plt.ylim(yl)
+    plt.tight_layout()
+    plt.show()
+
+
+def example_plot_massflux():
+    fig, ax = plt.subplots(figsize=(8, 4))
+    fdf.plot(ax=ax, secondary_y='Mass balance', style=['C1-', 'C0-'])
+    plt.axhline(0., color='grey', linestyle=':')
+    ax.set_ylim([0, 0.18])
+    ax.set_ylabel('Flux [m$^3$ s$^{-1}$]')
+    ax.right_ax.set_ylabel('MB [kg m$^{-2}$ yr$^{-1}$]')
+    ax.set_xlabel('Distance along flowline (m)')
+    plt.title('Mass flux and mass balance along flowline')
     plt.tight_layout()
     plt.show()

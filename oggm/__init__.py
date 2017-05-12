@@ -1,6 +1,6 @@
 """ OGGM package.
 
-Copyright: OGGM developers, 2014-2015
+Copyright: OGGM developers, 2014-2017
 
 License: GPLv3+
 """
@@ -16,10 +16,10 @@ except ImportError:  # pragma: no cover
                       'and  then install it in-place by running: '
                       'pip install -e .')
 
-# Fiona, rasterio and shapely are spammers
-logging.getLogger("Fiona").setLevel(logging.WARNING)
-logging.getLogger("shapely").setLevel(logging.WARNING)
-logging.getLogger("rasterio").setLevel(logging.WARNING)
+# Spammers
+logging.getLogger("Fiona").setLevel(logging.ERROR)
+logging.getLogger("shapely").setLevel(logging.ERROR)
+logging.getLogger("rasterio").setLevel(logging.ERROR)
 
 # Basic config
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -34,4 +34,3 @@ except ImportError:
 # API
 from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
 from oggm.core.preprocessing.centerlines import Centerline
-from oggm.core.preprocessing.geometry import InversionFlowline

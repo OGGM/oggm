@@ -65,14 +65,12 @@ WORKING_DIR = '/work/ubuntu/run_alps'
 DATA_DIR = '/work/ubuntu/oggm-data'
 
 cfg.PATHS['working_dir'] = WORKING_DIR
-cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
 cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
 cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
 
 # Currently OGGM wants some directories to exist
 # (maybe I'll change this but it can also catch errors in the user config)
 utils.mkdir(cfg.PATHS['working_dir'])
-utils.mkdir(cfg.PATHS['topo_dir'])
 utils.mkdir(cfg.PATHS['cru_dir'])
 utils.mkdir(cfg.PATHS['rgi_dir'])
 

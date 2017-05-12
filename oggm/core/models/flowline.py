@@ -26,6 +26,7 @@ import oggm.core.preprocessing.geometry
 import oggm.core.preprocessing.centerlines
 import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
+from oggm.core.preprocessing.centerlines import Centerline
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS
@@ -35,7 +36,7 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 log = logging.getLogger(__name__)
 
 
-class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
+class ModelFlowline(Centerline):
     """The is the input flowline for the model."""
 
     def __init__(self, line=None, dx=1, map_dx=None,
@@ -60,7 +61,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
 
-    @oggm.core.preprocessing.geometry.InversionFlowline.widths.getter
+    @Centerline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
         return self.widths_m / self.map_dx
@@ -74,7 +75,7 @@ class ModelFlowline(oggm.core.preprocessing.geometry.InversionFlowline):
     def thick(self, value):
         self._thick = value.clip(0)
 
-    @oggm.core.preprocessing.geometry.InversionFlowline.surface_h.getter
+    @Centerline.surface_h.getter
     def surface_h(self):
         return self._thick + self.bed_h
 
@@ -485,6 +486,11 @@ class FlowlineModel(object):
         if self.fls[-1].thick[-1] > 10:
             raise RuntimeError('Glacier exceeds domain boundaries.')
 
+        # Check for NaNs
+        for fl in self.fls:
+            if np.any(~np.isfinite(fl.thick)):
+                raise RuntimeError('NaN in numerical solution.')
+
     def run_until_and_store(self, y1, path=None):
         """Runs the model and returns intermediate steps in a dataset.
 
@@ -544,11 +550,11 @@ class FlowlineModel(object):
             v_bef = self.volume_m3
             self.run_until(self.yr + ystep)
             v_af = self.volume_m3
-            t_rate = np.abs(v_af - v_bef) / v_bef
             if np.isclose(v_bef, 0., atol=1):
                 t_rate = 1
                 was_close_zero += 1
-
+            else:
+                t_rate = np.abs(v_af - v_bef) / v_bef
         if ite > max_ite:
             raise RuntimeError('Did not find equilibrium.')
 
@@ -797,7 +803,9 @@ class FluxBasedModel(FlowlineModel):
             # Time crit: limit the velocity somehow
             maxu = np.max(np.abs(u_stag))
             if maxu > 0.:
-                _dt = 1./60. * dx / maxu
+                # this is arbitrary
+                # 100 is quite conservative, 60 is too low
+                _dt = 1./100. * dx / maxu
             else:
                 _dt = self.max_dt
             if _dt < dt:
@@ -806,7 +814,7 @@ class FluxBasedModel(FlowlineModel):
         # Time step
         if dt < min_dt:
             if not self.dt_warning:
-                log.warning('Unstable')
+                log.warning('Reached min dt')
             self.dt_warning = True
         dt = np.clip(dt, min_dt, self.max_dt)
 
@@ -1503,10 +1511,18 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, seed=None):
+def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
+                             filesuffix=''):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
+     
+     Parameters
+     ----------
+     nyears : length of the simulation
+     y0 : central year of the random climate period
+     seed : seed for the random generate
+     filesuffix : for the output file
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1517,15 +1533,15 @@ def random_glacier_evolution(gdir, nyears=1000, seed=None):
         fs = cfg.PARAMS['flowline_fs']
         glen_a = cfg.PARAMS['flowline_glen_a']
 
-    y0 = 1800
-    y1 = y0 + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, seed=seed)
+    ys = 1
+    ye = ys + nyears
+    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb_model=mb, y0=y0, fs=fs, glen_a=glen_a)
+    model = FluxBasedModel(fls, mb_model=mb, y0=ys, fs=fs, glen_a=glen_a)
 
     # run
-    path = gdir.get_filepath('past_model', delete=True)
-    model.run_until_and_store(y1, path=path)
+    path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
+    model.run_until_and_store(ye, path=path)
 
 
 @entity_task(log, writes=['past_model'])

@@ -14,10 +14,10 @@ implemented currently in OGGM, the ``FluxBasedModel`` (homegrown model with a
 rather simple numerical solver) and the ``MUSCLSuperBeeModel`` (mass-conserving
 numerical scheme, see [Jarosch_etal_2013]_).
 
+.. _ice-flow:
 
-
-Basics
-------
+Ice flow
+--------
 
 Let :math:`S` be the area of a cross-section perpendicular to the
 flowline. It has a width :math:`w` and a thickness :math:`h` and, in this
@@ -67,72 +67,25 @@ where :math:`\alpha` is the slope of the flowline and :math:`\rho` the density
 of ice. Both the ``FluxBasedModel`` and the ``MUSCLSuperBeeModel`` solve
 for these equations, but with different numerical schemes.
 
-Bed thickness inversion
------------------------
 
-To compute the initial ice thikness :math:`h_0`, OGGM follows a methodology
-largely inspired from
-[Farinotti_etal_2009]_ but using a different apparent mass-balance
-(see also: :ref:`mass-balance`) and another calibration algorithm.
-
-The principle is simple. Let's assume for now that we know the ice velocity
-:math:`u` along the flowline of our present-time glacier. Then the
-above equations can be used to compute the section area :math:`S` out of
-:math:`u` and the other ice-flow parameters. Since we know the present-time
-width :math:`w` with accuracy, :math:`h_0` can be obtained by assuming a
-certain geometrical shape for the bed.
-
-In OGGM, a number of climate and glacier related parameters are fixed prior to
-the inversion, leaving only one free parameter for the calibration of the
-bed inversion procedure: the inversion factor :math:`f_{inv}`. It is defined
-such as:
-
-.. math::
-
-    A = f_{inv} \, A_0
-
-With :math:`A_0` the standard creep parameter (2.4e-24). Currently,
-:math:`f_{inv}` is calibrated to minimize the volume RMSD of all glaciers
-with a volume estimation in the `GlaThiDa`_ database. It is therefore
-neither glacier nor temperature dependent and does not account for
-uncertainties in GlaThiDa's glacier-wide thickness estimations, two
-approximations which should be better handled in the future.
-
-.. _parabolic shape: https://en.wikipedia.org/wiki/Parabola#Area_enclosed_between_a_parabola_and_a_chord
-
-.. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
-
-
-Flux based model
-----------------
-
-Most flowline models treat the volume conservation equation as a
-diffusion problem, taking advantage of the robust numerical solutions
-available for this type of equations. The problem with this approach is that
-it develops the :math:`\partial S / \partial t` term to solve for
-ice thikness :math:`h` directly, thus implying different diffusion equations
-for different bed geometries (e.g. [Oerlemans_1997]_ with a trapezoidal bed).
-
-The OGGM flux based model solves for the :math:`\nabla \cdot q` term on a
-staggered grid (hence the name). It has the advantage that the model numerics
-are the same for any bed shape, but it makes one important simplification:
-the stress :math:`\tau = \alpha \rho g h` is always the same, regardless of the
-bed shape. This doesn't mean that the shape has no influence on the
-glacier evolution, as explained below.
-
-
-Glacier bed shapes
-------------------
+Bed shapes
+----------
 
 OGGM implements a number of possible bed-shapes. Currently the shape has no
-direct influence on ice dynamics, but it does influence how the width of the
-glacier changes with ice thickness and thus will influence the mass-balance
-:math:`w \, \dot{m}`. It appears that the flowline model is quite sensitive
-to the bed shape.
+direct influence on the shear stress (i.e. Cuffey and Paterson's "shape factor"
+is not considered), but the shape will still have a considerable influence
+on glacier dynamics:
+
+- the width change as a result of mass transport will be different for
+  each shape, thus influencing the mass balance :math:`w \, \dot{m}`
+- with all other things held constant, a change in section area
+  :math:`\partial S / \partial t` due to mass convergence/divergence
+  will result in a different :math:`\partial h / \partial t` and thus in
+  different shear stress computation at the next time step.
 
 
-VerticalWallFlowline
-~~~~~~~~~~~~~~~~~~~~
+Rectangular
+~~~~~~~~~~~
 
 
     .. figure:: _static/bed_vertical.png
@@ -142,8 +95,8 @@ VerticalWallFlowline
 The simplest shape. The glacier width does not change with ice thickness.
 
 
-TrapezoidalFlowline
-~~~~~~~~~~~~~~~~~~~
+Trapezoidal
+~~~~~~~~~~~
 
 
     .. figure:: _static/bed_trapezoidal.png
@@ -155,8 +108,8 @@ depends on :math:`\lambda`. [Golledge_Levy_2011]_ uses :math:`\lambda = 1`
 (a 45° wall angle).
 
 
-ParabolicFlowline
-~~~~~~~~~~~~~~~~~
+Parabolic
+~~~~~~~~~
 
 
     .. figure:: _static/bed_parabolic.png
@@ -180,16 +133,50 @@ reason, the default in OGGM is to use the mixed flowline model.
     therefore :math:`P_s = 4 h / w^2`.
 
 
-MixedFlowline
-~~~~~~~~~~~~~
+Mixed
+~~~~~
 
-A combination of trapezoidal and parabolic flowlines. If the bed shape
-parameter :math:`P_s` is below a certain threshold, a trapezoidal shape is
-used instead.
+A combination of rectangular, trapezoidal and parabolic shapes.
+The default is parabolic, but can be adapted in two cases:
+
+- if the glacier section touches an ice-divide or a neighboring tributary
+  catchment outline, the bed is considered to be rectangular;
+- if the parabolic shape parameter :math:`P_s` is below a certain threshold,
+  a trapezoidal shape is used. Indeed, flat parabolas tend to be very
+  sensitive to small changes in :math:`h`, which is undesired.
+
+
+Numerics
+--------
+
+"Flux based" model
+~~~~~~~~~~~~~~~~~~
+
+Most flowline models treat the volume conservation equation as a
+diffusion problem, taking advantage of the robust numerical solutions
+available for this type of equations. The problem with this approach is that
+it implies developing the :math:`\partial S / \partial t` term to solve for
+ice thickness :math:`h` directly, thus implying different diffusion equations
+for different bed geometries (e.g. [Oerlemans_1997]_ with a trapezoidal bed).
+
+The OGGM "flux based" model solves for the :math:`\nabla \cdot q` term
+(hence the name). The strong advantage of this method is that
+the numerical equations are the same for *any* bed shape, considerably
+simplifying the implementation. Similar to the "diffusion approach", the
+model looses mass-conservation in very steep slopes ([Jarosch_etal_2013]_).
+
+The numerical scheme implemented in OGGM is tested against A. Jarosch's
+MUSCLSuperBee Model (see below) and J. Oerleman's diffusion model for
+various idealized cases. For all cases but the steep slope one the model
+performs very well.
+
+In order to increase the stability and speed of the computations, we solve the
+numerical equations on a forward staggered grid and we use an adaptive time
+stepping scheme.
 
 
 MUSCLSuperBeeModel
-------------------
+~~~~~~~~~~~~~~~~~~
 
 A shallow ice model with improved numerics ensuring mass-conservation in
 very steep walls [Jarosch_etal_2013]_. The model is currently in
@@ -201,24 +188,25 @@ Glacier tributaries
 -------------------
 
 Glaciers in OGGM have a main centerline and, sometimes, one or more
-tributaries (which can themsleves also have tributaries, see
+tributaries (which can themselves also have tributaries, see
 :ref:`flowlines`). The number of these tributaries depends on many
 factors, but most of the time the algorithm works well.
 
-The main flowline and its tributaries are all handled the same way and
-are modelled individually. The difference is that tributaries can transport
-mass to the branch they are flowing to. Numerically, this mass transport is
+The main flowline and its tributaries are all modelled individually.
+At the end of a time step, the tributaries will transport mass to the branch
+they are flowing to. Numerically, this mass transport is
 handled by adding an element at the end of the flowline with the same
 properties (with, thickness...) as the last grid point, with the difference
 that the slope :math:`\alpha` is computed with respect to the altitude of
-the point they are flowing to. The ice flux is then computed normally and
+the point they are flowing to. The ice flux is then computed as usual and
 transferred to the downlying branch.
 
 The computation of the ice flux is always done first from the lowest order
 branches (without tributaries) to the highest ones, ensuring a correct
-mass-redistribution. The angle between tributary and main branch ensures
-that the former is not decoupled from the latter. If the angle is positive
-or if no ice is present at the end of the tributary, no mass exchange occurs.
+mass-redistribution. The use of the slope between the tributary and main branch
+ensures that the former is not dynamical coupled to the latter. If the angle is
+positive or if no ice is present at the end of the tributary,
+no mass exchange occurs.
 
 
 References

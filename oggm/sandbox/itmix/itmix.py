@@ -1,29 +1,31 @@
 from __future__ import absolute_import, division
 
+import glob
+import logging
 # Built ins
 import os
-import logging
 from shutil import copyfile
-import glob
+
+import matplotlib.pyplot as plt
+import netCDF4
+import numpy as np
+import pandas as pd
+import rasterio
 # External libs
 import salem
-from salem.datasets import EsriITMIX
-from osgeo import gdal
-import netCDF4
-import rasterio
-import pandas as pd
-import numpy as np
 import shapely.geometry as shpg
-from scipy.interpolate import griddata
-from oggm.core.preprocessing.inversion import invert_parabolic_bed
+from osgeo import gdal
+from salem.datasets import EsriITMIX
 from scipy import optimize as optimization
-import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+
+import oggm.cfg as cfg
 # Locals
 from oggm import entity_task
-import oggm.cfg as cfg
-from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
-from oggm.sandbox.itmix_cfg import DATA_DIR, ITMIX_ODIR
 from oggm import utils
+from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
+from oggm.core.preprocessing.inversion import mass_conservation_inversion
+from oggm.sandbox.itmix.itmix_cfg import DATA_DIR, ITMIX_ODIR
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -475,8 +477,8 @@ def optimize_thick(gdirs):
         tmp_ = np.zeros(len(ref_gdirs))
         glen_a = cfg.A * x[0]
         for i, gdir in enumerate(ref_gdirs):
-            v, a = invert_parabolic_bed(gdir, glen_a=glen_a,
-                                        fs=0., write=False)
+            v, a = mass_conservation_inversion(gdir, glen_a=glen_a,
+                                               fs=0., write=False)
             tmp_[i] = v / a
         return utils.rmsd(tmp_, ref_thickness_m)
     opti = optimization.minimize(to_optimize, [1.],
@@ -490,8 +492,8 @@ def optimize_thick(gdirs):
     oggm_volume_m3 = np.zeros(len(ref_gdirs))
     rgi_area_m2 = np.zeros(len(ref_gdirs))
     for i, gdir in enumerate(ref_gdirs):
-        v, a = invert_parabolic_bed(gdir, glen_a=glen_a, fs=fs,
-                                    write=False)
+        v, a = mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs,
+                                           write=False)
         oggm_volume_m3[i] = v
         rgi_area_m2[i] = a
     assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)

@@ -34,12 +34,16 @@ from oggm import graphics, utils
 cfg.initialize()
 
 # Local paths (where to write output and where to download input)
-_dir = '/home/mowglie/disk/TMP/OGGM_runs/test_dem/'
-WORKING_DIR = _dir + 'run/'
-utils.mkdir(WORKING_DIR)
-PLOTS_DIR = _dir + 'plots'
+DATA_DIR = '/home/mowglie/disk/OGGM_INPUT'
+WORKING_DIR = '/home/mowglie/disk/OGGM_RUNS/TEST_DEMS'
+PLOTS_DIR = os.path.join(WORKING_DIR, 'plots')
+
 cfg.PATHS['working_dir'] = WORKING_DIR
-cfg.PATHS['topo_dir'] = _dir + 'data/'
+cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
+cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
+utils.mkdir(WORKING_DIR)
+utils.mkdir(cfg.PATHS['topo_dir'])
+utils.mkdir(cfg.PATHS['rgi_dir'])
 
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = False
@@ -47,15 +51,14 @@ cfg.PARAMS['border'] = 20
 cfg.CONTINUE_ON_ERROR = False
 
 # Read in the RGI file
-rgisel = os.path.join(cfg.PATHS['topo_dir'], 'rgi_sel.shp')
+rgisel = os.path.join(WORKING_DIR, 'rgi_selection.shp')
 if not os.path.exists(rgisel):
-    rgidir = '/home/mowglie/disk/Data/GIS/SHAPES/RGI/RGI_V5/'
+    rgi_dir = utils.get_rgi_dir()
     regions = ['{:02d}'.format(int(p)) for p in range(1, 20)]
-    files = [glob.glob(os.path.join(rgidir, '*', r + '_rgi50_*.shp'))[0] for r in regions]
+    files = [glob.glob(os.path.join(rgi_dir, '*', r + '_rgi50_*.shp'))[0] for r in regions]
     rgidf = []
     for fs in files:
-        sh = salem.read_shapefile(os.path.join(rgidir, fs), cached=True)
-
+        sh = salem.read_shapefile(os.path.join(rgi_dir, fs), cached=True)
         percs = np.asarray([0, 25, 50, 75, 100])
         idppercs = np.round(percs * 0.01 * (len(sh)-1)).astype(int)
 
@@ -68,7 +71,6 @@ if not os.path.exists(rgisel):
 else:
     rgidf = salem.read_shapefile(rgisel)
 
-# rgidf = rgidf.loc[rgidf.O1Region.isin(['2'])]
 rgidf = rgidf.loc[~rgidf.RGIId.isin(['RGI50-10.00012', 'RGI50-17.00850',
                                      'RGI50-19.01497', 'RGI50-19.00990',
                                      'RGI50-19.01440'])]

@@ -34,6 +34,7 @@ import scipy.signal
 from scipy.interpolate import RegularGridInterpolator
 # Locals
 import oggm.cfg as cfg
+from oggm.cfg import GAUSSIAN_KERNEL
 from salem import lazy_property
 from oggm.utils import tuple2int
 from oggm import entity_task, divide_task
@@ -43,12 +44,12 @@ log = logging.getLogger(__name__)
 
 
 class Centerline(object):
-    """A centerline object has geometrical and flow rooting properties.
+    """A Centerline has geometrical and flow rooting properties.
 
     It is instanciated and updated by _join_lines() exclusively
     """
 
-    def __init__(self, line):
+    def __init__(self, line, dx=None, surface_h=None):
         """ Instanciate.
 
         Parameters
@@ -75,7 +76,18 @@ class Centerline(object):
         self.inflows = []  # list of Centerline instances (when available)
         self.inflow_points = []  # junction points
 
-    def set_flows_to(self, other):
+        # Optional attrs
+        self.dx = dx  # dx in pixels (assumes the line is on constant dx
+        self._surface_h = surface_h
+        self._widths = None
+        self.touches_border = None
+
+        # Set by external funcs
+        self.geometrical_widths = None  # these are kept for plotting and such
+        self.apparent_mb = None  # Apparent MB, NOT weighted by width.
+        self.flux = None  # Flux (kg m-2)
+
+    def set_flows_to(self, other, check_tail=True):
         """Find the closest point in "other" and sets all the corresponding
         attributes. Btw, it modifies the state of "other" too.
 
@@ -85,9 +97,28 @@ class Centerline(object):
         """
 
         self.flows_to = other
-        self.flows_to_point = _projection_point(other, self.tail)
-        other.inflow_points.append(self.flows_to_point)
-        other.inflows.append(self)
+
+        if check_tail:
+            # Project the point and Check that its not too close
+            prdis = other.line.project(self.tail, normalized=False)
+            ind_closest = np.argmin(np.abs(other.dis_on_line - prdis))
+            ind_closest = np.asscalar(ind_closest)
+            n = len(other.dis_on_line)
+            if n >= 9:
+                ind_closest = np.clip(ind_closest, 4, n-5)
+            elif n >= 7:
+                ind_closest = np.clip(ind_closest, 3, n-4)
+            elif n >= 5:
+                ind_closest = np.clip(ind_closest, 2, n-3)
+            p = shpg.Point(other.line.coords[int(ind_closest)])
+            self.flows_to_point = p
+            other.inflow_points.append(p)
+            other.inflows.append(self)
+        else:
+            # just the closest
+            self.flows_to_point = _projection_point(other, self.tail)
+            other.inflow_points.append(self.flows_to_point)
+            other.inflows.append(self)
 
     def set_line(self, line):
         """Update the Shapely LineString coordinate.
@@ -127,6 +158,86 @@ class Centerline(object):
             inds.append(ind[0])
         assert len(inds) == len(self.inflow_points)
         return inds
+
+    @lazy_property
+    def normals(self):
+        """List of (n1, n2) normal vectors at each point.
+
+        We use second order derivatives for smoother widths.
+        """
+
+        pcoords = np.array(self.line.coords)
+
+        normals = []
+        # First
+        normal = np.array(pcoords[1, :] - pcoords[0, :])
+        normals.append(_normalize(normal))
+        # Second
+        normal = np.array(pcoords[2, :] - pcoords[0, :])
+        normals.append(_normalize(normal))
+        # Others
+        for (bbef, bef, cur, aft, aaft) in zip(pcoords[:-4, :],
+                                               pcoords[1:-3, :],
+                                               pcoords[2:-2, :],
+                                               pcoords[3:-1, :],
+                                               pcoords[4:, :]):
+            normal = np.array(aaft + 2*aft - 2*bef - bbef)
+            normals.append(_normalize(normal))
+        # One before last
+        normal = np.array(pcoords[-1, :] - pcoords[-3, :])
+        normals.append(_normalize(normal))
+        # Last
+        normal = np.array(pcoords[-1, :] - pcoords[-2, :])
+        normals.append(_normalize(normal))
+
+        return normals
+
+    @property
+    def widths(self):
+        """Needed for overriding later"""
+        return self._widths
+
+    @widths.setter
+    def widths(self, value):
+        self._widths = value
+
+    @property
+    def surface_h(self):
+        """Needed for overriding later"""
+        return self._surface_h
+
+    @surface_h.setter
+    def surface_h(self, value):
+        self._surface_h = value
+
+    def set_apparent_mb(self, mb):
+        """Set the apparent mb and flux for the flowline.
+
+        MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
+
+        This should happen in line order, otherwise it will be wrong.
+        """
+
+        self.apparent_mb = mb
+
+        # Add MB to current flux and sum
+        # no more changes should happen after that
+        self.flux += mb * self.widths * self.dx
+        self.flux = np.cumsum(self.flux)
+
+        # Add to outflow. That's why it should happen in order
+        if self.flows_to is not None:
+            n = len(self.flows_to.line.coords)
+            ide = self.flows_to_indice
+            if n >= 9:
+                gk = GAUSSIAN_KERNEL[9]
+                self.flows_to.flux[ide-4:ide+5] += gk * self.flux[-1]
+            elif n >= 7:
+                gk = GAUSSIAN_KERNEL[7]
+                self.flows_to.flux[ide-3:ide+4] += gk * self.flux[-1]
+            elif n >= 5:
+                gk = GAUSSIAN_KERNEL[5]
+                self.flows_to.flux[ide-2:ide+3] += gk * self.flux[-1]
 
 
 def _filter_heads(heads, heads_height, radius, polygon):
@@ -303,12 +414,10 @@ def _projection_point(centerline, point):
     -------
     (flow_point, ind_closest): Shapely Point and indice in the line
     """
-
     prdis = centerline.line.project(point, normalized=False)
     ind_closest = np.argmin(np.abs(centerline.dis_on_line - prdis))
     ind_closest = np.asscalar(ind_closest)
     flow_point = shpg.Point(centerline.line.coords[int(ind_closest)])
-
     return flow_point
 
 
@@ -353,7 +462,7 @@ def _join_lines(lines):
 
         # We're done
         l.set_line(shpg.LineString(l.line.coords[:] + endline))
-        l.set_flows_to(flow_to)
+        l.set_flows_to(flow_to, check_tail=False)
 
         # The last one has nowhere to flow
         if i+2 == nl:
@@ -444,6 +553,19 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
         ind_term = np.argmin(zoutline)
 
     return np.asarray(ext_yx)[:, ind_term].astype(np.int64)
+
+
+def _normalize(n):
+    """Computes the normals of a vector n.
+
+    Returns
+    -------
+    the two normals (n1, n2)
+    """
+    nn = n / np.sqrt(np.sum(n*n))
+    n1 = np.array([-nn[1], nn[0]])
+    n2 = np.array([nn[1], -nn[0]])
+    return n1, n2
 
 
 @entity_task(log, writes=['centerlines', 'gridded_data'])

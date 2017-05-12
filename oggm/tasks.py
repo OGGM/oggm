@@ -1,10 +1,6 @@
 """OGGM tasks.
 
 This module is simply a shortcut to the core functions
-
-Copyright: OGGM development team, 2014-2015
-
-License: GPLv3+
 """
 from __future__ import absolute_import, division
 
@@ -20,8 +16,10 @@ from oggm.core.preprocessing.geometry import catchment_width_correction
 from oggm.core.preprocessing.climate import mu_candidates
 from oggm.core.preprocessing.climate import process_cru_data
 from oggm.core.preprocessing.climate import process_custom_climate_data
+from oggm.core.preprocessing.climate import process_cesm_data
 from oggm.core.preprocessing.inversion import prepare_for_inversion
 from oggm.core.preprocessing.inversion import volume_inversion
+from oggm.core.preprocessing.inversion import filter_inversion_output
 from oggm.core.preprocessing.inversion import distribute_thickness
 from oggm.core.models.flowline import init_present_time_glacier
 from oggm.core.models.flowline import random_glacier_evolution

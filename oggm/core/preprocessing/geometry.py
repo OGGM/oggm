@@ -26,18 +26,20 @@ import numpy as np
 from skimage.graph import route_through_array
 import netCDF4
 import shapely.geometry as shpg
+from shapely.ops import linemerge
 import matplotlib._cntr as cntr
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage.measurements import label
-from salem import lazy_property
+from scipy.ndimage.measurements import label, find_objects
+import pandas as pd
+import geopandas as gpd
+import salem
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
-import oggm.core.preprocessing.centerlines
+from oggm.core.preprocessing.centerlines import Centerline
 from oggm.utils import tuple2int
 from oggm import entity_task, divide_task
-from oggm.cfg import GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -46,147 +48,6 @@ log = logging.getLogger(__name__)
 LABEL_STRUCT = np.array([[0, 1, 0],
                          [1, 1, 1],
                          [0, 1, 0]])
-
-
-class InversionFlowline(oggm.core.preprocessing.centerlines.Centerline):
-    """An advanced centerline, with widths and apparent MB."""
-
-    def __init__(self, line, dx, heights):
-        """ Instanciate.
-
-        Parameters
-        ----------
-        line: Shapely LineString
-
-        Properties
-        ----------
-        #TODO: document properties
-        """
-
-        super(InversionFlowline, self).__init__(line)
-
-        self._surface_h = heights
-        self.dx = dx
-        self._widths = None
-        self.geometrical_widths = None  # these are kept for plotting and such
-
-        self.apparent_mb = None  # Apparent MB, NOT weighted by width.
-        self.flux = None  # Flux (kg m-2)
-
-    @property
-    def widths(self):
-        """Needed for overriding later"""
-        return self._widths
-
-    @widths.setter
-    def widths(self, value):
-        self._widths = value
-
-    @property
-    def surface_h(self):
-        """Needed for overriding later"""
-        return self._surface_h
-
-    @surface_h.setter
-    def surface_h(self, value):
-        self._surface_h = value
-
-    def set_apparent_mb(self, mb):
-        """Set the apparent mb and flux for the flowline.
-
-        MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
-
-        This should happen in line order, otherwise it will be wrong.
-        """
-
-        self.apparent_mb = mb
-
-        # Add MB to current flux and sum
-        # no more changes should happen after that
-        self.flux += mb * self.widths * self.dx
-        self.flux = np.cumsum(self.flux)
-
-        # Add to outflow. That's why it should happen in order
-        if self.flows_to is not None:
-            n = len(self.flows_to.line.coords)
-            ide = self.flows_to_indice
-            if n >= 9:
-                gk = GAUSSIAN_KERNEL[9]
-                self.flows_to.flux[ide-4:ide+5] += gk * self.flux[-1]
-            elif n >= 7:
-                gk = GAUSSIAN_KERNEL[7]
-                self.flows_to.flux[ide-3:ide+4] += gk * self.flux[-1]
-            elif n >= 5:
-                gk = GAUSSIAN_KERNEL[5]
-                self.flows_to.flux[ide-2:ide+3] += gk * self.flux[-1]
-
-    def set_flows_to(self, other):
-        """Find the closest point in "other" and sets all the corresponding
-        attributes. Btw, it modifies the state of "other" too.
-
-        Had to override this because of junction's safety reasons: we didnt
-        want to be too close to the tail
-
-        Parameters
-        ----------
-        other: an other centerline
-        """
-
-        self.flows_to = other
-
-        # Project the point and Check that its not too close
-        prdis = other.line.project(self.tail, normalized=False)
-        ind_closest = np.argmin(np.abs(other.dis_on_line - prdis))
-        ind_closest = np.asscalar(ind_closest)
-        n = len(other.dis_on_line)
-        if n >= 9:
-            ind_closest = np.clip(ind_closest, 4, n-5)
-        elif n >= 7:
-            ind_closest = np.clip(ind_closest, 3, n-4)
-        elif n >= 5:
-            ind_closest = np.clip(ind_closest, 2, n-3)
-        self.flows_to_point = shpg.Point(other.line.coords[int(ind_closest)])
-        other.inflow_points.append(self.flows_to_point)
-        other.inflows.append(self)
-
-    @lazy_property
-    def normals(self):
-        """List of (n1, n2) normal vectors at each point.
-
-        We use second order derivatives for smoother widths.
-        """
-
-        def _normalize(n):
-            nn = n / np.sqrt(np.sum(n*n))
-            n1 = np.array([-nn[1], nn[0]])
-            n2 = np.array([nn[1], -nn[0]])
-            return n1, n2
-
-        pcoords = np.array(self.line.coords)
-
-        normals = []
-        # First
-        normal = np.array(pcoords[1, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
-        # Second
-        normal = np.array(pcoords[2, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
-        # Others
-        for (bbef, bef, cur, aft, aaft) in zip(pcoords[:-4, :],
-                                               pcoords[1:-3, :],
-                                               pcoords[2:-2, :],
-                                               pcoords[3:-1, :],
-                                               pcoords[4:, :]):
-            normal = np.array(aaft + 2*aft - 2*bef - bbef)
-            normals.append(_normalize(normal))
-        # One before last
-        normal = np.array(pcoords[-1, :] - pcoords[-3, :])
-        normals.append(_normalize(normal))
-        # Last
-        normal = np.array(pcoords[-1, :] - pcoords[-2, :])
-        normals.append(_normalize(normal))
-
-        return normals
 
 
 def _line_interpol(line, dx):
@@ -329,7 +190,8 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
 
     Parameters
     ----------
-    aft, cur, bef: (x, y) coordinates of the current point, before, and after
+    normals: normals of the current point, before, and after
+    point: the centerline's point
     centerline: Centerline object
     poly, poly_no_nuntaks: subcatchment polygons
 
@@ -390,6 +252,38 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     return width, line
 
 
+def _filter_small_slopes(hgt, dx, min_slope=1):
+    """Masks out slopes with NaN until the slope if all valid points is at 
+    least min_slope (in degrees).
+    """
+
+    min_slope = np.deg2rad(min_slope)
+    slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+    # slope at the end always OK
+    slope[-1] = min_slope
+
+    # Find the locs where it doesn't work and expand till we got everything
+    slope_mask = np.where(slope >= min_slope, slope, np.NaN)
+    r, nr = label(~np.isfinite(slope_mask))
+    for objs in find_objects(r):
+        obj = objs[0]
+        i = 0
+        while True:
+            i += 1
+            i0 = objs[0].start-i
+            if i0 < 0:
+                break
+            ngap =  obj.stop - i0 - 1
+            nhgt = hgt[[i0, obj.stop]]
+            current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
+            if i0 <= 0 or current_slope[0] >= min_slope:
+                break
+        slope_mask[i0:obj.stop] = np.NaN
+    out = hgt.copy()
+    out[~np.isfinite(slope_mask)] = np.NaN
+    return out
+
+
 def _filter_for_altitude_range(widths, wlines, topo):
     """Some width lines have unrealistic lenght and go over the whole
     glacier. Filter them out."""
@@ -430,6 +324,37 @@ def _filter_for_altitude_range(widths, wlines, topo):
     return out_width
 
 
+def _filter_grouplen(arr, minsize=3):
+    """Filter out the groups of grid points smaller than minsize
+
+    Parameters
+    ----------
+    arr : the array to filter (should be False and Trues)
+    minsize : the minimum size of the group
+
+    Returns
+    -------
+    the array, with small groups removed
+    """
+
+    # Do it with trues
+    r, nr = label(arr)
+    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
+    arr = np.asarray([ri in nr for ri in r])
+
+    # and with Falses
+    r, nr = label(~ arr)
+    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
+    arr = ~ np.asarray([ri in nr for ri in r])
+
+    return arr
+
+
+def _width_change_factor(widths):
+    fac = widths[:-1] / widths[1:]
+    return fac
+
+
 @entity_task(log, writes=['catchment_indices'])
 @divide_task(log, add_0=False)
 def catchment_area(gdir, div_id=None):
@@ -466,7 +391,7 @@ def catchment_area(gdir, div_id=None):
     dic_catch = dict()
     for i, cl in enumerate(cls):
         x, y = tuple2int(cl.line.xy)
-        costgrid[y, x] *= cost_factor
+        costgrid[y, x] = cost_factor
         for x, y in [(int(x), int(y)) for x, y in cl.line.coords]:
             assert (y, x) not in dic_catch
             dic_catch[(y, x)] = set([(y, x)])
@@ -540,15 +465,121 @@ def catchment_area(gdir, div_id=None):
     gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
 
 
+def polygon_intersections(gdf):
+    """Computes the intersections between all polygons in a GeoDataFrame.
+
+    Parameters
+    ----------
+    gdf : Geopandas.GeoDataFrame
+
+    Returns
+    -------
+    a Geodataframe containing the intersections
+    """
+
+    out_cols = ['id_1', 'id_2', 'geometry']
+    out = gpd.GeoDataFrame(columns=out_cols)
+
+    for i, major in gdf.iterrows():
+
+        # Exterior only
+        major_poly = major.geometry.exterior
+
+        # Remove the major from the list
+        gdf = gdf.loc[gdf.index != i]
+
+        # Keep catchments which intersect
+        gdfs = gdf.loc[gdf.intersects(major_poly)]
+
+        for j, neighbor in gdfs.iterrows():
+
+            # No need to check if we already found the intersect
+            if j in out.id_1 or j in out.id_2:
+                continue
+
+            # Exterior only
+            neighbor_poly = neighbor.geometry.exterior
+
+            # Ok, the actual intersection
+            mult_intersect = major_poly.intersection(neighbor_poly)
+
+            # All what follows is to catch all possibilities
+            # Should no happen in our simple geometries but ya never know
+            if isinstance(mult_intersect, shpg.Point):
+                continue
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = [m for m in mult_intersect if
+                              not isinstance(m, shpg.Point)]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = linemerge(mult_intersect)
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            for line in mult_intersect:
+                assert isinstance(line, shpg.linestring.LineString)
+                line = gpd.GeoDataFrame([[i, j, line]],
+                                        columns=out_cols)
+                out = out.append(line)
+
+    return out
+
+
+@entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
+@divide_task(log, add_0=False)
+def catchment_intersections(gdir, div_id=None):
+    """Computes the intersections between the catchments.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    catchment_indices = gdir.read_pickle('catchment_indices', div_id=div_id)
+    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
+                               np.arange(0, gdir.grid.ny, 1))
+
+    # Loop over the lines
+    mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
+
+    gdfc = gpd.GeoDataFrame()
+    for i, ci in enumerate(catchment_indices):
+        # Catchment polygon
+        mask[:] = 0
+        mask[tuple(ci.T)] = 1
+        _, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        gdfc.loc[i, 'geometry'] = poly_no
+
+    gdfi = polygon_intersections(gdfc)
+
+    # We project them onto the mercator proj before writing. This is a bit
+    # inefficient (they'll be projected back later), but it's more sustainable
+    gdfc.crs = gdir.grid
+    gdfi.crs = gdir.grid
+    salem.transform_geopandas(gdfc, gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfi, gdir.grid.proj, inplace=True)
+    if hasattr(gdfc.crs, 'srs'):
+        # salem uses pyproj
+        gdfc.crs = gdfc.crs.srs
+        gdfi.crs = gdfi.crs.srs
+    gdfc.to_file(gdir.get_filepath('flowline_catchments', div_id=div_id))
+    if len(gdfi) > 0:
+        gdfi.to_file(gdir.get_filepath('catchments_intersects',
+                                       div_id=div_id))
+
+
 @entity_task(log, writes=['inversion_flowlines'])
 @divide_task(log, add_0=False)
 def initialize_flowlines(gdir, div_id=None):
     """ Transforms the geometrical Centerlines in the more "physical"
-    InversionFlowlines.
+    "Inversion Flowlines".
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
-    realistic junctions.
+    realistic junctions. It also checks for low and negatve slopes and corrects
+    them by interpolation.
 
     Parameters
     ----------
@@ -560,6 +591,8 @@ def initialize_flowlines(gdir, div_id=None):
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
+    ms = cfg.PARAMS['min_slope']
+    do_filter = cfg.PARAMS['filter_min_slope']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
@@ -594,7 +627,23 @@ def initialize_flowlines(gdir, div_id=None):
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
 
-        l = InversionFlowline(new_line, dx, hgts)
+        # Check for min slope issues and correct if needed
+        if do_filter:
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope=ms)
+            isfin = np.isfinite(hgts)
+            assert np.any(isfin)
+            perc_bad = np.sum(~isfin) / len(isfin)
+            if perc_bad > 0.1:
+                log.warning('{}: more than {:.0%} of the flowline is cropped '
+                            'due to negative slopes.'.format(gdir.rgi_id,
+                                                             perc_bad))
+            sp = np.min(np.where(isfin)[0])
+            hgts = utils.interp_nans(hgts[sp:])
+            assert np.all(np.isfinite(hgts))
+            assert len(hgts) > 5
+            new_line = shpg.LineString(points[sp:])
+
+        l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order
         fls.append(l)
 
@@ -626,7 +675,7 @@ def catchment_width_geom(gdir, div_id=None):
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
                                np.arange(0, gdir.grid.ny, 1))
 
-    # Topography is to filter the lines afterwards.
+    # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
     fpath = gdir.get_filepath('gridded_data', div_id=div_id)
@@ -636,6 +685,23 @@ def catchment_width_geom(gdir, div_id=None):
         mask_glacier = nc.variables['glacier_mask'][:]
     topo[np.where(mask_glacier == 0)] = np.NaN
     topo[np.where(mask_ext == 1)] = np.NaN
+
+    # Intersects between catchments/glaciers
+    gdfi = gpd.GeoDataFrame(columns=['geometry'])
+    if gdir.has_file('catchments_intersects', div_id=div_id):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                              div_id=div_id))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+    if gdir.has_file('intersects', div_id=0):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+
+    # apply a buffer to be sure we get the intersects right. Be generous
+    gdfi = gdfi.buffer(1.5)
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
@@ -667,6 +733,13 @@ def catchment_width_geom(gdir, div_id=None):
             raise RuntimeError(errmsg)
 
         # Ok now the entire centerline is computed.
+        # I take all these widths for geometrically valid, and see if they
+        # intersect with our buffered catchment/glacier intersections
+        touches_border = []
+        for wg in wlines:
+            touches_border.append(np.any(gdfi.intersects(wg)))
+        touches_border = _filter_grouplen(touches_border, minsize=5)
+
         # we filter the lines which have a large altitude range
         fil_widths = _filter_for_altitude_range(widths, wlines, topo)
 
@@ -687,6 +760,7 @@ def catchment_width_geom(gdir, div_id=None):
         assert len(fil_widths) == n
         fl.widths = fil_widths
         fl.geometrical_widths = wlines
+        fl.touches_border = touches_border
 
     # Overwrite pickle
     gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)
@@ -709,7 +783,6 @@ def catchment_width_correction(gdir, div_id=None):
 
     # The code below makes of this task a "special" divide task.
     # We keep it as is and remove the divide task decorator
-    # TODO: could be separated in two 'cleaner' tasks without output
     if div_id is None:
         # This is the original call
         # This time instead of just looping over the divides we add a test
@@ -766,7 +839,7 @@ def catchment_width_correction(gdir, div_id=None):
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
 
-        # Sometimes, the centerline does reach as high as each pix on the
+        # Sometimes, the centerline does not reach as high as each pix on the
         # glacier. (e.g. RGI40-11.00006)
         catch_h = np.clip(catch_h, 0, np.max(fhgt))
 
@@ -778,7 +851,7 @@ def catchment_width_correction(gdir, div_id=None):
         else:
             minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
-        # Now decide on a binsize which ensures at least one element per bin
+        # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']
         while True:
             maxb = utils.nicenumber(maxh, 1)
@@ -804,10 +877,22 @@ def catchment_width_correction(gdir, div_id=None):
 
             ref_set = set(range(len(bins)-1))
             if (_c == ref_set) and (_fl == ref_set):
+                # For each bin, the width(s) have to represent the "real" area
+                new_widths = widths.copy()
+                for bi in range(len(bins) - 1):
+                    bintopoarea = len(np.where(topo_digi == bi)[0])
+                    wherewiths = np.where(fl_digi == bi)
+                    binflarea = np.sum(new_widths[wherewiths]) * fl.dx
+                    new_widths[wherewiths] = (bintopoarea / binflarea) * \
+                                             new_widths[wherewiths]
                 break
+                # # TODO: smooth them ?
+                # widths = utils.smooth1d(widths)
+                # if np.nanmax(_width_change_factor(new_widths)[:-5]) < 2.:
+                #     break
             bsize += 5
 
-            # Add a secutity for infinite loops
+            # Add a security for infinite loops
             if bsize > 250:
                 nmin -= 1
                 bsize = cfg.PARAMS['base_binsize']
@@ -816,7 +901,7 @@ def catchment_width_correction(gdir, div_id=None):
                 if nmin == 0:
                     raise RuntimeError('NO binsize could be chosen for: '
                                        '{}'.format(gdir.rgi_id))
-        if bsize > 100:
+        if bsize > 150:
             log.warning('%s: chosen binsize %d', gdir.rgi_id, bsize)
         else:
             log.debug('%s: chosen binsize %d', gdir.rgi_id, bsize)
@@ -830,14 +915,7 @@ def catchment_width_correction(gdir, div_id=None):
         if (len(tosend) > 0) and (fl.flows_to is None):
             raise RuntimeError('This should not happen')
 
-        # For each bin, the width(s) have to represent the "real" area
-        for bi in range(len(bins)-1):
-            bintopoarea = len(np.where(topo_digi == bi)[0])
-            wherewiths = np.where(fl_digi == bi)
-            binflarea = np.sum(widths[wherewiths]) * fl.dx
-            widths[wherewiths] = (bintopoarea / binflarea) * widths[wherewiths]
-
         # Write it
-        fl.widths = widths
+        fl.widths = new_widths
 
     return flowlines

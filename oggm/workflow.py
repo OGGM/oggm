@@ -24,15 +24,33 @@ except ImportError:
 # Module logger
 log = logging.getLogger(__name__)
 
+# Multiprocessing Pool
+_mp_pool = None
 
-def _init_pool_globals(_cfg_contents):
+
+def _init_pool_globals(_cfg_contents, global_lock):
     cfg.unpack_config(_cfg_contents)
+    utils.lock = global_lock
 
 
 def _init_pool():
-    """Necessary because at import time, cfg might be unitialized"""
+    """Necessary because at import time, cfg might be uninitialized"""
+    global _mp_pool
+    if _mp_pool:
+        return _mp_pool
     cfg_contents = cfg.pack_config()
-    return mp.Pool(cfg.PARAMS['mp_processes'], initializer=_init_pool_globals, initargs=(cfg_contents,))
+    global_lock = mp.Manager().Lock()
+    mpp = cfg.PARAMS['mp_processes']
+    if mpp == -1:
+        mpp = mp.cpu_count()
+        log.info('Multiprocessing: using all available '
+                 'processors (N={})'.format(mp.cpu_count()))
+    else:
+        log.info('Multiprocessing: using the requested number of '
+                 'processors (N={})'.format(mpp))
+    _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
+                       initargs=(cfg_contents, global_lock))
+    return _mp_pool
 
 
 def _merge_dicts(*dicts):
@@ -52,12 +70,32 @@ class _pickle_copier(object):
         self.out_kwargs = kwargs
 
     def __call__(self, gdir):
-        if isinstance(gdir, collections.Sequence):
-            gdir, gdir_kwargs = gdir
-            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-            return self.call_func(gdir, **gdir_kwargs)
-        else:
-            return self.call_func(gdir, **self.out_kwargs)
+        try:
+            if isinstance(gdir, collections.Sequence):
+                gdir, gdir_kwargs = gdir
+                gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
+                return self.call_func(gdir, **gdir_kwargs)
+            else:
+                return self.call_func(gdir, **self.out_kwargs)
+        except Exception as e:
+            try:
+                raise RuntimeError('{0}: exception occured while processing task {1}' \
+                        .format(gdir.rgi_id, self.call_func.__name__)) from e
+            except AttributeError:
+                pass
+            raise
+
+
+def reset_multiprocessing():
+    """Reset multiprocessing state
+
+    Call this if you changed configuration parameters mid-run and need them to
+    be re-propagated to child processes.
+    """
+    global _mp_pool
+    if _mp_pool:
+        _mp_pool.terminate()
+        _mp_pool = None
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -67,13 +105,13 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     Parameters
     ----------
-    task: function
-        the entity task to apply
-    gdirs: list
-        the list of oggm.GlacierDirectory to process
-        optionally, each list element can be a tuple, with the first element being
-        the oggm.GlacierDirectory, and the second element a dict that will be passed
-        to the task function as **kwargs.
+    task : function
+         the entity task to apply
+    gdirs : list
+         the list of oggm.GlacierDirectory to process.
+         Optionally, each list element can be a tuple, with the first element 
+         being the ``oggm.GlacierDirectory``, and the second element a dict that
+         will be passed to the task function as ``**kwargs``.
     """
 
     if task.__dict__.get('global_task', False):
@@ -123,14 +161,14 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
 
 def gis_prepro_tasks(gdirs):
-    """Prepare the flowlines."""
+    """Helper function: run all flowlines tasks."""
 
     task_list = [
         tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.compute_downstream_lines,
-        tasks.catchment_area,
         tasks.initialize_flowlines,
+        tasks.catchment_area,
         tasks.catchment_width_geom,
         tasks.catchment_width_correction
     ]
@@ -139,7 +177,7 @@ def gis_prepro_tasks(gdirs):
 
 
 def climate_tasks(gdirs):
-    """Prepare the climate data."""
+    """Helper function: run all climate tasks."""
 
     # I don't know where this logic is best placed...
     if ('climate_file' in cfg.PATHS) and \
@@ -156,7 +194,7 @@ def climate_tasks(gdirs):
 
 
 def inversion_tasks(gdirs):
-    """Invert the bed topography."""
+    """Helper function: run all bed inversion tasks."""
 
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -166,3 +204,6 @@ def inversion_tasks(gdirs):
 
     # Inversion for all glaciers
     execute_entity_task(tasks.volume_inversion, gdirs)
+
+    # Filter
+    execute_entity_task(tasks.filter_inversion_output, gdirs)

@@ -5,7 +5,6 @@
 Getting started
 ===============
 
-
 .. ipython:: python
    :suppress:
 
@@ -119,8 +118,8 @@ example the plotting functions:
 What next?
 ----------
 
-We will try to fill out the next chapters of this documentation soon. In the
-meantime, a good place to start is the ``oggm/docs/notebooks`` directory.
+This documentation is growing step by step. In the meantime, a good place
+to start is the ``oggm/docs/notebooks`` directory.
 
 You will find two notebooks:
 

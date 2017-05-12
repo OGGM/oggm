@@ -17,16 +17,12 @@ log = logging.getLogger(__name__)
 
 # Python imports
 import os
-import shutil
 from functools import partial
 # Libs
 import pandas as pd
 import geopandas as gpd
-import numpy as np
-import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file
@@ -37,7 +33,7 @@ from oggm.sandbox import itmix
 from oggm.core.preprocessing.inversion import distribute_thickness
 
 # ITMIX paths
-from oggm.sandbox.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
+from oggm.sandbox.itmix.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR
 
 # Initialize OGGM
 cfg.initialize()

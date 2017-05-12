@@ -24,8 +24,8 @@ import pandas as pd
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import LinearMassBalanceModel
-from oggm.tests import (is_slow, assertDatasetAllClose, RUN_MODEL_TESTS,
-                        is_performance_test)
+from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
+import xarray as xr
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate
@@ -36,12 +36,6 @@ import matplotlib.pyplot as plt
 # do we event want to run the tests?
 if not RUN_MODEL_TESTS:
     raise unittest.SkipTest('Skipping all model tests.')
-
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# test directory
-testdir = os.path.join(current_dir, 'tmp')
 
 do_plot = False
 
@@ -64,6 +58,7 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
 
+
 def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     """
     I introduce a cliff in the bed to test the mass conservation of the models
@@ -85,6 +80,29 @@ def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
+
+
+def dummy_constant_bed_obstacle(hmax=3000., hmin=1000., nx=200):
+    """
+    I introduce an obstacle in the bed
+    """
+
+    map_dx = 100.
+    dx = 1.
+
+    surface_h = np.linspace(hmax, hmin, nx)
+
+    cliff_height = 200.0
+    surface_h[60:] = surface_h[60:] + cliff_height
+
+    bed_h = surface_h
+    widths = surface_h * 0. + 1.
+
+    coords = np.arange(0, nx-0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
+                                          bed_h, widths)]
+
 
 def dummy_bumpy_bed():
 
@@ -229,7 +247,7 @@ class TestInitFlowline(unittest.TestCase):
 
     def test_init_present_time_glacier(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         flowline.init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -325,7 +343,7 @@ class TestOtherDivides(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_div')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_div')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         # self.clean_dir()
@@ -356,7 +374,7 @@ class TestOtherDivides(unittest.TestCase):
 
         # This is another glacier with divides
         for index, entity in rgidf.iterrows():
-            if '00719' not in entity.RGIID:
+            if '00719' not in entity.RGIId:
                 continue
             gdir = GlacierDirectory(entity, base_dir=self.testdir)
             gis.define_glacier_region(gdir, entity=entity)
@@ -371,7 +389,7 @@ class TestOtherDivides(unittest.TestCase):
             climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
                                              prcp_fac=2.5)
             inversion.prepare_for_inversion(gdir)
-            v, ainv = inversion.invert_parabolic_bed(gdir)
+            v, ainv = inversion.mass_conservation_inversion(gdir)
             flowline.init_present_time_glacier(gdir)
 
         myarea = 0.
@@ -395,7 +413,12 @@ class TestOtherDivides(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':
+            self.assertEqual(len(fls), 4)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertEqual(len(fls), 5)
+        if cfg.PARAMS['grid_dx_method'] == 'square':
+            self.assertEqual(len(fls), 8)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -518,6 +541,7 @@ class TestMassBalance(unittest.TestCase):
     def test_constant_mb_model(self):
 
         gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
         mu_star = df['mu_star'][0]
@@ -686,7 +710,7 @@ class TestMassBalance(unittest.TestCase):
 class TestIO(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = os.path.join(current_dir, 'tmp_io')
+        self.test_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_io')
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
@@ -841,7 +865,7 @@ class TestIO(unittest.TestCase):
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
-            assertDatasetAllClose(ds, ds_)
+            xr.testing.assert_allclose(ds, ds_)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
@@ -926,6 +950,90 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(volume[1], volume[2])<2e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
+
+    @is_slow
+    def test_min_slope(self):
+        """ Check what is the min slope a flowline model can produce
+        """
+
+        models = [flowline.KarthausModel, flowline.FluxBasedModel,
+                  flowline.MUSCLSuperBeeModel]
+        fdts = [3*SEC_IN_DAY, None, None]
+        lens = []
+        surface_h = []
+        volume = []
+        min_slope = []
+        yrs = np.arange(1, 700, 2)
+        for model, fdt in zip(models, fdts):
+            fls = dummy_constant_bed_obstacle()
+            mb = LinearMassBalanceModel(2600.)
+
+            model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
+                          fixed_dt=fdt)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            slope = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                fl = fls[-1]
+                length[i] = fl.length_m
+                vol[i] = fl.volume_km3
+
+                hgt = np.where(fl.thick > 0, fl.surface_h, np.NaN)
+                sl = np.arctan(-np.gradient(hgt, fl.dx_meter))
+                slope[i] = np.rad2deg(np.nanmin(sl))
+
+            lens.append(length)
+            volume.append(vol)
+            min_slope.append(slope)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
+
+        self.assertTrue(utils.rmsd(volume[0], volume[2])<1e-2)
+        self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-2)
+
+        if do_plot:  # pragma: no cover
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.plot(yrs, lens[2], 'g')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.plot(yrs, volume[2], 'g')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, min_slope[0], 'r')
+            plt.plot(yrs, min_slope[1], 'b')
+            plt.plot(yrs, min_slope[2], 'g')
+            plt.title('Compare min slope')
+            plt.xlabel('years')
+            plt.ylabel('[degrees]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'], loc=2)
+
+            plt.figure()
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[2], 'g')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed','Karthaus','Flux','MUSCL-SuperBee'],loc=3)
+            plt.show()
 
     @is_slow
     def test_constant_bed_cliff(self):
@@ -1071,9 +1179,9 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
         self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
+        self.assertTrue(utils.rmsd(volume[2], volume[1])<1e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
     @is_slow
     def test_bumpy_bed(self):
@@ -1644,7 +1752,7 @@ class TestHEF(unittest.TestCase):
 
     def setUp(self):
 
-        self.gdir = init_hef(border=DOM_BORDER)
+        self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
@@ -1754,7 +1862,7 @@ class TestHEF(unittest.TestCase):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(0.07, np.std(vol), atol=0.02)
             np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
 
             if do_plot:

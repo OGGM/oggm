@@ -11,7 +11,7 @@ future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
 
-The project is currently in intense development. `Get in touch`_ with us if
+The project is currently in development. `Get in touch`_ with us if
 you want to contribute.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
@@ -41,6 +41,11 @@ About
 
 :Status:
     Experimental - in development
+
+:Citation:
+    .. image:: https://zenodo.org/badge/43965645.svg
+        :target: https://zenodo.org/badge/latestdoi/43965645
+        :alt: Zenodo
 
 :Tests:
     .. image:: https://coveralls.io/repos/OGGM/oggm/badge.svg?branch=master&service=github

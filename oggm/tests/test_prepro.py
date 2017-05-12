@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division
 
+import oggm
 import warnings
 
 import oggm.utils
@@ -8,6 +9,7 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
+import glob
 import shutil
 
 import shapely.geometry as shpg
@@ -29,9 +31,6 @@ from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
     raise unittest.SkipTest('Skipping all prepro tests.')
-
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def read_svgcoords(svg_file):
@@ -61,7 +60,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -90,6 +89,63 @@ class TestGIS(unittest.TestCase):
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
+        self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
+
+    def test_dx_methods(self):
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        # Test fixed method
+        cfg.PARAMS['grid_dx_method'] = 'fixed'
+        cfg.PARAMS['fixed_dx'] = 50
+        gis.define_glacier_region(gdir, entity=entity)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
+
+        # Test linear method
+        cfg.PARAMS['grid_dx_method'] = 'linear'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * gdir.rgi_area_km2 + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
+
+        # Test square method
+        cfg.PARAMS['grid_dx_method'] = 'square'
+        cfg.PARAMS['d1'] = 5.
+        cfg.PARAMS['d2'] = 10.
+        cfg.PARAMS['dmax'] = 100.
+        gis.define_glacier_region(gdir, entity=entity)
+        targetdx = np.rint(5. * np.sqrt(gdir.rgi_area_km2) + 10.)
+        targetdx = np.clip(targetdx, 10., 100.)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(mygrid.dx, targetdx)
+
+    def test_repr(self):
+        from textwrap import dedent
+
+        expected = dedent("""\
+        <oggm.GlacierDirectory>
+          RGI id: RGI40-11.00897
+          Region: 11: Central Europe
+          Subregion: 11-01: Alps
+          Glacier type: Not assigned
+          Terminus type: Land-terminating
+          Area: 8.036 mk2
+          Lon, Lat: (10.7584, 46.8003)
+          Grid (nx, ny): (159, 114)
+          Grid (dx, dy): (50.0, -50.0)
+        """)
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertEqual(gdir.__repr__(), expected)
 
     def test_glacierdir(self):
 
@@ -115,13 +171,41 @@ class TestGIS(unittest.TestCase):
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
             np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
 
+    def test_nodivides(self):
+
+        cfg.PARAMS['use_divides'] = False
+        cfg.set_divides_db()
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
+            np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
+
+        fp = gdir.get_filepath('outlines', div_id=1)
+        self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
+        cfg.PARAMS['use_divides'] = True
+        cfg.set_divides_db()
+
+    def test_intersects(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
+
 
 class TestCenterlines(unittest.TestCase):
 
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -240,6 +324,8 @@ class TestCenterlines(unittest.TestCase):
         entity.BGNDATE = 0
         entity.NAME = 'Baltoro'
         entity.GLACTYPE = '0000'
+        entity.O1REGION = '01'
+        entity.O2REGION = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -289,7 +375,10 @@ class TestCenterlines(unittest.TestCase):
         nd = len(np.where(rest == 0)[0])
         denom = np.float64((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
         hss = np.float64(2.) * ((na*nd)-(nb*nc)) / denom
-        self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'linear':
+            self.assertTrue(hss > 0.53)
+        if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
+            self.assertTrue(hss > 0.41)
 
 
 class TestGeometry(unittest.TestCase):
@@ -297,7 +386,7 @@ class TestGeometry(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -373,7 +462,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_geom_width(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -382,6 +471,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
         geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
         geometry.catchment_width_geom(gdir)
 
     def test_width(self):
@@ -436,16 +526,17 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_prepro')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(current_dir, 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -455,6 +546,7 @@ class TestClimate(unittest.TestCase):
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
+        shutil.rmtree(self.testdir_cru)
 
     def clean_dir(self):
         shutil.rmtree(self.testdir)
@@ -531,10 +623,10 @@ class TestClimate(unittest.TestCase):
         climate.process_histalp_nonparallel([gdirs[0]])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cru_dir = os.path.dirname(cru_dir)
-        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
         climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_pickle('climate_info')
@@ -1073,13 +1165,14 @@ class TestInversion(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -1096,7 +1189,7 @@ class TestInversion(unittest.TestCase):
 
     def test_invert_hef(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1122,9 +1215,9 @@ class TestInversion(unittest.TestCase):
         # meanH = 67+-7
         # Volume = 0.573+-0.063
         # maxH = 242+-13
-        inversion.prepare_for_inversion(gdir)
-
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
+                for i in [1, 2, 3]]
         pid = np.argmax(lens) + 1
 
         # Check how many clips:
@@ -1141,6 +1234,8 @@ class TestInversion(unittest.TestCase):
             _max = np.max(slope)
             if _max > maxs:
                 maxs = _max
+            if cl['is_last']:
+                self.assertEqual(cl['flux'][-1], 0.)
 
         self.assertTrue(nabove == 0)
         self.assertTrue(np.rad2deg(maxs) < 40.)
@@ -1150,8 +1245,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1164,9 +1259,9 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] < 1.1)
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1179,8 +1274,27 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
+            if fl.flows_to is None:
+                self.assertEqual(cl['volume'][-1], 0)
+                self.assertEqual(cl['thick'][-1], 0)
 
         np.testing.assert_allclose(242, maxs, atol=40)
+
+        # Filter
+        inversion.filter_inversion_output(gdir)
+        maxs = 0.
+        v = 0.
+        for div_id in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_output', div_id=div_id)
+            for cl in cls:
+                thick = cl['thick']
+                _max = np.max(thick)
+                if _max > maxs:
+                    maxs = _max
+                v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(ref_v, v)
+
 
     @is_slow
     def test_distribute(self):
@@ -1217,8 +1331,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1, 1],
@@ -1226,9 +1340,9 @@ class TestInversion(unittest.TestCase):
                                     tol=1e-1)['x']
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         inversion.distribute_thickness(gdir, how='per_altitude',
@@ -1283,8 +1397,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = 0.
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1297,9 +1411,9 @@ class TestInversion(unittest.TestCase):
 
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1312,7 +1426,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1330,9 +1444,9 @@ class TestInversion(unittest.TestCase):
         climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
                                          prcp_fac=prcp_fac)
         inversion.prepare_for_inversion(gdir)
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
 
         np.testing.assert_allclose(ref_v, v, rtol=0.02)
         cls = gdir.read_pickle('inversion_output', div_id=pid)
@@ -1343,7 +1457,104 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
+
+    def test_continue_on_error(self):
+
+        cfg.CONTINUE_ON_ERROR = True
+        cfg.PATHS['working_dir'] = self.testdir
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
+        entity.geometry = miniglac
+        entity.RGIID = 'RGI50-11.fake'
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.mu_candidates(gdir, div_id=0)
+        climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
+                                         prcp_fac=2.)
+        inversion.prepare_for_inversion(gdir)
+        inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
+
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
+                            'RGI50-11.fake')
+        self.assertTrue(os.path.exists(rdir))
+
+        rdir = os.path.join(rdir, 'log')
+        self.assertTrue(os.path.exists(rdir))
+
+        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.SUCCESS'))), 2)
+        self.assertTrue(len(glob.glob(os.path.join(rdir, '*.ERROR'))) >= 10)
+
+        cfg.CONTINUE_ON_ERROR = False
+
+        # Test the glacier charac
+        dfc = utils.glacier_characteristics([gdir])
+        self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
+        self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
+
+
+class TestSlopeMitigation(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        utils.mkdir(self.testdir)
+
+    def test_nodivides_correct_slope(self):
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db()
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+
+        self.assertEqual(gdir.n_divides, 1)
+
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+        for fl in fls:
+            dx = fl.dx * gdir.grid.dx
+            slope = np.arctan(-np.gradient(fl.surface_h, dx))
+            self.assertTrue(np.all(slope >= min_slope))
 
 
 class TestGrindelInvert(unittest.TestCase):
@@ -1351,7 +1562,7 @@ class TestGrindelInvert(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_grindel')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_grindel')
         self.clean_dir()
 
         # Init
@@ -1376,7 +1587,8 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, self.testdir)
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11',
+                                            'RGI50-11.01'))
 
     def _parabolic_bed(self):
 
@@ -1428,17 +1640,19 @@ class TestGrindelInvert(unittest.TestCase):
             widths = widths[pok]
             hgt = hgt[pok]
             flux = flux[pok]
+            flux_a0 = 1.5 * flux / widths
             angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
             # Clip flux to 0
             assert not np.any(flux < -0.1)
             # add to output
-            cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
-                          slope_angle=angle, is_last=True)
+            cl_dic = dict(dx=dx, flux=flux, flux_a0=flux_a0, width=widths,
+                          hgt=hgt, slope_angle=angle, is_last=True,
+                          is_rectangular=np.zeros(len(flux), dtype=bool))
             towrite.append(cl_dic)
 
         # Write out
         gdir.write_pickle(towrite, 'inversion_input', div_id=1)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         v_km3 = v * 1e-9
         a_km2 = np.sum(widths * dx) * 1e-6
         v_vas = 0.034*(a_km2**1.375)
@@ -1465,7 +1679,7 @@ class TestGrindelInvert(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
         inversion.prepare_for_inversion(gdir)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         cfg.PARAMS['bed_shape'] = 'parabolic'
         flowline.init_present_time_glacier(gdir)
         mb_mod = massbalance.ConstantMassBalanceModel(gdir)
@@ -1477,13 +1691,38 @@ class TestGrindelInvert(unittest.TestCase):
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
+    @requires_py3
+    def test_intersections(self):
+        cfg.PARAMS['use_multiple_flowlines'] = True
+        gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_intersections(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+
+        # see that we have as many catchments as flowlines
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
+                                               div_id=1))
+        self.assertEqual(len(fls), len(gdfc))
+        # and at least as many intersects
+        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
+                                               div_id=1))
+        self.assertGreaterEqual(len(gdfc), len(fls)-1)
+
+        # check touch borders qualitatively
+        self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
+
 
 class TestCatching(unittest.TestCase):
 
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_errors')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1491,7 +1730,7 @@ class TestCatching(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = current_dir
+        cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
     def tearDown(self):
         self.rm_dir()

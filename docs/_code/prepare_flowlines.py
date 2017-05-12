@@ -7,7 +7,7 @@ from oggm.utils import get_demo_file
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
-base_dir = os.path.join(os.path.expanduser('~'), 'Flowlines')
+base_dir = os.path.join(os.path.expanduser('~'), 'OGGM_docs', 'Flowlines')
 entity = gpd.read_file(get_demo_file('Hintereisferner.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 

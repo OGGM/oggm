@@ -1,8 +1,47 @@
-Using OGGM with MPI
-===================
+Parallel computations
+=====================
+
+.. currentmodule:: oggm
+
+OGGM is designed to use the available resources as well as possible. For single
+nodes machines but with more than one processor (frequent case for personal
+comuters) OGGM ships with a multiprocessing approach which is fairly simple to
+use. For cluster environments, use `MPI`_.
+
+
+Multiprocessing
+---------------
+
+Most OGGM computations are `embarrassingly parallel`_: they
+are standalone operations to be realized on one single glacier entity and
+therefore independent from each other
+(they are called **entity tasks**, as opposed to the non-parallelizable
+**global tasks**).
+
+.. _embarrassingly parallel: https://en.wikipedia.org/wiki/Embarrassingly_parallel
+
+When given a list of :ref:`glacierdir` on which to apply a given task,
+the :py:func:`workflow.execute_entity_task` will distribute the operations on
+the available processors using Python's `multiprocessing`_ module.
+You can control this behavior with the ``use_multiprocessing`` config
+parameter and the number of processors with ``mp_processes``.
+The default in OGGM is:
+
+.. ipython:: python
+
+    from oggm import cfg
+    cfg.initialize()
+    cfg.PARAMS['use_multiprocessing']  # whether to use multiprocessing
+    cfg.PARAMS['mp_processes']  # number of processors to use
+
+``-1`` means that all available processors will be used.
+
+.. _multiprocessing: https://docs.python.org/3.6/library/multiprocessing.html
+
+MPI
+---
 
 OGGM can be run in a clustered environment, using standard mpi features.
-
 OGGM depends on mpi4py in that case, which can be installed via either conda::
 
     conda install -c conda-forge mpi4py
