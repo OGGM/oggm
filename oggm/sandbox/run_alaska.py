@@ -107,8 +107,29 @@ if RUN_inPC:
                 'RGI50-01.22699', 'RGI50-01.23656', 'RGI50-01.10196',
                 'RGI50-01.10689']
 
+
     #keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
     keep_indexes = [(i in keep_ids) for i in rgidf.RGIID]
+
+    # I will improve this list later to drop duplicate ID's
+    # terminus_database_ids = ['RGI50-01.10402', 'RGI50-01.09426', 'RGI50-01.09519',
+    #                 'RGI50-01.10325', 'RGI50-01.22776', 'RGI50-01.17807',
+    #                 'RGI50-01.14878', 'RGI50-01.14876', 'RGI50-01.26732',
+    #                 'RGI50-01.20830', 'RGI50-01.03377', 'RGI50-01.10299',
+    #                 'RGI50-01.10689', 'RGI50-01.09639', 'RGI50-01.10188',
+    #                 'RGI50-01.21005', 'RGI50-01.03622', 'RGI50-01.20791',
+    #                 'RGI50-01.20470', 'RGI50-01.20554', 'RGI50-01.20734',
+    #                 'RGI50-01.14443', 'RGI50-01.20926', 'RGI50-01.17840',
+    #                 'RGI50-01.10575', 'RGI50-01.09783', 'RGI50-01.17843',
+    #                 'RGI50-01.21055', 'RGI50-01.23565', 'RGI50-01.20841',
+    #                 'RGI50-01.10607', 'RGI50-01.17876', 'RGI50-01.20968',
+    #                 'RGI50-01.20891', 'RGI50-01.09810', 'RGI50-01.04375',
+    #                 'RGI50-01.10431', 'RGI50-01.10836', 'RGI50-01.03890',
+    #                 'RGI50-01.21001', 'RGI50-01.20783', 'RGI50-01.17848',
+    #                 'RGI50-01.10612', 'RGI50-01.14683', 'RGI50-01.10355',
+    #                 'RGI50-01.13638', 'RGI50-01.14391', 'RGI50-01.23642',
+    #                 'RGI50-01.09757']
+
     # Other statements to exclude some glaciers
     #keep_indexes = [((i not in keep_ids) or (i not in ids_with_mb)) for i in rgidf.RGIID]
     #keep_indexes = [(i not in keep_ids) for i in rgidf.RGIID]
@@ -207,7 +228,8 @@ if No_calving:
     # graphics.plot_distributed_thickness(gd)
     # plt.savefig(bname + 'inv_cor.png')
     # plt.close()
-# #
+
+################### Making a regional thickness plot #########################
 # dem = utils.get_topo_file([-149.5,-146],[60, 62])
 # dem = salem.GeoTiff(dem[0])
 #
