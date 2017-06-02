@@ -211,6 +211,9 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
             salemmap.set_geometry(l, crs=crs,
                                  color='black', linewidth=0.5)
 
+        if add_downstream:
+            continue
+
         # plot Centerlines
         cls = gdir.read_pickle(filename, div_id=i)
 
@@ -228,14 +231,23 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
                                      markersize=40, edgecolor='k', alpha=0.8,
                                      zorder=99, facecolor='none')
 
-        if add_downstream:
-            line = gdir.read_pickle('downstream_line', div_id=i)
-            salemmap.set_geometry(line, crs=crs, color='red', linewidth=2.5,
-                                 zorder=50)
+    if add_downstream:
+        # plot Centerlines
+        cls = gdir.read_pickle(filename, div_id=0)
 
-            salemmap.set_geometry(shpg.Point(line.coords[0]), crs=crs,
-                                 marker='o', markersize=40, edgecolor='k',
-                                 alpha=0.8, zorder=99, facecolor='w')
+        # Go in reverse order for red always being the longuest
+        cls = cls[::-1]
+        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        for l, c in zip(cls, color):
+            salemmap.set_geometry(l.line, crs=crs, color=c,
+                                 linewidth=2.5, zorder=50)
+            salemmap.set_geometry(l.head, crs=gdir.grid, marker='o',
+                                  markersize=60, alpha=0.8, color=c, zorder=99)
+
+            for j in l.inflow_points:
+                salemmap.set_geometry(j, crs=crs, marker='o',
+                                     markersize=40, edgecolor='k', alpha=0.8,
+                                     zorder=99, facecolor='none')
 
     salemmap.plot(ax)
 
@@ -311,6 +323,9 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
         # Plot intersects
         if add_intersects and gdir.has_file('intersects', div_id=0):
             gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
+            salemmap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
+        if add_intersects and gdir.has_file('divides_intersects', div_id=0):
+            gdf = gpd.read_file(gdir.get_filepath('divides_intersects'))
             salemmap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines

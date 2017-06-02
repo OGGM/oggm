@@ -195,7 +195,6 @@ class TestWorkflow(unittest.TestCase):
         d = gdirs[0].read_pickle('inversion_params')
         fs = d['fs']
         glen_a = d['glen_a']
-        maxs = cfg.PARAMS['max_shape_param']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
             mb_mod = massbalance.ConstantMassBalanceModel(gdir)
@@ -206,13 +205,10 @@ class TestWorkflow(unittest.TestCase):
             _area = model.area_km2
             if gdir.rgi_id in df.index:
                 gldf = df.loc[gdir.rgi_id]
-                # TODO: broken but should work
-                # assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.03)
-                # assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
+                assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.05)
+                assert_allclose(gldf['ref_area_km2'], _area, rtol=0.05)
                 maxo = max([fl.order for fl in model.fls])
                 for fl in model.fls:
-                    self.assertTrue(np.all(fl.bed_shape > 0))
-                    self.assertTrue(np.all(fl.bed_shape <= maxs))
                     if len(model.fls) > 1:
                         if fl.order == (maxo-1):
                             self.assertTrue(fl.flows_to is fls[-1])
@@ -254,7 +250,7 @@ class TestWorkflow(unittest.TestCase):
         from oggm.core.models.massbalance import PastMassBalanceModel
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
-            h, w = gdir.get_flowline_hw()
+            h, w = gdir.get_inversion_flowline_hw()
             cfg.PARAMS['use_bias_for_run'] = False
             mbmod = PastMassBalanceModel(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
@@ -270,7 +266,6 @@ class TestWorkflow(unittest.TestCase):
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
             np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
-
 
     @is_slow
     def test_shapefile_output(self):
@@ -330,13 +325,13 @@ class TestWorkflow(unittest.TestCase):
         odf = pd.DataFrame(index=years)
         for gd in gdirs[:6]:
             mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
-            h, w = gd.get_flowline_hw()
+            h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertLessEqual(odf.corr().mean().mean(), 0.5)
         seed = 1
         for gd in gdirs[:6]:
             mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
-            h, w = gd.get_flowline_hw()
+            h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)
 

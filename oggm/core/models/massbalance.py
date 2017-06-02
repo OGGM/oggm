@@ -127,7 +127,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         ela_h: float
             Equilibrium line altitude (units: [m])
         grad: float
-            Mass-balance gradient (unit: [mm yr-1 m-1])
+            Mass-balance gradient (unit: [mm w.e. yr-1 m-1])
         """
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
@@ -142,7 +142,7 @@ class LinearMassBalanceModel(MassBalanceModel):
 
     def get_monthly_mb(self, heights, year=None):
         mb = (heights - self.ela_h) * self.grad
-        return mb / SEC_IN_YEAR / 1000.
+        return mb / SEC_IN_YEAR / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
         return self.get_monthly_mb(heights, year=year)

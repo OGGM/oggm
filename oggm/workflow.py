@@ -168,7 +168,9 @@ def gis_prepro_tasks(gdirs):
         tasks.compute_centerlines,
         tasks.compute_downstream_lines,
         tasks.initialize_flowlines,
+        tasks.compute_downstream_bedshape,
         tasks.catchment_area,
+        tasks.catchment_intersections,
         tasks.catchment_width_geom,
         tasks.catchment_width_correction
     ]

@@ -12,6 +12,7 @@ import shutil
 
 import os
 import geopandas as gpd
+import numpy as np
 import matplotlib.pyplot as plt
 
 # Local imports
@@ -19,11 +20,14 @@ import oggm.utils
 from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
 from oggm.tests import init_hef, BASELINE_DIR
 from oggm import graphics
-from oggm.core.preprocessing import gis, centerlines, geometry
+from oggm.core.preprocessing import (gis, centerlines, geometry, climate, inversion)
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm.core.models import flowline
+from oggm import utils
 
+# In case some logging happens or so
+cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
 # do we event want to run the tests?
 if not RUN_GRAPHIC_TESTS:
@@ -71,21 +75,21 @@ def test_flowlines():
 
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
-def test_downstream():
+def test_downstream_cls():
     fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True,
-                              use_flowlines=True)
+    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True)
     fig.tight_layout()
     return fig
 
 
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
-def test_downstream_cls():
+def test_downstream():
     fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True)
+    graphics.plot_centerlines(gdir, ax=ax, add_downstream=True,
+                              use_flowlines=True)
     fig.tight_layout()
     return fig
 
@@ -197,7 +201,6 @@ def test_modelsection():
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    fls = flowline.convert_to_mixed_flowline(fls)
     model = flowline.FlowlineModel(fls)
 
     fig = plt.figure(figsize=(12, 6))
@@ -213,7 +216,6 @@ def test_modelmap():
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    fls = flowline.convert_to_mixed_flowline(fls)
     model = flowline.FlowlineModel(fls)
 
     fig, ax = plt.subplots()
@@ -257,6 +259,98 @@ def test_catch_areas():
 def test_intersects_borders():
     fig, ax = plt.subplots()
     gdir = init_hef()
+    graphics.plot_catchment_width(gdir, ax=ax, add_intersects=True,
+                                  add_touches=True)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_chhota_shigri():
+
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_chhota')
+    utils.mkdir(testdir)
+
+    # Init
+    cfg.initialize()
+    cfg.PATHS['dem_file'] = get_demo_file('dem_chhota_shigri.tif')
+    cfg.PARAMS['border'] = 40
+    cfg.set_divides_db(get_demo_file('divides_RGI50-14.15990.shp'))
+
+    hef_file = get_demo_file('RGI50-14.15990.shp')
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir)
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+    centerlines.compute_downstream_lines(gdir)
+    geometry.initialize_flowlines(gdir)
+
+    # We should have two groups
+    lines = gdir.read_pickle('downstream_lines', div_id=0)
+    assert len(np.unique(lines.group)) == 2
+
+    # Just check if the rest runs
+    centerlines.compute_downstream_bedshape(gdir)
+    geometry.catchment_area(gdir)
+    geometry.catchment_intersections(gdir)
+    geometry.catchment_width_geom(gdir)
+    geometry.catchment_width_correction(gdir)
+    climate.apparent_mb_from_linear_mb(gdir)
+    inversion.prepare_for_inversion(gdir)
+    inversion.volume_inversion(gdir, use_cfg_params={'glen_a': cfg.A,
+                                                     'fs': 0})
+    inversion.filter_inversion_output(gdir)
+
+    flowline.init_present_time_glacier(gdir)
+
+    fls = gdir.read_pickle('model_flowlines')
+    for fl in fls:
+        fl.thick = np.clip(fl.thick, 100, 1000)
+    model = flowline.FlowlineModel(fls)
+
+    fig, ax = plt.subplots()
+    graphics.plot_modeloutput_map(gdir, ax=ax, model=model)
+    fig.tight_layout()
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_ice_cap():
+
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_icecap')
+    utils.mkdir(testdir)
+
+    cfg.initialize()
+    cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-05.08389.tif')
+    cfg.PARAMS['border'] = 20
+    cfg.set_divides_db(get_demo_file('divides_RGI50-05.08389.shp'))
+    # cfg.set_divides_db('/home/mowglie/Downloads/shapefiles_filter/divides_Area_filter_OFF.shp')
+
+    hef_file = get_demo_file('RGI50-05.08389.shp')
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir)
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+    centerlines.compute_downstream_lines(gdir)
+    geometry.initialize_flowlines(gdir)
+
+    # We should have five groups
+    lines = gdir.read_pickle('downstream_lines', div_id=0)
+    assert len(np.unique(lines.group))==5
+
+    # This just checks that it works
+    geometry.catchment_area(gdir)
+    geometry.catchment_intersections(gdir)
+    geometry.catchment_width_geom(gdir)
+    geometry.catchment_width_correction(gdir)
+
+    fig, ax = plt.subplots()
     graphics.plot_catchment_width(gdir, ax=ax, add_intersects=True,
                                   add_touches=True)
     fig.tight_layout()

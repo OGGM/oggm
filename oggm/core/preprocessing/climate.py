@@ -12,6 +12,7 @@ import xarray as xr
 from scipy import stats
 import netCDF4
 import salem
+from scipy import optimize as optimization
 # Locals
 from oggm import cfg
 from oggm import utils
@@ -860,8 +861,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                                                   flatten=False)
             fl.set_apparent_mb(np.mean(p, axis=1) - mustar*np.mean(t, axis=1))
 
-        # Check
-        if div_id >= 1:
+        # Check and write
+        if div_id > 0:
             aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
                 log.warning('%s: flux should be zero, but is: '
@@ -872,7 +873,62 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                        .format(gdir.rgi_id, aflux)
                 raise RuntimeError(msg)
 
-        # Overwrite
+            gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
+
+
+@entity_task(log, writes=['inversion_flowlines'])
+@divide_task(log, add_0=False)
+def apparent_mb_from_linear_mb(gdir, div_id=None):
+    """Compute apparent mb from a linear mass-balance assumption (for testing).
+
+    This is for testing currently, but could be used as alternative method
+    for the inversion quite easily.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    # Do we have a calving glacier?
+    cmb = calving_mb(gdir)
+
+    # Get the height and widths along the fls
+    h, w = gdir.get_inversion_flowline_hw(div_id=div_id)
+
+    # Now find the ELA till the integrated mb is zero
+    from oggm.core.models.massbalance import LinearMassBalanceModel
+    def to_minimize(ela_h):
+        mbmod = LinearMassBalanceModel(ela_h[0])
+        smb = mbmod.get_specific_mb(h, w)
+        return smb**2
+
+    ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
+    mbmod = LinearMassBalanceModel(ela_h['x'][0])
+
+    # For each flowline compute the apparent MB
+    fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+
+    # Reset flux
+    for fl in fls:
+        fl.flux = np.zeros(len(fl.surface_h))
+
+    # Flowlines in order to be sure
+    for fl in fls:
+        mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * cfg.RHO
+        fl.set_apparent_mb(mbz)
+
+    # Check and write
+    if div_id > 0:
+        aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
+        if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+            log.warning('%s: flux should be zero, but is: '
+                        '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
+        # If not marine and quite far from zero, error
+        if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
+            msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
+                   .format(gdir.rgi_id, aflux)
+            raise RuntimeError(msg)
+
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 

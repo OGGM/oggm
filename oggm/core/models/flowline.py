@@ -113,7 +113,7 @@ class ModelFlowline(Centerline):
         ds = xr.Dataset()
         ds.coords['x'] = np.arange(nx)
         ds.coords['c'] = [0, 1]
-        ds['coords'] = (['x', 'c'], np.asarray(self.line.coords))
+        ds['linecoords'] = (['x', 'c'], np.asarray(self.line.coords))
         ds['surface_h'] = (['x'],  h)
         ds['bed_h'] = (['x'],  self.bed_h)
         ds.attrs['class'] = type(self).__name__
@@ -224,6 +224,12 @@ class TrapezoidalFlowline(ModelFlowline):
                                                    surface_h, bed_h)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
+
+        if np.any(self._w0_m <= 0):
+            raise ValueError('Trapezoid beds need to have origin widths > 0.')
+
+        self._prec = np.where(lambdas == 0)
+
         self._lambdas = lambdas
 
     @property
@@ -239,7 +245,10 @@ class TrapezoidalFlowline(ModelFlowline):
     def section(self, val):
         b = 2 * self._w0_m
         a = 2 * self._lambdas
-        self.thick = (np.sqrt(b**2 + 4 * a * val) - b) / a
+        with np.errstate(divide='ignore', invalid='ignore'):
+            thick = (np.sqrt(b**2 + 4 * a * val) - b) / a
+        thick[self._prec] = val[self._prec] / self._w0_m[self._prec]
+        self.thick = thick
 
     @property
     def area_m2(self):
@@ -255,11 +264,9 @@ class TrapezoidalFlowline(ModelFlowline):
 class MixedFlowline(ModelFlowline):
     """A more advanced Flowline."""
 
-    def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None,
-                 section=None, bed_shape=None,
-                 where_trapezoid=None, lambdas=None,
-                 widths_m=None):
+    def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
+                 bed_h=None, section=None, bed_shape=None,
+                 is_trapezoid=None, lambdas=None, widths_m=None):
         """ Instanciate.
 
         Parameters
@@ -269,68 +276,86 @@ class MixedFlowline(ModelFlowline):
         Properties
         ----------
         #TODO: document properties
+        width_m is optional - for thick=0
         """
 
-        self._do_trapeze = False
-        super(MixedFlowline, self).__init__(line, dx, map_dx,
-                                            surface_h.copy(), bed_h.copy())
+        super(MixedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
+                                            surface_h=surface_h.copy(),
+                                            bed_h=bed_h.copy())
 
-        # The parabola is easy
-        assert np.all(np.isfinite(bed_shape))
-        self.bed_shape = bed_shape
+        # To speedup calculations if no trapezoid bed is present
+        self._do_trapeze = np.any(is_trapezoid)
+
+        # Parabolic
+        assert len(bed_shape) == self.nx
+        self.bed_shape = bed_shape.copy()
         self._sqrt_bed = np.sqrt(bed_shape)
 
-        # where to trapeze
-        if len(np.asarray(where_trapezoid).shape) == 2:
-            where_trapezoid = where_trapezoid[0]
-        ptrap = where_trapezoid
-        ref_section = section.copy()
-        _w0_m = widths_m[ptrap]
+        # Trapeze
+        assert len(lambdas) == self.nx
+        assert len(is_trapezoid) == self.nx
+        self._lambdas = lambdas.copy()
+        self._ptrap = np.where(is_trapezoid)[0]
+        self.is_trapezoid = is_trapezoid
 
-        sec = section[ptrap]
-        b = - 2 * widths_m[ptrap]
-        det = b ** 2 - 4 * lambdas[ptrap] * 2 * sec
-        h = (- b - np.sqrt(det)) / (2 * lambdas[ptrap])
-        assert np.alltrue(h >= 0)
-        self.bed_h[ptrap] = surface_h[ptrap] - h.clip(0)
-        self._thick[ptrap] = h.clip(0)
+        # Sanity
+        self.bed_shape[is_trapezoid] = np.NaN
+        self._lambdas[~is_trapezoid] = np.NaN
 
-        # This doesnt work because of interp at the tongue
-        # assert np.allclose(surface_h, self.surface_h)
+        # Here we have to compute the widths out of section and lambda
+        thick = surface_h - bed_h
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self._w0_m = section / thick - lambdas * thick / 2
 
-        # compute _w0_m
-        _w0_m = _w0_m - lambdas[ptrap] * self.thick[ptrap]
-        assert np.alltrue(_w0_m >= 0)
+        assert np.all(section >= 0)
+        need_w = (section == 0) & is_trapezoid
+        if np.any(need_w):
+            if widths_m is None:
+                raise ValueError('We need a non-zero section for trapezoid '
+                                 'shapes unless you provide widths_m.')
+            self._w0_m[need_w] = widths_m[need_w]
 
-        self._w0_m = _w0_m
-        self._lambdas = lambdas
-        self._ptrap = ptrap
-        self._do_trapeze = len(sec) > 0
-        assert np.allclose(self.thick[ptrap], h.clip(0))
-        assert np.allclose(ref_section, self.section)
+        self._w0_m[~is_trapezoid] = np.NaN
+
+        if (np.any(self._w0_m[self._ptrap] <= 0) or
+                np.any(~np.isfinite(self._w0_m[self._ptrap]))):
+            raise ValueError('Trapezoid beds need to have origin widths > 0.')
+
+        assert np.all(self.bed_shape[~is_trapezoid] > 0)
+
+        self._prec = np.where(is_trapezoid & (lambdas == 0))
+
+        assert np.allclose(section, self.section)
 
     @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         out = np.sqrt(4*self.thick/self.bed_shape)
         if self._do_trapeze:
-            out[self._ptrap] = self._w0_m + self._lambdas[self._ptrap] * self.thick[self._ptrap]
+            out[self._ptrap] = self._w0_m[self._ptrap] + \
+                               self._lambdas[self._ptrap] * \
+                               self.thick[self._ptrap]
         return out
 
     @property
     def section(self):
         out = TWO_THIRDS * self.widths_m * self.thick
         if self._do_trapeze:
-            out[self._ptrap] = (self.widths_m[self._ptrap] + self._w0_m) / 2 * self.thick[self._ptrap]
+            out[self._ptrap] = (self.widths_m[self._ptrap] + \
+                                self._w0_m[self._ptrap]) / 2 \
+                                * self.thick[self._ptrap]
         return out
 
     @section.setter
     def section(self, val):
         out = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
         if self._do_trapeze:
-            b = 2 * self._w0_m
+            b = 2 * self._w0_m[self._ptrap]
             a = 2 * self._lambdas[self._ptrap]
-            out[self._ptrap] = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
+            with np.errstate(divide='ignore', invalid='ignore'):
+                thick = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
+            thick[self._prec] = val[self._prec] / self._w0_m[self._prec]
+            out[self._ptrap] = thick
         self.thick = out
 
     @property
@@ -342,9 +367,9 @@ class MixedFlowline(ModelFlowline):
         """Add bed specific parameters."""
 
         ds['section'] = (['x'],  self.section)
-        ds['widths_m'] = (['x'],  self.widths_m)
         ds['bed_shape'] = (['x'],  self.bed_shape)
-        ds['where_trapezoid'] = (['p'], self._ptrap)
+        ds['is_trapezoid'] = (['x'], self.is_trapezoid)
+        ds['widths_m'] = (['x'], self._w0_m)
         ds['lambdas'] = (['x'],  self._lambdas)
 
 
@@ -1199,12 +1224,12 @@ def flowline_from_dataset(ds):
     """Instanciates a flowline from an xarray Dataset."""
 
     cl = globals()[ds.attrs['class']]
-    line = shpg.LineString(ds['coords'].values)
+    line = shpg.LineString(ds['linecoords'].values)
     args = dict(line=line, dx=ds.dx, map_dx=ds.map_dx,
                 surface_h=ds['surface_h'].values,
                 bed_h=ds['bed_h'].values)
 
-    have = {'c', 'x', 'surface_h', 'coords', 'bed_h', 'z', 'p', 'n',
+    have = {'c', 'x', 'surface_h', 'linecoords', 'bed_h', 'z', 'p', 'n',
             'time', 'month', 'year', 'ts_width_m', 'ts_section'}
     missing_vars = set(ds.variables.keys()).difference(have)
     for k in missing_vars:
@@ -1235,171 +1260,140 @@ def glacier_from_netcdf(path):
     return fls
 
 
-
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
     """First task after inversion. Merges the data from the various
-    preprocessing tasks into a stand-alone dataset ready for run.
-
-    In a first stage we assume that all divides CAN be merged as for HEF,
-    so that the concept of divide is not necessary anymore.
-
-    This task is horribly coded and needs more work
+    preprocessing tasks into a stand-alone numerical glacier ready for run.
 
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
     """
 
-    # Topo for heights
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
-        topo = nc.variables['topo_smoothed'][:]
-
-    # Bilinear interpolation
-    # Geometries coordinates are in "pixel centered" convention, i.e
-    # (0, 0) is also located in the center of the pixel
-    xy = (np.arange(0, gdir.grid.ny-0.1, 1),
-          np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
-
-    # Default bed shape
-    defshape = 0.003
-
-    # Map
+    # Some vars
     map_dx = gdir.grid.dx
+    def_lambda = cfg.PARAMS['trapezoid_lambdas']
+    min_shape = cfg.PARAMS['mixed_min_shape']
 
-    # OK. Dont try to solve problems you don't know about yet - i.e.
-    # rethink about all this when we will have proper divides everywhere.
-    # for HEF the following will work, and this is very ugly.
-    major_div = gdir.read_pickle('major_divide', div_id=0)
-    div_ids = list(gdir.divide_ids)
-    div_ids.remove(major_div)
-    div_ids = [major_div] + div_ids
-    fls_list = []
-    fls_per_divide = []
-    inversion_per_divide = []
-    for div_id in div_ids:
-        fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-        fls_list.extend(fls)
-        fls_per_divide.append(fls)
-        invs = gdir.read_pickle('inversion_output', div_id=div_id)
-        inversion_per_divide.append(invs)
+    # We take the div_0 centerlines and fill them with the inversion results
+    cls = gdir.read_pickle('inversion_flowlines')
+    ds_bss = gdir.read_pickle('downstream_bed')
 
-    max_shape = cfg.PARAMS['max_shape_param']
+    icls = []
+    for div_id in gdir.divide_ids:
+        icls.extend(gdir.read_pickle('inversion_flowlines', div_id=div_id))
 
-    # Extend the flowlines with the downstream lines, make a new object
+    invs = []
+    for div_id in gdir.divide_ids:
+        invs.extend(gdir.read_pickle('inversion_output', div_id=div_id))
+
+    # This is the not so nice part. Find which cls belongs to which
     new_fls = []
     flows_to_ids = []
-    major_id = None
-    for fls, invs, did in zip(fls_per_divide, inversion_per_divide, div_ids):
-        for fl, inv in zip(fls[0:-1], invs[0:-1]):
-            bed_h = fl.surface_h - inv['thick']
-            w = fl.widths * map_dx
-            bed_shape = (4*inv['thick'])/(w**2)
-            bed_shape = bed_shape.clip(0, max_shape)
-            bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
-            bed_shape = utils.interp_nans(bed_shape, default=defshape)
-            nfl = ParabolicFlowline(fl.line, fl.dx, map_dx, fl.surface_h,
-                                    bed_h, bed_shape)
-            flows_to_ids.append(fls_list.index(fl.flows_to))
-            new_fls.append(nfl)
+    for cl, ds_bs in zip(cls, ds_bss):
+        icl = None
+        inv = None
+        for totest, tinv in zip(icls, invs):
+            if cl.head == totest.head:
+                icl = totest
+                inv = tinv
+                break
+        if not icl:
+            raise RuntimeError('{}: centerlines could not be '
+                               'matched'.format(gdir.rgi_id))
 
-        # The last one is extended with the downstream
-        # TODO: copy-paste code smell
-        fl = fls[-1]
-        inv = invs[-1]
-        dline = gdir.read_pickle('downstream_line', div_id=did)
-        long_line = oggm.core.preprocessing.geometry._line_extend(fl.line,
-                                                                  dline, fl.dx)
-
-        # Interpolate heights
-        x, y = long_line.xy
-        hgts = interpolator((y, x))
-
-        # Inversion stuffs
-        bed_h = hgts.copy()
-        bed_h[0:len(fl.surface_h)] -= inv['thick']
-
-        # Shapes
-        w = fl.widths * map_dx
-        bed_shape = (4*inv['thick'])/(w**2)
-        bed_shape = bed_shape.clip(0, max_shape)
-        bed_shape = np.where(inv['thick'] < 1., np.NaN, bed_shape)
-        bed_shape = utils.interp_nans(bed_shape, default=defshape)
-
-        # TODO: forbid too small shape close to the end?
-        # bed_shape[-4:] = bed_shape[-4:].clip(cfg.PARAMS['mixed_min_shape'])
-
-        # Take the median of the last 30%
-        ashape = np.median(bed_shape[-np.floor(len(bed_shape)/3.).astype(np.int64):])
-        # But forbid too small shape
-        ashape = ashape.clip(cfg.PARAMS['mixed_min_shape'])
-
-        bed_shape = np.append(bed_shape, np.ones(len(bed_h)-len(bed_shape))*ashape)
-        nfl = ParabolicFlowline(long_line, fl.dx, map_dx, hgts, bed_h, bed_shape)
-
-        if major_id is None:
-            flid = -1
-            major_id = len(fls)-1
+        if icl.nx <= cl.nx:
+            surface_h = cl.surface_h.copy()
+            line = cl.line
+            nx = cl.nx
+            bed_shape = ds_bs
         else:
-            flid = major_id
-        flows_to_ids.append(flid)
+            # Make sure we are not far off
+            assert (icl.nx - cl.nx) < 5
+            surface_h = icl.surface_h.copy()
+            line = icl.line
+            nx = icl.nx
+            bed_shape = surface_h * np.NaN
+
+        is_gl = np.zeros(nx, dtype=np.bool)
+        is_gl[:icl.nx] = True
+
+        # Get the data to make the model flowlines
+        section = surface_h * 0.
+        section[is_gl] = inv['volume'] / (cl.dx * map_dx)
+        bed_h = surface_h.copy()
+        bed_h[is_gl] -= inv['thick']
+
+        assert np.all(icl.widths > 0)
+        bed_shape_gl = 4 * inv['thick'] / (icl.widths * map_dx)**2
+        bed_shape[is_gl] = bed_shape_gl
+
+        lambdas = bed_shape * np.NaN
+        lambdas_gl = inv['thick'] * np.NaN
+        lambdas_gl[bed_shape_gl < min_shape] = def_lambda
+        lambdas_gl[inv['is_rectangular']] = 0.
+
+        # For the very last pixs of a glacier, the section might be zero after
+        # the inversion, and the bedshapes are chaotic. We use the ones from
+        # the downstream. This is not volume conservative
+        if ~ gdir.is_tidewater and inv['is_last']:
+            lambdas_gl[-5:] = np.nan
+            bed_shape_gl[-5:] = np.nan
+            try:
+                tmp = np.append(bed_shape_gl, bed_shape[icl.nx])
+                bed_shape_gl = utils.interp_nans(tmp)[:-1].clip(min_shape)
+            except IndexError:
+                bed_shape_gl = utils.interp_nans(bed_shape_gl).clip(min_shape)
+            h = inv['thick']
+            n_sect = 2 / 3 * h * np.sqrt(4 * h / bed_shape_gl)
+            section[icl.nx-5:icl.nx] = n_sect[-5:]
+            bed_shape[icl.nx-5:icl.nx] = bed_shape_gl[-5:]
+
+        lambdas[is_gl] = lambdas_gl
+
+        is_trapezoid = np.isfinite(lambdas)
+
+        # Update bed_h where we now have a trapeze
+        w0_m = icl.widths * map_dx - lambdas_gl * inv['thick']
+        b = 2 * w0_m
+        a = 2 * lambdas_gl
+        with np.errstate(divide='ignore', invalid='ignore'):
+            thick = (np.sqrt(b**2 + 4 * a * section[is_gl]) - b) / a
+        pzero = lambdas_gl == 0
+        thick[pzero] = section[is_gl][pzero] / w0_m[pzero]
+        bed_h_n = surface_h.copy()[is_gl] - thick
+        assert np.all(np.isfinite(bed_h_n[np.isfinite(lambdas_gl)]))
+        bed_h[is_gl & is_trapezoid] = bed_h_n[np.isfinite(lambdas_gl)]
+
+        # Default widths for everything goes wrong
+        widths_m = np.zeros(nx)
+        widths_m[is_gl] = icl.widths * map_dx
+
+        nfl = MixedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
+                            surface_h=surface_h, bed_h=bed_h,
+                            section=section, bed_shape=bed_shape,
+                            is_trapezoid=is_trapezoid, lambdas=lambdas,
+                            widths_m=widths_m)
+
+        if cl.flows_to:
+            flows_to_ids.append(cls.index(cl.flows_to))
+        else:
+            flows_to_ids.append(None)
+
         new_fls.append(nfl)
 
     # Finalize the linkages
     for fl, fid in zip(new_fls, flows_to_ids):
-        if fid == -1:
-            continue
-        fl.set_flows_to(new_fls[fid])
+        if fid:
+            fl.set_flows_to(new_fls[fid])
 
     # Adds the line level
     for fl in new_fls:
         fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
-
-    # And sort them per order
-    fls = []
-    for i in np.argsort([fl.order for fl in new_fls]):
-        fls.append(new_fls[i])
 
     # Write the data
-    gdir.write_pickle(fls, 'model_flowlines')
+    gdir.write_pickle(new_fls, 'model_flowlines')
 
-
-def convert_to_mixed_flowline(fls):
-    """Replaces parabolic flowlines with a mixed type."""
-
-    new_fls = []
-    flows_to_ids = []
-    fls = copy.deepcopy(fls)
-    for fl in fls:
-
-        lambdas = fl.bed_shape * 0.
-        lambdas[:] = cfg.PARAMS['trapezoid_lambdas']
-
-        ptrap = np.nonzero(fl.bed_shape < cfg.PARAMS['mixed_min_shape'])
-
-        fl_ = MixedFlowline(line=fl.line, dx=fl.dx, map_dx=fl.map_dx,
-                            surface_h=fl.surface_h, bed_h=fl.bed_h,
-                            section=fl.section, bed_shape=fl.bed_shape,
-                            where_trapezoid=ptrap, lambdas=lambdas,
-                            widths_m=fl.widths_m)
-
-        new_fls.append(fl_)
-
-        if fl.flows_to is None:
-            flows_to_ids.append(-1)
-        else:
-            flows_to_ids.append(fls.index(fl.flows_to))
-
-    for i, fid in enumerate(flows_to_ids):
-        if fid != -1:
-            new_fls[i].set_flows_to(new_fls[fid])
-
-    # Adds the line level
-    for fl in new_fls:
-        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
-
-    return new_fls
 
 def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
                          rtol=0.01, atol=10, max_ite=100,
@@ -1575,8 +1569,6 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     y1 = gdir.rgi_date.year
     mb = mbmods.PastMassBalanceModel(gdir)
     fls = gdir.read_pickle('model_flowlines')
-    if cfg.PARAMS['bed_shape'] == 'mixed':
-        fls = convert_to_mixed_flowline(fls)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, glen_a=glen_a)
     assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)

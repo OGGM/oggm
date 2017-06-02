@@ -179,6 +179,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     centerlines.compute_centerlines(gdir)
     centerlines.compute_downstream_lines(gdir)
     geometry.initialize_flowlines(gdir)
+    centerlines.compute_downstream_bedshape(gdir)
     geometry.catchment_area(gdir)
     geometry.catchment_intersections(gdir)
     geometry.catchment_width_geom(gdir)
