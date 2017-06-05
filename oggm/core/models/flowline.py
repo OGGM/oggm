@@ -353,9 +353,8 @@ class MixedFlowline(ModelFlowline):
             b = 2 * self._w0_m[self._ptrap]
             a = 2 * self._lambdas[self._ptrap]
             with np.errstate(divide='ignore', invalid='ignore'):
-                thick = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
-            thick[self._prec] = val[self._prec] / self._w0_m[self._prec]
-            out[self._ptrap] = thick
+                out[self._ptrap] = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
+            out[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = out
 
     @property
