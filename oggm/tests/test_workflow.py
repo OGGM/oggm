@@ -22,7 +22,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
-from oggm.tests import requires_mpltest, RUN_GRAPHIC_TESTS, BASELINE_DIR
+from oggm.tests import requires_mpltest, is_graphic_test, BASELINE_DIR
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -116,6 +116,7 @@ def up_to_inversion(reset=False):
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
         cfg.PATHS['cru_dir'] = ''
+        workflow.init_mp_pool(reset=True)
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -149,6 +150,7 @@ def up_to_distrib(reset=False):
         cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
+        workflow.init_mp_pool(reset=True)
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")
@@ -337,6 +339,7 @@ class TestWorkflow(unittest.TestCase):
 
 
 @is_slow
+@is_graphic_test
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():

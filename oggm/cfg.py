@@ -209,9 +209,7 @@ _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
 _doc = 'Array of the parabolic coefficients for all centerlines, computed ' \
-       'from fitting a parabola to the topography. This is ' \
-       'useful for downstream lines only, but why not computing it' \
-       'everywhere if we can.'
+       'from fitting a parabola to the topography.'
 BASENAMES['downstream_bed'] = ('downstream_bed.pkl', _doc)
 
 

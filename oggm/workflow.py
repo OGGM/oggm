@@ -33,10 +33,10 @@ def _init_pool_globals(_cfg_contents, global_lock):
     utils.lock = global_lock
 
 
-def _init_pool():
+def init_mp_pool(reset=False):
     """Necessary because at import time, cfg might be uninitialized"""
     global _mp_pool
-    if _mp_pool:
+    if _mp_pool and not reset:
         return _mp_pool
     cfg_contents = cfg.pack_config()
     global_lock = mp.Manager().Lock()
@@ -79,8 +79,9 @@ class _pickle_copier(object):
                 return self.call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
-                raise RuntimeError('{0}: exception occured while processing task {1}' \
-                        .format(gdir.rgi_id, self.call_func.__name__)) from e
+                err_msg = '{0}: exception occured while processing task ' \
+                          '{1}'.format(gdir.rgi_id, self.call_func.__name__)
+                raise RuntimeError(err_msg) from e
             except AttributeError:
                 pass
             raise
@@ -125,7 +126,7 @@ def execute_entity_task(task, gdirs, **kwargs):
             return
 
     if cfg.PARAMS['use_multiprocessing']:
-        mppool = _init_pool()
+        mppool = init_mp_pool()
         mppool.map(pc, gdirs, chunksize=1)
     else:
         for gdir in gdirs:

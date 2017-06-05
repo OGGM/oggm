@@ -132,6 +132,12 @@ def is_download(test):
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
 
 
+def is_graphic_test(test):
+    # Test decorator
+    msg = "requires explicit environment for gaphic tests"
+    return test if RUN_GRAPHIC_TESTS else unittest.skip(msg)(test)
+
+
 def is_performance_test(test):
     # Test decorator
     msg = "requires explicit environment for performance tests"
