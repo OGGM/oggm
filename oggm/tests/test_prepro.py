@@ -1581,7 +1581,7 @@ class TestInversion(unittest.TestCase):
                                                      glen_a=glen_a,
                                                      write=True)
 
-        np.testing.assert_allclose(ref_v, v, rtol=0.02)
+        np.testing.assert_allclose(v, ref_v, rtol=0.06)
         cls = gdir.read_pickle('inversion_output', div_id=pid)
         maxs = 0.
         for cl in cls:
