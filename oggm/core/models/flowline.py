@@ -325,7 +325,7 @@ class MixedFlowline(ModelFlowline):
 
         self._prec = np.where(is_trapezoid & (lambdas == 0))
 
-        assert np.allclose(section, self.section, rtol=1e-3)
+        assert np.allclose(section, self.section)
 
     @property
     def widths_m(self):
@@ -1275,7 +1275,10 @@ def init_present_time_glacier(gdir):
     min_shape = cfg.PARAMS['mixed_min_shape']
 
     # We take the div_0 centerlines and fill them with the inversion results
-    cls = gdir.read_pickle('inversion_flowlines')
+    if gdir.is_tidewater:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=1)
+    else:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=0)
     ds_bss = gdir.read_pickle('downstream_bed')
 
     icls = []
@@ -1335,7 +1338,7 @@ def init_present_time_glacier(gdir):
         # For the very last pixs of a glacier, the section might be zero after
         # the inversion, and the bedshapes are chaotic. We use the ones from
         # the downstream. This is not volume conservative
-        if ~ gdir.is_tidewater and inv['is_last']:
+        if (not gdir.is_tidewater) and inv['is_last']:
             lambdas_gl[-5:] = np.nan
             bed_shape_gl[-5:] = np.nan
             try:

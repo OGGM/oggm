@@ -680,6 +680,12 @@ def catchment_width_geom(gdir, div_id=None):
             log.warning('{}: width filtering too strong.'.format(gdir.rgi_id))
             fil_widths = widths[np.int(len(widths) / 2.)]
 
+        # "Touches border" is a badly chosen name. In fact, it should be
+        # called "is_rectangular" since tidewater glaciers have a special
+        # treatment here
+        if gdir.is_tidewater and fl.flows_to is None:
+            touches_border[-5:] = True
+
         # Write it in the objects attributes
         assert len(fil_widths) == n
         fl.widths = fil_widths

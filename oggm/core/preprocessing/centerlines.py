@@ -1100,7 +1100,10 @@ def compute_downstream_bedshape(gdir):
     """
 
     # get the entire glacier only
-    cls = gdir.read_pickle('inversion_flowlines', div_id=0)
+    if gdir.is_tidewater:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=1)
+    else:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=0)
        
     # Topography
     with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:

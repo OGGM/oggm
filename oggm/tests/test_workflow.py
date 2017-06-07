@@ -289,6 +289,9 @@ class TestWorkflow(unittest.TestCase):
     @is_slow
     def test_random(self):
 
+        # Fake Reset (all these tests are horribly coded)
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
