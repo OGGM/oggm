@@ -325,7 +325,7 @@ class MixedFlowline(ModelFlowline):
 
         self._prec = np.where(is_trapezoid & (lambdas == 0))
 
-        assert np.allclose(section, self.section)
+        assert np.allclose(section, self.section, rtol=1e-3)
 
     @property
     def widths_m(self):
