@@ -746,6 +746,7 @@ def catchment_width_correction(gdir, div_id=None):
 
     # Param
     nmin = int(cfg.PARAMS['min_n_per_bin'])
+    smooth_ws = int(cfg.PARAMS['smooth_widths_window_size'])
 
     # Per flowline (important so that later, the indices can be moved)
     catchment_heights = []
@@ -810,10 +811,6 @@ def catchment_width_correction(gdir, div_id=None):
                     new_widths[wherewiths] = (bintopoarea / binflarea) * \
                                              new_widths[wherewiths]
                 break
-                # # TODO: smooth them ?
-                # widths = utils.smooth1d(widths)
-                # if np.nanmax(_width_change_factor(new_widths)[:-5]) < 2.:
-                #     break
             bsize += 5
 
             # Add a security for infinite loops
@@ -838,6 +835,17 @@ def catchment_width_correction(gdir, div_id=None):
             catchment_heights[ide] = np.append(catchment_heights[ide], tosend)
         if (len(tosend) > 0) and (fl.flows_to is None):
             raise RuntimeError('This should not happen')
+
+        # Now we have a width which is the "best" representation of our
+        # tributary according to the altitude area distribution.
+        # This sometimes leads to abrupt changes in the widths from one
+        # grid point to another. I think it's not too harmful to smooth them
+        # here, at the cost of a less perfect altitude area distribution
+        if smooth_ws != 0:
+            if smooth_ws == 1:
+                new_widths = utils.smooth1d(new_widths)
+            else:
+                new_widths = utils.smooth1d(new_widths, window_size=smooth_ws)
 
         # Write it
         fl.widths = new_widths

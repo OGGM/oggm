@@ -58,7 +58,8 @@ def up_to_climate(reset=False):
     cfg.initialize()
 
     # Use multiprocessing
-    cfg.PARAMS['use_multiprocessing'] = True
+    # We don't use mp on TRAVIS because unsure if compatible with test coverage
+    cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
