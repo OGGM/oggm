@@ -127,7 +127,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         ela_h: float
             Equilibrium line altitude (units: [m])
         grad: float
-            Mass-balance gradient (unit: [mm w.e. yr-1 m-1])
+            Mass-balance gradient (unit: [mm ice yr-1 m-1])
         """
         self.orig_ela_h = ela_h
         self.ela_h = ela_h

@@ -376,7 +376,7 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                       fs=0., fd=None, inplace=True):
+                       fs=0., fd=None, inplace=True, is_tidewater=False):
         """ Instanciate.
 
         Parameters
@@ -397,6 +397,7 @@ class FlowlineModel(object):
 
         self.mb = mb_model
         self.fs = fs
+        self.is_tidewater = is_tidewater
 
         # for backwards compatibility I calculate fd from glen_a and
         # throw a Deprecation warning
@@ -508,7 +509,10 @@ class FlowlineModel(object):
 
         # Check for domain bounds
         if self.fls[-1].thick[-1] > 10:
-            raise RuntimeError('Glacier exceeds domain boundaries.')
+            if self.is_tidewater:
+                log.warning('Glacier is calving.')
+            else:
+                raise RuntimeError('Glacier exceeds domain boundaries.')
 
         # Check for NaNs
         for fl in self.fls:
@@ -725,7 +729,7 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=31*SEC_IN_DAY, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=True, **kwargs):
 
         """ Instanciate.
 
@@ -737,8 +741,9 @@ class FluxBasedModel(FlowlineModel):
         #TODO: document properties
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
-                                                  y0=y0, glen_a=glen_a, fs=fs,
-                                                  fd=fd, inplace=inplace)
+                                             y0=y0, glen_a=glen_a, fs=fs,
+                                             fd=fd, inplace=inplace,
+                                             **kwargs)
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -751,6 +756,8 @@ class FluxBasedModel(FlowlineModel):
         for fl, trib in zip(self.fls, self._trib):
             nx = fl.nx
             if trib[0] is not None:
+                nx = fl.nx + 1
+            elif self.is_tidewater:
                 nx = fl.nx + 1
             a = np.zeros(nx+1)
             b = np.zeros(nx+1)
@@ -789,6 +796,13 @@ class FluxBasedModel(FlowlineModel):
                 surface_h = np.append(surface_h, fl_to.surface_h[ide])
                 thick = np.append(thick, thick[-1])
                 section = np.append(section, section[-1])
+            elif self.is_tidewater:
+                # For tidewater glacier, we trick and set the outgoing thick
+                # to zero (for numerical stability and this should quite OK
+                # represent what happens at the calving tongue)
+                surface_h = np.append(surface_h, surface_h[-1] - thick[-1])
+                thick = np.append(thick, 0)
+                section = np.append(section, 0)
 
             # Staggered gradient
             slope_stag[0] = 0
@@ -817,6 +831,10 @@ class FluxBasedModel(FlowlineModel):
 
             # Store the results
             if is_trib:
+                flxs.append(flx_stag[:-1])
+                aflxs.append(znxm1)
+                u_stag = u_stag[:-1]
+            elif self.is_tidewater:
                 flxs.append(flx_stag[:-1])
                 aflxs.append(znxm1)
                 u_stag = u_stag[:-1]

@@ -876,8 +876,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
             gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
-@entity_task(log, writes=['inversion_flowlines'])
-@divide_task(log, add_0=False)
+@entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
+@divide_task(log, add_0=True)
 def apparent_mb_from_linear_mb(gdir, div_id=None):
     """Compute apparent mb from a linear mass-balance assumption (for testing).
 
@@ -893,20 +893,33 @@ def apparent_mb_from_linear_mb(gdir, div_id=None):
     cmb = calving_mb(gdir)
 
     # Get the height and widths along the fls
-    h, w = gdir.get_inversion_flowline_hw(div_id=div_id)
+    if div_id == 0:
+        h, w = gdir.get_inversion_flowline_hw()
+    else:
+        h, w = gdir.get_inversion_flowline_hw(div_id=div_id)
 
     # Now find the ELA till the integrated mb is zero
     from oggm.core.models.massbalance import LinearMassBalanceModel
+
+    grad = 3.  # mm w.e
+
     def to_minimize(ela_h):
-        mbmod = LinearMassBalanceModel(ela_h[0])
+        mbmod = LinearMassBalanceModel(ela_h[0], grad=grad)
         smb = mbmod.get_specific_mb(h, w)
         return smb**2
 
     ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
-    mbmod = LinearMassBalanceModel(ela_h['x'][0])
+    ela_h = ela_h['x'][0]
+    mbmod = LinearMassBalanceModel(ela_h)
 
     # For each flowline compute the apparent MB
-    fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+    # For div 0 it is kind of artificial but this is for validation
+    fls = []
+    if div_id == 0:
+        for i in gdir.divide_ids:
+            fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+    else:
+        fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
     # Reset flux
     for fl in fls:
@@ -930,6 +943,9 @@ def apparent_mb_from_linear_mb(gdir, div_id=None):
             raise RuntimeError(msg)
 
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
+
+    gdir.write_pickle({'ela_h':ela_h, 'grad':grad},
+                      'linear_mb_params', div_id=div_id)
 
 
 def _get_ref_glaciers(gdirs):

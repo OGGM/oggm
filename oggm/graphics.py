@@ -529,10 +529,14 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
     # Compute area histo
     area = np.array([])
     height = np.array([])
+    bed = np.array([])
     for cls in model.fls:
-        area = np.concatenate((area, cls.widths_m * cls.dx_meter * 1e-6))
+        a = cls.widths_m * cls.dx_meter * 1e-6
+        a = np.where(cls.thick>0, a, 0)
+        area = np.concatenate((area, a))
         height = np.concatenate((height, cls.surface_h))
-    ylim = [height.min(), height.max()]
+        bed = np.concatenate((bed, cls.bed_h))
+    ylim = [bed.min(), height.max()]
 
     # Plot histo
     posax = ax.get_position()
