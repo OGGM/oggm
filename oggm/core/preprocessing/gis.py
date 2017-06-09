@@ -46,7 +46,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_topo_file
+from oggm.utils import tuple2int, get_topo_file, polygon_intersections
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -96,8 +96,11 @@ def _check_geometry(geometry):
         # let's assume that all other polygons are in fact interiors
         interiors = []
         for p in parts[1:]:
-            assert parts[0].contains(p)
-            interiors.append(p.exterior)
+            if parts[0].contains(p):
+                interiors.append(p.exterior)
+            else:
+                # This should not happen See that we have a small geom here
+                assert p.area < 1e-9
         geometry = shpg.Polygon(exterior, interiors)
 
     assert 'Polygon' in geometry.type
@@ -464,21 +467,34 @@ def define_glacier_region(gdir, entity=None):
     # Looks in the database if the glacier has divides.
     gdf = cfg.PARAMS['divides_gdf']
     if gdir.rgi_id in gdf.index.values:
-        divdf = [g for g in gdf.loc[gdir.rgi_id].geometry]
+
+        div_gdf = gdf.loc[gdir.rgi_id]
+
+        # Compute the intersections between them for later bedshapes
+        gdf_inter = polygon_intersections(div_gdf)
+        if len(gdf_inter) > 0:
+            if hasattr(div_gdf.crs, 'srs'):
+                # salem uses pyproj
+                gdf_inter.crs = div_gdf.crs.srs
+            else:
+                gdf_inter.crs = div_gdf.crs
+
+            gdf_inter.to_file(gdir.get_filepath('divides_intersects'))
+
+        # Ok go on
+        divlist = [g for g in div_gdf.geometry]
 
         # Reproject the shape
         def proj(lon, lat):
             return salem.transform_proj(salem.wgs84, gdir.grid.proj,
                                         lon, lat)
-        divdf = [shapely.ops.transform(proj, g) for g in divdf]
+        divlist = np.asarray([shapely.ops.transform(proj, g) for g in divlist])
 
-        # Keep only the ones large enough
-        log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divdf))
-        divdf = [g for g in divdf if (g.area >= (25*dx**2))]
-        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divdf))
+        # Sort them by area
+        divlist = divlist[np.argsort([g.area for g in divlist])[::-1]]
 
         # Write the directories and the files
-        for i, g in enumerate(divdf):
+        for i, g in enumerate(divlist):
             _dir = os.path.join(gdir.dir, 'divide_{0:0=2d}'.format(i + 1))
             if not os.path.exists(_dir):
                 os.makedirs(_dir)

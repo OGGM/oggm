@@ -9,7 +9,9 @@ from oggm.core.preprocessing.gis import define_glacier_region
 from oggm.core.preprocessing.gis import glacier_masks
 from oggm.core.preprocessing.centerlines import compute_centerlines
 from oggm.core.preprocessing.centerlines import compute_downstream_lines
+from oggm.core.preprocessing.centerlines import compute_downstream_bedshape
 from oggm.core.preprocessing.geometry import catchment_area
+from oggm.core.preprocessing.geometry import catchment_intersections
 from oggm.core.preprocessing.geometry import initialize_flowlines
 from oggm.core.preprocessing.geometry import catchment_width_geom
 from oggm.core.preprocessing.geometry import catchment_width_correction

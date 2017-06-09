@@ -20,6 +20,8 @@ from oggm.tests import is_download
 TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_download')
 utils.mkdir(TEST_DIR)
 
+# In case some logging happens or so
+cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
 class TestFuncs(unittest.TestCase):
 

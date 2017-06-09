@@ -39,6 +39,8 @@ import xarray as xr
 import rasterio
 from scipy.ndimage import filters
 from scipy.signal import gaussian
+import shapely.geometry as shpg
+from shapely.ops import linemerge
 try:
     # rasterio V > 1.0
     from rasterio.merge import merge as merge_tool
@@ -787,6 +789,44 @@ def smooth1d(array, window_size=None, kernel='gaussian'):
     return filters.convolve1d(array, kernel, mode='mirror')
 
 
+def line_interpol(line, dx):
+    """Interpolates a shapely LineString to a regularly spaced one.
+    
+    Shapely's interpolate function does not guaranty equally
+    spaced points in space. This is what this function is for.
+
+    We construct new points on the line but at constant distance from the
+    preceding one.
+
+    Parameters
+    ----------
+    line: a shapely.geometry.LineString instance
+    dx: the spacing
+
+    Returns
+    -------
+    a list of equally distanced points
+    """
+
+    # First point is easy
+    points = [line.interpolate(dx/2.)]
+
+    # Continue as long as line is not finished
+    while True:
+        pref = points[-1]
+        pbs = pref.buffer(dx).boundary.intersection(line)
+        if pbs.type == 'Point':
+            pbs = [pbs]
+        # Out of the point(s) that we get, take the one farthest from the top
+        refdis = line.project(pref)
+        tdis = np.array([line.project(pb) for pb in pbs])
+        p = np.where(tdis > refdis)[0]
+        if len(p) == 0:
+            break
+        points.append(pbs[int(p[0])])
+
+    return points
+
 def md(ref, data, axis=None):
     """Mean Deviation."""
     return np.mean(np.asarray(data)-ref, axis=axis)
@@ -852,6 +892,70 @@ def signchange(ts):
     out = ((np.roll(asign, 1) - asign) != 0).astype(int)
     if asign.iloc[0] == asign.iloc[1]:
         out.iloc[0] = 0
+    return out
+
+
+def polygon_intersections(gdf):
+    """Computes the intersections between all polygons in a GeoDataFrame.
+
+    Parameters
+    ----------
+    gdf : Geopandas.GeoDataFrame
+
+    Returns
+    -------
+    a Geodataframe containing the intersections
+    """
+
+    out_cols = ['id_1', 'id_2', 'geometry']
+    out = gpd.GeoDataFrame(columns=out_cols)
+
+    gdf = gdf.reset_index()
+
+    for i, major in gdf.iterrows():
+
+        # Exterior only
+        major_poly = major.geometry.exterior
+
+        # Remove the major from the list
+        agdf = gdf.loc[gdf.index != i]
+
+        # Keep catchments which intersect
+        gdfs = agdf.loc[agdf.intersects(major_poly)]
+
+        for j, neighbor in gdfs.iterrows():
+
+            # No need to check if we already found the intersect
+            if j in out.id_1 or j in out.id_2:
+                continue
+
+            # Exterior only
+            neighbor_poly = neighbor.geometry.exterior
+
+            # Ok, the actual intersection
+            mult_intersect = major_poly.intersection(neighbor_poly)
+
+            # All what follows is to catch all possibilities
+            # Should not happen in our simple geometries but ya never know
+            if isinstance(mult_intersect, shpg.Point):
+                continue
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = [m for m in mult_intersect if
+                              not isinstance(m, shpg.Point)]
+            if len(mult_intersect) == 0:
+                continue
+            mult_intersect = linemerge(mult_intersect)
+            if isinstance(mult_intersect, shpg.linestring.LineString):
+                mult_intersect = [mult_intersect]
+            for line in mult_intersect:
+                assert isinstance(line, shpg.linestring.LineString)
+                line = gpd.GeoDataFrame([[i, j, line]],
+                                        columns=out_cols)
+                out = out.append(line)
+
     return out
 
 
@@ -1547,19 +1651,21 @@ def glacier_characteristics(gdirs, to_csv=True):
             d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
 
         # MB and flowline related stuff
-        if gdir.has_file('inversion_flowlines', div_id=0):
+        if gdir.has_file('inversion_flowlines', div_id=1):
             amb = np.array([])
             h = np.array([])
             widths = np.array([])
             slope = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines', div_id=0)
-            dx = fls[0].dx * gdir.grid.dx
-            for fl in fls:
-                amb = np.append(amb, fl.apparent_mb)
-                hgt = fl.surface_h
-                h = np.append(h, hgt)
-                widths = np.append(widths, fl.widths * dx)
-                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+
+            for div_id in gdir.divide_ids:
+                fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
+                dx = fls[0].dx * gdir.grid.dx
+                for fl in fls:
+                    amb = np.append(amb, fl.apparent_mb)
+                    hgt = fl.surface_h
+                    h = np.append(h, hgt)
+                    widths = np.append(widths, fl.widths * dx)
+                    slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
 
             pacc = np.where(amb >= 0)
             pab = np.where(amb < 0)
@@ -1722,7 +1828,7 @@ class divide_task(object):
             if div_id is None:
                 ids = gdir.divide_ids
                 if self.add_0:
-                    ids = [0] + list(ids)
+                    ids = list(ids) + [0]
                 for i in ids:
                     self.log.info('%s: %s, divide %d', gdir.rgi_id,
                                   task_func.__name__, i)
@@ -1941,7 +2047,8 @@ class GlacierDirectory(object):
     @property
     def divide_dirs(self):
         """List of the glacier divides directories"""
-        dirs = [self.dir] + list(glob.glob(os.path.join(self.dir, 'divide_*')))
+        dirs = [self.dir]
+        dirs += sorted(glob.glob(os.path.join(self.dir, 'divide_*')))
         return dirs
 
     @property
@@ -2160,19 +2267,30 @@ class GlacierDirectory(object):
             v.long_name = 'temperature gradient'
             v[:] = grad
 
-    def get_flowline_hw(self):
+    def get_inversion_flowline_hw(self, div_id=None):
         """ Shortcut function to read the heights and widths of the glacier.
+
+        Parameters
+        ----------
+        div_id : int
+            the divide you want the data for. Default to use all divides.
 
         Returns
         -------
         (height, widths) in units of m
         """
-        fls = self.read_pickle('inversion_flowlines', div_id=0)
+
         h = np.array([])
         w = np.array([])
-        for fl in fls:
-            w = np.append(w, fl.widths)
-            h = np.append(h, fl.surface_h)
+
+        if div_id is None:
+            div_id = self.divide_ids
+
+        for div_id in np.atleast_1d(div_id):
+            fls = self.read_pickle('inversion_flowlines', div_id=div_id)
+            for fl in fls:
+                w = np.append(w, fl.widths)
+                h = np.append(h, fl.surface_h)
         return h, w * fl.dx * self.grid.dx
 
     def get_ref_mb_data(self):

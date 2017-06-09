@@ -115,8 +115,11 @@ BASENAMES['intersects'] = ('intersects.shp', _doc)
 _doc = 'The flowline catchments in the local projection.'
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
-_doc = 'The fcatchments interesctions in the local projection.'
+_doc = 'The catchments intersections in the local projection.'
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
+
+_doc = 'The divides intersections in their lonlat projection.'
+BASENAMES['divides_intersects'] = ('divides_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
@@ -134,10 +137,9 @@ _doc = 'A ``dict`` containing the shapely.Polygons of a divide. The ' \
        'will have their own area which is not obtained from the RGI file).'
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = 'A shapely.LineString of the coordinates of the downstream line ' \
-       '(flowing out of the glacier until the border of the domain) for ' \
-       'each divide.'
-BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
+_doc = 'A geopandas dataframe containing all downstream lines, grouped per ' \
+       'intersection.'
+BASENAMES['downstream_lines'] = ('downstream_lines.pkl', _doc)
 
 _doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
 BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
@@ -196,6 +198,10 @@ BASENAMES['inversion_params'] = ('inversion_params.pkl', _doc)
 _doc = 'List of flowlines ready to be run by the model.'
 BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 
+_doc = ('When using a linear mass-balance for the inversion, this dict stores '
+        'the optimal ela_h and grad.')
+BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
+
 _doc = ''
 BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
@@ -206,7 +212,8 @@ BASENAMES['past_model'] = ('past_model.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
-_doc = 'Array of the parabolic coefficents of the downstream lines'
+_doc = 'Array of the parabolic coefficients for all centerlines, computed ' \
+       'from fitting a parabola to the topography.'
 BASENAMES['downstream_bed'] = ('downstream_bed.pkl', _doc)
 
 
@@ -288,7 +295,6 @@ def initialize(file=None):
     PARAMS[_k] = cp.as_bool(_k)
 
     # Flowline model
-    PARAMS['bed_shape'] = cp['bed_shape']
     _k = 'use_optimized_inversion_params'
     PARAMS[_k] = cp.as_bool(_k)
 

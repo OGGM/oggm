@@ -26,7 +26,6 @@ import numpy as np
 from skimage.graph import route_through_array
 import netCDF4
 import shapely.geometry as shpg
-from shapely.ops import linemerge
 import matplotlib._cntr as cntr
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator
@@ -38,7 +37,7 @@ import salem
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.core.preprocessing.centerlines import Centerline
-from oggm.utils import tuple2int
+from oggm.utils import tuple2int, line_interpol
 from oggm import entity_task, divide_task
 
 # Module logger
@@ -50,44 +49,8 @@ LABEL_STRUCT = np.array([[0, 1, 0],
                          [0, 1, 0]])
 
 
-def _line_interpol(line, dx):
-    """The shapely interpolate function does not guaranty equally
-    spaced points in space. This is what this function is for.
-
-    We construct new points on the line but at constant distance from the
-    preceding one.
-
-    Parameters
-    ----------
-    line: a shapely.geometry.LineString instance
-    dx: the spacing
-
-    Returns
-    -------
-    a list of equally distanced points
-    """
-
-    # First point is easy
-    points = [line.interpolate(dx/2.)]
-
-    # Continue as long as line is not finished
-    while True:
-        pref = points[-1]
-        pbs = pref.buffer(dx).boundary.intersection(line)
-        if pbs.type == 'Point':
-            pbs = [pbs]
-        # Out of the point(s) that we get, take the one farthest from the top
-        refdis = line.project(pref)
-        tdis = np.array([line.project(pb) for pb in pbs])
-        p = np.where(tdis > refdis)[0]
-        if len(p) == 0:
-            break
-        points.append(pbs[int(p[0])])
-
-    return points
-
 def _line_extend(uline, dline, dx):
-    """An extension of _line_interpol with a downstream line to add
+    """An extension of line_interpol with a downstream line to add
 
     Parameters
     ----------
@@ -252,7 +215,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     return width, line
 
 
-def _filter_small_slopes(hgt, dx, min_slope=1):
+def _filter_small_slopes(hgt, dx, min_slope=0):
     """Masks out slopes with NaN until the slope if all valid points is at 
     least min_slope (in degrees).
     """
@@ -465,68 +428,6 @@ def catchment_area(gdir, div_id=None):
     gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
 
 
-def polygon_intersections(gdf):
-    """Computes the intersections between all polygons in a GeoDataFrame.
-
-    Parameters
-    ----------
-    gdf : Geopandas.GeoDataFrame
-
-    Returns
-    -------
-    a Geodataframe containing the intersections
-    """
-
-    out_cols = ['id_1', 'id_2', 'geometry']
-    out = gpd.GeoDataFrame(columns=out_cols)
-
-    for i, major in gdf.iterrows():
-
-        # Exterior only
-        major_poly = major.geometry.exterior
-
-        # Remove the major from the list
-        gdf = gdf.loc[gdf.index != i]
-
-        # Keep catchments which intersect
-        gdfs = gdf.loc[gdf.intersects(major_poly)]
-
-        for j, neighbor in gdfs.iterrows():
-
-            # No need to check if we already found the intersect
-            if j in out.id_1 or j in out.id_2:
-                continue
-
-            # Exterior only
-            neighbor_poly = neighbor.geometry.exterior
-
-            # Ok, the actual intersection
-            mult_intersect = major_poly.intersection(neighbor_poly)
-
-            # All what follows is to catch all possibilities
-            # Should no happen in our simple geometries but ya never know
-            if isinstance(mult_intersect, shpg.Point):
-                continue
-            if isinstance(mult_intersect, shpg.linestring.LineString):
-                mult_intersect = [mult_intersect]
-            if len(mult_intersect) == 0:
-                continue
-            mult_intersect = [m for m in mult_intersect if
-                              not isinstance(m, shpg.Point)]
-            if len(mult_intersect) == 0:
-                continue
-            mult_intersect = linemerge(mult_intersect)
-            if isinstance(mult_intersect, shpg.linestring.LineString):
-                mult_intersect = [mult_intersect]
-            for line in mult_intersect:
-                assert isinstance(line, shpg.linestring.LineString)
-                line = gpd.GeoDataFrame([[i, j, line]],
-                                        columns=out_cols)
-                out = out.append(line)
-
-    return out
-
-
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
 @divide_task(log, add_0=False)
 def catchment_intersections(gdir, div_id=None):
@@ -552,7 +453,7 @@ def catchment_intersections(gdir, div_id=None):
         _, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
         gdfc.loc[i, 'geometry'] = poly_no
 
-    gdfi = polygon_intersections(gdfc)
+    gdfi = utils.polygon_intersections(gdfc)
 
     # We project them onto the mercator proj before writing. This is a bit
     # inefficient (they'll be projected back later), but it's more sustainable
@@ -571,14 +472,14 @@ def catchment_intersections(gdir, div_id=None):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-@divide_task(log, add_0=False)
+@divide_task(log, add_0=True)
 def initialize_flowlines(gdir, div_id=None):
     """ Transforms the geometrical Centerlines in the more "physical"
     "Inversion Flowlines".
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
-    realistic junctions. It also checks for low and negatve slopes and corrects
+    realistic junctions. Also checks for low and negative slopes and corrects
     them by interpolation.
 
     Parameters
@@ -587,11 +488,17 @@ def initialize_flowlines(gdir, div_id=None):
     """
 
     # variables
+    if div_id == 0 and not gdir.has_file('centerlines', div_id=div_id):
+        # downstream lines haven't been computed
+        return
+
     cls = gdir.read_pickle('centerlines', div_id=div_id)
+
+    poly = gdir.read_pickle('geometries', div_id=div_id)
+    poly = poly['polygon_pix'].buffer(0.5)  # a small buffer around to be sure
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
-    ms = cfg.PARAMS['min_slope']
     do_filter = cfg.PARAMS['filter_min_slope']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
@@ -612,7 +519,7 @@ def initialize_flowlines(gdir, div_id=None):
     sw = cfg.PARAMS['flowline_height_smooth']
 
     for ic, cl in enumerate(cls):
-        points = _line_interpol(cl.line, dx)
+        points = line_interpol(cl.line, dx)
 
         # For tributaries, remove the tail
         if ic < (len(cls)-1):
@@ -621,29 +528,41 @@ def initialize_flowlines(gdir, div_id=None):
         new_line = shpg.LineString(points)
 
         # Interpolate heights
-        x, y = new_line.xy
-        hgts = interpolator((y, x))
+        xx, yy = new_line.xy
+        hgts = interpolator((yy, xx))
+
+        # Check where the glacier is and where not
+        isglacier = [poly.contains(shpg.Point(x, y)) for x, y in zip(xx, yy)]
+        if div_id != 0:
+            assert np.all(isglacier)
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
+        assert len(hgts) >= 5
 
         # Check for min slope issues and correct if needed
         if do_filter:
-            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope=ms)
-            isfin = np.isfinite(hgts)
+            # Correct only where glacier
+            nhgts = _filter_small_slopes(hgts[isglacier], dx*gdir.grid.dx)
+            isfin = np.isfinite(nhgts)
             assert np.any(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
-            if perc_bad > 0.1:
+            if perc_bad > 0.8:
                 log.warning('{}: more than {:.0%} of the flowline is cropped '
                             'due to negative slopes.'.format(gdir.rgi_id,
                                                              perc_bad))
-            sp = np.min(np.where(isfin)[0])
+
+            hgts[isglacier] = nhgts
+            sp = np.min(np.where(np.isfinite(nhgts))[0])
+            while len(hgts[sp:]) < 5:
+                sp -= 1
             hgts = utils.interp_nans(hgts[sp:])
+            isglacier = isglacier[sp:]
             assert np.all(np.isfinite(hgts))
-            assert len(hgts) > 5
+            assert len(hgts) >= 5
             new_line = shpg.LineString(points[sp:])
 
-        l = Centerline(new_line, dx=dx, surface_h=hgts)
+        l = Centerline(new_line, dx=dx, surface_h=hgts, is_glacier=isglacier)
         l.order = cl.order
         fls.append(l)
 
@@ -692,6 +611,11 @@ def catchment_width_geom(gdir, div_id=None):
         # read and transform to grid
         gdf = gpd.read_file(gdir.get_filepath('catchments_intersects',
                                               div_id=div_id))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+    if gdir.has_file('divides_intersects', div_id=0):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('divides_intersects'))
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
     if gdir.has_file('intersects', div_id=0):
@@ -755,6 +679,12 @@ def catchment_width_geom(gdir, div_id=None):
             # the correction task should do the rest
             log.warning('{}: width filtering too strong.'.format(gdir.rgi_id))
             fil_widths = widths[np.int(len(widths) / 2.)]
+
+        # "Touches border" is a badly chosen name. In fact, it should be
+        # called "is_rectangular" since tidewater glaciers have a special
+        # treatment here
+        if gdir.is_tidewater and fl.flows_to is None:
+            touches_border[-5:] = True
 
         # Write it in the objects attributes
         assert len(fil_widths) == n
@@ -822,6 +752,7 @@ def catchment_width_correction(gdir, div_id=None):
 
     # Param
     nmin = int(cfg.PARAMS['min_n_per_bin'])
+    smooth_ws = int(cfg.PARAMS['smooth_widths_window_size'])
 
     # Per flowline (important so that later, the indices can be moved)
     catchment_heights = []
@@ -886,10 +817,6 @@ def catchment_width_correction(gdir, div_id=None):
                     new_widths[wherewiths] = (bintopoarea / binflarea) * \
                                              new_widths[wherewiths]
                 break
-                # # TODO: smooth them ?
-                # widths = utils.smooth1d(widths)
-                # if np.nanmax(_width_change_factor(new_widths)[:-5]) < 2.:
-                #     break
             bsize += 5
 
             # Add a security for infinite loops
@@ -914,6 +841,17 @@ def catchment_width_correction(gdir, div_id=None):
             catchment_heights[ide] = np.append(catchment_heights[ide], tosend)
         if (len(tosend) > 0) and (fl.flows_to is None):
             raise RuntimeError('This should not happen')
+
+        # Now we have a width which is the "best" representation of our
+        # tributary according to the altitude area distribution.
+        # This sometimes leads to abrupt changes in the widths from one
+        # grid point to another. I think it's not too harmful to smooth them
+        # here, at the cost of a less perfect altitude area distribution
+        if smooth_ws != 0:
+            if smooth_ws == 1:
+                new_widths = utils.smooth1d(new_widths)
+            else:
+                new_widths = utils.smooth1d(new_widths, window_size=smooth_ws)
 
         # Write it
         fl.widths = new_widths

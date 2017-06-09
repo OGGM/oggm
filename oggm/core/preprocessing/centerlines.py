@@ -25,7 +25,9 @@ from itertools import groupby
 import numpy as np
 from pandas import Series as pdSeries
 import shapely.ops
+import geopandas as gpd
 import scipy.signal
+from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage.graph import route_through_array
 import netCDF4
@@ -36,7 +38,7 @@ from scipy.interpolate import RegularGridInterpolator
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from salem import lazy_property
-from oggm.utils import tuple2int
+from oggm.utils import tuple2int, line_interpol, interp_nans
 from oggm import entity_task, divide_task
 
 # Module logger
@@ -49,7 +51,7 @@ class Centerline(object):
     It is instanciated and updated by _join_lines() exclusively
     """
 
-    def __init__(self, line, dx=None, surface_h=None):
+    def __init__(self, line, dx=None, surface_h=None, is_glacier=None):
         """ Instanciate.
 
         Parameters
@@ -66,7 +68,8 @@ class Centerline(object):
         self.tail = None  # Shapely Point
         self.dis_on_line = None  # Shapely Point
         self.nx = None  # Shapely Point
-        self.set_line(line)  # Init all previous properties
+        self.is_glacier = None  # Shapely Point
+        self.set_line(line, is_glacier=is_glacier)  # Init all previous properties
 
         self.order = None  # Hydrological flow level (~ Strahler number)
 
@@ -87,7 +90,7 @@ class Centerline(object):
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
         self.flux = None  # Flux (kg m-2)
 
-    def set_flows_to(self, other, check_tail=True):
+    def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
         attributes. Btw, it modifies the state of "other" too.
 
@@ -112,15 +115,15 @@ class Centerline(object):
                 ind_closest = np.clip(ind_closest, 2, n-3)
             p = shpg.Point(other.line.coords[int(ind_closest)])
             self.flows_to_point = p
-            other.inflow_points.append(p)
-            other.inflows.append(self)
+        elif last_point:
+            self.flows_to_point = other.tail
         else:
             # just the closest
             self.flows_to_point = _projection_point(other, self.tail)
-            other.inflow_points.append(self.flows_to_point)
-            other.inflows.append(self)
+        other.inflow_points.append(self.flows_to_point)
+        other.inflows.append(self)
 
-    def set_line(self, line):
+    def set_line(self, line, is_glacier=None):
         """Update the Shapely LineString coordinate.
 
         Parameters
@@ -135,6 +138,12 @@ class Centerline(object):
         xx, yy = line.xy
         self.head = shpg.Point(xx[0], yy[0])
         self.tail = shpg.Point(xx[-1], yy[-1])
+        if is_glacier is None:
+            self.is_glacier = np.ones(self.nx).astype(np.bool)
+        else:
+            assert len(is_glacier) == self.nx
+            self.is_glacier = np.asarray(is_glacier)
+
 
     @lazy_property
     def flows_to_indice(self):
@@ -330,7 +339,7 @@ def _filter_lines(lines, heads, k, r):
     k : float
         A buffer (in raster coordinates) to cut around the selected lines
     r : float
-        The lines shorter than r will be filtered out..
+        The lines shorter than r will be filtered out.
 
     Returns
     -------
@@ -400,6 +409,66 @@ def _filter_lines(lines, heads, k, r):
     return olines, oheads
 
 
+def _filter_lines_slope(lines, topo, gdir):
+    """Filter the centerline candidates by slope: if they go up, remove
+
+    Kienholz et al. (2014), Ch. 4.3.1
+
+    Parameters
+    ----------
+    lines : list of shapely.geometry.LineString instances
+        The lines to filter out (in raster coordinates).
+    topo : the glacier topogaphy
+    gdir : the glacier directory for simplicity
+
+    Returns
+    -------
+    (lines, heads) a list of the new lines and corresponding heads
+    """
+
+    dx_cls = cfg.PARAMS['flowline_dx']
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
+    sw = cfg.PARAMS['flowline_height_smooth']
+
+    # Here we use a conservative value
+    min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+
+    # Bilinear interpolation
+    # Geometries coordinates are in "pixel centered" convention, i.e
+    # (0, 0) is also located in the center of the pixel
+    xy = (np.arange(0, gdir.grid.ny-0.1, 1),
+          np.arange(0, gdir.grid.nx-0.1, 1))
+    interpolator = RegularGridInterpolator(xy, topo)
+
+    olines = [lines[0]]
+    for line in lines[1:]:
+
+        # The code below mimicks what initialize_flowlines will do
+        # this is a bit smelly but necessary
+        points = line_interpol(line, dx_cls)
+
+        # For tributaries, remove the tail
+        points = points[0:-lid]
+
+        new_line = shpg.LineString(points)
+
+        # Interpolate heights
+        x, y = new_line.xy
+        hgts = interpolator((y, x))
+
+        # If smoothing, this is the moment
+        hgts = gaussian_filter1d(hgts, sw)
+
+        # Finally slope
+        slope = np.arctan(-np.gradient(hgts, dx_cls*gdir.grid.dx))
+
+        # arbitrary threshold with which we filter the lines, otherwise bye bye
+        if np.sum(slope >= min_slope) >= 5:
+            olines.append(line)
+
+    return olines
+
+
 def _projection_point(centerline, point):
     """Projects a point on a line and returns the closest integer point
     guaranteed to be on the line, and guaranteed to be far enough from the
@@ -428,11 +497,11 @@ def _join_lines(lines):
 
     Parameters
     ----------
-    lines: list of Centerline instances
+    lines: list of shapely lines instances
 
     Returns
     -------
-    the same Centerline instances, updated with flow routing properties
+    Centerline instances, updated with flow routing properties
      """
 
     olines = [Centerline(l) for l in lines[::-1]]
@@ -583,6 +652,7 @@ def compute_centerlines(gdir, div_id=None):
 
     # Params
     single_fl = not cfg.PARAMS['use_multiple_flowlines']
+    do_filter_slope = cfg.PARAMS['filter_min_slope']
 
     if 'force_one_flowline' in cfg.PARAMS:
         if gdir.rgi_id in cfg.PARAMS['force_one_flowline']:
@@ -653,11 +723,18 @@ def compute_centerlines(gdir, div_id=None):
     log.debug('%s: computed the routes', gdir.rgi_id)
 
     # Filter the shortest lines out
-    radius = cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
-    radius += 6 * cfg.PARAMS['flowline_dx']
+    dx_cls = cfg.PARAMS['flowline_dx']
+    radius = cfg.PARAMS['flowline_junction_pix'] * dx_cls
+    radius += 6 * dx_cls
     olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
     log.debug('%s: number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
+
+    # Filter the lines which are going up instead of down
+    if do_filter_slope:
+        olines = _filter_lines_slope(olines, topo, gdir)
+        log.debug('%s: number of heads after slope filter: %d',
+                  gdir.rgi_id, len(olines))
 
     # And rejoin the cutted tails
     olines = _join_lines(olines)
@@ -691,17 +768,20 @@ def compute_centerlines(gdir, div_id=None):
             v[:] = costgrid
 
 
-@entity_task(log, writes=['downstream_line', 'major_divide'])
+@entity_task(log, writes=['downstream_lines', 'major_divide'])
 def compute_downstream_lines(gdir):
     """Compute the lines continuing the glacier (one per divide).
 
     The idea is simple: starting from the glacier tail, compute all the routes
-    to all local minimas found at the domain edge. The cheapest is "the One".
+    to all local minimas found at the domain edge. The cheapest is "The One".
 
-    The task also determines the so-called "major flowline" which is the
-    only line flowing out of the domain. The other ones are flowing into the
-    branch. The rest of the job (merging all centerlines + downstreams into
-    one single glacier is realized by
+    The task also determines a so-called "major flowline" which is the
+    simply the flowline starting at the lowest point on the glacier. Other 
+    downstream lines might either flow in the major flowline, another 
+    downstream or out of the domain.
+    
+    The rest of the job (merging all centerlines + downstreams into
+    one single glacier is realized by 
     :py:func:`~oggm.tasks.init_present_time_glacier`).
 
     Parameters
@@ -712,85 +792,147 @@ def compute_downstream_lines(gdir):
     with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
         topo = nc.variables['topo_smoothed'][:]
 
-    # Make going up very costy
-    topo = topo**10
+    # Look for the starting points
+    heads = []
+    head_alts = []
+    div_ids = list(gdir.divide_ids)
+    for div_id in div_ids:
+        p = gdir.read_pickle('centerlines', div_id=div_id)[-1].tail
+        head_alts.append(topo[int(p.y), int(p.x)])
+        heads.append((int(p.y), int(p.x)))
 
-    # Variables we gonna need
+    # Find the lowest first
+    major_id = np.argmin(head_alts)
+
+    # For tidewater glaciers no need for all this
+    # I actually think tidewater glaciers can't be divided anyway
+    if gdir.is_tidewater:
+        gdir.write_pickle(div_ids[major_id], 'major_divide', div_id=0)
+        return
+
+    # Make going up very costy
+    topo = topo**8
+
+    # Variables we gonna need: the outer side of the domain
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
                                np.arange(0, gdir.grid.ny, 1, dtype=np.int64))
     _h = [topo[:, 0], topo[0, :], topo[:, -1], topo[-1, :]]
     _x = [xmesh[:, 0], xmesh[0, :], xmesh[:, -1], xmesh[-1, :]]
     _y = [ymesh[:, 0], ymesh[0, :], ymesh[:, -1], ymesh[-1, :]]
 
-    # First we have to find the "major" divide
-    heads = []
-    heigts = []
-    div_ids = list(gdir.divide_ids)
-    for div_id in div_ids:
-        head = gdir.read_pickle('centerlines', div_id=div_id)[-1].tail
-        heigts.append(topo[int(head.y), int(head.x)])
-        heads.append((int(head.y), int(head.x)))
-
-    # Now the lowest first
-    aso = np.argsort(heigts)
-    major_id = aso[0]
-    a = aso[0]
-    head = heads[a]
-    head_h = heigts[a]
-    # Find all local minimas and their coordinates
-    min_cost = np.Inf
-    line = None
-    min_thresold = 50
-    while True:
+    # For all heads, find their way out of the domain
+    lines = []
+    for head in heads:
+        min_cost = np.Inf
+        line = None
         for h, x, y in zip(_h, _x, _y):
             ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
             for i in ids[0]:
-                # Prevent very high local minimas
-                # if topo[y[i], x[i]] > ((head_h-min_thresold)**10):
-                #     continue
                 lids, cost = route_through_array(topo, head, (y[i], x[i]),
                                                  geometric=True)
                 if cost < min_cost:
                     min_cost = cost
                     line = shpg.LineString(np.array(lids)[:, [1, 0]])
         if line is None:
-            min_thresold -= 10
-        else:
-            break
-        if min_thresold < 0:
             raise RuntimeError('Downstream line not found')
+        lines.append(line)
 
-    if gdir.is_tidewater:
-        # for tidewater glaciers the line can be very long and chaotic.
-        # we clip it for now
-        cl = gdir.read_pickle('centerlines', div_id=div_ids[major_id])[-1]
-        len_gl = cl.dis_on_line[-1]
-        dis = [line.project(shpg.Point(co)) for co in line.coords]
-        new_coords = np.array(line.coords)[np.nonzero(dis <= 0.5 * len_gl)]
-        line = shpg.LineString(new_coords)
+    # If we have divides some lines can merge. We use geopandas to group them
+    gdf = gpd.GeoDataFrame(geometry=lines)
+    gdf['div_id'] = div_ids
+    union = gdf.buffer(cfg.PARAMS['kbuffer']).unary_union
+    if type(union) is not shpg.MultiPolygon:
+        assert type(union) is shpg.Polygon
+        union = [union]
+
+    # See which lines belong to each group
+    odf = gdf.copy()
+    odf['is_major'] = False
+    odf['group'] = -1
+    for i, poly in enumerate(union):
+        inter = gdf.intersects(poly)
+        odf.loc[inter, 'group'] = i
+        group = gdf.loc[inter].copy()
+        # sort them by length, shorter is major
+        group['length'] = group.length
+        group = group.sort_values('length')
+        odf.loc[group.iloc[[0]].index, 'is_major'] = True
+        odf.loc[group.iloc[1:].index, 'is_major'] = False
+
+    # If needed we interrupt the route at the glacier boundary
+    geom = gdir.read_pickle('geometries', div_id=0)['polygon_pix']
+    odf_div = odf.loc[~odf.is_major]
+    for i, ent in odf_div.iterrows():
+        line = ent.geometry.difference(geom)
+        if type(line) is shpg.MultiLineString:
+            lens = [l.length for l in line]
+            line = line[np.argmax(lens)]
+        assert type(line) is shpg.LineString
+        odf.loc[i, 'geometry'] = line
+
+    # Write the intermediate data
+    major_divide = div_ids[major_id]
+    gdir.write_pickle(major_divide, 'major_divide', div_id=0)
+    gdir.write_pickle(odf, 'downstream_lines', div_id=0)
+
+    # Ok now merge all this together in a big, nice glacier
+    odf = odf.set_index('div_id')
+    major_group = odf.loc[major_divide].group
+
+    # We loop over the groups of downstream
+    radius = cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
+    radius += 6 * cfg.PARAMS['flowline_dx']
+    final_lines = []
+    for group in np.unique(np.sort(odf.group)):
+
+        _odf = odf.loc[odf.group == group]
+
+        # Read all divides and add the downstream to the major line
+        lines = []
+        heads = []
+        for div_id in np.unique(np.sort(_odf.index)):
+            cls = gdir.read_pickle('centerlines', div_id=div_id)
+            dl = _odf.loc[div_id].geometry
+            for fl in cls:
+                line = fl.line
+                if fl is cls[-1]:
+                    line = shpg.LineString(list(line.coords) + dl.coords[1:])
+                lines.append(line)
+                heads.append(fl.head)
+
+        # Filter the shortest lines out
+        olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
+
+        # And rejoin the cutted tails
+        olines = _join_lines(olines)
+        final_lines.append(olines)
+
+    # The lines are sorted by length now
+    maj_lines = final_lines.pop(major_group)
+    flow_to = maj_lines[0]
+    for int_lines in final_lines:
+        l = int_lines[0]
+        l.set_flows_to(flow_to, check_tail=False, last_point=True)
+    # Ok, merge
+    olines = maj_lines
+    for fl in final_lines:
+        olines += fl
+
+    # Adds the line level
+    for cl in olines:
+        cl.order = _line_order(cl)
+
+    # And sort them per order !!! several downstream tasks  rely on this
+    cls = []
+    for i in np.argsort([cl.order for cl in olines]):
+        cls.append(olines[i])
+
+    # Final check
+    if len(cls) == 0:
+        raise RuntimeError('{} : problem by downstream!'.format(gdir.rgi_id))
 
     # Write the data
-    mdiv = div_ids[major_id]
-    gdir.write_pickle(mdiv, 'major_divide', div_id=0)
-    gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
-    if len(div_ids) == 1:
-        return
-
-    # If we have divides, there is just one route and we have to interrupt
-    # It at the glacier boundary
-    fpath = gdir.get_filepath('gridded_data', div_id=div_ids[a])
-    with netCDF4.Dataset(fpath) as nc:
-        mask = nc.variables['glacier_mask'][:]
-        ext = nc.variables['glacier_ext'][:]
-    mask[np.where(ext==1)] = 0
-    tail = head
-    topo[np.where(mask==1)] = 0
-    for a in aso[1:]:
-        head = heads[a]
-        lids, _ = route_through_array(topo, head, tail)
-        lids = [l for l in lids if mask[l[0], l[1]] == 0][0:-1]
-        line = shpg.LineString(np.array(lids)[:, [1, 0]])
-        gdir.write_pickle(line, 'downstream_line', div_id=div_ids[a])
+    gdir.write_pickle(cls, 'centerlines', div_id=0)
 
 
 def _approx_parabola(x, y, y0=0):
@@ -821,81 +963,60 @@ def _parabola_error(x, y, f):
     return sum(abs((np.polyval(f, x) - y) / y)) / len(x)
 
 
-@entity_task(log, writes=['downstream_bed'])
-def compute_downstream_bedshape(gdir):
-    """The bedshape obtained by fitting a parabola to the line's normals.
+class HashablePoint(shpg.Point):
+    def __hash__(self):
+        return hash(tuple((self.x, self.y)))
 
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    """
-    # get the major downstream line only
-    majid = gdir.read_pickle('major_divide', div_id=0)
-    dl = gdir.read_pickle('downstream_line', div_id=majid)
-    
-    # Volume area scaling formula for the ice thickness
+
+def _parabolic_bed_from_topo(gdir, idl, interpolator):
+    """this returns the parabolic bedhape for all points on idl"""
+
+    # Volume area scaling formula for the probable ice thickness
     h_mean = 0.034 * gdir.rgi_area_km2**0.375 * 1000
-    log.debug('%s: estimated glacier thickness: %d', gdir.rgi_id, h_mean)
+    gnx, gny = gdir.grid.nx, gdir.grid.ny
 
-    bed = []
     # Far Factor
     r = 40
     # number of points
     cs_n = 20
-    
-    # make distance between point the same
-    # TODO: use a Centerline class instead
-    from .geometry import _line_interpol
-    l = shpg.LineString(_line_interpol(dl,cfg.PARAMS['flowline_dx']))
-    idl = Centerline(l, cfg.PARAMS['flowline_dx'], None)
-       
-    # Topography
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
-        topo = nc.variables['topo_smoothed'][:]
-        x = nc.variables['x'][:]
-        y = nc.variables['y'][:]
-    xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
-
-    # TODO: temporary class
-    class MyPoint(shpg.Point):
-        def __hash__(self):
-            return hash(tuple((self.x, self.y)))
 
     # normals
     ns = [i[0] for i in idl.normals]
     cs = []
-    try:
-        for pcoords, n in zip(idl.line.coords, ns):
-            xi, yi = pcoords
-            vx, vy = n
-            modul = np.sqrt(vx**2 + vy**2)
-            ci = []
-            for ro in np.linspace(0, r / 2.0, cs_n):
-                t = ro / modul
-                cp1 = MyPoint(xi + t * vx, yi + t * vy)
-                cp2 = MyPoint(xi - t * vx, yi - t * vy)
+    isborder = []
 
-                # check if out of the frame
-                if not (0 < cp2.y < len(y) - 1) or \
-                   not (0 < cp2.x < len(x) - 1) or \
-                   not (0 < cp1.y < len(y) - 1) or \
-                   not (0 < cp1.x < len(x) - 1):
-                    raise StopIteration()
+    for pcoords, n in zip(idl.line.coords, ns):
+        xi, yi = pcoords
+        vx, vy = n
+        modul = np.sqrt(vx ** 2 + vy ** 2)
+        ci = []
+        _isborder = False
+        for ro in np.linspace(0, r / 2.0, cs_n):
+            t = ro / modul
+            cp1 = HashablePoint(xi + t * vx, yi + t * vy)
+            cp2 = HashablePoint(xi - t * vx, yi - t * vy)
 
-                ci.append((cp1, ro))
-                ci.append((cp2, -ro))
+            # check if out of the frame
+            if not (0 < cp2.y < gny - 1) or \
+                    not (0 < cp2.x < gnx - 1) or \
+                    not (0 < cp1.y < gny - 1) or \
+                    not (0 < cp1.x < gnx - 1):
+                _isborder = True
 
-            ci = list(set(ci))
-            cs.append(ci)
-    except StopIteration:
-        # we reached the end of the line
-        pass
+            ci.append((cp1, ro))
+            ci.append((cp2, -ro))
 
-    log.debug('%s: length of downstream line is: %d', gdir.rgi_id, len(cs))
+        ci = list(set(ci))
+        cs.append(ci)
+        isborder.append(_isborder)
 
-    good = 0
-    for ic, cc in enumerate(cs):
+    bed = []
+    for ic, (cc, isbo) in enumerate(zip(cs, isborder)):
+
+        if isbo:
+            bed.append(np.NaN)
+            continue
+
         z = []
         ro = []
         for i in cc:
@@ -918,7 +1039,7 @@ def compute_downstream_bedshape(gdir):
         idx = extr[0][np.argmin(abs(ro[extr]))]
 
         # x<0 => x=0
-        # (|x|+x)/2 
+        # (|x|+x)/2
         roN = ro[int((abs(zero - abs(zero - idx)) + zero - abs(
             zero - idx)) / 2):zero + abs(zero - idx) + 1]
         zN = z[int((abs(zero - abs(zero - idx)) + zero - abs(
@@ -933,27 +1054,71 @@ def compute_downstream_bedshape(gdir):
         p2[2] = z[ro == 0]
 
         err = _parabola_error(roN, zN, p2) * 100
+
+        # The original implementation of @anton-ub stored all three parabola
+        # params. We just keep the one important here for now
         if err < 1.5:
-            bed.append(p2)
-            good += 1
+            bed.append(p2[0])
         else:
-            bed.append([None, 0, p2[2]])
+            bed.append(np.NaN)
 
-    log.debug('%s: percentage of valid parabolas: %d',
-              gdir.rgi_id, int(good/len(cs)*100))
+    bed = np.asarray(bed)
+    assert len(bed) == idl.nx
+    pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
+    log.debug('%s: percentage of valid parabolas total: %d',
+              gdir.rgi_id, int(pvalid))
 
-    # skip gaps
-    x_bed = [i for i, j in enumerate(bed) if j[0]]
-    bg = [bed[i][0] for i in x_bed]
+    bedg = bed[~ idl.is_glacier]
+    if len(bedg) > 0:
+        pvalid = np.sum(np.isfinite(bedg)) / len(bedg) * 100
+        log.debug('%s: percentage of valid parabolas out glacier: %d',
+                  gdir.rgi_id, int(pvalid))
+        if pvalid < 10:
+            log.warning('{}: {}% of valid bedshapes.'.format(gdir.rgi_id,
+                                                             int(pvalid)))
 
     # interpolation, filling the gaps
-    bed_i = np.interp(range(0, len(bed)), x_bed, bg)
-    bed_int = [[bed_i[j], i[1], i[2]] for j, i in enumerate(bed)]
+    default = cfg.PARAMS['default_parabolic_bedshape']
+    bed_int = interp_nans(bed, default=default)
 
-    # approximation - BED_Moving_Average
-    bed_ma = pdSeries([i[0] for i in bed_int])
+    # Scale for dx (we worked in grid coords but need meters)
+    bed_int = bed_int / gdir.grid.dx**2
+
+    # Smoothing
+    bed_ma = pdSeries(bed_int)
     bed_ma = bed_ma.rolling(window=5, center=True, min_periods=1).mean()
-    bed_ma = [[bed_ma[j], i[1], i[2]] for j, i in enumerate(bed_int)]
+    return bed_ma.values
+
+
+@entity_task(log, writes=['downstream_bed'])
+def compute_downstream_bedshape(gdir):
+    """The bedshape obtained by fitting a parabola to the line's normals.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    """
+
+    # get the entire glacier only
+    if gdir.is_tidewater:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=1)
+    else:
+        cls = gdir.read_pickle('inversion_flowlines', div_id=0)
+       
+    # Topography
+    with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+        topo = nc.variables['topo_smoothed'][:]
+        x = nc.variables['x'][:]
+        y = nc.variables['y'][:]
+    xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
+    interpolator = RegularGridInterpolator(xy, topo)
+
+    bedshapes = []
+    for cl in cls:
+        bs = _parabolic_bed_from_topo(gdir, cl, interpolator)
+        assert len(bs) == cl.nx
+        assert np.all(np.isfinite(bs))
+        bedshapes.append(bs)
 
     # write output
-    gdir.write_pickle(bed_ma, 'downstream_bed')
+    gdir.write_pickle(bedshapes, 'downstream_bed')

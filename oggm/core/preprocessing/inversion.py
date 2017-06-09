@@ -393,72 +393,32 @@ def volume_inversion(gdir, use_cfg_params=None):
 
 @entity_task(log, writes=['inversion_output'])
 def filter_inversion_output(gdir):
-    """Overwrites the inversion output with filtered one.
-    
-    This conserves the total volume.
+    """Filters the last few grid point whilst conserving total volume.
     """
-
-    # sometimes the width is small and the flux is big. crop this
-    max_ratio = cfg.PARAMS['max_thick_to_width_ratio']
-    max_shape = cfg.PARAMS['max_shape_param']
-    # sigma of the smoothing window after inversion
-    sec_smooth = cfg.PARAMS['section_smoothing']
 
     for div in gdir.divide_ids:
         cls = gdir.read_pickle('inversion_output', div_id=div)
         for cl in cls:
-            # this filtering stuff below is not explained in Farinotti's
-            # paper. I did this because it looks better, but I'm not sure
-            # (yet) that this is a good idea
-            fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
+
             init_vol = np.sum(cl['volume'])
-            if init_vol == 0:
-                # this can happen
+            if init_vol == 0 or gdir.is_tidewater or not cl['is_last']:
                 continue
+
             w = cl['width']
             out_thick = cl['thick']
+            fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
 
-            # However for tidewater we have to be carefull at the tongue
-            if gdir.is_tidewater and cl['is_last']:
-                # store it to restore it later
-                tongue_thick = out_thick[-5:]
-
-            # Check for thick to width ratio (should ne be too large)
-            ratio = out_thick / w  # there's no 0 width so we're good
-            pno = np.where((~ cl['is_rectangular']) & (ratio > max_ratio))
-            if len(pno[0]) > 0:
-                ratio[pno] = np.NaN
-                ratio = utils.interp_nans(ratio, default=max_ratio)
-                out_thick[pno] = w[pno] * ratio[pno]
-
-            # TODO: last thicknesses can be noisy sometimes: interpolate?
-            if cl['is_last']:
-                out_thick[-4:-1] = np.NaN
-                out_thick = utils.interp_nans(out_thick)
-
-            # Check for the shape parameter (should not be too large)
-            out_shape = (4 * out_thick) / (w ** 2)
-            pno = np.where((~ cl['is_rectangular']) & (out_shape > max_shape))
-            if len(pno[0]) > 0:
-                out_shape[pno] = np.NaN
-                out_shape = utils.interp_nans(out_shape, default=max_shape)
-                out_thick[pno] = (out_shape[pno] * w[pno] ** 2) / 4
-
-            # smooth section
-            if sec_smooth != 0.:
-                section = out_thick * fac * w * cl['dx']
-                section = gaussian_filter1d(section, sec_smooth)
-                out_thick = section / (fac * w * cl['dx'])
-
-            if gdir.is_tidewater and cl['is_last']:
-                # restore the last thicknesses
-                out_thick[-5:] = tongue_thick
+            # Last thicknesses can be noisy sometimes: interpolate
+            out_thick[-4:] = np.NaN
+            out_thick = utils.interp_nans(np.append(out_thick, 0))[:-1]
+            assert len(out_thick) == len(fac)
 
             # final volume
             volume = fac * out_thick * w * cl['dx']
 
             # conserve it
             new_vol = np.nansum(volume)
+            assert new_vol != 0
             volume = init_vol / new_vol * volume
             np.testing.assert_allclose(np.nansum(volume), init_vol)
 

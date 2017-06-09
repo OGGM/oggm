@@ -82,7 +82,6 @@ cfg.CONTINUE_ON_ERROR = True
 cfg.PARAMS['border'] = 80
 cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['invert_with_sliding'] = False
-cfg.PARAMS['bed_shape'] = 'mixed'
 
 # Download RGI files
 rgi_dir = utils.get_rgi_dir()
