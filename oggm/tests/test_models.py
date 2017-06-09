@@ -1292,6 +1292,40 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
 
     @is_slow
+    def test_mass_conservation(self):
+
+        mb = LinearMassBalanceModel(2600.)
+
+        fls = dummy_constant_bed()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        fls = dummy_noisy_bed()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        fls = dummy_width_bed_tributary()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        # Calving!
+        fls = dummy_constant_bed(hmax=1000., hmin=0., nx=100)
+        mb = LinearMassBalanceModel(450.)
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a,
+                                                 is_tidewater=True)
+        model.run_until(500)
+        tot_vol = model.volume_m3 + model.calving_m3_since_y0
+        assert_allclose(model.total_mass, tot_vol, rtol=1e-2)
+
+
+    @is_slow
     def test_min_slope(self):
         """ Check what is the min slope a flowline model can produce
         """

@@ -367,11 +367,11 @@ def test_coxe():
 
     # Init
     cfg.initialize()
-    cfg.PATHS['dem_file'] = '/home/mowglie/dem_RGI50-01.10299.tif'
+    cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
     cfg.PARAMS['border'] = 40
     cfg.PARAMS['use_multiple_flowlines'] = False
 
-    hef_file = '/home/mowglie/rgi_RGI50-01.10299.shp'
+    hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
@@ -406,7 +406,7 @@ def test_coxe():
 
     # run
     model.run_until(200)
-    assert model.length_m == fls[-1].nx * gdir.grid.dx * cfg.PARAMS['flowline_dx']
+    assert model.calving_m3_since_y0 > 0
 
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdir, ax=ax, model=model)

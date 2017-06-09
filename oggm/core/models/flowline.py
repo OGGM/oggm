@@ -750,6 +750,7 @@ class FluxBasedModel(FlowlineModel):
             max_dt = fixed_dt
         self.min_dt = min_dt
         self.max_dt = max_dt
+        self.calving_m3_since_y0 = 0.  # total calving since time y0
 
         # Optim
         self._stags = []
@@ -864,6 +865,8 @@ class FluxBasedModel(FlowlineModel):
         for fl, flx_stag, aflx, trib in zip(self.fls, flxs, aflxs,
                                                  self._trib):
 
+            dx = fl.dx_meter
+
             # Mass balance
             widths = fl.widths_m
             mb = self.mb.get_mb(fl.surface_h, self.yr)
@@ -883,9 +886,54 @@ class FluxBasedModel(FlowlineModel):
             if trib[0] is not None:
                 aflxs[trib[0]][trib[1]:trib[2]] += flx_stag[-1].clip(0) * \
                                                    trib[3]
+            elif self.is_tidewater:
+                # -2 because the last flux is zero per construction
+                # TODO: not sure if this is the way to go yet
+                self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt*dx
 
         # Next step
         self.t += dt
+        return dt
+
+
+class MassConservationChecker(FluxBasedModel):
+    """This checks if the FluzBasedmodel is conserving mass."""
+
+    def __init__(self, flowlines, **kwargs):
+
+        """ Instanciate.
+
+        Parameters
+        ----------
+
+        Properties
+        ----------
+        #TODO: document properties
+        """
+        super(MassConservationChecker, self).__init__(flowlines, **kwargs)
+        self.total_mass = 0.
+
+    def step(self, **kwargs):
+
+        mbs = []
+        sections = []
+        for fl in self.fls:
+            # Mass balance
+            widths = fl.widths_m
+            mb = self.mb.get_mb(fl.surface_h, self.yr)
+            mbs.append(mb * widths)
+            sections.append(np.copy(fl.section))
+            dx = fl.dx_meter
+
+        dt = super(MassConservationChecker, self).step(**kwargs)
+
+        for mb, sec in zip(mbs, sections):
+            mb = dt * mb
+            # there can't be more negative mb than there is section
+            # this isn't an exact solution unforunatly
+            # TODO: exact solution for mass conservation
+            mb = mb.clip(-sec)
+            self.total_mass += np.sum(mb * dx)
 
 
 class KarthausModel(FlowlineModel):
