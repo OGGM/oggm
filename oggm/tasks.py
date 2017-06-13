@@ -19,6 +19,7 @@ from oggm.core.preprocessing.climate import mu_candidates
 from oggm.core.preprocessing.climate import process_cru_data
 from oggm.core.preprocessing.climate import process_custom_climate_data
 from oggm.core.preprocessing.climate import process_cesm_data
+from oggm.core.preprocessing.climate import apparent_mb_from_linear_mb
 from oggm.core.preprocessing.inversion import prepare_for_inversion
 from oggm.core.preprocessing.inversion import volume_inversion
 from oggm.core.preprocessing.inversion import filter_inversion_output

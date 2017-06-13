@@ -287,7 +287,7 @@ class TestInitFlowline(unittest.TestCase):
                                   fl.widths_m[0:len(ofl.widths)-5])
                 self.assertTrue(rmsd < 5.)
 
-        rtol = 0.01
+        rtol = 0.02
         np.testing.assert_allclose(0.573, vol, rtol=rtol)
         np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
