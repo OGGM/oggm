@@ -540,25 +540,35 @@ def glacier_masks(gdir):
     dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
     dem = dem_dr.read(1).astype(rasterio.float32)
 
-    # Correct the DEM (ASTER...)
-    # Currently we just do a linear interp -- ASTER is totally shit anyway
-    min_z = -999.
-    if np.min(dem) <= min_z:
-        xx, yy = gdir.grid.ij_coordinates
-        pnan = np.nonzero(dem <= min_z)
-        pok = np.nonzero(dem > min_z)
-        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
-        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
-        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
-    if np.min(dem) == np.max(dem):
-        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
-
     # Grid
     nx = dem_dr.width
     ny = dem_dr.height
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
+
+    # Correct the DEM (ASTER...)
+    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    min_z = -999.
+    isfinite = np.isfinite(dem)
+    if (np.min(dem) <= min_z) or np.any(~isfinite):
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero((dem <= min_z) | (~isfinite))
+        pok = np.nonzero((dem > min_z) | isfinite)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+
+    isfinite = np.isfinite(dem)
+    if not np.all(isfinite):
+        # see how many percent of the dem
+        if np.sum(~isfinite) > (0.2 * nx * ny):
+            raise RuntimeError('{}: too many NaNs in DEM'.format(gdir.rgi_id))
+        log.warning(gdir.rgi_id + ': DEM needed zeros somewhere.')
+        dem[isfinite] = 0
+
+    if np.min(dem) == np.max(dem):
+        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
 
     # Proj
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
@@ -584,6 +594,9 @@ def glacier_masks(gdir):
         smoothed_dem = gaussian_blur(dem, np.int(gsize))
     else:
         smoothed_dem = dem.copy()
+
+    if not np.all(np.isfinite(smoothed_dem)):
+        raise RuntimeError('{}: NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Make entity masks
     log.debug('%s: glacier mask, divide %d', gdir.rgi_id, 0)

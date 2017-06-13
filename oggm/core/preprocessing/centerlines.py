@@ -960,7 +960,9 @@ def _approx_parabola(x, y, y0=0):
 def _parabola_error(x, y, f):
     # f is an array represents polynom
     x, y = np.array(x), np.array(y)
-    return sum(abs((np.polyval(f, x) - y) / y)) / len(x)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out = sum(abs((np.polyval(f, x) - y) / y)) / len(x)
+    return out
 
 
 class HashablePoint(shpg.Point):
@@ -983,9 +985,9 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # normals
     ns = [i[0] for i in idl.normals]
     cs = []
-    isborder = []
+    donot_compute = []
 
-    for pcoords, n in zip(idl.line.coords, ns):
+    for pcoords, n, isgl in zip(idl.line.coords, ns, idl.is_glacier):
         xi, yi = pcoords
         vx, vy = n
         modul = np.sqrt(vx ** 2 + vy ** 2)
@@ -1008,12 +1010,12 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 
         ci = list(set(ci))
         cs.append(ci)
-        isborder.append(_isborder)
+        donot_compute.append(_isborder or isgl)
 
     bed = []
-    for ic, (cc, isbo) in enumerate(zip(cs, isborder)):
+    for ic, (cc, dontcomp) in enumerate(zip(cs, donot_compute)):
 
-        if isbo:
+        if dontcomp:
             bed.append(np.NaN)
             continue
 
@@ -1034,6 +1036,9 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 
         # find local minima in set of distances
         extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
+        if len(extr[0]) == 0:
+            bed.append(np.NaN)
+            continue
 
         # from local minima find that with the minimum |x|
         idx = extr[0][np.argmin(abs(ro[extr]))]

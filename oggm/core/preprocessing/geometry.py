@@ -820,7 +820,7 @@ def catchment_width_correction(gdir, div_id=None):
             bsize += 5
 
             # Add a security for infinite loops
-            if bsize > 250:
+            if bsize > 500:
                 nmin -= 1
                 bsize = cfg.PARAMS['base_binsize']
                 log.warning('%s: reduced min n per bin to %d', gdir.rgi_id,
