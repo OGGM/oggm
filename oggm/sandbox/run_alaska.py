@@ -51,19 +51,18 @@ if RUN_inPC:
     GLATHIDA_FILE = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/rgi_glathida_links_2014_RGIV54.csv'
 
 if RUN_inAWS:
+    # TODO: this paths are going to change with the new cluster
     WORKING_DIR = '~/work_dir/'
     DATA_DIR = '~/input_data/'
     RGI_FILE = '~/Sub_region4/Sub_region4.shp'
     GLATHIDA_FILE = '~/input_data/rgi_glathida_links_2014_RGIV54.csv'
-
 
 cfg.PATHS['working_dir'] = WORKING_DIR
 cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
 cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
 cfg.PATHS['glathida_rgi_links'] = GLATHIDA_FILE
 
-# Currently OGGM wants some directories to exist
-# (maybe I'll change this but it can also catch errors in the user config)
+# Create directories
 utils.mkdir(cfg.PATHS['working_dir'])
 utils.mkdir(cfg.PATHS['topo_dir'])
 utils.mkdir(cfg.PATHS['cru_dir'])
@@ -76,7 +75,6 @@ cfg.CONTINUE_ON_ERROR = False
 cfg.PARAMS['border'] = 80
 cfg.PARAMS['temp_use_local_gradient'] = False
 cfg.PARAMS['optimize_inversion_params'] = True
-#cfg.PARAMS['inversion_glen_a '] =  2.4e-24 * 0.0921965677572172
 cfg.PARAMS['invert_with_sliding'] = False
 cfg.PARAMS['bed_shape'] = 'parabolic'
 
@@ -90,55 +88,61 @@ RUN_DYNAMICS = False  # run dynamics
 # Read RGI file
 rgidf = salem.read_shapefile(RGI_FILE, cached=True)
 
-# Eventually we must sort out each glacier from large to small.
-
+# TODO: we must sort.() glaciers from large to small when we run in cluster
 # Get ref glaciers (all glaciers with MB)
 flink, mbdatadir = utils.get_wgms_files()
-
 ids_with_mb = pd.read_csv(flink)['RGI50_ID'].values
 
 if RUN_inPC:
-    #Select some glaciers
-    #get some tw-glaciers that we want to test inside alaska region, also that are
-    #inside GlathiDa
+    # Keep id's of glaciers in WGMS and GlathiDa V2
     keep_ids = ['RGI50-01.00037', 'RGI50-01.00570','RGI50-01.01104',
                 'RGI50-01.01390', 'RGI50-01.02228', 'RGI50-01.04591',
                 'RGI50-01.05211', 'RGI50-01.09162', 'RGI50-01.16316',
-                'RGI50-01.22699', 'RGI50-01.23656', 'RGI50-01.10196',
-                'RGI50-01.10689']
+                'RGI50-01.22699']
+
+    # Glaciers in the McNabb data base
+    # terminus_data_ids = ['RGI50-01.03377', 'RGI50-01.03622', 'RGI50-01.03890',
+    #    'RGI50-01.04375', 'RGI50-01.09426', 'RGI50-01.09519',
+    #    'RGI50-01.09757', 'RGI50-01.09783', 'RGI50-01.23565',
+    #    'RGI50-01.09810', 'RGI50-01.10188', 'RGI50-01.10299',
+    #    'RGI50-01.10325', 'RGI50-01.10355', 'RGI50-01.10402',
+    #    'RGI50-01.10431', 'RGI50-01.10575', 'RGI50-01.10607',
+    #    'RGI50-01.10612', 'RGI50-01.10689', 'RGI50-01.10836',
+    #    'RGI50-01.13638', 'RGI50-01.14391', 'RGI50-01.14443',
+    #    'RGI50-01.14683', 'RGI50-01.14876', 'RGI50-01.14878',
+    #    'RGI50-01.17807', 'RGI50-01.17840', 'RGI50-01.17843',
+    #    'RGI50-01.17848', 'RGI50-01.17876', 'RGI50-01.20470',
+    #    'RGI50-01.20554', 'RGI50-01.20734', 'RGI50-01.20783',
+    #    'RGI50-01.20791', 'RGI50-01.20830', 'RGI50-01.20841',
+    #    'RGI50-01.20891', 'RGI50-01.20926', 'RGI50-01.23642',
+    #    'RGI50-01.21001', 'RGI50-01.21005', 'RGI50-01.22776',
+    #    'RGI50-01.26732']
+
+    # problematic calving fluxes
+    terminus_data_ids = ['RGI50-01.03890', 'RGI50-01.10575', 'RGI50-01.10612',
+                        'RGI50-01.14443', 'RGI50-01.17876']
 
 
-    #keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
-    keep_indexes = [(i in keep_ids) for i in rgidf.RGIID]
+    keep_indexes = [((i in keep_ids) or (i in ids_with_mb) or
+                      (i in terminus_data_ids)) for i in rgidf.RGIID]
 
-    # I will improve this list later to drop duplicate ID's
-    # terminus_database_ids = ['RGI50-01.10402', 'RGI50-01.09426', 'RGI50-01.09519',
-    #                 'RGI50-01.10325', 'RGI50-01.22776', 'RGI50-01.17807',
-    #                 'RGI50-01.14878', 'RGI50-01.14876', 'RGI50-01.26732',
-    #                 'RGI50-01.20830', 'RGI50-01.03377', 'RGI50-01.10299',
-    #                 'RGI50-01.10689', 'RGI50-01.09639', 'RGI50-01.10188',
-    #                 'RGI50-01.21005', 'RGI50-01.03622', 'RGI50-01.20791',
-    #                 'RGI50-01.20470', 'RGI50-01.20554', 'RGI50-01.20734',
-    #                 'RGI50-01.14443', 'RGI50-01.20926', 'RGI50-01.17840',
-    #                 'RGI50-01.10575', 'RGI50-01.09783', 'RGI50-01.17843',
-    #                 'RGI50-01.21055', 'RGI50-01.23565', 'RGI50-01.20841',
-    #                 'RGI50-01.10607', 'RGI50-01.17876', 'RGI50-01.20968',
-    #                 'RGI50-01.20891', 'RGI50-01.09810', 'RGI50-01.04375',
-    #                 'RGI50-01.10431', 'RGI50-01.10836', 'RGI50-01.03890',
-    #                 'RGI50-01.21001', 'RGI50-01.20783', 'RGI50-01.17848',
-    #                 'RGI50-01.10612', 'RGI50-01.14683', 'RGI50-01.10355',
-    #                 'RGI50-01.13638', 'RGI50-01.14391', 'RGI50-01.23642',
-    #                 'RGI50-01.09757']
+    # original set up
+    # keep_indexes = [((i in keep_ids) or (i in ids_with_mb)) for i in rgidf.RGIID]
+    # only glaciers for calibration
+    # keep_indexes = [(i in keep_ids) for i in rgidf.RGIID]
+    # Only errors
+    # errors = ['RGI50-01.20968', 'RGI50-01.09639', 'RGI50-01.21055']
 
     # Other statements to exclude some glaciers
-    #keep_indexes = [((i not in keep_ids) or (i not in ids_with_mb)) for i in rgidf.RGIID]
-    #keep_indexes = [(i not in keep_ids) for i in rgidf.RGIID]
+    # keep_indexes = [((i not in keep_ids) or (i not in ids_with_mb)) for i in rgidf.RGIID]
+    # keep_indexes = [(i not in keep_ids) for i in rgidf.RGIID]
+    # keep_indexes = [((i in errors) or (i in keep_ids)) for i in rgidf.RGIID]
 
     rgidf = rgidf.iloc[keep_indexes]
 
 if RUN_inAWS:
-    # Uses all the glaciers in the shape-file, MB and GlathiDa glaciers are
-    # in side the shapefile regardless the Sub-region in Alaska
+    # Uses all the glaciers in the shape-file, MB and GlathiDa glaciers must be
+    # in side the shapefile.
     rgidf = rgidf
 
 rgidf = rgidf.drop_duplicates('RGIID')
@@ -148,20 +152,24 @@ log.info('Number of glaciers: {}'.format(len(rgidf)))
 _ = utils.get_cru_file(var='tmp')
 
 # Go - initialize working directories
-#gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+#gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True) CAREFUL HERE!
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Pre-pro tasks
 if RUN_GIS_mask:
     # Glacier masks go separate
     execute_entity_task(tasks.glacier_masks, gdirs)
-    #Replacing the DEM file for Columbia with ITMIX DEM
+
+    # Replacing the DEM file for Columbia with ITMIX DEM this path's can
+    # change in every update!
     if RUN_inPC:
+        #TODO this will change with the updates if the paths have changed in the work_dir
         Columbia = '/home/beatriz/Documents/OGGM_Alaska_run/work_dir/per_glacier/RGI50-01/RGI50-01.10689'
         Columbia_itmix = '/home/beatriz/Documents/Important_outputs_stuff_runalaska/RGI50-01.10689_itmixrun_new'
 
     if RUN_inAWS:
-        Columbia = '~/work_dir/per_glacier/RGI50-01/RGI50-01.10689'
+        #TODO this path will change in new cluster
+        Columbia = '~/work_dir/per_glacier/RGI50-01/RGI50-01.10/RGI50-01.10689'
         Columbia_itmix = '~/input_data/RGI50-01.10689'
 
     shutil.rmtree(Columbia, ignore_errors=False)
@@ -195,33 +203,33 @@ if RUN_INVERSION:
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
     tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
-    workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
+    #workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
 
 if No_calving:
     # Write out glacier statistics
     df = utils.glacier_characteristics(gdirs)
-    fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
-    df.to_csv(fpath)
+    #fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
+    #df.to_csv(fpath)
 
-###################### Plotting ###############################################
-#Plotting things before the calving for all glaciers
+###################### Plotting scripts #######################################
+# Plotting things before the calving for all glaciers
 # PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
-# # #PLOTS_DIR = ''
+# PLOTS_DIR = ''
 # if PLOTS_DIR == '':
 #    exit()
 # utils.mkdir(PLOTS_DIR)
-# #
+#
 # for gd in gdirs:
 #     bname = os.path.join(PLOTS_DIR, gd.name + '_' + gd.rgi_id + '_')
-    # graphics.plot_googlemap(gd)
-    # plt.savefig(bname + 'ggl.png')
-    # plt.close()
-    # graphics.plot_centerlines(gd, add_downstream=True)
-    # plt.savefig(bname + 'cls.png')
-    # plt.close()
-    # graphics.plot_catchment_width(gd, corrected=True)
-    # plt.savefig(bname + 'w.png')
-    # plt.close()
+#     graphics.plot_googlemap(gd)
+#     plt.savefig(bname + 'ggl.png')
+#     plt.close()
+#     graphics.plot_centerlines(gd, add_downstream=True)
+#     plt.savefig(bname + 'cls.png')
+#     plt.close()
+#     graphics.plot_catchment_width(gd, corrected=True)
+#     plt.savefig(bname + 'w.png')
+#     plt.close()
     # graphics.plot_inversion(gd)
     # plt.savefig(bname + 'inv.png')
     # plt.close()
@@ -263,6 +271,7 @@ if No_calving:
 ###### Never use ###########################################################
 
 if With_calving:
+
     # Re-initializing climate tasks and inversion without calving just to be sure
     for gdir in gdirs:
         gdir.inversion_calving_rate = 0
@@ -277,15 +286,6 @@ if With_calving:
         if gdir.is_tidewater:
             assert cl['volume'][-1] == 0.
 
-    # comments ....
-    # CAREFUL: the invert_parabolic_bed() task is making tests on the shape of the
-    # bed, and if the bed shape is not realistic, it will change it to more
-    # realistic values. This might be undesirable for tidewater glaciers, and
-    # it is possible to add special conditions for tidewater glaciers in the
-    # function. For example: if gdir.is_tidewater: etc.
-
-    # (To fix this for now everything has been put after an if in the inversion.py)
-
     # Defining a calving function
     def calving_from_depth(gdir):
         """ Finds a calving flux based on the approaches proposed by
@@ -294,23 +294,36 @@ if With_calving:
         We take the initial output of the model and surface elevation data
         to calculate the water depth of the calving front.
         """
-        # We read the model output, of the last pixel of the inversion
-        cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
-        t_altitude = cl['hgt'][-1] #this gives us the altitude at the terminus
-        width = cl['width'][-1]
-        print('width',width)
-        thick = cl['volume'][-1] / cl['dx'] / width
+        # Read width database:
+        #data_link = '/home/beatriz/Documents/OGGM_Alaska_run/results/Terminus_width_McNabb_vs_OGGMout.csv'
+        data_link = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/Terminus_width_McNabb.csv'
+        dfids = pd.read_csv(data_link)['RGI_ID'].values
+        dfwidth = pd.read_csv(data_link)['width'].values
+        index = np.where(dfids == gdir.rgi_id)
 
+        cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
+
+        if gdir.rgi_id not in dfids:
+            # We read the model output, of the last pixel of the inversion
+            width = cl['width'][-1]
+            #print('width',width)
+
+        else:
+            # we read the McNabb width
+            width = dfwidth[index[0][0]]
+            #print('width',width)
+
+        t_altitude = cl['hgt'][-1] # this gives us the altitude at the terminus
+        thick = cl['volume'][-1] / cl['dx'] / width
         # We calculate the water_depth
         w_depth = thick - t_altitude
-        # or F_calving = np.amax(0, 2*H_free*w_depth) * width
-        print('t_altitude', t_altitude)
-        #print('depth', w_depth)
-        print('thick', thick)
+        # print('t_altitude_fromfun', t_altitude)
+        # print('depth_fromfun', w_depth)
+        # print('thick_fromfun', thick)
         out = 2 * thick * w_depth * width / 1e9
         if out < 0:
             out = 0
-        return out, w_depth, thick
+        return out, w_depth, thick, width
 
     # Selecting the tidewater glaciers on the region
     for gdir in gdirs:
@@ -320,10 +333,10 @@ if With_calving:
             data_calving = []
             w_depth = []
             thick = []
+            t_width = []
             forwrite = []
 
             # Our first guess of calving is that of a water depth of 1m
-
             # We read the model output, of the last pixel of the inversion
             cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
 
@@ -331,10 +344,31 @@ if With_calving:
             t_altitude = cl['hgt'][-1]
             thick = t_altitude + 1
             w_depth = thick - t_altitude
+            # print('t_altitude',t_altitude)
+            # print('depth',w_depth)
+            # print('thick',thick)
 
-            # Lets compute the theeoretical calving out of it
-            pre_calving = 2 * thick * w_depth * cl['width'][-1] / 1e9
+            # Read width database:
+            #data_link = '/home/beatriz/Documents/OGGM_Alaska_run/results/Terminus_width_McNabb_vs_OGGMout.csv'
+            data_link = '/home/beatriz/Documents/OGGM_Alaska_run/input_data/Terminus_width_McNabb.csv'
+            dfids = pd.read_csv(data_link)['RGI_ID'].values
+            dfwidth = pd.read_csv(data_link)['width'].values
+            index = np.where(dfids == gdir.rgi_id)
+
+            if gdir.rgi_id not in dfids:
+                # We read the model output, of the last pixel of the inversion
+                width = cl['width'][-1]
+                #print('width',width)
+
+            else:
+                # we read the McNabb width
+                width = dfwidth[index[0][0]]
+                #print('width',width)
+
+            # Lets compute the theoretical calving out of it
+            pre_calving = 2 * thick * w_depth * width / 1e9
             gdir.inversion_calving_rate = pre_calving
+            #print('pre_calving', pre_calving)
 
             # Recompute all with calving
             tasks.distribute_t_stars([gdir])
@@ -343,12 +377,13 @@ if With_calving:
 
             while i < 50:
                 # First calculates a calving flux from model output
-                F_calving, new_depth, new_thick = calving_from_depth(gdir)
+                F_calving, new_depth, new_thick, t_width = calving_from_depth(gdir)
 
                 # Stores the data, and we see it
                 data_calving += [F_calving]
                 w_depth += [new_depth]
                 thick += [new_thick]
+                t_width = t_width
                 #print('Calving rate calculated', F_calving)
 
                 # We put the calving function output into the Model
@@ -360,16 +395,17 @@ if With_calving:
                 # Inversion with calving, inv optimization is not iterative
                 tasks.prepare_for_inversion(gdir)
                 tasks.volume_inversion(gdir)
-                tasks.distribute_thickness(gdir, how='per_altitude')
+                #tasks.distribute_thickness(gdir, how='per_altitude')
 
                 i += 1
                 avg_one = np.average(data_calving[-4:])
                 avg_two = np.average(data_calving[-5:-1])
                 difference = abs(avg_two - avg_one)
-                if difference < 0.05*avg_two and i>5:
+                if difference < 0.05*avg_two or data_calving[-1] == 0:
                     break
+
             # Making a dictionary for calving
-            cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth, H_ice=thick)
+            cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth, H_ice=thick, t_width=t_width)
             forwrite.append(cal_dic)
             # We write out everything
             gdir.write_pickle(forwrite, 'calving_output', div_id=1)
@@ -390,21 +426,25 @@ if With_calving:
                 all_calving_data = objt['calving_fluxes']
                 all_data_depth = objt['water_depth']
                 all_data_H_i = objt['H_ice']
+                all_data_width = objt['t_width']
             # we see the final calculated calving flux
             last_calving = all_calving_data[-1]
+            last_width = all_data_width
             print('For the glacier', gdir.rgi_id)
             print('last calving value is:', last_calving)
+
             gdir.inversion_calving_rate = last_calving
 
     # Calculating everything again with a calving flux assigned
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
-    workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
+    #workflow.execute_entity_task(tasks.distribute_thickness, gdirs, how='per_altitude')
+
     # Write out glacier statistics
     df = utils.glacier_characteristics(gdirs)
-    fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char_withcalving.csv')
-    df.to_csv(fpath)
+    #fpath = os.path.join(cfg.PATHS['working_dir'], 'glacier_char.csv')
+    #df.to_csv(fpath)
 
 # Plotting things after the calving for all glaciers
 # PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'

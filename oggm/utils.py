@@ -1509,13 +1509,18 @@ def glacier_characteristics(gdirs, to_csv=True):
         # Calving
         if gdir.has_file('calving_output', div_id=1):
             all_calving_data = []
+            all_width = []
             for i in gdir.divide_ids:
                 cl = gdir.read_pickle('calving_output', div_id=i)
                 for c in cl:
                     all_calving_data = c['calving_fluxes'][-1]
+                    all_width = c['t_width']
             d['calving_flux'] = all_calving_data
+            d['t_width'] = all_width
         else:
             d['calving_flux'] = 0
+            d['t_width'] = 0
+
 
         out_df.append(d)
 
