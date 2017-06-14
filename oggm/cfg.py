@@ -8,11 +8,14 @@ import logging
 import os
 import shutil
 import sys
+import glob
 from collections import OrderedDict
+from distutils.util import strtobool
 
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
 
 # Defaults
@@ -26,6 +29,8 @@ log = logging.getLogger(__name__)
 CACHE_DIR = os.path.join(os.path.expanduser('~'), '.oggm')
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+# Path to the config file
+CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 
 
 class DocumentedDict(dict):
@@ -72,6 +77,7 @@ PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 RGI_REG_NAMES = False
 RGI_SUBREG_NAMES = False
+LRUHANDLERS = OrderedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -92,18 +98,9 @@ FOUR_THIRDS = 4./3.
 ONE_FIFTH = 1./5.
 
 GAUSSIAN_KERNEL = dict()
-GAUSSIAN_KERNEL[9] = np.array([1.33830625e-04, 4.43186162e-03,
-                               5.39911274e-02, 2.41971446e-01,
-                               3.98943469e-01, 2.41971446e-01,
-                               5.39911274e-02, 4.43186162e-03,
-                               1.33830625e-04])
-GAUSSIAN_KERNEL[7] = np.array([1.78435052e-04, 1.51942011e-02,
-                               2.18673667e-01, 5.31907394e-01,
-                               2.18673667e-01, 1.51942011e-02,
-                               1.78435052e-04])
-GAUSSIAN_KERNEL[5] = np.array([2.63865083e-04, 1.06450772e-01,
-                               7.86570726e-01, 1.06450772e-01,
-                               2.63865083e-04])
+for ks in [5, 7, 9]:
+    kernel = gaussian(ks, 1)
+    GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
 # TODO: document all files
 _doc = 'A geotiff file containing the DEM (reprojected into the local grid).'
@@ -118,8 +115,11 @@ BASENAMES['intersects'] = ('intersects.shp', _doc)
 _doc = 'The flowline catchments in the local projection.'
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
-_doc = 'The fcatchments interesctions in the local projection.'
+_doc = 'The catchments intersections in the local projection.'
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
+
+_doc = 'The divides intersections in their lonlat projection.'
+BASENAMES['divides_intersects'] = ('divides_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
@@ -137,10 +137,9 @@ _doc = 'A ``dict`` containing the shapely.Polygons of a divide. The ' \
        'will have their own area which is not obtained from the RGI file).'
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = 'A shapely.LineString of the coordinates of the downstream line ' \
-       '(flowing out of the glacier until the border of the domain) for ' \
-       'each divide.'
-BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
+_doc = 'A geopandas dataframe containing all downstream lines, grouped per ' \
+       'intersection.'
+BASENAMES['downstream_lines'] = ('downstream_lines.pkl', _doc)
 
 _doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
 BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
@@ -199,6 +198,10 @@ BASENAMES['inversion_params'] = ('inversion_params.pkl', _doc)
 _doc = 'List of flowlines ready to be run by the model.'
 BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 
+_doc = ('When using a linear mass-balance for the inversion, this dict stores '
+        'the optimal ela_h and grad.')
+BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
+
 _doc = ''
 BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
@@ -208,6 +211,10 @@ BASENAMES['past_model'] = ('past_model.nc', _doc)
 
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
+
+_doc = 'Array of the parabolic coefficients for all centerlines, computed ' \
+       'from fitting a parabola to the topography.'
+BASENAMES['downstream_bed'] = ('downstream_bed.pkl', _doc)
 
 
 def initialize(file=None):
@@ -223,10 +230,6 @@ def initialize(file=None):
     global RGI_REG_NAMES
     global RGI_SUBREG_NAMES
 
-    # Make sure we have a proper cache dir
-    from oggm.utils import _download_oggm_files
-    _download_oggm_files()
-
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
@@ -236,34 +239,20 @@ def initialize(file=None):
     try:
         cp = ConfigObj(file, file_error=True)
     except (ConfigObjError, IOError) as e:
-        log.critical('Config file could not be parsed (%s): %s', file, e)
+        log.critical('Param file could not be parsed (%s): %s', file, e)
         sys.exit()
-
-    homedir = os.path.expanduser('~')
-
-    # Some defaults
-    if cp['working_dir'] == '~':
-        cp['working_dir'] = os.path.join(homedir, 'OGGM_wd')
-    if cp['topo_dir'] == '~':
-        cp['topo_dir'] = os.path.join(homedir, 'OGGM_data', 'topo')
-    if cp['cru_dir'] == '~':
-        cp['cru_dir'] = os.path.join(homedir, 'OGGM_data', 'cru')
-    if cp['rgi_dir'] == '~':
-        cp['rgi_dir'] = os.path.join(homedir, 'OGGM_data', 'rgi')
-
-    # Parse RGI metadata
-    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
-    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
-                                index_col=0)
-    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
-                                   index_col=0)
 
     CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
+    # Default
     PATHS['working_dir'] = cp['working_dir']
-    PATHS['topo_dir'] = cp['topo_dir']
-    PATHS['cru_dir'] = cp['cru_dir']
-    PATHS['rgi_dir'] = cp['rgi_dir']
+    if not PATHS['working_dir']:
+        PATHS['working_dir'] = os.path.join(os.path.expanduser('~'),
+                                            'OGGM_WORKING_DIRECTORY')
+
+    # Paths
+    oggm_static_paths()
+
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -286,6 +275,7 @@ def initialize(file=None):
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
+    PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -305,23 +295,33 @@ def initialize(file=None):
     PARAMS[_k] = cp.as_bool(_k)
 
     # Flowline model
-    PARAMS['bed_shape'] = cp['bed_shape']
     _k = 'use_optimized_inversion_params'
     PARAMS[_k] = cp.as_bool(_k)
 
+    # Make sure we have a proper cache dir
+    from oggm.utils import download_oggm_files
+    download_oggm_files()
+
+    # Parse RGI metadata
+    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
+    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
+                                index_col=0)
+    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
+                                   index_col=0)
+
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
-           'glathida_rgi_links', 'grid_dx_method', 'topo_dir', 'cru_dir',
+           'glathida_rgi_links', 'grid_dx_method',
            'mp_processes', 'use_multiprocessing', 'use_divides',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_optimized_inversion_params', 'invert_with_sliding', 'rgi_dir',
+           'use_optimized_inversion_params', 'invert_with_sliding',
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor', 'use_intersects']
+           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope']
     for k in ltr:
-        del cp[k]
+        cp.pop(k, None)
 
     # Other params are floats
     for k in cp:
@@ -332,6 +332,112 @@ def initialize(file=None):
     set_divides_db(get_demo_file('divides_alps.shp'))
     set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     IS_INITIALIZED = True
+
+
+def oggm_static_paths():
+    """Initialise the OGGM paths from the config file."""
+
+    global PATHS, PARAMS
+
+    # See if the file is there, if not create it
+    if not os.path.exists(CONFIG_FILE):
+        dldir = os.path.join(os.path.expanduser('~'), 'OGGM')
+        config = ConfigObj()
+        config['dl_cache_dir'] = os.path.join(dldir, 'download_cache')
+        config['dl_cache_readonly'] = False
+        config['tmp_dir'] = os.path.join(dldir, 'tmp')
+        config['cru_dir'] = os.path.join(dldir, 'cru')
+        config['rgi_dir'] = os.path.join(dldir, 'rgi')
+        config['test_dir'] = os.path.join(dldir, 'tests')
+        config['has_internet'] = True
+        config.filename = CONFIG_FILE
+        config.write()
+
+    # OK, read in the file
+    try:
+        config = ConfigObj(CONFIG_FILE, file_error=True)
+    except (ConfigObjError, IOError) as e:
+        log.critical('Config file could not be parsed (%s): %s',
+                     CONFIG_FILE, e)
+        sys.exit()
+
+    # Check that all keys are here
+    for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir',
+              'cru_dir', 'rgi_dir', 'test_dir', 'has_internet']:
+        if k not in config:
+            raise RuntimeError('The oggm config file ({}) should have an '
+                               'entry for {}.'.format(CONFIG_FILE, k))
+
+    # Override defaults with env variables if available
+    if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
+        ro = bool(strtobool(os.environ.get('OGGM_DOWNLOAD_CACHE_RO')))
+        config['dl_cache_readonly'] = ro
+    if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
+        config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+
+    if not config['dl_cache_dir']:
+        raise RuntimeError('At the very least, the "dl_cache_dir" entry '
+                           'should be provided in the oggm config file '
+                           '({})'.format(CONFIG_FILE, k))
+
+    # Fill the PATH dict
+    for k, v in config.iteritems():
+        if not k.endswith('_dir'):
+            continue
+        if not v:
+            # Default value?
+            v = os.path.join('~', 'OGGM_' + k[:-4])
+        PATHS[k] = os.path.abspath(os.path.expanduser(v))
+
+    # Other
+    PARAMS['has_internet'] = config.as_bool('has_internet')
+    PARAMS['dl_cache_readonly'] = config.as_bool('dl_cache_readonly')
+
+    # Create cache dir if possible
+    if not os.path.exists(PATHS['dl_cache_dir']):
+        if not PARAMS['dl_cache_readonly']:
+            os.makedirs(PATHS['dl_cache_dir'])
+
+# Always call this one!
+oggm_static_paths()
+
+
+def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
+    """LRU handler for a given temporary directory (singleton).
+
+    Parameters
+    ----------
+    tmpdir : str
+        path to the temporary directory to handle. Default is
+        ``cfg.PATHS['tmp_dir']``.
+    maxsize : int
+        the max number of files to keep in the directory
+    ending : str
+        consider only the files with a certain ending
+    """
+    global LRUHANDLERS
+
+    # see if we're set up
+    if tmpdir is None:
+        tmpdir = PATHS['tmp_dir']
+    if not os.path.exists(tmpdir):
+        os.makedirs(tmpdir)
+
+    # one handler per directory and per size
+    # (in practice not very useful, but a dict is easier to handle)
+    k = (tmpdir, maxsize)
+    if k in LRUHANDLERS:
+        # was already there
+        return LRUHANDLERS[k]
+    else:
+        # we do a new one
+        from oggm.utils import LRUFileCache
+        # the files already present have to be counted, too
+        l0 = list(glob.glob(os.path.join(tmpdir, '*' + ending)))
+        l0.sort(key=os.path.getmtime)
+        lru = LRUFileCache(l0, maxsize=maxsize)
+        LRUHANDLERS[k] = lru
+        return lru
 
 
 def set_divides_db(path=None):
@@ -367,7 +473,7 @@ def set_intersects_db(path=None):
 
 
 def reset_working_dir():
-    """Deketes the working directory."""
+    """Deletes the working directory."""
     if os.path.exists(PATHS['working_dir']):
         shutil.rmtree(PATHS['working_dir'])
     os.makedirs(PATHS['working_dir'])
@@ -381,20 +487,25 @@ def pack_config():
         'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
         'PARAMS': PARAMS,
         'PATHS': PATHS,
+        'LRUHANDLERS': LRUHANDLERS,
         'BASENAMES': dict(BASENAMES)
     }
+
 
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, BASENAMES
+    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, \
+        BASENAMES, LRUHANDLERS
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
     CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
+    LRUHANDLERS = cfg_dict['LRUHANDLERS']
 
-    # BASENAMES is a DocumentedDict, which cannot be pickled because set intentionally mismatches with get
+    # BASENAMES is a DocumentedDict, which cannot be pickled because
+    # set intentionally mismatches with get
     BASENAMES = DocumentedDict()
     for k in cfg_dict['BASENAMES']:
         BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')

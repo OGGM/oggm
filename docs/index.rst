@@ -13,7 +13,7 @@ past and future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
 
-The project is currently in intense development. `Get in touch`_ with us if
+The project is currently in development. `Get in touch`_ with us if
 you want to contribute.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
@@ -62,6 +62,7 @@ Using OGGM
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`glacierdir-gen`
+* :doc:`input-data`
 * :doc:`mpi`
 * :doc:`api`
 * :doc:`contributing`
@@ -75,6 +76,7 @@ Using OGGM
     installing-oggm.rst
     getting-started.rst
     glacierdir-gen.rst
+    input-data.rst
     mpi.rst
     api.rst
     whats-new.rst
@@ -112,10 +114,10 @@ OGGM is available under the open source `GNU GPLv3 license`_.
 
 .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
 
-OGGM is free software. This implies that you are free to use the model or
-copy and modify its code, under certain conditions:
+OGGM is free software. This implies that you are free to use the model and
+copy or modify its code at your wish, under certain conditions:
 
-1. When using this software, you should refer to the original authors of this
+1. When using this software, please acknowledge the original authors of this
    contribution. Currently, we recommend to use the `Zenodo citation`_ for this
    purpose.
 
@@ -138,13 +140,17 @@ copy and modify its code, under certain conditions:
         }
 
 
-2. When you use and modify the OGGM code you must publish your adaptation under
-   the same license as OGGM (the GNU General Public License as published by
-   the Free Software Foundation).
+2. Your modifications to the code belong to you, but if you decide
+   to share these modifications with others you'll have to do so under the same
+   license as OGGM (the GNU General Public License as published by the Free
+   Software Foundation).
 
-See the `OGGM license`_ for more information.
+See the `wikipedia page about GPL`_ and the `OGGM license`_ for more
+information.
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
+
+.. _wikipedia page about GPL: https://en.wikipedia.org/wiki/GNU_General_Public_License
 
 .. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.rst
 

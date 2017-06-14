@@ -11,13 +11,17 @@ branches:  # blacklist
     - appveyor
     - docs
 
+cache:
+  directories:
+    - $HOME/dl_cache
+
 matrix:
   fast_finish: true
   include:
-    - env: OGGM_ENV=prepro MPL=
-    - env: OGGM_ENV=models MPL=
-    - env: OGGM_ENV=workflow MPL=--mpl
-    - env: OGGM_ENV=graphics MPL=--mpl
+    - env: OGGM_TEST_ENV=prepro MPL=
+    - env: OGGM_TEST_ENV=models MPL=
+    - env: OGGM_TEST_ENV=workflow MPL=--mpl
+    - env: OGGM_TEST_ENV=graphics MPL=--mpl
 
 before_install:
   - docker pull oggm/untested_base:latest
@@ -34,9 +38,12 @@ install:
     coveralls || true
     exit 0
     EOF
-  - docker create --name oggm_travis -ti -e OGGM_ENV -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:latest /bin/bash /root/oggm/test.sh
+  - mkdir -p $HOME/dl_cache
+  - export OGGM_DOWNLOAD_CACHE=/dl_cache
+  - docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:latest /bin/bash /root/oggm/test.sh
   - docker cp $PWD oggm_travis:/root/oggm
 script:
+  - export OGGM_DOWNLOAD_CACHE=/dl_cache
   - docker start -ai oggm_travis
 after_script:
   - docker rm oggm_travis

@@ -3,23 +3,25 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
+import time
 import shutil
 
 import salem
 import numpy as np
 import pandas as pd
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_equal, assert_allclose
 
-from oggm.tests import is_download
+import oggm
 from oggm import utils
 from oggm import cfg
+from oggm.tests import is_download
 
 # Globals
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_download')
-if not os.path.exists(TEST_DIR):
-    os.makedirs(TEST_DIR)
+TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_download')
+utils.mkdir(TEST_DIR)
 
+# In case some logging happens or so
+cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
 class TestFuncs(unittest.TestCase):
 
@@ -36,6 +38,15 @@ class TestFuncs(unittest.TestCase):
         ts = pd.Series([-2., -1., 1., 2., 3][::-1], index=np.arange(5))
         sc = utils.signchange(ts)
         assert_array_equal(sc, [0, 0, 0, 1, 0])
+
+    def test_smooth(self):
+        a = np.array([1., 4, 7, 7, 4, 1])
+        b = utils.smooth1d(a, 3, kernel='mean')
+        assert_allclose(b, [3, 4, 6, 6, 4, 3])
+        kernel = [0.60653066,  1., 0.60653066]
+        b = utils.smooth1d(a, 3, kernel=kernel)
+        c = utils.smooth1d(a, 3)
+        assert_allclose(b, c)
 
     def test_filter_rgi_name(self):
 
@@ -130,10 +141,8 @@ class TestInitialize(unittest.TestCase):
         self.homedir = os.path.expanduser('~')
 
     def test_defaults(self):
-        expected = os.path.join(self.homedir, 'OGGM_wd')
+        expected = os.path.join(self.homedir, 'OGGM_WORKING_DIRECTORY')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
-        expected = os.path.join(self.homedir, 'OGGM_data', 'topo')
-        self.assertEqual(cfg.PATHS['topo_dir'], expected)
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
@@ -144,14 +153,22 @@ class TestInitialize(unittest.TestCase):
 class TestDataFiles(unittest.TestCase):
 
     def setUp(self):
-        cfg.PATHS['topo_dir'] = TEST_DIR
-
-        if os.path.exists(TEST_DIR):
-            shutil.rmtree(TEST_DIR)
-            os.makedirs(TEST_DIR)
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = os.path.join(TEST_DIR, 'dl_cache')
+        cfg.PATHS['working_dir'] = os.path.join(TEST_DIR, 'wd')
+        cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
+        self.reset_dir()
 
     def tearDown(self):
-        del cfg.PATHS['topo_dir']
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+
+    def reset_dir(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+        utils.mkdir(cfg.PATHS['dl_cache_dir'])
+        utils.mkdir(cfg.PATHS['working_dir'])
+        utils.mkdir(cfg.PATHS['tmp_dir'])
 
     def test_download_demo_files(self):
 
@@ -163,9 +180,6 @@ class TestDataFiles(unittest.TestCase):
 
         # Data files
         cfg.initialize()
-
-        lf, df = utils.get_leclercq_files()
-        self.assertTrue(os.path.exists(lf))
 
         lf, df = utils.get_wgms_files()
         self.assertTrue(os.path.exists(lf))
@@ -252,12 +266,70 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 1)
         self.assertEqual('Q01', z[0])
 
+        # normal tile
+        z = utils.dem3_viewpano_zone([107, 107], [69, 69])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('R48', z[0])
+
         # Alps
         ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32',
                       'L33', 'M31', 'M32', 'M33'])
         z = utils.dem3_viewpano_zone([6, 14], [41, 48])
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
+
+    def test_lrufilecache(self):
+
+        f1 = os.path.join(TEST_DIR, 'f1.txt')
+        f2 = os.path.join(TEST_DIR, 'f2.txt')
+        f3 = os.path.join(TEST_DIR, 'f3.txt')
+        open(f1, 'a').close()
+        open(f2, 'a').close()
+        open(f3, 'a').close()
+
+        assert os.path.exists(f1)
+        lru = utils.LRUFileCache(maxsize=2)
+        lru.append(f1)
+        assert os.path.exists(f1)
+        lru.append(f2)
+        assert os.path.exists(f1)
+        lru.append(f3)
+        assert not os.path.exists(f1)
+        assert os.path.exists(f2)
+        lru.append(f2)
+        assert os.path.exists(f2)
+
+        open(f1, 'a').close()
+        lru = utils.LRUFileCache(l0=[f2, f3], maxsize=2)
+        assert os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
+        lru.append(f1)
+        assert os.path.exists(f1)
+        assert not os.path.exists(f2)
+        assert os.path.exists(f3)
+
+    def test_lruhandler(self):
+
+        self.reset_dir()
+        f1 = os.path.join(TEST_DIR, 'f1.txt')
+        f2 = os.path.join(TEST_DIR, 'f2.txt')
+        f3 = os.path.join(TEST_DIR, 'f3.txt')
+        open(f1, 'a').close()
+        time.sleep(0.1)
+        open(f2, 'a').close()
+        time.sleep(0.1)
+        open(f3, 'a').close()
+
+        l = cfg.get_lru_handler(TEST_DIR, maxsize=3, ending='.txt')
+        assert os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
+
+        l = cfg.get_lru_handler(TEST_DIR, maxsize=2, ending='.txt')
+        assert not os.path.exists(f1)
+        assert os.path.exists(f2)
+        assert os.path.exists(f3)
 
     @is_download
     def test_srtmdownload(self):
@@ -288,17 +360,18 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_gimp(self):
         fp, z = utils.get_topo_file([], [], rgi_region=5)
-        self.assertTrue(os.path.exists(fp))
+        self.assertTrue(os.path.exists(fp[0]))
+        self.assertEqual(z, 'GIMP')
 
     @is_download
     def test_iceland(self):
         fp, z = utils.get_topo_file([-20, -20], [65, 65])
-        self.assertTrue(os.path.exists(fp))
+        self.assertTrue(os.path.exists(fp[0]))
 
     @is_download
     def test_asterdownloadfails(self):
 
-        # this zone does exist and file should be small enough for download
+        # this zone does not exist
         zone = 'bli'
         unit = 'S75E135'
         self.assertTrue(utils._download_aster_file(zone, unit) is None)
@@ -313,10 +386,8 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_download_cru(self):
 
-        cfg.initialize()
-
         tmp = cfg.PATHS['cru_dir']
-        cfg.PATHS['cru_dir'] = TEST_DIR
+        cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_extract')
 
         of = utils.get_cru_file('tmp')
         self.assertTrue(os.path.exists(of))
@@ -326,10 +397,8 @@ class TestDataFiles(unittest.TestCase):
     @is_download
     def test_download_rgi(self):
 
-        cfg.initialize()
-
         tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = TEST_DIR
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
 
         of = utils.get_rgi_dir()
         of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
@@ -347,3 +416,26 @@ class TestDataFiles(unittest.TestCase):
         zone = 'U44'
         fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
+
+    @is_download
+    def test_download_dem3_viewpano_fails(self):
+
+        # this zone does not exist
+        zone = 'dummy'
+        fp = utils._download_dem3_viewpano(zone)
+        self.assertTrue(fp is None)
+
+    @is_download
+    def test_auto_topo(self):
+        # Test for combine
+        fdem, src = utils.get_topo_file([6, 14], [41, 41])
+        self.assertEqual(src, 'SRTM')
+        self.assertEqual(len(fdem), 2)
+        for fp in fdem:
+            self.assertTrue(os.path.exists(fp))
+
+        fdem, src = utils.get_topo_file([-143, -131], [61, 61])
+        self.assertEqual(src, 'DEM3')
+        self.assertEqual(len(fdem), 3)
+        for fp in fdem:
+            self.assertTrue(os.path.exists(fp))

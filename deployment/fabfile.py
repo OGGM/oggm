@@ -594,7 +594,7 @@ def install_node_pip(nn='', inst=None):
     pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal" &&
     pip install mpi4py &&
-    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock motionless pytest progressbar2 &&
+    pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 motionless pytest progressbar2 &&
     pip install git+https://github.com/fmaussion/salem.git &&
     sed -i 's/^backend.*/backend      : Agg/' "${WORKON_HOME}"/oggm_env/lib/python?.?/site-packages/matplotlib/mpl-data/matplotlibrc
     """, pty=False)

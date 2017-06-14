@@ -22,7 +22,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
-from oggm.tests import requires_mpltest, RUN_GRAPHIC_TESTS, BASELINE_DIR
+from oggm.tests import requires_mpltest, is_graphic_test, BASELINE_DIR
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -32,8 +32,7 @@ if not RUN_WORKFLOW_TESTS:
     raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DIR = os.path.join(CURRENT_DIR, 'tmp_workflow')
+TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 
@@ -59,6 +58,7 @@ def up_to_climate(reset=False):
     cfg.initialize()
 
     # Use multiprocessing
+    # We don't use mp on TRAVIS because unsure if compatible with test coverage
     cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
 
     # Working dir
@@ -77,6 +77,7 @@ def up_to_climate(reset=False):
     cfg.PARAMS['border'] = 70
     cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
+    cfg.PARAMS['invert_with_rectangular'] = False
 
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
@@ -115,7 +116,8 @@ def up_to_inversion(reset=False):
         # Use histalp for the actual inversion test
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
-        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['cru_dir'] = ''
+        workflow.init_mp_pool(reset=True)
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -146,9 +148,10 @@ def up_to_distrib(reset=False):
         # Use CRU
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['temp_use_local_gradient'] = False
-        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
+        workflow.init_mp_pool(reset=True)
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")
@@ -195,7 +198,6 @@ class TestWorkflow(unittest.TestCase):
         d = gdirs[0].read_pickle('inversion_params')
         fs = d['fs']
         glen_a = d['glen_a']
-        maxs = cfg.PARAMS['max_shape_param']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
             mb_mod = massbalance.ConstantMassBalanceModel(gdir)
@@ -206,12 +208,10 @@ class TestWorkflow(unittest.TestCase):
             _area = model.area_km2
             if gdir.rgi_id in df.index:
                 gldf = df.loc[gdir.rgi_id]
-                assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.03)
-                assert_allclose(gldf['ref_area_km2'], _area, rtol=0.03)
+                assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.05)
+                assert_allclose(gldf['ref_area_km2'], _area, rtol=0.05)
                 maxo = max([fl.order for fl in model.fls])
                 for fl in model.fls:
-                    self.assertTrue(np.all(fl.bed_shape > 0))
-                    self.assertTrue(np.all(fl.bed_shape <= maxs))
                     if len(model.fls) > 1:
                         if fl.order == (maxo-1):
                             self.assertTrue(fl.flows_to is fls[-1])
@@ -253,7 +253,7 @@ class TestWorkflow(unittest.TestCase):
         from oggm.core.models.massbalance import PastMassBalanceModel
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
-            h, w = gdir.get_flowline_hw()
+            h, w = gdir.get_inversion_flowline_hw()
             cfg.PARAMS['use_bias_for_run'] = False
             mbmod = PastMassBalanceModel(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
@@ -269,7 +269,6 @@ class TestWorkflow(unittest.TestCase):
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
             np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
-
 
     @is_slow
     def test_shapefile_output(self):
@@ -290,6 +289,9 @@ class TestWorkflow(unittest.TestCase):
     @is_slow
     def test_random(self):
 
+        # Fake Reset (all these tests are horribly coded)
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
@@ -329,18 +331,19 @@ class TestWorkflow(unittest.TestCase):
         odf = pd.DataFrame(index=years)
         for gd in gdirs[:6]:
             mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
-            h, w = gd.get_flowline_hw()
+            h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertLessEqual(odf.corr().mean().mean(), 0.5)
         seed = 1
         for gd in gdirs[:6]:
             mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
-            h, w = gd.get_flowline_hw()
+            h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)
 
 
 @is_slow
+@is_graphic_test
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():

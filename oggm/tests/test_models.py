@@ -19,13 +19,14 @@ import shutil
 import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.tests import init_hef
 from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import LinearMassBalanceModel
-from oggm.tests import (is_slow, assertDatasetAllClose, RUN_MODEL_TESTS,
-                        is_performance_test)
+from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
+import xarray as xr
 from oggm import utils, cfg
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate
@@ -37,17 +38,12 @@ import matplotlib.pyplot as plt
 if not RUN_MODEL_TESTS:
     raise unittest.SkipTest('Skipping all model tests.')
 
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# test directory
-testdir = os.path.join(current_dir, 'tmp')
-
 do_plot = False
 
 DOM_BORDER = 80
 
-# raise unittest.SkipTest("Such-and-such failed. Skipping all tests in foo.py")
+# In case some logging happens or so
+cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
@@ -63,6 +59,7 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200):
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
+
 
 def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     """
@@ -85,6 +82,29 @@ def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200):
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
     return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
                                           bed_h, widths)]
+
+
+def dummy_constant_bed_obstacle(hmax=3000., hmin=1000., nx=200):
+    """
+    I introduce an obstacle in the bed
+    """
+
+    map_dx = 100.
+    dx = 1.
+
+    surface_h = np.linspace(hmax, hmin, nx)
+
+    cliff_height = 200.0
+    surface_h[60:] = surface_h[60:] + cliff_height
+
+    bed_h = surface_h
+    widths = surface_h * 0. + 1.
+
+    coords = np.arange(0, nx-0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords*0.]).T)
+    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
+                                          bed_h, widths)]
+
 
 def dummy_bumpy_bed():
 
@@ -144,20 +164,24 @@ def dummy_mixed_bed():
     surface_h = np.linspace(3000, 1000, nx)
     bed_h = surface_h
     shape = surface_h * 0. + 3.e-03
-    shape[10:20] = 0.00001
+    shape[10:20] = np.NaN
+    is_trapezoid = ~np.isfinite(shape)
+    lambdas = shape * 0.
+    lambdas[is_trapezoid] = 3.5
+
+    widths_m = bed_h*0. + 10
+    section = bed_h*0.
 
     coords = np.arange(0, nx-0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords*0.]).T)
-    fls = [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
-                                      bed_h, shape)]
 
-    cfg.PARAMS['trapezoid_lambdas'] = 3.5
-    cfg.PARAMS['mixed_min_shape'] = 0.0015
-    fls = flowline.convert_to_mixed_flowline(fls)
-    del cfg.PARAMS['trapezoid_lambdas']
-    del cfg.PARAMS['mixed_min_shape']
+    fls = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                 surface_h=surface_h, bed_h=bed_h,
+                                 section=section, bed_shape=shape,
+                                 is_trapezoid=is_trapezoid,
+                                 lambdas=lambdas, widths_m=widths_m)
 
-    return fls
+    return [fls]
 
 
 def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
@@ -234,9 +258,7 @@ class TestInitFlowline(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1, 2, 3]]
-        ofl = gdir.read_pickle('inversion_flowlines',
-                               div_id=np.argmax(lens)+1)[-1]
+        ofl = gdir.read_pickle('inversion_flowlines', div_id=1)[-1]
 
         self.assertTrue(gdir.rgi_date.year == 2003)
         self.assertTrue(len(fls) == 4)
@@ -256,20 +278,18 @@ class TestInitFlowline(unittest.TestCase):
                             len(fl.dis_on_line) ==
                             len(fl.widths))
 
-            self.assertTrue(np.all(fl.bed_shape >= 0))
             self.assertTrue(np.all(fl.widths >= 0))
             vol += fl.volume_km3
             area += fl.area_km2
 
             if refo == 1:
-                rmsd = utils.rmsd(ofl.widths * gdir.grid.dx,
-                                  fl.widths_m[0:len(ofl.widths)])
+                rmsd = utils.rmsd(ofl.widths[:-5] * gdir.grid.dx,
+                                  fl.widths_m[0:len(ofl.widths)-5])
                 self.assertTrue(rmsd < 5.)
 
-        np.testing.assert_allclose(0.573, vol, rtol=0.001)
+        rtol = 0.02
+        np.testing.assert_allclose(0.573, vol, rtol=rtol)
         np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
-
-        rtol = 0.01
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
 
         if do_plot:  # pragma: no cover
@@ -325,7 +345,7 @@ class TestOtherDivides(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_div')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_div')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         # self.clean_dir()
@@ -347,7 +367,8 @@ class TestOtherDivides(unittest.TestCase):
 
     def test_define_divides(self):
 
-        from oggm.core.preprocessing import gis, centerlines, geometry, climate, inversion
+        from oggm.core.preprocessing import (gis, centerlines, geometry,
+                                             climate, inversion)
         from oggm import GlacierDirectory
         import geopandas as gpd
 
@@ -355,24 +376,23 @@ class TestOtherDivides(unittest.TestCase):
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
 
         # This is another glacier with divides
-        for index, entity in rgidf.iterrows():
-            if '00719' not in entity.RGIId:
-                continue
-            gdir = GlacierDirectory(entity, base_dir=self.testdir)
-            gis.define_glacier_region(gdir, entity=entity)
-            gis.glacier_masks(gdir)
-            centerlines.compute_centerlines(gdir)
-            centerlines.compute_downstream_lines(gdir)
-            geometry.initialize_flowlines(gdir)
-            geometry.catchment_area(gdir)
-            geometry.catchment_width_geom(gdir)
-            geometry.catchment_width_correction(gdir)
-            climate.process_histalp_nonparallel([gdir])
-            climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
-                                             prcp_fac=2.5)
-            inversion.prepare_for_inversion(gdir)
-            v, ainv = inversion.invert_parabolic_bed(gdir)
-            flowline.init_present_time_glacier(gdir)
+        entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719'].iloc[0]
+        gdir = GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.compute_downstream_lines(gdir)
+        geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.process_histalp_nonparallel([gdir])
+        climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
+                                         prcp_fac=2.5)
+        inversion.prepare_for_inversion(gdir)
+        v, ainv = inversion.mass_conservation_inversion(gdir)
+        flowline.init_present_time_glacier(gdir)
 
         myarea = 0.
         for did in gdir.divide_ids:
@@ -414,13 +434,13 @@ class TestOtherDivides(unittest.TestCase):
                             len(fl.dis_on_line) ==
                             len(fl.widths))
 
-            self.assertTrue(np.all(fl.bed_shape >= 0))
             self.assertTrue(np.all(fl.widths >= 0))
             vol += fl.volume_km3
             area += fl.area_km2
 
-        rtol = 0.01
+        rtol = 0.03
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
+        np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
 
 
 class TestMassBalance(unittest.TestCase):
@@ -444,10 +464,7 @@ class TestMassBalance(unittest.TestCase):
         yrp = [1851, 2000]
 
         # Flowlines height
-        fls = gdir.read_pickle('model_flowlines')
-        h = np.array([])
-        for fl in fls:
-            h = np.append(h, fl.surface_h)
+        h, w = gdir.get_inversion_flowline_hw()
         _, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
                                                       year_range=yrp)
 
@@ -479,13 +496,7 @@ class TestMassBalance(unittest.TestCase):
                                        atol=1e-2)
 
         # real data
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
-        h = np.array([])
-        w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
-
+        h, w = gdir.get_inversion_flowline_hw()
         mbdf = gdir.get_ref_mb_data()
         mbdf.loc[yr, 'MY_MB'] = np.NaN
         mb_mod = massbalance.PastMassBalanceModel(gdir)
@@ -530,12 +541,10 @@ class TestMassBalance(unittest.TestCase):
         bias = df['bias'][0]
         prcp_fac = df['prcp_fac'][0]
 
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=0)
         h = np.array([])
         w = np.array([])
-        for fl in ofl:
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
+
+        h, w = gdir.get_inversion_flowline_hw()
 
         cmb_mod = massbalance.ConstantMassBalanceModel(gdir, bias=0)
         ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
@@ -599,11 +608,7 @@ class TestMassBalance(unittest.TestCase):
         ref_mod = massbalance.ConstantMassBalanceModel(gdir)
         mb_mod = massbalance.RandomMassBalanceModel(gdir, seed=10)
 
-        h = np.array([])
-        w = np.array([])
-        for fl in gdir.read_pickle('inversion_flowlines', div_id=0):
-            h = np.append(h, fl.surface_h)
-            w = np.append(w, fl.widths)
+        h, w = gdir.get_inversion_flowline_hw()
 
         ref_mbh = ref_mod.get_annual_mb(h, None) * SEC_IN_YEAR
 
@@ -662,9 +667,8 @@ class TestMassBalance(unittest.TestCase):
 
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
-        h = np.array([])
-        for fl in gdir.read_pickle('inversion_flowlines', div_id=0):
-            h = np.append(h, fl.surface_h)
+
+        h, w = gdir.get_inversion_flowline_hw()
 
         # Climate period, 10 day timestep
         yrs = np.arange(1850, 2003, 10/365)
@@ -689,17 +693,370 @@ class TestMassBalance(unittest.TestCase):
             unittest.skip('Allowed failure')
 
 
+class TestModelFlowlines(unittest.TestCase):
+
+    def test_rectangular(self):
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 100
+        widths = bed_h * 0. + 20
+        widths[:30] = 40
+        widths[-30:] = 10
+
+        rec = flowline.VerticalWallFlowline(line=line, dx=dx, map_dx=map_dx,
+                                            surface_h=surface_h, bed_h=bed_h,
+                                            widths=widths)
+        thick = surface_h - bed_h
+        widths_m = widths * map_dx
+        section = thick * widths_m
+        vol_m3 = thick * map_dx * widths_m
+        area_m2 = map_dx * widths_m
+        area_m2[thick == 0] = 0
+
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, vol_m3.sum())
+
+        # We set something and everything stays same
+        rec.thick = thick
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, vol_m3.sum())
+        rec.section = section
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, vol_m3.sum())
+
+        # More adventurous
+        rec.section = section / 2
+        assert_allclose(rec.thick, thick/2)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section/2)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, (vol_m3/2).sum())
+
+    def test_trapeze_mixed_rec(self):
+
+        # Special case of lambda = 0
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 80
+        widths = bed_h * 0. + 20
+        widths[:30] = 40
+        widths[-30:] = 10
+
+        lambdas = bed_h*0.
+        is_trap = np.ones(len(lambdas), dtype=np.bool)
+
+        # tests
+        thick = surface_h - bed_h
+        widths_m = widths * map_dx
+        section = thick * widths_m
+        vol_m3 = thick * map_dx * widths_m
+        area_m2 = map_dx * widths_m
+        area_m2[thick == 0] = 0
+
+        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
+                                           surface_h=surface_h, bed_h=bed_h,
+                                           widths=widths, lambdas=lambdas)
+
+        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                      surface_h=surface_h, bed_h=bed_h,
+                                      section=section, bed_shape=lambdas,
+                                      is_trapezoid=is_trap, lambdas=lambdas)
+
+        recs = [rec1, rec2]
+        for rec in recs:
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+            # We set something and everything stays same
+            rec.thick = thick
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.section = section
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+            # More adventurous
+            rec.section = section / 2
+            assert_allclose(rec.thick, thick/2)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section/2)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, (vol_m3/2).sum())
+
+    def test_trapeze_mixed_lambda1(self):
+
+        # Real lambdas
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 80
+        widths_0 = bed_h * 0. + 20
+        widths_0[:30] = 40
+        widths_0[-30:] = 10
+
+        lambdas = bed_h*0. + 1
+
+        # tests
+        thick = surface_h - bed_h
+        widths_m = widths_0 * map_dx + lambdas * thick
+        widths = widths_m / map_dx
+        section = thick * (widths_0 * map_dx + widths_m) / 2
+        vol_m3 = section * map_dx
+        area_m2 = map_dx * widths_m
+        area_m2[thick == 0] = 0
+
+        is_trap = np.ones(len(lambdas), dtype=np.bool)
+
+
+        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
+                                           surface_h=surface_h, bed_h=bed_h,
+                                           widths=widths, lambdas=lambdas)
+
+        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                      surface_h=surface_h, bed_h=bed_h,
+                                      section=section, bed_shape=lambdas,
+                                      is_trapezoid=is_trap, lambdas=lambdas)
+
+        recs = [rec1, rec2]
+        for rec in recs:
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+            # We set something and everything stays same
+            rec.thick = thick
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.section = section
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+    def test_parab_mixed(self):
+
+        # Real parabolas
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 80
+
+        shapes = bed_h*0. + 0.003
+        shapes[:30] = 0.002
+        shapes[-30:] = 0.004
+
+        # tests
+        thick = surface_h - bed_h
+        widths_m = np.sqrt(4 * thick / shapes)
+        widths = widths_m / map_dx
+        section = 2 / 3 * widths_m * thick
+        vol_m3 = section * map_dx
+        area_m2 = map_dx * widths_m
+        area_m2[thick == 0] = 0
+
+        is_trap = np.zeros(len(shapes), dtype=np.bool)
+
+
+        rec1 = flowline.ParabolicFlowline(line=line, dx=dx, map_dx=map_dx,
+                                          surface_h=surface_h, bed_h=bed_h,
+                                          bed_shape=shapes)
+
+        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                      surface_h=surface_h, bed_h=bed_h,
+                                      section=section, bed_shape=shapes,
+                                      is_trapezoid=is_trap, lambdas=shapes)
+
+        recs = [rec1, rec2]
+        for rec in recs:
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+            # We set something and everything stays same
+            rec.thick = thick
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.section = section
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+
+
+    def test_mixed(self):
+
+        # Set a section and see if it all matches
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 80
+        widths_0 = bed_h * 0. + 20
+        widths_0[:30] = 40
+        widths_0[-30:] = 10
+
+        lambdas = bed_h*0. + 1
+        lambdas[0:50] = 0
+
+        thick = surface_h - bed_h
+        widths_m = widths_0 * map_dx + lambdas * thick
+        widths = widths_m / map_dx
+        section_trap = thick * (widths_0 * map_dx + widths_m) / 2
+
+        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
+                                           surface_h=surface_h, bed_h=bed_h,
+                                           widths=widths, lambdas=lambdas)
+
+
+
+        shapes = bed_h*0. + 0.003
+        shapes[-30:] = 0.004
+
+        # tests
+        thick = surface_h - bed_h
+        widths_m = np.sqrt(4 * thick / shapes)
+        widths = widths_m / map_dx
+        section_para = 2 / 3 * widths_m * thick
+
+        rec2 = flowline.ParabolicFlowline(line=line, dx=dx, map_dx=map_dx,
+                                          surface_h=surface_h, bed_h=bed_h,
+                                          bed_shape=shapes)
+
+        is_trap = np.ones(len(shapes), dtype=np.bool)
+        is_trap[100:] = False
+
+        section = section_trap.copy()
+        section[~is_trap] = section_para[~is_trap]
+
+        rec = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                      surface_h=surface_h, bed_h=bed_h,
+                                      section=section, bed_shape=shapes,
+                                      is_trapezoid=is_trap, lambdas=lambdas)
+
+        thick = rec1.thick
+        thick[~is_trap] = rec2.thick[~is_trap]
+        assert_allclose(rec.thick, thick)
+
+        widths = rec1.widths
+        widths[~is_trap] = rec2.widths[~is_trap]
+        assert_allclose(rec.widths, widths)
+
+        widths_m = rec1.widths_m
+        widths_m[~is_trap] = rec2.widths_m[~is_trap]
+        assert_allclose(rec.widths_m, widths_m)
+
+        section = rec1.section
+        section[~is_trap] = rec2.section[~is_trap]
+        assert_allclose(rec.section, section)
+
+        # We set something and everything stays same
+        area_m2 = rec.area_m2
+        volume_m3 = rec.volume_m3
+        rec.thick = rec.thick
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2)
+        assert_allclose(rec.volume_m3, volume_m3)
+        rec.section = rec.section
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2)
+        assert_allclose(rec.volume_m3, volume_m3)
+
+
 class TestIO(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = os.path.join(current_dir, 'tmp_io')
+        self.test_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_io')
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
         self.gdir = init_hef(border=DOM_BORDER)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
-    @is_slow
     def test_flowline_to_dataset(self):
 
         beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
@@ -742,6 +1099,7 @@ class TestIO(unittest.TestCase):
                                         glen_a=self.glen_a)
         model.run_until(100)
 
+    @is_slow
     def test_run(self):
         mb = LinearMassBalanceModel(2600.)
 
@@ -821,14 +1179,14 @@ class TestIO(unittest.TestCase):
         for fl, fl_ in zip(fls, fls_):
             ds = fl.to_dataset()
             ds_ = fl_.to_dataset()
-            self.assertTrue(ds_.equals(ds))
+            for v in ds.variables.keys():
+                np.testing.assert_allclose(ds_[v], ds[v], equal_nan=True)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
 
         # mixed flowline
         fls = self.gdir.read_pickle('model_flowlines')
-        fls = flowline.convert_to_mixed_flowline(fls)
         model = flowline.FluxBasedModel(fls)
 
         p = os.path.join(self.test_dir, 'grp_hef_mix.nc')
@@ -847,7 +1205,7 @@ class TestIO(unittest.TestCase):
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
-            assertDatasetAllClose(ds, ds_)
+            xr.testing.assert_allclose(ds, ds_)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
@@ -932,6 +1290,124 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(volume[1], volume[2])<2e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2])<1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2])<1.0)
+
+    @is_slow
+    def test_mass_conservation(self):
+
+        mb = LinearMassBalanceModel(2600.)
+
+        fls = dummy_constant_bed()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        fls = dummy_noisy_bed()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        fls = dummy_width_bed_tributary()
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a)
+        model.run_until(200)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        # Calving!
+        fls = dummy_constant_bed(hmax=1000., hmin=0., nx=100)
+        mb = LinearMassBalanceModel(450.)
+        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                                 glen_a=self.glen_a,
+                                                 is_tidewater=True)
+        model.run_until(500)
+        tot_vol = model.volume_m3 + model.calving_m3_since_y0
+        assert_allclose(model.total_mass, tot_vol, rtol=1e-2)
+
+
+    @is_slow
+    def test_min_slope(self):
+        """ Check what is the min slope a flowline model can produce
+        """
+
+        models = [flowline.KarthausModel, flowline.FluxBasedModel,
+                  flowline.MUSCLSuperBeeModel]
+        fdts = [3*SEC_IN_DAY, None, None]
+        lens = []
+        surface_h = []
+        volume = []
+        min_slope = []
+        yrs = np.arange(1, 700, 2)
+        for model, fdt in zip(models, fdts):
+            fls = dummy_constant_bed_obstacle()
+            mb = LinearMassBalanceModel(2600.)
+
+            model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
+                          fixed_dt=fdt)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            slope = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                fl = fls[-1]
+                length[i] = fl.length_m
+                vol[i] = fl.volume_km3
+
+                hgt = np.where(fl.thick > 0, fl.surface_h, np.NaN)
+                sl = np.arctan(-np.gradient(hgt, fl.dx_meter))
+                slope[i] = np.rad2deg(np.nanmin(sl))
+
+            lens.append(length)
+            volume.append(vol)
+            min_slope.append(slope)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=3e-3)
+
+        self.assertTrue(utils.rmsd(volume[0], volume[2])<1e-2)
+        self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-2)
+
+        if do_plot:  # pragma: no cover
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.plot(yrs, lens[2], 'g')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.plot(yrs, volume[2], 'g')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'],loc=2)
+
+            plt.figure()
+            plt.plot(yrs, min_slope[0], 'r')
+            plt.plot(yrs, min_slope[1], 'b')
+            plt.plot(yrs, min_slope[2], 'g')
+            plt.title('Compare min slope')
+            plt.xlabel('years')
+            plt.ylabel('[degrees]')
+            plt.legend(['Karthaus','Flux','MUSCL-SuperBee'], loc=2)
+
+            plt.figure()
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.plot(surface_h[2], 'g')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed','Karthaus','Flux','MUSCL-SuperBee'],loc=3)
+            plt.show()
 
     @is_slow
     def test_constant_bed_cliff(self):
@@ -1077,9 +1553,9 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
         self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
+        self.assertTrue(utils.rmsd(volume[2], volume[1])<1e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
     @is_slow
     def test_bumpy_bed(self):
@@ -1314,7 +1790,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-2)
 
-        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=60)
+        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=70)
         np.testing.assert_allclose(utils.rmsd(volume[0], volume[1]), 0.,
                                    atol=6e-3)
         np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
@@ -1650,7 +2126,7 @@ class TestHEF(unittest.TestCase):
 
     def setUp(self):
 
-        self.gdir = init_hef(border=DOM_BORDER)
+        self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
@@ -1677,7 +2153,7 @@ class TestHEF(unittest.TestCase):
 
         np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
 
-        model.run_until(50.)
+        model.run_until(40.)
         self.assertFalse(model.dt_warning)
 
         after_vol = model.volume_km3
@@ -1686,7 +2162,7 @@ class TestHEF(unittest.TestCase):
 
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.03)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=300.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
     @is_slow
     def test_commitment(self):
@@ -1752,7 +2228,7 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=1)
+        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5)
         path = self.gdir.get_filepath('past_model')
 
         with flowline.FileModel(path) as model:
@@ -1760,9 +2236,8 @@ class TestHEF(unittest.TestCase):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            np.testing.assert_allclose(0.05, np.std(vol), atol=0.02)
+            np.testing.assert_allclose(0.07, np.std(vol), atol=0.02)
             np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
-
             if do_plot:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                 vol.plot(ax=ax1)

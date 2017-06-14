@@ -65,7 +65,7 @@ Testing:
     - pytest
 
 Other libraries:
-    - filelock
+    - boto3
     - `salem <https://github.com/fmaussion/salem>`_
     - `motionless <https://github.com/ryancox/motionless/>`_
 
@@ -157,13 +157,16 @@ No scientific python installation is complete without installing
 OGGM
 ~~~~
 
-You can install OGGM as a normal python package (in that case you will be able
-to use the model but not change its code)::
+**If you are using conda**, you can install OGGM as a normal python package
+(in that case you will be able to use the model but you cannot change its
+code)::
 
     conda install -c oggm -c conda-forge oggm
 
-We recommend to clone the git repository (or a fork if you want
-to participate to the development, see also :ref:`contributing`)::
+
+If you want to explore the code or participate to its
+development, we recommend to clone the git repository (or your own fork ,
+see also :ref:`contributing`)::
 
     git clone https://github.com/OGGM/oggm.git
 
@@ -171,7 +174,8 @@ Then go to the project root directory::
 
     cd oggm
 
-And install OGGM in development mode::
+And install OGGM in development mode (this is valid for **pip** or **conda**
+environments)::
 
     pip install -e .
 
@@ -180,9 +184,8 @@ And install OGGM in development mode::
 
     Installing OGGM in development mode means that subsequent changes to this
     code repository will be taken into account the next time you will
-    ``import oggm``. This means that you are going to
-    be able to update OGGM with a simple `git pull`_ from the head of the
-    cloned repository.
+    ``import oggm``. You can also update OGGM with a simple `git pull`_ from
+    the root of the cloned repository.
 
 .. _git pull: https://git-scm.com/docs/git-pull
 
@@ -195,7 +198,7 @@ expected. From the oggm directory, type::
 
     pytest .
 
-The tests can run for several minutes. If everything worked fine, you
+The tests can run for a couple of minutes. If everything worked fine, you
 should see something like::
 
     ==== test session starts ====
@@ -293,22 +296,27 @@ Install one by one the easy stuff::
 
    $ pip install numpy scipy pandas shapely matplotlib
 
-For **GDAL**, it's also not straight forward. First, check which version of
+For **GDAL**, it's not as straight forward. First, check which version of
 GDAL is installed::
 
-    $ dpkg -s libgdal-dev
+    $ dpkg -s libgdal-dev  | grep '^Version:'
 
-The version (10, 11, ...) should match that of the python package. Install
-using the system binaries::
+The major and minor package version (e.g. ``1.10``, ``1.11``, ...) should match
+that of the python package you want to install. For example, if the linux
+GDAL version is ``1.11.3``, install the latest corresponding python version
+(in this case, ``1.11.2``)::
 
-    $ pip install gdal==1.10.0 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+    $ pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+
+Fiona also builds upon GDAL, so let's compile it the same way::
+
     $ pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
 
 (Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html )
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray filelock progressbar2 pytest motionless
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless
 
 And the salem library::
 

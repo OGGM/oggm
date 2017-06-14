@@ -25,7 +25,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file
 from oggm import tasks
-from oggm.workflow import execute_entity_task
+from oggm.workflow import execute_entity_task, reset_multiprocessing
 from oggm import graphics, utils
 
 
@@ -33,13 +33,14 @@ from oggm import graphics, utils
 cfg.initialize()
 
 # Local paths (where to write output and where to download input)
-WORKING_DIR = ''
-DATA_DIR = ''
+WORKING_DIR = os.path.expanduser('~/OGGM_wd_bench')
+DATA_DIR = os.path.join(WORKING_DIR, 'datadir')
 
 cfg.PATHS['working_dir'] = WORKING_DIR
 cfg.PATHS['topo_dir'] = os.path.join(DATA_DIR, 'topo')
 cfg.PATHS['cru_dir'] = os.path.join(DATA_DIR, 'cru')
 cfg.PATHS['rgi_dir'] = os.path.join(DATA_DIR, 'rgi')
+cfg.PATHS['tmp_dir'] = os.path.join(DATA_DIR, 'tmp')
 
 # Currently OGGM wants some directories to exist
 # (maybe I'll change this but it can also catch errors in the user config)
@@ -47,15 +48,20 @@ utils.mkdir(cfg.PATHS['working_dir'])
 utils.mkdir(cfg.PATHS['topo_dir'])
 utils.mkdir(cfg.PATHS['cru_dir'])
 utils.mkdir(cfg.PATHS['rgi_dir'])
+utils.mkdir(cfg.PATHS['tmp_dir'])
 
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 cfg.CONTINUE_ON_ERROR = False
 
 # Read in the Benchmark RGI file
-rgi_pkl_path = os.path.join(DATA_DIR, 'rgi_benchmark.pkl')
-utils.aws_file_download('rgi_benchmark.pkl', rgi_pkl_path, reset=False)
+rgi_pkl_path = utils.aws_file_download('rgi_benchmark.pkl')
 rgidf = pd.read_pickle(rgi_pkl_path)
+
+# Remove glaciers causing issues
+rgidf = rgidf.iloc[[s not in ('RGI50-11.00291', 'RGI50-03.02479') for s in rgidf['RGIId']]]
+
+utils.get_rgi_dir()
 
 log.info('Number of glaciers: {}'.format(len(rgidf)))
 

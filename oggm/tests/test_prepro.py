@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division
 
+import oggm
 import warnings
 
 import oggm.utils
@@ -26,13 +27,13 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
+from oggm.core.models import flowline
+
+cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
     raise unittest.SkipTest('Skipping all prepro tests.')
-
-# Globals
-current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def read_svgcoords(svg_file):
@@ -62,7 +63,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -207,7 +208,7 @@ class TestCenterlines(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -278,9 +279,66 @@ class TestCenterlines(unittest.TestCase):
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.compute_downstream_lines(gdir)
+        geometry.initialize_flowlines(gdir)
 
-        fls = gdir.read_pickle('centerlines', div_id='major')
-        self.assertIs(fls[0].flows_to, fls[-1])
+        # We should have one group only
+        lines = gdir.read_pickle('downstream_lines', div_id=0)
+        self.assertTrue(np.all(lines.group.values == np.unique(lines.group)))
+
+    def test_downstream_bedshape(self):
+
+        # dummy test to see if it runs
+        # TODO: test!
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        default_b = cfg.PARAMS['border']
+        cfg.PARAMS['border'] = 80
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.compute_downstream_lines(gdir)
+        geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+
+        out = gdir.read_pickle('downstream_bed')
+        cls = gdir.read_pickle('inversion_flowlines')
+        assert len(out) == len(cls)
+
+        for c, o in zip(cls, out):
+            assert np.all(np.isfinite(o))
+
+        # Independant reproduction for a few points
+        i0s = [74, 80, 111]
+
+        for i0 in i0s:
+            wi = 11
+            cur = c.line.coords[i0]
+            n1, n2 = c.normals[i0]
+            l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                                 shpg.Point(cur + wi / 2. * n2)])
+            from oggm.core.preprocessing.geometry import line_interpol
+            from scipy.interpolate import RegularGridInterpolator
+            points = line_interpol(l, 0.5)
+            with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+                topo = nc.variables['topo_smoothed'][:]
+                x = nc.variables['x'][:]
+                y = nc.variables['y'][:]
+            xy = (np.arange(0, len(y) - 0.1, 1), np.arange(0, len(x) - 0.1, 1))
+            interpolator = RegularGridInterpolator(xy, topo)
+
+            zref = [interpolator((p.xy[1][0], p.xy[0][0])) for p in points]
+
+            myx = np.arange(len(points))
+            myx = (myx - np.argmin(zref)) / 2 * gdir.grid.dx
+            myz = o[i0] * myx**2 + np.min(zref)
+
+            # In this case the fit is simply very good (plot it if you want!)
+            assert utils.rmsd(zref, myz) < 20
+
+        cfg.PARAMS['border'] = default_b
 
     @is_slow
     def test_baltoro_centerlines(self):
@@ -361,7 +419,7 @@ class TestGeometry(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -501,16 +559,17 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_prepro')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(current_dir, 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -520,6 +579,7 @@ class TestClimate(unittest.TestCase):
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
+        shutil.rmtree(self.testdir_cru)
 
     def clean_dir(self):
         shutil.rmtree(self.testdir)
@@ -596,10 +656,10 @@ class TestClimate(unittest.TestCase):
         climate.process_histalp_nonparallel([gdirs[0]])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cru_dir = os.path.dirname(cru_dir)
-        cfg.PATHS['climate_file'] = '~'
+        cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
         climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = '~'
+        cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_pickle('climate_info')
@@ -1099,7 +1159,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mu_ref, df['mu_star'][0], atol=1e-3)
 
         # Check for apparent mb to be zeros
-        for i in [0] + list(gdir.divide_ids):
+        for i in list(gdir.divide_ids):
              fls = gdir.read_pickle('inversion_flowlines', div_id=i)
              tmb = 0.
              for fl in fls:
@@ -1111,7 +1171,7 @@ class TestClimate(unittest.TestCase):
 
         # ------ Look for gradient
         # which years to look at
-        fls = gdir.read_pickle('inversion_flowlines', div_id=0)
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
         mb_on_h = np.array([])
         h = np.array([])
         for fl in fls:
@@ -1138,13 +1198,14 @@ class TestInversion(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
@@ -1161,7 +1222,7 @@ class TestInversion(unittest.TestCase):
 
     def test_invert_hef(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1187,9 +1248,9 @@ class TestInversion(unittest.TestCase):
         # meanH = 67+-7
         # Volume = 0.573+-0.063
         # maxH = 242+-13
-        inversion.prepare_for_inversion(gdir)
-
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
+                for i in [1, 2, 3]]
         pid = np.argmax(lens) + 1
 
         # Check how many clips:
@@ -1209,7 +1270,6 @@ class TestInversion(unittest.TestCase):
             if cl['is_last']:
                 self.assertEqual(cl['flux'][-1], 0.)
 
-
         self.assertTrue(nabove == 0)
         self.assertTrue(np.rad2deg(maxs) < 40.)
 
@@ -1218,8 +1278,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1232,9 +1292,9 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] < 1.1)
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1247,12 +1307,127 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-            # This doesn't pass because of smoothing
-            # if fl.flows_to is None:
-            #     self.assertEqual(cl['volume'][-1], 0)
-            #     self.assertEqual(cl['thick'][-1], 0)
+            if fl.flows_to is None:
+                self.assertEqual(cl['volume'][-1], 0)
+                self.assertEqual(cl['thick'][-1], 0)
 
         np.testing.assert_allclose(242, maxs, atol=40)
+
+        # Filter
+        inversion.filter_inversion_output(gdir)
+        maxs = 0.
+        v = 0.
+        for div_id in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_output', div_id=div_id)
+            for cl in cls:
+                thick = cl['thick']
+                _max = np.max(thick)
+                if _max > maxs:
+                    maxs = _max
+                v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(ref_v, v)
+
+    def test_invert_hef_from_linear_mb(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+        geometry.catchment_area(gdir)
+        geometry.catchment_width_geom(gdir)
+        geometry.catchment_width_correction(gdir)
+        climate.apparent_mb_from_linear_mb(gdir)
+
+        # OK. Values from Fischer and Kuhn 2013
+        # Area: 8.55
+        # meanH = 67+-7
+        # Volume = 0.573+-0.063
+        # maxH = 242+-13
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
+                for i in [1, 2, 3]]
+        pid = np.argmax(lens) + 1
+
+        # Check how many clips:
+        cls = gdir.read_pickle('inversion_input', div_id=pid)
+        nabove = 0
+        maxs = 0.
+        npoints = 0.
+        for cl in cls:
+            # Clip slope to avoid negative and small slopes
+            slope = cl['slope_angle']
+            nm = np.where(slope <  np.deg2rad(2.))
+            nabove += len(nm[0])
+            npoints += len(slope)
+            _max = np.max(slope)
+            if _max > maxs:
+                maxs = _max
+            if cl['is_last']:
+                self.assertEqual(cl['flux'][-1], 0.)
+
+        self.assertTrue(nabove == 0)
+        self.assertTrue(np.rad2deg(maxs) < 40.)
+
+        ref_v = 0.573 * 1e9
+
+        def to_optimize(x):
+            glen_a = cfg.A * x[0]
+            fs = cfg.FS * x[1]
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
+            return (v - ref_v)**2
+
+        import scipy.optimize as optimization
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-4)['x']
+        self.assertTrue(out[0] > 0.1)
+        self.assertTrue(out[1] > 0.1)
+        self.assertTrue(out[0] < 1.1)
+        self.assertTrue(out[1] < 1.1)
+        glen_a = cfg.A * out[0]
+        fs = cfg.FS * out[1]
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
+        np.testing.assert_allclose(ref_v, v)
+
+        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
+        pid = np.argmax(lens) + 1
+        cls = gdir.read_pickle('inversion_output', div_id=pid)
+        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        maxs = 0.
+        for cl, fl in zip(cls, fls):
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+            if fl.flows_to is None:
+                self.assertEqual(cl['volume'][-1], 0)
+                self.assertEqual(cl['thick'][-1], 0)
+
+        np.testing.assert_allclose(242, maxs, atol=40)
+
+        # Filter
+        inversion.filter_inversion_output(gdir)
+        maxs = 0.
+        v = 0.
+        for div_id in gdir.divide_ids:
+            cls = gdir.read_pickle('inversion_output', div_id=div_id)
+            for cl in cls:
+                thick = cl['thick']
+                _max = np.max(thick)
+                if _max > maxs:
+                    maxs = _max
+                v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(ref_v, v)
+
 
     @is_slow
     def test_distribute(self):
@@ -1289,8 +1464,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = cfg.FS * x[1]
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
         import scipy.optimize as optimization
         out = optimization.minimize(to_optimize, [1, 1],
@@ -1298,9 +1473,9 @@ class TestInversion(unittest.TestCase):
                                     tol=1e-1)['x']
         glen_a = cfg.A * out[0]
         fs = cfg.FS * out[1]
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         inversion.distribute_thickness(gdir, how='per_altitude',
@@ -1355,8 +1530,8 @@ class TestInversion(unittest.TestCase):
         def to_optimize(x):
             glen_a = cfg.A * x[0]
             fs = 0.
-            v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                                  glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1369,9 +1544,9 @@ class TestInversion(unittest.TestCase):
 
         glen_a = cfg.A * out[0]
         fs = 0.
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
         np.testing.assert_allclose(ref_v, v)
 
         lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
@@ -1384,7 +1559,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1402,11 +1577,11 @@ class TestInversion(unittest.TestCase):
         climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
                                          prcp_fac=prcp_fac)
         inversion.prepare_for_inversion(gdir)
-        v, _ = inversion.invert_parabolic_bed(gdir, fs=fs,
-                                              glen_a=glen_a,
-                                              write=True)
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
 
-        np.testing.assert_allclose(ref_v, v, rtol=0.02)
+        np.testing.assert_allclose(v, ref_v, rtol=0.06)
         cls = gdir.read_pickle('inversion_output', div_id=pid)
         maxs = 0.
         for cl in cls:
@@ -1415,11 +1590,12 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=31)
 
     def test_continue_on_error(self):
 
         cfg.CONTINUE_ON_ERROR = True
+        cfg.PATHS['working_dir'] = self.testdir
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
@@ -1442,7 +1618,8 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
 
-        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fake')
+        rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
+                            'RGI50-11.fake')
         self.assertTrue(os.path.exists(rdir))
 
         rdir = os.path.join(rdir, 'log')
@@ -1459,12 +1636,66 @@ class TestInversion(unittest.TestCase):
         self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
 
 
+class TestSlopeMitigation(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        utils.mkdir(self.testdir)
+
+    def test_nodivides_correct_slope(self):
+
+        # Init
+        cfg.initialize()
+        cfg.set_divides_db()
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        geometry.initialize_flowlines(gdir)
+
+        self.assertEqual(gdir.n_divides, 1)
+
+        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+        for fl in fls:
+            dx = fl.dx * gdir.grid.dx
+            slope = np.arctan(-np.gradient(fl.surface_h, dx))
+            self.assertTrue(np.all(slope >= min_slope))
+
+
 class TestGrindelInvert(unittest.TestCase):
 
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_grindel')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_grindel')
         self.clean_dir()
 
         # Init
@@ -1489,11 +1720,10 @@ class TestGrindelInvert(unittest.TestCase):
         self.rgin = os.path.basename(gpath)
         gpath = os.path.dirname(gpath)
         assert self.rgin == 'RGI50-11.01270'
-        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11'))
+        shutil.copytree(gpath, os.path.join(self.testdir, 'RGI50-11',
+                                            'RGI50-11.01'))
 
     def _parabolic_bed(self):
-
-        from oggm.core.models import flowline
 
         map_dx = 100.
         dx = 1.
@@ -1541,17 +1771,19 @@ class TestGrindelInvert(unittest.TestCase):
             widths = widths[pok]
             hgt = hgt[pok]
             flux = flux[pok]
+            flux_a0 = 1.5 * flux / widths
             angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
             # Clip flux to 0
             assert not np.any(flux < -0.1)
             # add to output
-            cl_dic = dict(dx=dx, flux=flux, width=widths, hgt=hgt,
-                          slope_angle=angle, is_last=True)
+            cl_dic = dict(dx=dx, flux=flux, flux_a0=flux_a0, width=widths,
+                          hgt=hgt, slope_angle=angle, is_last=True,
+                          is_rectangular=np.zeros(len(flux), dtype=bool))
             towrite.append(cl_dic)
 
         # Write out
         gdir.write_pickle(towrite, 'inversion_input', div_id=1)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         v_km3 = v * 1e-9
         a_km2 = np.sum(widths * dx) * 1e-6
         v_vas = 0.034*(a_km2**1.375)
@@ -1573,20 +1805,23 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.compute_downstream_lines(gdir)
         geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
         inversion.prepare_for_inversion(gdir)
-        v, a = inversion.invert_parabolic_bed(gdir, glen_a=glen_a)
-        cfg.PARAMS['bed_shape'] = 'parabolic'
+        v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
+        inversion.filter_inversion_output(gdir)
         flowline.init_present_time_glacier(gdir)
         mb_mod = massbalance.ConstantMassBalanceModel(gdir)
         fls = gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=0, glen_a=glen_a)
+
         ref_vol = model.volume_m3
-        model.run_until_equilibrium()
+        np.testing.assert_allclose(v, ref_vol, rtol=0.01)
+        model.run_until(10)
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
@@ -1621,7 +1856,7 @@ class TestCatching(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(current_dir, 'tmp_errors')
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1629,7 +1864,7 @@ class TestCatching(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = current_dir
+        cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
     def tearDown(self):
         self.rm_dir()

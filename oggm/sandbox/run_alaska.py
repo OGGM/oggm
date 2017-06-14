@@ -91,6 +91,7 @@ rgidf = salem.read_shapefile(RGI_FILE, cached=True)
 # TODO: we must sort.() glaciers from large to small when we run in cluster
 # Get ref glaciers (all glaciers with MB)
 flink, mbdatadir = utils.get_wgms_files()
+
 ids_with_mb = pd.read_csv(flink)['RGI50_ID'].values
 
 if RUN_inPC:
@@ -153,6 +154,7 @@ _ = utils.get_cru_file(var='tmp')
 
 # Go - initialize working directories
 #gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True) CAREFUL HERE!
+
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Pre-pro tasks
@@ -215,6 +217,7 @@ if No_calving:
 # Plotting things before the calving for all glaciers
 # PLOTS_DIR = '/home/beatriz/Documents/OGGM_Alaska_run/plots/'
 # PLOTS_DIR = ''
+
 # if PLOTS_DIR == '':
 #    exit()
 # utils.mkdir(PLOTS_DIR)
@@ -337,6 +340,7 @@ if With_calving:
             forwrite = []
 
             # Our first guess of calving is that of a water depth of 1m
+
             # We read the model output, of the last pixel of the inversion
             cl = gdir.read_pickle('inversion_output', div_id=1)[-1]
 
@@ -344,6 +348,7 @@ if With_calving:
             t_altitude = cl['hgt'][-1]
             thick = t_altitude + 1
             w_depth = thick - t_altitude
+
             # print('t_altitude',t_altitude)
             # print('depth',w_depth)
             # print('thick',thick)
@@ -377,6 +382,7 @@ if With_calving:
 
             while i < 50:
                 # First calculates a calving flux from model output
+
                 F_calving, new_depth, new_thick, t_width = calving_from_depth(gdir)
 
                 # Stores the data, and we see it
@@ -430,6 +436,7 @@ if With_calving:
             # we see the final calculated calving flux
             last_calving = all_calving_data[-1]
             last_width = all_data_width
+
             print('For the glacier', gdir.rgi_id)
             print('last calving value is:', last_calving)
 
