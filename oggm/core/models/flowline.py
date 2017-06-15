@@ -798,10 +798,7 @@ class FluxBasedModel(FlowlineModel):
                 dt = _dt
 
         # Time step
-        if dt < min_dt:
-            if not self.dt_warning:
-                log.warning('Reached min dt')
-            self.dt_warning = True
+        self.dt_warning = dt < min_dt
         dt = np.clip(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
@@ -1566,6 +1563,9 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
         try:
             model.run_until_and_store(ye, path=path)
         except RuntimeError:
+            if step == 'ultra-conservative':
+                raise RuntimeError('%s: we did our best, the model is still '
+                                   'unstable.', gdir.rgi_id)
             continue
         # If we get here we good
         log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
