@@ -314,10 +314,7 @@ class TestWorkflow(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(length) & length != 0.))
 
         # Test output
-        utils.compile_run_output(gdirs, filesuffix='_test')
-        path = os.path.join(cfg.PATHS['working_dir'],
-                            'run_output_test.nc')
-        ds = xr.open_dataset(path)
+        ds = utils.compile_run_output(gdirs, filesuffix='_test')
         assert_allclose(vol, ds.volume.sel(rgi_id=gd.rgi_id) * 1e-9)
         assert_allclose(area, ds.area.sel(rgi_id=gd.rgi_id) * 1e-6)
         assert_allclose(length, ds.length.sel(rgi_id=gd.rgi_id))

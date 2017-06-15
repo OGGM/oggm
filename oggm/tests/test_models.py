@@ -2269,8 +2269,8 @@ class TestHEF(unittest.TestCase):
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.1)
         assert_allclose(out[0].volume, out[2].volume, rtol=0.1)
-        # Last two should be much closer
-        assert_allclose(out[1].volume, out[2].volume, rtol=0.01)
+        # Last two should be closer
+        assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
 
         if do_plot:
             plt.figure()
