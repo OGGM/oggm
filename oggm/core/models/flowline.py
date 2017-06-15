@@ -29,7 +29,7 @@ from oggm import entity_task
 from oggm.core.preprocessing.centerlines import Centerline
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
 from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
@@ -552,7 +552,7 @@ class FlowlineModel(object):
         """Returns False if the glacier reaches the domains bound."""
         return np.isclose(self.fls[-1].thick[-1], 0)
 
-    def step(self, dt=None):
+    def step(self, dt):
         """Advance one step."""
         raise NotImplementedError
 
@@ -560,7 +560,7 @@ class FlowlineModel(object):
 
         t = (y1-self.y0) * SEC_IN_YEAR
         while self.t < t:
-            self.step(dt=t-self.t)
+            self.step(t-self.t)
 
         # Check for domain bounds
         if self.fls[-1].thick[-1] > 10:
@@ -642,150 +642,14 @@ class FlowlineModel(object):
             raise RuntimeError('Did not find equilibrium.')
 
 
-class FluxBasedModelDeprecated(FlowlineModel):
-    """The actual model"""
-
-    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=31*SEC_IN_DAY, inplace=True):
-
-        """ Instanciate.
-
-        Parameters
-        ----------
-
-        Properties
-        ----------
-        #TODO: document properties
-        """
-        super(FluxBasedModelDeprecated, self).__init__(flowlines,
-                                                       mb_model=mb_model,
-                                                       y0=y0, glen_a=glen_a,
-                                                       fs=fs,
-                                                       inplace=inplace)
-        self.dt_warning = False
-        if fixed_dt is not None:
-            min_dt = fixed_dt
-            max_dt = fixed_dt
-        self.min_dt = min_dt
-        self.max_dt = max_dt
-
-    def step(self, dt=31*SEC_IN_DAY):
-        """Advance one step."""
-
-        # This is to guarantee a precise arrival on a specific date if asked
-        min_dt = dt if dt < self.min_dt else self.min_dt
-
-        # Loop over tributaries to determine the flux rate
-        flxs = []
-        aflxs = []
-        for fl, trib in zip(self.fls, self._trib):
-
-            surface_h = fl.surface_h
-            thick = fl.thick
-            section = fl.section
-            nx = fl.nx
-
-            # If it is a tributary, we use the branch it flows into to compute
-            # the slope of the last grid points
-            is_trib = trib[0] is not None
-            if is_trib:
-                fl_to = self.fls[trib[0]]
-                ide = fl.flows_to_indice
-                surface_h = np.append(surface_h, fl_to.surface_h[ide])
-                thick = np.append(thick, thick[-1])
-                section = np.append(section, section[-1])
-                nx = nx + 1
-
-            dx = fl.dx_meter
-
-            # Staggered gradient
-            slope_stag = np.zeros(nx+1)
-            slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
-            slope_stag[-1] = slope_stag[-2]
-
-            # Convert to angle?
-            # slope_stag = np.sin(np.arctan(slope_stag))
-
-            # Staggered thick
-            thick_stag = np.zeros(nx+1)
-            thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
-            thick_stag[[0, -1]] = thick[[0, -1]]
-
-            # Staggered velocity (Deformation + Sliding)
-            # _fd = 2/(N+2) * self.glen_a
-            rhogh = (RHO*G*slope_stag)**N
-            u_stag = (thick_stag**(N+1)) * self._fd * rhogh + \
-                     (thick_stag**(N-1)) * self.fs * rhogh
-
-            # Staggered section
-            section_stag = np.zeros(nx+1)
-            section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
-            section_stag[[0, -1]] = section[[0, -1]]
-
-            # Staggered flux rate
-            flx_stag = u_stag * section_stag / dx
-
-            # Store the results
-            if is_trib:
-                flxs.append(flx_stag[:-1])
-                aflxs.append(np.zeros(nx-1))
-                u_stag = u_stag[:-1]
-            else:
-                flxs.append(flx_stag)
-                aflxs.append(np.zeros(nx))
-
-            # Time crit: limit the velocity somehow
-            maxu = np.max(np.abs(u_stag))
-            if maxu > 0.:
-                _dt = 1./60. * dx / maxu
-            else:
-                _dt = self.max_dt
-            if _dt < dt:
-                dt = _dt
-
-        # Time step
-        if dt < min_dt:
-            if not self.dt_warning:
-                log.warning('Unstable')
-            self.dt_warning = True
-        dt = np.clip(dt, min_dt, self.max_dt)
-
-        # A second loop for the mass exchange
-        for fl, flx_stag, aflx, trib in zip(self.fls, flxs, aflxs,
-                                                 self._trib):
-
-            # Mass balance
-            widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
-            # Allow parabolic beds to grow
-            widths = np.where((mb > 0.) & (widths == 0), 10., widths)
-            mb = dt * mb * widths
-
-            # Update section with flowing and mass balance
-            new_section = fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt + \
-                          aflx*dt + mb
-
-            # Keep positive values only and store
-            fl.section = new_section.clip(0)
-
-            # Add the last flux to the tributary
-            # this is ok because the lines are sorted in order
-            if trib[0] is not None:
-                aflxs[trib[0]][trib[1]:trib[2]] += flx_stag[-1].clip(0) * \
-                                                   trib[3]
-
-        # Next step
-        self.t += dt
-
-
 class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., fixed_dt=None, cfl_number=1./100,
+                 fs=0., inplace=True, fixed_dt=None, cfl_number=1./100,
                  min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
-                 inplace=True, **kwargs):
+                 time_stepping='user',
+                 **kwargs):
         """ Instanciate.
 
         Parameters
@@ -799,6 +663,31 @@ class FluxBasedModel(FlowlineModel):
                                              y0=y0, glen_a=glen_a, fs=fs,
                                              inplace=inplace,
                                              **kwargs)
+
+        if time_stepping == 'ultra-ambitious':
+            cfl_number = 1/20
+            min_dt = 4*SEC_IN_DAY
+            max_dt = 31*SEC_IN_DAY
+        elif time_stepping == 'ambitious':
+            cfl_number = 1/60
+            min_dt = 2*SEC_IN_DAY
+            max_dt = 31*SEC_IN_DAY
+        elif time_stepping == 'default':
+            cfl_number = 1/100
+            min_dt = 1*SEC_IN_DAY
+            max_dt = 31*SEC_IN_DAY
+        elif time_stepping == 'conservative':
+            cfl_number = 1/140
+            min_dt = 6*SEC_IN_HOUR
+            max_dt = 10*SEC_IN_DAY
+        elif time_stepping == 'ultra-conservative':
+            cfl_number = 1/180
+            min_dt = 1*SEC_IN_HOUR
+            max_dt = 5*SEC_IN_DAY
+        else:
+            if time_stepping != 'user':
+                raise ValueError('time_stepping not understood.')
+
         self.dt_warning = False
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -823,7 +712,7 @@ class FluxBasedModel(FlowlineModel):
             e = np.zeros(nx)
             self._stags.append((a, b, c, d, e))
 
-    def step(self, dt=31*SEC_IN_DAY):
+    def step(self, dt):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -968,7 +857,7 @@ class MassConservationChecker(FluxBasedModel):
         super(MassConservationChecker, self).__init__(flowlines, **kwargs)
         self.total_mass = 0.
 
-    def step(self, **kwargs):
+    def step(self, dt):
 
         mbs = []
         sections = []
@@ -980,12 +869,12 @@ class MassConservationChecker(FluxBasedModel):
             sections.append(np.copy(fl.section))
             dx = fl.dx_meter
 
-        dt = super(MassConservationChecker, self).step(**kwargs)
+        dt = super(MassConservationChecker, self).step(dt)
 
         for mb, sec in zip(mbs, sections):
             mb = dt * mb
             # there can't be more negative mb than there is section
-            # this isn't an exact solution unforunatly
+            # this isn't an exact solution unfortunately
             # TODO: exact solution for mass conservation
             mb = mb.clip(-sec)
             self.total_mass += np.sum(mb * dx)
@@ -1022,7 +911,7 @@ class KarthausModel(FlowlineModel):
         self.min_dt = min_dt
         self.max_dt = max_dt
 
-    def step(self, dt=31*SEC_IN_DAY):
+    def step(self, dt):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -1074,6 +963,7 @@ class KarthausModel(FlowlineModel):
         # Next step
         self.t += dt
 
+
 class MUSCLSuperBeeModel(FlowlineModel):
     """This model is based on Jarosch et al. 2013 (doi:10.5194/tc-7-229-2013)
 
@@ -1117,7 +1007,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         
         return val_phi
 
-    def step(self, dt=31*SEC_IN_DAY):
+    def step(self, dt):
         """Advance one step."""
 
         # This is to guarantee a precise arrival on a specific date if asked
@@ -1660,15 +1550,26 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
     ys = 1
     ye = ys + nyears
     mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
-    fls = gdir.read_pickle('model_flowlines')
-    if zero_inititial_glacier:
-        for fl in fls:
-            fl.thick = fl.thick * 0.
-    model = FluxBasedModel(fls, mb_model=mb, y0=ys, **kwargs)
 
     # run
     path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
-    model.run_until_and_store(ye, path=path)
+
+    steps = ['ambitious', 'default', 'conservative', 'ultra-conservative']
+    for step in steps:
+        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
+        fls = gdir.read_pickle('model_flowlines')
+        if zero_inititial_glacier:
+            for fl in fls:
+                fl.thick = fl.thick * 0.
+        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
+                               **kwargs)
+        try:
+            model.run_until_and_store(ye, path=path)
+        except RuntimeError:
+            continue
+        # If we get here we good
+        log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
+        break
 
 
 @entity_task(log, writes=['past_model'])
