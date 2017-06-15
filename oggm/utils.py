@@ -1533,7 +1533,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
-def compile_run_output(gdirs, filesuffix=''):
+def compile_run_output(gdirs, path=None, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
 
@@ -1547,11 +1547,21 @@ def compile_run_output(gdirs, filesuffix=''):
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
-    path = gdirs[0].get_filepath('past_model', filesuffix=filesuffix)
-    with flowline.FileModel(path) as model:
-        ts = model.volume_km3_ts()
-    time = ts.index
-    year, month = year_to_date(time)
+
+    # The first gdir might have blown up, try some others
+    i = 0
+    while True:
+        if i >= len(gdirs):
+            raise RuntimeError('Found no valid glaciers!')
+        try:
+            ppath = gdirs[i].get_filepath('past_model', filesuffix=filesuffix)
+            with flowline.FileModel(ppath) as model:
+                ts = model.volume_km3_ts()
+            time = ts.index
+            year, month = year_to_date(time)
+            break
+        except:
+            i += 1
 
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
@@ -1564,8 +1574,8 @@ def compile_run_output(gdirs, filesuffix=''):
     length = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
-            path = gdir.get_filepath('past_model', filesuffix=filesuffix)
-            with flowline.FileModel(path) as model:
+            ppath = gdir.get_filepath('past_model', filesuffix=filesuffix)
+            with flowline.FileModel(ppath) as model:
                 vol[:, i] = model.volume_m3_ts().values
                 area[:, i] = model.area_m2_ts().values
                 length[:, i] = model.length_m_ts().values
@@ -1584,12 +1594,17 @@ def compile_run_output(gdirs, filesuffix=''):
     ds['length'].attrs['units'] = 'm'
     ds['length'].attrs['description'] = 'Glacier length'
 
-    path = os.path.join(cfg.PATHS['working_dir'],
-                        'run_output' + filesuffix + '.nc')
-    ds.to_netcdf(path)
+    if path:
+        if path is True:
+            path = os.path.join(cfg.PATHS['working_dir'],
+                                'run_output' + filesuffix + '.nc')
+        ds.to_netcdf(path)
+    return ds
 
 
-def glacier_characteristics(gdirs, to_csv=True):
+
+
+def glacier_characteristics(gdirs, filesuffix='', path=True):
     """Gathers as many statistics as possible about a list of glacier
     directories.
 
@@ -1600,9 +1615,11 @@ def glacier_characteristics(gdirs, to_csv=True):
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
-    to_csv:
+    filesuffix : str
+        add suffix to output file
+    path:
         Set to "True" in order  to store the info in the working directory
-        Set to a basename to rename the file to your choice
+        Set to a path to store the file to your chosen location
     """
 
     out_df = []
@@ -1721,12 +1738,12 @@ def glacier_characteristics(gdirs, to_csv=True):
 
     cols = list(out_df[0].keys())
     out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
-    if to_csv:
-        if to_csv == True:
+    if path:
+        if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                       'glacier_characteristics.csv'))
+                       'glacier_characteristics'+filesuffix+'.csv'))
         else:
-            out.to_csv(os.path.join(cfg.PATHS['working_dir'], to_csv))
+            out.to_csv(path)
     return out
 
 

@@ -488,7 +488,13 @@ def define_glacier_region(gdir, entity=None):
         def proj(lon, lat):
             return salem.transform_proj(salem.wgs84, gdir.grid.proj,
                                         lon, lat)
-        divlist = np.asarray([shapely.ops.transform(proj, g) for g in divlist])
+        divlist = [shapely.ops.transform(proj, g) for g in divlist]
+
+        # Keep only the ones large enough
+        log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divlist))
+        divlist = [g for g in divlist if (g.area >= (25 * dx ** 2))]
+        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divlist))
+        divlist = np.asarray(divlist)
 
         # Sort them by area
         divlist = divlist[np.argsort([g.area for g in divlist])[::-1]]

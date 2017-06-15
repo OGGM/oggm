@@ -1558,6 +1558,41 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
     @is_slow
+    def test_timestepping(self):
+
+        steps = ['ultra-ambitious',
+                 'ambitious',
+                 'default',
+                 'conservative',
+                 'ultra-conservative'][::-1]
+        lens = []
+        surface_h = []
+        volume = []
+        yrs = np.arange(1, 400, 2)
+        for step in steps:
+            fls = dummy_constant_bed()
+            mb = LinearMassBalanceModel(2600.)
+
+            model = flowline.FluxBasedModel(fls, mb_model=mb,
+                                            glen_a=self.glen_a,
+                                            time_stepping=step)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                length[i] = fls[-1].length_m
+                vol[i] = fls[-1].volume_km3
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[3][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[4][-1], atol=1e-1)
+
+    @is_slow
     def test_bumpy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -1980,53 +2015,6 @@ class TestIdealisedCases(unittest.TestCase):
             plt.legend()
             plt.show()
 
-    @is_slow
-    def test_optim(self):
-
-        models = [flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
-                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
-                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
-                  flowline.FluxBasedModelDeprecated, flowline.FluxBasedModel,
-                  ]
-        lens = []
-        surface_h = []
-        volume = []
-        runtime = []
-        yrs = np.arange(1, 200, 5)
-        for model in models:
-            fls = dummy_width_bed_tributary()
-            mb = LinearMassBalanceModel(2600.)
-
-            model = model(fls, mb_model=mb, glen_a=self.glen_a,
-                          min_dt=5*SEC_IN_DAY)
-
-            length = yrs * 0.
-            vol = yrs * 0.
-            start_time = time.time()
-            for i, y in enumerate(yrs):
-                model.run_until(y)
-                length[i] = fls[-1].length_m
-                vol[i] = model.volume_km3
-            runtime.append(time.time() - start_time)
-            lens.append(length)
-            volume.append(vol)
-            surface_h.append(fls[-1].surface_h.copy())
-
-        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
-        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
-
-        self.assertTrue(utils.rmsd(lens[0], lens[1])<50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1])<1e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-
-        t1 = np.mean(runtime[::2])
-        t2 = np.mean(runtime[1::2])
-        try:
-            assert t2 <= t1
-        except AssertionError:
-            # no big deal
-            unittest.skip('Allowed failure')
-
 
 class TestBackwardsIdealized(unittest.TestCase):
 
@@ -2179,7 +2167,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -2203,7 +2191,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -2248,6 +2236,43 @@ class TestHEF(unittest.TestCase):
                 ax3.set_title('Length')
                 plt.tight_layout()
                 plt.show()
+
+    @is_slow
+    def test_elevation_feedback(self):
+
+        flowline.init_present_time_glacier(self.gdir)
+
+        feedbacks = ['annual', 'monthly', 'always']
+        times = []
+        out = []
+        for feedback in feedbacks:
+            start_time = time.time()
+            flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
+                                              cfl_number=1./30,
+                                              mb_elev_feedback=feedback)
+            end_time = time.time()
+            times.append(end_time - start_time)
+            out.append(utils.compile_run_output([self.gdir]))
+
+        # Check that volume isn't so different
+        assert_allclose(out[0].volume, out[1].volume, rtol=0.1)
+        assert_allclose(out[0].volume, out[2].volume, rtol=0.1)
+        # Last two should be closer
+        assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
+
+        if do_plot:
+            plt.figure()
+            for ds, lab in zip(out, feedbacks):
+                (ds.volume*1e-9).plot(label=lab)
+            plt.xlabel('Vol (km3)')
+            plt.legend()
+            plt.figure()
+            for ds, lab in zip(out, feedbacks):
+                mm = ds.volume.groupby(ds.month).mean(dim='time')
+                (mm*1e-9).plot(label=lab)
+            plt.xlabel('Vol (km3)')
+            plt.legend()
+            plt.show()
 
     @is_slow
     def test_find_t0(self):
