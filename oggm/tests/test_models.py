@@ -2179,7 +2179,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -2203,7 +2203,7 @@ class TestHEF(unittest.TestCase):
         ref_vol = model.volume_km3
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
-        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.01)
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         self.assertTrue(model.yr > 100)
@@ -2248,6 +2248,43 @@ class TestHEF(unittest.TestCase):
                 ax3.set_title('Length')
                 plt.tight_layout()
                 plt.show()
+
+    @is_slow
+    def test_elevation_feedback(self):
+
+        flowline.init_present_time_glacier(self.gdir)
+
+        feedbacks = ['annual', 'monthly', 'always']
+        times = []
+        out = []
+        for feedback in feedbacks:
+            start_time = time.time()
+            flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
+                                              cfl_number=1./30,
+                                              mb_elev_feedback=feedback)
+            end_time = time.time()
+            times.append(end_time - start_time)
+            out.append(utils.compile_run_output([self.gdir]))
+
+        # Check that volume isn't so different
+        assert_allclose(out[0].volume, out[1].volume, rtol=0.1)
+        assert_allclose(out[0].volume, out[2].volume, rtol=0.1)
+        # Last two should be much closer
+        assert_allclose(out[1].volume, out[2].volume, rtol=0.01)
+
+        if do_plot:
+            plt.figure()
+            for ds, lab in zip(out, feedbacks):
+                (ds.volume*1e-9).plot(label=lab)
+            plt.xlabel('Vol (km3)')
+            plt.legend()
+            plt.figure()
+            for ds, lab in zip(out, feedbacks):
+                mm = ds.volume.groupby(ds.month).mean(dim='time')
+                (mm*1e-9).plot(label=lab)
+            plt.xlabel('Vol (km3)')
+            plt.legend()
+            plt.show()
 
     @is_slow
     def test_find_t0(self):

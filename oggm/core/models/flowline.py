@@ -376,40 +376,57 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                       fs=0., fd=None, inplace=True, is_tidewater=False):
-        """ Instanciate.
+                 fs=0., inplace=True, is_tidewater=False,
+                 mb_elev_feedback='annual'):
+        """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
+        flowlines : list
+            a list of Flowlines instances, sorted by order
+        mb_model : MassBalanceModel
+            the MB model to use
+        y0 : int
+            the starting year of the simultation
+        glen_a : float
+            glen's parameter A
+        fs: float
+            sliding parameter
+        inplace : bool
+            whether or not to make a copy of the flowline objects for the run
+            setting to True (the default) implies that your objects will
+            be modified at run time by the model
+        is_tidewater : bool
+            this changes how the last grid points of the domain are handled
+        mb_elev_feedback : str
+            'always', 'annual', or 'monthly': how often the mass-balance should
+            be recomputed from the mass balance model.
         """
 
-        if not inplace:
-            flowlines = copy.deepcopy(flowlines)
-
-        try:
-            _ = len(flowlines)
-        except TypeError:
-            flowlines = [flowlines]
-
-        self.mb = mb_model
-        self.fs = fs
         self.is_tidewater = is_tidewater
 
-        # for backwards compatibility I calculate fd from glen_a and
-        # throw a Deprecation warning
-        if fd is not None and glen_a is None:
-            self.fd_deprecated = fd
-            glen_a = (N+2) * fd / 2.
-            warnings.warn(DeprecationWarning('the use of fd is deprecated'))
+        # Mass balance
+        self.mb_model = mb_model
+        self.mb_elev_feedback = mb_elev_feedback
+        _mb_call = None
+        if mb_model:
+            if mb_elev_feedback == 'always':
+                _mb_call = mb_model.get_monthly_mb
+            elif mb_elev_feedback == 'monthly':
+                _mb_call = mb_model.get_monthly_mb
+            elif mb_elev_feedback == 'annual':
+                _mb_call = mb_model.get_annual_mb
+            else:
+                raise ValueError('mb_elev_feedback not understood')
+        self._mb_call = _mb_call
+        self._mb_current_date = None
+        self._mb_current_out = dict()
 
         # Defaults
         if glen_a is None:
             glen_a = cfg.A
         self.glen_a = glen_a
+        self.fs = fs
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (N+2) * self.glen_a
@@ -418,6 +435,12 @@ class FlowlineModel(object):
         self.t = None
         self.reset_y0(y0)
 
+        if not inplace:
+            flowlines = copy.deepcopy(flowlines)
+        try:
+            _ = len(flowlines)
+        except TypeError:
+            flowlines = [flowlines]
         self.fls = None
         self._trib = None
         self.reset_flowlines(flowlines)
@@ -431,6 +454,7 @@ class FlowlineModel(object):
         """Reset the initial model flowlines"""
 
         self.fls = flowlines
+
         # list of tributary coordinates and stuff
         trib_ind = []
         for fl in self.fls:
@@ -477,6 +501,37 @@ class FlowlineModel(object):
     @property
     def length_m(self):
         return self.fls[-1].length_m
+
+    def get_mb(self, heights, year=None, fl_id=None):
+        """Get the mass balance at the requested height and time.
+
+        Optimized so that no mb model call is necessary at each step.
+        """
+
+        # Do we have to optimise?
+        if self.mb_elev_feedback == 'always':
+            return self._mb_call(heights, year)
+
+        # Ok, user asked for it
+        if fl_id is None:
+            raise ValueError('Need fls_id')
+
+        date = utils.year_to_date(year)
+        if self.mb_elev_feedback == 'annual':
+            # ignore month changes
+            date = (date[0], date[0])
+
+        if self._mb_current_date == date:
+            if fl_id not in self._mb_current_out:
+                # We need to reset just this tributary
+                self._mb_current_out[fl_id] = self._mb_call(heights, year)
+        else:
+            # We need to reset all
+            self._mb_current_date = date
+            self._mb_current_out = dict()
+            self._mb_current_out[fl_id] = self._mb_call(heights, year)
+
+        return self._mb_current_out[fl_id]
 
     def to_netcdf(self, path):
         """Creates a netcdf group file storing the state of the model."""
@@ -591,7 +646,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
+                 fs=0., fixed_dt=None, min_dt=SEC_IN_DAY,
                  max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
@@ -606,7 +661,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
         super(FluxBasedModelDeprecated, self).__init__(flowlines,
                                                        mb_model=mb_model,
                                                        y0=y0, glen_a=glen_a,
-                                                       fs=fs, fd=fd,
+                                                       fs=fs,
                                                        inplace=inplace)
         self.dt_warning = False
         if fixed_dt is not None:
@@ -702,7 +757,7 @@ class FluxBasedModelDeprecated(FlowlineModel):
 
             # Mass balance
             widths = fl.widths_m
-            mb = self.mb.get_mb(fl.surface_h, self.yr)
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
             # Allow parabolic beds to grow
             widths = np.where((mb > 0.) & (widths == 0), 10., widths)
             mb = dt * mb * widths
@@ -728,9 +783,9 @@ class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=31*SEC_IN_DAY, inplace=True, **kwargs):
-
+                 fs=0., fixed_dt=None, cfl_number=1./100,
+                 min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
+                 inplace=True, **kwargs):
         """ Instanciate.
 
         Parameters
@@ -742,7 +797,7 @@ class FluxBasedModel(FlowlineModel):
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
-                                             fd=fd, inplace=inplace,
+                                             inplace=inplace,
                                              **kwargs)
         self.dt_warning = False
         if fixed_dt is not None:
@@ -750,6 +805,7 @@ class FluxBasedModel(FlowlineModel):
             max_dt = fixed_dt
         self.min_dt = min_dt
         self.max_dt = max_dt
+        self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
 
         # Optim
@@ -843,12 +899,10 @@ class FluxBasedModel(FlowlineModel):
                 flxs.append(flx_stag)
                 aflxs.append(znx)
 
-            # Time crit: limit the velocity somehow
+            # CFL condition
             maxu = np.max(np.abs(u_stag))
             if maxu > 0.:
-                # this is arbitrary
-                # 100 is quite conservative, 60 is too low
-                _dt = 1./100. * dx / maxu
+                _dt = self.cfl_number * dx / maxu
             else:
                 _dt = self.max_dt
             if _dt < dt:
@@ -869,7 +923,7 @@ class FluxBasedModel(FlowlineModel):
 
             # Mass balance
             widths = fl.widths_m
-            mb = self.mb.get_mb(fl.surface_h, self.yr)
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
             # Allow parabolic beds to grow
             widths = np.where((mb > 0.) & (widths == 0), 10., widths)
             mb = dt * mb * widths
@@ -888,7 +942,8 @@ class FluxBasedModel(FlowlineModel):
                                                    trib[3]
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
-                # TODO: not sure if this is the way to go yet
+                # TODO: not sure if this is the way to go yet,
+                # but mass conservation is OK
                 self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt*dx
 
         # Next step
@@ -920,7 +975,7 @@ class MassConservationChecker(FluxBasedModel):
         for fl in self.fls:
             # Mass balance
             widths = fl.widths_m
-            mb = self.mb.get_mb(fl.surface_h, self.yr)
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
             mbs.append(mb * widths)
             sections.append(np.copy(fl.section))
             dx = fl.dx_meter
@@ -940,7 +995,7 @@ class KarthausModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
-                 fd=None, fixed_dt=None, min_dt=SEC_IN_DAY,
+                 fixed_dt=None, min_dt=SEC_IN_DAY,
                  max_dt=31*SEC_IN_DAY, inplace=True):
 
         """ Instanciate.
@@ -959,7 +1014,7 @@ class KarthausModel(FlowlineModel):
 
         super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
                                             y0=y0, glen_a=glen_a, fs=fs,
-                                            fd=fd, inplace=inplace)
+                                            inplace=inplace)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -979,7 +1034,7 @@ class KarthausModel(FlowlineModel):
         width = fl.widths_m
         thick = fl.thick
 
-        MassBalance = self.mb.get_mb(fl.surface_h, self.yr)
+        MassBalance = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
 
         SurfaceHeight = fl.surface_h
 
@@ -1024,7 +1079,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
        The equation references in the comments refer to the paper for clarity
     """
-    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None, fd=None,
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=True):
 
@@ -1043,7 +1098,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
         super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
                                                  y0=y0, glen_a=glen_a, fs=fs,
-                                                 fd=fd, inplace=inplace)
+                                                 inplace=inplace)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt
@@ -1079,7 +1134,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
          
 
         # mass balance
-        m_dot = self.mb.get_mb(fl.surface_h, self.yr)
+        m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
         # get in the surface elevation
         S = fl.surface_h
         # get the bed
@@ -1248,7 +1303,7 @@ class FileModel(object):
         self.yr = sel.time.values
 
     def area_m2_ts(self, rollmin=36):
-        """rollmin is the numebr of months you want to smooth onto"""
+        """rollmin is the number of months you want to smooth onto"""
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
             widths = ds.ts_width_m.copy()
@@ -1574,7 +1629,8 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 @entity_task(log)
 def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
-                             filesuffix=''):
+                             filesuffix='', zero_inititial_glacier=False,
+                             **kwargs):
     """Random glacier dynamics for benchmarking purposes.
 
      This runs the random mass-balance model for a certain number of years.
@@ -1585,6 +1641,9 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
      y0 : central year of the random climate period
      seed : seed for the random generate
      filesuffix : for the output file
+     zero_inititial_glacier : if true, the ice thickness is set to zero before
+         the sim
+     kwargs : kwargs to pass to the FluxBasedModel instance
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1595,11 +1654,17 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
         fs = cfg.PARAMS['flowline_fs']
         glen_a = cfg.PARAMS['flowline_glen_a']
 
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
     ys = 1
     ye = ys + nyears
     mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
     fls = gdir.read_pickle('model_flowlines')
-    model = FluxBasedModel(fls, mb_model=mb, y0=ys, fs=fs, glen_a=glen_a)
+    if zero_inititial_glacier:
+        for fl in fls:
+            fl.thick = fl.thick * 0.
+    model = FluxBasedModel(fls, mb_model=mb, y0=ys, **kwargs)
 
     # run
     path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
