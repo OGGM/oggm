@@ -410,7 +410,7 @@ def _download_oggm_files_unlocked():
             if filename in out:
                 # This was a stupid thing, and should not happen
                 # TODO: duplicates in sample data...
-                k = os.path.join(os.path.dirname(root), filename)
+                k = os.path.join(os.path.basename(root), filename)
                 assert k not in out
                 out[k] = os.path.join(root, filename)
             else:
