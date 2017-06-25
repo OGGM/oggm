@@ -13,7 +13,7 @@ notifications:
 environment:
   matrix:
     - PYTHON: "C:\\Python3-conda64"
-      PYTHON_VERSION: "3.5"
+      PYTHON_VERSION: "3.6"
       PYTHON_ARCH: "64"
 
 install:
@@ -22,6 +22,7 @@ install:
 
   # Create environment with desired python version and activate it
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "SET GDAL_DATA=%PYTHON%\\Library\\share\\gdal"
   - "conda install --yes --quiet python=%PYTHON_VERSION%"
 
   # Check that we have the expected version and architecture for Python
@@ -30,7 +31,7 @@ install:
 
   # install dependencies
   - "python -m pip install --upgrade pip"
-  - "conda install --yes --quiet -c conda-forge geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pyproj numpy rasterio krb5 xarray boto3"
+  - "conda install --yes --quiet -c conda-forge gdal libgdal geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pyproj numpy rasterio krb5 xarray boto3"
   - "pip install motionless"
   - "pip install git+https://github.com/fmaussion/salem.git"
   - "pip install -e ."
