@@ -42,9 +42,14 @@ def init_mp_pool(reset=False):
     global_lock = mp.Manager().Lock()
     mpp = cfg.PARAMS['mp_processes']
     if mpp == -1:
-        mpp = mp.cpu_count()
-        log.info('Multiprocessing: using all available '
-                 'processors (N={})'.format(mp.cpu_count()))
+        try:
+            mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
+            log.info('Multiprocessing: using slurm allocated '
+                     'processors (N={})'.format(mpp))
+        except KeyError:
+            mpp = mp.cpu_count()
+            log.info('Multiprocessing: using all available '
+                     'processors (N={})'.format(mpp))
     else:
         log.info('Multiprocessing: using the requested number of '
                  'processors (N={})'.format(mpp))
