@@ -410,7 +410,7 @@ def _download_oggm_files_unlocked():
             if filename in out:
                 # This was a stupid thing, and should not happen
                 # TODO: duplicates in sample data...
-                k = os.path.join(os.path.dirname(root), filename)
+                k = os.path.join(os.path.basename(root), filename)
                 assert k not in out
                 out[k] = os.path.join(root, filename)
             else:
@@ -1716,10 +1716,10 @@ def glacier_characteristics(gdirs, to_csv=True):
                     all_calving_data = c['calving_fluxes'][-1]
                     all_width = c['t_width']
             d['calving_flux'] = all_calving_data
-            d['t_width'] = all_width
+            d['calving_front_width'] = all_width
         else:
             d['calving_flux'] = 0
-            d['t_width'] = 0
+            d['calving_front_width'] = 0
 
 
         out_df.append(d)
