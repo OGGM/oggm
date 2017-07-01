@@ -281,7 +281,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
         else:
             alt_range_th += 20
             log.warning('Set altitude threshold to {}'.format(alt_range_th))
-        if alt_range_th > 1000:
+        if alt_range_th > 2000:
             raise RuntimeError('Problem by altitude filter.')
 
     return out_width
@@ -721,7 +721,7 @@ def catchment_width_correction(gdir, div_id=None):
         divides = []
         for i in gdir.divide_ids:
             log.info('%s: width correction, divide %d', gdir.rgi_id, i)
-            fls = catchment_width_correction(gdir, div_id=i)
+            fls = catchment_width_correction(gdir, div_id=i, reset=True)
             for fl in fls:
                 area += np.sum(fl.widths) * fl.dx
             divides.append(fls)

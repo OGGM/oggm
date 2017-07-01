@@ -975,7 +975,7 @@ def _get_optimal_scaling_factor(ref_gdirs):
         abs_std = []
         for gdir in ref_gdirs:
             # all possible mus
-            mu_candidates(gdir, prcp_sf=sf)
+            mu_candidates(gdir, prcp_sf=sf, reset=True)
             # list of mus compatibles with refmb
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
             res = t_star_from_refmb(gdir, mbdf)
@@ -1006,16 +1006,16 @@ def compute_ref_t_stars(gdirs):
     # Reference glaciers only if in the list and period is good
     ref_gdirs = _get_ref_glaciers(gdirs)
 
-    sf = None
+    prcp_sf = None
     if cfg.PARAMS['prcp_scaling_factor'] == 'stddev':
-        sf = _get_optimal_scaling_factor(ref_gdirs)
+        prcp_sf = _get_optimal_scaling_factor(ref_gdirs)
 
     # Loop
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
     for gdir in ref_gdirs:
         # all possible mus
-        mu_candidates(gdir, prcp_sf=sf)
+        mu_candidates(gdir, prcp_sf=prcp_sf, reset=True)
         # list of mus compatibles with refmb
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = t_star_from_refmb(gdir, mbdf)
@@ -1030,14 +1030,13 @@ def compute_ref_t_stars(gdirs):
     # At least one of the glaciers should have a single t*, otherwise we don't
     # know how to start
     if len(only_one) == 0:
+        # TODO: hardcoded stuff here, for the test workflow
         if 'RGI50-11.00897' in per_glacier:
-            # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI50-11.00897')
             gdir, t_star, res_bias, prcp_fac = per_glacier['RGI50-11.00897']
             per_glacier['RGI50-11.00897'] = (gdir, [t_star[-1]],
                                              [res_bias[-1]], prcp_fac)
         elif 'RGI40-11.00897' in per_glacier:
-            # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00897')
             gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00897']
             per_glacier['RGI40-11.00897'] = (gdir, [t_star[-1]],
@@ -1082,7 +1081,8 @@ def compute_ref_t_stars(gdirs):
         only_one.append(gdir.rgi_id)
 
     # Write out the data
-    rgis_ids, t_stars, prcp_facs,  biases, lons, lats = [], [], [], [], [], []
+    rgis_ids, t_stars, prcp_facs,  biases, lons, lats, n_mb = ([], [], [], [],
+                                                               [], [], [])
     for id, (gdir, t_star, res_bias, prcp_fac) in per_glacier.items():
         rgis_ids.append(id)
         t_stars.append(t_star[0])
@@ -1090,9 +1090,11 @@ def compute_ref_t_stars(gdirs):
         biases.append(res_bias[0])
         lats.append(gdir.cenlat)
         lons.append(gdir.cenlon)
+        n_mb.append(len(gdir.get_ref_mb_data()))
     df = pd.DataFrame(index=rgis_ids)
     df['lon'] = lons
     df['lat'] = lats
+    df['n_mb_years'] = n_mb
     df['tstar'] = t_stars
     df['prcp_fac'] = prcp_facs
     df['bias'] = biases
@@ -1101,7 +1103,7 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs, compute_apparent_mb=True):
+def distribute_t_stars(gdirs, compute_apparent_mb=True, ref_df=None):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
@@ -1113,8 +1115,9 @@ def distribute_t_stars(gdirs, compute_apparent_mb=True):
 
     log.info('Distribute t* and mu*')
 
-    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                      'ref_tstars.csv'))
+    if ref_df is None:
+        ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                          'ref_tstars.csv'))
 
     for gdir in gdirs:
 
@@ -1140,12 +1143,17 @@ def distribute_t_stars(gdirs, compute_apparent_mb=True):
         # Go
         local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
                                  prcp_fac=prcp_fac,
-                                 compute_apparent_mb=compute_apparent_mb)
+                                 compute_apparent_mb=compute_apparent_mb,
+                                 reset=True)
 
 
 @global_task
 def crossval_t_stars(gdirs):
     """Cross-validate the interpolation of tstar to each individual glacier.
+
+    This is a naive, thorough check (redoes many, many useless calculations).
+
+    you can use quick_crossval_t_stars for most purposes,
 
     Parameters
     ----------
@@ -1158,8 +1166,11 @@ def crossval_t_stars(gdirs):
                                            'ref_tstars.csv'), index_col=0)
 
     rgdirs = _get_ref_glaciers(gdirs)
+    n = len(full_ref_df)
+    for i, rid in enumerate(full_ref_df.index):
 
-    for rid in full_ref_df.index:
+        log.info('Cross-validation iteration {} of {}'.format(i+1, n))
+
         # the glacier to look at
         gdir = [g for g in rgdirs if g.rgi_id == rid][0]
 
@@ -1169,7 +1180,7 @@ def crossval_t_stars(gdirs):
         # redo the computations
         with utils.DisableLogger():
             compute_ref_t_stars(ref_gdirs)
-            distribute_t_stars([gdir], compute_apparent_mb=True)
+            distribute_t_stars([gdir], compute_apparent_mb=False)
 
         # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1177,6 +1188,80 @@ def crossval_t_stars(gdirs):
         full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
         full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
         full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
+
+    # write
+    file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+    full_ref_df.to_csv(file)
+
+
+@global_task
+def quick_crossval_t_stars(gdirs):
+    """Cross-validate the interpolation of tstar to each individual glacier.
+
+    This version does NOT recompute the precipitation scaling factor at each
+    round (this quite OK to do so)
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('Cross-validate the t* and mu* determination')
+
+    rgdirs = _get_ref_glaciers(gdirs)
+
+    # This might be redundant but we redo the calc here
+    with utils.DisableLogger():
+        compute_ref_t_stars(rgdirs)
+    full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                           'ref_tstars.csv'), index_col=0)
+    with utils.DisableLogger():
+        distribute_t_stars(rgdirs, compute_apparent_mb=False)
+
+    n = len(full_ref_df)
+    for i, rid in enumerate(full_ref_df.index):
+
+        # log.info('Cross-validation iteration {} of {}'.format(i+1, n))
+
+        # the glacier to look at
+        gdir = [g for g in rgdirs if g.rgi_id == rid][0]
+
+        # the reference glaciers
+        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
+
+        # before the cross-val we can get the info about "real" mustar
+        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+        full_ref_df.loc[rid, 'mustar'] = rdf['mu_star'].values[0]
+
+        # redo the computations
+        with utils.DisableLogger():
+            distribute_t_stars([gdir], ref_df=tmp_ref_df,
+                               compute_apparent_mb=False)
+
+        # store
+        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+        full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
+        full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
+        full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
+        full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
+
+    # Reproduce Ben's figure
+    for i, rid in enumerate(full_ref_df.index):
+        # the glacier to look at
+        gdir = full_ref_df.loc[full_ref_df.index == rid]
+        # the reference glaciers
+        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
+
+        # Compute the distance
+        distances = utils.haversine(gdir.lon.values[0], gdir.lat.values[0],
+                                    tmp_ref_df.lon, tmp_ref_df.lat)
+
+        # Take the 10 closests
+        aso = np.argsort(distances)[0:9]
+        amin = tmp_ref_df.iloc[aso]
+        distances = distances[aso] ** 2
+        interp = np.average(amin.mustar, weights=1. / distances)
+        full_ref_df.loc[rid, 'interp_mustar'] = interp
 
     # write
     file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')

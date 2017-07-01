@@ -33,4 +33,5 @@ from oggm.core.preprocessing.climate import process_histalp_nonparallel
 from oggm.core.preprocessing.climate import compute_ref_t_stars
 from oggm.core.preprocessing.climate import distribute_t_stars
 from oggm.core.preprocessing.climate import crossval_t_stars
+from oggm.core.preprocessing.climate import quick_crossval_t_stars
 from oggm.core.preprocessing.inversion import optimize_inversion_params

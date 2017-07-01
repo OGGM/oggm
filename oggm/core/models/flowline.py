@@ -646,8 +646,8 @@ class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., inplace=True, fixed_dt=None, cfl_number=1./100,
-                 min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
+                 fs=0., inplace=True, fixed_dt=None, cfl_number=0.05,
+                 min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
                  time_stepping='user',
                  **kwargs):
         """ Instanciate.
@@ -665,24 +665,24 @@ class FluxBasedModel(FlowlineModel):
                                              **kwargs)
 
         if time_stepping == 'ultra-ambitious':
-            cfl_number = 1/20
+            cfl_number = 0.5
             min_dt = 4*SEC_IN_DAY
             max_dt = 31*SEC_IN_DAY
         elif time_stepping == 'ambitious':
-            cfl_number = 1/60
-            min_dt = 2*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'default':
-            cfl_number = 1/100
+            cfl_number = 0.1
             min_dt = 1*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'conservative':
-            cfl_number = 1/140
-            min_dt = 6*SEC_IN_HOUR
-            max_dt = 10*SEC_IN_DAY
-        elif time_stepping == 'ultra-conservative':
-            cfl_number = 1/180
+            max_dt = 15*SEC_IN_DAY
+        elif time_stepping == 'default':
+            cfl_number = 0.05
             min_dt = 1*SEC_IN_HOUR
+            max_dt = 10*SEC_IN_DAY
+        elif time_stepping == 'conservative':
+            cfl_number = 0.01
+            min_dt = 1*SEC_IN_HOUR
+            max_dt = 5*SEC_IN_DAY
+        elif time_stepping == 'ultra-conservative':
+            cfl_number = 0.01
+            min_dt = 0.5*SEC_IN_HOUR
             max_dt = 5*SEC_IN_DAY
         else:
             if time_stepping != 'user':
@@ -1007,101 +1007,104 @@ class MUSCLSuperBeeModel(FlowlineModel):
     def step(self, dt):
         """Advance one step."""
 
-        # This is to guarantee a precise arrival on a specific date if asked
-        min_dt = dt if dt < self.min_dt else self.min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-        fl = self.fls[0]
-        dx = fl.dx_meter
-        width = fl.widths_m
-        
-        """ Switch to the notation from the MUSCL_1D example
-            This is useful to ensure that the MUSCL-SuperBee code
-            is working as it has been benchmarked many time"""
-         
+            # This is to guarantee a precise arrival on a specific date if asked
+            min_dt = dt if dt < self.min_dt else self.min_dt
+            dt = np.clip(dt, min_dt, self.max_dt)
 
-        # mass balance
-        m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
-        # get in the surface elevation
-        S = fl.surface_h
-        # get the bed
-        B = fl.bed_h
-        # define Glen's law here
-        Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
-        #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
-        # time stepping 
-        c_stab = 0.165
-        
-        # define the finite difference indices required for the MUSCL-SuperBee scheme
-        k = np.arange(0,fl.nx)
-        kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
-        kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
-        km = np.hstack([0,np.arange(0,fl.nx-1)])
-        kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+            fl = self.fls[0]
+            dx = fl.dx_meter
+            width = fl.widths_m
 
-        # I'm gonna introduce another level of adaptive time stepping here, which is probably not
-        # necessary. However I keep it to be consistent with my benchmarked and tested code.
-        # If the OGGM time stepping is correctly working, this loop should never run more than once
-        stab_t = 0.
-        while stab_t < dt:
-            H = S - B
-            
-            # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
-            r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
-            H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
-            r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
-            H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
-            
-            # surface slope gradient
-            s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
-            D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
-            D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
-            
-            D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
-            D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
-            D_up = np.zeros(fl.nx)
-            
-            # Eq. 33
-            D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
-            D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
-            D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
-            D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+            """ Switch to the notation from the MUSCL_1D example
+                This is useful to ensure that the MUSCL-SuperBee code
+                is working as it has been benchmarked many time"""
 
-            # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
-            r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
-            H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
-            r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
-            H_dn_p = H[k] - 0.5 * self.phi(r_dn_p)*(H[kp]-H[k])
-            
-            # calculate the slope gradient
-            s_grad_dn = ((S[k]-S[km])**2. / dx**2.)**((N-1.)/2.)
-            D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
-            D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
-            
-            D_dn_min = np.minimum(D_dn_m,D_dn_p);
-            D_dn_max = np.maximum(D_dn_m,D_dn_p);
-            D_dn = np.zeros(fl.nx)
-            
-            D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
-            D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
-            D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
-            D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
-            
-            dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
-            dt_use = min(dt_stab,dt-stab_t)
-            stab_t = stab_t + dt_use
-            
-            # check if the extra time stepping is needed [to be removed one day]
-            #if dt_stab < dt:
-            #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
-            #else:
-            #    print "MUSCL Scheme fine with time stepping as is"
-            
-            #explicit time stepping scheme
-            div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
-            S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
-            
-            S = np.maximum(S,B)                                                 # Eq. 7
+
+            # mass balance
+            m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
+            # get in the surface elevation
+            S = fl.surface_h
+            # get the bed
+            B = fl.bed_h
+            # define Glen's law here
+            Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
+            #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
+            # time stepping
+            c_stab = 0.165
+
+            # define the finite difference indices required for the MUSCL-SuperBee scheme
+            k = np.arange(0,fl.nx)
+            kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
+            kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
+            km = np.hstack([0,np.arange(0,fl.nx-1)])
+            kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+
+            # I'm gonna introduce another level of adaptive time stepping here, which is probably not
+            # necessary. However I keep it to be consistent with my benchmarked and tested code.
+            # If the OGGM time stepping is correctly working, this loop should never run more than once
+            stab_t = 0.
+            while stab_t < dt:
+                H = S - B
+
+                # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
+                r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
+                H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
+                r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
+                H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
+
+                # surface slope gradient
+                s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
+                D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
+                D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
+
+                D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
+                D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
+                D_up = np.zeros(fl.nx)
+
+                # Eq. 33
+                D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
+                D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
+                D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
+                D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+
+                # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
+                r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
+                H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
+                r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
+                H_dn_p = H[k] - 0.5 * self.phi(r_dn_p)*(H[kp]-H[k])
+
+                # calculate the slope gradient
+                s_grad_dn = ((S[k]-S[km])**2. / dx**2.)**((N-1.)/2.)
+                D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
+                D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
+
+                D_dn_min = np.minimum(D_dn_m,D_dn_p);
+                D_dn_max = np.maximum(D_dn_m,D_dn_p);
+                D_dn = np.zeros(fl.nx)
+
+                D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
+                D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
+                D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
+                D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
+
+                dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
+                dt_use = min(dt_stab,dt-stab_t)
+                stab_t = stab_t + dt_use
+
+                # check if the extra time stepping is needed [to be removed one day]
+                #if dt_stab < dt:
+                #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
+                #else:
+                #    print "MUSCL Scheme fine with time stepping as is"
+
+                #explicit time stepping scheme
+                div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
+                S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
+
+                S = np.maximum(S,B)                                                 # Eq. 7
         
         # Done with the loop, prepare output
         NewIceThickness = S-B
@@ -1564,8 +1567,8 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
             model.run_until_and_store(ye, path=path)
         except RuntimeError:
             if step == 'ultra-conservative':
-                raise RuntimeError('%s: we did our best, the model is still '
-                                   'unstable.', gdir.rgi_id)
+                raise RuntimeError('{}: we did our best, the model is still '
+                                   'unstable.'.format(gdir.rgi_id))
             continue
         # If we get here we good
         log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)

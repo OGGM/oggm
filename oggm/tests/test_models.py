@@ -1322,7 +1322,7 @@ class TestIdealisedCases(unittest.TestCase):
                                                  is_tidewater=True)
         model.run_until(500)
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
-        assert_allclose(model.total_mass, tot_vol, rtol=1e-2)
+        assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
 
 
     @is_slow
@@ -1332,18 +1332,18 @@ class TestIdealisedCases(unittest.TestCase):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
                   flowline.MUSCLSuperBeeModel]
-        fdts = [3*SEC_IN_DAY, None, None]
+        kwargs = [{'fixed_dt':3*SEC_IN_DAY}, {}, {}]
         lens = []
         surface_h = []
         volume = []
         min_slope = []
         yrs = np.arange(1, 700, 2)
-        for model, fdt in zip(models, fdts):
+        for model, kw in zip(models, kwargs):
             fls = dummy_constant_bed_obstacle()
             mb = LinearMassBalanceModel(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
-                          fixed_dt=fdt)
+                          **kw)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -1365,7 +1365,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
-        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=3e-3)
+        np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=5e-3)
 
         self.assertTrue(utils.rmsd(volume[0], volume[2])<1e-2)
         self.assertTrue(utils.rmsd(volume[1], volume[2])<1e-2)
@@ -1787,11 +1787,11 @@ class TestIdealisedCases(unittest.TestCase):
             plt.show()
 
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
-        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-2)
 
-        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=50)
+        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=70)
         np.testing.assert_allclose(utils.rmsd(volume[0], volume[1]), 0.,
-                                   atol=3e-3)
+                                   atol=1e-2)
         np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
                                    atol=5)
 

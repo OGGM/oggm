@@ -409,7 +409,10 @@ def define_glacier_region(gdir, entity=None):
     if len(dem_list) == 1:
         dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
         dem_data = rasterio.band(dem_dss[0], 1)
-        src_transform = dem_dss[0].affine
+        if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+            src_transform = dem_dss[0].transform
+        else:
+            src_transform = dem_dss[0].affine
     else:
         dem_dss = [rasterio.open(s) for s in dem_list]  # list of rasters
         dem_data, src_transform = merge_tool(dem_dss)  # merged rasters
