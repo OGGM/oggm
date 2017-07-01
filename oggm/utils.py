@@ -93,7 +93,7 @@ def _get_download_lock():
     return lock
 
 
-def _cached_download_helper(cache_obj_name, dl_func):
+def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
     Takes care of checking if the file is already cached.
@@ -107,13 +107,13 @@ def _cached_download_helper(cache_obj_name, dl_func):
         cache_dir = fb_cache_dir
         cache_ro = False
 
-    cache_path = os.path.join(cache_dir, cache_obj_name)
-    if os.path.isfile(cache_path):
-        return cache_path
-
     fb_path = os.path.join(fb_cache_dir, cache_obj_name)
-    if os.path.isfile(fb_path):
+    if not reset and os.path.isfile(fb_path):
         return fb_path
+
+    cache_path = os.path.join(cache_dir, cache_obj_name)
+    if not reset and os.path.isfile(cache_path):
+        return cache_path
 
     if cache_ro:
         cache_path = fb_path
@@ -130,7 +130,7 @@ def _cached_download_helper(cache_obj_name, dl_func):
     return cache_path
 
 
-def _urlretrieve(url, cache_obj_name=None, *args, **kwargs):
+def _urlretrieve(url, cache_obj_name=None, reset=False, *args, **kwargs):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
@@ -146,10 +146,10 @@ def _urlretrieve(url, cache_obj_name=None, *args, **kwargs):
         urlretrieve(url, cache_path, *args, **kwargs)
         return cache_path
 
-    return _cached_download_helper(cache_obj_name, _dlf)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
-def _progress_urlretrieve(url, cache_name=None):
+def _progress_urlretrieve(url, cache_name=None, reset=False):
     """Downloads a file, returns its local path, and shows a progressbar."""
 
     try:
@@ -165,22 +165,22 @@ def _progress_urlretrieve(url, cache_name=None):
                     pbar[0].start(UnknownLength)
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, cache_obj_name=cache_name, reporthook=_upd)
+        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset, reporthook=_upd)
         try:
             pbar[0].finish()
         except:
             pass
         return res
     except ImportError:
-        return _urlretrieve(url, cache_obj_name=cache_name)
+        return _urlretrieve(url, cache_obj_name=cache_name, reset=reset)
 
 
-def aws_file_download(aws_path):
+def aws_file_download(aws_path, cache_name=None, reset=False):
     with _get_download_lock():
-        return _aws_file_download_unlocked(aws_path)
+        return _aws_file_download_unlocked(aws_path, cache_name, reset)
 
 
-def _aws_file_download_unlocked(aws_path, cache_name=None):
+def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     """Download a file from the AWS drive s3://astgtmv2/
 
     **Note:** you need AWS credentials for this to work.
@@ -212,10 +212,10 @@ def _aws_file_download_unlocked(aws_path, cache_name=None):
                 raise
         return cache_path
 
-    return _cached_download_helper(cache_obj_name, _dlf)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=5, cache_name=None):
+def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -224,7 +224,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None):
         # Try to download
         try:
             retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, cache_name=cache_name)
+            local_path = _progress_urlretrieve(www_path, cache_name=cache_name, reset=reset)
             # if no error, exit
             break
         except HTTPError as err:
