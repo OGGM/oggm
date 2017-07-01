@@ -2250,7 +2250,7 @@ class TestHEF(unittest.TestCase):
                                               mb_elev_feedback=feedback)
             end_time = time.time()
             times.append(end_time - start_time)
-            out.append(utils.compile_run_output([self.gdir]))
+            out.append(utils.compile_run_output([self.gdir], path=False))
 
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.1)
