@@ -664,11 +664,7 @@ class FluxBasedModel(FlowlineModel):
                                              inplace=inplace,
                                              **kwargs)
 
-        if time_stepping == 'ultra-ambitious':
-            cfl_number = 0.5
-            min_dt = 4*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'ambitious':
+        if time_stepping == 'ambitious':
             cfl_number = 0.1
             min_dt = 1*SEC_IN_DAY
             max_dt = 15*SEC_IN_DAY

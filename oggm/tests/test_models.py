@@ -1560,8 +1560,7 @@ class TestIdealisedCases(unittest.TestCase):
     @is_slow
     def test_timestepping(self):
 
-        steps = ['ultra-ambitious',
-                 'ambitious',
+        steps = ['ambitious',
                  'default',
                  'conservative',
                  'ultra-conservative'][::-1]
@@ -1590,7 +1589,6 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[3][-1], atol=1e-2)
-        np.testing.assert_allclose(volume[0][-1], volume[4][-1], atol=1e-1)
 
     @is_slow
     def test_bumpy_bed(self):

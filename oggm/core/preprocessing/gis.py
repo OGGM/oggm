@@ -495,7 +495,7 @@ def define_glacier_region(gdir, entity=None):
 
         # Keep only the ones large enough
         log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divlist))
-        divlist = [g for g in divlist if (g.area >= (25 * dx ** 2))]
+        divlist = [g for g in divlist if (g.area >= (50 * dx ** 2))]
         log.debug('%s: number of divides: %d', gdir.rgi_id, len(divlist))
         divlist = np.asarray(divlist)
 

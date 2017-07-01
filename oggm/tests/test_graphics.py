@@ -334,7 +334,7 @@ def test_ice_cap():
     hef_file = get_demo_file('RGI50-05.08389.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-    gdir = oggm.GlacierDirectory(entity, base_dir=testdir)
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)

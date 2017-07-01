@@ -530,6 +530,7 @@ def initialize_flowlines(gdir, div_id=None):
         # Interpolate heights
         xx, yy = new_line.xy
         hgts = interpolator((yy, xx))
+        assert len(hgts) >= 5
 
         # Check where the glacier is and where not
         isglacier = [poly.contains(shpg.Point(x, y)) for x, y in zip(xx, yy)]
@@ -538,7 +539,6 @@ def initialize_flowlines(gdir, div_id=None):
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
-        assert len(hgts) >= 5
 
         # Check for min slope issues and correct if needed
         if do_filter:
