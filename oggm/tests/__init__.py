@@ -7,6 +7,7 @@ import socket
 import unittest
 import logging
 import matplotlib
+import matplotlib.ft2font
 import pandas as pd
 import geopandas as gpd
 import numpy as np
@@ -31,7 +32,12 @@ HAS_MPL_FOR_TESTS = False
 if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
     BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
-                                'baseline_images', '2.0.x')
+                                'baseline_images')
+    ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
+    if ftver >= LooseVersion('2.7.0'):
+        BASELINE_DIR = os.path.join(BASELINE_DIR, 'alt')
+    else:
+        BASELINE_DIR = os.path.join(BASELINE_DIR, '2.0.x')
 
 
 # Some control on which tests to run (useful to avoid too long tests)
