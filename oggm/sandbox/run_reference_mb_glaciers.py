@@ -34,7 +34,7 @@ cfg.PARAMS['use_multiprocessing'] = True
 
 # How many grid points around the glacier?
 # Make it large if you expect your glaciers to grow large
-cfg.PARAMS['border'] = 80
+cfg.PARAMS['border'] = 60
 
 # This is the default in OGGM
 cfg.PARAMS['prcp_scaling_factor'] = 2.5
@@ -55,11 +55,11 @@ _ = utils.get_cru_file(var='pre')
 
 # Download and read in the RGI file
 rgif = 'https://dl.dropboxusercontent.com/u/20930277/RGI_list_WGMS_glaciers_noTidewater.zip'
-# rgif = utils.file_downloader(rgif)
-# with zipfile.ZipFile(rgif) as zf:
-#     zf.extractall(WORKING_DIR)
+rgif = utils.file_downloader(rgif)
+with zipfile.ZipFile(rgif) as zf:
+    zf.extractall(WORKING_DIR)
 rgif = os.path.join(WORKING_DIR, 'RGI_list_WGMS_glaciers_noTidewater.shp')
-rgidf = salem.read_shapefile(rgif)
+rgidf = salem.read_shapefile(rgif, cached=True)
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
@@ -71,8 +71,8 @@ print('Number of glaciers: {}'.format(len(rgidf)))
 # -----------------------------------
 
 # you can use the command below to reset your run -- use with caution!
-# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-gdirs = workflow.init_glacier_regions(rgidf)
+gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+# gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks
 task_list = [
@@ -91,9 +91,9 @@ for task in task_list:
 
 # Climate tasks
 execute_entity_task(tasks.process_cru_data, gdirs)
-# tasks.quick_crossval_t_stars(gdirs)
-# tasks.compute_ref_t_stars(gdirs)
-# tasks.distribute_t_stars(gdirs)
+tasks.quick_crossval_t_stars(gdirs)
+tasks.compute_ref_t_stars(gdirs)
+tasks.distribute_t_stars(gdirs)
 
 # Model validation
 # ----------------
@@ -138,6 +138,13 @@ for gd in gdirs:
     cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = refmb.OGGM.mean() - \
                                             refmb.ANNUAL_BALANCE.mean()
 
+# Plots (if you want)
+if PLOTS_DIR == '':
+    exit()
+
+utils.mkdir(PLOTS_DIR)
+
+# Ben Figure 3
 f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
 bins = np.linspace(-4000, 4000, 26)
 cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3')
@@ -148,13 +155,11 @@ cvdf['INTERP_MB_BIAS'].plot(ax=ax2, kind='hist', bins=bins, color='C0')
 ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile(), 0, 100)
 ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile([0.05, 0.95]), 0, 100, color='grey')
 plt.tight_layout()
-plt.show()
+fn = os.path.join(PLOTS_DIR, '00_mb_crossval.pdf')
+plt.savefig(fn)
+plt.close()
 
-# Plots (if you want)
-if PLOTS_DIR == '':
-    exit()
-
-utils.mkdir(PLOTS_DIR)
+# Plots per glacier
 for gd in gdirs:
 
     bname = os.path.join(PLOTS_DIR, gd.rgi_id + '_')
@@ -176,7 +181,8 @@ for gd in gdirs:
     fn = bname + '2_fls.png'
     if not os.path.exists(fn):
         graphics.plot_centerlines(gd, title_comment=demsource,
-                                  use_flowlines=True, add_downstream=True)
+                                  use_flowlines=True,
+                                  add_downstream=True)
         plt.savefig(fn)
         plt.close()
 
@@ -195,6 +201,7 @@ for gd in gdirs:
         heights, widths = gd.get_inversion_flowline_hw()
         refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
                                                year=refmb.index)
+        refmb = refmb.reindex(np.arange(refmb.index[0], refmb.index[-1]+1))
         refmb[['ANNUAL_BALANCE', 'OGGM']].plot()
         title = gd.rgi_id
         if gd.name and gd.name != '':

@@ -564,9 +564,7 @@ class FlowlineModel(object):
 
         # Check for domain bounds
         if self.fls[-1].thick[-1] > 10:
-            if self.is_tidewater:
-                log.warning('Glacier is calving.')
-            else:
+            if not self.is_tidewater:
                 raise RuntimeError('Glacier exceeds domain boundaries.')
 
         # Check for NaNs
@@ -1514,8 +1512,9 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
-                             filesuffix='', zero_inititial_glacier=False,
+def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
+                             seed=None, filesuffix='',
+                             zero_inititial_glacier=False,
                              **kwargs):
     """Random glacier dynamics for benchmarking purposes.
 
@@ -1545,7 +1544,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
 
     ys = 1
     ye = ys + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
+    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
 
     # run
     path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
@@ -1558,6 +1557,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
             for fl in fls:
                 fl.thick = fl.thick * 0.
         model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
+                               is_tidewater=gdir.is_tidewater,
                                **kwargs)
         try:
             model.run_until_and_store(ye, path=path)

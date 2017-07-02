@@ -791,6 +791,7 @@ def compute_downstream_lines(gdir):
 
     with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
         topo = nc.variables['topo_smoothed'][:]
+        glacier_ext = nc.variables['glacier_ext'][:]
 
     # Look for the starting points
     heads = []
@@ -811,7 +812,15 @@ def compute_downstream_lines(gdir):
         return
 
     # Make going up very costy
-    topo = topo**8
+    topo = topo**4
+
+    # We add an artificial cost as distance from the glacier
+    # This should have to much influence on mountain glaciers but helps for
+    # tidewater-candidates
+    topo = topo + distance_transform_edt(1 - glacier_ext)
+
+    # Make going up very costy
+    topo = topo**2
 
     # Variables we gonna need: the outer side of the domain
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
@@ -824,14 +833,19 @@ def compute_downstream_lines(gdir):
     lines = []
     for head in heads:
         min_cost = np.Inf
+        min_len = np.Inf
         line = None
         for h, x, y in zip(_h, _x, _y):
             ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
+            if np.all(h == 0):
+                # Test every fifth (we don't really care)
+                ids = [np.arange(0, len(h), 5)]
             for i in ids[0]:
-                lids, cost = route_through_array(topo, head, (y[i], x[i]),
-                                                 geometric=True)
-                if cost < min_cost:
+                lids, cost = route_through_array(topo, head, (y[i], x[i]))
+                if ((cost < min_cost) or
+                        ((cost == min_cost) and (len(lids) < min_len))):
                     min_cost = cost
+                    min_len = len(lids)
                     line = shpg.LineString(np.array(lids)[:, [1, 0]])
         if line is None:
             raise RuntimeError('Downstream line not found')

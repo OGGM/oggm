@@ -248,7 +248,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
                                      markersize=40, edgecolor='k', alpha=0.8,
                                      zorder=99, facecolor='none')
 
-    if add_downstream:
+    if add_downstream and not gdir.is_tidewater:
         # plot Centerlines
         cls = gdir.read_pickle(filename, div_id=0)
 
