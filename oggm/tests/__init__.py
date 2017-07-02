@@ -174,6 +174,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
+    cfg.PARAMS['use_optimized_inversion_params'] = True
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]

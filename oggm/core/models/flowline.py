@@ -1549,7 +1549,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
     # run
     path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
 
-    steps = ['ambitious', 'default', 'conservative', 'ultra-conservative']
+    steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
         log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
         fls = gdir.read_pickle('model_flowlines')

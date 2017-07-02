@@ -420,7 +420,7 @@ class TestOtherDivides(unittest.TestCase):
         if cfg.PARAMS['grid_dx_method'] == 'linear':
             self.assertEqual(len(fls), 5)
         if cfg.PARAMS['grid_dx_method'] == 'square':
-            self.assertEqual(len(fls), 8)
+            self.assertEqual(len(fls), 5)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -2111,7 +2111,6 @@ class TestBackwardsIdealized(unittest.TestCase):
 class TestHEF(unittest.TestCase):
 
     def setUp(self):
-
         self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
@@ -2214,7 +2213,8 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5)
+        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
+                                          bias=0)
         path = self.gdir.get_filepath('past_model')
 
         with flowline.FileModel(path) as model:
