@@ -1718,8 +1718,8 @@ def glacier_characteristics(gdirs, to_csv=True):
             d['calving_flux'] = all_calving_data
             d['calving_front_width'] = all_width
         else:
-            d['calving_flux'] = 0
-            d['calving_front_width'] = 0
+            d['calving_flux'] = np.NaN
+            d['calving_front_width'] = np.NaN
 
 
         out_df.append(d)
