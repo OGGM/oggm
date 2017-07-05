@@ -32,7 +32,7 @@ def process_histalp_nonparallel(gdirs, fpath=None):
 
     # Did the user specify a specific climate data file?
     if fpath is None:
-        if ('climate_file' in cfg.PATHS):
+        if 'climate_file' in cfg.PATHS:
             fpath = cfg.PATHS['climate_file']
 
     if not os.path.exists(fpath):
@@ -92,8 +92,8 @@ def process_custom_climate_data(gdir):
     This is the way OGGM does it for the Alps (HISTALP).
     """
 
-    if not (('climate_file' in cfg.PATHS) and \
-                    os.path.exists(cfg.PATHS['climate_file'])):
+    if not (('climate_file' in cfg.PATHS) and
+            os.path.exists(cfg.PATHS['climate_file'])):
         raise IOError('Custom climate file not found')
 
     # read the file
@@ -110,9 +110,13 @@ def process_custom_climate_data(gdir):
         raise ValueError('Climate data should be N full years exclusively')
 
     # Units
-    assert nc_ts._nc.variables['hgt'].units == 'm'
-    assert nc_ts._nc.variables['temp'].units == 'degC'
-    assert nc_ts._nc.variables['prcp'].units == 'kg m-2'
+    assert nc_ts._nc.variables['hgt'].units.lower() in ['m', 'meters', 'meter',
+                                                        'metres', 'metre']
+    assert nc_ts._nc.variables['temp'].units.lower() in ['degc', 'degrees',
+                                                         'degree', 'c']
+    assert nc_ts._nc.variables['prcp'].units.lower() in ['kg m-2', 'l m-2',
+                                                         'mm', 'millimeters',
+                                                         'millimeter']
 
     # geoloc
     lon = nc_ts._nc.variables['lon'][:]
@@ -380,28 +384,28 @@ def process_cru_data(gdir):
     elif np.any(~np.isfinite(ts_tmp)):
         # maybe the side is nan, but we can do nearest
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                               interp='nearest')
+                                              interp='nearest')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                               interp='nearest')
+                                              interp='nearest')
     else:
         # We can do bilinear
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                               interp='linear')
+                                              interp='linear')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                               interp='linear')
+                                              interp='linear')
 
     # take the center pixel and add it to the CRU CL clim
     # for temp
     loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
-                           coords={'month':ts_tmp_avg.month})
+                           coords={'month': ts_tmp_avg.month})
     ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
-                           coords={'time':time})
+                          coords={'time': time})
     ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
     # for prcp
     loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
-                           coords={'month':ts_pre_avg.month})
+                           coords={'month': ts_pre_avg.month})
     ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
-                           coords={'time':time})
+                          coords={'time': time})
     ts_pre = ts_pre.groupby('time.month') + loc_pre
 
     # done
@@ -590,7 +594,8 @@ def mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=None, year_range=None):
 
     if div_id == 0:
         for i in gdir.divide_ids:
-             flowlines.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+            flowlines.extend(gdir.read_pickle('inversion_flowlines',
+                                              div_id=i))
     else:
         flowlines = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
@@ -661,13 +666,14 @@ def mu_candidates(gdir, div_id=None, prcp_sf=None):
             if ((i-mu_hp) < 0) or ((i+mu_hp) >= ny):
                 continue
             t_avg = np.mean(temp_yr[i-mu_hp:i+mu_hp+1])
-            if t_avg > 1e-3 :  # if too cold no melt possible
-                prcp_ts = prcp_yr[i-mu_hp:i+mu_hp+1]*fac
+            if t_avg > 1e-3:  # if too cold no melt possible
+                prcp_ts = prcp_yr[i-mu_hp:i+mu_hp+1] * fac
                 mu_yr_clim[i, j] = np.mean(prcp_ts) / t_avg
 
-    # Check mu's
-    if np.sum(np.isfinite(mu_yr_clim)) < (len(years) / 2. * nsf):
-        raise RuntimeError('{}: has no normal climate'.format(gdir.rgi_id))
+    # Check that we found a least one mustar
+    if np.sum(np.isfinite(mu_yr_clim)) < 1:
+        raise RuntimeError('No mustar candidates found for {}'
+                           .format(gdir.rgi_id))
 
     # Write
     df = pd.DataFrame(data=mu_yr_clim, index=years, columns=sf)
@@ -846,7 +852,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         fls = []
         if div_id == 0:
             for i in gdir.divide_ids:
-                 fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+                fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
         else:
             fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
@@ -944,7 +950,7 @@ def apparent_mb_from_linear_mb(gdir, div_id=None):
 
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
-    gdir.write_pickle({'ela_h':ela_h, 'grad':grad},
+    gdir.write_pickle({'ela_h': ela_h, 'grad': grad},
                       'linear_mb_params', div_id=div_id)
 
 
