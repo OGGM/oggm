@@ -41,11 +41,6 @@ cfg.PARAMS['use_multiprocessing'] = True
 # Make it large if you expect your glaciers to grow large
 cfg.PARAMS['border'] = 60
 
-cfg.PARAMS['grid_dx_method'] = 'square'
-cfg.PARAMS['d1'] = 15
-cfg.PARAMS['d2'] = 10
-cfg.PARAMS['dmax'] = 200
-
 # This is the default in OGGM
 cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
@@ -53,8 +48,14 @@ cfg.PARAMS['prcp_scaling_factor'] = 2.5
 cfg.CONTINUE_ON_ERROR = False
 cfg.PARAMS['auto_skip_task'] = False
 
+# Test
+cfg.PARAMS['mixed_min_shape'] = 0.003
+cfg.PARAMS['default_parabolic_bedshape'] = 0.003
+cfg.PARAMS['trapezoid_lambdas'] = 0.
+
 # Don't use divides for now
 cfg.set_divides_db()
+cfg.set_intersects_db()
 
 # Pre-download other files which will be needed later
 _ = utils.get_cru_file(var='tmp')
@@ -99,31 +100,55 @@ print('Number of glaciers: {}'.format(len(rgidf)))
 # gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 gdirs = workflow.init_glacier_regions(rgidf)
 
+utils.glacier_characteristics(gdirs)
+utils.compile_run_output(gdirs, filesuffix='_fromzero')
+utils.compile_run_output(gdirs, filesuffix='_fromzero_newparams')
+utils.compile_run_output(gdirs, filesuffix='_fromtoday')
+utils.compile_run_output(gdirs, filesuffix='_fromtoday_newparams')
+
+exit()
+
 # Prepro tasks
 task_list = [
-    tasks.glacier_masks,
-    tasks.compute_centerlines,
-    tasks.compute_downstream_lines,
-    tasks.initialize_flowlines,
-    tasks.compute_downstream_bedshape,
-    tasks.catchment_area,
-    tasks.catchment_intersections,
-    tasks.catchment_width_geom,
-    tasks.catchment_width_correction,
+    # tasks.glacier_masks,
+    # tasks.compute_centerlines,
+    # tasks.compute_downstream_lines,
+    # tasks.initialize_flowlines,
+    # tasks.compute_downstream_bedshape,
+    # tasks.catchment_area,
+    # tasks.catchment_intersections,
+    # tasks.catchment_width_geom,
+    # tasks.catchment_width_correction,
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)
 
 # Climate tasks -- only data preparation and tstar interpolation!
-execute_entity_task(tasks.process_cru_data, gdirs)
-tasks.distribute_t_stars(gdirs)
+# execute_entity_task(tasks.process_cru_data, gdirs)
+# tasks.distribute_t_stars(gdirs)
+#
+# execute_entity_task(tasks.prepare_for_inversion, gdirs)
+# execute_entity_task(tasks.volume_inversion, gdirs,
+#                     use_cfg_params={'glen_a': cfg.A, 'fs': 0})
+# execute_entity_task(tasks.filter_inversion_output, gdirs)
+#
+# Tests: for all glaciers, the mass-balance around tstar and the
+# bias with observation should be approx 0
 
-execute_entity_task(tasks.prepare_for_inversion, gdirs)
-execute_entity_task(tasks.volume_inversion, gdirs,
-                    use_cfg_params={'glen_a': cfg.A, 'fs': 0})
-execute_entity_task(tasks.filter_inversion_output, gdirs)
+from oggm.core.models.massbalance import ConstantMassBalanceModel
+for gd in gdirs:
+    heights, widths = gd.get_inversion_flowline_hw()
+
+    mb_mod = ConstantMassBalanceModel(gd, bias=0)  # bias=0 because of calib!
+    mb = mb_mod.get_specific_mb(heights, widths)
+    np.testing.assert_allclose(mb, 0, atol=10)  # numerical errors
 
 execute_entity_task(tasks.init_present_time_glacier, gdirs)
+
+# Go
+workflow.execute_entity_task(tasks.random_glacier_evolution, gdirs, bias=0,
+                             nyears=5000, seed=0,
+                             filesuffix='_fromtoday_newparams')
 
 # Plots (if you want)
 if PLOTS_DIR == '':
@@ -177,7 +202,4 @@ for gd in gdirs:
         plt.savefig(fn)
         plt.close()
 
-# Go
-# workflow.execute_entity_task(tasks.random_glacier_evolution, gdirs, bias=0,
-#                              nyears=3000, seed=0, filesuffix='_fromzero',
-#                              zero_inititial_glacier=True)
+

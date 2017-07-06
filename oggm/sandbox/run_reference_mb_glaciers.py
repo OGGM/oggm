@@ -38,6 +38,7 @@ cfg.PARAMS['border'] = 60
 
 # This is the default in OGGM
 cfg.PARAMS['prcp_scaling_factor'] = 2.5
+cfg.PARAMS['temp_melt'] = -1
 
 # Set to True for operational runs
 cfg.CONTINUE_ON_ERROR = False
@@ -54,11 +55,13 @@ _ = utils.get_cru_file(var='pre')
 # ---------------------------------------------
 
 # Download and read in the RGI file
-rgif = 'https://dl.dropboxusercontent.com/u/20930277/RGI_list_WGMS_glaciers_noTidewater.zip'
+rgilist = 'RGI_list_WGMS_glaciers_noTidewater'
+# rgilist = 'RGI_list_WGMS_glaciers_noIceCap_noTidewater'
+rgif = 'https://dl.dropboxusercontent.com/u/20930277/' + rgilist + '.zip'
 rgif = utils.file_downloader(rgif)
 with zipfile.ZipFile(rgif) as zf:
     zf.extractall(WORKING_DIR)
-rgif = os.path.join(WORKING_DIR, 'RGI_list_WGMS_glaciers_noTidewater.shp')
+rgif = os.path.join(WORKING_DIR, rgilist + '.shp')
 rgidf = salem.read_shapefile(rgif, cached=True)
 
 # Sort for more efficient parallel computing
@@ -71,8 +74,8 @@ print('Number of glaciers: {}'.format(len(rgidf)))
 # -----------------------------------
 
 # you can use the command below to reset your run -- use with caution!
-gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-# gdirs = workflow.init_glacier_regions(rgidf)
+# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks
 task_list = [
@@ -91,9 +94,9 @@ for task in task_list:
 
 # Climate tasks
 execute_entity_task(tasks.process_cru_data, gdirs)
-tasks.quick_crossval_t_stars(gdirs)
-tasks.compute_ref_t_stars(gdirs)
-tasks.distribute_t_stars(gdirs)
+# tasks.quick_crossval_t_stars(gdirs)
+# tasks.compute_ref_t_stars(gdirs)
+# tasks.distribute_t_stars(gdirs)
 
 # Model validation
 # ----------------
@@ -107,13 +110,13 @@ for gd in gdirs:
 
     mb_mod = ConstantMassBalanceModel(gd, bias=0)  # bias=0 because of calib!
     mb = mb_mod.get_specific_mb(heights, widths)
-    np.testing.assert_allclose(mb, 0, atol=5)  # numerical errors
+    np.testing.assert_allclose(mb, 0, atol=10)  # numerical errors
 
     mb_mod = PastMassBalanceModel(gd)  # Here we need the computed bias
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
-                               atol=5)
+                               atol=10)
 
 # Cross-validation
 # What happens if we use the cross-validated mus and biases instead?
@@ -131,6 +134,8 @@ for gd in gdirs:
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     cvdf.loc[gd.rgi_id, 'CV_MB_BIAS'] = refmb.OGGM.mean() - \
                                         refmb.ANNUAL_BALANCE.mean()
+    cvdf.loc[gd.rgi_id, 'CV_MB_SIGMA_BIAS'] = refmb.OGGM.std() - \
+                                              refmb.ANNUAL_BALANCE.std()
     mb_mod = PastMassBalanceModel(gd, mu_star=t_cvdf.interp_mustar,
                                   bias=t_cvdf.cv_bias,
                                   prcp_fac=t_cvdf.cv_prcp_fac)
@@ -146,18 +151,32 @@ utils.mkdir(PLOTS_DIR)
 
 # Ben Figure 3
 f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
-bins = np.linspace(-4000, 4000, 26)
-cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3')
-ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 100)
-ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 100, color='grey')
-ax1.set_ylim(0, 90)
+bins = np.arange(20) * 400 - 3800
+cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3', label='')
+ax1.vlines(cvdf['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
+ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
+ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
+                                       label='5% and 95%\npercentiles')
+ax1.set_ylim(0, 120)
+ax1.set_ylabel('N Glaciers')
+ax1.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
+ax1.legend(loc='best')
 cvdf['INTERP_MB_BIAS'].plot(ax=ax2, kind='hist', bins=bins, color='C0')
-ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile(), 0, 100)
-ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile([0.05, 0.95]), 0, 100, color='grey')
+ax2.vlines(cvdf['INTERP_MB_BIAS'].mean(), 0, 120, linestyles='--')
+ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile(), 0, 120)
+ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey')
+ax2.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
 plt.tight_layout()
 fn = os.path.join(PLOTS_DIR, '00_mb_crossval.pdf')
 plt.savefig(fn)
-plt.close()
+
+print('Median bias', cvdf['CV_MB_BIAS'].median())
+print('Mean bias', cvdf['CV_MB_BIAS'].mean())
+print('RMS', np.sqrt(np.mean(cvdf['CV_MB_BIAS']**2)))
+print('Sigma bias', np.mean(cvdf['CV_MB_SIGMA_BIAS']))
+
+exit()
+
 
 # Plots per glacier
 for gd in gdirs:
