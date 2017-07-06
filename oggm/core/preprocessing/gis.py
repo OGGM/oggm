@@ -409,7 +409,10 @@ def define_glacier_region(gdir, entity=None):
     if len(dem_list) == 1:
         dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
         dem_data = rasterio.band(dem_dss[0], 1)
-        src_transform = dem_dss[0].affine
+        if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+            src_transform = dem_dss[0].transform
+        else:
+            src_transform = dem_dss[0].affine
     else:
         dem_dss = [rasterio.open(s) for s in dem_list]  # list of rasters
         dem_data, src_transform = merge_tool(dem_dss)  # merged rasters
@@ -492,7 +495,7 @@ def define_glacier_region(gdir, entity=None):
 
         # Keep only the ones large enough
         log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divlist))
-        divlist = [g for g in divlist if (g.area >= (25 * dx ** 2))]
+        divlist = [g for g in divlist if (g.area >= (50 * dx ** 2))]
         log.debug('%s: number of divides: %d', gdir.rgi_id, len(divlist))
         divlist = np.asarray(divlist)
 

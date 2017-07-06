@@ -271,9 +271,8 @@ class PastMassBalanceModel(MassBalanceModel):
         fac = np.clip(fac, 0, 1)
         prcpsol *= fac
 
-        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1) \
-                    - self.bias
-        return mb_annual / SEC_IN_YEAR / cfg.RHO
+        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
+        return (mb_annual - self.bias) / SEC_IN_YEAR / cfg.RHO
 
 
 class ConstantMassBalanceModel(MassBalanceModel):

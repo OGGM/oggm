@@ -281,7 +281,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
         else:
             alt_range_th += 20
             log.warning('Set altitude threshold to {}'.format(alt_range_th))
-        if alt_range_th > 1000:
+        if alt_range_th > 2000:
             raise RuntimeError('Problem by altitude filter.')
 
     return out_width
@@ -530,6 +530,7 @@ def initialize_flowlines(gdir, div_id=None):
         # Interpolate heights
         xx, yy = new_line.xy
         hgts = interpolator((yy, xx))
+        assert len(hgts) >= 5
 
         # Check where the glacier is and where not
         isglacier = [poly.contains(shpg.Point(x, y)) for x, y in zip(xx, yy)]
@@ -538,7 +539,6 @@ def initialize_flowlines(gdir, div_id=None):
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
-        assert len(hgts) >= 5
 
         # Check for min slope issues and correct if needed
         if do_filter:
@@ -721,7 +721,7 @@ def catchment_width_correction(gdir, div_id=None):
         divides = []
         for i in gdir.divide_ids:
             log.info('%s: width correction, divide %d', gdir.rgi_id, i)
-            fls = catchment_width_correction(gdir, div_id=i)
+            fls = catchment_width_correction(gdir, div_id=i, reset=True)
             for fl in fls:
                 area += np.sum(fl.widths) * fl.dx
             divides.append(fls)

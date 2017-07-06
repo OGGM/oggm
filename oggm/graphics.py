@@ -61,6 +61,10 @@ def _plot_map(plotfunc):
         pass kwargs to salem.Map.set_lonlat_contours
     cbar_ax: ax, optional
         ax where to plot the colorbar
+    savefig : str, optional
+        save the figure to a file instead of displaying it
+    savefig_kwargs : dict, optional
+        the kwargs to plt.savefig
     """
 
     # Build on the original docstring
@@ -70,7 +74,7 @@ def _plot_map(plotfunc):
     def newplotfunc(gdir, ax=None, add_colorbar=True, title=None,
                     title_comment=None, horizontal_colorbar=False,
                     lonlat_contours_kwargs=None, cbar_ax=None,
-                    add_scalebar=True,
+                    add_scalebar=True, savefig=None, savefig_kwargs=None,
                     **kwargs):
 
         dofig = False
@@ -116,6 +120,10 @@ def _plot_map(plotfunc):
 
         if dofig:
             plt.tight_layout()
+
+        if savefig is not None:
+            plt.savefig(savefig, savefig_kwargs=savefig_kwargs)
+            plt.close()
 
     return newplotfunc
 
@@ -240,7 +248,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
                                      markersize=40, edgecolor='k', alpha=0.8,
                                      zorder=99, facecolor='none')
 
-    if add_downstream:
+    if add_downstream and not gdir.is_tidewater:
         # plot Centerlines
         cls = gdir.read_pickle(filename, div_id=0)
 
@@ -488,7 +496,7 @@ def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None, vmax=None,
         corners = ((ml[0], ml[1]), (ml[2], ml[3]))
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",category=RuntimeWarning)
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
             ds.set_subset(corners=corners, margin=10, crs=gdir.grid)
 
         salemmap = salem.Map(ds.grid, countries=False, nx=gdir.grid.nx)

@@ -1533,7 +1533,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
-def compile_run_output(gdirs, path=None, filesuffix=''):
+def compile_run_output(gdirs, path=True, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
 
@@ -1797,8 +1797,17 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, **kwargs):
-            # Log only if needed:
+        def _entity_task(gdir, reset=None, **kwargs):
+
+            if reset is None:
+                reset = not cfg.PARAMS['auto_skip_task']
+
+            # Do we need to run this task?
+            s = gdir.get_task_status(task_func)
+            if not reset and s and ('SUCCESS' in s):
+                return
+
+            # Log what we are doing
             if not task_func.__dict__.get('divide_task', False):
                 self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
 
@@ -1816,6 +1825,7 @@ class entity_task(object):
                 if not cfg.CONTINUE_ON_ERROR:
                     raise
             return out
+
         _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
 
@@ -1884,7 +1894,8 @@ def filter_rgi_name(name):
         return ''
 
     if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',
-                    '\r', '\x93', '¤', '0', '`']:
+                    '\r', '\x93', '¤', '0', '`', '/', 'C', '@',
+                    'Å', '\x06', '\x10', '^', 'å']:
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()
@@ -2035,6 +2046,12 @@ class GlacierDirectory(object):
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
+
+        # logging file
+        self.logfile = os.path.join(self.dir, 'log.txt')
+
+        # Optimization
+        self._mbdf = None
 
     def __repr__(self):
 
@@ -2318,22 +2335,25 @@ class GlacierDirectory(object):
     def get_ref_mb_data(self):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
-        flink, mbdatadir = get_wgms_files()
-        flink = pd.read_csv(flink)
-        wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
-        wid = wid.WGMS_ID.values[0]
+        if self._mbdf is None:
+            flink, mbdatadir = get_wgms_files()
+            flink = pd.read_csv(flink)
+            wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+            wid = wid.WGMS_ID.values[0]
 
-        # file
-        reff = os.path.join(mbdatadir, 'mbdata_WGMS-{:05d}.csv'.format(wid))
-        # list of years
-        mbdf = pd.read_csv(reff).set_index('YEAR')
+            # file
+            reff = os.path.join(mbdatadir,
+                                'mbdata_WGMS-{:05d}.csv'.format(wid))
+            # list of years
+            self._mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period
         y0, y1 = cfg.PARAMS['run_period']
         ci = self.read_pickle('climate_info')
         y0 = y0 or ci['hydro_yr_0']
         y1 = y1 or ci['hydro_yr_1']
-        return mbdf.loc[y0:y1]
+        out = self._mbdf.loc[y0:y1]
+        return out.dropna(subset=['ANNUAL_BALANCE'])
 
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
@@ -2350,20 +2370,43 @@ class GlacierDirectory(object):
             raised, a success is logged)
         """
 
-        # logging directory
-        fpath = os.path.join(self.dir, 'log')
-        mkdir(fpath)
-
-        # a file per function name
-        nowsrt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')
-        fpath = os.path.join(fpath, nowsrt + '_' + func.__name__)
-        if err is not None:
-            fpath += '.ERROR'
+        # a line per function call
+        nowsrt = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        line = nowsrt + ';' + func.__name__ + ';'
+        if err is None:
+            line += 'SUCCESS'
         else:
-            fpath += '.SUCCESS'
+            line += err.__class__.__name__ + ': {}'.format(err)
+        with open(self.logfile, 'a') as logfile:
+            logfile.write(line + '\n')
 
-        # in case an exception was raised, write the log message too
-        with open(fpath, 'w') as f:
-            f.write(func.__name__ + '\n')
-            if err is not None:
-                f.write(err.__class__.__name__ + ': {}'.format(err))
+    def get_task_status(self, func):
+        """Opens this directory's log file to see if a task was already run.
+
+        It is usually called by the :py:class:`entity_task` decorator, normally
+        you shouldn't take care about that.
+
+        Parameters
+        ----------
+        func : a function
+            the tasks which wants to know
+
+        Returns
+        -------
+        The last message for this task (SUCCESS if was successful),
+        None if the task was not run yet
+        """
+
+        if not os.path.isfile(self.logfile):
+            return None
+
+        with open(self.logfile) as logfile:
+            lines = logfile.readlines()
+
+        lines = [l.replace('\n', '') for l in lines if func.__name__ in l]
+        if lines:
+            # keep only the last log
+            return lines[-1].split(';')[-1]
+        else:
+            return None
+

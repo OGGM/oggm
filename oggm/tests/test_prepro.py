@@ -344,6 +344,7 @@ class TestCenterlines(unittest.TestCase):
     def test_baltoro_centerlines(self):
 
         cfg.PARAMS['border'] = 2
+        cfg.PARAMS['dmax'] = 100
         cfg.PATHS['dem_file'] = get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
@@ -1622,11 +1623,8 @@ class TestInversion(unittest.TestCase):
                             'RGI50-11.fake')
         self.assertTrue(os.path.exists(rdir))
 
-        rdir = os.path.join(rdir, 'log')
+        rdir = os.path.join(rdir, 'log.txt')
         self.assertTrue(os.path.exists(rdir))
-
-        self.assertEqual(len(glob.glob(os.path.join(rdir, '*.SUCCESS'))), 2)
-        self.assertTrue(len(glob.glob(os.path.join(rdir, '*.ERROR'))) >= 10)
 
         cfg.CONTINUE_ON_ERROR = False
 
@@ -1888,3 +1886,37 @@ class TestCatching(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
+
+    def test_task_status(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        cfg.CONTINUE_ON_ERROR = True
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        self.assertEqual(gdir.get_task_status(gis.glacier_masks), 'SUCCESS')
+        self.assertIsNone(gdir.get_task_status(centerlines.compute_centerlines))
+
+        centerlines.compute_downstream_bedshape(gdir)
+
+        s = gdir.get_task_status(centerlines.compute_downstream_bedshape)
+        assert 'FileNotFoundError' in s
+
+        # Try overwrite
+        cfg.PARAMS['auto_skip_task'] = True
+        gis.glacier_masks(gdir)
+
+        with open(gdir.logfile) as logfile:
+            lines = logfile.readlines()
+        isrun = ['glacier_masks' in l for l in lines]
+        assert np.sum(isrun) == 1
+
+        cfg.PARAMS['auto_skip_task'] = False
+        gis.glacier_masks(gdir)
+        with open(gdir.logfile) as logfile:
+            lines = logfile.readlines()
+        isrun = ['glacier_masks' in l for l in lines]
+        assert np.sum(isrun) == 2
