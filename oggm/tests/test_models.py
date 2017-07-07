@@ -2213,7 +2213,7 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
+        flowline.random_glacier_evolution(self.gdir, nyears=200, seed=4,
                                           bias=0)
         path = self.gdir.get_filepath('past_model')
 
@@ -2222,8 +2222,8 @@ class TestHEF(unittest.TestCase):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol), rtol=0.1)
-            np.testing.assert_allclose(0.07, np.std(vol), atol=0.02)
             np.testing.assert_allclose(area.iloc[0], np.mean(area), rtol=0.1)
+
             if do_plot:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                 vol.plot(ax=ax1)
@@ -2246,16 +2246,14 @@ class TestHEF(unittest.TestCase):
         for feedback in feedbacks:
             start_time = time.time()
             flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
-                                              cfl_number=1./30,
                                               mb_elev_feedback=feedback)
             end_time = time.time()
             times.append(end_time - start_time)
             out.append(utils.compile_run_output([self.gdir], path=False))
 
         # Check that volume isn't so different
-        assert_allclose(out[0].volume, out[1].volume, rtol=0.1)
-        assert_allclose(out[0].volume, out[2].volume, rtol=0.1)
-        # Last two should be closer
+        assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
+        assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
         assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
 
         if do_plot:
