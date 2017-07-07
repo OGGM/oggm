@@ -968,8 +968,8 @@ def year_to_date(yr):
     try:
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
-        sec = sec * SEC_IN_YEAR
-        out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
+        sec = round(sec * SEC_IN_YEAR)
+        out_m = np.nonzero(sec < CUMSEC_IN_MONTHS)[0][0] + 1
     except TypeError:
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
