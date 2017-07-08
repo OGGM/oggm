@@ -1794,7 +1794,8 @@ class TestGrindelInvert(unittest.TestCase):
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
         cl = gdir.read_pickle('inversion_output', div_id=1)[0]
-        assert utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])]) < 10.
+        rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
+        assert rmsd < 10.
 
     @requires_py3
     def test_invert_and_run(self):

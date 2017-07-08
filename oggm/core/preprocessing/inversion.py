@@ -82,7 +82,7 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
 
         # Heights
         hgt = fl.surface_h
-        angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+        angle = -np.gradient(hgt, dx)  # beware the minus sign
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
