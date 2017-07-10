@@ -685,7 +685,11 @@ def compute_centerlines(gdir, div_id=None):
     # Remove the heads that are too low
     zglacier = topo[np.where(glacier_mask)]
     head_threshold = np.percentile(zglacier, (1./3.)*100)
-    heads_idx = heads_idx[0][np.where(zoutline[heads_idx] > head_threshold)]
+    _heads_idx = heads_idx[0][np.where(zoutline[heads_idx] > head_threshold)]
+    if len(_heads_idx) == 0:
+        # this is for baaad ice caps where the outline is far off in altitude
+        _heads_idx = [heads_idx[0][np.argmax(zoutline[heads_idx])]]
+    heads_idx = _heads_idx
     heads = np.asarray(ext_yx)[:, heads_idx]
     heads_z = zoutline[heads_idx]
     # careful, the coords are in y, x order!
