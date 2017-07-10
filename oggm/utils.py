@@ -817,6 +817,22 @@ def line_interpol(line, dx):
         pbs = pref.buffer(dx).boundary.intersection(line)
         if pbs.type == 'Point':
             pbs = [pbs]
+        elif pbs.type == 'LineString':
+            # This is rare
+            pbs = [shpg.Point(c) for c in pbs.coords]
+            assert len(pbs) == 2
+        elif pbs.type == 'GeometryCollection':
+            # This is rare
+            opbs = []
+            for p in pbs:
+                if p.type == 'Point':
+                    opbs.append(p)
+                elif p.type == 'LineString':
+                    opbs.extend([shpg.Point(c) for c in p.coords])
+            pbs = opbs
+        else:
+            assert pbs.type == 'MultiPoint'
+
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
         tdis = np.array([line.project(pb) for pb in pbs])
