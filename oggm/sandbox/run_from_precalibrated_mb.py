@@ -45,7 +45,7 @@ cfg.PARAMS['border'] = 60
 cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
 # Set to True for operational runs
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 cfg.PARAMS['auto_skip_task'] = False
 
 # Test

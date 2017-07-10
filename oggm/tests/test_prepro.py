@@ -1600,7 +1600,7 @@ class TestInversion(unittest.TestCase):
 
     def test_continue_on_error(self):
 
-        cfg.CONTINUE_ON_ERROR = True
+        cfg.PARAMS['continue_on_error'] = True
         cfg.PATHS['working_dir'] = self.testdir
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -1631,7 +1631,7 @@ class TestInversion(unittest.TestCase):
         rdir = os.path.join(rdir, 'log.txt')
         self.assertTrue(os.path.exists(rdir))
 
-        cfg.CONTINUE_ON_ERROR = False
+        cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
         dfc = utils.glacier_characteristics([gdir])
@@ -1887,7 +1887,7 @@ class TestCatching(unittest.TestCase):
 
         # Make it large to raise an error
         cfg.PARAMS['border'] = 250
-        cfg.CONTINUE_ON_ERROR = True
+        cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -1897,7 +1897,7 @@ class TestCatching(unittest.TestCase):
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-        cfg.CONTINUE_ON_ERROR = True
+        cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)

@@ -48,7 +48,7 @@ utils.mkdir(cfg.PATHS['rgi_dir'])
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = False
 cfg.PARAMS['border'] = 20
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 
 # Read in the RGI file
 rgisel = os.path.join(WORKING_DIR, 'rgi_selection.shp')

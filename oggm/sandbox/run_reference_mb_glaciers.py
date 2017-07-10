@@ -41,7 +41,7 @@ cfg.PARAMS['prcp_scaling_factor'] = 2.5
 cfg.PARAMS['temp_melt'] = -1
 
 # Set to True for operational runs
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 cfg.PARAMS['auto_skip_task'] = True
 
 # Don't use divides for now
