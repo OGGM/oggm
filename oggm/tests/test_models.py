@@ -2564,7 +2564,7 @@ class TestHEF(unittest.TestCase):
         flowline.init_present_time_glacier(self.gdir)
         flowline.random_glacier_evolution(self.gdir, nyears=200, seed=4,
                                           bias=0)
-        path = self.gdir.get_filepath('past_model')
+        path = self.gdir.get_filepath('model_run')
 
         with flowline.FileModel(path) as model:
             vol = model.volume_km3_ts()
@@ -2640,7 +2640,7 @@ class TestHEF(unittest.TestCase):
         flowline.iterative_initial_glacier_search(gdir, y0=df.index[0], init_bias=init_bias,
                                                   rtol=rtol, write_steps=True)
 
-        past_model = flowline.FileModel(gdir.get_filepath('past_model'))
+        past_model = flowline.FileModel(gdir.get_filepath('model_run'))
 
         vol_start = past_model.volume_km3
         bef_fls = copy.deepcopy(past_model.fls)

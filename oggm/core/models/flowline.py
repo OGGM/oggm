@@ -1547,7 +1547,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
     mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
 
     # run
-    path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
+    path = gdir.get_filepath('model_run', filesuffix=filesuffix, delete=True)
 
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
@@ -1571,22 +1571,12 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
         break
 
 
-@entity_task(log, writes=['past_model'])
+@entity_task(log, writes=['model_run'])
 def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                      write_steps=True):
     """Iterative search for the glacier in year y0.
 
-    this doesn't really work.
-
-    Parameters
-    ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    New file::
-        - past_model.p: a ModelFlowline object
+    this is outdated and doesn't really work.
     """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1619,7 +1609,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
 
     # Write the data
     gdir.write_pickle(params, 'find_initial_glacier_params')
-    path = gdir.get_filepath('past_model', delete=True)
+    path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
         _ = past_model.run_until_and_store(y1, path=path)
     else:

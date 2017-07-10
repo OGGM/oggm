@@ -301,7 +301,7 @@ class TestWorkflow(unittest.TestCase):
 
         for gd in gdirs:
 
-            path = gd.get_filepath('past_model', filesuffix='_test')
+            path = gd.get_filepath('model_run', filesuffix='_test')
 
             # See that we are running ok
             with flowline.FileModel(path) as model:

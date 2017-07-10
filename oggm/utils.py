@@ -1570,7 +1570,7 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         if i >= len(gdirs):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('past_model', filesuffix=filesuffix)
+            ppath = gdirs[i].get_filepath('model_run', filesuffix=filesuffix)
             with flowline.FileModel(ppath) as model:
                 ts = model.volume_km3_ts()
             time = ts.index
@@ -1590,7 +1590,7 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
     length = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
-            ppath = gdir.get_filepath('past_model', filesuffix=filesuffix)
+            ppath = gdir.get_filepath('model_run', filesuffix=filesuffix)
             with flowline.FileModel(ppath) as model:
                 vol[:, i] = model.volume_m3_ts().values
                 area[:, i] = model.area_m2_ts().values
@@ -2149,7 +2149,7 @@ class GlacierDirectory(object):
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + '_' + filesuffix + '.' + fname[1]
+            fname = fname[0] + filesuffix + '.' + fname[1]
         out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
