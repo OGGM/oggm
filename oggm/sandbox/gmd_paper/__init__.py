@@ -1,0 +1,1 @@
+PLOT_DIR = '/home/mowglie/disk/MyProjects/Papers/2017_OGGM/gmdd/figs/'
