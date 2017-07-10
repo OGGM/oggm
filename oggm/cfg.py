@@ -71,7 +71,6 @@ class PathOrderedDict(OrderedDict):
 
 # Globals
 IS_INITIALIZED = False
-CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
@@ -223,7 +222,6 @@ def initialize(file=None):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global CONTINUE_ON_ERROR
     global N
     global A
     global RHO
@@ -241,8 +239,6 @@ def initialize(file=None):
     except (ConfigObjError, IOError) as e:
         log.critical('Param file could not be parsed (%s): %s', file, e)
         sys.exit()
-
-    CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     # Default
     PATHS['working_dir'] = cp['working_dir']
@@ -267,6 +263,8 @@ def initialize(file=None):
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
     # Some non-trivial params
+
+    PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
@@ -486,7 +484,6 @@ def pack_config():
 
     return {
         'IS_INITIALIZED': IS_INITIALIZED,
-        'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
         'PARAMS': PARAMS,
         'PATHS': PATHS,
         'LRUHANDLERS': LRUHANDLERS,
@@ -497,11 +494,9 @@ def pack_config():
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, \
-        BASENAMES, LRUHANDLERS
+    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
-    CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
     LRUHANDLERS = cfg_dict['LRUHANDLERS']

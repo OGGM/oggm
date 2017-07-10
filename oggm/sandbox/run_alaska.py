@@ -70,7 +70,7 @@ utils.mkdir(cfg.PATHS['cru_dir'])
 
 # Use multiprocessing? Change this to run in the AWS
 cfg.PARAMS['use_multiprocessing'] = False
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 
 # Other params
 cfg.PARAMS['border'] = 80

@@ -39,7 +39,7 @@ cfg.PARAMS['use_multiprocessing'] = True
 cfg.PARAMS['border'] = 60
 
 # Set to True for operational runs
-cfg.CONTINUE_ON_ERROR = True
+cfg.PARAMS['continue_on_error'] = True
 cfg.PARAMS['auto_skip_task'] = True
 
 # Don't use divides for now

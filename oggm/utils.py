@@ -1838,7 +1838,7 @@ class entity_task(object):
                 pipe_log(gdir, task_func, err=err)
                 self.log.error('%s occured during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
-                if not cfg.CONTINUE_ON_ERROR:
+                if not cfg.PARAMS['continue_on_error']:
                     raise
             return out
 

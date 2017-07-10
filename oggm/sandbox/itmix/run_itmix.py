@@ -40,7 +40,7 @@ cfg.initialize()
 
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 
 # Working dir
 cfg.PATHS['working_dir'] = WORKING_DIR
