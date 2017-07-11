@@ -1552,17 +1552,17 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
-def compile_run_output(gdirs, path=True, filesuffix=''):
+def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
 
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
+    path: where to store (default is on the working dir).
+    monthly: wether to store monthly values (default is yearly)
     filesuffix: the filesuffix of the run
     """
-
-    from oggm.core.models import flowline
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
@@ -1583,6 +1583,15 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         except:
             i += 1
 
+    # Monthly or not
+    if monthly:
+        pkeep = np.ones(len(time), dtype=np.bool)
+    else:
+        pkeep = np.where(month == 1)
+
+    time = time[pkeep]
+    year = year[pkeep]
+    month = month[pkeep]
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
                             'month': ('time', month),
@@ -1597,9 +1606,9 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                vol[:, i] = ds_diag.volume_m3.values
-                area[:, i] = ds_diag.area_m2.values
-                length[:, i] = ds_diag.length_m.values
+                vol[:, i] = ds_diag.volume_m3.values[pkeep]
+                area[:, i] = ds_diag.area_m2.values[pkeep]
+                length[:, i] = ds_diag.length_m.values[pkeep]
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
