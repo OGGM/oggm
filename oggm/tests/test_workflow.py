@@ -295,14 +295,12 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        rand_glac = partial(flowline.random_glacier_evolution, nyears=200,
-                            seed=0, filesuffix='_test')
-        workflow.execute_entity_task(rand_glac, gdirs)
+        workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
+                                     nyears=200, seed=0, filesuffix='_test')
 
         for gd in gdirs:
 
-            path = gd.get_filepath('past_model', filesuffix='_test')
-
+            path = gd.get_filepath('model_run', filesuffix='_test')
             # See that we are running ok
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
@@ -313,11 +311,28 @@ class TestWorkflow(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
                 self.assertTrue(np.all(np.isfinite(length) & length != 0.))
 
+            ds_diag = gd.get_filepath('model_diagnostics', filesuffix='_test')
+            ds_diag = xr.open_dataset(ds_diag)
+            df = vol.to_frame('RUN')
+            df['DIAG'] = ds_diag.volume_m3.to_series() * 1e-9
+            assert_allclose(df.RUN, df.DIAG)
+            df = area.to_frame('RUN')
+            df['DIAG'] = ds_diag.area_m2.to_series() * 1e-6
+            assert_allclose(df.RUN, df.DIAG)
+            df = length.to_frame('RUN')
+            df['DIAG'] = ds_diag.length_m.to_series()
+            assert_allclose(df.RUN, df.DIAG)
+
+        # Test output
+        ds = utils.compile_run_output(gdirs, filesuffix='_test', monthly=True)
+        assert_allclose(ds_diag.volume_m3, ds.volume.sel(rgi_id=gd.rgi_id))
+        assert_allclose(ds_diag.area_m2, ds.area.sel(rgi_id=gd.rgi_id))
+        assert_allclose(ds_diag.length_m, ds.length.sel(rgi_id=gd.rgi_id))
         # Test output
         ds = utils.compile_run_output(gdirs, filesuffix='_test')
-        assert_allclose(vol, ds.volume.sel(rgi_id=gd.rgi_id) * 1e-9)
-        assert_allclose(area, ds.area.sel(rgi_id=gd.rgi_id) * 1e-6)
-        assert_allclose(length, ds.length.sel(rgi_id=gd.rgi_id))
+        df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
+        df['RUN'] = ds_diag.volume_m3.to_series()
+        assert_allclose(df.RUN, df.OUT)
 
 
     @is_slow

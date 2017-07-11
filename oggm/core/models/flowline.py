@@ -572,54 +572,73 @@ class FlowlineModel(object):
             if np.any(~np.isfinite(fl.thick)):
                 raise RuntimeError('NaN in numerical solution.')
 
-    def run_until_and_store(self, y1, path=None):
-        """Runs the model and returns intermediate steps in a dataset.
+    def run_until_and_store(self, y1, run_path=None, diag_path=None):
+        """Runs the model and returns intermediate steps in two datasets
+        (model run and diagnostics).
 
-        You can store the whole in a netcdf file, too.
+        You can store the whole in netcdf files, too.
         """
 
         # time
-        time = utils.monthly_timeseries(self.yr, y1)
-        yr, mo = utils.year_to_date(time)
+        monthly_time = utils.monthly_timeseries(self.yr, y1)
+        yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+        yrs, months = utils.year_to_date(monthly_time)
 
         # init output
-        sects = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
-        widths = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
-        if path is not None:
-            self.to_netcdf(path)
+        if run_path is not None:
+            self.to_netcdf(run_path)
+        ny = len(yearly_time)
+        nm = len(monthly_time)
+        sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+        widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+        diag_ds = xr.Dataset(coords=OrderedDict(time=('time', monthly_time),
+                                                year=('time', yrs),
+                                                month=('time', months),
+                                                ))
+        diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
 
         # Run
-        for i, y in enumerate(time):
-            self.run_until(y)
-            for s, w, fl in zip(sects, widths, self.fls):
-                s[i, :] = fl.section
-                w[i, :] = fl.widths_m
+        j = 0
+        for i, (yr, mo) in enumerate(zip(monthly_time, months)):
+            self.run_until(yr)
+            # Model run
+            if mo == 1:
+                for s, w, fl in zip(sects, widths, self.fls):
+                    s[j, :] = fl.section
+                    w[j, :] = fl.widths_m
+                j += 1
+            # Diagnostics
+            diag_ds['volume_m3'].data[i] = self.volume_m3
+            diag_ds['area_m2'].data[i] = self.area_m2
+            diag_ds['length_m'].data[i] = self.length_m
 
         # to datasets
-        dss = []
+        run_ds = []
         for (s, w) in zip(sects, widths):
             ds = xr.Dataset()
-            ds.coords['time'] = time
-            varcoords = {'time': time,
-                         'year': ('time', yr),
-                         'month': ('time', mo),
-                         }
+            ds.coords['time'] = yearly_time
+            varcoords = OrderedDict(time=('time', yearly_time),
+                                    year=('time', yearly_time))
             ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            dss.append(ds)
+            run_ds.append(ds)
 
         # write output?
-        if path is not None:
+        if run_path is not None:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
                       }
-            for i, ds in enumerate(dss):
-                ds.to_netcdf(path, 'a', group='fl_{}'.format(i),
+            for i, ds in enumerate(run_ds):
+                ds.to_netcdf(run_path, 'a', group='fl_{}'.format(i),
                              encoding=encode)
+        if diag_path is not None:
+            diag_ds.to_netcdf(diag_path)
 
-        return dss
+        return run_ds, diag_ds
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
@@ -1186,8 +1205,8 @@ class FileModel(object):
                 fl.section = sel.values
         self.yr = sel.time.values
 
-    def area_m2_ts(self, rollmin=36):
-        """rollmin is the number of months you want to smooth onto"""
+    def area_m2_ts(self, rollmin=0):
+        """rollmin is the number of years you want to smooth onto"""
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
             widths = ds.ts_width_m.copy()
@@ -1211,7 +1230,8 @@ class FileModel(object):
     def volume_km3_ts(self):
         return self.volume_m3_ts() * 1e-9
 
-    def length_m_ts(self, rollmin=36):
+    def length_m_ts(self, rollmin=0):
+        """rollmin is the number of years you want to smooth onto"""
         fl = self.fls[-1]
         ds = self.dss[-1]
         sel = ds.ts_section.copy()
@@ -1542,12 +1562,15 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
-    ys = 1
+    ys = 0
     ye = ys + nyears
     mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
 
     # run
-    path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
+    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
+                                 delete=True)
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
+                                  delete=True)
 
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
@@ -1560,7 +1583,8 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
         try:
-            model.run_until_and_store(ye, path=path)
+            model.run_until_and_store(ye, run_path=run_path,
+                                      diag_path=diag_path)
         except RuntimeError:
             if step == 'ultra-conservative':
                 raise RuntimeError('{}: we did our best, the model is still '
@@ -1571,22 +1595,12 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
         break
 
 
-@entity_task(log, writes=['past_model'])
+@entity_task(log, writes=['model_run'])
 def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                      write_steps=True):
     """Iterative search for the glacier in year y0.
 
-    this doesn't really work.
-
-    Parameters
-    ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    New file::
-        - past_model.p: a ModelFlowline object
+    this is outdated and doesn't really work.
     """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1619,7 +1633,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
 
     # Write the data
     gdir.write_pickle(params, 'find_initial_glacier_params')
-    path = gdir.get_filepath('past_model', delete=True)
+    path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
         _ = past_model.run_until_and_store(y1, path=path)
     else:

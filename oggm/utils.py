@@ -1006,7 +1006,7 @@ def date_to_year(y, m):
     return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
-def monthly_timeseries(y0, y1=None, ny=None):
+def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """Creates a monthly timeseries in units of floating years.
     """
 
@@ -1018,7 +1018,10 @@ def monthly_timeseries(y0, y1=None, ny=None):
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    return date_to_year(years, months)
+    out = date_to_year(years, months)
+    if not include_last_year:
+        out = out[:-11]
+    return out
 
 
 @MEMORY.cache
@@ -1549,17 +1552,17 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
-def compile_run_output(gdirs, path=True, filesuffix=''):
+def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
 
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
+    path: where to store (default is on the working dir).
+    monthly: wether to store monthly values (default is yearly)
     filesuffix: the filesuffix of the run
     """
-
-    from oggm.core.models import flowline
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
@@ -1570,31 +1573,42 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         if i >= len(gdirs):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('past_model', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                ts = model.volume_km3_ts()
-            time = ts.index
-            year, month = year_to_date(time)
+            ppath = gdirs[i].get_filepath('model_diagnostics',
+                                          filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                time = ds_diag.time.values
+                year = ds_diag.year.values
+                month = ds_diag.month.values
             break
         except:
             i += 1
 
+    # Monthly or not
+    if monthly:
+        pkeep = np.ones(len(time), dtype=np.bool)
+    else:
+        pkeep = np.where(month == 1)
+
+    time = time[pkeep]
+    year = year[pkeep]
+    month = month[pkeep]
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
                             'month': ('time', month),
                             'rgi_id': ('rgi_id', rgi_ids)
                             })
-    shape = (len(ts), len(rgi_ids))
+    shape = (len(time), len(rgi_ids))
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
-            ppath = gdir.get_filepath('past_model', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                vol[:, i] = model.volume_m3_ts().values
-                area[:, i] = model.area_m2_ts().values
-                length[:, i] = model.length_m_ts().values
+            ppath = gdir.get_filepath('model_diagnostics',
+                                      filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                vol[:, i] = ds_diag.volume_m3.values[pkeep]
+                area[:, i] = ds_diag.area_m2.values[pkeep]
+                length[:, i] = ds_diag.length_m.values[pkeep]
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
@@ -1616,8 +1630,6 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
                                 'run_output' + filesuffix + '.nc')
         ds.to_netcdf(path)
     return ds
-
-
 
 
 def glacier_characteristics(gdirs, filesuffix='', path=True):
@@ -2149,7 +2161,7 @@ class GlacierDirectory(object):
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + '_' + filesuffix + '.' + fname[1]
+            fname = fname[0] + filesuffix + '.' + fname[1]
         out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
