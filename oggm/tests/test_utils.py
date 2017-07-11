@@ -108,7 +108,7 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, [1998, 1998])
         np.testing.assert_array_equal(m, [2, 3])
 
-        time = pd.date_range('1/1/1800', periods=300*12, freq='MS')
+        time = pd.date_range('1/1/1800', periods=300*12-11, freq='MS')
         yr = utils.date_to_year(time.year, time.month)
         y, m = utils.year_to_date(yr)
         np.testing.assert_array_equal(y, time.year)
@@ -124,8 +124,14 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        time = pd.period_range('0001-01', '3000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 3000)
+        time = pd.period_range('0001-01', '6000-1', freq='M')
+        myr = utils.monthly_timeseries(1, 6000)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+        time = pd.period_range('0001-01', '6000-12', freq='M')
+        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
         y, m = utils.year_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)

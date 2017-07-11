@@ -1006,7 +1006,7 @@ def date_to_year(y, m):
     return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
-def monthly_timeseries(y0, y1=None, ny=None):
+def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """Creates a monthly timeseries in units of floating years.
     """
 
@@ -1018,7 +1018,10 @@ def monthly_timeseries(y0, y1=None, ny=None):
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    return date_to_year(years, months)
+    out = date_to_year(years, months)
+    if not include_last_year:
+        out = out[:-11]
+    return out
 
 
 @MEMORY.cache
@@ -1570,11 +1573,12 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         if i >= len(gdirs):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('model_run', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                ts = model.volume_km3_ts()
-            time = ts.index
-            year, month = year_to_date(time)
+            ppath = gdirs[i].get_filepath('model_diagnostics',
+                                          filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                time = ds_diag.time.values
+                year = ds_diag.year.values
+                month = ds_diag.month.values
             break
         except:
             i += 1
@@ -1584,17 +1588,18 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
                             'month': ('time', month),
                             'rgi_id': ('rgi_id', rgi_ids)
                             })
-    shape = (len(ts), len(rgi_ids))
+    shape = (len(time), len(rgi_ids))
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
-            ppath = gdir.get_filepath('model_run', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                vol[:, i] = model.volume_m3_ts().values
-                area[:, i] = model.area_m2_ts().values
-                length[:, i] = model.length_m_ts().values
+            ppath = gdir.get_filepath('model_diagnostics',
+                                      filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                vol[:, i] = ds_diag.volume_m3.values
+                area[:, i] = ds_diag.area_m2.values
+                length[:, i] = ds_diag.length_m.values
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
@@ -1616,8 +1621,6 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
                                 'run_output' + filesuffix + '.nc')
         ds.to_netcdf(path)
     return ds
-
-
 
 
 def glacier_characteristics(gdirs, filesuffix='', path=True):

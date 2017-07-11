@@ -1110,8 +1110,8 @@ class TestIO(unittest.TestCase):
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
-        ds = model.run_until_and_store(500)[0]
-
+        ds, ds_diag = model.run_until_and_store(500)
+        ds = ds[0]
 
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
@@ -1121,24 +1121,44 @@ class TestIO(unittest.TestCase):
         vol_ref = []
         a_ref = []
         l_ref = []
+        vol_diag = []
+        a_diag = []
+        l_diag = []
         for yr in years:
             model.run_until(yr)
-            vol_ref.append(model.volume_m3)
-            a_ref.append(model.area_m2)
-            l_ref.append(model.length_m)
+            vol_diag.append(model.volume_m3)
+            a_diag.append(model.area_m2)
+            l_diag.append(model.length_m)
+            if int(yr) == yr:
+                vol_ref.append(model.volume_m3)
+                a_ref.append(model.area_m2)
+                l_ref.append(model.length_m)
+                if int(yr) == 500:
+                    secfortest = model.fls[0].section
 
         np.testing.assert_allclose(ds.ts_section.isel(time=-1),
-                                   model.fls[0].section)
+                                   secfortest)
+
+        np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
+        np.testing.assert_allclose(ds_diag.area_m2, a_diag)
+        np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
         fls = dummy_constant_bed()
-        path = os.path.join(self.test_dir, 'ts_ideal.nc')
-        if os.path.exists(path):
-            os.remove(path)
+        run_path = os.path.join(self.test_dir, 'ts_ideal.nc')
+        diag_path = os.path.join(self.test_dir, 'ts_diag.nc')
+        if os.path.exists(run_path):
+            os.remove(run_path)
+        if os.path.exists(diag_path):
+            os.remove(diag_path)
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
-        _ = model.run_until_and_store(500, path=path)
+        model.run_until_and_store(500, run_path=run_path,
+                                  diag_path=diag_path)
 
-        fmodel = flowline.FileModel(path)
+        ds_ = xr.open_dataset(diag_path)
+        xr.testing.assert_identical(ds_diag, ds_)
+
+        fmodel = flowline.FileModel(run_path)
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
@@ -1153,9 +1173,8 @@ class TestIO(unittest.TestCase):
                                            fmodel.fls[0].widths_m)
 
         np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-        np.testing.assert_allclose(fmodel.area_m2_ts(rollmin=0), a_ref)
-        np.testing.assert_allclose(fmodel.length_m_ts().iloc[1:], l_ref[1:],
-                                   atol=101)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
         # Can we start a run from the middle?
         fmodel.run_until(300)

@@ -205,8 +205,13 @@ _doc = ''
 BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
 
-_doc = ''
+_doc = 'A netcdf file containing enough information to reconstruct the ' \
+       'entire flowline glacier along the run (can be data expensive).'
 BASENAMES['model_run'] = ('model_run.nc', _doc)
+
+_doc = 'A netcdf file containing the model diagnostics (volume, ' \
+       'mass-balance, length...).'
+BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
