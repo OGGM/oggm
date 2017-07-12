@@ -1655,7 +1655,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
 
         d = OrderedDict()
 
-        # Easy stats
+        # Easy stats - this should always be possible
         d['rgi_id'] = gdir.rgi_id
         d['name'] = gdir.name
         d['cenlon'] = gdir.cenlon
@@ -1664,113 +1664,112 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
         d['glacier_type'] = gdir.glacier_type
         d['terminus_type'] = gdir.terminus_type
 
-        # Masks related stuff
-        if gdir.has_file('gridded_data', div_id=0):
-            fpath = gdir.get_filepath('gridded_data', div_id=0)
-            with netCDF4.Dataset(fpath) as nc:
-                mask = nc.variables['glacier_mask'][:]
-                topo = nc.variables['topo'][:]
-            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-
-        # Divides
-        d['n_divides'] = len(list(gdir.divide_ids))
-
-        # Very bad folders sometimes
+        # The rest is less certain. We put this in a try block and see
         try:
-            gdir.has_file('centerlines', div_id=1)
-        except IndexError:
-            out_df.append(d)
-            continue
+            # Masks related stuff
+            if gdir.has_file('gridded_data', div_id=0):
+                fpath = gdir.get_filepath('gridded_data', div_id=0)
+                with netCDF4.Dataset(fpath) as nc:
+                    mask = nc.variables['glacier_mask'][:]
+                    topo = nc.variables['topo'][:]
+                d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+                d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+                d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
 
-        # Centerlines
-        if gdir.has_file('centerlines', div_id=1):
-            cls = []
-            for i in gdir.divide_ids:
-                cls.extend(gdir.read_pickle('centerlines', div_id=i))
-            longuest = 0.
-            for cl in cls:
-                longuest = np.max([longuest, cl.dis_on_line[-1]])
-            d['n_centerlines'] = len(cls)
-            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+            # Divides
+            d['n_divides'] = len(list(gdir.divide_ids))
 
-        # MB and flowline related stuff
-        if gdir.has_file('inversion_flowlines', div_id=1):
-            amb = np.array([])
-            h = np.array([])
-            widths = np.array([])
-            slope = np.array([])
+            # Centerlines
+            if gdir.has_file('centerlines', div_id=1):
+                cls = []
+                for i in gdir.divide_ids:
+                    cls.extend(gdir.read_pickle('centerlines', div_id=i))
+                longuest = 0.
+                for cl in cls:
+                    longuest = np.max([longuest, cl.dis_on_line[-1]])
+                d['n_centerlines'] = len(cls)
+                d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
 
-            for div_id in gdir.divide_ids:
-                fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-                dx = fls[0].dx * gdir.grid.dx
-                for fl in fls:
-                    amb = np.append(amb, fl.apparent_mb)
-                    hgt = fl.surface_h
-                    h = np.append(h, hgt)
-                    widths = np.append(widths, fl.widths * dx)
-                    slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+            # MB and flowline related stuff
+            if gdir.has_file('inversion_flowlines', div_id=1):
+                amb = np.array([])
+                h = np.array([])
+                widths = np.array([])
+                slope = np.array([])
 
-            pacc = np.where(amb >= 0)
-            pab = np.where(amb < 0)
-            d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
-            try:
-                # Try to get the slope
-                mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
-                d['mb_grad'] = mb_slope
-            except:
-                # we don't mind if something goes wrong
-                d['mb_grad'] = np.NaN
-            d['avg_width'] = np.mean(widths)
-            d['avg_slope'] = np.mean(slope)
+                for div_id in gdir.divide_ids:
+                    fls = gdir.read_pickle('inversion_flowlines',
+                                           div_id=div_id)
+                    dx = fls[0].dx * gdir.grid.dx
+                    for fl in fls:
+                        amb = np.append(amb, fl.apparent_mb)
+                        hgt = fl.surface_h
+                        h = np.append(h, hgt)
+                        widths = np.append(widths, fl.widths * dx)
+                        slope = np.append(slope,
+                                          np.arctan(-np.gradient(hgt, dx)))
 
-        # Climate
-        if gdir.has_file('climate_monthly', div_id=0):
-            with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cds:
-                d['clim_alt'] = cds.ref_hgt
-                t = cds.temp.mean(dim='time').values
-                if 'dem_mean_elev' in d:
-                    t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
-                        cfg.PARAMS['temp_default_gradient']
-                else:
-                    t = np.NaN
-                d['clim_temp_avgh'] = t
-                d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+                pacc = np.where(amb >= 0)
+                pab = np.where(amb < 0)
+                d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
+                try:
+                    # Try to get the slope
+                    mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+                    d['mb_grad'] = mb_slope
+                except:
+                    # we don't mind if something goes wrong
+                    d['mb_grad'] = np.NaN
+                d['avg_width'] = np.mean(widths)
+                d['avg_slope'] = np.mean(slope)
 
-        # Inversion
-        if gdir.has_file('inversion_output', div_id=1):
-            vol = []
-            for i in gdir.divide_ids:
-                cl = gdir.read_pickle('inversion_output', div_id=i)
-                for c in cl:
-                    vol.extend(c['volume'])
-            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
-            area = gdir.rgi_area_km2
-            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-            d['vas_volume_km3'] = 0.034*(area**1.375)
-            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+            # Climate
+            if gdir.has_file('climate_monthly', div_id=0):
+                cf = gdir.get_filepath('climate_monthly')
+                with xr.open_dataset(cf) as cds:
+                    d['clim_alt'] = cds.ref_hgt
+                    t = cds.temp.mean(dim='time').values
+                    if 'dem_mean_elev' in d:
+                        t = (t - (d['dem_mean_elev'] - d['clim_alt']) *
+                             cfg.PARAMS['temp_default_gradient'])
+                    else:
+                        t = np.NaN
+                    d['clim_temp_avgh'] = t
+                    d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
 
-        # Calving
-        if gdir.has_file('calving_output', div_id=1):
-            all_calving_data = []
-            all_width = []
-            for i in gdir.divide_ids:
-                cl = gdir.read_pickle('calving_output', div_id=i)
-                for c in cl:
-                    all_calving_data = c['calving_fluxes'][-1]
-                    all_width = c['t_width']
-            d['calving_flux'] = all_calving_data
-            d['calving_front_width'] = all_width
-        else:
-            d['calving_flux'] = np.NaN
-            d['calving_front_width'] = np.NaN
+            # Inversion
+            if gdir.has_file('inversion_output', div_id=1):
+                vol = []
+                for i in gdir.divide_ids:
+                    cl = gdir.read_pickle('inversion_output', div_id=i)
+                    for c in cl:
+                        vol.extend(c['volume'])
+                d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+                area = gdir.rgi_area_km2
+                d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+                d['vas_volume_km3'] = 0.034*(area**1.375)
+                d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
 
+            # Calving
+            if gdir.has_file('calving_output', div_id=1):
+                all_calving_data = []
+                all_width = []
+                for i in gdir.divide_ids:
+                    cl = gdir.read_pickle('calving_output', div_id=i)
+                    for c in cl:
+                        all_calving_data = c['calving_fluxes'][-1]
+                        all_width = c['t_width']
+                d['calving_flux'] = all_calving_data
+                d['calving_front_width'] = all_width
+            else:
+                d['calving_flux'] = np.NaN
+                d['calving_front_width'] = np.NaN
+        except:
+            # We're good with any error - we store the dict anyway below
+            pass
 
         out_df.append(d)
 
-    cols = list(out_df[0].keys())
-    out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
@@ -2020,8 +2019,8 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
             self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
-            self.rgi_subregion = self.rgi_region + '-' + \
-                                 '{:02d}'.format(int(rgi_entity.O2Region))
+            self.rgi_subregion = (self.rgi_region + '-' +
+                                  '{:02d}'.format(int(rgi_entity.O2Region)))
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
@@ -2196,8 +2195,8 @@ class GlacierDirectory(object):
         -------
         An object read from the pickle
         """
-        use_comp = use_compression if use_compression is not None \
-            else cfg.PARAMS['use_compression']
+        use_comp = (use_compression if use_compression is not None
+                    else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'rb') as f:
             out = pickle.load(f)
@@ -2219,8 +2218,8 @@ class GlacierDirectory(object):
             whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         """
-        use_comp = use_compression if use_compression is not None \
-            else cfg.PARAMS['use_compression']
+        use_comp = (use_compression if use_compression is not None
+                    else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'wb') as f:
             pickle.dump(var, f, protocol=-1)
