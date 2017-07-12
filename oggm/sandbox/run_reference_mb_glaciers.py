@@ -7,7 +7,6 @@ import zipfile
 import oggm
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 import matplotlib.pyplot as plt
 import salem
 
@@ -36,16 +35,13 @@ cfg.PARAMS['use_multiprocessing'] = True
 # Make it large if you expect your glaciers to grow large
 cfg.PARAMS['border'] = 60
 
-# This is the default in OGGM
-cfg.PARAMS['prcp_scaling_factor'] = 2.5
-cfg.PARAMS['temp_melt'] = -1
-
 # Set to True for operational runs
 cfg.PARAMS['continue_on_error'] = False
 cfg.PARAMS['auto_skip_task'] = True
 
-# Don't use divides for now
+# Don't use divides for now, or intersects
 cfg.set_divides_db()
+cfg.set_intersects_db()
 
 # Pre-download other files which will be needed later
 _ = utils.get_cru_file(var='tmp')
@@ -94,9 +90,9 @@ for task in task_list:
 
 # Climate tasks
 execute_entity_task(tasks.process_cru_data, gdirs)
-# tasks.quick_crossval_t_stars(gdirs)
-# tasks.compute_ref_t_stars(gdirs)
-# tasks.distribute_t_stars(gdirs)
+tasks.quick_crossval_t_stars(gdirs)
+tasks.compute_ref_t_stars(gdirs)
+tasks.distribute_t_stars(gdirs)
 
 # Model validation
 # ----------------
@@ -131,11 +127,18 @@ for gd in gdirs:
                                   bias=t_cvdf.cv_bias,
                                   prcp_fac=t_cvdf.cv_prcp_fac)
     refmb = gd.get_ref_mb_data().copy()
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
+    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
+                                           year=refmb.index)
+    std_ref = refmb.ANNUAL_BALANCE.std()
+    rcor = np.corrcoef(refmb.OGGM, refmb.ANNUAL_BALANCE)[0, 1]
+    if std_ref == 0:
+        std_ref = refmb.OGGM.std()
+        rcor = 1
     cvdf.loc[gd.rgi_id, 'CV_MB_BIAS'] = refmb.OGGM.mean() - \
                                         refmb.ANNUAL_BALANCE.mean()
-    cvdf.loc[gd.rgi_id, 'CV_MB_SIGMA_BIAS'] = refmb.OGGM.std() - \
-                                              refmb.ANNUAL_BALANCE.std()
+    cvdf.loc[gd.rgi_id, 'CV_MB_SIGMA_BIAS'] = refmb.OGGM.std() / \
+                                              std_ref
+    cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
     mb_mod = PastMassBalanceModel(gd, mu_star=t_cvdf.interp_mustar,
                                   bias=t_cvdf.cv_bias,
                                   prcp_fac=t_cvdf.cv_prcp_fac)
@@ -174,9 +177,6 @@ print('Median bias', cvdf['CV_MB_BIAS'].median())
 print('Mean bias', cvdf['CV_MB_BIAS'].mean())
 print('RMS', np.sqrt(np.mean(cvdf['CV_MB_BIAS']**2)))
 print('Sigma bias', np.mean(cvdf['CV_MB_SIGMA_BIAS']))
-
-exit()
-
 
 # Plots per glacier
 for gd in gdirs:
