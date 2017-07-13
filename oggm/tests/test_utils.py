@@ -413,6 +413,19 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['rgi_dir'] = tmp
 
     @is_download
+    def test_download_rgi_intersects(self):
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
+
+        of = utils.get_rgi_intersects_dir()
+        of = os.path.join(of, '01_rgi50_Alaska',
+                          'intersects_01_rgi50_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp
+
+    @is_download
     def test_download_dem3_viewpano(self):
 
         # this zone does exist and file should be small enough for download

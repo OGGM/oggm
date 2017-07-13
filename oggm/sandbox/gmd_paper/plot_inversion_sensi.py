@@ -99,7 +99,5 @@ ax.plot(th3, 'C2', label='1/5 A')
 ax.set_ylabel('Thickness [m]')
 ax.legend(loc=3)
 
-
-plt.show()
-# plt.tight_layout()
-# plt.savefig(PLOT_DIR + 'inversions_sensi.pdf', dpi=150, bbox_inches='tight')
+plt.tight_layout()
+plt.savefig(PLOT_DIR + 'inversions_sensi.pdf', dpi=150, bbox_inches='tight')

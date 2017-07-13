@@ -99,8 +99,10 @@ def _check_geometry(geometry):
             if parts[0].contains(p):
                 interiors.append(p.exterior)
             else:
-                # This should not happen See that we have a small geom here
-                assert p.area < 1e-9
+                # This should not happen. Check that we have a small geom here
+                if p.area > 1e-4:
+                    log.warning('warning while correcting geometry. Area was: '
+                                '{} but it should be smaller.'.format(p.area))
         geometry = shpg.Polygon(exterior, interiors)
 
     assert 'Polygon' in geometry.type
