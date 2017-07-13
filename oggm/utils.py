@@ -1366,10 +1366,10 @@ def _get_rgi_dir_unlocked():
         raise ValueError('The RGI data directory has to be'
                          'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    rgi_dir = os.path.join(rgi_dir, 'RGIV5')
     mkdir(rgi_dir)
 
-    bname = 'rgi50.zip'
-    dfile = 'http://www.glims.org/RGI/rgi50_files/' + bname
+    dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
     test_file = os.path.join(rgi_dir, '000_rgi50_manifest.txt')
 
     if not os.path.exists(test_file):
@@ -1390,6 +1390,46 @@ def _get_rgi_dir_unlocked():
                 # delete the zipfile after success
                 os.remove(zfile)
     return rgi_dir
+
+
+def get_rgi_intersects_dir():
+    """Returns a path to the RGI directory containing the intersects.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the directory
+    """
+
+    with _get_download_lock():
+        return _get_rgi_intersects_dir_unlocked()
+
+
+def _get_rgi_intersects_dir_unlocked():
+
+    rgi_dir = cfg.PATHS['rgi_dir']
+
+    # Be sure the user gave a sensible path to the RGI dir
+    if not rgi_dir:
+        raise ValueError('The RGI data directory has to be'
+                         'specified explicitly.')
+
+    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    mkdir(rgi_dir)
+
+    dfile = ('https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/' +
+             'RGI_V5_Intersects.zip')
+    test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
+                             'Intersects_OGGM_Manifest.txt')
+
+    if not os.path.exists(test_file):
+        # if not there download it
+        ofile = file_downloader(dfile)
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+    return os.path.join(rgi_dir, 'RGI_V5_Intersects')
 
 
 def get_cru_file(var=None):

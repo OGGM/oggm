@@ -379,6 +379,13 @@ def oggm_static_paths():
         config['dl_cache_readonly'] = ro
     if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
         config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+    if os.environ.get('OGGM_EXTRACT_DIR') is not None:
+        # This is for the directories where OGGM needs to extract things
+        # On the cluster it might be useful to do it on a fast disc
+        edir = os.path.abspath(os.environ.get('OGGM_EXTRACT_DIR'))
+        config['tmp_dir'] = os.path.join(edir, 'tmp')
+        config['cru_dir'] = os.path.join(edir, 'cru')
+        config['rgi_dir'] = os.path.join(edir, 'rgi')
 
     if not config['dl_cache_dir']:
         raise RuntimeError('At the very least, the "dl_cache_dir" entry '
