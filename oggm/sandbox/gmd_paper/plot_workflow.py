@@ -65,10 +65,11 @@ tasks.filter_inversion_output(gdir)
 # run
 tasks.init_present_time_glacier(gdir)
 
-mb = RandomMassBalanceModel(gdir, seed=0)
+mb = RandomMassBalanceModel(gdir, seed=1)
 fls = gdir.read_pickle('model_flowlines')
 model = FluxBasedModel(fls, mb_model=mb, y0=0, glen_a=glen_a)
-model.run_until(100)
+
+model.run_until(150)
 
 f = plt.figure(figsize=(10, 12))
 from mpl_toolkits.axes_grid1 import ImageGrid
