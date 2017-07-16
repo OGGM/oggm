@@ -280,6 +280,7 @@ def initialize(file=None):
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
+    PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -324,7 +325,7 @@ def initialize(file=None):
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
-           'auto_skip_task']
+           'auto_skip_task', 'correct_for_neg_flux']
     for k in ltr:
         cp.pop(k, None)
 

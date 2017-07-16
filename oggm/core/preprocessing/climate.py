@@ -875,8 +875,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                             '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-                msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
-                       .format(gdir.rgi_id, aflux)
+                msg = ('{}: flux should be zero, but is: {:.4f} km3 ice yr-1'
+                       .format(gdir.rgi_id, aflux))
                 raise RuntimeError(msg)
 
             gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)

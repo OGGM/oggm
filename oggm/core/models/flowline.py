@@ -598,6 +598,9 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        if self.is_tidewater:
+            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+
 
         # Run
         j = 0
@@ -613,6 +616,8 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
+            if self.is_tidewater:
+                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 
         # to datasets
         run_ds = []
@@ -1534,7 +1539,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 @entity_task(log)
 def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
                              seed=None, filesuffix='',
-                             zero_inititial_glacier=False,
+                             zero_initial_glacier=False,
                              **kwargs):
     """Random glacier dynamics for benchmarking purposes.
 
@@ -1546,7 +1551,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      y0 : central year of the random climate period
      seed : seed for the random generate
      filesuffix : for the output file
-     zero_inititial_glacier : if true, the ice thickness is set to zero before
+     zero_initial_glacier : if true, the ice thickness is set to zero before
          the sim
      kwargs : kwargs to pass to the FluxBasedModel instance
      """
@@ -1576,7 +1581,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
     for step in steps:
         log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
         fls = gdir.read_pickle('model_flowlines')
-        if zero_inititial_glacier:
+        if zero_initial_glacier:
             for fl in fls:
                 fl.thick = fl.thick * 0.
         model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
@@ -1593,6 +1598,8 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
         # If we get here we good
         log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
         break
+
+    return model
 
 
 @entity_task(log, writes=['model_run'])

@@ -34,6 +34,7 @@ import netCDF4
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.interpolate import RegularGridInterpolator
+from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
@@ -89,6 +90,7 @@ class Centerline(object):
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
         self.flux = None  # Flux (kg m-2)
+        self.flux_needed_correction = False  # whether this branch was baaad
 
     def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -231,8 +233,30 @@ class Centerline(object):
 
         # Add MB to current flux and sum
         # no more changes should happen after that
-        self.flux += mb * self.widths * self.dx
-        self.flux = np.cumsum(self.flux)
+        flux_needed_correction = False
+        flux = np.cumsum(self.flux + mb * self.widths * self.dx)
+        # We need to keep the flux -- even negative! -- in order to keep
+        # mass conservation dowsntream. This is quite bad and calls for a
+        # better solution
+        add_flux = flux[-1]
+        if cfg.PARAMS['correct_for_neg_flux'] and add_flux < 0:
+            # Some glacier geometries imply that some tributaries have a
+            # negative mass flux, i.e. zero thickness. One can correct for
+            # this effect, but this implies playing around with the
+            # mass-balance...
+            target_flux = 1 if (self.flows_to is not None) else 0
+
+            def to_optimize(x):
+                tmp_flux = self.flux + (x[0] + mb) * self.widths * self.dx
+                tmp_flux = np.cumsum(tmp_flux)
+                return (tmp_flux[-1] - target_flux)**2
+
+            x = optimization.minimize(to_optimize, [1.])['x']
+            flux = np.cumsum(self.flux + (x[0] + mb) * self.widths * self.dx)
+            flux_needed_correction = True
+
+        self.flux = flux
+        self.flux_needed_correction = flux_needed_correction
 
         # Add to outflow. That's why it should happen in order
         if self.flows_to is not None:
@@ -240,13 +264,13 @@ class Centerline(object):
             ide = self.flows_to_indice
             if n >= 9:
                 gk = GAUSSIAN_KERNEL[9]
-                self.flows_to.flux[ide-4:ide+5] += gk * self.flux[-1]
+                self.flows_to.flux[ide-4:ide+5] += gk * add_flux
             elif n >= 7:
                 gk = GAUSSIAN_KERNEL[7]
-                self.flows_to.flux[ide-3:ide+4] += gk * self.flux[-1]
+                self.flows_to.flux[ide-3:ide+4] += gk * add_flux
             elif n >= 5:
                 gk = GAUSSIAN_KERNEL[5]
-                self.flows_to.flux[ide-2:ide+3] += gk * self.flux[-1]
+                self.flows_to.flux[ide-2:ide+3] += gk * add_flux
 
 
 def _filter_heads(heads, heads_height, radius, polygon):
