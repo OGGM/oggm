@@ -533,9 +533,11 @@ def initialize_flowlines(gdir, div_id=None):
         assert len(hgts) >= 5
 
         # Check where the glacier is and where not
-        isglacier = [poly.contains(shpg.Point(x, y)) for x, y in zip(xx, yy)]
         if div_id != 0:
-            assert np.all(isglacier)
+            isglacier = np.ones(len(hgts), dtype=np.bool)
+        else:
+            isglacier = [poly.contains(shpg.Point(x, y)) for x, y in
+                         zip(xx, yy)]
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
