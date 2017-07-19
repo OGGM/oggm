@@ -7,6 +7,13 @@ balance anymore.
 import os
 import shutil
 import zipfile
+from glob import glob
+import oggm
+
+# Module logger
+import logging
+log = logging.getLogger(__name__)
+
 # Libs
 import oggm
 import numpy as np
@@ -23,23 +30,51 @@ from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 from oggm.core.models import flowline
 
+# Time
+import time
+start = time.time()
+
+# Alaska 01
+# Western Canada and US 02
+# Arctic Canada North 03
+# Arctic Canada South 04
+# Greenland 05
+# Iceland 06
+# Svalbard 07
+# Scandinavia 08
+# Russian Arctic 09
+# North Asia 10
+# North Asia 10
+# Central Europe 11
+# Caucasus and Middle East 12
+# Central Asia 13
+# South Asia West 14
+# South Asia East 15
+# Low Latitudes 16
+# Southern Andes 17
+# New Zealand 18
+# Antarctic and Subantarctic 19
+rgi_reg = '07'
+
 # Initialize OGGM and set up the run parameters
 # ---------------------------------------------
 
 cfg.initialize()
 
-# Local paths (where to write the OGGM run output)
-WORKING_DIR = '/home/mowglie/disk/OGGM_Runs/EXAMPLE_GLACIERS'
-PLOTS_DIR = os.path.join(WORKING_DIR, 'plots')
+# Local paths (where to write output and where to download input)
+WORKING_DIR = '/home/mowglie/disk/OGGM_Runs/TESTS'
 utils.mkdir(WORKING_DIR)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
+PLOTS_DIR = os.path.join(WORKING_DIR, 'plots')
+utils.mkdir(PLOTS_DIR)
+
 # Use multiprocessing?
-cfg.PARAMS['use_multiprocessing'] = True
+cfg.PARAMS['use_multiprocessing'] = False
 
 # How many grid points around the glacier?
 # Make it large if you expect your glaciers to grow large
-cfg.PARAMS['border'] = 60
+cfg.PARAMS['border'] = 100
 
 # Set to True for operational runs
 cfg.PARAMS['continue_on_error'] = False
@@ -47,7 +82,12 @@ cfg.PARAMS['auto_skip_task'] = True
 
 # Don't use divides for now
 cfg.set_divides_db()
-cfg.set_intersects_db()
+
+# But we use intersects
+rgi_dir = utils.get_rgi_intersects_dir()
+rgi_shp = list(glob(os.path.join(rgi_dir, "*", '*intersects*' + rgi_reg + '_rgi50_*.shp')))
+assert len(rgi_shp) == 1
+cfg.set_intersects_db(rgi_shp[0])
 
 # Pre-download other files which will be needed later
 _ = utils.get_cru_file(var='tmp')
@@ -62,34 +102,30 @@ _ = utils.get_cru_file(var='pre')
 # the results much (expectedly), so that it's ok to change it. All the rest
 # (e.g. smoothing, dx, prcp factor...) should imply a re-calibration
 
-mbf = '/home/mowglie/disk/Dropbox/Public/OGGM_Public/ref_tstars_no_tidewater.csv'
+mbf = 'https://dl.dropboxusercontent.com/u/20930277/ref_tstars_no_tidewater.csv'
 mbf = utils.file_downloader(mbf)
 shutil.copyfile(mbf, os.path.join(WORKING_DIR, 'ref_tstars.csv'))
 
-# Initialize OGGM and set up the run parameters
-# ---------------------------------------------
 
-# Download and read in the RGI file
-rgif = 'https://dl.dropboxusercontent.com/u/20930277/RGI_example_glaciers.zip'
-rgif = utils.file_downloader(rgif)
-with zipfile.ZipFile(rgif) as zf:
-    zf.extractall(WORKING_DIR)
-rgif = os.path.join(WORKING_DIR, 'RGI_example_glaciers.shp')
-rgidf = salem.read_shapefile(rgif, cached=True)
+# Copy the RGI file
+# -----------------
+
+# Download RGI files
+rgi_dir = utils.get_rgi_dir()
+rgi_shp = list(glob(os.path.join(rgi_dir, "*", rgi_reg+ '_rgi50_*.shp')))
+assert len(rgi_shp) == 1
+rgidf = salem.read_shapefile(rgi_shp[0], cached=True)
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
 
-# rgidf = rgidf.loc[rgidf.RGIId.isin(['RGI50-01.10299'])]
+rgidf = rgidf.loc[rgidf.RGIId.isin(['RGI50-07.01394'])]
 
-print('Number of glaciers: {}'.format(len(rgidf)))
-
+log.info('Starting run for RGI reg: ' + rgi_reg)
+log.info('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go - initialize working directories
 # -----------------------------------
-
-# you can use the command below to reset your run -- use with caution!
-# gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks
@@ -111,11 +147,20 @@ for task in task_list:
 execute_entity_task(tasks.process_cru_data, gdirs)
 tasks.distribute_t_stars(gdirs)
 
-execute_entity_task(tasks.prepare_for_inversion, gdirs, reset=True)
+# Inversion tasks
+execute_entity_task(tasks.prepare_for_inversion, gdirs)
 execute_entity_task(tasks.volume_inversion, gdirs,
-                    use_cfg_params={'glen_a': cfg.A, 'fs': 0}, reset=True)
-execute_entity_task(tasks.filter_inversion_output, gdirs, reset=True)
-execute_entity_task(tasks.init_present_time_glacier, gdirs, reset=True)
+                    use_cfg_params={'glen_a': cfg.A, 'fs': 0})
+execute_entity_task(tasks.filter_inversion_output, gdirs)
+execute_entity_task(tasks.init_present_time_glacier, gdirs)
+
+# Compile output
+utils.glacier_characteristics(gdirs)
+
+# Log
+m, s = divmod(time.time() - start, 60)
+h, m = divmod(m, 60)
+log.info("OGGM is done! Time needed: %d:%02d:%02d" % (h, m, s))
 
 # Plots (if you want)
 if PLOTS_DIR == '':

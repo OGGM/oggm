@@ -53,10 +53,10 @@ df = utils.glacier_characteristics([gdir], path=False)
 reset = False
 seed = 0
 
-tasks.random_glacier_evolution(gdir, nyears=400, bias=0, seed=0, y0=2000,
+tasks.random_glacier_evolution(gdir, nyears=400, seed=0, y0=2000,
                                filesuffix='_2000_def', reset=reset)
 
-tasks.random_glacier_evolution(gdir, nyears=400, bias=0, seed=0, y0=1920,
+tasks.random_glacier_evolution(gdir, nyears=400, seed=0, y0=1920,
                                filesuffix='_1920_def', reset=reset)
 
 
