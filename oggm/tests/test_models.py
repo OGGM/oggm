@@ -19,6 +19,7 @@ import shutil
 import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 from numpy.testing import assert_allclose
 
 # Local imports
@@ -1184,6 +1185,23 @@ class TestIO(unittest.TestCase):
         fmodel.run_until(500)
         np.testing.assert_allclose(model.fls[0].section,
                                    fmodel.fls[0].section)
+
+    def test_gdir_copy(self):
+        print(self.gdir.dir)
+        new_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_testcopy')
+        if os.path.exists(new_dir):
+            shutil.rmtree(new_dir)
+        self.gdir.copy_to_basedir(new_dir, setup='all')
+        new_gdir = utils.GlacierDirectory(self.gdir.rgi_id, base_dir=new_dir)
+        flowline.init_present_time_glacier(new_gdir)
+        shutil.rmtree(new_dir)
+
+        self.gdir.copy_to_basedir(new_dir)
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
+        flowline.random_glacier_evolution(new_gdir, nyears=10)
+        shutil.rmtree(new_dir)
 
     def test_hef(self):
 

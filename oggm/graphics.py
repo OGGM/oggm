@@ -477,8 +477,8 @@ def plot_distributed_thickness(gdir, ax=None, salemmap=None, how=None):
 
 @entity_task(log)
 @_plot_map
-def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None, vmax=None,
-                         linewidth=3, subset=True):
+def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None,
+                         vmax=None, linewidth=3, subset=True):
     """Plots the result of the model output."""
 
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:

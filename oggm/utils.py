@@ -653,6 +653,35 @@ def mkdir(path, reset=False):
         os.makedirs(path)
 
 
+def include_patterns(*patterns):
+    """Factory function that can be used with copytree() ignore parameter.
+
+    Arguments define a sequence of glob-style patterns
+    that are used to specify what files to NOT ignore.
+    Creates and returns a function that determines this for each directory
+    in the file hierarchy rooted at the source directory when used with
+    shutil.copytree().
+
+    https://stackoverflow.com/questions/35155382/copying-specific-files-to-a-
+    new-folder-while-maintaining-the-original-subdirect
+    """
+
+    def _ignore_patterns(path, names):
+        # This is our cuisine
+        bname = os.path.basename(path)
+        if 'divide' in bname or 'log' in bname:
+            keep = []
+        else:
+            keep = set(name for pattern in patterns
+                       for name in fnmatch.filter(names, pattern))
+        ignore = set(name for name in names
+                     if name not in keep and not
+                     os.path.isdir(os.path.join(path, name)))
+        return ignore
+
+    return _ignore_patterns
+
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
 
@@ -1962,7 +1991,7 @@ def filter_rgi_name(name):
 
     if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',
                     '\r', '\x93', '¤', '0', '`', '/', 'C', '@',
-                    'Å', '\x06', '\x10', '^', 'å']:
+                    'Å', '\x06', '\x10', '^', 'å', ';']:
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()
@@ -2166,6 +2195,37 @@ class GlacierDirectory(object):
     def divide_ids(self):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
+
+    def copy_to_basedir(self, base_dir, setup='run'):
+        """Copies the glacier directory and its content to a new location.
+
+        This utility function allows to select certain files only, thus
+        saving time at copy.
+
+        Parameters
+        ----------
+        basedir : str
+            path to the new base directory (should end with "per_glacier" most
+            of the times)
+        setup : str
+            set up you want the copied directory to be useful for. Currently
+            supported are 'all' (copy the entire directory) and 'run' (copy)
+            the necessary files for a dynamical run).
+        """
+
+        base_dir = os.path.abspath(base_dir)
+        new_dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
+                               self.rgi_id)
+        if setup == 'run':
+            paths = ['model_flowlines', 'inversion_params',
+                     'local_mustar', 'climate_monthly']
+            paths = ('*' + p + '*' for p in paths)
+            shutil.copytree(self.dir, new_dir,
+                            ignore=include_patterns(*paths))
+        elif setup == 'all':
+            shutil.copytree(self.dir, new_dir)
+        else:
+            raise ValueError('setup not understood: {}'.format(setup))
 
     def get_filepath(self, filename, div_id=0, delete=False, filesuffix=''):
         """Absolute path to a specific file.
