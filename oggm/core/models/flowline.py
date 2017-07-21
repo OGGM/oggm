@@ -570,7 +570,7 @@ class FlowlineModel(object):
         # Check for NaNs
         for fl in self.fls:
             if np.any(~np.isfinite(fl.thick)):
-                raise RuntimeError('NaN in numerical solution.')
+                raise FloatingPointError('NaN in numerical solution.')
 
     def run_until_and_store(self, y1, run_path=None, diag_path=None):
         """Runs the model and returns intermediate steps in two datasets
@@ -1331,7 +1331,7 @@ def init_present_time_glacier(gdir):
                 inv = tinv
                 break
         if not icl:
-            raise RuntimeError('{}: centerlines could not be '
+            raise RuntimeError('({}) centerlines could not be '
                                'matched'.format(gdir.rgi_id))
 
         if icl.nx <= cl.nx:
@@ -1590,10 +1590,9 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
         try:
             model.run_until_and_store(ye, run_path=run_path,
                                       diag_path=diag_path)
-        except RuntimeError:
+        except (RuntimeError, FloatingPointError):
             if step == 'ultra-conservative':
-                raise RuntimeError('{}: we did our best, the model is still '
-                                   'unstable.'.format(gdir.rgi_id))
+                raise
             continue
         # If we get here we good
         log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)

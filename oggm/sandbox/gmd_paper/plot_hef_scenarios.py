@@ -26,6 +26,7 @@ cfg.PARAMS['border'] = 60
 cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'scenarios')
+cfg.PATHS['working_dir'] = base_dir
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 

@@ -318,7 +318,7 @@ def process_cru_data(gdir):
             loc_hgt = ncclim.get_vardata('elev')
             isok = np.isfinite(loc_hgt)
         if _margin > 1:
-            log.debug('%s: I had to look up for far climate pixels: %s',
+            log.debug('(%s) I had to look up for far climate pixels: %s',
                       gdir.rgi_id, _margin)
 
         # Take the first candidate (doesn't matter which)
@@ -379,7 +379,7 @@ def process_cru_data(gdir):
                     ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
                     found_it = True
         if not found_it:
-            msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+            msg = '({}) there is no climate data'.format(gdir.rgi_id)
             raise RuntimeError(msg)
     elif np.any(~np.isfinite(ts_tmp)):
         # maybe the side is nan, but we can do nearest
@@ -820,7 +820,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
 
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
-        log.info('%s: local mu* for t*=%d, divide %d',
+        log.info('(%s) local mu* for t*=%d, divide %d',
                  gdir.rgi_id, tstar, div_id)
 
         # Get the corresponding mu
@@ -871,11 +871,11 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         if div_id > 0:
             aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-                log.warning('%s: flux should be zero, but is: '
+                log.warning('(%s) flux should be zero, but is: '
                             '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-                msg = ('{}: flux should be zero, but is: {:.4f} km3 ice yr-1'
+                msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                        .format(gdir.rgi_id, aflux))
                 raise RuntimeError(msg)
 
@@ -937,11 +937,11 @@ def apparent_mb_from_linear_mb(gdir, div_id=None, mb_gradient=3.):
     if div_id > 0:
         aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
         if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-            log.warning('%s: flux should be zero, but is: '
+            log.warning('(%s) flux should be zero, but is: '
                         '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
         # If not marine and quite far from zero, error
         if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-            msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
+            msg = '({}) flux should be zero, but is:  %.4f km3 ice yr-1' \
                    .format(gdir.rgi_id, aflux)
             raise RuntimeError(msg)
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
