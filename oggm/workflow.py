@@ -84,7 +84,7 @@ class _pickle_copier(object):
                 return self.call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
-                err_msg = '{0}: exception occured while processing task ' \
+                err_msg = '({0}) exception occured while processing task ' \
                           '{1}'.format(gdir.rgi_id, self.call_func.__name__)
                 raise RuntimeError(err_msg) from e
             except AttributeError:

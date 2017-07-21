@@ -726,14 +726,14 @@ def compute_centerlines(gdir, div_id=None):
     radius /= gdir.grid.dx # in raster coordinates
     # Plus our criteria, quite usefull to remove short lines:
     radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
-    log.debug('%s: radius in raster coordinates: %.2f',
+    log.debug('(%s) radius in raster coordinates: %.2f',
               gdir.rgi_id, radius)
 
     # OK. Filter and see.
-    log.debug('%s: number of heads before radius filter: %d',
+    log.debug('(%s) number of heads before radius filter: %d',
               gdir.rgi_id, len(heads))
     heads, heads_z = _filter_heads(heads, heads_z, radius, poly_pix)
-    log.debug('%s: number of heads after radius filter: %d',
+    log.debug('(%s) number of heads after radius filter: %d',
               gdir.rgi_id, len(heads))
 
     # Cost array
@@ -748,20 +748,20 @@ def compute_centerlines(gdir, div_id=None):
         h_coord = np.asarray(h.xy)[::-1].astype(np.int64)
         indices, _ = route_through_array(costgrid, h_coord, t_coord)
         lines.append(shpg.LineString(np.array(indices)[:, [1, 0]]))
-    log.debug('%s: computed the routes', gdir.rgi_id)
+    log.debug('(%s) computed the routes', gdir.rgi_id)
 
     # Filter the shortest lines out
     dx_cls = cfg.PARAMS['flowline_dx']
     radius = cfg.PARAMS['flowline_junction_pix'] * dx_cls
     radius += 6 * dx_cls
     olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
-    log.debug('%s: number of heads after lines filter: %d',
+    log.debug('(%s) number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
         olines = _filter_lines_slope(olines, topo, gdir)
-        log.debug('%s: number of heads after slope filter: %d',
+        log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
     # And rejoin the cutted tails
@@ -1112,24 +1112,29 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     bed = np.asarray(bed)
     assert len(bed) == idl.nx
     pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
-    log.debug('%s: percentage of valid parabolas total: %d',
+    log.debug('(%s) percentage of valid parabolas total: %d',
               gdir.rgi_id, int(pvalid))
 
     bedg = bed[~ idl.is_glacier]
     if len(bedg) > 0:
         pvalid = np.sum(np.isfinite(bedg)) / len(bedg) * 100
-        log.debug('%s: percentage of valid parabolas out glacier: %d',
+        log.debug('(%s) percentage of valid parabolas out glacier: %d',
                   gdir.rgi_id, int(pvalid))
         if pvalid < 10:
-            log.warning('{}: {}% of valid bedshapes.'.format(gdir.rgi_id,
-                                                             int(pvalid)))
+            log.warning('({}) {}% of valid bedshapes.'.format(gdir.rgi_id,
+                                                              int(pvalid)))
+
+    # Scale for dx (we worked in grid coords but need meters)
+    bed = bed / gdir.grid.dx**2
 
     # interpolation, filling the gaps
     default = cfg.PARAMS['default_parabolic_bedshape']
     bed_int = interp_nans(bed, default=default)
 
-    # Scale for dx (we worked in grid coords but need meters)
-    bed_int = bed_int / gdir.grid.dx**2
+    # We forbid super small shapes (important! This can lead to huge volumes)
+    # Sometimes the parabola fits in flat areas are very good, implying very
+    # flat parabolas.
+    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'])
 
     # Smoothing
     bed_ma = pdSeries(bed_int)
