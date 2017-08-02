@@ -5,10 +5,10 @@
 Set-up a run with previously calibrated mass-balance
 ====================================================
 
-This realizes a full run on a subset of four glaciers.
+This example shows how to run OGGM on a list of glaciers.
 
-The important part here is that we use a precalibrated list of tstars for the
-run, which means that we don't calibrate the mass balance anymore.
+We use a previously precalibrated list of tstars for the
+run, which means that we don't have to calibrate the mass balance anymore.
 
 
 Full script
