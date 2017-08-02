@@ -31,6 +31,10 @@ class TestFuncs(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def test_show_versions(self):
+        # just see that it runs
+        utils.show_versions()
+
     def test_signchange(self):
         ts = pd.Series([-2., -1., 1., 2., 3], index=np.arange(5))
         sc = utils.signchange(ts)

@@ -64,8 +64,8 @@ Using OGGM
 * :doc:`glacierdir-gen`
 * :doc:`input-data`
 * :doc:`mpi`
+* :doc:`run`
 * :doc:`api`
-* :doc:`contributing`
 * :doc:`whats-new`
 
 .. toctree::
@@ -78,6 +78,7 @@ Using OGGM
     glacierdir-gen.rst
     input-data.rst
     mpi.rst
+    run.rst
     api.rst
     whats-new.rst
 
