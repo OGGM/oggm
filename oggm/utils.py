@@ -23,6 +23,9 @@ from functools import partial, wraps
 import json
 import time
 import fnmatch
+import platform
+import struct
+import importlib
 
 # External libs
 import geopandas as gpd
@@ -281,6 +284,75 @@ def del_empty_dirs(s_dir):
     if b_empty:
         os.rmdir(s_dir)
     return b_empty
+
+
+def get_sys_info():
+    """Returns system information as a dict"""
+
+    blob = []
+    try:
+        (sysname, nodename, release,
+         version, machine, processor) = platform.uname()
+        blob.extend([
+            ("python", "%d.%d.%d.%s.%s" % sys.version_info[:]),
+            ("python-bits", struct.calcsize("P") * 8),
+            ("OS", "%s" % (sysname)),
+            ("OS-release", "%s" % (release)),
+            ("machine", "%s" % (machine)),
+            ("processor", "%s" % (processor)),
+        ])
+    except:
+        pass
+
+    return blob
+
+
+def show_versions(logger=None):
+    """Prints the OGGM version and other system information.
+
+    Parameters
+    ----------
+    logger : optional
+        the logger you want to send the printouts to. If None, will use stdout
+    """
+
+    _print = print if logger is None else logger.info
+
+    sys_info = get_sys_info()
+
+    deps = [
+        # (MODULE_NAME, f(mod) -> mod version)
+        ("oggm", lambda mod: mod.__version__),
+        ("numpy", lambda mod: mod.__version__),
+        ("scipy", lambda mod: mod.__version__),
+        ("pandas", lambda mod: mod.__version__),
+        ("geopandas", lambda mod: mod.__version__),
+        ("netCDF4", lambda mod: mod.__version__),
+        ("matplotlib", lambda mod: mod.__version__),
+        ("rasterio", lambda mod: mod.__version__),
+        ("fiona", lambda mod: mod.__version__),
+        ("osgeo.gdal", lambda mod: mod.__version__),
+        ("pyproj", lambda mod: mod.__version__),
+    ]
+
+    deps_blob = list()
+    for (modname, ver_f) in deps:
+        try:
+            if modname in sys.modules:
+                mod = sys.modules[modname]
+            else:
+                mod = importlib.import_module(modname)
+            ver = ver_f(mod)
+            deps_blob.append((modname, ver))
+        except:
+            deps_blob.append((modname, None))
+
+    _print("  System info:")
+    for k, stat in sys_info:
+        _print("%s: %s" % (k, stat))
+    _print("  Packages info:")
+    for k, stat in deps_blob:
+        _print("%s: %s" % (k, stat))
 
 
 class SuperclassMeta(type):
@@ -1421,7 +1493,7 @@ def _get_rgi_dir_unlocked():
     return rgi_dir
 
 
-def get_rgi_intersects_dir():
+def get_rgi_intersects_dir(reset=False):
     """Returns a path to the RGI directory containing the intersects.
 
     If the files are not present, download them.
@@ -1432,10 +1504,10 @@ def get_rgi_intersects_dir():
     """
 
     with _get_download_lock():
-        return _get_rgi_intersects_dir_unlocked()
+        return _get_rgi_intersects_dir_unlocked(reset=reset)
 
 
-def _get_rgi_intersects_dir_unlocked():
+def _get_rgi_intersects_dir_unlocked(reset=False):
 
     rgi_dir = cfg.PATHS['rgi_dir']
 
@@ -1445,19 +1517,20 @@ def _get_rgi_intersects_dir_unlocked():
                          'specified explicitly.')
 
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
-    mkdir(rgi_dir)
+    mkdir(rgi_dir, reset=reset)
 
     dfile = ('https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/' +
              'RGI_V5_Intersects.zip')
     test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
                              'Intersects_OGGM_Manifest.txt')
-
     if not os.path.exists(test_file):
         # if not there download it
-        ofile = file_downloader(dfile)
+        ofile = file_downloader(dfile, reset=reset)
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
+
+
     return os.path.join(rgi_dir, 'RGI_V5_Intersects')
 
 
@@ -2536,4 +2609,3 @@ class GlacierDirectory(object):
             return lines[-1].split(';')[-1]
         else:
             return None
-

@@ -138,7 +138,7 @@ def execute_entity_task(task, gdirs, **kwargs):
             pc(gdir)
 
 
-def init_glacier_regions(rgidf, reset=False, force=False):
+def init_glacier_regions(rgidf=None, reset=False, force=False):
     """Very first task to do (always).
 
     Set reset=True in order to delete the content of the directories.
@@ -155,12 +155,22 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
     gdirs = []
     new_gdirs = []
-    for _, entity in rgidf.iterrows():
-        gdir = oggm.GlacierDirectory(entity, reset=reset)
-        if not os.path.exists(gdir.get_filepath('dem')):
-            new_gdirs.append((gdir, dict(entity=entity)))
-        gdirs.append(gdir)
+    if rgidf is None:
+        if reset:
+            raise ValueError('Cannot use reset without a rgi file')
+        # The dirs should be there already
+        gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+        for root, _, files in os.walk(gl_dir):
+            if files and ('dem.tif' in files):
+                gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
+    else:
+        for _, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, reset=reset)
+            if not os.path.exists(gdir.get_filepath('dem')):
+                new_gdirs.append((gdir, dict(entity=entity)))
+            gdirs.append(gdir)
 
+    # If not initialized, run the task in parallel
     execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs
