@@ -25,7 +25,6 @@ cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
-utils.mkdir(WORKING_DIR)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?

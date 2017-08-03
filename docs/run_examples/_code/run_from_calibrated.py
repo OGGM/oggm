@@ -20,7 +20,7 @@ from oggm.workflow import execute_entity_task
 import time
 start = time.time()
 
-# Initialize OGGM and set up the run parameters
+# Initialize OGGM and set up the default run parameters
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
@@ -31,6 +31,7 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
+# Here we override some of the default parameters
 # How many grid points around the glacier?
 # Make it large if you expect your glaciers to grow large
 cfg.PARAMS['border'] = 100

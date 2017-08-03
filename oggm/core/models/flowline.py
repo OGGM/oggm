@@ -1547,13 +1547,22 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      
      Parameters
      ----------
-     nyears : length of the simulation
-     y0 : central year of the random climate period
-     seed : seed for the random generate
-     filesuffix : for the output file
-     zero_initial_glacier : if true, the ice thickness is set to zero before
-         the sim
-     kwargs : kwargs to pass to the FluxBasedModel instance
+     nyears : int
+         length of the simulation
+     y0 : int
+         central year of the random climate period. The default is to be
+         centred on t*.
+     seed : int
+         seed for the random generator. If you ignore this, the runs will be
+         different each time. Setting it to a fixed seed accross glaciers can
+         be usefull if you want to have the same climate years for all of them
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
