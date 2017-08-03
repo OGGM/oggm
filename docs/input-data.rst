@@ -1,3 +1,5 @@
+.. _input-data:
+
 Input data
 ==========
 

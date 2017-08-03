@@ -2,17 +2,22 @@
 
 .. _run-from-calibrated:
 
-Set-up a run with previously calibrated mass-balance
-====================================================
+1. Set-up a run with previously calibrated mass-balance
+=======================================================
 
-This example shows how to run OGGM on a list of glaciers.
-
-We use a previously precalibrated list of tstars for the
+This example shows how to run the OGGM  model for a list of selected glaciers
+(here, four). We use a previously calibrated list of :math:`t^*` for the
 run, which means that we don't have to calibrate the mass balance anymore.
 
+For this example we download the list of glaciers from Fabien's dropbox, but
+you can use any list of glaciers for this. See the
+`prepare_glacier_list.ipynb <https://github.com/OGGM/oggm/blob/master/docs/notebooks/prepare_glacier_list.ipynb>`_
+notebook in the ``oggm/docs/notebooks`` directory for an example on how to
+prepare such a file.
 
-Full script
------------
+
+Script
+------
 
 .. literalinclude:: _code/run_from_calibrated.py
 
@@ -37,27 +42,34 @@ If everything went well, you should see an output similar to::
    occur. These are expected to happen and caught by the solver, which then
    tries a more conservative time stepping scheme.
 
-The ``random_glacier_evolution`` task can be replaced by any climate scenario
-built by the user. For this you'll have to develop your own task, which will
-be the topic of another example script.
+.. note::
+
+    The ``random_glacier_evolution`` task can be replaced by any climate
+    scenario built by the user. For this you'll have to develop your own task,
+    which will be the topic of another example script.
 
 
 Starting from a preprocessed state
 ----------------------------------
 
-Now that we've gone through all the preprocessing steps, it is easy to run
-new experiments:
+Now that we've gone through all the preprocessing steps once and that their
+output is stored on disk, it isn't necessary to re-run everything to make
+a new experiment. The code can be simplified to:
 
 .. literalinclude:: _code/run_from_calibrated_and_prepro.py
 
-Which should have a much shorter runtime.
+.. note::
+
+    Note the use of the ``filesuffix`` keyword argument. This allows to store
+    the output of different runs in different files, useful for later analyses.
+
 
 Some analyses
 -------------
 
 The output directory contains the compiled output files from the run. The
-``glacier_characteristics.csv`` file contains various informations about each
-glacier after the preprocessing, either obtained from the RGI directly
+``glacier_characteristics.csv`` file contains various information about each
+glacier obation after the preprocessing, either from the RGI directly
 (location, name, glacier type...) or from the model itself (hypsometry,
 inversion model output...).
 
@@ -84,7 +96,9 @@ RGI50-08.02637  Storglaciaeren     18.5604   67.9042           3.163   Land-term
 
 
 The run outpout is stored in netCDF files, and it can therefore be read with
-other tools than python. We are used to python, and use the xarray package to
+any tool able to read those (Matlab, R, ...).
+
+I myself am familiar with python, and I use the xarray package to
 read the data:
 
 .. code-block:: python
@@ -122,6 +136,7 @@ read the data:
         for l in [l1_km, l2_km]:
             roll_yrs = 5
             sel = l.isel(rgi_id=i).to_series()
+            # Take the minimum out of 5 years
             sel = sel.rolling(roll_yrs).min()
             sel.iloc[0:roll_yrs] = sel.iloc[roll_yrs]
             sel.plot(ax=ax)
@@ -140,3 +155,24 @@ This code snippet should produce the following plot:
 .. figure:: ../_static/run_example.png
     :width: 100%
 
+.. warning::
+
+    In the script above we have to "smooth" our length data for nicer plots.
+    This is necessary because of annual snow cover: indeed, OGGM cannot
+    differentiate between snow and ice. At the end of a cold mass-balance year,
+    it can happen that some snow remains at the tongue and below: for the
+    model, this looks like a longer glacier... (this cover is very thin, so
+    that it doesn't influence the volume much).
+
+More analysis
+-------------
+
+Here is a more complex example to demonstrate how to plot the glacier
+geometries after the run:
+
+.. literalinclude:: _code/example_analysis.py
+
+Which should produce the following plot:
+
+.. figure:: ../_static/example_run_map_plot.png
+    :width: 100%

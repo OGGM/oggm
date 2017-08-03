@@ -2,7 +2,7 @@
 
 .. _run-calibration:
 
-Run the mass-balance calibration
-================================
+2. Run the mass-balance calibration
+===================================
 
 TODO
