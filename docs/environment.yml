@@ -17,7 +17,7 @@ dependencies:
   - pyproj=1.9.5.1
   - krb5
   - geos=3.5.0 # https://github.com/conda-forge/fiona-feedstock/issues/21
-  - rasterio=1.0a7
+  - conda-forge/label/dev::rasterio
   - xarray=0.9.1
   - boto3
   - numpydoc
