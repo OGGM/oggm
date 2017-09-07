@@ -28,6 +28,7 @@ from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
 from oggm.core.models import flowline
+from oggm import workflow
 
 cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
 
@@ -1730,7 +1731,6 @@ class TestDividesAsGlaciers(unittest.TestCase):
                             ['_d01', '_d02', '_d03']]
 
         # Just check that things are working
-        from oggm import workflow
         gdirs = workflow.init_glacier_regions(hef_rgi)
         workflow.gis_prepro_tasks(gdirs)
 
