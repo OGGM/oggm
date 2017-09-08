@@ -100,7 +100,7 @@ class TestInitFlowline(unittest.TestCase):
         np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
 
-        if do_plot:  # pragma: no cover
+        if do_plot:
             plt.plot(fls[-1].bed_h)
             plt.plot(fls[-1].surface_h)
             plt.show()

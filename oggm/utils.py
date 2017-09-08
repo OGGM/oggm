@@ -257,7 +257,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
     return local_path
 
 
-def empty_cache():  # pragma: no cover
+def empty_cache():
     """Empty oggm's cache directory."""
 
     if os.path.exists(cfg.CACHE_DIR):

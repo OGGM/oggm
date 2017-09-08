@@ -75,7 +75,7 @@ class TestIdealisedCases(unittest.TestCase):
             volume.append(vol)
             surface_h.append(fls[-1].surface_h.copy())
 
-        if do_plot:  # pragma: no cover
+        if do_plot:
             plt.figure()
             plt.plot(yrs, lens[0], 'r')
             plt.plot(yrs, lens[1], 'b')
