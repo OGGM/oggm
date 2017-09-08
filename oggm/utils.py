@@ -1978,7 +1978,7 @@ class entity_task(object):
 
             # Log what we are doing
             if not task_func.__dict__.get('divide_task', False):
-                self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
+                self.log.info('(%s) %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
             try:
@@ -1989,7 +1989,7 @@ class entity_task(object):
                 out = None
                 gdir.log(task_func, err=err)
                 pipe_log(gdir, task_func, err=err)
-                self.log.error('%s occured during task %s on %s!',
+                self.log.error('%s occurred during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
                 if not cfg.PARAMS['continue_on_error']:
                     raise
@@ -2017,7 +2017,7 @@ class divide_task(object):
         self.add_0 = add_0
         self._cdoc = """"
             div_id : int
-                the ID of the divide to process. Should be left to  the default
+                the ID of the divide to process. Should be left to the default
                 ``None`` unless you know what you do.
         """
 
@@ -2031,7 +2031,7 @@ class divide_task(object):
                 if self.add_0:
                     ids = list(ids) + [0]
                 for i in ids:
-                    self.log.info('%s: %s, divide %d', gdir.rgi_id,
+                    self.log.info('(%s) %s, divide %d', gdir.rgi_id,
                                   task_func.__name__, i)
                     task_func(gdir, div_id=i, **kwargs)
             else:

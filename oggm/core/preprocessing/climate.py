@@ -672,7 +672,7 @@ def mu_candidates(gdir, div_id=None, prcp_sf=None):
 
     # Check that we found a least one mustar
     if np.sum(np.isfinite(mu_yr_clim)) < 1:
-        raise RuntimeError('No mustar candidates found for {}'
+        raise RuntimeError('({}) no mustar candidates found.'
                            .format(gdir.rgi_id))
 
     # Write

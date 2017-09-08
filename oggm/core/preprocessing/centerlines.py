@@ -778,7 +778,7 @@ def compute_centerlines(gdir, div_id=None):
 
     # Final check
     if len(cls) == 0:
-        raise RuntimeError('{} : no centerline found!'.format(gdir.rgi_id))
+        raise RuntimeError('({}) no centerline found!'.format(gdir.rgi_id))
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines', div_id=div_id)
@@ -971,7 +971,7 @@ def compute_downstream_lines(gdir):
 
     # Final check
     if len(cls) == 0:
-        raise RuntimeError('{} : problem by downstream!'.format(gdir.rgi_id))
+        raise RuntimeError('({}) problem by downstream!'.format(gdir.rgi_id))
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines', div_id=0)
