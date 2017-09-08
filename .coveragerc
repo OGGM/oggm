@@ -1,9 +1,10 @@
 [run]
 source = oggm
-omit = oggm/tests/*
+omit = *tests/*
 
 [report]
 omit = */sandbox*/*
+omit = *tests/*
 # Regexes for lines to exclude from consideration
 exclude_lines =
     pragma: no cover
