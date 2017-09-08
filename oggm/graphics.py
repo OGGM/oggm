@@ -161,7 +161,7 @@ def plot_googlemap(gdir, ax=None):
 
 @entity_task(log)
 @_plot_map
-def plot_domain(gdir, ax=None, salemmap=None):  # pragma: no cover
+def plot_domain(gdir, ax=None, salemmap=None):
     """Plot the glacier directory.
 
     """
@@ -631,7 +631,7 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
 
 
 @entity_task(log)
-def plot_modeloutput_section_withtrib(gdir, model=None, title=''):  # pragma: no cover
+def plot_modeloutput_section_withtrib(gdir, model=None, title=''):
     """Plots the result of the model output along the flowline."""
 
     n_tribs = len(model.fls) - 1
