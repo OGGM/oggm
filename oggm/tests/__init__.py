@@ -47,6 +47,7 @@ ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
 RUN_PREPRO_TESTS = True
+RUN_NUMERIC_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
@@ -61,6 +62,7 @@ if os.environ.get('TRAVIS') is not None:
         # Minimal tests
         RUN_SLOW_TESTS = False
         RUN_PREPRO_TESTS = True
+        RUN_NUMERIC_TESTS = True
         RUN_MODEL_TESTS = True
         RUN_WORKFLOW_TESTS = True
         RUN_GRAPHIC_TESTS = True
@@ -70,21 +72,31 @@ if os.environ.get('TRAVIS') is not None:
         env = os.environ.get('OGGM_TEST_ENV')
         if env == 'prepro':
             RUN_PREPRO_TESTS = True
+            RUN_NUMERIC_TESTS = False
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = False
+            RUN_GRAPHIC_TESTS = False
+        if env == 'numerics':
+            RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = True
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'models':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = True
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'workflow':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = True
             RUN_GRAPHIC_TESTS = False
         if env == 'graphics':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = True
