@@ -256,7 +256,7 @@ def _mask_per_divide(gdir, div_id, dem, smoothed_dem):
     # See if we can filter them out easily
     regions, nregions = label(glacier_mask, structure=label_struct)
     if nregions > 1:
-        log.debug('%s: we had to cut an island in the mask', gdir.rgi_id)
+        log.debug('(%s) we had to cut an island in the mask', gdir.rgi_id)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
@@ -347,7 +347,7 @@ def define_glacier_region(gdir, entity=None):
     if dxmethod in ['linear', 'square']:
         dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
-    log.debug('%s: area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
+    log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Make a local glacier map
     proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
@@ -407,7 +407,7 @@ def define_glacier_region(gdir, entity=None):
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
                                          source=source)
-    log.debug('%s: DEM source: %s', gdir.rgi_id, dem_source)
+    log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
 
     # A glacier area can cover more than one tile:
     if len(dem_list) == 1:
@@ -498,9 +498,9 @@ def define_glacier_region(gdir, entity=None):
         divlist = [shapely.ops.transform(proj, g) for g in divlist]
 
         # Keep only the ones large enough
-        log.debug('%s: divide candidates: %d', gdir.rgi_id, len(divlist))
+        log.debug('(%s) divide candidates: %d', gdir.rgi_id, len(divlist))
         divlist = [g for g in divlist if (g.area >= (50 * dx ** 2))]
-        log.debug('%s: number of divides: %d', gdir.rgi_id, len(divlist))
+        log.debug('(%s) number of divides: %d', gdir.rgi_id, len(divlist))
         divlist = np.asarray(divlist)
 
         # Sort them by area
@@ -518,7 +518,7 @@ def define_glacier_region(gdir, entity=None):
             towrite.to_file(os.path.join(_dir, cfg.BASENAMES['outlines']))
     else:
         # Make a single directory and link the files
-        log.debug('%s: number of divides: %d', gdir.rgi_id, 1)
+        log.debug('(%s) number of divides: %d', gdir.rgi_id, 1)
         _dir = os.path.join(gdir.dir, 'divide_01')
         if not os.path.exists(_dir):
             os.makedirs(_dir)
@@ -576,12 +576,13 @@ def glacier_masks(gdir):
     if not np.all(isfinite):
         # see how many percent of the dem
         if np.sum(~isfinite) > (0.2 * nx * ny):
-            raise RuntimeError('{}: too many NaNs in DEM'.format(gdir.rgi_id))
-        log.warning(gdir.rgi_id + ': DEM needed zeros somewhere.')
+            raise RuntimeError('({}) too many NaNs in DEM'.format(gdir.rgi_id))
+        log.warning('({}) DEM needed zeros somewhere.'.format(gdir.rgi_id))
         dem[isfinite] = 0
 
     if np.min(dem) == np.max(dem):
-        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
+        raise RuntimeError('({}) min equal max in the DEM.'
+                           .format(gdir.rgi_id))
 
     # Proj
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
@@ -609,10 +610,10 @@ def glacier_masks(gdir):
         smoothed_dem = dem.copy()
 
     if not np.all(np.isfinite(smoothed_dem)):
-        raise RuntimeError('{}: NaN in smoothed DEM'.format(gdir.rgi_id))
+        raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Make entity masks
-    log.debug('%s: glacier mask, divide %d', gdir.rgi_id, 0)
+    log.debug('(%s) glacier mask, divide %d', gdir.rgi_id, 0)
     _mask_per_divide(gdir, 0, dem, smoothed_dem)
 
     # Glacier divides
@@ -646,5 +647,5 @@ def glacier_masks(gdir):
     else:
         # Loop over divides
         for i in gdir.divide_ids:
-            log.debug('%s: glacier mask, divide %d', gdir.rgi_id, i)
+            log.debug('(%s) glacier mask, divide %d', gdir.rgi_id, i)
             _mask_per_divide(gdir, i, dem, smoothed_dem)

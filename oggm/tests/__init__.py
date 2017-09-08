@@ -34,7 +34,7 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
                                 'baseline_images')
     ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
-    if ftver >= LooseVersion('2.7.0'):
+    if ftver >= LooseVersion('2.8.0'):
         BASELINE_DIR = os.path.join(BASELINE_DIR, 'alt')
     else:
         BASELINE_DIR = os.path.join(BASELINE_DIR, '2.0.x')

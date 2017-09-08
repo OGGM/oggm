@@ -22,6 +22,11 @@ you want to contribute.
 News
 ----
 
+- **18.04.2017**: the `ITMIX paper <https://www.the-cryosphere.net/11/949/2017/>`_
+  is published!
+- **03.04.2017**: the 2nd OGGM workshop took place on the East Frisian Island
+  Spiekeroog, northern Germany! We will publish a summary of the workshop
+  soon.
 - **30.11.2016**: the paper summarizing the ITMIX experiment is online for
   review! Visit `this link <http://www.the-cryosphere-discuss.net/tc-2016-250/>`_
   to read and discuss the manuscript.
@@ -64,8 +69,8 @@ Using OGGM
 * :doc:`glacierdir-gen`
 * :doc:`input-data`
 * :doc:`mpi`
+* :doc:`run`
 * :doc:`api`
-* :doc:`contributing`
 * :doc:`whats-new`
 
 .. toctree::
@@ -78,6 +83,7 @@ Using OGGM
     glacierdir-gen.rst
     input-data.rst
     mpi.rst
+    run.rst
     api.rst
     whats-new.rst
 

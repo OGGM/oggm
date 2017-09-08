@@ -500,6 +500,7 @@ def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None,
             ds.set_subset(corners=corners, margin=10, crs=gdir.grid)
 
         salemmap = salem.Map(ds.grid, countries=False, nx=gdir.grid.nx)
+        salemmap.set_scale_bar()
 
     salemmap.set_topography(topo, crs=gdir.grid)
 

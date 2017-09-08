@@ -570,7 +570,7 @@ class FlowlineModel(object):
         # Check for NaNs
         for fl in self.fls:
             if np.any(~np.isfinite(fl.thick)):
-                raise RuntimeError('NaN in numerical solution.')
+                raise FloatingPointError('NaN in numerical solution.')
 
     def run_until_and_store(self, y1, run_path=None, diag_path=None):
         """Runs the model and returns intermediate steps in two datasets
@@ -1331,7 +1331,7 @@ def init_present_time_glacier(gdir):
                 inv = tinv
                 break
         if not icl:
-            raise RuntimeError('{}: centerlines could not be '
+            raise RuntimeError('({}) centerlines could not be '
                                'matched'.format(gdir.rgi_id))
 
         if icl.nx <= cl.nx:
@@ -1547,13 +1547,22 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      
      Parameters
      ----------
-     nyears : length of the simulation
-     y0 : central year of the random climate period
-     seed : seed for the random generate
-     filesuffix : for the output file
-     zero_initial_glacier : if true, the ice thickness is set to zero before
-         the sim
-     kwargs : kwargs to pass to the FluxBasedModel instance
+     nyears : int
+         length of the simulation
+     y0 : int
+         central year of the random climate period. The default is to be
+         centred on t*.
+     seed : int
+         seed for the random generator. If you ignore this, the runs will be
+         different each time. Setting it to a fixed seed accross glaciers can
+         be usefull if you want to have the same climate years for all of them
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1579,7 +1588,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
 
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
-        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
+        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
         fls = gdir.read_pickle('model_flowlines')
         if zero_initial_glacier:
             for fl in fls:
@@ -1590,13 +1599,12 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
         try:
             model.run_until_and_store(ye, run_path=run_path,
                                       diag_path=diag_path)
-        except RuntimeError:
+        except (RuntimeError, FloatingPointError):
             if step == 'ultra-conservative':
-                raise RuntimeError('{}: we did our best, the model is still '
-                                   'unstable.'.format(gdir.rgi_id))
+                raise
             continue
         # If we get here we good
-        log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
+        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
 
     return model

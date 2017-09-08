@@ -90,12 +90,12 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
 
         # Clip flux to 0
         if np.any(flux < -0.1):
-            log.warning('%s: has negative flux somewhere', gdir.rgi_id)
+            log.warning('(%s) has negative flux somewhere', gdir.rgi_id)
         flux = flux.clip(0)
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
-                msg = '{}: flux at terminus should be zero, but is: ' \
+                msg = '({}) flux at terminus should be zero, but is: ' \
                       '%.4f km3 ice yr-1'.format(gdir.rgi_id, flux[-1])
                 raise RuntimeError(msg)
             flux[-1] = 0.
@@ -185,7 +185,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
             a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
 
             if np.any(~np.isfinite(a0s)):
-                raise RuntimeError('{}: something went wrong with the '
+                raise RuntimeError('({}) something went wrong with the '
                                    'inversion'.format(gdir.rgi_id))
 
             # GO

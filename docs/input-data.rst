@@ -1,3 +1,5 @@
+.. _input-data:
+
 Input data
 ==========
 
@@ -41,9 +43,9 @@ OGGM implements a bunch of logic to make access to the input data as painless
 as possible, including the automated download of all the required files.
 
 Unlike runtime parameters (such as physical constants or working directories),
-the input data is shared accross runs and even computers. Therefore, the
-paths to previously downloaded data are stored in a simple configuration file
-that you'll find in your ``$HOME`` folder: the ``~/.oggm_config`` file.
+the input data is shared accross runs and even accross computers. Therefore,
+the paths to previously downloaded data are stored in a simple configuration
+file that you'll find in your ``$HOME`` folder: the ``~/.oggm_config`` file.
 
 The file should look like::
 
@@ -62,11 +64,13 @@ With:
   explore this folder (it is organized as a list of urls) but you have to make
   sure to set this path to a folder with sufficient disk space available.
 - ``dl_cache_readonly`` indicates if writing is allowed in this folder (this is
-  the default). Setting this to ``True`` will prevent any further download.
+  the default). Setting this to ``True`` will prevent any further download in
+  this directory (useful for cluster environments, where this data might be
+  available on a readonly folder).
 - ``tmp_dir`` is a path to OGGM's temporary directory. Most of the topography
   files used by OGGM are downloaded and cached in a compressed format. They
   will be extracted in ``tmp_dir`` before use. OGGM will never allow more than
-  100 ``.tiff`` files to exist in this directory be deleting the oldest ones
+  100 ``.tiff`` files to exist in this directory by deleting the oldest ones
   following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
   this directory might still grow to quite a large size. Simply delete it
   if you want to get this space back.
@@ -78,10 +82,12 @@ With:
   another directory (for example a fast SSD disk -- the data written for
   testing is much smaller than the input files).
 
+.. note::
+
+  ``tmp_dir``, ``cru_dir`` and ``rgi_dir`` can be overridden and set to a
+  specific directory by defining an environment variable ``OGGM_EXTRACT_DIR``
+  to a directory path. Similarly the envorinment variables
+  ``OGGM_DOWNLOAD_CACHE`` and ``OGGM_DOWNLOAD_CACHE_RO`` override the
+  ``dl_cache_dir`` and ``dl_cache_readonly`` settings.
+
 .. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
-
-
-More about the topography data
-------------------------------
-
-TODO
