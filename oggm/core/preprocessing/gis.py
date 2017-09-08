@@ -577,11 +577,12 @@ def glacier_masks(gdir):
         # see how many percent of the dem
         if np.sum(~isfinite) > (0.2 * nx * ny):
             raise RuntimeError('({}) too many NaNs in DEM'.format(gdir.rgi_id))
-        log.warning(gdir.rgi_id + ': DEM needed zeros somewhere.')
+        log.warning('({}) DEM needed zeros somewhere.'.format(gdir.rgi_id))
         dem[isfinite] = 0
 
     if np.min(dem) == np.max(dem):
-        raise RuntimeError(gdir.rgi_id + ': min equal max in the DEM.')
+        raise RuntimeError('({}) min equal max in the DEM.'
+                           .format(gdir.rgi_id))
 
     # Proj
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):

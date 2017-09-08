@@ -828,8 +828,8 @@ def catchment_width_correction(gdir, div_id=None):
                 log.warning('(%s) reduced min n per bin to %d', gdir.rgi_id,
                             nmin)
                 if nmin == 0:
-                    raise RuntimeError('NO binsize could be chosen for: '
-                                       '{}'.format(gdir.rgi_id))
+                    raise RuntimeError('({}) no binsize could be chosen '
+                                       .format(gdir.rgi_id))
         if bsize > 150:
             log.warning('(%s) chosen binsize %d', gdir.rgi_id, bsize)
         else:

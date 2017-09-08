@@ -1588,7 +1588,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
 
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
-        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
+        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
         fls = gdir.read_pickle('model_flowlines')
         if zero_initial_glacier:
             for fl in fls:
@@ -1604,7 +1604,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
                 raise
             continue
         # If we get here we good
-        log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
+        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
 
     return model
