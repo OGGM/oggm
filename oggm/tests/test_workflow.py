@@ -222,11 +222,14 @@ class TestWorkflow(unittest.TestCase):
         cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
         self.assertTrue(cc > 0.4)
 
-
     @is_slow
     def test_crossval(self):
 
         gdirs = up_to_distrib()
+
+        # in case we ran crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
 
         # before crossval
         refmustars = []
@@ -241,6 +244,21 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+
+        # Test if quicker crossval is also OK
+        tasks.quick_crossval_t_stars(gdirs)
+        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+        dfq = pd.read_csv(file, index_col=0)
+
+        # after crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
+
+        np.testing.assert_allclose(np.abs(df.cv_bias), np.abs(dfq.cv_bias),
+                                   rtol=0.05)
+        np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
+
+        print(df)
 
         # see if the process didn't brake anything
         mustars = []
@@ -355,7 +373,6 @@ class TestWorkflow(unittest.TestCase):
 
 
 @is_slow
-@is_graphic_test
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
