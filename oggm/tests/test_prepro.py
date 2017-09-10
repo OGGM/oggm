@@ -1900,6 +1900,91 @@ class TestGrindelInvert(unittest.TestCase):
         self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
 
 
+class TestGCMClimate(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_process_cesm(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
+
+        cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        climate.process_cesm_data(gdir)
+
+        cru = xr.open_dataset(gdir.get_filepath('climate_monthly'))
+        cesm = xr.open_dataset(gdir.get_filepath('cesm_data'))
+        time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
+                               cesm.time.values[-1].strftime('%Y-%m-%d'),
+                               freq='M')
+        cesm['time'] = time
+        cesm.coords['year'] = ('time', time.year)
+        cesm.coords['month'] = ('time', time.month)
+
+        # Let's do some basic checks
+        scru = cru.sel(time=slice('1961', '1990'))
+        scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+        # Climate during the chosen period should be the same
+        np.testing.assert_allclose(scru.temp.mean(), scesm.temp.mean(), rtol=1e-3)
+        np.testing.assert_allclose(scru.prcp.mean(), scesm.prcp.mean(), rtol=1e-3)
+        np.testing.assert_allclose(scru.grad.mean(), scesm.grad.mean())
+        # And also the anual cycle
+        scru = scru.groupby('time.month').mean()
+        scesm = scesm.groupby(scesm.month).mean()
+        np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+        np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+        np.testing.assert_allclose(scru.grad, scesm.grad)
+
+        # How did the annua cycle change with time?
+        scesm1 = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+        scesm2 = cesm.isel(time=(cesm.year >= 1661) & (cesm.year <= 1690))
+        scesm1 = scesm1.groupby(scesm1.month).mean()
+        scesm2 = scesm2.groupby(scesm2.month).mean()
+        # No more than one degree? (silly test)
+        np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
+        # N more than 20%? (silly test)
+        np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+
+
 class TestCatching(unittest.TestCase):
 
     def setUp(self):

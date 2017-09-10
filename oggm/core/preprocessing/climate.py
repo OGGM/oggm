@@ -5,6 +5,7 @@ from __future__ import division
 import logging
 import os
 import datetime
+import warnings
 # External libs
 import numpy as np
 import pandas as pd
@@ -175,7 +176,10 @@ def process_cesm_data(gdir, filesuffix=''):
     fpath_precc = cfg.PATHS['gcm_precc_file']
     fpath_precl = cfg.PATHS['gcm_precl_file']
 
-    tempds = xr.open_dataset(fpath_temp)
+    with warnings.catch_warnings():
+        # Long time series are currently a pain pandas
+        warnings.filterwarnings("ignore", message='Unable to decode time axis')
+        tempds = xr.open_dataset(fpath_temp)
     precpcds = xr.open_dataset(fpath_precc, decode_times=False)
     preclpds = xr.open_dataset(fpath_precl, decode_times=False)
 
@@ -194,32 +198,35 @@ def process_cesm_data(gdir, filesuffix=''):
             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
 
     # from normal years to hydrological years
+    # TODO: we don't check if the files actually start in January but we should
     precp = precp[9:-3]
     temp = temp[9:-3]
     y0 = int(temp.time.values[0].strftime('%Y'))
     y1 = int(temp.time.values[-1].strftime('%Y'))
-    temp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
-                                   freq='M')
-    precp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
-                                    freq='M')
-    ny, r = divmod(len(temp.time), 12)
+    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    temp['time'] = time
+    precp['time'] = time
+    # Workaround for https://github.com/pydata/xarray/issues/1565
+    temp['month'] = ('time', time.month)
+    precp['month'] = ('time', time.month)
+    temp['year'] = ('time', time.year)
+    precp['year'] = ('time', time.year)
+    ny, r = divmod(len(time), 12)
     assert r == 0
 
     # Convert m s-1 to mm mth-1
-    ndays = np.tile([31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30],
-                    (y1 - y0))
+    ndays = np.tile(cfg.DAYS_IN_MONTH_HYDRO, y1 - y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
-    year = np.array([t.year for t in temp.time.values])
     # of temp
-    ts_tmp_avg = temp.isel(time=(year >= 1961) & (year <= 1990))
-    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
-    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
+    ts_tmp_avg = temp.sel(time=(temp.year >= 1961) & (temp.year <= 1990))
+    ts_tmp_avg = ts_tmp_avg.groupby(ts_tmp_avg.month).mean(dim='time')
+    ts_tmp = temp.groupby(temp.month) - ts_tmp_avg
     # of precip
-    ts_pre_avg = precp.isel(time=(year >= 1961) & (year <= 1990))
-    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
-    ts_pre = precp.groupby('time.month') - ts_pre_avg
+    ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
+    ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
+    ts_pre = precp.groupby(precp.month) - ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -232,10 +239,10 @@ def process_cesm_data(gdir, filesuffix=''):
     dscru = dscru.sel(time=slice('1961', '1990'))
     # for temp
     loc_tmp = dscru.temp.groupby('time.month').mean()
-    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
-    ts_pre = ts_pre.groupby('time.month') + loc_pre
+    ts_pre = ts_pre.groupby(ts_pre.month) + loc_pre
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
