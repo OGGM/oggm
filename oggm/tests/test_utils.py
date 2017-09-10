@@ -3,8 +3,9 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
-import time
 import shutil
+import time
+import gzip
 
 import salem
 import numpy as np
@@ -158,6 +159,204 @@ class TestInitialize(unittest.TestCase):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
+
+
+def touch(path):
+    with open(path, 'a'):
+        os.utime(path, None)
+    return path
+
+
+def make_fake_zipdir(dir_path, fakefile=None):
+    """Creates a directory with a file in it if asked to, then compresses it"""
+
+    utils.mkdir(dir_path)
+    if fakefile:
+        touch(os.path.join(dir_path, fakefile))
+    shutil.make_archive(dir_path, 'zip', dir_path)
+    return dir_path + '.zip'
+
+
+class FakeDownloadManager():
+
+    def __init__(self, func_name, new_func):
+        self.func_name = func_name
+        self.new_func = new_func
+        self._store = getattr(utils, func_name)
+
+    def __enter__(self):
+        self._store = getattr(utils, self.func_name)
+        setattr(utils, self.func_name, self.new_func)
+
+    def __exit__(self, *args):
+        setattr(utils, self.func_name, self._store)
+
+
+class TestFakeDownloads(unittest.TestCase):
+
+    def setUp(self):
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = os.path.join(TEST_DIR, 'dl_cache')
+        cfg.PATHS['working_dir'] = os.path.join(TEST_DIR, 'wd')
+        cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_test')
+        cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_test')
+        self.reset_dir()
+
+    def tearDown(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+
+    def reset_dir(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+        utils.mkdir(cfg.PATHS['dl_cache_dir'])
+        utils.mkdir(cfg.PATHS['working_dir'])
+        utils.mkdir(cfg.PATHS['tmp_dir'])
+        utils.mkdir(cfg.PATHS['rgi_dir'])
+        utils.mkdir(cfg.PATHS['cru_dir'])
+        utils.mkdir(TEST_DIR)
+
+    def test_rgi(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, '01_rgi50_Region'),
+                         fakefile='test.txt')
+        rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
+        assert os.path.exists(os.path.join(rgi, '01_rgi50_Region', 'test.txt'))
+
+    def test_rgi_intersects(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects'),
+                         fakefile='Intersects_OGGM_Manifest.txt')
+        rgi_f = make_fake_zipdir(rgi_dir)
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://dl.dropboxusercontent.com/u/20930277/'
+                        'OGGM_Public/RGI_V5_Intersects.zip')
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_intersects_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi,
+                                           'Intersects_OGGM_Manifest.txt'))
+
+    def test_cru(self):
+
+        # Create fake cru file
+        cf = os.path.join(TEST_DIR, 'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+        with gzip.open(cf, 'wb') as gz:
+            gz.write(b'dummy')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/'
+                        'cru_ts_3.24.01/cruts.1701201703.v3.24.01/tmp/'
+                        'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+            self.assertEqual(url, expected)
+            return cf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            tf = utils.get_cru_file('tmp')
+
+        assert os.path.exists(tf)
+
+    def test_srtm(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(TEST_DIR, 'srtm_39_03'),
+                              fakefile='srtm_39_03.tif')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_39_03.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
+
+        assert os.path.exists(of[0])
+        assert source == 'SRTM'
+
+    def test_dem3(self):
+
+        # GEt the path to the file before we mess around
+
+        tf = utils.get_demo_file('T10.zip')
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
+
+        assert os.path.exists(of[0])
+        assert source == 'DEM3'
+
+    def test_ramp(self):
+
+        def down_check(url):
+            expected = 'AntarcticDEM_wgs84.tif'
+            self.assertEqual(url, expected)
+            return 'yo'
+
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=19)
+
+        assert of[0] == 'yo'
+        assert source == 'RAMP'
+
+    def test_gimp(self):
+
+        def down_check(url):
+            expected = 'gimpdem_90m.tif'
+            self.assertEqual(url, expected)
+            return 'yo'
+
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=5)
+
+        assert of[0] == 'yo'
+        assert source == 'GIMP'
+
+    def test_aster(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(TEST_DIR, 'ASTGTM2_S88W121'),
+                              fakefile='ASTGTM2_S88W121_dem.tif')
+
+        def down_check(url):
+            expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_aws_file_download_unlocked', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             source='ASTER')
+
+        assert os.path.exists(of[0])
+        assert source == 'ASTER'
 
 
 class TestDataFiles(unittest.TestCase):

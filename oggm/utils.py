@@ -168,7 +168,8 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
                     pbar[0].start(UnknownLength)
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset, reporthook=_upd)
+        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset,
+                           reporthook=_upd)
         try:
             pbar[0].finish()
         except:
@@ -227,7 +228,8 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
         # Try to download
         try:
             retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, cache_name=cache_name, reset=reset)
+            local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
+                                               reset=reset)
             # if no error, exit
             break
         except HTTPError as err:
@@ -754,7 +756,7 @@ def include_patterns(*patterns):
     return _ignore_patterns
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question, default="yes"):  # pragma: no cover
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -1529,7 +1531,6 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
-
 
     return os.path.join(rgi_dir, 'RGI_V5_Intersects')
 
