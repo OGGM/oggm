@@ -177,6 +177,21 @@ def make_fake_zipdir(dir_path, fakefile=None):
     return dir_path + '.zip'
 
 
+class FakeDownloadManager():
+
+    def __init__(self, func_name, new_func):
+        self.func_name = func_name
+        self.new_func = new_func
+        self._store = getattr(utils, func_name)
+
+    def __enter__(self):
+        self._store = getattr(utils, self.func_name)
+        setattr(utils, self.func_name, self.new_func)
+
+    def __exit__(self, *args):
+        setattr(utils, self.func_name, self._store)
+
+
 class TestFakeDownloads(unittest.TestCase):
 
     def setUp(self):
@@ -187,14 +202,10 @@ class TestFakeDownloads(unittest.TestCase):
         cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_test')
         cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_test')
         self.reset_dir()
-        self._dlfunc = utils._progress_urlretrieve
-        self._adlfunc = utils._download_alternate_topo_file
 
     def tearDown(self):
         if os.path.exists(TEST_DIR):
             shutil.rmtree(TEST_DIR)
-        utils._progress_urlretrieve = self._dlfunc
-        utils._download_alternate_topo_file = self._adlfunc
 
     def reset_dir(self):
         if os.path.exists(TEST_DIR):
@@ -219,10 +230,10 @@ class TestFakeDownloads(unittest.TestCase):
             expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
             self.assertEqual(url, expected)
             return rgi_f
-        utils._progress_urlretrieve = down_check
 
-        rgi = utils.get_rgi_dir()
-        utils._progress_urlretrieve = self._dlfunc
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_dir()
+
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
         assert os.path.exists(os.path.join(rgi, 'region', 'test.txt'))
@@ -240,9 +251,10 @@ class TestFakeDownloads(unittest.TestCase):
                         'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
             self.assertEqual(url, expected)
             return cf
-        utils._progress_urlretrieve = down_check
-        tf = utils.get_cru_file('tmp')
-        utils._progress_urlretrieve = self._dlfunc
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            tf = utils.get_cru_file('tmp')
+
         assert os.path.exists(tf)
 
     def test_srtm(self):
@@ -255,10 +267,10 @@ class TestFakeDownloads(unittest.TestCase):
             expected = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_39_03.zip'
             self.assertEqual(url, expected)
             return tf
-        utils._progress_urlretrieve = down_check
 
-        of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
-        utils._progress_urlretrieve = self._dlfunc
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
+
         assert os.path.exists(of[0])
         assert source == 'SRTM'
 
@@ -271,10 +283,10 @@ class TestFakeDownloads(unittest.TestCase):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)
             return tf
-        utils._progress_urlretrieve = down_check
 
-        of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
-        utils._progress_urlretrieve = self._dlfunc
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
+
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
@@ -284,11 +296,11 @@ class TestFakeDownloads(unittest.TestCase):
             expected = 'AntarcticDEM_wgs84.tif'
             self.assertEqual(url, expected)
             return 'yo'
-        utils._download_alternate_topo_file = down_check
 
-        of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                         rgi_region=19)
-        utils._download_alternate_topo_file = self._adlfunc
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=19)
+
         assert of[0] == 'yo'
         assert source == 'RAMP'
 
@@ -298,11 +310,11 @@ class TestFakeDownloads(unittest.TestCase):
             expected = 'gimpdem_90m.tif'
             self.assertEqual(url, expected)
             return 'yo'
-        utils._download_alternate_topo_file = down_check
 
-        of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                         rgi_region=5)
-        utils._download_alternate_topo_file = self._adlfunc
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=5)
+
         assert of[0] == 'yo'
         assert source == 'GIMP'
 
