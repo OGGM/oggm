@@ -222,6 +222,7 @@ class TestFakeDownloads(unittest.TestCase):
         utils._progress_urlretrieve = down_check
 
         rgi = utils.get_rgi_dir()
+        utils._progress_urlretrieve = self._dlfunc
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
         assert os.path.exists(os.path.join(rgi, 'region', 'test.txt'))
@@ -241,6 +242,7 @@ class TestFakeDownloads(unittest.TestCase):
             return cf
         utils._progress_urlretrieve = down_check
         tf = utils.get_cru_file('tmp')
+        utils._progress_urlretrieve = self._dlfunc
         assert os.path.exists(tf)
 
     def test_srtm(self):
@@ -256,18 +258,23 @@ class TestFakeDownloads(unittest.TestCase):
         utils._progress_urlretrieve = down_check
 
         of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
+        utils._progress_urlretrieve = self._dlfunc
         assert os.path.exists(of[0])
         assert source == 'SRTM'
 
     def test_dem3(self):
 
+        # GEt the path to the file before we mess around
+
+        tf = utils.get_demo_file('T10.zip')
         def down_check(url, cache_name=None, reset=False):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)
-            return utils.get_demo_file('T10.zip')
+            return tf
         utils._progress_urlretrieve = down_check
 
         of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
+        utils._progress_urlretrieve = self._dlfunc
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
@@ -281,6 +288,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                          rgi_region=19)
+        utils._download_alternate_topo_file = self._adlfunc
         assert of[0] == 'yo'
         assert source == 'RAMP'
 
@@ -294,6 +302,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                          rgi_region=5)
+        utils._download_alternate_topo_file = self._adlfunc
         assert of[0] == 'yo'
         assert source == 'GIMP'
 
