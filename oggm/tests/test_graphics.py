@@ -54,6 +54,17 @@ def test_googlemap():
     return fig
 
 
+@requires_internet
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_domain():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_domain(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
+
+
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_centerlines():
@@ -207,6 +218,20 @@ def test_modelsection():
     fig = plt.figure(figsize=(12, 6))
     ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
     graphics.plot_modeloutput_section(gdir, ax=ax, model=model)
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_modelsection_withtrib():
+
+    gdir = init_hef()
+    flowline.init_present_time_glacier(gdir)
+    fls = gdir.read_pickle('model_flowlines')
+    model = flowline.FlowlineModel(fls)
+
+    fig = plt.figure(figsize=(14, 10))
+    graphics.plot_modeloutput_section_withtrib(gdir, fig=fig, model=model)
     return fig
 
 

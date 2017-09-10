@@ -553,11 +553,9 @@ def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None,
 def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
     """Plots the result of the model output along the flowline."""
 
-    dofig = False
     if ax is None:
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
-        dofig = True
     else:
         fig = plt.gcf()
 
@@ -641,22 +639,25 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
 
 
 @entity_task(log)
-def plot_modeloutput_section_withtrib(gdir, model=None, title=''):
+def plot_modeloutput_section_withtrib(gdir, model=None, fig=None, title=''):
     """Plots the result of the model output along the flowline."""
 
     n_tribs = len(model.fls) - 1
 
     axs = []
     if n_tribs == 0:
-        fig = plt.figure(figsize=(8, 5))
+        if fig is None:
+            fig = plt.figure(figsize=(8, 5))
         axmaj = fig.add_subplot(111)
     elif n_tribs <= 3:
-        fig = plt.figure(figsize=(14, 10))
+        if fig is None:
+            fig = plt.figure(figsize=(14, 10))
         axmaj = plt.subplot2grid((2, 3), (1, 0), colspan=3)
         for i in np.arange(n_tribs):
             axs.append(plt.subplot2grid((2, 3), (0, i)))
     elif n_tribs <= 6:
-        fig = plt.figure(figsize=(14, 10))
+        if fig is None:
+            fig = plt.figure(figsize=(14, 10))
         axmaj = plt.subplot2grid((3, 3), (2, 0), colspan=3)
         for i in np.arange(n_tribs):
             j = 0
