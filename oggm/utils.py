@@ -756,7 +756,7 @@ def include_patterns(*patterns):
     return _ignore_patterns
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question, default="yes"):  # pragma: no cover
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -1531,7 +1531,6 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
-
 
     return os.path.join(rgi_dir, 'RGI_V5_Intersects')
 

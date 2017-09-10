@@ -222,7 +222,7 @@ class TestFakeDownloads(unittest.TestCase):
         # Make a fake RGI file
         rgi_dir = os.path.join(TEST_DIR, 'rgi50')
         utils.mkdir(rgi_dir)
-        make_fake_zipdir(os.path.join(rgi_dir, 'region'),
+        make_fake_zipdir(os.path.join(rgi_dir, '01_rgi50_Region'),
                          fakefile='test.txt')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
 
@@ -236,7 +236,29 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
-        assert os.path.exists(os.path.join(rgi, 'region', 'test.txt'))
+        assert os.path.exists(os.path.join(rgi, '01_rgi50_Region', 'test.txt'))
+
+    def test_rgi_intersects(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects'),
+                         fakefile='Intersects_OGGM_Manifest.txt')
+        rgi_f = make_fake_zipdir(rgi_dir)
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://dl.dropboxusercontent.com/u/20930277/'
+                        'OGGM_Public/RGI_V5_Intersects.zip')
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_intersects_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi,
+                                           'Intersects_OGGM_Manifest.txt'))
 
     def test_cru(self):
 
@@ -317,6 +339,24 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert of[0] == 'yo'
         assert source == 'GIMP'
+
+    def test_aster(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(TEST_DIR, 'ASTGTM2_S88W121'),
+                              fakefile='ASTGTM2_S88W121_dem.tif')
+
+        def down_check(url):
+            expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_aws_file_download_unlocked', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             source='ASTER')
+
+        assert os.path.exists(of[0])
+        assert source == 'ASTER'
 
 
 class TestDataFiles(unittest.TestCase):
