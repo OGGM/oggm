@@ -48,7 +48,7 @@ About
         :alt: Zenodo
 
 :Tests:
-    .. image:: https://coveralls.io/repos/OGGM/oggm/badge.svg?branch=master&service=github
+    .. image:: https://coveralls.io/repos/github/OGGM/oggm/badge.svg?branch=master
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
 
