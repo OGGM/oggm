@@ -37,6 +37,16 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     return new_cmap
 
 
+def gencolor(n, cmap='Set1'):
+    """ Color generator intended to work with qualitative color scales."""
+    # don't use more than 9 discrete colors
+    n_colors = min(n, 9)
+    cmap = colormap.get_cmap(cmap, n_colors)
+    colors = cmap(range(n_colors))
+    for i in range(n):
+        yield colors[i % n_colors]
+
+
 def _plot_map(plotfunc):
     """
     Decorator for common salem.Map plotting logic
@@ -236,7 +246,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -254,7 +264,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -296,7 +306,7 @@ def plot_catchment_areas(gdir, ax=None, salemmap=None):
 
         # plot Centerlines
         cls = gdir.read_pickle('centerlines', div_id=i)[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -347,7 +357,7 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines', div_id=i)[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
