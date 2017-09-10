@@ -43,7 +43,7 @@ def gencolor(n, cmap='Set1'):
     n_colors = min(n, 9)
     cmap = colormap.get_cmap(cmap, n_colors)
     colors = cmap(range(n_colors))
-    for i in xrange(N):
+    for i in range(n):
         yield colors[i % n_colors]
 
 
