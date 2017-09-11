@@ -601,6 +601,8 @@ def _download_dem3_viewpano_unlocked(zone):
     profile['driver'] = 'GTiff'
     with rasterio.open(outpath, 'w', **profile) as dst:
         dst.write(dest)
+    for rf in rfiles:
+        rf.close()
 
     # delete original files to spare disk space
     for s in globlist:
