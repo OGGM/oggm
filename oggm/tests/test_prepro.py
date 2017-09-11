@@ -1951,38 +1951,43 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
         climate.process_cesm_data(gdir)
 
-        cru = xr.open_dataset(gdir.get_filepath('climate_monthly'))
-        cesm = xr.open_dataset(gdir.get_filepath('cesm_data'))
-        time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
-                               cesm.time.values[-1].strftime('%Y-%m-%d'),
-                               freq='M')
-        cesm['time'] = time
-        cesm.coords['year'] = ('time', time.year)
-        cesm.coords['month'] = ('time', time.month)
+        with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cru, \
+            xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
 
-        # Let's do some basic checks
-        scru = cru.sel(time=slice('1961', '1990'))
-        scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
-        # Climate during the chosen period should be the same
-        np.testing.assert_allclose(scru.temp.mean(), scesm.temp.mean(), rtol=1e-3)
-        np.testing.assert_allclose(scru.prcp.mean(), scesm.prcp.mean(), rtol=1e-3)
-        np.testing.assert_allclose(scru.grad.mean(), scesm.grad.mean())
-        # And also the anual cycle
-        scru = scru.groupby('time.month').mean()
-        scesm = scesm.groupby(scesm.month).mean()
-        np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
-        np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-        np.testing.assert_allclose(scru.grad, scesm.grad)
+            time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
+                                   cesm.time.values[-1].strftime('%Y-%m-%d'),
+                                   freq='M')
+            cesm['time'] = time
+            cesm.coords['year'] = ('time', time.year)
+            cesm.coords['month'] = ('time', time.month)
 
-        # How did the annua cycle change with time?
-        scesm1 = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
-        scesm2 = cesm.isel(time=(cesm.year >= 1661) & (cesm.year <= 1690))
-        scesm1 = scesm1.groupby(scesm1.month).mean()
-        scesm2 = scesm2.groupby(scesm2.month).mean()
-        # No more than one degree? (silly test)
-        np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
-        # N more than 20%? (silly test)
-        np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.grad.mean(), scesm.grad.mean())
+            # And also the anual cycle
+            scru = scru.groupby('time.month').mean()
+            scesm = scesm.groupby(scesm.month).mean()
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+            np.testing.assert_allclose(scru.grad, scesm.grad)
+
+            # How did the annua cycle change with time?
+            scesm1 = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+            scesm2 = cesm.isel(time=(cesm.year >= 1661) & (cesm.year <= 1690))
+            scesm1 = scesm1.groupby(scesm1.month).mean()
+            scesm2 = scesm2.groupby(scesm2.month).mean()
+            # No more than one degree? (silly test)
+            np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
+            # N more than 20%? (silly test)
+            np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
 
 
 class TestCatching(unittest.TestCase):
