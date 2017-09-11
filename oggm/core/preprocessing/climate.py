@@ -268,6 +268,7 @@ def process_cesm_data(gdir, filesuffix=''):
     tempds.close()
     precpcds.close()
     preclpds.close()
+    dscru.close()
 
 
 @entity_task(log, writes=['climate_monthly'])
