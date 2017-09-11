@@ -162,6 +162,7 @@ class TestInitialize(unittest.TestCase):
 
 
 def touch(path):
+    """Equivalent to linux's touch"""
     with open(path, 'a'):
         os.utime(path, None)
     return path
@@ -169,7 +170,6 @@ def touch(path):
 
 def make_fake_zipdir(dir_path, fakefile=None):
     """Creates a directory with a file in it if asked to, then compresses it"""
-
     utils.mkdir(dir_path)
     if fakefile:
         touch(os.path.join(dir_path, fakefile))
@@ -178,7 +178,8 @@ def make_fake_zipdir(dir_path, fakefile=None):
 
 
 class FakeDownloadManager():
-
+    """We mess around with oggm internals, so the last we can do is to try
+    to keep things clean after the tests."""
     def __init__(self, func_name, new_func):
         self.func_name = func_name
         self.new_func = new_func
