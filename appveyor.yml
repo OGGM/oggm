@@ -21,16 +21,17 @@ install:
   - "powershell ./ci/install_python.ps1"
 
   # Create environment with desired python version and activate it
-  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "SET PATH=%PYTHON%\\Scripts;%PYTHON%;%PATH%"
   - "SET GDAL_DATA=%PYTHON%\\Library\\share\\gdal"
-  - "conda install --yes --quiet python=%PYTHON_VERSION%"
+
+  - "conda install --yes --quiet -c conda-forge python=%PYTHON_VERSION%"
+  - "conda update --yes --quiet -c conda-forge --all"
 
   # Check that we have the expected version and architecture for Python
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
   # install dependencies
-  - "python -m pip install --upgrade pip"
   - "conda install --yes --quiet -c conda-forge gdal libgdal geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pyproj numpy rasterio krb5 xarray boto3"
   - "pip install motionless"
   - "pip install git+https://github.com/fmaussion/salem.git"
