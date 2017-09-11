@@ -230,13 +230,13 @@ def process_cesm_data(gdir, filesuffix=''):
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
-    dscru = xr.open_dataset(fpath)
+    ds_cru = xr.open_dataset(fpath)
 
     # Here we assume the gradient is a monthly average
-    ts_grad = np.tile(dscru.grad[0:12], ny)
+    ts_grad = np.tile(ds_cru.grad[0:12], ny)
 
     # Add climate anomaly to CRU clim
-    dscru = dscru.sel(time=slice('1961', '1990'))
+    dscru = ds_cru.sel(time=slice('1961', '1990'))
     # for temp
     loc_tmp = dscru.temp.groupby('time.month').mean()
     ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
@@ -258,7 +258,7 @@ def process_cesm_data(gdir, filesuffix=''):
     loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
 
     gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
-                                    ts_grad, dscru.ref_hgt,
+                                    ts_grad, float(dscru.ref_hgt),
                                     loc_lon, precp.lat.values,
                                     time_unit=time1.units,
                                     file_name='cesm_data',
@@ -268,7 +268,7 @@ def process_cesm_data(gdir, filesuffix=''):
     tempds.close()
     precpcds.close()
     preclpds.close()
-    dscru.close()
+    ds_cru.close()
 
 
 @entity_task(log, writes=['climate_monthly'])
