@@ -28,7 +28,7 @@ from oggm.core.models import massbalance, flowline
 from oggm.core.models.massbalance import LinearMassBalanceModel
 from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
 import xarray as xr
-from oggm import utils, cfg
+from oggm import utils, cfg, workflow
 from oggm.utils import get_demo_file
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
 from oggm.core.preprocessing import climate, inversion, centerlines
@@ -1631,15 +1631,18 @@ class TestHEF(unittest.TestCase):
         flowline.init_present_time_glacier(self.gdir)
 
         feedbacks = ['annual', 'monthly', 'always']
-        times = []
+        # Mutliproc
+        tasks = []
+        for feedback in feedbacks:
+            tasks.append((flowline.random_glacier_evolution,
+                          dict(nyears=200, seed=5, mb_elev_feedback=feedback,
+                               filesuffix=feedback)))
+        workflow.execute_parallel_tasks(self.gdir, tasks)
+
         out = []
         for feedback in feedbacks:
-            start_time = time.time()
-            flowline.random_glacier_evolution(self.gdir, nyears=200, seed=5,
-                                              mb_elev_feedback=feedback)
-            end_time = time.time()
-            times.append(end_time - start_time)
-            out.append(utils.compile_run_output([self.gdir], path=False))
+            out.append(utils.compile_run_output([self.gdir], path=False,
+                                                filesuffix=feedback))
 
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
