@@ -6,8 +6,8 @@ import logging
 import os
 from shutil import rmtree
 import collections
+from functools import partial
 # External libs
-import pandas as pd
 import multiprocessing as mp
 
 # Locals
@@ -115,9 +115,6 @@ def execute_entity_task(task, gdirs, **kwargs):
          the entity task to apply
     gdirs : list
          the list of oggm.GlacierDirectory to process.
-         Optionally, each list element can be a tuple, with the first element 
-         being the ``oggm.GlacierDirectory``, and the second element a dict that
-         will be passed to the task function as ``**kwargs``.
     """
 
     if task.__dict__.get('global_task', False):
@@ -136,6 +133,50 @@ def execute_entity_task(task, gdirs, **kwargs):
     else:
         for gdir in gdirs:
             pc(gdir)
+
+
+def execute_parallel_tasks(gdir, tasks):
+    """Execute a list of task on a single gdir (experimental!).
+
+    This is useful when running a non-sequential list of task on a gdir,
+    mostly for e.g. different experiments with different output files.
+
+    Parameters
+    ----------
+    gdirs : oggm.GlacierDirectory
+         the directory to process.
+    tasks : list
+         the the list of entity tasks to apply.
+         Optionally, each list element can be a tuple, with the first element
+         being the task, and the second element a dict that
+         will be passed to the task function as ``**kwargs``.
+    """
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            raise NotImplementedError('execute_parallel_tasks does not work'
+                                      'with MPI yet')
+
+    _tasks = []
+    for task in tasks:
+        kwargs = {}
+        if len(task) == 2:
+            # The tuple option
+            kwargs = task[1]
+            task = task[0]
+        _tasks.append(partial(task, gdir, **kwargs))
+
+    if cfg.PARAMS['use_multiprocessing']:
+        proc = []
+        for task in _tasks:
+            p = mp.Process(target=task)
+            p.start()
+            proc.append(p)
+        for p in proc:
+            p.join()
+    else:
+        for task in _tasks:
+            task()
 
 
 def init_glacier_regions(rgidf=None, reset=False, force=False):

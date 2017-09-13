@@ -11,6 +11,7 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 import unittest
+import pytest
 import copy
 from numpy.testing import assert_allclose
 
@@ -838,3 +839,93 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b', label='mixed')
             plt.legend()
             plt.show()
+
+
+@pytest.mark.skip(reason='Currently not in OGGM')
+class TestSandbox(unittest.TestCase):
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_constant_bed(self):
+
+        map_dx = 100.
+        yrs = np.arange(1, 700, 5)
+        lens = []
+        volume = []
+        surface_h = []
+
+        # Flowline case
+        fls = dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=map_dx,
+                                 widths=1.)
+        mb = LinearMassBalanceModel(2600.)
+
+        flmodel = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                          glen_a=cfg.A)
+
+        length = yrs * 0.
+        vol = yrs * 0.
+        for i, y in enumerate(yrs):
+            flmodel.run_until(y)
+            length[i] = fls[-1].length_m
+            vol[i] = fls[-1].volume_km3
+
+        lens.append(length)
+        volume.append(vol)
+        surface_h.append(fls[-1].surface_h.copy())
+
+        # Make a 2D bed out of the 1D
+        bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3))
+
+        from oggm.sandbox.sia_2d.models import Upstream2D
+        sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
+                             glen_a=cfg.A, ice_thick_filter=None)
+
+        length = yrs * 0.
+        vol = yrs * 0.
+        for i, y in enumerate(yrs):
+            sdmodel.run_until(y)
+            surf_1d = sdmodel.ice_thick[:, 1]
+            length[i] = np.sum(surf_1d > 0) * sdmodel.dx
+            vol[i] = np.sum(surf_1d) * sdmodel.dx ** 2 * 1e-9
+
+        lens.append(length)
+        volume.append(vol)
+        surface_h.append(sdmodel.surface_h[:, 1])
+
+        if do_plot:
+            plt.figure()
+            plt.plot(yrs, lens[0], 'r')
+            plt.plot(yrs, lens[1], 'b')
+            plt.title('Compare Length')
+            plt.xlabel('years')
+            plt.ylabel('[m]')
+            plt.legend(['Flowline', '2D'], loc=2)
+
+            plt.figure()
+            plt.plot(yrs, volume[0], 'r')
+            plt.plot(yrs, volume[1], 'b')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km^3]')
+            plt.legend(['Flowline', '2D'], loc=2)
+
+            plt.figure()
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.title('Compare Shape')
+            plt.xlabel('[m]')
+            plt.ylabel('Elevation [m]')
+            plt.legend(['Bed', 'Flowline', '2D'], loc=2)
+            plt.show()
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=3e-3)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[1] ) < 2e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) < 1.0)
