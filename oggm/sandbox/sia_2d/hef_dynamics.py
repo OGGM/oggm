@@ -64,8 +64,6 @@ tasks.random_glacier_evolution(gdir, nyears=800, bias=0, seed=0,
 # For metadata
 utils.glacier_characteristics([gdir], path=base_dir+'/hef_fl_out.csv')
 
-exit()
-
 # OK now the distributed stuffs
 with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
     topo = nc.variables['topo'][:]
@@ -77,8 +75,8 @@ ds['topo'] = (('y', 'x'), topo)
 ds['ice_thick'] = (('y', 'x'), ice_thick)
 ds = ds.salem.subset(corners=((1, 3), (250, 202)), crs=gdir.grid)
 
-# Possible are factors 2 or 5
-factor = 5
+# Possible are factors 1 (50m) 2 (100m) or 5 (250m)
+factor = 2
 topo = reduce(ds.topo.values, factor=factor)
 ice_thick = reduce(ds.ice_thick.values, factor=factor)
 bed_topo = topo - ice_thick
@@ -110,27 +108,27 @@ def run_task(gdir, grid=None, mb_model=None, glen_a=cfg.A, outf=None,
 tasks = []
 
 mbmod = RandomMassBalanceModel(gdir, seed=0)
-outf = db_dir + 'out_def_250m.nc'
+outf = db_dir + 'out_def_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_border,
                          'print_stdout':'Task1'}))
 
 mbmod = RandomMassBalanceModel(gdir, seed=0)
 mbmod.temp_bias = 0.5
-outf = db_dir + 'out_tbias_250m.nc'
+outf = db_dir + 'out_tbias_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_border,
                          'print_stdout': 'Task2'}))
 
 mbmod = RandomMassBalanceModel(gdir, seed=0)
-outf = db_dir + 'out_filter_250m.nc'
+outf = db_dir + 'out_filter_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_tributaries,
                          'print_stdout': 'Task3'}))
 
 mbmod = RandomMassBalanceModel(gdir, seed=0)
 mbmod.temp_bias = 0.5
-outf = db_dir + 'out_filter_bias_250m.nc'
+outf = db_dir + 'out_filter_bias_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_tributaries,
                          'print_stdout': 'Task4'}))
