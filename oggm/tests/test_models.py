@@ -1630,7 +1630,7 @@ class TestHEF(unittest.TestCase):
 
         flowline.init_present_time_glacier(self.gdir)
 
-        feedbacks = ['annual', 'monthly', 'always']
+        feedbacks = ['annual', 'monthly', 'always', 'never']
         # Mutliproc
         tasks = []
         for feedback in feedbacks:
@@ -1648,17 +1648,13 @@ class TestHEF(unittest.TestCase):
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
         assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
         assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
+        # Except for "never", where things are different
+        assert out[3].volume.mean() < out[2].volume.mean()
 
         if do_plot:
             plt.figure()
             for ds, lab in zip(out, feedbacks):
                 (ds.volume*1e-9).plot(label=lab)
-            plt.xlabel('Vol (km3)')
-            plt.legend()
-            plt.figure()
-            for ds, lab in zip(out, feedbacks):
-                mm = ds.volume.groupby(ds.month).mean(dim='time')
-                (mm*1e-9).plot(label=lab)
             plt.xlabel('Vol (km3)')
             plt.legend()
             plt.show()

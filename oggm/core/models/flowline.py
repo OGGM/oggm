@@ -398,9 +398,11 @@ class FlowlineModel(object):
             be modified at run time by the model
         is_tidewater : bool
             this changes how the last grid points of the domain are handled
-        mb_elev_feedback : str
-            'always', 'annual', or 'monthly': how often the mass-balance should
-            be recomputed from the mass balance model.
+        mb_elev_feedback : str, default: 'annual'
+            'never', 'always', 'annual', or 'monthly': how often the
+            mass-balance should be recomputed from the mass balance model.
+            'Never' is equivalent to 'annual' but without elevation feedback
+            at all (the heights are taken from the first call).
         """
 
         self.is_tidewater = is_tidewater
@@ -416,11 +418,14 @@ class FlowlineModel(object):
                 _mb_call = mb_model.get_monthly_mb
             elif mb_elev_feedback == 'annual':
                 _mb_call = mb_model.get_annual_mb
+            elif mb_elev_feedback == 'never':
+                _mb_call = mb_model.get_annual_mb
             else:
                 raise ValueError('mb_elev_feedback not understood')
         self._mb_call = _mb_call
         self._mb_current_date = None
         self._mb_current_out = dict()
+        self._mb_current_heights = dict()
 
         # Defaults
         if glen_a is None:
@@ -515,6 +520,14 @@ class FlowlineModel(object):
         # Ok, user asked for it
         if fl_id is None:
             raise ValueError('Need fls_id')
+
+        if self.mb_elev_feedback == 'never':
+            # The very first call we take the heights
+            if fl_id not in self._mb_current_heights:
+                # We need to reset just this tributary
+                self._mb_current_heights[fl_id] = heights
+            # All calls we replace
+            heights = self._mb_current_heights[fl_id]
 
         date = utils.year_to_date(year)
         if self.mb_elev_feedback == 'annual':
