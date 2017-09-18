@@ -1162,13 +1162,17 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     return iprcp, itemp, igrad, ihgt
 
 
-def pipe_log(gdir, task_func, err=None):
+def pipe_log(gdir, task_func_name, err=None):
     """Log the error in a specific directory."""
+
+    time_str = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     mkdir(fpath)
 
     fpath = os.path.join(fpath, gdir.rgi_id)
+
+    sep = '; '
 
     if err is not None:
         fpath += '.ERROR'
@@ -1177,9 +1181,11 @@ def pipe_log(gdir, task_func, err=None):
         fpath += '.SUCCESS'
 
     with open(fpath, 'a') as f:
-        f.write(task_func.__name__ + ': ')
+        f.write(time_str + sep + task_func_name + sep)
         if err is not None:
-            f.write(err.__class__.__name__ + ': {}\n'.format(err))
+            f.write(err.__class__.__name__ + sep + '{}\n'.format(err))
+        else:
+            f.write(sep + '\n')
 
 
 def write_centerlines_to_shape(gdirs, filename):
@@ -2031,7 +2037,12 @@ class entity_task(object):
                 # Something happened
                 out = None
                 gdir.log(task_func, err=err)
-                pipe_log(gdir, task_func, err=err)
+                task_func_name = task_func.__name__
+                # Filesuffix are typically used to differenciate tasks
+                fsuffix = kwargs.get('filesuffix', False)
+                if fsuffix:
+                    task_func_name += '_' + fsuffix
+                pipe_log(gdir, task_func_name, err=err)
                 self.log.error('%s occurred during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
                 if not cfg.PARAMS['continue_on_error']:

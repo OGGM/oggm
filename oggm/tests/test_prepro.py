@@ -1998,35 +1998,52 @@ class TestCatching(unittest.TestCase):
         self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.clean_dir()
 
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+        self.log_dir = os.path.join(cfg.PATHS['test_dir'], 'log')
+        self.clean_dir()
 
     def tearDown(self):
         self.rm_dir()
+        shutil.rmtree(self.log_dir)
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
 
     def clean_dir(self):
-        shutil.rmtree(self.testdir)
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
+        if os.path.exists(self.log_dir):
+            shutil.rmtree(self.log_dir)
+        os.makedirs(self.log_dir)
 
-    def test_log(self):
+    def test_pipe_log(self):
+
+        self.clean_dir()
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # Make it large to raise an error
-        cfg.PARAMS['border'] = 250
         cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
+
+        # This will "run" but log an error
+        climate.mu_candidates(gdir)
+
+        tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
+        assert os.path.exists(tfile)
+        with open(tfile, 'r') as f:
+            first_line = f.readline()
+
+        spl = first_line.split(';')
+        assert len(spl) == 4
 
     def test_task_status(self):
 
