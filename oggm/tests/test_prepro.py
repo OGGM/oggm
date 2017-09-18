@@ -2035,7 +2035,8 @@ class TestCatching(unittest.TestCase):
         gis.glacier_masks(gdir)
 
         # This will "run" but log an error
-        climate.mu_candidates(gdir)
+        from oggm.tasks import random_glacier_evolution
+        random_glacier_evolution(gdir, filesuffix='_testme')
 
         tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
         assert os.path.exists(tfile)
@@ -2044,6 +2045,7 @@ class TestCatching(unittest.TestCase):
 
         spl = first_line.split(';')
         assert len(spl) == 4
+        assert spl[1].strip() == 'random_glacier_evolution_testme'
 
     def test_task_status(self):
 

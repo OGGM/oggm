@@ -2041,7 +2041,7 @@ class entity_task(object):
                 # Filesuffix are typically used to differenciate tasks
                 fsuffix = kwargs.get('filesuffix', False)
                 if fsuffix:
-                    task_func_name += '_' + fsuffix
+                    task_func_name += fsuffix
                 pipe_log(gdir, task_func_name, err=err)
                 self.log.error('%s occurred during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
