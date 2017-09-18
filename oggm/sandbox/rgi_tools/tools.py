@@ -14,7 +14,7 @@ import time
 
 INDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/results_global_partitioning/altitude_filter/'
 
-OUTDIR_INTERSECTS = '/home/mowglie/disk/Data/OGGM_DATA/RGI_V5_Modified_Intersects/'
+OUTDIR_INTERSECTS = '/home/users/fmaussion/RGI_Corrected_Intersects/'
 OUTDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/RGI_V5_Modified/'
 
 
@@ -33,7 +33,17 @@ def compute_intersects(rgi_shp):
     gdf = gpd.read_file(rgi_shp)
 
     # clean geometries like OGGM does
-    gdf['geometry'] = [_check_geometry(g) for g in gdf.geometry]
+    ngeos = []
+    keep = []
+    for g in gdf.geometry:
+        try:
+            g = _check_geometry(g)
+            ngeos.append(g)
+            keep.append(True)
+        except:
+            keep.append(False)
+    gdf = gdf.loc[keep]
+    gdf['geometry'] = ngeos
 
     out_cols = ['RGIId_1', 'RGIId_2', 'geometry']
     out = gpd.GeoDataFrame(columns=out_cols)

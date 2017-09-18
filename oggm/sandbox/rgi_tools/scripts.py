@@ -2,6 +2,7 @@
 import multiprocessing as mp
 import os
 import oggm
+import numpy as np
 from glob import glob
 
 from oggm import cfg
@@ -24,8 +25,9 @@ def intersects_ondivides_script():
     rgi_dir = get_rgi_corrected_dir()
     rgi_shps = list(glob(os.path.join(rgi_dir, "*", '*_rgi50_*.shp')))
     rgi_shps = sorted([r for r in rgi_shps if 'Regions' not in r])
+    rgi_shps = np.array(rgi_shps)[[3, 16]]
     with mp.Pool() as p:
-        p.map(compute_intersects, rgi_shps, chunksize=1)
+       p.map(compute_intersects, rgi_shps, chunksize=1)
 
 
 def divides_script():
