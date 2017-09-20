@@ -60,7 +60,7 @@ utils.get_cru_file(var='pre')
 # the results much (as expected), so it's ok to change this parameter above.
 # All other parameters (e.g. topo smoothing, dx, precip factor...)
 # will need a re-calibration (see the calibration recipe)
-mbf = 'https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/ref_tstars_no_tidewater.csv'
+mbf = 'https://www.dropbox.com/s/23a61yxwgpprs9q/ref_tstars_no_tidewater.csv'
 mbf = utils.file_downloader(mbf)
 # Copy the file in the working directory, where OGGM expects to find it
 shutil.copyfile(mbf, path.join(WORKING_DIR, 'ref_tstars.csv'))
