@@ -442,7 +442,7 @@ def _download_oggm_files_unlocked():
         last_mod = 0
 
     # test only every hour
-    if (time.time() - last_mod) > 3600:
+    if (time.time() - last_mod) > 3600 and cfg.PARAMS['has_internet']:
         write_sha = True
         try:
             # this might fail with HTTP 403 when server overload
