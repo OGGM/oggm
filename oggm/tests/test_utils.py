@@ -202,6 +202,7 @@ class TestFakeDownloads(unittest.TestCase):
         cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
         cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_test')
         cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_test')
+        cfg.CACHE_DIR = os.path.join(TEST_DIR, 'cache_dir')
         self.reset_dir()
 
     def tearDown(self):
@@ -211,12 +212,27 @@ class TestFakeDownloads(unittest.TestCase):
     def reset_dir(self):
         if os.path.exists(TEST_DIR):
             shutil.rmtree(TEST_DIR)
+        utils.mkdir(TEST_DIR)
         utils.mkdir(cfg.PATHS['dl_cache_dir'])
         utils.mkdir(cfg.PATHS['working_dir'])
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
         utils.mkdir(cfg.PATHS['cru_dir'])
-        utils.mkdir(TEST_DIR)
+        utils.mkdir(cfg.CACHE_DIR)
+
+    def test_github_no_internet(self):
+        self.reset_dir()
+        def fake_down(url, cache_name=None, reset=False):
+            # This should never be called, if it still is assert
+            assert False
+        with FakeDownloadManager('_progress_urlretrieve', fake_down):
+            with self.assertRaises(utils.NoInternetException):
+                tmp = cfg.PARAMS['has_internet']
+                cfg.PARAMS['has_internet'] = False
+                try:
+                    utils.download_oggm_files()
+                finally:
+                    cfg.PARAMS['has_internet'] = tmp
 
     def test_rgi(self):
 
