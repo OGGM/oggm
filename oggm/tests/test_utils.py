@@ -222,10 +222,10 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_github_no_internet(self):
         self.reset_dir()
-        def fake_down(url, cache_name=None, reset=False):
+        def fake_down(dl_func, cache_path):
             # This should never be called, if it still is assert
             assert False
-        with FakeDownloadManager('_progress_urlretrieve', fake_down):
+        with FakeDownloadManager('_call_dl_func', fake_down):
             with self.assertRaises(utils.NoInternetException):
                 tmp = cfg.PARAMS['has_internet']
                 cfg.PARAMS['has_internet'] = False

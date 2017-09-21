@@ -100,6 +100,12 @@ class NoInternetException(Exception):
     pass
 
 
+def _call_dl_func(dl_func, cache_path):
+    """Helper so the actual call to downloads cann be overridden
+    """
+    return dl_func(cache_path)
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -131,7 +137,7 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     mkdir(os.path.dirname(cache_path))
 
     try:
-        cache_path = dl_func(cache_path)
+        cache_path = _call_dl_func(dl_func, cache_path)
     except:
         if os.path.exists(cache_path):
             os.remove(cache_path)
