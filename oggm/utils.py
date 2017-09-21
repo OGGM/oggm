@@ -96,6 +96,10 @@ def _get_download_lock():
     return lock
 
 
+class NoInternetException(Exception):
+    pass
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -120,6 +124,9 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     if cache_ro:
         cache_path = fb_path
+
+    if not cfg.PARAMS['has_internet']:
+        raise NoInternetException("Download required, but has_internet is False.")
 
     mkdir(os.path.dirname(cache_path))
 
