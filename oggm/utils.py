@@ -96,6 +96,16 @@ def _get_download_lock():
     return lock
 
 
+class NoInternetException(Exception):
+    pass
+
+
+def _call_dl_func(dl_func, cache_path):
+    """Helper so the actual call to downloads cann be overridden
+    """
+    return dl_func(cache_path)
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -121,10 +131,13 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     if cache_ro:
         cache_path = fb_path
 
+    if not cfg.PARAMS['has_internet']:
+        raise NoInternetException("Download required, but has_internet is False.")
+
     mkdir(os.path.dirname(cache_path))
 
     try:
-        cache_path = dl_func(cache_path)
+        cache_path = _call_dl_func(dl_func, cache_path)
     except:
         if os.path.exists(cache_path):
             os.remove(cache_path)
@@ -435,7 +448,7 @@ def _download_oggm_files_unlocked():
         last_mod = 0
 
     # test only every hour
-    if (time.time() - last_mod) > 3600:
+    if (time.time() - last_mod) > 3600 and cfg.PARAMS['has_internet']:
         write_sha = True
         try:
             # this might fail with HTTP 403 when server overload
