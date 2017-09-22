@@ -1666,3 +1666,63 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
         _ = past_model.run_until_and_store(y1, path=path)
     else:
         past_model.to_netcdf(path)
+
+@entity_task(log)
+def run_from_gcm(gdir, filename='cesm_data', filesuffix='', **kwargs):
+    """ Runs glacier with climate input from a general circulation model.
+
+     Parameters
+     ----------
+     y0 : is the start year of the model run
+     y1 : is the end year of the model run
+     filename: name of the climate file. (Can be made with the
+     process_cesm_data function)
+     filesuffix : for the input & output file
+     kwargs : kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    y0 = cfg.PARAMS['y0']
+    ye = cfg.PARAMS['y1']
+
+    mb_model = oggm.core.models.massbalance.\
+        PastMassBalanceModel(gdir, filename=filename, filesuffix=filesuffix)
+
+    # run
+    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
+                                 delete=True)
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
+                                  delete=True)
+
+    # steps = ['ambitious', 'default', 'conservative', 'ultra-conservative']
+    steps = ['default', 'conservative', 'ultra-conservative']
+    for step in steps:
+        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id,
+                 step)
+        fls = gdir.read_pickle('model_flowlines')
+        model = FluxBasedModel(fls, mb_model=mb_model, y0=y0,
+                               time_stepping=step,
+                               **kwargs)
+        try:
+            model.run_until_and_store(ye, run_path=run_path,
+                                      diag_path=diag_path)
+        except RuntimeError:
+            if step == 'ultra-conservative':
+                raise RuntimeError(
+                    '%s: we did our best, the model is still '
+                    'unstable.', gdir.rgi_id)
+            continue
+        # If we get here we good
+        log.info('%s: %s time stepping was successful!', gdir.rgi_id,
+                 step)
+        break
