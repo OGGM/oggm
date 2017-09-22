@@ -1529,8 +1529,8 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir, reset=reset)
 
-    dfile = ('https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/' +
-             'RGI_V5_Intersects.zip')
+    dfile = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
+             'RGI_V5_Intersects.zip?dl=1')
     test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
                              'Intersects_OGGM_Manifest.txt')
     if not os.path.exists(test_file):

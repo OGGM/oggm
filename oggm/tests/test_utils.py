@@ -249,8 +249,8 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://dl.dropboxusercontent.com/u/20930277/'
-                        'OGGM_Public/RGI_V5_Intersects.zip')
+            expected = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
+                        'RGI_V5_Intersects.zip?dl=1')
             self.assertEqual(url, expected)
             return rgi_f
 
