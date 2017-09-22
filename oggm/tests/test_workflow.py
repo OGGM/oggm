@@ -164,6 +164,19 @@ def up_to_distrib(reset=False):
     return gdirs
 
 
+def random_for_plot():
+
+    # Fake Reset (all these tests are horribly coded)
+    with open(CLI_LOGF, 'wb') as f:
+        pickle.dump('none', f)
+    gdirs = up_to_inversion()
+
+    workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+    workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
+                                 nyears=10, seed=0, filesuffix='_plot')
+    return gdirs
+
+
 class TestWorkflow(unittest.TestCase):
 
     @is_slow
@@ -394,6 +407,35 @@ def test_plot_region_inversion():
     # Give this to the plot function
     fig, ax = plt.subplots()
     graphics.plot_region_inversion(gdirs, salemmap=sm, ax=ax)
+
+    fig.tight_layout()
+    return fig
+
+
+@is_slow
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+def test_plot_region_model():
+
+    import matplotlib.pyplot as plt
+    import salem
+    from oggm import graphics
+
+    gdirs = random_for_plot()
+
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                            extent=(27000, 21000))
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+
+    # Give this to the plot function
+    fig, ax = plt.subplots()
+    graphics.plot_region_model_output(gdirs, salemmap=sm, ax=ax,
+                                      filesuffix='_plot',
+                                      modelyr=10)
 
     fig.tight_layout()
     return fig

@@ -1551,7 +1551,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
 
 @entity_task(log)
 def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
-                             seed=None, filesuffix='',
+                             seed=None, temperature_bias=None, filesuffix='',
                              zero_initial_glacier=False,
                              **kwargs):
     """Random glacier dynamics for benchmarking purposes.
@@ -1565,10 +1565,16 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      y0 : int
          central year of the random climate period. The default is to be
          centred on t*.
+     bias : float
+         bias of the mb model. Default is to use the calibrated one, which
+         is often a better idea. For t* experiments it can be useful to set it
+         to zero
      seed : int
          seed for the random generator. If you ignore this, the runs will be
          different each time. Setting it to a fixed seed accross glaciers can
          be usefull if you want to have the same climate years for all of them
+     temperature_bias : float
+         add a bias to the temperature timeseries
      filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
@@ -1592,6 +1598,8 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
     ys = 0
     ye = ys + nyears
     mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
 
     # run
     run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
