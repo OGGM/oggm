@@ -116,7 +116,7 @@ if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
 try:
     _ = urlopen('http://www.google.com', timeout=1)
     HAS_INTERNET = True
-except URLError:
+except:
     HAS_INTERNET = False
 
 
