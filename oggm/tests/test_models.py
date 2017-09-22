@@ -1700,6 +1700,7 @@ class TestHEF(unittest.TestCase):
             plt.show()
 
         # See what that means for a run
+        flowline.init_present_time_glacier(gdir)
         flowline.run_from_climate_data(gdir, filesuffix='_hist')
         flowline.run_from_climate_data(gdir, filename='cesm_data',
                                        filesuffix='_cesm')
