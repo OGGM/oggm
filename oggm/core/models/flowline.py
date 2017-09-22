@@ -1675,18 +1675,25 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     else:
         past_model.to_netcdf(path)
 
+
 @entity_task(log)
-def run_from_gcm(gdir, filename='cesm_data', filesuffix='', **kwargs):
+def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
+                          filesuffix='', **kwargs):
     """ Runs glacier with climate input from a general circulation model.
 
      Parameters
      ----------
-     y0 : is the start year of the model run
-     y1 : is the end year of the model run
-     filename: name of the climate file. (Can be made with the
-     process_cesm_data function)
-     filesuffix : for the input & output file
-     kwargs : kwargs to pass to the FluxBasedModel instance
+     ys : int
+         start year of the model run (default: from the config file)
+     y1 : int
+         end year of the model run (default: from the config file)
+     filename : str
+         name of the climate file, e.g. 'climate_monthly' (default) or
+         'cesm_data'
+     filesuffix : str
+         for the output file
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
      """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1700,11 +1707,12 @@ def run_from_gcm(gdir, filename='cesm_data', filesuffix='', **kwargs):
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
-    y0 = cfg.PARAMS['y0']
-    ye = cfg.PARAMS['y1']
+    if ys is None:
+        ys = cfg.PARAMS['ys']
+    if ye is None:
+        ye = cfg.PARAMS['ye']
 
-    mb_model = oggm.core.models.massbalance.\
-        PastMassBalanceModel(gdir, filename=filename, filesuffix=filesuffix)
+    mb_model = mbmods.PastMassBalanceModel(gdir, filename=filename)
 
     # run
     run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
@@ -1712,25 +1720,23 @@ def run_from_gcm(gdir, filename='cesm_data', filesuffix='', **kwargs):
     diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
                                   delete=True)
 
-    # steps = ['ambitious', 'default', 'conservative', 'ultra-conservative']
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
-        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id,
-                 step)
+        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
         fls = gdir.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_model, y0=y0,
+        model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                                time_stepping=step,
+                               is_tidewater=gdir.is_tidewater,
                                **kwargs)
         try:
             model.run_until_and_store(ye, run_path=run_path,
                                       diag_path=diag_path)
-        except RuntimeError:
+        except (RuntimeError, FloatingPointError):
             if step == 'ultra-conservative':
-                raise RuntimeError(
-                    '%s: we did our best, the model is still '
-                    'unstable.', gdir.rgi_id)
+                raise
             continue
         # If we get here we good
-        log.info('%s: %s time stepping was successful!', gdir.rgi_id,
-                 step)
+        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
+
+    return model

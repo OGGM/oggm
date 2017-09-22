@@ -249,6 +249,9 @@ class PastMassBalanceModel(MassBalanceModel):
 
         pok = np.where(self.years == np.floor(year))[0]
 
+        if len(pok) < 1:
+            raise ValueError('Year {} not in record'.format(year))
+
         # Read timeseries
         itemp = self.temp[pok] + self.temp_bias
         iprcp = self.prcp[pok]
