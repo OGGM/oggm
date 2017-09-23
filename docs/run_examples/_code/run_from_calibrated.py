@@ -25,7 +25,7 @@ cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
-utils.mkdir(WORKING_DIR)
+utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?
@@ -49,6 +49,7 @@ cfg.set_intersects_db(path.join(rgi_dir, '00_rgi50_AllRegs',
                                 'intersects_rgi50_AllRegs.shp'))
 
 # Pre-download other files which will be needed later
+utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
