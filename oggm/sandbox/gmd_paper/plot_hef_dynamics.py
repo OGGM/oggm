@@ -26,6 +26,7 @@ cfg.PARAMS['border'] = 60
 cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'dynamics')
+cfg.PATHS['working_dir'] = base_dir
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
@@ -56,6 +57,10 @@ tasks.random_glacier_evolution(gdir, nyears=800, bias=0, seed=seed,
                                filesuffix='_fromzero_def', reset=reset,
                                zero_initial_glacier=True)
 
+tasks.run_constant_climate(gdir, nyears=800, bias=0,
+                           filesuffix='_fromzero_ct', reset=reset,
+                           zero_initial_glacier=True)
+
 cfg.PARAMS['flowline_fs'] = 5.7e-20 * 0.5
 tasks.random_glacier_evolution(gdir, nyears=800, bias=0, seed=seed,
                                filesuffix='_fromzero_fs', reset=reset,
@@ -82,6 +87,8 @@ f = gdir.get_filepath('model_diagnostics', filesuffix='_fromzero_2A')
 ds3 = xr.open_dataset(f)
 f = gdir.get_filepath('model_diagnostics', filesuffix='_fromzero_halfA')
 ds4 = xr.open_dataset(f)
+f = gdir.get_filepath('model_diagnostics', filesuffix='_fromzero_ct')
+ds5 = xr.open_dataset(f)
 
 letkm = dict(color='black', ha='left', va='top', fontsize=14,
              bbox=dict(facecolor='white', edgecolor='black'))
@@ -93,6 +100,7 @@ ax.axhline(df.inv_volume_km3.values[0], 0, 800, color='k')
 (ds1.volume_m3 * 1e-9).plot(ax=ax, linewidth=2, label='Default')
 (ds2.volume_m3 * 1e-9).plot(ax=ax, label='Sliding')
 (ds4.volume_m3 * 1e-9).plot(ax=ax, label=r'A / 2')
+(ds5.volume_m3 * 1e-9).plot(ax=ax, label=r'Constant climate')
 ax.set_xlabel('Years')
 ax.set_ylabel('Volume [km$^3$]')
 ax.text(tx, ty, 'a', transform=ax.transAxes, **letkm)
@@ -103,6 +111,7 @@ ax.axhline(gdir.read_pickle('model_flowlines')[-1].length_m / 1000, 0, 800,
 (ds1.length_m / 1000).plot(ax=ax, linewidth=2, label='Default')
 (ds2.length_m / 1000).plot(ax=ax, label='Sliding')
 (ds4.length_m / 1000).plot(ax=ax, label=r'A / 2')
+(ds5.length_m / 1000).plot(ax=ax, label=r'Constant climate')
 ax.set_xlabel('Years')
 ax.set_ylabel('Length [km]')
 ax.text(tx, ty, 'b', transform=ax.transAxes, **letkm)
