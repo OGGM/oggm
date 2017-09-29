@@ -1736,7 +1736,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
 
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
-                          filesuffix='', **kwargs):
+                          input_filesuffix='', filesuffix='', **kwargs):
     """ Runs glacier with climate input from a general circulation model.
 
      Parameters
@@ -1748,6 +1748,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
      filename : str
          name of the climate file, e.g. 'climate_monthly' (default) or
          'cesm_data'
+     input_filesuffix: str
+         filesuffix for the input file
      filesuffix : str
          for the output file
      kwargs : dict
@@ -1770,5 +1772,6 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
     if ye is None:
         ye = cfg.PARAMS['ye']
 
-    mb = mbmods.PastMassBalanceModel(gdir, filename=filename)
+    mb = mbmods.PastMassBalanceModel(gdir, filename=filename,
+                                     input_filesuffix=input_filesuffix)
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs)

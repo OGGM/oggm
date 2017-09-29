@@ -152,7 +152,7 @@ class PastMassBalanceModel(MassBalanceModel):
     """Mass balance during the climate data period."""
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 filename='climate_monthly', filesuffix=''):
+                 filename='climate_monthly', input_filesuffix=''):
         """Initialize.
 
         Parameters
@@ -173,8 +173,8 @@ class PastMassBalanceModel(MassBalanceModel):
         filename : str, optional
             set to a different BASENAME if you want to use alternative climate
             data.
-        filesuffix : str
-            append a suffix to the filename (useful for model runs).
+        input_filesuffix : str
+            the file suffix of the input file
         """
 
         if mu_star is None:
@@ -201,7 +201,7 @@ class PastMassBalanceModel(MassBalanceModel):
         self.temp_bias = 0.
 
         # Read file
-        fpath = gdir.get_filepath(filename, filesuffix=filesuffix)
+        fpath = gdir.get_filepath(filename, input_filesuffix=input_filesuffix)
         with netCDF4.Dataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
