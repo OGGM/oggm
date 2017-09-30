@@ -197,3 +197,10 @@ def dummy_width_bed_tributary(map_dx=100.):
                                          bed_h[0:20], widths[0:20])
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
+
+
+def get_ident():
+    ident_str="$Id$"
+    if ":" not in ident_str:
+        return "default"
+    return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")

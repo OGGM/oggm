@@ -23,6 +23,7 @@ from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
 from oggm.tests import requires_mpltest, is_graphic_test, BASELINE_DIR
+from oggm.tests.funcs import get_ident
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -32,7 +33,7 @@ if not RUN_WORKFLOW_TESTS:
     raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
-TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow')
+TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow', get_ident())
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 
@@ -79,6 +80,9 @@ def up_to_climate(reset=False):
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
     cfg.PARAMS['invert_with_rectangular'] = False
 
+    # Reset MP
+    workflow.reset_multiprocessing()
+
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
 
@@ -117,7 +121,7 @@ def up_to_inversion(reset=False):
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
         cfg.PATHS['cru_dir'] = ''
-        workflow.init_mp_pool(reset=True)
+        workflow.reset_multiprocessing()
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -151,7 +155,7 @@ def up_to_distrib(reset=False):
         cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        workflow.init_mp_pool(reset=True)
+        workflow.reset_multiprocessing()
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")
