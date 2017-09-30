@@ -11,22 +11,17 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 import unittest
-import os
 import copy
 import time
 import shutil
 
-import shapely.geometry as shpg
-import numpy as np
 import pandas as pd
-import geopandas as gpd
 from numpy.testing import assert_allclose
 
 # Local imports
-from oggm.tests import init_hef
-from oggm.core.models import massbalance, flowline
+from oggm.core.models import massbalance
 from oggm.core.models.massbalance import LinearMassBalanceModel
-from oggm.tests import is_slow, RUN_MODEL_TESTS, is_performance_test
+from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
 from oggm import utils, cfg, workflow
 from oggm.utils import get_demo_file

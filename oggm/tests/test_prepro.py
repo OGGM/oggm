@@ -2037,8 +2037,8 @@ class TestCatching(unittest.TestCase):
 
         # This will "run" but log an error
         from oggm.tasks import random_glacier_evolution
-        workflow.execute_entity_task(random_glacier_evolution, [gdir],
-                                     filesuffix='_testme')
+        workflow.execute_entity_task(random_glacier_evolution,
+                                     [(gdir, {'filesuffix':'_testme'})])
 
         tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
         assert os.path.exists(tfile)
