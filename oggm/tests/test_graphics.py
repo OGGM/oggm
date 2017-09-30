@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 # Local imports
 import oggm.utils
 from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
-from oggm.tests import init_hef, BASELINE_DIR
+from oggm.tests import BASELINE_DIR
+from oggm.tests.funcs import init_hef
 from oggm import graphics
 from oggm.core.preprocessing import (gis, centerlines, geometry, climate, inversion)
 import oggm.cfg as cfg

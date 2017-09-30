@@ -6,6 +6,8 @@ omit =
     */mpi.py
     */__init__.py
 
+concurrency = multiprocessing
+
 [report]
 omit =
     */sandbox/*

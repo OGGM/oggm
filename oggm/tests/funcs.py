@@ -1,9 +1,18 @@
+import os
+
+import geopandas as gpd
 import shapely.geometry as shpg
 import numpy as np
+from scipy import optimize as optimization
 
 # Local imports
+import oggm
+import oggm.cfg as cfg
+from oggm.core.preprocessing import gis, centerlines, geometry
+from oggm.core.preprocessing import climate, inversion
 from oggm.core.models import flowline
-
+from oggm.utils import get_demo_file
+from oggm.workflow import execute_entity_task
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
                        widths=3.):
@@ -204,3 +213,110 @@ def get_ident():
     if ":" not in ident_str:
         return "default"
     return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
+
+
+def init_hef(reset=False, border=40, invert_with_sliding=True,
+             invert_with_rectangular=True):
+
+    # test directory
+    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_border{}'.format(border))
+    if not invert_with_sliding:
+        testdir += '_withoutslide'
+    if not invert_with_rectangular:
+        testdir += '_withoutrectangular'
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+        reset = True
+
+    # Init
+    cfg.initialize()
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['border'] = border
+    cfg.PARAMS['use_optimized_inversion_params'] = True
+
+    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+    if not gdir.has_file('inversion_params'):
+        reset = True
+        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+
+    if not reset:
+        return gdir
+
+    gis.define_glacier_region(gdir, entity=entity)
+    execute_entity_task(gis.glacier_masks, [gdir])
+    execute_entity_task(centerlines.compute_centerlines, [gdir])
+    centerlines.compute_downstream_lines(gdir)
+    geometry.initialize_flowlines(gdir)
+    centerlines.compute_downstream_bedshape(gdir)
+    geometry.catchment_area(gdir)
+    geometry.catchment_intersections(gdir)
+    geometry.catchment_width_geom(gdir)
+    geometry.catchment_width_correction(gdir)
+    climate.process_histalp_nonparallel([gdir])
+    climate.mu_candidates(gdir, div_id=0)
+    mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+    res = climate.t_star_from_refmb(gdir, mbdf)
+    climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
+                                     bias=res['bias'][-1],
+                                     prcp_fac=res['prcp_fac'])
+
+    inversion.prepare_for_inversion(gdir, add_debug_var=True,
+                                    invert_with_rectangular=invert_with_rectangular)
+    ref_v = 0.573 * 1e9
+
+    if invert_with_sliding:
+        def to_optimize(x):
+            # For backwards compat
+            _fd = 1.9e-24 * x[0]
+            glen_a = (cfg.N+2) * _fd / 2.
+            fs = 5.7e-20 * x[1]
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                         glen_a=glen_a)
+            return (v - ref_v)**2
+
+        out = optimization.minimize(to_optimize, [1, 1],
+                                    bounds=((0.01, 10), (0.01, 10)),
+                                    tol=1e-4)['x']
+        _fd = 1.9e-24 * out[0]
+        glen_a = (cfg.N+2) * _fd / 2.
+        fs = 5.7e-20 * out[1]
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
+    else:
+        def to_optimize(x):
+            glen_a = cfg.A * x[0]
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=0.,
+                                                         glen_a=glen_a)
+            return (v - ref_v)**2
+
+        out = optimization.minimize(to_optimize, [1],
+                                    bounds=((0.01, 10),),
+                                    tol=1e-4)['x']
+        glen_a = cfg.A * out[0]
+        fs = 0.
+        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                     glen_a=glen_a,
+                                                     write=True)
+    d = dict(fs=fs, glen_a=glen_a)
+    d['factor_glen_a'] = out[0]
+    try:
+        d['factor_fs'] = out[1]
+    except IndexError:
+        d['factor_fs'] = 0.
+    gdir.write_pickle(d, 'inversion_params')
+
+    # filter
+    inversion.filter_inversion_output(gdir)
+
+    inversion.distribute_thickness(gdir, how='per_altitude',
+                                   add_nc_name=True)
+    inversion.distribute_thickness(gdir, how='per_interpolation',
+                                   add_slope=False, smooth=False,
+                                   add_nc_name=True)
+
+    return gdir

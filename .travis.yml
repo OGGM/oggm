@@ -35,7 +35,8 @@ install:
     pip3 install coveralls
     cd /root/oggm
     pip3 install -e .
-    pytest oggm $MPL --cov=oggm --cov-report term-missing
+    pytest oggm $MPL --cov-config .coveragerc --cov=oggm --cov-report term-missing
+    coverage combine
     coveralls || true
     exit 0
     EOF

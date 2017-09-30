@@ -615,6 +615,29 @@ class TestClimate(unittest.TestCase):
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
+    def test_distribute_climate_grad(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        cfg.PARAMS['temp_use_local_gradient'] = True
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_histalp_nonparallel(gdirs)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1802)
+        self.assertEqual(ci['hydro_yr_1'], 2003)
+
+        with netCDF4.Dataset(gdir.get_filepath('climate_monthly')) as nc_r:
+            grad = nc_r.variables['grad'][:]
+            assert np.std(grad) > 0.0001
+
+        cfg.PARAMS['temp_use_local_gradient'] = False
+
     def test_distribute_climate_parallel(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -2001,6 +2024,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
         self.log_dir = os.path.join(cfg.PATHS['test_dir'], 'log')
@@ -2036,7 +2060,8 @@ class TestCatching(unittest.TestCase):
 
         # This will "run" but log an error
         from oggm.tasks import random_glacier_evolution
-        random_glacier_evolution(gdir, filesuffix='_testme')
+        workflow.execute_entity_task(random_glacier_evolution,
+                                     [(gdir, {'filesuffix':'_testme'})])
 
         tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
         assert os.path.exists(tfile)
