@@ -2367,8 +2367,7 @@ class GlacierDirectory(object):
         else:
             raise ValueError('setup not understood: {}'.format(setup))
 
-    def get_filepath(self, filename, div_id=0, delete=False,
-                     input_filesuffix='', filesuffix=''):
+    def get_filepath(self, filename, div_id=0, delete=False, filesuffix=''):
         """Absolute path to a specific file.
 
         Parameters
@@ -2383,9 +2382,6 @@ class GlacierDirectory(object):
             delete the file if exists
         input_filesuffix: str
             the suffix of the input file
-        filesuffix : str
-            append a suffix to the filename (useful for model runs). Note
-            that the BASENAME remains same.
 
         Returns
         -------
@@ -2400,11 +2396,6 @@ class GlacierDirectory(object):
 
         dir = self.divide_dirs[div_id]
         fname = cfg.BASENAMES[filename]
-
-        if input_filesuffix:
-            fname = fname.split('.')
-            assert len(fname) == 2
-            fname = fname[0] + input_filesuffix + '.' + fname[1]
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
