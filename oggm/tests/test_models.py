@@ -23,10 +23,8 @@ from oggm.core.models import massbalance
 from oggm.core.models.massbalance import LinearMassBalanceModel
 from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
-from oggm import utils, cfg, workflow
-from oggm.utils import get_demo_file
+from oggm import utils, workflow
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS
-from oggm.core.preprocessing import climate, inversion, centerlines
 
 # Tests
 from oggm.tests.funcs import *
