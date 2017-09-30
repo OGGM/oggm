@@ -21,8 +21,8 @@ from numpy.testing import assert_allclose
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
-from oggm.tests import requires_mpltest, is_graphic_test, BASELINE_DIR
+from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
+from oggm.tests import requires_mpltest, BASELINE_DIR
 from oggm.tests.funcs import get_ident
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
@@ -59,8 +59,7 @@ def up_to_climate(reset=False):
     cfg.initialize()
 
     # Use multiprocessing
-    # We don't use mp on TRAVIS because unsure if compatible with test coverage
-    cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
+    cfg.PARAMS['use_multiprocessing'] = True
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
@@ -71,7 +70,7 @@ def up_to_climate(reset=False):
     rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
 
-    # Be sure data is downloaded because lock doesn't work
+    # Be sure data is downloaded
     cl = utils.get_cru_cl_file()
 
     # Params

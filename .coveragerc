@@ -34,6 +34,7 @@ exclude_lines =
     if __name__ == .__main__.:
 
 ignore_errors = True
+concurrency = multiprocessing
 
 [html]
 directory = coverage_html_report
