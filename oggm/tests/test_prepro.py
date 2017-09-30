@@ -2001,6 +2001,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
         self.log_dir = os.path.join(cfg.PATHS['test_dir'], 'log')
@@ -2036,7 +2037,8 @@ class TestCatching(unittest.TestCase):
 
         # This will "run" but log an error
         from oggm.tasks import random_glacier_evolution
-        random_glacier_evolution(gdir, filesuffix='_testme')
+        workflow.execute_entity_task(random_glacier_evolution, [gdir],
+                                     filesuffix='_testme')
 
         tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
         assert os.path.exists(tfile)
