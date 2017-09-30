@@ -2380,9 +2380,10 @@ class GlacierDirectory(object):
             compute_downstream_lines)
         delete : bool
             delete the file if exists
-        filesuffix: str
+        filesuffix : str
             append a suffix to the filename (useful for model runs). Note
-            that the BASENAME remains same. 
+            that the BASENAME remains same.
+
         Returns
         -------
         The absolute path to the desired file
