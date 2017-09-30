@@ -12,6 +12,7 @@ from oggm.core.preprocessing import gis, centerlines, geometry
 from oggm.core.preprocessing import climate, inversion
 from oggm.core.models import flowline
 from oggm.utils import get_demo_file
+from oggm.workflow import execute_entity_task
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
                        widths=3.):
@@ -245,9 +246,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     if not reset:
         return gdir
 
-    gis.define_glacier_region(gdir, entity=entity)
-    gis.glacier_masks(gdir)
-    centerlines.compute_centerlines(gdir)
+    execute_entity_task(gis.define_glacier_region, [gdir], entity=entity)
+    execute_entity_task(gis.glacier_masks, [gdir])
+    execute_entity_task(centerlines.compute_centerlines, [gdir])
     centerlines.compute_downstream_lines(gdir)
     geometry.initialize_flowlines(gdir)
     centerlines.compute_downstream_bedshape(gdir)
