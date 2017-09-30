@@ -174,7 +174,7 @@ class PastMassBalanceModel(MassBalanceModel):
             set to a different BASENAME if you want to use alternative climate
             data.
         input_filesuffix : str
-            the file suffix of the input file
+            the file suffix of the input climate file
         """
 
         if mu_star is None:
@@ -201,7 +201,7 @@ class PastMassBalanceModel(MassBalanceModel):
         self.temp_bias = 0.
 
         # Read file
-        fpath = gdir.get_filepath(filename, input_filesuffix=input_filesuffix)
+        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with netCDF4.Dataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
