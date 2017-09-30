@@ -2381,7 +2381,7 @@ class GlacierDirectory(object):
         delete : bool
             delete the file if exists
         filesuffix: str
-            append a suffix to the filename (useful for model runs). Note\
+            append a suffix to the filename (useful for model runs). Note
             that the BASENAME remains same. 
         Returns
         -------
