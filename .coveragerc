@@ -6,6 +6,8 @@ omit =
     */mpi.py
     */__init__.py
 
+concurrency = multiprocessing
+
 [report]
 omit =
     */sandbox/*
@@ -34,7 +36,6 @@ exclude_lines =
     if __name__ == .__main__.:
 
 ignore_errors = True
-concurrency = multiprocessing
 
 [html]
 directory = coverage_html_report
