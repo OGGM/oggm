@@ -1749,7 +1749,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
          name of the climate file, e.g. 'climate_monthly' (default) or
          'cesm_data'
      input_filesuffix: str
-         filesuffix for the input file
+         filesuffix for the input climate file
      filesuffix : str
          for the output file
      kwargs : dict
