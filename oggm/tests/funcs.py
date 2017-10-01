@@ -225,7 +225,7 @@ def get_test_dir():
     # If new ident, remove all other dirs so spare space
     for d in os.listdir(cfg.PATHS['test_dir']):
         if d and d != s:
-            shutil.rmtree(cfg.PATHS['test_dir'], os.path.join(d))
+            shutil.rmtree(os.path.join(cfg.PATHS['test_dir'], d))
     return out
 
 
