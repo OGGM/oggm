@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import geopandas as gpd
 import shapely.geometry as shpg
@@ -11,7 +12,7 @@ import oggm.cfg as cfg
 from oggm.core.preprocessing import gis, centerlines, geometry
 from oggm.core.preprocessing import climate, inversion
 from oggm.core.models import flowline
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -211,12 +212,21 @@ def dummy_width_bed_tributary(map_dx=100.):
 def get_ident():
     ident_str = '$Id$'
     if ":" not in ident_str:
-        return "default"
+        return 'no_git_id'
     return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
 
 
 def get_test_dir():
-    return os.path.join(cfg.PATHS['test_dir'], get_ident())
+
+    s = get_ident()
+    out = os.path.join(cfg.PATHS['test_dir'], s)
+    mkdir(out)
+
+    # If new ident, remove all other dirs so spare space
+    for d in os.listdir(cfg.PATHS['test_dir']):
+        if d and d != s:
+            shutil.rmtree(cfg.PATHS['test_dir'], os.path.join(d))
+    return out
 
 
 def init_hef(reset=False, border=40, invert_with_sliding=True,
