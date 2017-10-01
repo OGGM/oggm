@@ -1,5 +1,6 @@
 import os
 import shutil
+from distutils.util import strtobool
 
 import geopandas as gpd
 import shapely.geometry as shpg
@@ -207,6 +208,13 @@ def dummy_width_bed_tributary(map_dx=100.):
                                          bed_h[0:20], widths[0:20])
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
+
+
+def use_multiprocessing():
+    try:
+        return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "True"))
+    except:
+        return True
 
 
 def get_ident():
