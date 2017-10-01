@@ -127,7 +127,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         if len(np.atleast_1d(year)) > 1:
             return np.asarray([self.get_ela(year=yr) for yr in year])
 
-        if not self.valid_bounds:
+        if self.valid_bounds is None:
             raise ValueError('valid_bounds attribute needs to be set for '
                              'ELA search.')
 
@@ -348,8 +348,8 @@ class ConstantMassBalanceModel(MassBalanceModel):
         # This is a quick'n dirty optimisation
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
             zminmax = [nc.min_h_dem-50, nc.max_h_dem+1000]
-        self.valid_bounds = zminmax
         self.hbins = np.arange(*zminmax, step=5)
+        self.valid_bounds = self.hbins[[0, -1]]
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @MassBalanceModel.temp_bias.setter
