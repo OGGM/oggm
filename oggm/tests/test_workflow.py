@@ -23,7 +23,7 @@ from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
 from oggm.tests import requires_mpltest, BASELINE_DIR
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, use_multiprocessing
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -59,7 +59,7 @@ def up_to_climate(reset=False):
     cfg.initialize()
 
     # Use multiprocessing
-    cfg.PARAMS['use_multiprocessing'] = True
+    cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
