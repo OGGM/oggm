@@ -105,7 +105,6 @@ def write_version_py(filename=None):
     cnt = """\
 version = '%s'
 short_version = '%s'
-git_ident_str = '$Id$'
 """
     if not filename:
         filename = path.join(path.dirname(__file__), 'oggm', 'version.py')

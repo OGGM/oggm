@@ -209,7 +209,7 @@ def dummy_width_bed_tributary(map_dx=100.):
 
 
 def get_ident():
-    ident_str = getattr(oggm.version, 'git_ident_str', '')
+    ident_str = '$Id$'
     if ":" not in ident_str:
         return "default"
     return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
