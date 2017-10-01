@@ -25,6 +25,8 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 # Local logger
 log = logging.getLogger(__name__)
 
+git_ident_str = '$Id$'
+
 # Path to the cache directory
 CACHE_DIR = os.path.join(os.path.expanduser('~'), '.oggm')
 if not os.path.exists(CACHE_DIR):
