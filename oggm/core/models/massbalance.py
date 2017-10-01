@@ -7,11 +7,10 @@ import numpy as np
 import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
-from numpy import random
+from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS
-from oggm.core.preprocessing import climate
 from oggm import utils
 from oggm.utils import SuperclassMeta, lazy_property
 
@@ -25,6 +24,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
     def __init__(self):
         """ Initialize."""
         self._temp_bias = 0
+        self.valid_bounds = None
 
     @property
     def temp_bias(self):
@@ -111,6 +111,31 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
         return np.average(mbs, weights=widths)
 
+    def get_ela(self, year=None):
+        """Compute the equilibrium line altitude for this year
+
+        Parameters
+        ----------
+        year: float, optional
+            the time (in the "floating year" convention)
+
+        Returns
+        -------
+        the equilibrium line altitude (ELA, units: m)
+        """
+
+        if len(np.atleast_1d(year)) > 1:
+            return np.asarray([self.get_ela(year=yr) for yr in year])
+
+        if not self.valid_bounds:
+            raise ValueError('valid_bounds attribute needs to be set for '
+                             'ELA search.')
+
+        def to_minimize(x):
+            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * cfg.RHO
+            return o
+        return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
+
 
 class LinearMassBalanceModel(MassBalanceModel):
     """Constant mass-balance as a linear function of altitude.
@@ -129,6 +154,8 @@ class LinearMassBalanceModel(MassBalanceModel):
         grad: float
             Mass-balance gradient (unit: [mm ice yr-1 m-1])
         """
+        super(LinearMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
         self.grad = grad
@@ -141,7 +168,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         self._temp_bias = value
 
     def get_monthly_mb(self, heights, year=None):
-        mb = (heights - self.ela_h) * self.grad
+        mb = (np.asarray(heights) - self.ela_h) * self.grad
         return mb / SEC_IN_YEAR / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
@@ -177,6 +204,8 @@ class PastMassBalanceModel(MassBalanceModel):
             the file suffix of the input climate file
         """
 
+        super(PastMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
             mu_star = df['mu_star'][0]
@@ -308,6 +337,7 @@ class ConstantMassBalanceModel(MassBalanceModel):
             the half-size of the time window (window size = 2 * halfsize + 1)
         """
 
+        super(ConstantMassBalanceModel, self).__init__()
         self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
                                           prcp_fac=prcp_fac)
 
@@ -317,7 +347,8 @@ class ConstantMassBalanceModel(MassBalanceModel):
 
         # This is a quick'n dirty optimisation
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            zminmax = [nc.min_h_dem-50, nc.max_h_dem+500]
+            zminmax = [nc.min_h_dem-50, nc.max_h_dem+1000]
+        self.valid_bounds = zminmax
         self.hbins = np.arange(*zminmax, step=5)
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
@@ -398,6 +429,8 @@ class RandomMassBalanceModel(MassBalanceModel):
             Random seed used to initialize the pseudo-random number generator.
         """
 
+        super(RandomMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
                                           prcp_fac=prcp_fac)
 

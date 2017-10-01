@@ -253,6 +253,8 @@ class TestMassBalance(unittest.TestCase):
 
     def test_past_mb_model(self):
 
+        F = SEC_IN_YEAR * cfg.RHO
+
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
@@ -272,16 +274,22 @@ class TestMassBalance(unittest.TestCase):
         mb_mod = massbalance.PastMassBalanceModel(gdir, bias=0)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
             ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
             np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
                                        atol=1e-2)
+            ela_z = mb_mod.get_ela(year=yr)
+            totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
+            assert_allclose(totest[0], 0, atol=1)
 
         mb_mod = massbalance.PastMassBalanceModel(gdir)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
             ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
             np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
                                        atol=1e-2)
+            ela_z = mb_mod.get_ela(year=yr)
+            totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
+            assert_allclose(totest[0], 0, atol=1)
 
         for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
 
@@ -308,6 +316,9 @@ class TestMassBalance(unittest.TestCase):
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
                                    mbdf['MY_MB'].mean(),
                                    atol=1e-2)
+        mbdf['MY_ELA'] = mb_mod.get_ela(year=mbdf.index.values)
+        assert mbdf[['MY_ELA', 'MY_MB']].corr().values[0, 1] < -0.9
+        assert mbdf[['MY_ELA', 'ANNUAL_BALANCE']].corr().values[0, 1] < -0.7
 
         mb_mod = massbalance.PastMassBalanceModel(gdir, bias=0)
         for yr in mbdf.index.values:
@@ -427,10 +438,14 @@ class TestMassBalance(unittest.TestCase):
         ny = 2000
         yrs = np.arange(ny)
         r_mbh = 0.
-        for yr in yrs:
+        mbts = yrs * 0
+        for i, yr in enumerate(yrs):
+            mbts[i] = mb_mod.get_annual_mb(h, yr)[0] * SEC_IN_YEAR
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
+        elats = mb_mod.get_ela(yrs[:200])
+        assert np.corrcoef(mbts[:200], elats)[0, 1] < -0.9
 
         mb_mod.temp_bias = -0.5
         r_mbh_b = 0.
@@ -1662,7 +1677,6 @@ class TestHEF(unittest.TestCase):
             np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
             np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
             np.testing.assert_allclose(scru.grad, scesm.grad)
-
 
         # Mass balance models
         mb_cru = massbalance.PastMassBalanceModel(self.gdir)
