@@ -611,6 +611,7 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
         if self.is_tidewater:
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
 
@@ -629,6 +630,7 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
+            diag_ds['ela_m'].data[i] = self.mb_model.get_ela(year=yr)
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 

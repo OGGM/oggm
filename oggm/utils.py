@@ -1805,6 +1805,7 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
+    ela = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
@@ -1813,10 +1814,12 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
                 vol[:, i] = ds_diag.volume_m3.values[pkeep]
                 area[:, i] = ds_diag.area_m2.values[pkeep]
                 length[:, i] = ds_diag.length_m.values[pkeep]
+                ela[:, i] = ds_diag.ela_m.values[pkeep]
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
             length[:, i] = np.NaN
+            ela[:, i] = np.NaN
 
     ds['volume'] = (('time', 'rgi_id'), vol)
     ds['volume'].attrs['units'] = 'm3'
@@ -1827,6 +1830,9 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     ds['length'] = (('time', 'rgi_id'), length)
     ds['length'].attrs['units'] = 'm'
     ds['length'].attrs['description'] = 'Glacier length'
+    ds['ela'] = (('time', 'rgi_id'), ela)
+    ds['ela'].attrs['units'] = 'm'
+    ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
 
     if path:
         if path is True:
