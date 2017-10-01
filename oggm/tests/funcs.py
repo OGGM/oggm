@@ -104,7 +104,7 @@ def dummy_noisy_bed(map_dx=100.):
 
 
 def dummy_parabolic_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
-                        default_shape=5.e-03,
+                        default_shape=5.e-3,
                         from_other_shape=None, from_other_bed=None):
     dx = 1.
 
