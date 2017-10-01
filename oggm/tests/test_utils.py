@@ -16,13 +16,14 @@ import oggm
 from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
+from oggm.tests.funcs import get_test_dir
 
 # Globals
-TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_download')
+TEST_DIR = os.path.join(get_test_dir(), 'tmp_download')
 utils.mkdir(TEST_DIR)
 
 # In case some logging happens or so
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 class TestFuncs(unittest.TestCase):
 

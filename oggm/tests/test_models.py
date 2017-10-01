@@ -41,7 +41,7 @@ do_plot = False
 DOM_BORDER = 80
 
 # In case some logging happens or so
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 
 class TestInitFlowline(unittest.TestCase):
@@ -146,7 +146,7 @@ class TestOtherDivides(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_div')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_div')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         # self.clean_dir()
@@ -851,7 +851,7 @@ class TestModelFlowlines(unittest.TestCase):
 class TestIO(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_io')
+        self.test_dir = os.path.join(get_test_dir(), 'tmp_io')
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
@@ -984,7 +984,7 @@ class TestIO(unittest.TestCase):
 
     def test_gdir_copy(self):
         print(self.gdir.dir)
-        new_dir = os.path.join(cfg.PATHS['test_dir'], 'tmp_testcopy')
+        new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
         self.gdir.copy_to_basedir(new_dir, setup='all')
@@ -1148,8 +1148,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
     def setUp(self):
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'],
-                                    'tmp_ideal_inversion')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_ideal_inversion')
 
         from oggm import GlacierDirectory
         from oggm.tasks import define_glacier_region

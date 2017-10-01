@@ -23,7 +23,7 @@ from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
 from oggm.tests import requires_mpltest, BASELINE_DIR
-from oggm.tests.funcs import get_ident
+from oggm.tests.funcs import get_test_dir
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -33,7 +33,7 @@ if not RUN_WORKFLOW_TESTS:
     raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
-TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow', get_ident())
+TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 
