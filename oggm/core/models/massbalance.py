@@ -36,10 +36,6 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """Temperature bias to add to the original series."""
         self._temp_bias = value
 
-    def get_mb(self, heights, year=None):
-        """Temporary place holder. Currently links to get_annual_mb()."""
-        return self.get_annual_mb(heights, year=year)
-
     def get_monthly_mb(self, heights, year=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
 

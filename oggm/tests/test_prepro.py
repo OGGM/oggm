@@ -1835,7 +1835,7 @@ class TestGrindelInvert(unittest.TestCase):
             # Heights
             hgt = fl.surface_h
             # Flux
-            mb = mbmod.get_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
+            mb = mbmod.get_annual_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
             fl.flux = np.zeros(len(fl.surface_h))
             fl.set_apparent_mb(mb)
             flux = fl.flux * (map_dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
