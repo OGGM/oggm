@@ -27,10 +27,11 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
+from oggm.tests.funcs import get_test_dir
 from oggm.core.models import flowline
 from oggm import workflow
 
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
@@ -64,7 +65,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -209,7 +210,7 @@ class TestCenterlines(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -421,7 +422,7 @@ class TestGeometry(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -561,10 +562,10 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
@@ -1228,7 +1229,7 @@ class TestInversion(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1667,7 +1668,7 @@ class TestSlopeMitigation(unittest.TestCase):
 
     def setUp(self):
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1722,7 +1723,7 @@ class TestDividesAsGlaciers(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1766,7 +1767,7 @@ class TestGrindelInvert(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_grindel')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_grindel')
         self.clean_dir()
 
         # Init
@@ -1928,7 +1929,7 @@ class TestGCMClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -2018,7 +2019,7 @@ class TestCatching(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
 
@@ -2026,8 +2027,8 @@ class TestCatching(unittest.TestCase):
         cfg.initialize()
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
-        self.log_dir = os.path.join(cfg.PATHS['test_dir'], 'log')
+        cfg.PATHS['working_dir'] = get_test_dir()
+        self.log_dir = os.path.join(get_test_dir(), 'log')
         self.clean_dir()
 
     def tearDown(self):

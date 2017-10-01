@@ -34,7 +34,7 @@ if not RUN_NUMERIC_TESTS:
 do_plot = False
 
 # In case some logging happens or so
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 
 class TestIdealisedCases(unittest.TestCase):

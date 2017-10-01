@@ -209,17 +209,21 @@ def dummy_width_bed_tributary(map_dx=100.):
 
 
 def get_ident():
-    ident_str="$Id$"
+    ident_str = getattr(oggm.version, 'git_ident_str', '')
     if ":" not in ident_str:
         return "default"
     return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
+
+
+def get_test_dir():
+    return os.path.join(cfg.PATHS['test_dir'], get_ident())
 
 
 def init_hef(reset=False, border=40, invert_with_sliding=True,
              invert_with_rectangular=True):
 
     # test directory
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_border{}'.format(border))
+    testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
     if not invert_with_sliding:
         testdir += '_withoutslide'
     if not invert_with_rectangular:
