@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 # Local imports
 import oggm.utils
 from oggm.tests import requires_mpltest, requires_internet, RUN_GRAPHIC_TESTS
-from oggm.tests import init_hef, BASELINE_DIR
+from oggm.tests import BASELINE_DIR
+from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
 from oggm.core.preprocessing import (gis, centerlines, geometry, climate, inversion)
 import oggm.cfg as cfg
@@ -27,7 +28,7 @@ from oggm.core.models import flowline, massbalance
 from oggm import utils
 
 # In case some logging happens or so
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 # do we event want to run the tests?
 if not RUN_GRAPHIC_TESTS:
@@ -50,6 +51,17 @@ def test_googlemap():
     fig, ax = plt.subplots()
     gdir = init_hef()
     graphics.plot_googlemap(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
+
+
+@requires_internet
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_domain():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    graphics.plot_domain(gdir, ax=ax)
     fig.tight_layout()
     return fig
 
@@ -130,7 +142,7 @@ def test_inversion():
 def test_nodivide():
 
     # test directory
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_nodiv')
+    testdir = os.path.join(get_test_dir(), 'tmp_nodiv')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
 
@@ -162,7 +174,7 @@ def test_nodivide():
 def test_nodivide_corrected():
 
     # test directory
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_nodiv')
+    testdir = os.path.join(get_test_dir(), 'tmp_nodiv')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
 
@@ -207,6 +219,20 @@ def test_modelsection():
     fig = plt.figure(figsize=(12, 6))
     ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
     graphics.plot_modeloutput_section(gdir, ax=ax, model=model)
+    return fig
+
+
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+def test_modelsection_withtrib():
+
+    gdir = init_hef()
+    flowline.init_present_time_glacier(gdir)
+    fls = gdir.read_pickle('model_flowlines')
+    model = flowline.FlowlineModel(fls)
+
+    fig = plt.figure(figsize=(14, 10))
+    graphics.plot_modeloutput_section_withtrib(gdir, fig=fig, model=model)
     return fig
 
 
@@ -271,7 +297,7 @@ def test_intersects_borders():
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_chhota_shigri():
 
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_chhota')
+    testdir = os.path.join(get_test_dir(), 'tmp_chhota')
     utils.mkdir(testdir)
 
     # Init
@@ -323,7 +349,7 @@ def test_chhota_shigri():
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_ice_cap():
 
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_icecap')
+    testdir = os.path.join(get_test_dir(), 'tmp_icecap')
     utils.mkdir(testdir)
 
     cfg.initialize()
@@ -362,7 +388,7 @@ def test_ice_cap():
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_coxe():
 
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_coxe')
+    testdir = os.path.join(get_test_dir(), 'tmp_coxe')
     utils.mkdir(testdir)
 
     # Init

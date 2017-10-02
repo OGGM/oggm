@@ -7,11 +7,10 @@ import numpy as np
 import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
-from numpy import random
+from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS
-from oggm.core.preprocessing import climate
 from oggm import utils
 from oggm.utils import SuperclassMeta, lazy_property
 
@@ -25,6 +24,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
     def __init__(self):
         """ Initialize."""
         self._temp_bias = 0
+        self.valid_bounds = None
 
     @property
     def temp_bias(self):
@@ -35,10 +35,6 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
     def temp_bias(self, value):
         """Temperature bias to add to the original series."""
         self._temp_bias = value
-
-    def get_mb(self, heights, year=None):
-        """Temporary place holder. Currently links to get_annual_mb()."""
-        return self.get_annual_mb(heights, year=year)
 
     def get_monthly_mb(self, heights, year=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
@@ -111,6 +107,31 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
         return np.average(mbs, weights=widths)
 
+    def get_ela(self, year=None):
+        """Compute the equilibrium line altitude for this year
+
+        Parameters
+        ----------
+        year: float, optional
+            the time (in the "floating year" convention)
+
+        Returns
+        -------
+        the equilibrium line altitude (ELA, units: m)
+        """
+
+        if len(np.atleast_1d(year)) > 1:
+            return np.asarray([self.get_ela(year=yr) for yr in year])
+
+        if self.valid_bounds is None:
+            raise ValueError('valid_bounds attribute needs to be set for '
+                             'ELA search.')
+
+        def to_minimize(x):
+            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * cfg.RHO
+            return o
+        return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
+
 
 class LinearMassBalanceModel(MassBalanceModel):
     """Constant mass-balance as a linear function of altitude.
@@ -129,6 +150,8 @@ class LinearMassBalanceModel(MassBalanceModel):
         grad: float
             Mass-balance gradient (unit: [mm ice yr-1 m-1])
         """
+        super(LinearMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
         self.grad = grad
@@ -141,7 +164,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         self._temp_bias = value
 
     def get_monthly_mb(self, heights, year=None):
-        mb = (heights - self.ela_h) * self.grad
+        mb = (np.asarray(heights) - self.ela_h) * self.grad
         return mb / SEC_IN_YEAR / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
@@ -152,7 +175,7 @@ class PastMassBalanceModel(MassBalanceModel):
     """Mass balance during the climate data period."""
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 filename='climate_monthly', filesuffix=''):
+                 filename='climate_monthly', input_filesuffix=''):
         """Initialize.
 
         Parameters
@@ -173,10 +196,12 @@ class PastMassBalanceModel(MassBalanceModel):
         filename : str, optional
             set to a different BASENAME if you want to use alternative climate
             data.
-        filesuffix : str
-            append a suffix to the filename (useful for model runs).
+        input_filesuffix : str
+            the file suffix of the input climate file
         """
 
+        super(PastMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
             mu_star = df['mu_star'][0]
@@ -201,7 +226,7 @@ class PastMassBalanceModel(MassBalanceModel):
         self.temp_bias = 0.
 
         # Read file
-        fpath = gdir.get_filepath(filename, filesuffix=filesuffix)
+        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with netCDF4.Dataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
@@ -248,6 +273,9 @@ class PastMassBalanceModel(MassBalanceModel):
     def get_annual_mb(self, heights, year=None):
 
         pok = np.where(self.years == np.floor(year))[0]
+
+        if len(pok) < 1:
+            raise ValueError('Year {} not in record'.format(year))
 
         # Read timeseries
         itemp = self.temp[pok] + self.temp_bias
@@ -305,6 +333,7 @@ class ConstantMassBalanceModel(MassBalanceModel):
             the half-size of the time window (window size = 2 * halfsize + 1)
         """
 
+        super(ConstantMassBalanceModel, self).__init__()
         self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
                                           prcp_fac=prcp_fac)
 
@@ -314,8 +343,9 @@ class ConstantMassBalanceModel(MassBalanceModel):
 
         # This is a quick'n dirty optimisation
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            zminmax = [nc.min_h_dem-50, nc.max_h_dem+500]
+            zminmax = [nc.min_h_dem-50, nc.max_h_dem+1000]
         self.hbins = np.arange(*zminmax, step=5)
+        self.valid_bounds = self.hbins[[0, -1]]
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @MassBalanceModel.temp_bias.setter
@@ -395,6 +425,8 @@ class RandomMassBalanceModel(MassBalanceModel):
             Random seed used to initialize the pseudo-random number generator.
         """
 
+        super(RandomMassBalanceModel, self).__init__()
+        self.valid_bounds = [-1e4, 2e4]  # in m
         self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
                                           prcp_fac=prcp_fac)
 

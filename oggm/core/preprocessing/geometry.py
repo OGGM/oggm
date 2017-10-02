@@ -49,40 +49,6 @@ LABEL_STRUCT = np.array([[0, 1, 0],
                          [0, 1, 0]])
 
 
-def _line_extend(uline, dline, dx):
-    """An extension of line_interpol with a downstream line to add
-
-    Parameters
-    ----------
-    uline: a shapely.geometry.LineString instance
-    dline: a shapely.geometry.LineString instance
-    dx: the spacing
-
-    Returns
-    -------
-    a shapely.geometry.LineString
-    """
-
-    # First points is easy
-    points = [shpg.Point(c) for c in uline.coords]
-
-    # Continue as long as line is not finished
-    while True:
-        pref = points[-1]
-        pbs = pref.buffer(dx).boundary.intersection(dline)
-        if pbs.type == 'Point':
-            pbs = [pbs]
-        # Out of the point(s) that we get, take the one farthest from the top
-        refdis = dline.project(pref)
-        tdis = np.array([dline.project(pb) for pb in pbs])
-        p = np.where(tdis > refdis)[0]
-        if len(p) == 0:
-            break
-        points.append(pbs[int(p[0])])
-
-    return shpg.LineString(points)
-
-
 def _mask_to_polygon(mask, x=None, y=None, gdir=None):
     """Converts a mask to a single polygon.
 

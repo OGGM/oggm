@@ -27,10 +27,11 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
+from oggm.tests.funcs import get_test_dir
 from oggm.core.models import flowline
 from oggm import workflow
 
-cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+cfg.PATHS['working_dir'] = get_test_dir()
 
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
@@ -64,7 +65,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -209,7 +210,7 @@ class TestCenterlines(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -421,7 +422,7 @@ class TestGeometry(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -561,10 +562,10 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(cfg.PATHS['test_dir'], 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
@@ -614,6 +615,29 @@ class TestClimate(unittest.TestCase):
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+
+    def test_distribute_climate_grad(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        cfg.PARAMS['temp_use_local_gradient'] = True
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_histalp_nonparallel(gdirs)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1802)
+        self.assertEqual(ci['hydro_yr_1'], 2003)
+
+        with netCDF4.Dataset(gdir.get_filepath('climate_monthly')) as nc_r:
+            grad = nc_r.variables['grad'][:]
+            assert np.std(grad) > 0.0001
+
+        cfg.PARAMS['temp_use_local_gradient'] = False
 
     def test_distribute_climate_parallel(self):
 
@@ -1205,7 +1229,7 @@ class TestInversion(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1644,7 +1668,7 @@ class TestSlopeMitigation(unittest.TestCase):
 
     def setUp(self):
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1699,7 +1723,7 @@ class TestDividesAsGlaciers(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
@@ -1743,7 +1767,7 @@ class TestGrindelInvert(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_grindel')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_grindel')
         self.clean_dir()
 
         # Init
@@ -1811,7 +1835,7 @@ class TestGrindelInvert(unittest.TestCase):
             # Heights
             hgt = fl.surface_h
             # Flux
-            mb = mbmod.get_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
+            mb = mbmod.get_annual_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
             fl.flux = np.zeros(len(fl.surface_h))
             fl.set_apparent_mb(mb)
             flux = fl.flux * (map_dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
@@ -1900,20 +1924,25 @@ class TestGrindelInvert(unittest.TestCase):
         self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
 
 
-class TestCatching(unittest.TestCase):
+class TestGCMClimate(unittest.TestCase):
 
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_errors')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
 
         # Init
         cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = cfg.PATHS['test_dir']
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['border'] = 10
 
     def tearDown(self):
         self.rm_dir()
@@ -1925,18 +1954,124 @@ class TestCatching(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
-    def test_log(self):
+    def test_process_cesm(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
-        # Make it large to raise an error
-        cfg.PARAMS['border'] = 250
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
+
+        cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        climate.process_cesm_data(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cru, \
+            xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
+
+            time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
+                                   cesm.time.values[-1].strftime('%Y-%m-%d'),
+                                   freq='M')
+            cesm['time'] = time
+            cesm.coords['year'] = ('time', time.year)
+            cesm.coords['month'] = ('time', time.month)
+
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.grad.mean(), scesm.grad.mean())
+            # And also the anual cycle
+            scru = scru.groupby('time.month').mean()
+            scesm = scesm.groupby(scesm.month).mean()
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+            np.testing.assert_allclose(scru.grad, scesm.grad)
+
+            # How did the annua cycle change with time?
+            scesm1 = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+            scesm2 = cesm.isel(time=(cesm.year >= 1661) & (cesm.year <= 1690))
+            scesm1 = scesm1.groupby(scesm1.month).mean()
+            scesm2 = scesm2.groupby(scesm2.month).mean()
+            # No more than one degree? (silly test)
+            np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
+            # N more than 20%? (silly test)
+            np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+
+
+class TestCatching(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['working_dir'] = get_test_dir()
+        self.log_dir = os.path.join(get_test_dir(), 'log')
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+        shutil.rmtree(self.log_dir)
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+        if os.path.exists(self.log_dir):
+            shutil.rmtree(self.log_dir)
+        os.makedirs(self.log_dir)
+
+    def test_pipe_log(self):
+
+        self.clean_dir()
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
         cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
+
+        # This will "run" but log an error
+        from oggm.tasks import random_glacier_evolution
+        workflow.execute_entity_task(random_glacier_evolution,
+                                     [(gdir, {'filesuffix':'_testme'})])
+
+        tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
+        assert os.path.exists(tfile)
+        with open(tfile, 'r') as f:
+            first_line = f.readline()
+
+        spl = first_line.split(';')
+        assert len(spl) == 4
+        assert spl[1].strip() == 'random_glacier_evolution_testme'
 
     def test_task_status(self):
 

@@ -1,19 +1,15 @@
-import six
-from distutils.version import LooseVersion
-import osgeo.gdal
-import os
-import sys
-import socket
-import unittest
 import logging
-import matplotlib
+import os
+import socket
+import sys
+import unittest
+from distutils.version import LooseVersion
+
 import matplotlib.ft2font
-import pandas as pd
-import geopandas as gpd
-import numpy as np
-import scipy.optimize as optimization
+import osgeo.gdal
+import six
 from six.moves.urllib.request import urlopen
-from six.moves.urllib.error import URLError
+
 from oggm import cfg
 
 # Defaults
@@ -47,6 +43,7 @@ ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
 RUN_PREPRO_TESTS = True
+RUN_NUMERIC_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
@@ -61,6 +58,7 @@ if os.environ.get('TRAVIS') is not None:
         # Minimal tests
         RUN_SLOW_TESTS = False
         RUN_PREPRO_TESTS = True
+        RUN_NUMERIC_TESTS = True
         RUN_MODEL_TESTS = True
         RUN_WORKFLOW_TESTS = True
         RUN_GRAPHIC_TESTS = True
@@ -70,21 +68,31 @@ if os.environ.get('TRAVIS') is not None:
         env = os.environ.get('OGGM_TEST_ENV')
         if env == 'prepro':
             RUN_PREPRO_TESTS = True
+            RUN_NUMERIC_TESTS = False
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = False
+            RUN_GRAPHIC_TESTS = False
+        if env == 'numerics':
+            RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = True
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'models':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = True
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'workflow':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = True
             RUN_GRAPHIC_TESTS = False
         if env == 'graphics':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = True
@@ -104,7 +112,7 @@ if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
 try:
     _ = urlopen('http://www.google.com', timeout=1)
     HAS_INTERNET = True
-except URLError:
+except:
     HAS_INTERNET = False
 
 
@@ -148,116 +156,3 @@ def is_performance_test(test):
     # Test decorator
     msg = "requires explicit environment for performance tests"
     return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
-
-
-def init_hef(reset=False, border=40, invert_with_sliding=True,
-             invert_with_rectangular=True):
-
-    from oggm.core.preprocessing import gis, centerlines, geometry
-    from oggm.core.preprocessing import climate, inversion
-    import oggm
-    import oggm.cfg as cfg
-    from oggm.utils import get_demo_file
-
-    # test directory
-    testdir = os.path.join(cfg.PATHS['test_dir'], 'tmp_border{}'.format(border))
-    if not invert_with_sliding:
-        testdir += '_withoutslide'
-    if not invert_with_rectangular:
-        testdir += '_withoutrectangular'
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
-        reset = True
-
-    # Init
-    cfg.initialize()
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.PARAMS['border'] = border
-    cfg.PARAMS['use_optimized_inversion_params'] = True
-
-    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-
-    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
-    if not gdir.has_file('inversion_params'):
-        reset = True
-        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
-
-    if not reset:
-        return gdir
-
-    gis.define_glacier_region(gdir, entity=entity)
-    gis.glacier_masks(gdir)
-    centerlines.compute_centerlines(gdir)
-    centerlines.compute_downstream_lines(gdir)
-    geometry.initialize_flowlines(gdir)
-    centerlines.compute_downstream_bedshape(gdir)
-    geometry.catchment_area(gdir)
-    geometry.catchment_intersections(gdir)
-    geometry.catchment_width_geom(gdir)
-    geometry.catchment_width_correction(gdir)
-    climate.process_histalp_nonparallel([gdir])
-    climate.mu_candidates(gdir, div_id=0)
-    mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-    res = climate.t_star_from_refmb(gdir, mbdf)
-    climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
-                                     bias=res['bias'][-1],
-                                     prcp_fac=res['prcp_fac'])
-
-    inversion.prepare_for_inversion(gdir, add_debug_var=True,
-                                    invert_with_rectangular=invert_with_rectangular)
-    ref_v = 0.573 * 1e9
-
-    if invert_with_sliding:
-        def to_optimize(x):
-            # For backwards compat
-            _fd = 1.9e-24 * x[0]
-            glen_a = (cfg.N+2) * _fd / 2.
-            fs = 5.7e-20 * x[1]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                         glen_a=glen_a)
-            return (v - ref_v)**2
-
-        out = optimization.minimize(to_optimize, [1, 1],
-                                    bounds=((0.01, 10), (0.01, 10)),
-                                    tol=1e-4)['x']
-        _fd = 1.9e-24 * out[0]
-        glen_a = (cfg.N+2) * _fd / 2.
-        fs = 5.7e-20 * out[1]
-        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                     glen_a=glen_a,
-                                                     write=True)
-    else:
-        def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=0.,
-                                                         glen_a=glen_a)
-            return (v - ref_v)**2
-
-        out = optimization.minimize(to_optimize, [1],
-                                    bounds=((0.01, 10),),
-                                    tol=1e-4)['x']
-        glen_a = cfg.A * out[0]
-        fs = 0.
-        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                     glen_a=glen_a,
-                                                     write=True)
-    d = dict(fs=fs, glen_a=glen_a)
-    d['factor_glen_a'] = out[0]
-    try:
-        d['factor_fs'] = out[1]
-    except IndexError:
-        d['factor_fs'] = 0.
-    gdir.write_pickle(d, 'inversion_params')
-
-    # filter
-    inversion.filter_inversion_output(gdir)
-
-    inversion.distribute_thickness(gdir, how='per_altitude',
-                                   add_nc_name=True)
-    inversion.distribute_thickness(gdir, how='per_interpolation',
-                                   add_slope=False, smooth=False,
-                                   add_nc_name=True)
-
-    return gdir

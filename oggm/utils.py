@@ -96,6 +96,16 @@ def _get_download_lock():
     return lock
 
 
+class NoInternetException(Exception):
+    pass
+
+
+def _call_dl_func(dl_func, cache_path):
+    """Helper so the actual call to downloads cann be overridden
+    """
+    return dl_func(cache_path)
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -121,10 +131,13 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     if cache_ro:
         cache_path = fb_path
 
+    if not cfg.PARAMS['has_internet']:
+        raise NoInternetException("Download required, but has_internet is False.")
+
     mkdir(os.path.dirname(cache_path))
 
     try:
-        cache_path = dl_func(cache_path)
+        cache_path = _call_dl_func(dl_func, cache_path)
     except:
         if os.path.exists(cache_path):
             os.remove(cache_path)
@@ -168,7 +181,8 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
                     pbar[0].start(UnknownLength)
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset, reporthook=_upd)
+        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset,
+                           reporthook=_upd)
         try:
             pbar[0].finish()
         except:
@@ -227,7 +241,8 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
         # Try to download
         try:
             retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, cache_name=cache_name, reset=reset)
+            local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
+                                               reset=reset)
             # if no error, exit
             break
         except HTTPError as err:
@@ -257,7 +272,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
     return local_path
 
 
-def empty_cache():  # pragma: no cover
+def empty_cache():
     """Empty oggm's cache directory."""
 
     if os.path.exists(cfg.CACHE_DIR):
@@ -433,7 +448,7 @@ def _download_oggm_files_unlocked():
         last_mod = 0
 
     # test only every hour
-    if (time.time() - last_mod) > 3600:
+    if (time.time() - last_mod) > 3600 and cfg.PARAMS['has_internet']:
         write_sha = True
         try:
             # this might fail with HTTP 403 when server overload
@@ -599,6 +614,8 @@ def _download_dem3_viewpano_unlocked(zone):
     profile['driver'] = 'GTiff'
     with rasterio.open(outpath, 'w', **profile) as dst:
         dst.write(dest)
+    for rf in rfiles:
+        rf.close()
 
     # delete original files to spare disk space
     for s in globlist:
@@ -754,7 +771,7 @@ def include_patterns(*patterns):
     return _ignore_patterns
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question, default="yes"):  # pragma: no cover
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -1158,13 +1175,17 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     return iprcp, itemp, igrad, ihgt
 
 
-def pipe_log(gdir, task_func, err=None):
+def pipe_log(gdir, task_func_name, err=None):
     """Log the error in a specific directory."""
+
+    time_str = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     mkdir(fpath)
 
     fpath = os.path.join(fpath, gdir.rgi_id)
+
+    sep = '; '
 
     if err is not None:
         fpath += '.ERROR'
@@ -1173,9 +1194,11 @@ def pipe_log(gdir, task_func, err=None):
         fpath += '.SUCCESS'
 
     with open(fpath, 'a') as f:
-        f.write(task_func.__name__ + ': ')
+        f.write(time_str + sep + task_func_name + sep)
         if err is not None:
-            f.write(err.__class__.__name__ + ': {}\n'.format(err))
+            f.write(err.__class__.__name__ + sep + '{}\n'.format(err))
+        else:
+            f.write(sep + '\n')
 
 
 def write_centerlines_to_shape(gdirs, filename):
@@ -1519,8 +1542,8 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir, reset=reset)
 
-    dfile = ('https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/' +
-             'RGI_V5_Intersects.zip')
+    dfile = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
+             'RGI_V5_Intersects.zip?dl=1')
     test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
                              'Intersects_OGGM_Manifest.txt')
     if not os.path.exists(test_file):
@@ -1530,8 +1553,47 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
 
-
     return os.path.join(rgi_dir, 'RGI_V5_Intersects')
+
+
+def get_rgi_corrected_dir(reset=False):
+    """Returns a path to the RGI directory containing the new divided files.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the directory
+    """
+
+    with _get_download_lock():
+        return _get_rgi_corrected_dir_unlocked(reset=reset)
+
+
+def _get_rgi_corrected_dir_unlocked(reset=False):
+
+    rgi_dir = cfg.PATHS['rgi_dir']
+
+    # Be sure the user gave a sensible path to the RGI dir
+    if not rgi_dir:
+        raise ValueError('The RGI data directory has to be'
+                         'specified explicitly.')
+
+    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    mkdir(rgi_dir, reset=reset)
+
+    dfile = ('https://www.dropbox.com/s/85xdglv0zredue9/' +
+             'RGIV5_Corrected.zip?dl=1')
+    test_file = os.path.join(rgi_dir, 'RGIV5_Corrected',
+                             'RGIV5_Corrected_OGGM_Manifest.txt')
+    if not os.path.exists(test_file):
+        # if not there download it
+        ofile = file_downloader(dfile, reset=reset)
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+
+    return os.path.join(rgi_dir, 'RGIV5_Corrected')
 
 
 def get_cru_file(var=None):
@@ -1743,6 +1805,7 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
+    ela = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
@@ -1751,10 +1814,12 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
                 vol[:, i] = ds_diag.volume_m3.values[pkeep]
                 area[:, i] = ds_diag.area_m2.values[pkeep]
                 length[:, i] = ds_diag.length_m.values[pkeep]
+                ela[:, i] = ds_diag.ela_m.values[pkeep]
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
             length[:, i] = np.NaN
+            ela[:, i] = np.NaN
 
     ds['volume'] = (('time', 'rgi_id'), vol)
     ds['volume'].attrs['units'] = 'm3'
@@ -1765,6 +1830,9 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     ds['length'] = (('time', 'rgi_id'), length)
     ds['length'].attrs['units'] = 'm'
     ds['length'].attrs['description'] = 'Glacier length'
+    ds['ela'] = (('time', 'rgi_id'), ela)
+    ds['ela'].attrs['units'] = 'm'
+    ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
 
     if path:
         if path is True:
@@ -1988,7 +2056,12 @@ class entity_task(object):
                 # Something happened
                 out = None
                 gdir.log(task_func, err=err)
-                pipe_log(gdir, task_func, err=err)
+                task_func_name = task_func.__name__
+                # Filesuffix are typically used to differenciate tasks
+                fsuffix = kwargs.get('filesuffix', False)
+                if fsuffix:
+                    task_func_name += fsuffix
+                pipe_log(gdir, task_func_name, err=err)
                 self.log.error('%s occurred during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
                 if not cfg.PARAMS['continue_on_error']:

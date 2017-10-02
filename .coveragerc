@@ -1,9 +1,20 @@
 [run]
 source = oggm
-omit = oggm/tests/*
+omit =
+    */tests/*
+    */sandbox/*
+    */mpi.py
+    */__init__.py
+
+concurrency = multiprocessing
 
 [report]
-omit = */sandbox*/*
+omit =
+    */sandbox/*
+    */tests/*
+    */mpi.py
+    */__init__.py
+
 # Regexes for lines to exclude from consideration
 exclude_lines =
     pragma: no cover

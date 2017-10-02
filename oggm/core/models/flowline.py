@@ -398,9 +398,11 @@ class FlowlineModel(object):
             be modified at run time by the model
         is_tidewater : bool
             this changes how the last grid points of the domain are handled
-        mb_elev_feedback : str
-            'always', 'annual', or 'monthly': how often the mass-balance should
-            be recomputed from the mass balance model.
+        mb_elev_feedback : str, default: 'annual'
+            'never', 'always', 'annual', or 'monthly': how often the
+            mass-balance should be recomputed from the mass balance model.
+            'Never' is equivalent to 'annual' but without elevation feedback
+            at all (the heights are taken from the first call).
         """
 
         self.is_tidewater = is_tidewater
@@ -416,11 +418,14 @@ class FlowlineModel(object):
                 _mb_call = mb_model.get_monthly_mb
             elif mb_elev_feedback == 'annual':
                 _mb_call = mb_model.get_annual_mb
+            elif mb_elev_feedback == 'never':
+                _mb_call = mb_model.get_annual_mb
             else:
                 raise ValueError('mb_elev_feedback not understood')
         self._mb_call = _mb_call
         self._mb_current_date = None
         self._mb_current_out = dict()
+        self._mb_current_heights = dict()
 
         # Defaults
         if glen_a is None:
@@ -516,6 +521,14 @@ class FlowlineModel(object):
         if fl_id is None:
             raise ValueError('Need fls_id')
 
+        if self.mb_elev_feedback == 'never':
+            # The very first call we take the heights
+            if fl_id not in self._mb_current_heights:
+                # We need to reset just this tributary
+                self._mb_current_heights[fl_id] = heights
+            # All calls we replace
+            heights = self._mb_current_heights[fl_id]
+
         date = utils.year_to_date(year)
         if self.mb_elev_feedback == 'annual':
             # ignore month changes
@@ -598,6 +611,7 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
         if self.is_tidewater:
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
 
@@ -616,6 +630,7 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
+            diag_ds['ela_m'].data[i] = self.mb_model.get_ela(year=yr)
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 
@@ -1436,9 +1451,10 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
-    log.info('iterative_initial_glacier_search in year %d. Ref area to catch: %.3f km2. '
-             'Tolerance: %.2f %%' ,
-             np.int64(y0), ref_area*1e-6, rtol*100)
+    log.info('iterative_initial_glacier_search '
+             'in year %d. Ref area to catch: %.3f km2. '
+             'Tolerance: %.2f %%',
+             np.int64(y0), ref_area * 1e-6, rtol * 100)
 
     # are we trying to grow or to shrink the glacier?
     prev_model = copy.deepcopy(final_model)
@@ -1451,18 +1467,21 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('iterative_initial_glacier_search: inital starting glacier converges '
+        log.info('iterative_initial_glacier_search: inital '
+                 'starting glacier converges '
                  'to itself with a final dif of %.2f %%',
                  utils.rel_err(ref_area, prev_area) * 100)
         return 0, None, model
 
     if prev_area < ref_area:
         sign_mb = -1.
-        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. '
+                 'Glacier would be too '
                  'small of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
     else:
-        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. '
+                 'Glacier would be too '
                  'big of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = 1.
@@ -1536,80 +1555,6 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
-@entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
-                             seed=None, filesuffix='',
-                             zero_initial_glacier=False,
-                             **kwargs):
-    """Random glacier dynamics for benchmarking purposes.
-
-     This runs the random mass-balance model for a certain number of years.
-     
-     Parameters
-     ----------
-     nyears : int
-         length of the simulation
-     y0 : int
-         central year of the random climate period. The default is to be
-         centred on t*.
-     seed : int
-         seed for the random generator. If you ignore this, the runs will be
-         different each time. Setting it to a fixed seed accross glaciers can
-         be usefull if you want to have the same climate years for all of them
-     filesuffix : str
-         this add a suffix to the output file (useful to avoid overwriting
-         previous experiments)
-     zero_initial_glacier : bool
-         if true, the ice thickness is set to zero before the simulation
-     kwargs : dict
-         kwargs to pass to the FluxBasedModel instance
-     """
-
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-
-    ys = 0
-    ye = ys + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
-
-    # run
-    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
-                                 delete=True)
-    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
-                                  delete=True)
-
-    steps = ['default', 'conservative', 'ultra-conservative']
-    for step in steps:
-        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
-        fls = gdir.read_pickle('model_flowlines')
-        if zero_initial_glacier:
-            for fl in fls:
-                fl.thick = fl.thick * 0.
-        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
-                               is_tidewater=gdir.is_tidewater,
-                               **kwargs)
-        try:
-            model.run_until_and_store(ye, run_path=run_path,
-                                      diag_path=diag_path)
-        except (RuntimeError, FloatingPointError):
-            if step == 'ultra-conservative':
-                raise
-            continue
-        # If we get here we good
-        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
-        break
-
-    return model
-
-
 @entity_task(log, writes=['model_run'])
 def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                      write_steps=True):
@@ -1653,3 +1598,182 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
         _ = past_model.run_until_and_store(y1, path=path)
     else:
         past_model.to_netcdf(path)
+
+
+def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                              zero_initial_glacier=False):
+    """Quick n dirty function to avoid copy-paste smell"""
+
+    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
+                                 delete=True)
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
+                                  delete=True)
+
+    steps = ['default', 'conservative', 'ultra-conservative']
+    for step in steps:
+        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
+        fls = gdir.read_pickle('model_flowlines')
+        if zero_initial_glacier:
+            for fl in fls:
+                fl.thick = fl.thick * 0.,
+        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
+                               is_tidewater=gdir.is_tidewater,
+                               **kwargs)
+        try:
+            model.run_until_and_store(ye, run_path=run_path,
+                                      diag_path=diag_path)
+        except (RuntimeError, FloatingPointError):
+            if step == 'ultra-conservative':
+                raise
+            continue
+        # If we get here we good
+        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
+        break
+    return model
+
+
+@entity_task(log)
+def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
+                             seed=None, temperature_bias=None, filesuffix='',
+                             zero_initial_glacier=False,
+                             **kwargs):
+    """Random glacier dynamics for benchmarking purposes.
+
+     This runs the random mass-balance model for a certain number of years.
+
+     Parameters
+     ----------
+     nyears : int
+         length of the simulation
+     y0 : int
+         central year of the random climate period. The default is to be
+         centred on t*.
+     bias : float
+         bias of the mb model. Default is to use the calibrated one, which
+         is often a better idea. For t* experiments it can be useful to set it
+         to zero
+     seed : int
+         seed for the random generator. If you ignore this, the runs will be
+         different each time. Setting it to a fixed seed accross glaciers can
+         be usefull if you want to have the same climate years for all of them
+     temperature_bias : float
+         add a bias to the temperature timeseries
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    ys = 0
+    ye = ys + nyears
+    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
+
+    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                                     zero_initial_glacier=zero_initial_glacier)
+
+@entity_task(log)
+def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
+                         temperature_bias=None, filesuffix='',
+                         zero_initial_glacier=False,
+                         **kwargs):
+    """Run a glacier under a constant climate for a given climate period.
+
+     Parameters
+     ----------
+     nyears : int
+         length of the simulation (default: as long as needed for reaching
+         equilbrium)
+     y0 : int
+         central year of the requested climate period. The default is to be
+         centred on t*.
+     bias : float
+         bias of the mb model. Default is to use the calibrated one, which
+         is often a better idea. For t* experiments it can be useful to set it
+         to zero
+     temperature_bias : float
+         add a bias to the temperature timeseries
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    mb = mbmods.ConstantMassBalanceModel(gdir, y0=y0, bias=bias)
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
+
+    return _run_with_numerical_tests(gdir, filesuffix, mb, 0, nyears, kwargs,
+                                     zero_initial_glacier=zero_initial_glacier)
+
+
+@entity_task(log)
+def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
+                          input_filesuffix='', filesuffix='', **kwargs):
+    """ Runs glacier with climate input from a general circulation model.
+
+     Parameters
+     ----------
+     ys : int
+         start year of the model run (default: from the config file)
+     y1 : int
+         end year of the model run (default: from the config file)
+     filename : str
+         name of the climate file, e.g. 'climate_monthly' (default) or
+         'cesm_data'
+     input_filesuffix: str
+         filesuffix for the input climate file
+     filesuffix : str
+         for the output file
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    if ys is None:
+        ys = cfg.PARAMS['ys']
+    if ye is None:
+        ye = cfg.PARAMS['ye']
+
+    mb = mbmods.PastMassBalanceModel(gdir, filename=filename,
+                                     input_filesuffix=input_filesuffix)
+    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs)

@@ -35,7 +35,6 @@ import numpy as np
 import pandas as pd
 import netCDF4
 from scipy import optimize as optimization
-from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 # Locals

@@ -25,7 +25,7 @@ cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
-utils.mkdir(WORKING_DIR)
+utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?
@@ -49,6 +49,7 @@ cfg.set_intersects_db(path.join(rgi_dir, '00_rgi50_AllRegs',
                                 'intersects_rgi50_AllRegs.shp'))
 
 # Pre-download other files which will be needed later
+utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
@@ -60,15 +61,15 @@ utils.get_cru_file(var='pre')
 # the results much (as expected), so it's ok to change this parameter above.
 # All other parameters (e.g. topo smoothing, dx, precip factor...)
 # will need a re-calibration (see the calibration recipe)
-mbf = 'https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/ref_tstars_no_tidewater.csv'
-mbf = utils.file_downloader(mbf)
+f = 'https://www.dropbox.com/s/23a61yxwgpprs9q/ref_tstars_no_tidewater.csv?dl=1'
+mbf = utils.file_downloader(f)
 # Copy the file in the working directory, where OGGM expects to find it
 shutil.copyfile(mbf, path.join(WORKING_DIR, 'ref_tstars.csv'))
 
 # Download the RGI file for the run
 # We us a set of four glaciers here but this could be an entire RGI region,
 # or any glacier list you'd like to model
-dl = 'https://dl.dropboxusercontent.com/u/20930277/OGGM_Public/RGI_example_glaciers.zip'
+dl = 'https://www.dropbox.com/s/6cwi7b4q4zqgh4a/RGI_example_glaciers.zip?dl=1'
 with zipfile.ZipFile(utils.file_downloader(dl)) as zf:
     zf.extractall(WORKING_DIR)
 rgidf = salem.read_shapefile(path.join(WORKING_DIR, 'RGI_example_glaciers',

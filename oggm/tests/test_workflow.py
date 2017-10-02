@@ -21,8 +21,9 @@ from numpy.testing import assert_allclose
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, ON_TRAVIS, RUN_WORKFLOW_TESTS
-from oggm.tests import requires_mpltest, is_graphic_test, BASELINE_DIR
+from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
+from oggm.tests import requires_mpltest, BASELINE_DIR
+from oggm.tests.funcs import get_test_dir, use_multiprocessing
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -32,7 +33,7 @@ if not RUN_WORKFLOW_TESTS:
     raise unittest.SkipTest('Skipping all workflow tests.')
 
 # Globals
-TEST_DIR = os.path.join(cfg.PATHS['test_dir'], 'tmp_workflow')
+TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 
 
@@ -58,8 +59,7 @@ def up_to_climate(reset=False):
     cfg.initialize()
 
     # Use multiprocessing
-    # We don't use mp on TRAVIS because unsure if compatible with test coverage
-    cfg.PARAMS['use_multiprocessing'] = not ON_TRAVIS
+    cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
@@ -70,7 +70,7 @@ def up_to_climate(reset=False):
     rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.GeoDataFrame.from_file(rgi_file)
 
-    # Be sure data is downloaded because lock doesn't work
+    # Be sure data is downloaded
     cl = utils.get_cru_cl_file()
 
     # Params
@@ -78,6 +78,9 @@ def up_to_climate(reset=False):
     cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
     cfg.PARAMS['invert_with_rectangular'] = False
+
+    # Reset MP
+    workflow.reset_multiprocessing()
 
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
@@ -117,7 +120,7 @@ def up_to_inversion(reset=False):
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
         cfg.PATHS['cru_dir'] = ''
-        workflow.init_mp_pool(reset=True)
+        workflow.reset_multiprocessing()
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -151,7 +154,7 @@ def up_to_distrib(reset=False):
         cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        workflow.init_mp_pool(reset=True)
+        workflow.reset_multiprocessing()
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")
@@ -161,6 +164,19 @@ def up_to_distrib(reset=False):
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('cru', f)
 
+    return gdirs
+
+
+def random_for_plot():
+
+    # Fake Reset (all these tests are horribly coded)
+    with open(CLI_LOGF, 'wb') as f:
+        pickle.dump('none', f)
+    gdirs = up_to_inversion()
+
+    workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+    workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
+                                 nyears=10, seed=0, filesuffix='_plot')
     return gdirs
 
 
@@ -222,11 +238,14 @@ class TestWorkflow(unittest.TestCase):
         cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
         self.assertTrue(cc > 0.4)
 
-
     @is_slow
     def test_crossval(self):
 
         gdirs = up_to_distrib()
+
+        # in case we ran crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
 
         # before crossval
         refmustars = []
@@ -241,6 +260,21 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+
+        # Test if quicker crossval is also OK
+        tasks.quick_crossval_t_stars(gdirs)
+        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+        dfq = pd.read_csv(file, index_col=0)
+
+        # after crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
+
+        np.testing.assert_allclose(np.abs(df.cv_bias), np.abs(dfq.cv_bias),
+                                   rtol=0.05)
+        np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
+
+        print(df)
 
         # see if the process didn't brake anything
         mustars = []
@@ -355,7 +389,6 @@ class TestWorkflow(unittest.TestCase):
 
 
 @is_slow
-@is_graphic_test
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
@@ -377,6 +410,35 @@ def test_plot_region_inversion():
     # Give this to the plot function
     fig, ax = plt.subplots()
     graphics.plot_region_inversion(gdirs, salemmap=sm, ax=ax)
+
+    fig.tight_layout()
+    return fig
+
+
+@is_slow
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+def test_plot_region_model():
+
+    import matplotlib.pyplot as plt
+    import salem
+    from oggm import graphics
+
+    gdirs = random_for_plot()
+
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                            extent=(27000, 21000))
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+
+    # Give this to the plot function
+    fig, ax = plt.subplots()
+    graphics.plot_region_model_output(gdirs, salemmap=sm, ax=ax,
+                                      filesuffix='_plot',
+                                      modelyr=10)
 
     fig.tight_layout()
     return fig

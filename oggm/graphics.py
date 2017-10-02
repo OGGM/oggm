@@ -19,6 +19,7 @@ import netCDF4
 import salem
 
 from oggm.utils import entity_task, global_task
+from oggm.core.models.flowline import FileModel
 
 # Local imports
 import oggm.cfg as cfg
@@ -35,6 +36,16 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))
     return new_cmap
+
+
+def gencolor(n, cmap='Set1'):
+    """ Color generator intended to work with qualitative color scales."""
+    # don't use more than 9 discrete colors
+    n_colors = min(n, 9)
+    cmap = colormap.get_cmap(cmap, n_colors)
+    colors = cmap(range(n_colors))
+    for i in range(n):
+        yield colors[i % n_colors]
 
 
 def _plot_map(plotfunc):
@@ -161,7 +172,7 @@ def plot_googlemap(gdir, ax=None):
 
 @entity_task(log)
 @_plot_map
-def plot_domain(gdir, ax=None, salemmap=None):  # pragma: no cover
+def plot_domain(gdir, ax=None, salemmap=None):
     """Plot the glacier directory.
 
     """
@@ -236,7 +247,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -254,7 +265,7 @@ def plot_centerlines(gdir, ax=None, salemmap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -296,7 +307,7 @@ def plot_catchment_areas(gdir, ax=None, salemmap=None):
 
         # plot Centerlines
         cls = gdir.read_pickle('centerlines', div_id=i)[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -347,7 +358,7 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines', div_id=i)[::-1]
-        color = gpd.plotting.gencolor(len(cls) + 1, colormap='Set1')
+        color = gencolor(len(cls) + 1, cmap='Set1')
         for l, c in zip(cls, color):
             salemmap.set_geometry(l.line, crs=crs, color=c,
                                  linewidth=2.5, zorder=50)
@@ -543,11 +554,9 @@ def plot_modeloutput_map(gdir, ax=None, salemmap=None, model=None,
 def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
     """Plots the result of the model output along the flowline."""
 
-    dofig = False
     if ax is None:
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
-        dofig = True
     else:
         fig = plt.gcf()
 
@@ -631,22 +640,25 @@ def plot_modeloutput_section(gdir, model=None, ax=None, title=''):
 
 
 @entity_task(log)
-def plot_modeloutput_section_withtrib(gdir, model=None, title=''):  # pragma: no cover
+def plot_modeloutput_section_withtrib(gdir, model=None, fig=None, title=''):
     """Plots the result of the model output along the flowline."""
 
     n_tribs = len(model.fls) - 1
 
     axs = []
     if n_tribs == 0:
-        fig = plt.figure(figsize=(8, 5))
+        if fig is None:
+            fig = plt.figure(figsize=(8, 5))
         axmaj = fig.add_subplot(111)
     elif n_tribs <= 3:
-        fig = plt.figure(figsize=(14, 10))
+        if fig is None:
+            fig = plt.figure(figsize=(14, 10))
         axmaj = plt.subplot2grid((2, 3), (1, 0), colspan=3)
         for i in np.arange(n_tribs):
             axs.append(plt.subplot2grid((2, 3), (0, i)))
     elif n_tribs <= 6:
-        fig = plt.figure(figsize=(14, 10))
+        if fig is None:
+            fig = plt.figure(figsize=(14, 10))
         axmaj = plt.subplot2grid((3, 3), (2, 0), colspan=3)
         for i in np.arange(n_tribs):
             j = 0
@@ -709,7 +721,6 @@ def plot_region_inversion(gdirs, ax=None, salemmap=None):
 
     toplot_th = np.array([])
     toplot_lines = []
-    vol = []
     crs_list = []
 
     # loop over the directories to get the data
@@ -739,7 +750,61 @@ def plot_region_inversion(gdirs, ax=None, salemmap=None):
                                          shpg.Point(cur + wi / 2. * n2)])
                     toplot_lines.append(l)
                     crs_list.append(crs)
-                vol.extend(c['volume'])
+
+    # plot the data
+    cm = plt.cm.get_cmap('YlOrRd')
+    dl = salem.DataLevels(cmap=cm, nlevels=256, data=toplot_th, vmin=0)
+    colors = dl.to_rgb()
+    for l, c, crs in zip(toplot_lines, colors, crs_list):
+        salemmap.set_geometry(l, crs=crs, color=c,
+                              linewidth=1, zorder=50)
+
+    salemmap.plot(ax)
+    cb = dl.append_colorbar(ax, "right", size="5%", pad=0.2)
+    cb.set_label('Section thickness [m]')
+
+
+@global_task
+def plot_region_model_output(gdirs, ax=None, salemmap=None, modelyr=0,
+                             filesuffix=''):
+    """Plots the result of the model output for a larger region."""
+
+    if ax is None:
+        ax = plt.gca()
+
+    toplot_th = np.array([])
+    toplot_lines = []
+    crs_list = []
+
+    # loop over the directories to get the data
+    for gdir in gdirs:
+
+        crs = gdir.grid.center_grid
+        for i in gdir.divide_ids:
+            geom = gdir.read_pickle('geometries', div_id=i)
+            inv = gdir.read_pickle('inversion_output', div_id=i)
+            # Plot boundaries
+            poly_pix = geom['polygon_pix']
+            salemmap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
+                                 linewidth=.2)
+            for l in poly_pix.interiors:
+                salemmap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+            # plot model output
+            model = FileModel(gdir.get_filepath('model_run',
+                                                filesuffix=filesuffix))
+            model.run_until(modelyr)
+            for l in model.fls:
+
+                salemmap.set_geometry(l.line, crs=crs, color='gray',
+                                     linewidth=1.2, zorder=50)
+                toplot_th = np.append(toplot_th, l.thick)
+                for wi, cur, (n1, n2) in zip(l.widths, l.line.coords,
+                                             l.normals):
+                    l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                                         shpg.Point(cur + wi / 2. * n2)])
+                    toplot_lines.append(l)
+                    crs_list.append(crs)
 
     # plot the data
     cm = plt.cm.get_cmap('YlOrRd')
