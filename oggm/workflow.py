@@ -6,8 +6,8 @@ import logging
 import os
 from shutil import rmtree
 import collections
+from functools import partial
 # External libs
-import pandas as pd
 import multiprocessing as mp
 
 # Locals
@@ -84,7 +84,7 @@ class _pickle_copier(object):
                 return self.call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
-                err_msg = '{0}: exception occured while processing task ' \
+                err_msg = '({0}) exception occured while processing task ' \
                           '{1}'.format(gdir.rgi_id, self.call_func.__name__)
                 raise RuntimeError(err_msg) from e
             except AttributeError:
@@ -115,9 +115,6 @@ def execute_entity_task(task, gdirs, **kwargs):
          the entity task to apply
     gdirs : list
          the list of oggm.GlacierDirectory to process.
-         Optionally, each list element can be a tuple, with the first element 
-         being the ``oggm.GlacierDirectory``, and the second element a dict that
-         will be passed to the task function as ``**kwargs``.
     """
 
     if task.__dict__.get('global_task', False):
@@ -138,7 +135,51 @@ def execute_entity_task(task, gdirs, **kwargs):
             pc(gdir)
 
 
-def init_glacier_regions(rgidf, reset=False, force=False):
+def execute_parallel_tasks(gdir, tasks):
+    """Execute a list of task on a single gdir (experimental!).
+
+    This is useful when running a non-sequential list of task on a gdir,
+    mostly for e.g. different experiments with different output files.
+
+    Parameters
+    ----------
+    gdirs : oggm.GlacierDirectory
+         the directory to process.
+    tasks : list
+         the the list of entity tasks to apply.
+         Optionally, each list element can be a tuple, with the first element
+         being the task, and the second element a dict that
+         will be passed to the task function as ``**kwargs``.
+    """
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            raise NotImplementedError('execute_parallel_tasks does not work'
+                                      'with MPI yet')
+
+    _tasks = []
+    for task in tasks:
+        kwargs = {}
+        if len(task) == 2:
+            # The tuple option
+            kwargs = task[1]
+            task = task[0]
+        _tasks.append(partial(task, gdir, **kwargs))
+
+    if cfg.PARAMS['use_multiprocessing']:
+        proc = []
+        for task in _tasks:
+            p = mp.Process(target=task)
+            p.start()
+            proc.append(p)
+        for p in proc:
+            p.join()
+    else:
+        for task in _tasks:
+            task()
+
+
+def init_glacier_regions(rgidf=None, reset=False, force=False):
     """Very first task to do (always).
 
     Set reset=True in order to delete the content of the directories.
@@ -155,12 +196,22 @@ def init_glacier_regions(rgidf, reset=False, force=False):
 
     gdirs = []
     new_gdirs = []
-    for _, entity in rgidf.iterrows():
-        gdir = oggm.GlacierDirectory(entity, reset=reset)
-        if not os.path.exists(gdir.get_filepath('dem')):
-            new_gdirs.append((gdir, dict(entity=entity)))
-        gdirs.append(gdir)
+    if rgidf is None:
+        if reset:
+            raise ValueError('Cannot use reset without a rgi file')
+        # The dirs should be there already
+        gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+        for root, _, files in os.walk(gl_dir):
+            if files and ('dem.tif' in files):
+                gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
+    else:
+        for _, entity in rgidf.iterrows():
+            gdir = oggm.GlacierDirectory(entity, reset=reset)
+            if not os.path.exists(gdir.get_filepath('dem')):
+                new_gdirs.append((gdir, dict(entity=entity)))
+            gdirs.append(gdir)
 
+    # If not initialized, run the task in parallel
     execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs

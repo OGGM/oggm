@@ -58,7 +58,7 @@ utils.mkdir(cfg.PATHS['rgi_dir'])
 
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
-cfg.CONTINUE_ON_ERROR = False
+cfg.PARAMS['continue_on_error'] = False
 
 # Run parameters
 cfg.PARAMS['d1'] = 4

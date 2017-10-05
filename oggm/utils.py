@@ -23,6 +23,9 @@ from functools import partial, wraps
 import json
 import time
 import fnmatch
+import platform
+import struct
+import importlib
 
 # External libs
 import geopandas as gpd
@@ -93,6 +96,16 @@ def _get_download_lock():
     return lock
 
 
+class NoInternetException(Exception):
+    pass
+
+
+def _call_dl_func(dl_func, cache_path):
+    """Helper so the actual call to downloads cann be overridden
+    """
+    return dl_func(cache_path)
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -118,10 +131,13 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     if cache_ro:
         cache_path = fb_path
 
+    if not cfg.PARAMS['has_internet']:
+        raise NoInternetException("Download required, but has_internet is False.")
+
     mkdir(os.path.dirname(cache_path))
 
     try:
-        cache_path = dl_func(cache_path)
+        cache_path = _call_dl_func(dl_func, cache_path)
     except:
         if os.path.exists(cache_path):
             os.remove(cache_path)
@@ -165,7 +181,8 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
                     pbar[0].start(UnknownLength)
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
-        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset, reporthook=_upd)
+        res = _urlretrieve(url, cache_obj_name=cache_name, reset=reset,
+                           reporthook=_upd)
         try:
             pbar[0].finish()
         except:
@@ -224,7 +241,8 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
         # Try to download
         try:
             retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, cache_name=cache_name, reset=reset)
+            local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
+                                               reset=reset)
             # if no error, exit
             break
         except HTTPError as err:
@@ -254,7 +272,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
     return local_path
 
 
-def empty_cache():  # pragma: no cover
+def empty_cache():
     """Empty oggm's cache directory."""
 
     if os.path.exists(cfg.CACHE_DIR):
@@ -281,6 +299,75 @@ def del_empty_dirs(s_dir):
     if b_empty:
         os.rmdir(s_dir)
     return b_empty
+
+
+def get_sys_info():
+    """Returns system information as a dict"""
+
+    blob = []
+    try:
+        (sysname, nodename, release,
+         version, machine, processor) = platform.uname()
+        blob.extend([
+            ("python", "%d.%d.%d.%s.%s" % sys.version_info[:]),
+            ("python-bits", struct.calcsize("P") * 8),
+            ("OS", "%s" % (sysname)),
+            ("OS-release", "%s" % (release)),
+            ("machine", "%s" % (machine)),
+            ("processor", "%s" % (processor)),
+        ])
+    except:
+        pass
+
+    return blob
+
+
+def show_versions(logger=None):
+    """Prints the OGGM version and other system information.
+
+    Parameters
+    ----------
+    logger : optional
+        the logger you want to send the printouts to. If None, will use stdout
+    """
+
+    _print = print if logger is None else logger.info
+
+    sys_info = get_sys_info()
+
+    deps = [
+        # (MODULE_NAME, f(mod) -> mod version)
+        ("oggm", lambda mod: mod.__version__),
+        ("numpy", lambda mod: mod.__version__),
+        ("scipy", lambda mod: mod.__version__),
+        ("pandas", lambda mod: mod.__version__),
+        ("geopandas", lambda mod: mod.__version__),
+        ("netCDF4", lambda mod: mod.__version__),
+        ("matplotlib", lambda mod: mod.__version__),
+        ("rasterio", lambda mod: mod.__version__),
+        ("fiona", lambda mod: mod.__version__),
+        ("osgeo.gdal", lambda mod: mod.__version__),
+        ("pyproj", lambda mod: mod.__version__),
+    ]
+
+    deps_blob = list()
+    for (modname, ver_f) in deps:
+        try:
+            if modname in sys.modules:
+                mod = sys.modules[modname]
+            else:
+                mod = importlib.import_module(modname)
+            ver = ver_f(mod)
+            deps_blob.append((modname, ver))
+        except:
+            deps_blob.append((modname, None))
+
+    _print("  System info:")
+    for k, stat in sys_info:
+        _print("%s: %s" % (k, stat))
+    _print("  Packages info:")
+    for k, stat in deps_blob:
+        _print("%s: %s" % (k, stat))
 
 
 class SuperclassMeta(type):
@@ -361,7 +448,7 @@ def _download_oggm_files_unlocked():
         last_mod = 0
 
     # test only every hour
-    if (time.time() - last_mod) > 3600:
+    if (time.time() - last_mod) > 3600 and cfg.PARAMS['has_internet']:
         write_sha = True
         try:
             # this might fail with HTTP 403 when server overload
@@ -527,6 +614,8 @@ def _download_dem3_viewpano_unlocked(zone):
     profile['driver'] = 'GTiff'
     with rasterio.open(outpath, 'w', **profile) as dst:
         dst.write(dest)
+    for rf in rfiles:
+        rf.close()
 
     # delete original files to spare disk space
     for s in globlist:
@@ -653,7 +742,36 @@ def mkdir(path, reset=False):
         os.makedirs(path)
 
 
-def query_yes_no(question, default="yes"):
+def include_patterns(*patterns):
+    """Factory function that can be used with copytree() ignore parameter.
+
+    Arguments define a sequence of glob-style patterns
+    that are used to specify what files to NOT ignore.
+    Creates and returns a function that determines this for each directory
+    in the file hierarchy rooted at the source directory when used with
+    shutil.copytree().
+
+    https://stackoverflow.com/questions/35155382/copying-specific-files-to-a-
+    new-folder-while-maintaining-the-original-subdirect
+    """
+
+    def _ignore_patterns(path, names):
+        # This is our cuisine
+        bname = os.path.basename(path)
+        if 'divide' in bname or 'log' in bname:
+            keep = []
+        else:
+            keep = set(name for pattern in patterns
+                       for name in fnmatch.filter(names, pattern))
+        ignore = set(name for name in names
+                     if name not in keep and not
+                     os.path.isdir(os.path.join(path, name)))
+        return ignore
+
+    return _ignore_patterns
+
+
+def query_yes_no(question, default="yes"):  # pragma: no cover
     """Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
@@ -817,6 +935,22 @@ def line_interpol(line, dx):
         pbs = pref.buffer(dx).boundary.intersection(line)
         if pbs.type == 'Point':
             pbs = [pbs]
+        elif pbs.type == 'LineString':
+            # This is rare
+            pbs = [shpg.Point(c) for c in pbs.coords]
+            assert len(pbs) == 2
+        elif pbs.type == 'GeometryCollection':
+            # This is rare
+            opbs = []
+            for p in pbs:
+                if p.type == 'Point':
+                    opbs.append(p)
+                elif p.type == 'LineString':
+                    opbs.extend([shpg.Point(c) for c in p.coords])
+            pbs = opbs
+        else:
+            assert pbs.type == 'MultiPoint'
+
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
         tdis = np.array([line.project(pb) for pb in pbs])
@@ -968,8 +1102,8 @@ def year_to_date(yr):
     try:
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
-        sec = sec * SEC_IN_YEAR
-        out_m = np.nonzero(sec <= CUMSEC_IN_MONTHS)[0][0] + 1
+        sec = round(sec * SEC_IN_YEAR)
+        out_m = np.nonzero(sec < CUMSEC_IN_MONTHS)[0][0] + 1
     except TypeError:
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
@@ -990,7 +1124,7 @@ def date_to_year(y, m):
     return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
 
 
-def monthly_timeseries(y0, y1=None, ny=None):
+def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """Creates a monthly timeseries in units of floating years.
     """
 
@@ -1002,7 +1136,10 @@ def monthly_timeseries(y0, y1=None, ny=None):
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    return date_to_year(years, months)
+    out = date_to_year(years, months)
+    if not include_last_year:
+        out = out[:-11]
+    return out
 
 
 @MEMORY.cache
@@ -1038,13 +1175,17 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     return iprcp, itemp, igrad, ihgt
 
 
-def pipe_log(gdir, task_func, err=None):
+def pipe_log(gdir, task_func_name, err=None):
     """Log the error in a specific directory."""
+
+    time_str = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     mkdir(fpath)
 
     fpath = os.path.join(fpath, gdir.rgi_id)
+
+    sep = '; '
 
     if err is not None:
         fpath += '.ERROR'
@@ -1053,9 +1194,11 @@ def pipe_log(gdir, task_func, err=None):
         fpath += '.SUCCESS'
 
     with open(fpath, 'a') as f:
-        f.write(task_func.__name__ + ': ')
+        f.write(time_str + sep + task_func_name + sep)
         if err is not None:
-            f.write(err.__class__.__name__ + ': {}\n'.format(err))
+            f.write(err.__class__.__name__ + sep + '{}\n'.format(err))
+        else:
+            f.write(sep + '\n')
 
 
 def write_centerlines_to_shape(gdirs, filename):
@@ -1347,10 +1490,10 @@ def _get_rgi_dir_unlocked():
         raise ValueError('The RGI data directory has to be'
                          'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    rgi_dir = os.path.join(rgi_dir, 'RGIV5')
     mkdir(rgi_dir)
 
-    bname = 'rgi50.zip'
-    dfile = 'http://www.glims.org/RGI/rgi50_files/' + bname
+    dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
     test_file = os.path.join(rgi_dir, '000_rgi50_manifest.txt')
 
     if not os.path.exists(test_file):
@@ -1371,6 +1514,86 @@ def _get_rgi_dir_unlocked():
                 # delete the zipfile after success
                 os.remove(zfile)
     return rgi_dir
+
+
+def get_rgi_intersects_dir(reset=False):
+    """Returns a path to the RGI directory containing the intersects.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the directory
+    """
+
+    with _get_download_lock():
+        return _get_rgi_intersects_dir_unlocked(reset=reset)
+
+
+def _get_rgi_intersects_dir_unlocked(reset=False):
+
+    rgi_dir = cfg.PATHS['rgi_dir']
+
+    # Be sure the user gave a sensible path to the RGI dir
+    if not rgi_dir:
+        raise ValueError('The RGI data directory has to be'
+                         'specified explicitly.')
+
+    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    mkdir(rgi_dir, reset=reset)
+
+    dfile = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
+             'RGI_V5_Intersects.zip?dl=1')
+    test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
+                             'Intersects_OGGM_Manifest.txt')
+    if not os.path.exists(test_file):
+        # if not there download it
+        ofile = file_downloader(dfile, reset=reset)
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+
+    return os.path.join(rgi_dir, 'RGI_V5_Intersects')
+
+
+def get_rgi_corrected_dir(reset=False):
+    """Returns a path to the RGI directory containing the new divided files.
+
+    If the files are not present, download them.
+
+    Returns
+    -------
+    path to the directory
+    """
+
+    with _get_download_lock():
+        return _get_rgi_corrected_dir_unlocked(reset=reset)
+
+
+def _get_rgi_corrected_dir_unlocked(reset=False):
+
+    rgi_dir = cfg.PATHS['rgi_dir']
+
+    # Be sure the user gave a sensible path to the RGI dir
+    if not rgi_dir:
+        raise ValueError('The RGI data directory has to be'
+                         'specified explicitly.')
+
+    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
+    mkdir(rgi_dir, reset=reset)
+
+    dfile = ('https://www.dropbox.com/s/85xdglv0zredue9/' +
+             'RGIV5_Corrected.zip?dl=1')
+    test_file = os.path.join(rgi_dir, 'RGIV5_Corrected',
+                             'RGIV5_Corrected_OGGM_Manifest.txt')
+    if not os.path.exists(test_file):
+        # if not there download it
+        ofile = file_downloader(dfile, reset=reset)
+        # Extract root
+        with zipfile.ZipFile(ofile) as zf:
+            zf.extractall(rgi_dir)
+
+    return os.path.join(rgi_dir, 'RGIV5_Corrected')
 
 
 def get_cru_file(var=None):
@@ -1533,17 +1756,17 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
-def compile_run_output(gdirs, path=None, filesuffix=''):
+def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
 
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
+    path: where to store (default is on the working dir).
+    monthly: wether to store monthly values (default is yearly)
     filesuffix: the filesuffix of the run
     """
-
-    from oggm.core.models import flowline
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
@@ -1554,31 +1777,42 @@ def compile_run_output(gdirs, path=None, filesuffix=''):
         if i >= len(gdirs):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('past_model', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                ts = model.volume_km3_ts()
-            time = ts.index
-            year, month = year_to_date(time)
+            ppath = gdirs[i].get_filepath('model_diagnostics',
+                                          filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                time = ds_diag.time.values
+                year = ds_diag.year.values
+                month = ds_diag.month.values
             break
         except:
             i += 1
 
+    # Monthly or not
+    if monthly:
+        pkeep = np.ones(len(time), dtype=np.bool)
+    else:
+        pkeep = np.where(month == 1)
+
+    time = time[pkeep]
+    year = year[pkeep]
+    month = month[pkeep]
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
                             'month': ('time', month),
                             'rgi_id': ('rgi_id', rgi_ids)
                             })
-    shape = (len(ts), len(rgi_ids))
+    shape = (len(time), len(rgi_ids))
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
     for i, gdir in enumerate(gdirs):
         try:
-            ppath = gdir.get_filepath('past_model', filesuffix=filesuffix)
-            with flowline.FileModel(ppath) as model:
-                vol[:, i] = model.volume_m3_ts().values
-                area[:, i] = model.area_m2_ts().values
-                length[:, i] = model.length_m_ts().values
+            ppath = gdir.get_filepath('model_diagnostics',
+                                      filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_diag:
+                vol[:, i] = ds_diag.volume_m3.values[pkeep]
+                area[:, i] = ds_diag.area_m2.values[pkeep]
+                length[:, i] = ds_diag.length_m.values[pkeep]
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
@@ -1602,16 +1836,12 @@ def compile_run_output(gdirs, path=None, filesuffix=''):
     return ds
 
 
-
-
 def glacier_characteristics(gdirs, filesuffix='', path=True):
     """Gathers as many statistics as possible about a list of glacier
     directories.
-
     It can be used to do result diagnostics and other stuffs. If the data
     necessary for a statistic is not available (e.g.: flowlines length) it
     will simply be ignored.
-
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
@@ -1627,7 +1857,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
 
         d = OrderedDict()
 
-        # Easy stats
+        # Easy stats - this should always be possible
         d['rgi_id'] = gdir.rgi_id
         d['name'] = gdir.name
         d['cenlon'] = gdir.cenlon
@@ -1636,113 +1866,112 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
         d['glacier_type'] = gdir.glacier_type
         d['terminus_type'] = gdir.terminus_type
 
-        # Masks related stuff
-        if gdir.has_file('gridded_data', div_id=0):
-            fpath = gdir.get_filepath('gridded_data', div_id=0)
-            with netCDF4.Dataset(fpath) as nc:
-                mask = nc.variables['glacier_mask'][:]
-                topo = nc.variables['topo'][:]
-            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-
-        # Divides
-        d['n_divides'] = len(list(gdir.divide_ids))
-
-        # Very bad folders sometimes
+        # The rest is less certain. We put this in a try block and see
         try:
-            gdir.has_file('centerlines', div_id=1)
-        except IndexError:
-            out_df.append(d)
-            continue
+            # Masks related stuff
+            if gdir.has_file('gridded_data', div_id=0):
+                fpath = gdir.get_filepath('gridded_data', div_id=0)
+                with netCDF4.Dataset(fpath) as nc:
+                    mask = nc.variables['glacier_mask'][:]
+                    topo = nc.variables['topo'][:]
+                d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+                d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+                d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
 
-        # Centerlines
-        if gdir.has_file('centerlines', div_id=1):
-            cls = []
-            for i in gdir.divide_ids:
-                cls.extend(gdir.read_pickle('centerlines', div_id=i))
-            longuest = 0.
-            for cl in cls:
-                longuest = np.max([longuest, cl.dis_on_line[-1]])
-            d['n_centerlines'] = len(cls)
-            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+            # Divides
+            d['n_divides'] = len(list(gdir.divide_ids))
 
-        # MB and flowline related stuff
-        if gdir.has_file('inversion_flowlines', div_id=1):
-            amb = np.array([])
-            h = np.array([])
-            widths = np.array([])
-            slope = np.array([])
+            # Centerlines
+            if gdir.has_file('centerlines', div_id=1):
+                cls = []
+                for i in gdir.divide_ids:
+                    cls.extend(gdir.read_pickle('centerlines', div_id=i))
+                longuest = 0.
+                for cl in cls:
+                    longuest = np.max([longuest, cl.dis_on_line[-1]])
+                d['n_centerlines'] = len(cls)
+                d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
 
-            for div_id in gdir.divide_ids:
-                fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-                dx = fls[0].dx * gdir.grid.dx
-                for fl in fls:
-                    amb = np.append(amb, fl.apparent_mb)
-                    hgt = fl.surface_h
-                    h = np.append(h, hgt)
-                    widths = np.append(widths, fl.widths * dx)
-                    slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+            # MB and flowline related stuff
+            if gdir.has_file('inversion_flowlines', div_id=1):
+                amb = np.array([])
+                h = np.array([])
+                widths = np.array([])
+                slope = np.array([])
 
-            pacc = np.where(amb >= 0)
-            pab = np.where(amb < 0)
-            d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
-            try:
-                # Try to get the slope
-                mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
-                d['mb_grad'] = mb_slope
-            except:
-                # we don't mind if something goes wrong
-                d['mb_grad'] = np.NaN
-            d['avg_width'] = np.mean(widths)
-            d['avg_slope'] = np.mean(slope)
+                for div_id in gdir.divide_ids:
+                    fls = gdir.read_pickle('inversion_flowlines',
+                                           div_id=div_id)
+                    dx = fls[0].dx * gdir.grid.dx
+                    for fl in fls:
+                        amb = np.append(amb, fl.apparent_mb)
+                        hgt = fl.surface_h
+                        h = np.append(h, hgt)
+                        widths = np.append(widths, fl.widths * dx)
+                        slope = np.append(slope,
+                                          np.arctan(-np.gradient(hgt, dx)))
 
-        # Climate
-        if gdir.has_file('climate_monthly', div_id=0):
-            with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cds:
-                d['clim_alt'] = cds.ref_hgt
-                t = cds.temp.mean(dim='time').values
-                if 'dem_mean_elev' in d:
-                    t = t - (d['dem_mean_elev'] - d['clim_alt']) * \
-                        cfg.PARAMS['temp_default_gradient']
-                else:
-                    t = np.NaN
-                d['clim_temp_avgh'] = t
-                d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
+                pacc = np.where(amb >= 0)
+                pab = np.where(amb < 0)
+                d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
+                try:
+                    # Try to get the slope
+                    mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
+                    d['mb_grad'] = mb_slope
+                except:
+                    # we don't mind if something goes wrong
+                    d['mb_grad'] = np.NaN
+                d['avg_width'] = np.mean(widths)
+                d['avg_slope'] = np.mean(slope)
 
-        # Inversion
-        if gdir.has_file('inversion_output', div_id=1):
-            vol = []
-            for i in gdir.divide_ids:
-                cl = gdir.read_pickle('inversion_output', div_id=i)
-                for c in cl:
-                    vol.extend(c['volume'])
-            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
-            area = gdir.rgi_area_km2
-            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-            d['vas_volume_km3'] = 0.034*(area**1.375)
-            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+            # Climate
+            if gdir.has_file('climate_monthly', div_id=0):
+                cf = gdir.get_filepath('climate_monthly')
+                with xr.open_dataset(cf) as cds:
+                    d['clim_alt'] = cds.ref_hgt
+                    t = cds.temp.mean(dim='time').values
+                    if 'dem_mean_elev' in d:
+                        t = (t - (d['dem_mean_elev'] - d['clim_alt']) *
+                             cfg.PARAMS['temp_default_gradient'])
+                    else:
+                        t = np.NaN
+                    d['clim_temp_avgh'] = t
+                    d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
 
-        # Calving
-        if gdir.has_file('calving_output', div_id=1):
-            all_calving_data = []
-            all_width = []
-            for i in gdir.divide_ids:
-                cl = gdir.read_pickle('calving_output', div_id=i)
-                for c in cl:
-                    all_calving_data = c['calving_fluxes'][-1]
-                    all_width = c['t_width']
-            d['calving_flux'] = all_calving_data
-            d['calving_front_width'] = all_width
-        else:
-            d['calving_flux'] = np.NaN
-            d['calving_front_width'] = np.NaN
+            # Inversion
+            if gdir.has_file('inversion_output', div_id=1):
+                vol = []
+                for i in gdir.divide_ids:
+                    cl = gdir.read_pickle('inversion_output', div_id=i)
+                    for c in cl:
+                        vol.extend(c['volume'])
+                d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+                area = gdir.rgi_area_km2
+                d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+                d['vas_volume_km3'] = 0.034*(area**1.375)
+                d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
 
+            # Calving
+            if gdir.has_file('calving_output', div_id=1):
+                all_calving_data = []
+                all_width = []
+                for i in gdir.divide_ids:
+                    cl = gdir.read_pickle('calving_output', div_id=i)
+                    for c in cl:
+                        all_calving_data = c['calving_fluxes'][-1]
+                        all_width = c['t_width']
+                d['calving_flux'] = all_calving_data
+                d['calving_front_width'] = all_width
+            else:
+                d['calving_flux'] = np.NaN
+                d['calving_front_width'] = np.NaN
+        except:
+            # We're good with any error - we store the dict anyway below
+            pass
 
         out_df.append(d)
 
-    cols = list(out_df[0].keys())
-    out = pd.DataFrame(out_df, columns=cols).set_index('rgi_id')
+    out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
@@ -1750,6 +1979,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
         else:
             out.to_csv(path)
     return out
+
 
 
 class DisableLogger():
@@ -1797,10 +2027,19 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, **kwargs):
-            # Log only if needed:
+        def _entity_task(gdir, reset=None, **kwargs):
+
+            if reset is None:
+                reset = not cfg.PARAMS['auto_skip_task']
+
+            # Do we need to run this task?
+            s = gdir.get_task_status(task_func)
+            if not reset and s and ('SUCCESS' in s):
+                return
+
+            # Log what we are doing
             if not task_func.__dict__.get('divide_task', False):
-                self.log.info('%s: %s', gdir.rgi_id, task_func.__name__)
+                self.log.info('(%s) %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
             try:
@@ -1810,12 +2049,18 @@ class entity_task(object):
                 # Something happened
                 out = None
                 gdir.log(task_func, err=err)
-                pipe_log(gdir, task_func, err=err)
-                self.log.error('%s occured during task %s on %s!',
+                task_func_name = task_func.__name__
+                # Filesuffix are typically used to differenciate tasks
+                fsuffix = kwargs.get('filesuffix', False)
+                if fsuffix:
+                    task_func_name += fsuffix
+                pipe_log(gdir, task_func_name, err=err)
+                self.log.error('%s occurred during task %s on %s!',
                         type(err).__name__, task_func.__name__, gdir.rgi_id)
-                if not cfg.CONTINUE_ON_ERROR:
+                if not cfg.PARAMS['continue_on_error']:
                     raise
             return out
+
         _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
 
@@ -1838,7 +2083,7 @@ class divide_task(object):
         self.add_0 = add_0
         self._cdoc = """"
             div_id : int
-                the ID of the divide to process. Should be left to  the default
+                the ID of the divide to process. Should be left to the default
                 ``None`` unless you know what you do.
         """
 
@@ -1852,7 +2097,7 @@ class divide_task(object):
                 if self.add_0:
                     ids = list(ids) + [0]
                 for i in ids:
-                    self.log.info('%s: %s, divide %d', gdir.rgi_id,
+                    self.log.info('(%s) %s, divide %d', gdir.rgi_id,
                                   task_func.__name__, i)
                     task_func(gdir, div_id=i, **kwargs)
             else:
@@ -1884,7 +2129,8 @@ def filter_rgi_name(name):
         return ''
 
     if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',
-                    '\r', '\x93', '¤', '0', '`']:
+                    '\r', '\x93', '¤', '0', '`', '/', 'C', '@',
+                    'Å', '\x06', '\x10', '^', 'å', ';']:
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()
@@ -1981,8 +2227,8 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
             self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
-            self.rgi_subregion = self.rgi_region + '-' + \
-                                 '{:02d}'.format(int(rgi_entity.O2Region))
+            self.rgi_subregion = (self.rgi_region + '-' +
+                                  '{:02d}'.format(int(rgi_entity.O2Region)))
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
             gtype = rgi_entity.GlacType
@@ -2036,6 +2282,12 @@ class GlacierDirectory(object):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
 
+        # logging file
+        self.logfile = os.path.join(self.dir, 'log.txt')
+
+        # Optimization
+        self._mbdf = None
+
     def __repr__(self):
 
         summary = ['<oggm.GlacierDirectory>']
@@ -2083,6 +2335,37 @@ class GlacierDirectory(object):
         """Iterator over the glacier divides ids"""
         return range(1, self.n_divides+1)
 
+    def copy_to_basedir(self, base_dir, setup='run'):
+        """Copies the glacier directory and its content to a new location.
+
+        This utility function allows to select certain files only, thus
+        saving time at copy.
+
+        Parameters
+        ----------
+        basedir : str
+            path to the new base directory (should end with "per_glacier" most
+            of the times)
+        setup : str
+            set up you want the copied directory to be useful for. Currently
+            supported are 'all' (copy the entire directory) and 'run' (copy)
+            the necessary files for a dynamical run).
+        """
+
+        base_dir = os.path.abspath(base_dir)
+        new_dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
+                               self.rgi_id)
+        if setup == 'run':
+            paths = ['model_flowlines', 'inversion_params',
+                     'local_mustar', 'climate_monthly']
+            paths = ('*' + p + '*' for p in paths)
+            shutil.copytree(self.dir, new_dir,
+                            ignore=include_patterns(*paths))
+        elif setup == 'all':
+            shutil.copytree(self.dir, new_dir)
+        else:
+            raise ValueError('setup not understood: {}'.format(setup))
+
     def get_filepath(self, filename, div_id=0, delete=False, filesuffix=''):
         """Absolute path to a specific file.
 
@@ -2116,7 +2399,7 @@ class GlacierDirectory(object):
         if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + '_' + filesuffix + '.' + fname[1]
+            fname = fname[0] + filesuffix + '.' + fname[1]
         out = os.path.join(dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
@@ -2151,8 +2434,8 @@ class GlacierDirectory(object):
         -------
         An object read from the pickle
         """
-        use_comp = use_compression if use_compression is not None \
-            else cfg.PARAMS['use_compression']
+        use_comp = (use_compression if use_compression is not None
+                    else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'rb') as f:
             out = pickle.load(f)
@@ -2174,8 +2457,8 @@ class GlacierDirectory(object):
             whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         """
-        use_comp = use_compression if use_compression is not None \
-            else cfg.PARAMS['use_compression']
+        use_comp = (use_compression if use_compression is not None
+                    else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         with _open(self.get_filepath(filename, div_id), 'wb') as f:
             pickle.dump(var, f, protocol=-1)
@@ -2318,22 +2601,25 @@ class GlacierDirectory(object):
     def get_ref_mb_data(self):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
-        flink, mbdatadir = get_wgms_files()
-        flink = pd.read_csv(flink)
-        wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
-        wid = wid.WGMS_ID.values[0]
+        if self._mbdf is None:
+            flink, mbdatadir = get_wgms_files()
+            flink = pd.read_csv(flink)
+            wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+            wid = wid.WGMS_ID.values[0]
 
-        # file
-        reff = os.path.join(mbdatadir, 'mbdata_WGMS-{:05d}.csv'.format(wid))
-        # list of years
-        mbdf = pd.read_csv(reff).set_index('YEAR')
+            # file
+            reff = os.path.join(mbdatadir,
+                                'mbdata_WGMS-{:05d}.csv'.format(wid))
+            # list of years
+            self._mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period
         y0, y1 = cfg.PARAMS['run_period']
         ci = self.read_pickle('climate_info')
         y0 = y0 or ci['hydro_yr_0']
         y1 = y1 or ci['hydro_yr_1']
-        return mbdf.loc[y0:y1]
+        out = self._mbdf.loc[y0:y1]
+        return out.dropna(subset=['ANNUAL_BALANCE'])
 
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
@@ -2350,20 +2636,42 @@ class GlacierDirectory(object):
             raised, a success is logged)
         """
 
-        # logging directory
-        fpath = os.path.join(self.dir, 'log')
-        mkdir(fpath)
-
-        # a file per function name
-        nowsrt = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')
-        fpath = os.path.join(fpath, nowsrt + '_' + func.__name__)
-        if err is not None:
-            fpath += '.ERROR'
+        # a line per function call
+        nowsrt = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        line = nowsrt + ';' + func.__name__ + ';'
+        if err is None:
+            line += 'SUCCESS'
         else:
-            fpath += '.SUCCESS'
+            line += err.__class__.__name__ + ': {}'.format(err)
+        with open(self.logfile, 'a') as logfile:
+            logfile.write(line + '\n')
 
-        # in case an exception was raised, write the log message too
-        with open(fpath, 'w') as f:
-            f.write(func.__name__ + '\n')
-            if err is not None:
-                f.write(err.__class__.__name__ + ': {}'.format(err))
+    def get_task_status(self, func):
+        """Opens this directory's log file to see if a task was already run.
+
+        It is usually called by the :py:class:`entity_task` decorator, normally
+        you shouldn't take care about that.
+
+        Parameters
+        ----------
+        func : a function
+            the tasks which wants to know
+
+        Returns
+        -------
+        The last message for this task (SUCCESS if was successful),
+        None if the task was not run yet
+        """
+
+        if not os.path.isfile(self.logfile):
+            return None
+
+        with open(self.logfile) as logfile:
+            lines = logfile.readlines()
+
+        lines = [l.replace('\n', '') for l in lines if func.__name__ in l]
+        if lines:
+            # keep only the last log
+            return lines[-1].split(';')[-1]
+        else:
+            return None

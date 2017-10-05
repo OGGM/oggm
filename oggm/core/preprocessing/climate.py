@@ -5,6 +5,7 @@ from __future__ import division
 import logging
 import os
 import datetime
+import warnings
 # External libs
 import numpy as np
 import pandas as pd
@@ -32,7 +33,7 @@ def process_histalp_nonparallel(gdirs, fpath=None):
 
     # Did the user specify a specific climate data file?
     if fpath is None:
-        if ('climate_file' in cfg.PATHS):
+        if 'climate_file' in cfg.PATHS:
             fpath = cfg.PATHS['climate_file']
 
     if not os.path.exists(fpath):
@@ -92,8 +93,8 @@ def process_custom_climate_data(gdir):
     This is the way OGGM does it for the Alps (HISTALP).
     """
 
-    if not (('climate_file' in cfg.PATHS) and \
-                    os.path.exists(cfg.PATHS['climate_file'])):
+    if not (('climate_file' in cfg.PATHS) and
+            os.path.exists(cfg.PATHS['climate_file'])):
         raise IOError('Custom climate file not found')
 
     # read the file
@@ -110,9 +111,13 @@ def process_custom_climate_data(gdir):
         raise ValueError('Climate data should be N full years exclusively')
 
     # Units
-    assert nc_ts._nc.variables['hgt'].units == 'm'
-    assert nc_ts._nc.variables['temp'].units == 'degC'
-    assert nc_ts._nc.variables['prcp'].units == 'kg m-2'
+    assert nc_ts._nc.variables['hgt'].units.lower() in ['m', 'meters', 'meter',
+                                                        'metres', 'metre']
+    assert nc_ts._nc.variables['temp'].units.lower() in ['degc', 'degrees',
+                                                         'degree', 'c']
+    assert nc_ts._nc.variables['prcp'].units.lower() in ['kg m-2', 'l m-2',
+                                                         'mm', 'millimeters',
+                                                         'millimeter']
 
     # geoloc
     lon = nc_ts._nc.variables['lon'][:]
@@ -171,7 +176,10 @@ def process_cesm_data(gdir, filesuffix=''):
     fpath_precc = cfg.PATHS['gcm_precc_file']
     fpath_precl = cfg.PATHS['gcm_precl_file']
 
-    tempds = xr.open_dataset(fpath_temp)
+    with warnings.catch_warnings():
+        # Long time series are currently a pain pandas
+        warnings.filterwarnings("ignore", message='Unable to decode time axis')
+        tempds = xr.open_dataset(fpath_temp)
     precpcds = xr.open_dataset(fpath_precc, decode_times=False)
     preclpds = xr.open_dataset(fpath_precl, decode_times=False)
 
@@ -190,48 +198,51 @@ def process_cesm_data(gdir, filesuffix=''):
             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
 
     # from normal years to hydrological years
+    # TODO: we don't check if the files actually start in January but we should
     precp = precp[9:-3]
     temp = temp[9:-3]
     y0 = int(temp.time.values[0].strftime('%Y'))
     y1 = int(temp.time.values[-1].strftime('%Y'))
-    temp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
-                                   freq='M')
-    precp['time'] = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1),
-                                    freq='M')
-    ny, r = divmod(len(temp.time), 12)
+    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    temp['time'] = time
+    precp['time'] = time
+    # Workaround for https://github.com/pydata/xarray/issues/1565
+    temp['month'] = ('time', time.month)
+    precp['month'] = ('time', time.month)
+    temp['year'] = ('time', time.year)
+    precp['year'] = ('time', time.year)
+    ny, r = divmod(len(time), 12)
     assert r == 0
 
     # Convert m s-1 to mm mth-1
-    ndays = np.tile([31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30],
-                    (y1 - y0))
+    ndays = np.tile(cfg.DAYS_IN_MONTH_HYDRO, y1 - y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
-    year = np.array([t.year for t in temp.time.values])
     # of temp
-    ts_tmp_avg = temp.isel(time=(year >= 1961) & (year <= 1990))
-    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
-    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
+    ts_tmp_avg = temp.sel(time=(temp.year >= 1961) & (temp.year <= 1990))
+    ts_tmp_avg = ts_tmp_avg.groupby(ts_tmp_avg.month).mean(dim='time')
+    ts_tmp = temp.groupby(temp.month) - ts_tmp_avg
     # of precip
-    ts_pre_avg = precp.isel(time=(year >= 1961) & (year <= 1990))
-    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
-    ts_pre = precp.groupby('time.month') - ts_pre_avg
+    ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
+    ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
+    ts_pre = precp.groupby(precp.month) - ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
-    dscru = xr.open_dataset(fpath)
+    ds_cru = xr.open_dataset(fpath)
 
     # Here we assume the gradient is a monthly average
-    ts_grad = np.tile(dscru.grad[0:12], ny)
+    ts_grad = np.tile(ds_cru.grad[0:12], ny)
 
     # Add climate anomaly to CRU clim
-    dscru = dscru.sel(time=slice('1961', '1990'))
+    dscru = ds_cru.sel(time=slice('1961', '1990'))
     # for temp
     loc_tmp = dscru.temp.groupby('time.month').mean()
-    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
-    ts_pre = ts_pre.groupby('time.month') + loc_pre
+    ts_pre = ts_pre.groupby(ts_pre.month) + loc_pre
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
@@ -247,7 +258,7 @@ def process_cesm_data(gdir, filesuffix=''):
     loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
 
     gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
-                                    ts_grad, dscru.ref_hgt,
+                                    ts_grad, float(dscru.ref_hgt),
                                     loc_lon, precp.lat.values,
                                     time_unit=time1.units,
                                     file_name='cesm_data',
@@ -257,6 +268,7 @@ def process_cesm_data(gdir, filesuffix=''):
     tempds.close()
     precpcds.close()
     preclpds.close()
+    ds_cru.close()
 
 
 @entity_task(log, writes=['climate_monthly'])
@@ -314,7 +326,7 @@ def process_cru_data(gdir):
             loc_hgt = ncclim.get_vardata('elev')
             isok = np.isfinite(loc_hgt)
         if _margin > 1:
-            log.debug('%s: I had to look up for far climate pixels: %s',
+            log.debug('(%s) I had to look up for far climate pixels: %s',
                       gdir.rgi_id, _margin)
 
         # Take the first candidate (doesn't matter which)
@@ -375,33 +387,33 @@ def process_cru_data(gdir):
                     ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
                     found_it = True
         if not found_it:
-            msg = '{}: OMG there is no climate data'.format(gdir.rgi_id)
+            msg = '({}) there is no climate data'.format(gdir.rgi_id)
             raise RuntimeError(msg)
     elif np.any(~np.isfinite(ts_tmp)):
         # maybe the side is nan, but we can do nearest
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                               interp='nearest')
+                                              interp='nearest')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                               interp='nearest')
+                                              interp='nearest')
     else:
         # We can do bilinear
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
-                                               interp='linear')
+                                              interp='linear')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
-                                               interp='linear')
+                                              interp='linear')
 
     # take the center pixel and add it to the CRU CL clim
     # for temp
     loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
-                           coords={'month':ts_tmp_avg.month})
+                           coords={'month': ts_tmp_avg.month})
     ts_tmp = xr.DataArray(ts_tmp[:, 1, 1], dims=['time'],
-                           coords={'time':time})
+                          coords={'time': time})
     ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
     # for prcp
     loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
-                           coords={'month':ts_pre_avg.month})
+                           coords={'month': ts_pre_avg.month})
     ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
-                           coords={'time':time})
+                          coords={'time': time})
     ts_pre = ts_pre.groupby('time.month') + loc_pre
 
     # done
@@ -590,7 +602,8 @@ def mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=None, year_range=None):
 
     if div_id == 0:
         for i in gdir.divide_ids:
-             flowlines.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+            flowlines.extend(gdir.read_pickle('inversion_flowlines',
+                                              div_id=i))
     else:
         flowlines = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
@@ -661,13 +674,14 @@ def mu_candidates(gdir, div_id=None, prcp_sf=None):
             if ((i-mu_hp) < 0) or ((i+mu_hp) >= ny):
                 continue
             t_avg = np.mean(temp_yr[i-mu_hp:i+mu_hp+1])
-            if t_avg > 1e-3 :  # if too cold no melt possible
-                prcp_ts = prcp_yr[i-mu_hp:i+mu_hp+1]*fac
+            if t_avg > 1e-3:  # if too cold no melt possible
+                prcp_ts = prcp_yr[i-mu_hp:i+mu_hp+1] * fac
                 mu_yr_clim[i, j] = np.mean(prcp_ts) / t_avg
 
-    # Check mu's
-    if np.sum(np.isfinite(mu_yr_clim)) < (len(years) / 2. * nsf):
-        raise RuntimeError('{}: has no normal climate'.format(gdir.rgi_id))
+    # Check that we found a least one mustar
+    if np.sum(np.isfinite(mu_yr_clim)) < 1:
+        raise RuntimeError('({}) no mustar candidates found.'
+                           .format(gdir.rgi_id))
 
     # Write
     df = pd.DataFrame(data=mu_yr_clim, index=years, columns=sf)
@@ -814,7 +828,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
 
     # Ok. Looping over divides
     for div_id in [0] + list(gdir.divide_ids):
-        log.info('%s: local mu* for t*=%d, divide %d',
+        log.info('(%s) local mu* for t*=%d, divide %d',
                  gdir.rgi_id, tstar, div_id)
 
         # Get the corresponding mu
@@ -846,7 +860,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         fls = []
         if div_id == 0:
             for i in gdir.divide_ids:
-                 fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
+                fls.extend(gdir.read_pickle('inversion_flowlines', div_id=i))
         else:
             fls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
 
@@ -865,12 +879,12 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         if div_id > 0:
             aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
             if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-                log.warning('%s: flux should be zero, but is: '
+                log.warning('(%s) flux should be zero, but is: '
                             '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
             if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-                msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
-                       .format(gdir.rgi_id, aflux)
+                msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
+                       .format(gdir.rgi_id, aflux))
                 raise RuntimeError(msg)
 
             gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
@@ -878,7 +892,7 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
 @divide_task(log, add_0=True)
-def apparent_mb_from_linear_mb(gdir, div_id=None):
+def apparent_mb_from_linear_mb(gdir, div_id=None, mb_gradient=3.):
     """Compute apparent mb from a linear mass-balance assumption (for testing).
 
     This is for testing currently, but could be used as alternative method
@@ -900,17 +914,14 @@ def apparent_mb_from_linear_mb(gdir, div_id=None):
 
     # Now find the ELA till the integrated mb is zero
     from oggm.core.models.massbalance import LinearMassBalanceModel
-
-    grad = 3.  # mm w.e
-
     def to_minimize(ela_h):
-        mbmod = LinearMassBalanceModel(ela_h[0], grad=grad)
+        mbmod = LinearMassBalanceModel(ela_h[0], grad=mb_gradient)
         smb = mbmod.get_specific_mb(h, w)
         return smb**2
 
     ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
     ela_h = ela_h['x'][0]
-    mbmod = LinearMassBalanceModel(ela_h)
+    mbmod = LinearMassBalanceModel(ela_h, grad=mb_gradient)
 
     # For each flowline compute the apparent MB
     # For div 0 it is kind of artificial but this is for validation
@@ -934,17 +945,16 @@ def apparent_mb_from_linear_mb(gdir, div_id=None):
     if div_id > 0:
         aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
         if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-            log.warning('%s: flux should be zero, but is: '
+            log.warning('(%s) flux should be zero, but is: '
                         '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
         # If not marine and quite far from zero, error
         if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-            msg = '{}: flux should be zero, but is:  %.4f km3 ice yr-1' \
+            msg = '({}) flux should be zero, but is:  %.4f km3 ice yr-1' \
                    .format(gdir.rgi_id, aflux)
             raise RuntimeError(msg)
-
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
-    gdir.write_pickle({'ela_h':ela_h, 'grad':grad},
+    gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
                       'linear_mb_params', div_id=div_id)
 
 
@@ -975,7 +985,7 @@ def _get_optimal_scaling_factor(ref_gdirs):
         abs_std = []
         for gdir in ref_gdirs:
             # all possible mus
-            mu_candidates(gdir, prcp_sf=sf)
+            mu_candidates(gdir, prcp_sf=sf, reset=True)
             # list of mus compatibles with refmb
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
             res = t_star_from_refmb(gdir, mbdf)
@@ -1006,16 +1016,16 @@ def compute_ref_t_stars(gdirs):
     # Reference glaciers only if in the list and period is good
     ref_gdirs = _get_ref_glaciers(gdirs)
 
-    sf = None
+    prcp_sf = None
     if cfg.PARAMS['prcp_scaling_factor'] == 'stddev':
-        sf = _get_optimal_scaling_factor(ref_gdirs)
+        prcp_sf = _get_optimal_scaling_factor(ref_gdirs)
 
     # Loop
     only_one = []  # start to store the glaciers with just one t*
     per_glacier = dict()
     for gdir in ref_gdirs:
         # all possible mus
-        mu_candidates(gdir, prcp_sf=sf)
+        mu_candidates(gdir, prcp_sf=prcp_sf, reset=True)
         # list of mus compatibles with refmb
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = t_star_from_refmb(gdir, mbdf)
@@ -1030,14 +1040,13 @@ def compute_ref_t_stars(gdirs):
     # At least one of the glaciers should have a single t*, otherwise we don't
     # know how to start
     if len(only_one) == 0:
+        # TODO: hardcoded stuff here, for the test workflow
         if 'RGI50-11.00897' in per_glacier:
-            # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI50-11.00897')
             gdir, t_star, res_bias, prcp_fac = per_glacier['RGI50-11.00897']
             per_glacier['RGI50-11.00897'] = (gdir, [t_star[-1]],
                                              [res_bias[-1]], prcp_fac)
         elif 'RGI40-11.00897' in per_glacier:
-            # TODO: hardcoded stuff here, for the test workflow
             only_one.append('RGI40-11.00897')
             gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00897']
             per_glacier['RGI40-11.00897'] = (gdir, [t_star[-1]],
@@ -1082,7 +1091,8 @@ def compute_ref_t_stars(gdirs):
         only_one.append(gdir.rgi_id)
 
     # Write out the data
-    rgis_ids, t_stars, prcp_facs,  biases, lons, lats = [], [], [], [], [], []
+    rgis_ids, t_stars, prcp_facs,  biases, lons, lats, n_mb = ([], [], [], [],
+                                                               [], [], [])
     for id, (gdir, t_star, res_bias, prcp_fac) in per_glacier.items():
         rgis_ids.append(id)
         t_stars.append(t_star[0])
@@ -1090,9 +1100,11 @@ def compute_ref_t_stars(gdirs):
         biases.append(res_bias[0])
         lats.append(gdir.cenlat)
         lons.append(gdir.cenlon)
+        n_mb.append(len(gdir.get_ref_mb_data()))
     df = pd.DataFrame(index=rgis_ids)
     df['lon'] = lons
     df['lat'] = lats
+    df['n_mb_years'] = n_mb
     df['tstar'] = t_stars
     df['prcp_fac'] = prcp_facs
     df['bias'] = biases
@@ -1101,7 +1113,7 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs, compute_apparent_mb=True):
+def distribute_t_stars(gdirs, compute_apparent_mb=True, ref_df=None):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
@@ -1113,8 +1125,9 @@ def distribute_t_stars(gdirs, compute_apparent_mb=True):
 
     log.info('Distribute t* and mu*')
 
-    ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                      'ref_tstars.csv'))
+    if ref_df is None:
+        ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                          'ref_tstars.csv'))
 
     for gdir in gdirs:
 
@@ -1140,12 +1153,17 @@ def distribute_t_stars(gdirs, compute_apparent_mb=True):
         # Go
         local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
                                  prcp_fac=prcp_fac,
-                                 compute_apparent_mb=compute_apparent_mb)
+                                 compute_apparent_mb=compute_apparent_mb,
+                                 reset=True)
 
 
 @global_task
 def crossval_t_stars(gdirs):
     """Cross-validate the interpolation of tstar to each individual glacier.
+
+    This is a naive, thorough check (redoes many, many useless calculations).
+
+    you can use quick_crossval_t_stars for most purposes,
 
     Parameters
     ----------
@@ -1158,8 +1176,11 @@ def crossval_t_stars(gdirs):
                                            'ref_tstars.csv'), index_col=0)
 
     rgdirs = _get_ref_glaciers(gdirs)
+    n = len(full_ref_df)
+    for i, rid in enumerate(full_ref_df.index):
 
-    for rid in full_ref_df.index:
+        log.info('Cross-validation iteration {} of {}'.format(i+1, n))
+
         # the glacier to look at
         gdir = [g for g in rgdirs if g.rgi_id == rid][0]
 
@@ -1169,7 +1190,7 @@ def crossval_t_stars(gdirs):
         # redo the computations
         with utils.DisableLogger():
             compute_ref_t_stars(ref_gdirs)
-            distribute_t_stars([gdir], compute_apparent_mb=True)
+            distribute_t_stars([gdir], compute_apparent_mb=False)
 
         # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1177,6 +1198,80 @@ def crossval_t_stars(gdirs):
         full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
         full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
         full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
+
+    # write
+    file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+    full_ref_df.to_csv(file)
+
+
+@global_task
+def quick_crossval_t_stars(gdirs):
+    """Cross-validate the interpolation of tstar to each individual glacier.
+
+    This version does NOT recompute the precipitation scaling factor at each
+    round (this quite OK to do so)
+
+    Parameters
+    ----------
+    gdirs: list of oggm.GlacierDirectory objects
+    """
+
+    log.info('Cross-validate the t* and mu* determination')
+
+    rgdirs = _get_ref_glaciers(gdirs)
+
+    # This might be redundant but we redo the calc here
+    with utils.DisableLogger():
+        compute_ref_t_stars(rgdirs)
+    full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
+                                           'ref_tstars.csv'), index_col=0)
+    with utils.DisableLogger():
+        distribute_t_stars(rgdirs, compute_apparent_mb=False)
+
+    n = len(full_ref_df)
+    for i, rid in enumerate(full_ref_df.index):
+
+        # log.info('Cross-validation iteration {} of {}'.format(i+1, n))
+
+        # the glacier to look at
+        gdir = [g for g in rgdirs if g.rgi_id == rid][0]
+
+        # the reference glaciers
+        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
+
+        # before the cross-val we can get the info about "real" mustar
+        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+        full_ref_df.loc[rid, 'mustar'] = rdf['mu_star'].values[0]
+
+        # redo the computations
+        with utils.DisableLogger():
+            distribute_t_stars([gdir], ref_df=tmp_ref_df,
+                               compute_apparent_mb=False)
+
+        # store
+        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
+        full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
+        full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
+        full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
+        full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
+
+    # Reproduce Ben's figure
+    for i, rid in enumerate(full_ref_df.index):
+        # the glacier to look at
+        gdir = full_ref_df.loc[full_ref_df.index == rid]
+        # the reference glaciers
+        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
+
+        # Compute the distance
+        distances = utils.haversine(gdir.lon.values[0], gdir.lat.values[0],
+                                    tmp_ref_df.lon, tmp_ref_df.lat)
+
+        # Take the 10 closests
+        aso = np.argsort(distances)[0:9]
+        amin = tmp_ref_df.iloc[aso]
+        distances = distances[aso] ** 2
+        interp = np.average(amin.mustar, weights=1. / distances)
+        full_ref_df.loc[rid, 'interp_mustar'] = interp
 
     # write
     file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')

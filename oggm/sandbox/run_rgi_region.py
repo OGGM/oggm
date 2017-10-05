@@ -76,7 +76,7 @@ utils.mkdir(cfg.PATHS['rgi_dir'])
 
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
-cfg.CONTINUE_ON_ERROR = True
+cfg.PARAMS['continue_on_error'] = True
 
 # Other params
 cfg.PARAMS['border'] = 80

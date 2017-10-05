@@ -34,7 +34,7 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
                                 'baseline_images')
     ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
-    if ftver >= LooseVersion('2.7.0'):
+    if ftver >= LooseVersion('2.8.0'):
         BASELINE_DIR = os.path.join(BASELINE_DIR, 'alt')
     else:
         BASELINE_DIR = os.path.join(BASELINE_DIR, '2.0.x')
@@ -47,6 +47,7 @@ ON_TRAVIS = False
 RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
 RUN_PREPRO_TESTS = True
+RUN_NUMERIC_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
@@ -61,6 +62,7 @@ if os.environ.get('TRAVIS') is not None:
         # Minimal tests
         RUN_SLOW_TESTS = False
         RUN_PREPRO_TESTS = True
+        RUN_NUMERIC_TESTS = True
         RUN_MODEL_TESTS = True
         RUN_WORKFLOW_TESTS = True
         RUN_GRAPHIC_TESTS = True
@@ -70,21 +72,31 @@ if os.environ.get('TRAVIS') is not None:
         env = os.environ.get('OGGM_TEST_ENV')
         if env == 'prepro':
             RUN_PREPRO_TESTS = True
+            RUN_NUMERIC_TESTS = False
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = False
+            RUN_GRAPHIC_TESTS = False
+        if env == 'numerics':
+            RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = True
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'models':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = True
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
         if env == 'workflow':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = True
             RUN_GRAPHIC_TESTS = False
         if env == 'graphics':
             RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = True
@@ -104,7 +116,7 @@ if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
 try:
     _ = urlopen('http://www.google.com', timeout=1)
     HAS_INTERNET = True
-except URLError:
+except:
     HAS_INTERNET = False
 
 
@@ -174,6 +186,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border
+    cfg.PARAMS['use_optimized_inversion_params'] = True
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]

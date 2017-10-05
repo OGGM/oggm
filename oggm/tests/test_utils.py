@@ -3,8 +3,9 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
-import time
 import shutil
+import time
+import gzip
 
 import salem
 import numpy as np
@@ -30,6 +31,10 @@ class TestFuncs(unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    def test_show_versions(self):
+        # just see that it runs
+        utils.show_versions()
 
     def test_signchange(self):
         ts = pd.Series([-2., -1., 1., 2., 3], index=np.arange(5))
@@ -108,7 +113,7 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, [1998, 1998])
         np.testing.assert_array_equal(m, [2, 3])
 
-        time = pd.date_range('1/1/1800', periods=300*12, freq='MS')
+        time = pd.date_range('1/1/1800', periods=300*12-11, freq='MS')
         yr = utils.date_to_year(time.year, time.month)
         y, m = utils.year_to_date(yr)
         np.testing.assert_array_equal(y, time.year)
@@ -124,8 +129,14 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        time = pd.period_range('0001-01', '3000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 3000)
+        time = pd.period_range('0001-01', '6000-1', freq='M')
+        myr = utils.monthly_timeseries(1, 6000)
+        y, m = utils.year_to_date(myr)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+        time = pd.period_range('0001-01', '6000-12', freq='M')
+        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
         y, m = utils.year_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
@@ -148,6 +159,242 @@ class TestInitialize(unittest.TestCase):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
+
+
+def touch(path):
+    """Equivalent to linux's touch"""
+    with open(path, 'a'):
+        os.utime(path, None)
+    return path
+
+
+def make_fake_zipdir(dir_path, fakefile=None):
+    """Creates a directory with a file in it if asked to, then compresses it"""
+    utils.mkdir(dir_path)
+    if fakefile:
+        touch(os.path.join(dir_path, fakefile))
+    shutil.make_archive(dir_path, 'zip', dir_path)
+    return dir_path + '.zip'
+
+
+class FakeDownloadManager():
+    """We mess around with oggm internals, so the last we can do is to try
+    to keep things clean after the tests."""
+    def __init__(self, func_name, new_func):
+        self.func_name = func_name
+        self.new_func = new_func
+        self._store = getattr(utils, func_name)
+
+    def __enter__(self):
+        self._store = getattr(utils, self.func_name)
+        setattr(utils, self.func_name, self.new_func)
+
+    def __exit__(self, *args):
+        setattr(utils, self.func_name, self._store)
+
+
+class TestFakeDownloads(unittest.TestCase):
+
+    def setUp(self):
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = os.path.join(TEST_DIR, 'dl_cache')
+        cfg.PATHS['working_dir'] = os.path.join(TEST_DIR, 'wd')
+        cfg.PATHS['tmp_dir'] = os.path.join(TEST_DIR, 'extract')
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_test')
+        cfg.PATHS['cru_dir'] = os.path.join(TEST_DIR, 'cru_test')
+        cfg.CACHE_DIR = os.path.join(TEST_DIR, 'cache_dir')
+        self.reset_dir()
+
+    def tearDown(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+
+    def reset_dir(self):
+        if os.path.exists(TEST_DIR):
+            shutil.rmtree(TEST_DIR)
+        utils.mkdir(TEST_DIR)
+        utils.mkdir(cfg.PATHS['dl_cache_dir'])
+        utils.mkdir(cfg.PATHS['working_dir'])
+        utils.mkdir(cfg.PATHS['tmp_dir'])
+        utils.mkdir(cfg.PATHS['rgi_dir'])
+        utils.mkdir(cfg.PATHS['cru_dir'])
+        utils.mkdir(cfg.CACHE_DIR)
+
+    def test_github_no_internet(self):
+        self.reset_dir()
+        def fake_down(dl_func, cache_path):
+            # This should never be called, if it still is assert
+            assert False
+        with FakeDownloadManager('_call_dl_func', fake_down):
+            with self.assertRaises(utils.NoInternetException):
+                tmp = cfg.PARAMS['has_internet']
+                cfg.PARAMS['has_internet'] = False
+                try:
+                    utils.download_oggm_files()
+                finally:
+                    cfg.PARAMS['has_internet'] = tmp
+
+    def test_rgi(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, '01_rgi50_Region'),
+                         fakefile='test.txt')
+        rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
+        assert os.path.exists(os.path.join(rgi, '01_rgi50_Region', 'test.txt'))
+
+    def test_rgi_intersects(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects'),
+                         fakefile='Intersects_OGGM_Manifest.txt')
+        rgi_f = make_fake_zipdir(rgi_dir)
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
+                        'RGI_V5_Intersects.zip?dl=1')
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_intersects_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi,
+                                           'Intersects_OGGM_Manifest.txt'))
+
+    def test_rgi_corrected(self):
+
+        # Make a fake RGI file
+        rgi_dir = os.path.join(TEST_DIR, 'rgi50')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGIV5_Corrected'),
+                         fakefile='RGIV5_Corrected_OGGM_Manifest.txt')
+        rgi_f = make_fake_zipdir(rgi_dir)
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://www.dropbox.com/s/85xdglv0zredue9/' +
+                        'RGIV5_Corrected.zip?dl=1')
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_corrected_dir()
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi, 'RGIV5_Corrected_OGGM_Manifest.txt'))
+
+    def test_cru(self):
+
+        # Create fake cru file
+        cf = os.path.join(TEST_DIR, 'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+        with gzip.open(cf, 'wb') as gz:
+            gz.write(b'dummy')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/'
+                        'cru_ts_3.24.01/cruts.1701201703.v3.24.01/tmp/'
+                        'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+            self.assertEqual(url, expected)
+            return cf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            tf = utils.get_cru_file('tmp')
+
+        assert os.path.exists(tf)
+
+    def test_srtm(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(TEST_DIR, 'srtm_39_03'),
+                              fakefile='srtm_39_03.tif')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_39_03.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
+
+        assert os.path.exists(of[0])
+        assert source == 'SRTM'
+
+    def test_dem3(self):
+
+        # GEt the path to the file before we mess around
+
+        tf = utils.get_demo_file('T10.zip')
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
+
+        assert os.path.exists(of[0])
+        assert source == 'DEM3'
+
+    def test_ramp(self):
+
+        def down_check(url):
+            expected = 'AntarcticDEM_wgs84.tif'
+            self.assertEqual(url, expected)
+            return 'yo'
+
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=19)
+
+        assert of[0] == 'yo'
+        assert source == 'RAMP'
+
+    def test_gimp(self):
+
+        def down_check(url):
+            expected = 'gimpdem_90m.tif'
+            self.assertEqual(url, expected)
+            return 'yo'
+
+        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             rgi_region=5)
+
+        assert of[0] == 'yo'
+        assert source == 'GIMP'
+
+    def test_aster(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(TEST_DIR, 'ASTGTM2_S88W121'),
+                              fakefile='ASTGTM2_S88W121_dem.tif')
+
+        def down_check(url):
+            expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_aws_file_download_unlocked', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+                                             source='ASTER')
+
+        assert os.path.exists(of[0])
+        assert source == 'ASTER'
 
 
 class TestDataFiles(unittest.TestCase):
@@ -401,6 +648,31 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
 
         of = utils.get_rgi_dir()
+        of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp
+
+    @is_download
+    def test_download_rgi_intersects(self):
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
+
+        of = utils.get_rgi_intersects_dir()
+        of = os.path.join(of, '01_rgi50_Alaska',
+                          'intersects_01_rgi50_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp
+
+    @is_download
+    def test_download_rgi_corrected(self):
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = os.path.join(TEST_DIR, 'rgi_extract')
+
+        of = utils.get_rgi_corrected_dir()
         of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
         self.assertTrue(os.path.exists(of))
 

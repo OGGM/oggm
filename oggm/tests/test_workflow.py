@@ -164,6 +164,19 @@ def up_to_distrib(reset=False):
     return gdirs
 
 
+def random_for_plot():
+
+    # Fake Reset (all these tests are horribly coded)
+    with open(CLI_LOGF, 'wb') as f:
+        pickle.dump('none', f)
+    gdirs = up_to_inversion()
+
+    workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+    workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
+                                 nyears=10, seed=0, filesuffix='_plot')
+    return gdirs
+
+
 class TestWorkflow(unittest.TestCase):
 
     @is_slow
@@ -222,11 +235,14 @@ class TestWorkflow(unittest.TestCase):
         cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
         self.assertTrue(cc > 0.4)
 
-
     @is_slow
     def test_crossval(self):
 
         gdirs = up_to_distrib()
+
+        # in case we ran crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
 
         # before crossval
         refmustars = []
@@ -241,6 +257,21 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+
+        # Test if quicker crossval is also OK
+        tasks.quick_crossval_t_stars(gdirs)
+        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
+        dfq = pd.read_csv(file, index_col=0)
+
+        # after crossval we need to rerun
+        tasks.compute_ref_t_stars(gdirs)
+        tasks.distribute_t_stars(gdirs)
+
+        np.testing.assert_allclose(np.abs(df.cv_bias), np.abs(dfq.cv_bias),
+                                   rtol=0.05)
+        np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
+
+        print(df)
 
         # see if the process didn't brake anything
         mustars = []
@@ -295,14 +326,12 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        rand_glac = partial(flowline.random_glacier_evolution, nyears=200,
-                            seed=0, filesuffix='_test')
-        workflow.execute_entity_task(rand_glac, gdirs)
+        workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
+                                     nyears=200, seed=0, filesuffix='_test')
 
         for gd in gdirs:
 
-            path = gd.get_filepath('past_model', filesuffix='_test')
-
+            path = gd.get_filepath('model_run', filesuffix='_test')
             # See that we are running ok
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
@@ -313,11 +342,28 @@ class TestWorkflow(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
                 self.assertTrue(np.all(np.isfinite(length) & length != 0.))
 
+            ds_diag = gd.get_filepath('model_diagnostics', filesuffix='_test')
+            ds_diag = xr.open_dataset(ds_diag)
+            df = vol.to_frame('RUN')
+            df['DIAG'] = ds_diag.volume_m3.to_series() * 1e-9
+            assert_allclose(df.RUN, df.DIAG)
+            df = area.to_frame('RUN')
+            df['DIAG'] = ds_diag.area_m2.to_series() * 1e-6
+            assert_allclose(df.RUN, df.DIAG)
+            df = length.to_frame('RUN')
+            df['DIAG'] = ds_diag.length_m.to_series()
+            assert_allclose(df.RUN, df.DIAG)
+
+        # Test output
+        ds = utils.compile_run_output(gdirs, filesuffix='_test', monthly=True)
+        assert_allclose(ds_diag.volume_m3, ds.volume.sel(rgi_id=gd.rgi_id))
+        assert_allclose(ds_diag.area_m2, ds.area.sel(rgi_id=gd.rgi_id))
+        assert_allclose(ds_diag.length_m, ds.length.sel(rgi_id=gd.rgi_id))
         # Test output
         ds = utils.compile_run_output(gdirs, filesuffix='_test')
-        assert_allclose(vol, ds.volume.sel(rgi_id=gd.rgi_id) * 1e-9)
-        assert_allclose(area, ds.area.sel(rgi_id=gd.rgi_id) * 1e-6)
-        assert_allclose(length, ds.length.sel(rgi_id=gd.rgi_id))
+        df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
+        df['RUN'] = ds_diag.volume_m3.to_series()
+        assert_allclose(df.RUN, df.OUT)
 
 
     @is_slow
@@ -340,7 +386,6 @@ class TestWorkflow(unittest.TestCase):
 
 
 @is_slow
-@is_graphic_test
 @requires_mpltest
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
@@ -362,6 +407,35 @@ def test_plot_region_inversion():
     # Give this to the plot function
     fig, ax = plt.subplots()
     graphics.plot_region_inversion(gdirs, salemmap=sm, ax=ax)
+
+    fig.tight_layout()
+    return fig
+
+
+@is_slow
+@requires_mpltest
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+def test_plot_region_model():
+
+    import matplotlib.pyplot as plt
+    import salem
+    from oggm import graphics
+
+    gdirs = random_for_plot()
+
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                            extent=(27000, 21000))
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+
+    # Give this to the plot function
+    fig, ax = plt.subplots()
+    graphics.plot_region_model_output(gdirs, salemmap=sm, ax=ax,
+                                      filesuffix='_plot',
+                                      modelyr=10)
 
     fig.tight_layout()
     return fig

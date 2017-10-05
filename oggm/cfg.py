@@ -71,7 +71,6 @@ class PathOrderedDict(OrderedDict):
 
 # Globals
 IS_INITIALIZED = False
-CONTINUE_ON_ERROR = False
 PARAMS = OrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
@@ -84,9 +83,10 @@ SEC_IN_YEAR = 365*24*3600
 SEC_IN_DAY = 24*3600
 SEC_IN_HOUR = 3600
 DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+DAYS_IN_MONTH_HYDRO = [31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30]
 SEC_IN_MONTHS = [d * SEC_IN_DAY for d in DAYS_IN_MONTH]
 CUMSEC_IN_MONTHS = np.cumsum(SEC_IN_MONTHS)
-BEGINSEC_IN_MONTHS = np.cumsum([0] + [(d + 1) * SEC_IN_DAY for d in DAYS_IN_MONTH[:-1]])
+BEGINSEC_IN_MONTHS = np.insert(CUMSEC_IN_MONTHS[:-1], [0], 0)
 
 RHO = 900.  # ice density
 G = 9.81  # gravity
@@ -206,8 +206,13 @@ _doc = ''
 BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
                                             _doc)
 
-_doc = ''
-BASENAMES['past_model'] = ('past_model.nc', _doc)
+_doc = 'A netcdf file containing enough information to reconstruct the ' \
+       'entire flowline glacier along the run (can be data expensive).'
+BASENAMES['model_run'] = ('model_run.nc', _doc)
+
+_doc = 'A netcdf file containing the model diagnostics (volume, ' \
+       'mass-balance, length...).'
+BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
@@ -223,7 +228,6 @@ def initialize(file=None):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global CONTINUE_ON_ERROR
     global N
     global A
     global RHO
@@ -241,8 +245,6 @@ def initialize(file=None):
     except (ConfigObjError, IOError) as e:
         log.critical('Param file could not be parsed (%s): %s', file, e)
         sys.exit()
-
-    CONTINUE_ON_ERROR = cp.as_bool('continue_on_error')
 
     # Default
     PATHS['working_dir'] = cp['working_dir']
@@ -267,6 +269,8 @@ def initialize(file=None):
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
     # Some non-trivial params
+
+    PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_divides'] = cp.as_bool('use_divides')
@@ -276,6 +280,8 @@ def initialize(file=None):
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
+    PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
+    PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -319,7 +325,8 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
-           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope']
+           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
+           'auto_skip_task', 'correct_for_neg_flux']
     for k in ltr:
         cp.pop(k, None)
 
@@ -374,6 +381,13 @@ def oggm_static_paths():
         config['dl_cache_readonly'] = ro
     if os.environ.get('OGGM_DOWNLOAD_CACHE') is not None:
         config['dl_cache_dir'] = os.environ.get('OGGM_DOWNLOAD_CACHE')
+    if os.environ.get('OGGM_EXTRACT_DIR') is not None:
+        # This is for the directories where OGGM needs to extract things
+        # On the cluster it might be useful to do it on a fast disc
+        edir = os.path.abspath(os.environ.get('OGGM_EXTRACT_DIR'))
+        config['tmp_dir'] = os.path.join(edir, 'tmp')
+        config['cru_dir'] = os.path.join(edir, 'cru')
+        config['rgi_dir'] = os.path.join(edir, 'rgi')
 
     if not config['dl_cache_dir']:
         raise RuntimeError('At the very least, the "dl_cache_dir" entry '
@@ -484,7 +498,6 @@ def pack_config():
 
     return {
         'IS_INITIALIZED': IS_INITIALIZED,
-        'CONTINUE_ON_ERROR': CONTINUE_ON_ERROR,
         'PARAMS': PARAMS,
         'PATHS': PATHS,
         'LRUHANDLERS': LRUHANDLERS,
@@ -495,11 +508,9 @@ def pack_config():
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, CONTINUE_ON_ERROR, PARAMS, PATHS, \
-        BASENAMES, LRUHANDLERS
+    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
-    CONTINUE_ON_ERROR = cfg_dict['CONTINUE_ON_ERROR']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
     LRUHANDLERS = cfg_dict['LRUHANDLERS']

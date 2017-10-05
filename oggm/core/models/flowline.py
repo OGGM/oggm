@@ -398,9 +398,11 @@ class FlowlineModel(object):
             be modified at run time by the model
         is_tidewater : bool
             this changes how the last grid points of the domain are handled
-        mb_elev_feedback : str
-            'always', 'annual', or 'monthly': how often the mass-balance should
-            be recomputed from the mass balance model.
+        mb_elev_feedback : str, default: 'annual'
+            'never', 'always', 'annual', or 'monthly': how often the
+            mass-balance should be recomputed from the mass balance model.
+            'Never' is equivalent to 'annual' but without elevation feedback
+            at all (the heights are taken from the first call).
         """
 
         self.is_tidewater = is_tidewater
@@ -416,11 +418,14 @@ class FlowlineModel(object):
                 _mb_call = mb_model.get_monthly_mb
             elif mb_elev_feedback == 'annual':
                 _mb_call = mb_model.get_annual_mb
+            elif mb_elev_feedback == 'never':
+                _mb_call = mb_model.get_annual_mb
             else:
                 raise ValueError('mb_elev_feedback not understood')
         self._mb_call = _mb_call
         self._mb_current_date = None
         self._mb_current_out = dict()
+        self._mb_current_heights = dict()
 
         # Defaults
         if glen_a is None:
@@ -516,6 +521,14 @@ class FlowlineModel(object):
         if fl_id is None:
             raise ValueError('Need fls_id')
 
+        if self.mb_elev_feedback == 'never':
+            # The very first call we take the heights
+            if fl_id not in self._mb_current_heights:
+                # We need to reset just this tributary
+                self._mb_current_heights[fl_id] = heights
+            # All calls we replace
+            heights = self._mb_current_heights[fl_id]
+
         date = utils.year_to_date(year)
         if self.mb_elev_feedback == 'annual':
             # ignore month changes
@@ -564,64 +577,86 @@ class FlowlineModel(object):
 
         # Check for domain bounds
         if self.fls[-1].thick[-1] > 10:
-            if self.is_tidewater:
-                log.warning('Glacier is calving.')
-            else:
+            if not self.is_tidewater:
                 raise RuntimeError('Glacier exceeds domain boundaries.')
 
         # Check for NaNs
         for fl in self.fls:
             if np.any(~np.isfinite(fl.thick)):
-                raise RuntimeError('NaN in numerical solution.')
+                raise FloatingPointError('NaN in numerical solution.')
 
-    def run_until_and_store(self, y1, path=None):
-        """Runs the model and returns intermediate steps in a dataset.
+    def run_until_and_store(self, y1, run_path=None, diag_path=None):
+        """Runs the model and returns intermediate steps in two datasets
+        (model run and diagnostics).
 
-        You can store the whole in a netcdf file, too.
+        You can store the whole in netcdf files, too.
         """
 
         # time
-        time = utils.monthly_timeseries(self.yr, y1)
-        yr, mo = utils.year_to_date(time)
+        monthly_time = utils.monthly_timeseries(self.yr, y1)
+        yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+        yrs, months = utils.year_to_date(monthly_time)
 
         # init output
-        sects = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
-        widths = [(np.zeros((len(time), fl.nx)) * np.NaN) for fl in self.fls]
-        if path is not None:
-            self.to_netcdf(path)
+        if run_path is not None:
+            self.to_netcdf(run_path)
+        ny = len(yearly_time)
+        nm = len(monthly_time)
+        sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+        widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+        diag_ds = xr.Dataset(coords=OrderedDict(time=('time', monthly_time),
+                                                year=('time', yrs),
+                                                month=('time', months),
+                                                ))
+        diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        if self.is_tidewater:
+            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+
 
         # Run
-        for i, y in enumerate(time):
-            self.run_until(y)
-            for s, w, fl in zip(sects, widths, self.fls):
-                s[i, :] = fl.section
-                w[i, :] = fl.widths_m
+        j = 0
+        for i, (yr, mo) in enumerate(zip(monthly_time, months)):
+            self.run_until(yr)
+            # Model run
+            if mo == 1:
+                for s, w, fl in zip(sects, widths, self.fls):
+                    s[j, :] = fl.section
+                    w[j, :] = fl.widths_m
+                j += 1
+            # Diagnostics
+            diag_ds['volume_m3'].data[i] = self.volume_m3
+            diag_ds['area_m2'].data[i] = self.area_m2
+            diag_ds['length_m'].data[i] = self.length_m
+            if self.is_tidewater:
+                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 
         # to datasets
-        dss = []
+        run_ds = []
         for (s, w) in zip(sects, widths):
             ds = xr.Dataset()
-            ds.coords['time'] = time
-            varcoords = {'time': time,
-                         'year': ('time', yr),
-                         'month': ('time', mo),
-                         }
+            ds.coords['time'] = yearly_time
+            varcoords = OrderedDict(time=('time', yearly_time),
+                                    year=('time', yearly_time))
             ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            dss.append(ds)
+            run_ds.append(ds)
 
         # write output?
-        if path is not None:
+        if run_path is not None:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
                       }
-            for i, ds in enumerate(dss):
-                ds.to_netcdf(path, 'a', group='fl_{}'.format(i),
+            for i, ds in enumerate(run_ds):
+                ds.to_netcdf(run_path, 'a', group='fl_{}'.format(i),
                              encoding=encode)
+        if diag_path is not None:
+            diag_ds.to_netcdf(diag_path)
 
-        return dss
+        return run_ds, diag_ds
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
 
@@ -646,8 +681,8 @@ class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., inplace=True, fixed_dt=None, cfl_number=1./100,
-                 min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
+                 fs=0., inplace=True, fixed_dt=None, cfl_number=0.05,
+                 min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
                  time_stepping='user',
                  **kwargs):
         """ Instanciate.
@@ -664,25 +699,21 @@ class FluxBasedModel(FlowlineModel):
                                              inplace=inplace,
                                              **kwargs)
 
-        if time_stepping == 'ultra-ambitious':
-            cfl_number = 1/20
-            min_dt = 4*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'ambitious':
-            cfl_number = 1/60
-            min_dt = 2*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'default':
-            cfl_number = 1/100
+        if time_stepping == 'ambitious':
+            cfl_number = 0.1
             min_dt = 1*SEC_IN_DAY
-            max_dt = 31*SEC_IN_DAY
-        elif time_stepping == 'conservative':
-            cfl_number = 1/140
-            min_dt = 6*SEC_IN_HOUR
-            max_dt = 10*SEC_IN_DAY
-        elif time_stepping == 'ultra-conservative':
-            cfl_number = 1/180
+            max_dt = 15*SEC_IN_DAY
+        elif time_stepping == 'default':
+            cfl_number = 0.05
             min_dt = 1*SEC_IN_HOUR
+            max_dt = 10*SEC_IN_DAY
+        elif time_stepping == 'conservative':
+            cfl_number = 0.01
+            min_dt = 1*SEC_IN_HOUR
+            max_dt = 5*SEC_IN_DAY
+        elif time_stepping == 'ultra-conservative':
+            cfl_number = 0.01
+            min_dt = 0.5*SEC_IN_HOUR
             max_dt = 5*SEC_IN_DAY
         else:
             if time_stepping != 'user':
@@ -1007,101 +1038,104 @@ class MUSCLSuperBeeModel(FlowlineModel):
     def step(self, dt):
         """Advance one step."""
 
-        # This is to guarantee a precise arrival on a specific date if asked
-        min_dt = dt if dt < self.min_dt else self.min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-        fl = self.fls[0]
-        dx = fl.dx_meter
-        width = fl.widths_m
-        
-        """ Switch to the notation from the MUSCL_1D example
-            This is useful to ensure that the MUSCL-SuperBee code
-            is working as it has been benchmarked many time"""
-         
+            # This is to guarantee a precise arrival on a specific date if asked
+            min_dt = dt if dt < self.min_dt else self.min_dt
+            dt = np.clip(dt, min_dt, self.max_dt)
 
-        # mass balance
-        m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
-        # get in the surface elevation
-        S = fl.surface_h
-        # get the bed
-        B = fl.bed_h
-        # define Glen's law here
-        Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
-        #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
-        # time stepping 
-        c_stab = 0.165
-        
-        # define the finite difference indices required for the MUSCL-SuperBee scheme
-        k = np.arange(0,fl.nx)
-        kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
-        kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
-        km = np.hstack([0,np.arange(0,fl.nx-1)])
-        kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+            fl = self.fls[0]
+            dx = fl.dx_meter
+            width = fl.widths_m
 
-        # I'm gonna introduce another level of adaptive time stepping here, which is probably not
-        # necessary. However I keep it to be consistent with my benchmarked and tested code.
-        # If the OGGM time stepping is correctly working, this loop should never run more than once
-        stab_t = 0.
-        while stab_t < dt:
-            H = S - B
-            
-            # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
-            r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
-            H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
-            r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
-            H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
-            
-            # surface slope gradient
-            s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
-            D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
-            D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
-            
-            D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
-            D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
-            D_up = np.zeros(fl.nx)
-            
-            # Eq. 33
-            D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
-            D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
-            D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
-            D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+            """ Switch to the notation from the MUSCL_1D example
+                This is useful to ensure that the MUSCL-SuperBee code
+                is working as it has been benchmarked many time"""
 
-            # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
-            r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
-            H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
-            r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
-            H_dn_p = H[k] - 0.5 * self.phi(r_dn_p)*(H[kp]-H[k])
-            
-            # calculate the slope gradient
-            s_grad_dn = ((S[k]-S[km])**2. / dx**2.)**((N-1.)/2.)
-            D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
-            D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
-            
-            D_dn_min = np.minimum(D_dn_m,D_dn_p);
-            D_dn_max = np.maximum(D_dn_m,D_dn_p);
-            D_dn = np.zeros(fl.nx)
-            
-            D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
-            D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
-            D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
-            D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
-            
-            dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
-            dt_use = min(dt_stab,dt-stab_t)
-            stab_t = stab_t + dt_use
-            
-            # check if the extra time stepping is needed [to be removed one day]
-            #if dt_stab < dt:
-            #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
-            #else:
-            #    print "MUSCL Scheme fine with time stepping as is"
-            
-            #explicit time stepping scheme
-            div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
-            S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
-            
-            S = np.maximum(S,B)                                                 # Eq. 7
+
+            # mass balance
+            m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
+            # get in the surface elevation
+            S = fl.surface_h
+            # get the bed
+            B = fl.bed_h
+            # define Glen's law here
+            Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
+            #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
+            # time stepping
+            c_stab = 0.165
+
+            # define the finite difference indices required for the MUSCL-SuperBee scheme
+            k = np.arange(0,fl.nx)
+            kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
+            kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
+            km = np.hstack([0,np.arange(0,fl.nx-1)])
+            kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+
+            # I'm gonna introduce another level of adaptive time stepping here, which is probably not
+            # necessary. However I keep it to be consistent with my benchmarked and tested code.
+            # If the OGGM time stepping is correctly working, this loop should never run more than once
+            stab_t = 0.
+            while stab_t < dt:
+                H = S - B
+
+                # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
+                r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
+                H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
+                r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
+                H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
+
+                # surface slope gradient
+                s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
+                D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
+                D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
+
+                D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
+                D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
+                D_up = np.zeros(fl.nx)
+
+                # Eq. 33
+                D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
+                D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
+                D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
+                D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+
+                # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
+                r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
+                H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
+                r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
+                H_dn_p = H[k] - 0.5 * self.phi(r_dn_p)*(H[kp]-H[k])
+
+                # calculate the slope gradient
+                s_grad_dn = ((S[k]-S[km])**2. / dx**2.)**((N-1.)/2.)
+                D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
+                D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
+
+                D_dn_min = np.minimum(D_dn_m,D_dn_p);
+                D_dn_max = np.maximum(D_dn_m,D_dn_p);
+                D_dn = np.zeros(fl.nx)
+
+                D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
+                D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
+                D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
+                D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
+
+                dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
+                dt_use = min(dt_stab,dt-stab_t)
+                stab_t = stab_t + dt_use
+
+                # check if the extra time stepping is needed [to be removed one day]
+                #if dt_stab < dt:
+                #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
+                #else:
+                #    print "MUSCL Scheme fine with time stepping as is"
+
+                #explicit time stepping scheme
+                div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
+                S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
+
+                S = np.maximum(S,B)                                                 # Eq. 7
         
         # Done with the loop, prepare output
         NewIceThickness = S-B
@@ -1189,8 +1223,8 @@ class FileModel(object):
                 fl.section = sel.values
         self.yr = sel.time.values
 
-    def area_m2_ts(self, rollmin=36):
-        """rollmin is the number of months you want to smooth onto"""
+    def area_m2_ts(self, rollmin=0):
+        """rollmin is the number of years you want to smooth onto"""
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
             widths = ds.ts_width_m.copy()
@@ -1214,7 +1248,8 @@ class FileModel(object):
     def volume_km3_ts(self):
         return self.volume_m3_ts() * 1e-9
 
-    def length_m_ts(self, rollmin=36):
+    def length_m_ts(self, rollmin=0):
+        """rollmin is the number of years you want to smooth onto"""
         fl = self.fls[-1]
         ds = self.dss[-1]
         sel = ds.ts_section.copy()
@@ -1309,7 +1344,7 @@ def init_present_time_glacier(gdir):
                 inv = tinv
                 break
         if not icl:
-            raise RuntimeError('{}: centerlines could not be '
+            raise RuntimeError('({}) centerlines could not be '
                                'matched'.format(gdir.rgi_id))
 
         if icl.nx <= cl.nx:
@@ -1414,9 +1449,10 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     # Objective
     if ref_area is None:
         ref_area = final_model.area_m2
-    log.info('iterative_initial_glacier_search in year %d. Ref area to catch: %.3f km2. '
-             'Tolerance: %.2f %%' ,
-             np.int64(y0), ref_area*1e-6, rtol*100)
+    log.info('iterative_initial_glacier_search '
+             'in year %d. Ref area to catch: %.3f km2. '
+             'Tolerance: %.2f %%',
+             np.int64(y0), ref_area * 1e-6, rtol * 100)
 
     # are we trying to grow or to shrink the glacier?
     prev_model = copy.deepcopy(final_model)
@@ -1429,18 +1465,21 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
         model = copy.deepcopy(final_model)
         model.reset_y0(y0)
-        log.info('iterative_initial_glacier_search: inital starting glacier converges '
+        log.info('iterative_initial_glacier_search: inital '
+                 'starting glacier converges '
                  'to itself with a final dif of %.2f %%',
                  utils.rel_err(ref_area, prev_area) * 100)
         return 0, None, model
 
     if prev_area < ref_area:
         sign_mb = -1.
-        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. '
+                 'Glacier would be too '
                  'small of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
     else:
-        log.info('iterative_initial_glacier_search, ite: %d. Glacier would be too '
+        log.info('iterative_initial_glacier_search, ite: %d. '
+                 'Glacier would be too '
                  'big of %.2f %%. Continue', 0,
                  utils.rel_err(ref_area, prev_area) * 100)
         sign_mb = 1.
@@ -1514,80 +1553,12 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
-@entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, y0=None, seed=None,
-                             filesuffix='', zero_inititial_glacier=False,
-                             **kwargs):
-    """Random glacier dynamics for benchmarking purposes.
-
-     This runs the random mass-balance model for a certain number of years.
-     
-     Parameters
-     ----------
-     nyears : length of the simulation
-     y0 : central year of the random climate period
-     seed : seed for the random generate
-     filesuffix : for the output file
-     zero_inititial_glacier : if true, the ice thickness is set to zero before
-         the sim
-     kwargs : kwargs to pass to the FluxBasedModel instance
-     """
-
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-
-    ys = 1
-    ye = ys + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, seed=seed)
-
-    # run
-    path = gdir.get_filepath('past_model', delete=True, filesuffix=filesuffix)
-
-    steps = ['ambitious', 'default', 'conservative', 'ultra-conservative']
-    for step in steps:
-        log.info('%s: trying %s time stepping scheme.', gdir.rgi_id, step)
-        fls = gdir.read_pickle('model_flowlines')
-        if zero_inititial_glacier:
-            for fl in fls:
-                fl.thick = fl.thick * 0.
-        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
-                               **kwargs)
-        try:
-            model.run_until_and_store(ye, path=path)
-        except RuntimeError:
-            if step == 'ultra-conservative':
-                raise RuntimeError('%s: we did our best, the model is still '
-                                   'unstable.', gdir.rgi_id)
-            continue
-        # If we get here we good
-        log.info('%s: %s time stepping was successful!', gdir.rgi_id, step)
-        break
-
-
-@entity_task(log, writes=['past_model'])
+@entity_task(log, writes=['model_run'])
 def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                      write_steps=True):
     """Iterative search for the glacier in year y0.
 
-    this doesn't really work.
-
-    Parameters
-    ----------
-    gdir: GlacierDir object
-    div_id: the divide ID to process (should be left to None)
-
-    I/O
-    ---
-    New file::
-        - past_model.p: a ModelFlowline object
+    this is outdated and doesn't really work.
     """
 
     if cfg.PARAMS['use_optimized_inversion_params']:
@@ -1620,8 +1591,184 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
 
     # Write the data
     gdir.write_pickle(params, 'find_initial_glacier_params')
-    path = gdir.get_filepath('past_model', delete=True)
+    path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
         _ = past_model.run_until_and_store(y1, path=path)
     else:
         past_model.to_netcdf(path)
+
+
+def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                              zero_initial_glacier=False):
+    """Quick n dirty function to avoid copy-paste smell"""
+
+    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
+                                 delete=True)
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
+                                  delete=True)
+
+    steps = ['default', 'conservative', 'ultra-conservative']
+    for step in steps:
+        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
+        fls = gdir.read_pickle('model_flowlines')
+        if zero_initial_glacier:
+            for fl in fls:
+                fl.thick = fl.thick * 0.,
+        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
+                               is_tidewater=gdir.is_tidewater,
+                               **kwargs)
+        try:
+            model.run_until_and_store(ye, run_path=run_path,
+                                      diag_path=diag_path)
+        except (RuntimeError, FloatingPointError):
+            if step == 'ultra-conservative':
+                raise
+            continue
+        # If we get here we good
+        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
+        break
+    return model
+
+
+@entity_task(log)
+def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
+                             seed=None, temperature_bias=None, filesuffix='',
+                             zero_initial_glacier=False,
+                             **kwargs):
+    """Random glacier dynamics for benchmarking purposes.
+
+     This runs the random mass-balance model for a certain number of years.
+
+     Parameters
+     ----------
+     nyears : int
+         length of the simulation
+     y0 : int
+         central year of the random climate period. The default is to be
+         centred on t*.
+     bias : float
+         bias of the mb model. Default is to use the calibrated one, which
+         is often a better idea. For t* experiments it can be useful to set it
+         to zero
+     seed : int
+         seed for the random generator. If you ignore this, the runs will be
+         different each time. Setting it to a fixed seed accross glaciers can
+         be usefull if you want to have the same climate years for all of them
+     temperature_bias : float
+         add a bias to the temperature timeseries
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    ys = 0
+    ye = ys + nyears
+    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
+
+    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                                     zero_initial_glacier=zero_initial_glacier)
+
+@entity_task(log)
+def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
+                         temperature_bias=None, filesuffix='',
+                         zero_initial_glacier=False,
+                         **kwargs):
+    """Run a glacier under a constant climate for a given climate period.
+
+     Parameters
+     ----------
+     nyears : int
+         length of the simulation (default: as long as needed for reaching
+         equilbrium)
+     y0 : int
+         central year of the requested climate period. The default is to be
+         centred on t*.
+     bias : float
+         bias of the mb model. Default is to use the calibrated one, which
+         is often a better idea. For t* experiments it can be useful to set it
+         to zero
+     temperature_bias : float
+         add a bias to the temperature timeseries
+     filesuffix : str
+         this add a suffix to the output file (useful to avoid overwriting
+         previous experiments)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    mb = mbmods.ConstantMassBalanceModel(gdir, y0=y0, bias=bias)
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
+
+    return _run_with_numerical_tests(gdir, filesuffix, mb, 0, nyears, kwargs,
+                                     zero_initial_glacier=zero_initial_glacier)
+
+
+@entity_task(log)
+def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
+                          filesuffix='', **kwargs):
+    """ Runs glacier with climate input from a general circulation model.
+
+     Parameters
+     ----------
+     ys : int
+         start year of the model run (default: from the config file)
+     y1 : int
+         end year of the model run (default: from the config file)
+     filename : str
+         name of the climate file, e.g. 'climate_monthly' (default) or
+         'cesm_data'
+     filesuffix : str
+         for the output file
+     kwargs : dict
+         kwargs to pass to the FluxBasedModel instance
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    if ys is None:
+        ys = cfg.PARAMS['ys']
+    if ye is None:
+        ye = cfg.PARAMS['ye']
+
+    mb = mbmods.PastMassBalanceModel(gdir, filename=filename)
+    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs)
