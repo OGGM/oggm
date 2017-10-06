@@ -136,7 +136,7 @@ def is_graphic_test(test):
     @functools.wraps(test)
     def new_test(*args, **kwargs):
         try:
-            test(*args, **kwargs)
+            return test(*args, **kwargs)
         finally:
             plt.close()
 
