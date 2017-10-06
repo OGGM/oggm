@@ -45,7 +45,7 @@ for fl in model.fls:
     line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
     flo = Centerline(line, dx=fl.dx, surface_h=fl.surface_h[pg])
     flo.widths = fl.widths[pg]
-    flo.touches_border = np.ones(flo.nx).astype(np.bool)
+    flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
 for did in [0, 1]:
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
@@ -77,7 +77,7 @@ for fl in model.fls:
     line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
     flo = Centerline(line, dx=fl.dx, surface_h=fl.surface_h[pg])
     flo.widths = fl.widths[pg]
-    flo.touches_border = np.ones(flo.nx).astype(np.bool)
+    flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
 for did in [0, 1]:
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
@@ -107,7 +107,7 @@ for fl in model.fls:
     line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
     flo = Centerline(line, dx=fl.dx, surface_h=fl.surface_h[pg])
     flo.widths = fl.widths[pg]
-    flo.touches_border = np.ones(flo.nx).astype(np.bool)
+    flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
 for did in [0, 1]:
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
@@ -144,7 +144,7 @@ for fl in model.fls:
     sh = fl.surface_h[pg]
     flo = Centerline(line, dx=fl.dx, surface_h=sh)
     flo.widths = fl.widths[pg]
-    flo.touches_border = np.ones(flo.nx).astype(np.bool)
+    flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
 for did in [0, 1]:
     gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)

@@ -378,7 +378,7 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
                                               linewidth=0.6, zorder=50)
 
             if add_touches:
-                pok = np.where(l.touches_border)
+                pok = np.where(l.is_rectangular)
                 xi, yi = l.line.xy
                 xis.append(np.asarray(xi)[pok])
                 yis.append(np.asarray(yi)[pok])
