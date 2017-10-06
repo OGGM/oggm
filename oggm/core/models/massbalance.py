@@ -124,8 +124,15 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             return np.asarray([self.get_ela(year=yr) for yr in year])
 
         if self.valid_bounds is None:
-            raise ValueError('valid_bounds attribute needs to be set for '
-                             'ELA search.')
+            raise ValueError('attribute `valid_bounds` needs to be '
+                             'set for the ELA computation.')
+
+        # Check for invalid ELAs
+        b0, b1 = self.valid_bounds
+        if (np.any(~np.isfinite(self.get_annual_mb([b0, b1], year=year))) or
+            (self.get_annual_mb([b0], year=year)[0] > 0) or
+            (self.get_annual_mb([b1], year=year)[0] < 0)):
+            return np.NaN
 
         def to_minimize(x):
             o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * cfg.RHO
