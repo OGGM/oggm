@@ -1650,33 +1650,38 @@ class TestHEF(unittest.TestCase):
         climate.process_cesm_data(self.gdir)
 
         # CLimate data
-        with xr.open_dataset(gdir.get_filepath('climate_monthly')) as hist, \
-            xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
+        with warnings.catch_warnings():
+            # Long time series are currently a pain pandas
+            warnings.filterwarnings("ignore",
+                                    message='Unable to decode time axis')
 
-            time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
-                                   cesm.time.values[-1].strftime('%Y-%m-%d'),
-                                   freq='M')
-            cesm['time'] = time
-            cesm.coords['year'] = ('time', time.year)
-            cesm.coords['month'] = ('time', time.month)
+            with xr.open_dataset(gdir.get_filepath('climate_monthly')) as hist, \
+                xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
 
-            # Let's do some basic checks
-            shist = hist.sel(time=slice('1961', '1990'))
-            scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
-            # Climate during the chosen period should be the same
-            np.testing.assert_allclose(shist.temp.mean(),
-                                       scesm.temp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(shist.prcp.mean(),
-                                       scesm.prcp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(shist.grad.mean(), scesm.grad.mean())
-            # And also the anual cycle
-            scru = shist.groupby('time.month').mean()
-            scesm = scesm.groupby(scesm.month).mean()
-            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
-            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-            np.testing.assert_allclose(scru.grad, scesm.grad)
+                time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
+                                       cesm.time.values[-1].strftime('%Y-%m-%d'),
+                                       freq='M')
+                cesm['time'] = time
+                cesm.coords['year'] = ('time', time.year)
+                cesm.coords['month'] = ('time', time.month)
+
+                # Let's do some basic checks
+                shist = hist.sel(time=slice('1961', '1990'))
+                scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+                # Climate during the chosen period should be the same
+                np.testing.assert_allclose(shist.temp.mean(),
+                                           scesm.temp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(shist.prcp.mean(),
+                                           scesm.prcp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(shist.grad.mean(), scesm.grad.mean())
+                # And also the anual cycle
+                scru = shist.groupby('time.month').mean()
+                scesm = scesm.groupby(scesm.month).mean()
+                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
+                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+                np.testing.assert_allclose(scru.grad, scesm.grad)
 
         # Mass balance models
         mb_cru = massbalance.PastMassBalanceModel(self.gdir)
