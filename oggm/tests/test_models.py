@@ -1644,9 +1644,12 @@ class TestHEF(unittest.TestCase):
         gdir = self.gdir
 
         # init
-        cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_temp_file'] = f
+        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = f
+        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = f
         climate.process_cesm_data(self.gdir)
 
         # CLimate data
@@ -1654,12 +1657,13 @@ class TestHEF(unittest.TestCase):
             # Long time series are currently a pain pandas
             warnings.filterwarnings("ignore",
                                     message='Unable to decode time axis')
+            fh = gdir.get_filepath('climate_monthly')
+            fcesm = gdir.get_filepath('cesm_data')
+            with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
 
-            with xr.open_dataset(gdir.get_filepath('climate_monthly')) as hist, \
-                xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
-
-                time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
-                                       cesm.time.values[-1].strftime('%Y-%m-%d'),
+                tv = cesm.time.values
+                time = pd.period_range(tv[0].strftime('%Y-%m-%d'),
+                                       tv[-1].strftime('%Y-%m-%d'),
                                        freq='M')
                 cesm['time'] = time
                 cesm.coords['year'] = ('time', time.year)
@@ -1667,7 +1671,8 @@ class TestHEF(unittest.TestCase):
 
                 # Let's do some basic checks
                 shist = hist.sel(time=slice('1961', '1990'))
-                scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
+                scesm = cesm.isel(time=((cesm.year >= 1961) &
+                                        (cesm.year <= 1990)))
                 # Climate during the chosen period should be the same
                 np.testing.assert_allclose(shist.temp.mean(),
                                            scesm.temp.mean(),
@@ -1675,7 +1680,8 @@ class TestHEF(unittest.TestCase):
                 np.testing.assert_allclose(shist.prcp.mean(),
                                            scesm.prcp.mean(),
                                            rtol=1e-3)
-                np.testing.assert_allclose(shist.grad.mean(), scesm.grad.mean())
+                np.testing.assert_allclose(shist.grad.mean(),
+                                           scesm.grad.mean())
                 # And also the anual cycle
                 scru = shist.groupby('time.month').mean()
                 scesm = scesm.groupby(scesm.month).mean()
@@ -1703,23 +1709,29 @@ class TestHEF(unittest.TestCase):
         ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
         if do_plot:
             df = pd.DataFrame(index=yrs)
-            k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1), np.std(ts1))
-            k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2), np.std(ts2))
+            k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
+                                                               np.std(ts1))
+            k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
+                                                            np.std(ts2))
             df[k1] = ts1
             df[k2] = ts2
 
             df.plot()
-            plt.plot(yrs, df[k1].rolling(31, center=True, min_periods=15).mean(),
+            plt.plot(yrs,
+                     df[k1].rolling(31, center=True, min_periods=15).mean(),
                      color='C0', linewidth=3)
-            plt.plot(yrs, df[k2].rolling(31, center=True, min_periods=15).mean(),
+            plt.plot(yrs,
+                     df[k2].rolling(31, center=True, min_periods=15).mean(),
                      color='C1', linewidth=3)
             plt.title('SMB Hintereisferner Histalp VS CESM')
             plt.show()
 
         # See what that means for a run
         flowline.init_present_time_glacier(gdir)
-        flowline.run_from_climate_data(gdir, filesuffix='_hist')
-        flowline.run_from_climate_data(gdir, filename='cesm_data',
+        flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
+                                       filesuffix='_hist')
+        flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
+                                       filename='cesm_data',
                                        filesuffix='_cesm')
 
         ds1 = utils.compile_run_output([gdir], path=False, filesuffix='_hist')
@@ -1728,6 +1740,8 @@ class TestHEF(unittest.TestCase):
         assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
                         ds2.volume.isel(rgi_id=0, time=-1),
                         rtol=0.1)
+        # ELA should be close
+        assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
 
     @is_slow
     def test_elevation_feedback(self):
