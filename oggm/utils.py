@@ -2269,6 +2269,7 @@ class GlacierDirectory(object):
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
         self.inversion_calving_rate = 0.
+        self.is_icecap = self.glacier_type == 'Ice cap'
 
         # convert the date
         try:

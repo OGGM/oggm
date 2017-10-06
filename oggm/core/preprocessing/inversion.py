@@ -100,11 +100,11 @@ def prepare_for_inversion(gdir, div_id=None, add_debug_var=False,
             flux[-1] = 0.
 
         # Optimisation: we need to compute this term of a0 only once
-        flux_a0 = np.where(fl.touches_border, 1, 1.5)
+        flux_a0 = np.where(fl.is_rectangular, 1, 1.5)
         flux_a0 *= flux / widths
 
         # Shape
-        is_rectangular = fl.touches_border
+        is_rectangular = fl.is_rectangular
         if not invert_with_rectangular:
             is_rectangular[:] = False
         if invert_all_rectangular:

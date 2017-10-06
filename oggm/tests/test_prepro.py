@@ -1921,7 +1921,7 @@ class TestGrindelInvert(unittest.TestCase):
         self.assertGreaterEqual(len(gdfc), len(fls)-1)
 
         # check touch borders qualitatively
-        self.assertGreaterEqual(np.sum(fls[-1].touches_border),  10)
+        self.assertGreaterEqual(np.sum(fls[-1].is_rectangular),  10)
 
 
 class TestGCMClimate(unittest.TestCase):

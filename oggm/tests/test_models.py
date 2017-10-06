@@ -1235,7 +1235,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1264,7 +1264,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1305,7 +1305,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = fl.is_trapezoid[pg]
+            flo.is_rectangular = fl.is_trapezoid[pg]
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1337,7 +1337,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1367,7 +1367,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1398,7 +1398,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
 
         fls[0].set_flows_to(fls[1])
@@ -1435,7 +1435,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
@@ -1468,7 +1468,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.touches_border = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
             fls.append(flo)
         for did in [0, 1]:
             self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',

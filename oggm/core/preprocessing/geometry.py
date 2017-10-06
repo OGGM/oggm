@@ -627,10 +627,10 @@ def catchment_width_geom(gdir, div_id=None):
         # Ok now the entire centerline is computed.
         # I take all these widths for geometrically valid, and see if they
         # intersect with our buffered catchment/glacier intersections
-        touches_border = []
+        is_rectangular = []
         for wg in wlines:
-            touches_border.append(np.any(gdfi.intersects(wg)))
-        touches_border = _filter_grouplen(touches_border, minsize=5)
+            is_rectangular.append(np.any(gdfi.intersects(wg)))
+        is_rectangular = _filter_grouplen(is_rectangular, minsize=5)
 
         # we filter the lines which have a large altitude range
         fil_widths = _filter_for_altitude_range(widths, wlines, topo)
@@ -648,17 +648,15 @@ def catchment_width_geom(gdir, div_id=None):
             log.warning('({}) width filtering too strong.'.format(gdir.rgi_id))
             fil_widths = widths[np.int(len(widths) / 2.)]
 
-        # "Touches border" is a badly chosen name. In fact, it should be
-        # called "is_rectangular" since tidewater glaciers have a special
-        # treatment here
+        # Special treatment for tidewater glaciers
         if gdir.is_tidewater and fl.flows_to is None:
-            touches_border[-5:] = True
+            is_rectangular[-5:] = True
 
         # Write it in the objects attributes
         assert len(fil_widths) == n
         fl.widths = fil_widths
         fl.geometrical_widths = wlines
-        fl.touches_border = touches_border
+        fl.is_rectangular = is_rectangular
 
     # Overwrite pickle
     gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)

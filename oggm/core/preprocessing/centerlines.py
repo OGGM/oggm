@@ -84,7 +84,7 @@ class Centerline(object):
         self.dx = dx  # dx in pixels (assumes the line is on constant dx
         self._surface_h = surface_h
         self._widths = None
-        self.touches_border = None
+        self.is_rectangular = None
 
         # Set by external funcs
         self.geometrical_widths = None  # these are kept for plotting and such
@@ -678,9 +678,12 @@ def compute_centerlines(gdir, div_id=None):
     single_fl = not cfg.PARAMS['use_multiple_flowlines']
     do_filter_slope = cfg.PARAMS['filter_min_slope']
 
+    # Force single flowline for ice caps
+    if gdir.is_icecap:
+        single_fl = True
+
     if 'force_one_flowline' in cfg.PARAMS:
-        if gdir.rgi_id in cfg.PARAMS['force_one_flowline']:
-            single_fl = True
+        raise ValueError('`force_one_flowline` is deprecated')
 
     # open
     geom = gdir.read_pickle('geometries', div_id=div_id)
