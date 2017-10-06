@@ -22,7 +22,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
-from oggm.tests import requires_mpltest, BASELINE_DIR
+from oggm.tests import is_graphic_test, BASELINE_DIR
 from oggm.tests.funcs import get_test_dir, use_multiprocessing
 from oggm.core.models import flowline, massbalance
 from oggm import tasks
@@ -389,7 +389,7 @@ class TestWorkflow(unittest.TestCase):
 
 
 @is_slow
-@requires_mpltest
+@is_graphic_test
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
 
@@ -416,7 +416,7 @@ def test_plot_region_inversion():
 
 
 @is_slow
-@requires_mpltest
+@is_graphic_test
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_model():
 

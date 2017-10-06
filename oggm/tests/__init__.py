@@ -3,9 +3,11 @@ import os
 import socket
 import sys
 import unittest
+import functools
 from distutils.version import LooseVersion
 
 import matplotlib.ft2font
+import matplotlib.pyplot as plt
 import osgeo.gdal
 import six
 from six.moves.urllib.request import urlopen
@@ -128,10 +130,18 @@ def requires_py3(test):
     return unittest.skip(msg)(test) if six.PY2 else test
 
 
-def requires_mpltest(test):
+def is_graphic_test(test):
     # Decorator
+
+    @functools.wraps(test)
+    def new_test(*args, **kwargs):
+        try:
+            test(*args, **kwargs)
+        finally:
+            plt.close()
+
     msg = 'requires mpl V1.5+ and matplotlib.testing.decorators'
-    return test if HAS_MPL_FOR_TESTS else unittest.skip(msg)(test)
+    return new_test if HAS_MPL_FOR_TESTS else unittest.skip(msg)(test)
 
 
 def is_slow(test):
@@ -144,12 +154,6 @@ def is_download(test):
     # Test decorator
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
-
-
-def is_graphic_test(test):
-    # Test decorator
-    msg = "requires explicit environment for gaphic tests"
-    return test if RUN_GRAPHIC_TESTS else unittest.skip(msg)(test)
 
 
 def is_performance_test(test):
