@@ -1970,48 +1970,60 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['hydro_yr_0'], 1902)
         self.assertEqual(ci['hydro_yr_1'], 2014)
 
-        cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_temp_file'] = f
+        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = f
+        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = f
         climate.process_cesm_data(gdir)
+        with warnings.catch_warnings():
+            # Long time series are currently a pain pandas
+            warnings.filterwarnings("ignore",
+                                    message='Unable to decode time axis')
+            fh = gdir.get_filepath('climate_monthly')
+            fcesm = gdir.get_filepath('cesm_data')
+            with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
 
-        with xr.open_dataset(gdir.get_filepath('climate_monthly')) as cru, \
-            xr.open_dataset(gdir.get_filepath('cesm_data')) as cesm:
+                tv = cesm.time.values
+                time = pd.period_range(tv[0].strftime('%Y-%m-%d'),
+                                       tv[-1].strftime('%Y-%m-%d'),
+                                       freq='M')
+                cesm['time'] = time
+                cesm.coords['year'] = ('time', time.year)
+                cesm.coords['month'] = ('time', time.month)
 
-            time = pd.period_range(cesm.time.values[0].strftime('%Y-%m-%d'),
-                                   cesm.time.values[-1].strftime('%Y-%m-%d'),
-                                   freq='M')
-            cesm['time'] = time
-            cesm.coords['year'] = ('time', time.year)
-            cesm.coords['month'] = ('time', time.month)
+                # Let's do some basic checks
+                scru = cru.sel(time=slice('1961', '1990'))
+                scesm = cesm.isel(time=((cesm.year >= 1961) &
+                                        (cesm.year <= 1990)))
+                # Climate during the chosen period should be the same
+                np.testing.assert_allclose(scru.temp.mean(),
+                                           scesm.temp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp.mean(),
+                                           scesm.prcp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(scru.grad.mean(),
+                                           scesm.grad.mean())
+                # And also the anual cycle
+                scru = scru.groupby('time.month').mean()
+                scesm = scesm.groupby(scesm.month).mean()
+                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+                np.testing.assert_allclose(scru.grad, scesm.grad)
 
-            # Let's do some basic checks
-            scru = cru.sel(time=slice('1961', '1990'))
-            scesm = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
-            # Climate during the chosen period should be the same
-            np.testing.assert_allclose(scru.temp.mean(),
-                                       scesm.temp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(scru.prcp.mean(),
-                                       scesm.prcp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(scru.grad.mean(), scesm.grad.mean())
-            # And also the anual cycle
-            scru = scru.groupby('time.month').mean()
-            scesm = scesm.groupby(scesm.month).mean()
-            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
-            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-            np.testing.assert_allclose(scru.grad, scesm.grad)
-
-            # How did the annua cycle change with time?
-            scesm1 = cesm.isel(time=(cesm.year >= 1961) & (cesm.year <= 1990))
-            scesm2 = cesm.isel(time=(cesm.year >= 1661) & (cesm.year <= 1690))
-            scesm1 = scesm1.groupby(scesm1.month).mean()
-            scesm2 = scesm2.groupby(scesm2.month).mean()
-            # No more than one degree? (silly test)
-            np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
-            # N more than 20%? (silly test)
-            np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+                # How did the annua cycle change with time?
+                scesm1 = cesm.isel(time=((cesm.year >= 1961) &
+                                         (cesm.year <= 1990)))
+                scesm2 = cesm.isel(time=((cesm.year >= 1661) &
+                                         (cesm.year <= 1690)))
+                scesm1 = scesm1.groupby(scesm1.month).mean()
+                scesm2 = scesm2.groupby(scesm2.month).mean()
+                # No more than one degree? (silly test)
+                np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
+                # N more than 20%? (silly test)
+                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
 
 
 class TestCatching(unittest.TestCase):

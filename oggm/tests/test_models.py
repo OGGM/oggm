@@ -1652,7 +1652,7 @@ class TestHEF(unittest.TestCase):
         cfg.PATHS['gcm_precl_file'] = f
         climate.process_cesm_data(self.gdir)
 
-        # CLimate data
+        # Climate data
         with warnings.catch_warnings():
             # Long time series are currently a pain pandas
             warnings.filterwarnings("ignore",
