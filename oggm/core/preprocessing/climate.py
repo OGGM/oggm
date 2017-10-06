@@ -878,7 +878,8 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         # Check and write
         if div_id > 0:
             aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
-            if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+            # If not marine and a bit far from zero, warning
+            if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
                 log.warning('(%s) flux should be zero, but is: '
                             '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
             # If not marine and quite far from zero, error
@@ -886,7 +887,6 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
                 msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                        .format(gdir.rgi_id, aflux))
                 raise RuntimeError(msg)
-
             gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
 
@@ -917,7 +917,7 @@ def apparent_mb_from_linear_mb(gdir, div_id=None, mb_gradient=3.):
     def to_minimize(ela_h):
         mbmod = LinearMassBalanceModel(ela_h[0], grad=mb_gradient)
         smb = mbmod.get_specific_mb(h, w)
-        return smb**2
+        return (smb - cmb)**2
 
     ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
     ela_h = ela_h['x'][0]
@@ -944,13 +944,14 @@ def apparent_mb_from_linear_mb(gdir, div_id=None, mb_gradient=3.):
     # Check and write
     if div_id > 0:
         aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
-        if not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+        # If not marine and a bit far from zero, warning
+        if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
             log.warning('(%s) flux should be zero, but is: '
                         '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
         # If not marine and quite far from zero, error
         if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-            msg = '({}) flux should be zero, but is:  %.4f km3 ice yr-1' \
-                   .format(gdir.rgi_id, aflux)
+            msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
+                   .format(gdir.rgi_id, aflux))
             raise RuntimeError(msg)
         gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
 
