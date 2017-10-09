@@ -23,7 +23,7 @@ from oggm import graphics, utils
 cfg.initialize()
 
 # Local paths (where to write the OGGM run output)
-WORKING_DIR = '/home/mowglie/disk/OGGM_Runs/WGMS_GLACIERS'
+WORKING_DIR = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_REF_MB_GLACIERS')
 PLOTS_DIR = os.path.join(WORKING_DIR, 'plots')
 utils.mkdir(WORKING_DIR)
 cfg.PATHS['working_dir'] = WORKING_DIR
@@ -51,13 +51,12 @@ _ = utils.get_cru_file(var='pre')
 # ---------------------------------------------
 
 # Download and read in the RGI file
-rgilist = 'RGI_list_WGMS_glaciers_noTidewater'
-# rgilist = 'RGI_list_WGMS_glaciers_noIceCap_noTidewater'
-rgif = 'https://dl.dropboxusercontent.com/u/20930277/' + rgilist + '.zip'
+n = 'RGI_list_WGMS_glaciers_noTidewater'
+rgif = 'https://www.dropbox.com/s/ekkl99o1lglljyg/' + n + '.zip?dl=1'
 rgif = utils.file_downloader(rgif)
 with zipfile.ZipFile(rgif) as zf:
     zf.extractall(WORKING_DIR)
-rgif = os.path.join(WORKING_DIR, rgilist + '.shp')
+rgif = os.path.join(WORKING_DIR, n + '.shp')
 rgidf = salem.read_shapefile(rgif, cached=True)
 
 # Sort for more efficient parallel computing
