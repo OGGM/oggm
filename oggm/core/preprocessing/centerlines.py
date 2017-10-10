@@ -204,6 +204,11 @@ class Centerline(object):
         return normals
 
     @property
+    def touches_border(self):
+        """Deprecated attribute"""
+        return self.is_rectangular
+
+    @property
     def widths(self):
         """Needed for overriding later"""
         return self._widths
