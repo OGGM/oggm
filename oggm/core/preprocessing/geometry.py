@@ -536,6 +536,7 @@ def initialize_flowlines(gdir, div_id=None):
 
     # All objects are initialized, now we can link them.
     for cl, fl in zip(cls, fls):
+        fl.orig_centerline_id = id(cl)
         if cl.flows_to is None:
             continue
         fl.set_flows_to(fls[cls.index(cl.flows_to)])

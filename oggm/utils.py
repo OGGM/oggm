@@ -2613,6 +2613,8 @@ class GlacierDirectory(object):
             flink, mbdatadir = get_wgms_files()
             flink = pd.read_csv(flink)
             wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+            if len(wid) == 0:
+                raise RuntimeError('Not a reference glacier!')
             wid = wid.WGMS_ID.values[0]
 
             # file

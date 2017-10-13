@@ -87,10 +87,12 @@ class Centerline(object):
         self.is_rectangular = None
 
         # Set by external funcs
+        self.orig_centerline_id = None  # id of original centerline object
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
         self.flux = None  # Flux (kg m-2)
         self.flux_needed_correction = False  # whether this branch was baaad
+        self.flux_before_correction = None
 
     def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -236,10 +238,12 @@ class Centerline(object):
         flux_needed_correction = False
         flux = np.cumsum(self.flux + mb * self.widths * self.dx)
         # We need to keep the flux -- even negative! -- in order to keep
-        # mass conservation dowsntream. This is quite bad and calls for a
+        # mass conservation downstream. This is quite bad and calls for a
         # better solution
         add_flux = flux[-1]
-        if cfg.PARAMS['correct_for_neg_flux'] and add_flux < 0:
+        # We filter only lines with two negative gridpoints, the
+        # rest we can cope with
+        if cfg.PARAMS['correct_for_neg_flux'] and flux[-2] < 0:
             # Some glacier geometries imply that some tributaries have a
             # negative mass flux, i.e. zero thickness. One can correct for
             # this effect, but this implies playing around with the
@@ -257,6 +261,7 @@ class Centerline(object):
 
         self.flux = flux
         self.flux_needed_correction = flux_needed_correction
+        self.flux_before_correction = add_flux
 
         # Add to outflow. That's why it should happen in order
         if self.flows_to is not None:
@@ -661,44 +666,8 @@ def _normalize(n):
     return n1, n2
 
 
-@entity_task(log, writes=['centerlines', 'gridded_data'])
-@divide_task(log, add_0=False)
-def compute_centerlines(gdir, div_id=None):
-    """Compute the centerlines following Kienholz et al., (2014).
-
-    They are then sorted according to the modified Strahler number:
-    http://en.wikipedia.org/wiki/Strahler_number
-
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    """
-
-    # Params
-    single_fl = not cfg.PARAMS['use_multiple_flowlines']
-    do_filter_slope = cfg.PARAMS['filter_min_slope']
-
-    # Force single flowline for ice caps
-    if gdir.is_icecap:
-        single_fl = True
-
-    if 'force_one_flowline' in cfg.PARAMS:
-        raise ValueError('`force_one_flowline` is deprecated')
-
-    # open
-    geom = gdir.read_pickle('geometries', div_id=div_id)
-    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
-    with netCDF4.Dataset(grids_file) as nc:
-        # Variables
-        glacier_mask = nc.variables['glacier_mask'][:]
-        glacier_ext = nc.variables['glacier_ext'][:]
-        topo = nc.variables['topo_smoothed'][:]
-        poly_pix = geom['polygon_pix']
-
-    # Find for local maximas on the outline
-    x, y = tuple2int(poly_pix.exterior.xy)
-    ext_yx = tuple(reversed(poly_pix.exterior.xy))
-    zoutline = topo[y[:-1], x[:-1]]  # last point is first point
+def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
+                           glacier_mask, topo, geom, poly_pix):
 
     # Size of the half window to use to look for local maximas
     maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
@@ -727,7 +696,7 @@ def compute_centerlines(gdir, div_id=None):
     radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
     radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
     radius /= gdir.grid.dx # in raster coordinates
-    # Plus our criteria, quite usefull to remove short lines:
+    # Plus our criteria, quite useful to remove short lines:
     radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
     log.debug('(%s) radius in raster coordinates: %.2f',
               gdir.rgi_id, radius)
@@ -738,6 +707,54 @@ def compute_centerlines(gdir, div_id=None):
     heads, heads_z = _filter_heads(heads, heads_z, radius, poly_pix)
     log.debug('(%s) number of heads after radius filter: %d',
               gdir.rgi_id, len(heads))
+
+    return heads
+
+
+@entity_task(log, writes=['centerlines', 'gridded_data'])
+@divide_task(log, add_0=False)
+def compute_centerlines(gdir, div_id=None, heads=None):
+    """Compute the centerlines following Kienholz et al., (2014).
+
+    They are then sorted according to the modified Strahler number:
+    http://en.wikipedia.org/wiki/Strahler_number
+
+    Parameters
+    ----------
+    heads : list, optional
+        list of shpg.Points to use as line heads (default is to compute them
+        like Kienholz did)
+    """
+
+    # Params
+    single_fl = not cfg.PARAMS['use_multiple_flowlines']
+    do_filter_slope = cfg.PARAMS['filter_min_slope']
+
+    # Force single flowline for ice caps
+    if gdir.is_icecap:
+        single_fl = True
+
+    if 'force_one_flowline' in cfg.PARAMS:
+        raise ValueError('`force_one_flowline` is deprecated')
+
+    # open
+    geom = gdir.read_pickle('geometries', div_id=div_id)
+    grids_file = gdir.get_filepath('gridded_data', div_id=div_id)
+    with netCDF4.Dataset(grids_file) as nc:
+        # Variables
+        glacier_mask = nc.variables['glacier_mask'][:]
+        glacier_ext = nc.variables['glacier_ext'][:]
+        topo = nc.variables['topo_smoothed'][:]
+        poly_pix = geom['polygon_pix']
+
+    # Find for local maximas on the outline
+    x, y = tuple2int(poly_pix.exterior.xy)
+    ext_yx = tuple(reversed(poly_pix.exterior.xy))
+    zoutline = topo[y[:-1], x[:-1]]  # last point is first point
+
+    if heads is None:
+        heads = _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
+                                       glacier_mask, topo, geom, poly_pix)
 
     # Cost array
     costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)

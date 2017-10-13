@@ -1184,19 +1184,21 @@ class TestClimate(unittest.TestCase):
                                          prcp_fac=prcp_fac)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
-        mu_ref = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac].loc[t_star]
+        mu_ref = gdir.read_pickle('mu_candidates', div_id=0)
+        mu_ref = mu_ref[prcp_fac].loc[t_star]
         np.testing.assert_allclose(mu_ref, df['mu_star'][0], atol=1e-3)
 
         # Check for apparent mb to be zeros
         for i in list(gdir.divide_ids):
-             fls = gdir.read_pickle('inversion_flowlines', div_id=i)
-             tmb = 0.
-             for fl in fls:
-                 self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
-                 tmb += np.sum(fl.apparent_mb * fl.widths)
-             np.testing.assert_allclose(tmb, 0., atol=0.01)
-             if i == 0: continue
-             np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
+            fls = gdir.read_pickle('inversion_flowlines', div_id=i)
+            tmb = 0.
+            for fl in fls:
+                self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
+                tmb += np.sum(fl.apparent_mb * fl.widths)
+                assert not fl.flux_needed_correction
+            np.testing.assert_allclose(tmb, 0., atol=0.01)
+            if i == 0: continue
+            np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
 
         # ------ Look for gradient
         # which years to look at
