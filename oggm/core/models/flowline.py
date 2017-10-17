@@ -1319,8 +1319,6 @@ def init_present_time_glacier(gdir):
     def_lambda = cfg.PARAMS['trapezoid_lambdas']
     min_shape = cfg.PARAMS['mixed_min_shape']
 
-    dic_ds = gdir.read_pickle('downstream_line')
-
     cls = gdir.read_pickle('inversion_flowlines')
     invs = gdir.read_pickle('inversion_output')
 
@@ -1360,6 +1358,7 @@ def init_present_time_glacier(gdir):
         # the inversion, and the bedshapes are chaotic. We interpolate from
         # the downstream. This is not volume conservative
         if not gdir.is_tidewater and inv['is_last']:
+            dic_ds = gdir.read_pickle('downstream_line')
             bed_shape[-5:] = np.nan
 
             # Interpolate

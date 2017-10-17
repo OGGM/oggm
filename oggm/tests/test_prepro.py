@@ -90,11 +90,18 @@ class TestGIS(unittest.TestCase):
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
+        extent = gdir.extent_ll
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
         self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
+
+        # From string
+        gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
+        # This is not guaranteed to be equal because of projection issues
+        np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
+
 
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner.shp')

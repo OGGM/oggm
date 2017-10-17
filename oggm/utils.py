@@ -2153,7 +2153,21 @@ class GlacierDirectory(object):
         if isinstance(rgi_entity, string_types):
             _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
-            rgi_entity = read_shapefile(_shp).iloc[0]
+            rgi_entity = read_shapefile(_shp)
+            crs = salem.check_crs(rgi_entity.crs)
+            rgi_entity = rgi_entity.iloc[0]
+            xx, yy = salem.transform_proj(crs, salem.wgs84,
+                                          [rgi_entity['min_x'],
+                                           rgi_entity['max_x']],
+                                          [rgi_entity['min_y'],
+                                           rgi_entity['max_y']])
+        else:
+            g = rgi_entity['geometry']
+            xx, yy = ([g.bounds[0], g.bounds[2]],
+                      [g.bounds[1], g.bounds[3]])
+
+        # Extent of the glacier in lon/lat
+        self.extent_ll = [xx, yy]
 
         try:
             # Assume RGI V4
