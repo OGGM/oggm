@@ -59,10 +59,10 @@ class TestInitFlowline(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
 
-        ofl = gdir.read_pickle('inversion_flowlines', div_id=1)[-1]
+        ofl = gdir.read_pickle('inversion_flowlines')[-1]
 
         self.assertTrue(gdir.rgi_date.year == 2003)
-        self.assertTrue(len(fls) == 4)
+        self.assertTrue(len(fls) == 3)
 
         vol = 0.
         area = 0.
@@ -90,7 +90,7 @@ class TestInitFlowline(unittest.TestCase):
 
         rtol = 0.02
         np.testing.assert_allclose(0.573, vol, rtol=rtol)
-        np.testing.assert_allclose(7400.0, fls[-1].length_m, atol=101)
+        np.testing.assert_allclose(6900.0, fls[-1].length_m, atol=101)
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
 
         if do_plot:
@@ -141,7 +141,7 @@ class TestInitFlowline(unittest.TestCase):
         np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
 
 
-class TestOtherDivides(unittest.TestCase):
+class TestOtherGlacier(unittest.TestCase):
 
     def setUp(self):
 
@@ -182,8 +182,8 @@ class TestOtherDivides(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        centerlines.compute_downstream_line(gdir)
         geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
@@ -196,23 +196,19 @@ class TestOtherDivides(unittest.TestCase):
         flowline.init_present_time_glacier(gdir)
 
         myarea = 0.
-        for did in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_flowlines', div_id=did)
-            for cl in cls:
-                myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+        cls = gdir.read_pickle('inversion_flowlines')
+        for cl in cls:
+            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
 
         np.testing.assert_allclose(ainv, gdir.rgi_area_m2, rtol=1e-2)
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
-        self.assertTrue(len(gdir.divide_ids) == 2)
 
         myarea = 0.
-        for did in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_flowlines', div_id=did)
-            for cl in cls:
-                myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+        cls = gdir.read_pickle('inversion_flowlines')
+        for cl in cls:
+            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
 
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
-        self.assertTrue(len(gdir.divide_ids) == 2)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
@@ -221,7 +217,7 @@ class TestOtherDivides(unittest.TestCase):
         if cfg.PARAMS['grid_dx_method'] == 'linear':
             self.assertEqual(len(fls), 5)
         if cfg.PARAMS['grid_dx_method'] == 'square':
-            self.assertEqual(len(fls), 5)
+            self.assertEqual(len(fls), 4)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -258,7 +254,7 @@ class TestMassBalance(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        df = pd.read_csv(gdir.get_filepath('local_mustar'))
         mu_star = df['mu_star'][0]
         bias = df['bias'][0]
         prcp_fac = df['prcp_fac'][0]
@@ -348,7 +344,7 @@ class TestMassBalance(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+        df = pd.read_csv(gdir.get_filepath('local_mustar'))
         mu_star = df['mu_star'][0]
         bias = df['bias'][0]
         prcp_fac = df['prcp_fac'][0]
@@ -438,14 +434,14 @@ class TestMassBalance(unittest.TestCase):
         ny = 2000
         yrs = np.arange(ny)
         r_mbh = 0.
-        mbts = yrs * 0
+        mbts = yrs * 0.
         for i, yr in enumerate(yrs):
-            mbts[i] = mb_mod.get_annual_mb(h, yr)[0] * SEC_IN_YEAR
+            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
         elats = mb_mod.get_ela(yrs[:200])
-        assert np.corrcoef(mbts[:200], elats)[0, 1] < -0.9
+        assert np.corrcoef(mbts[:200], elats)[0, 1] < -0.95
 
         mb_mod.temp_bias = -0.5
         r_mbh_b = 0.
@@ -1171,7 +1167,6 @@ class TestIdealisedInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
@@ -1189,7 +1184,7 @@ class TestIdealisedInversion(unittest.TestCase):
             shutil.rmtree(self.testdir)
 
     def simple_plot(self, model):  # pragma: no cover
-        ocls = self.gdir.read_pickle('inversion_output', div_id=1)
+        ocls = self.gdir.read_pickle('inversion_output')
         ithick = ocls[-1]['thick']
         pg = model.fls[-1].thick > 0
         plt.figure()
@@ -1205,7 +1200,7 @@ class TestIdealisedInversion(unittest.TestCase):
         plt.show()
 
     def double_plot(self, model):  # pragma: no cover
-        ocls = self.gdir.read_pickle('inversion_output', div_id=1)
+        ocls = self.gdir.read_pickle('inversion_output')
         f, axs = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
         for i, ax in enumerate(axs):
             ithick = ocls[i]['thick']
@@ -1237,9 +1232,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1266,16 +1259,14 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
         v, _ = inversion.mass_conservation_inversion(self.gdir)
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        inv = self.gdir.read_pickle('inversion_output', div_id=1)[-1]
+        inv = self.gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / (flo.widths * self.gdir.grid.dx) ** 2
         bed_shape_ref = 4 * fl.thick[pg] / (flo.widths * self.gdir.grid.dx) ** 2
 
@@ -1307,9 +1298,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = fl.is_trapezoid[pg]
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1339,9 +1328,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1369,9 +1356,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1403,9 +1388,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         fls[0].set_flows_to(fls[1])
 
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1437,9 +1420,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1447,7 +1428,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         # expected errors
         assert v > model.volume_m3
-        ocls = self.gdir.read_pickle('inversion_output', div_id=1)
+        ocls = self.gdir.read_pickle('inversion_output')
         ithick = ocls[0]['thick']
         assert np.mean(ithick) > np.mean(model.fls[0].thick)*1.1
         if do_plot:  # pragma: no cover
@@ -1470,9 +1451,7 @@ class TestIdealisedInversion(unittest.TestCase):
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
             fls.append(flo)
-        for did in [0, 1]:
-            self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines',
-                                   div_id=did)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(self.gdir)
         inversion.prepare_for_inversion(self.gdir)
@@ -1480,7 +1459,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        inv = self.gdir.read_pickle('inversion_output', div_id=1)[-1]
+        inv = self.gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / (flo.widths * self.gdir.grid.dx) ** 2
         bed_shape_ref = 4 * fl.thick[pg] / (flo.widths * self.gdir.grid.dx) ** 2
 
@@ -1527,7 +1506,8 @@ class TestHEF(unittest.TestCase):
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=self.fs,
                                         glen_a=self.glen_a,
-                                        min_dt=SEC_IN_DAY/2.)
+                                        min_dt=SEC_IN_DAY/2.,
+                                        mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -1535,14 +1515,14 @@ class TestHEF(unittest.TestCase):
 
         np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
 
-        model.run_until(40.)
+        model.run_until_equilibrium(rate=1e-4)
         self.assertFalse(model.dt_warning)
-
+        assert model.yr > 100
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.03)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.08)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 

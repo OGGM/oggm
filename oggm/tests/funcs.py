@@ -271,15 +271,15 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     gis.define_glacier_region(gdir, entity=entity)
     execute_entity_task(gis.glacier_masks, [gdir])
     execute_entity_task(centerlines.compute_centerlines, [gdir])
-    centerlines.compute_downstream_line(gdir)
     geometry.initialize_flowlines(gdir)
+    centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
     geometry.catchment_area(gdir)
     geometry.catchment_intersections(gdir)
     geometry.catchment_width_geom(gdir)
     geometry.catchment_width_correction(gdir)
     climate.process_histalp_nonparallel([gdir])
-    climate.mu_candidates(gdir, div_id=0)
+    climate.mu_candidates(gdir)
     mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
     res = climate.t_star_from_refmb(gdir, mbdf)
     climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
