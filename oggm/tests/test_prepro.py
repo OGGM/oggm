@@ -287,7 +287,7 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
-        out = gdir.read_pickle('downstream_bed')
+        out = gdir.read_pickle('downstream_line')
         for o, h in zip(out['bedshapes'], out['surface_h']):
             assert np.all(np.isfinite(o))
             assert np.all(np.isfinite(h))
