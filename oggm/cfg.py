@@ -118,9 +118,6 @@ BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 _doc = 'The catchments intersections in the local projection.'
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
-_doc = 'The divides intersections in their lonlat projection.'
-BASENAMES['divides_intersects'] = ('divides_intersects.shp', _doc)
-
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
@@ -128,27 +125,19 @@ _doc = 'A netcdf file containing several gridded data variables such as ' \
        'topography, the glacier masks and more (see the netCDF file metadata).'
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
 
-_doc = 'A ``dict`` containing the shapely.Polygons of a divide. The ' \
+_doc = 'A ``dict`` containing the shapely.Polygons of a glacier. The ' \
        '"polygon_hr" entry contains the geometry transformed to the local ' \
        'grid in (i, j) coordinates, while the "polygon_pix" entry contains ' \
        'the geometries transformed into the coarse grid (the i, j elements ' \
        'are integers). The "polygon_area" entry contains the area of the ' \
-       'polygon as computed by Shapely (it is needed because the divides ' \
-       'will have their own area which is not obtained from the RGI file).'
+       'polygon as computed by Shapely.'
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = 'A geopandas dataframe containing all downstream lines, grouped per ' \
-       'intersection.'
-BASENAMES['downstream_lines'] = ('downstream_lines.pkl', _doc)
+_doc = ''
+BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
 _doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
 BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
-
-_doc = 'A simple integer in the glacier root directory (divide 00) ' \
-       'containing the ID of the "major divide", i.e. the one ' \
-       'really flowing out of the glacier (the other downstream lines ' \
-       'flowing into the main branch).'
-BASENAMES['major_divide'] = ('major_divide.pkl', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
@@ -217,10 +206,6 @@ BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
-_doc = 'Array of the parabolic coefficients for all centerlines, computed ' \
-       'from fitting a parabola to the topography.'
-BASENAMES['downstream_bed'] = ('downstream_bed.pkl', _doc)
-
 
 def initialize(file=None):
     """Read the configuration file containing the run's parameters."""
@@ -273,7 +258,6 @@ def initialize(file=None):
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
-    PARAMS['use_divides'] = cp.as_bool('use_divides')
     PARAMS['use_intersects'] = cp.as_bool('use_intersects')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
@@ -318,7 +302,7 @@ def initialize(file=None):
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
            'glathida_rgi_links', 'grid_dx_method',
-           'mp_processes', 'use_multiprocessing', 'use_divides',
+           'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding',
@@ -336,7 +320,6 @@ def initialize(file=None):
 
     # Empty defaults
     from oggm.utils import get_demo_file
-    set_divides_db(get_demo_file('divides_alps.shp'))
     set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     IS_INITIALIZED = True
 
@@ -452,28 +435,6 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
         lru = LRUFileCache(l0, maxsize=maxsize)
         LRUHANDLERS[k] = lru
         return lru
-
-
-def set_divides_db(path=None):
-    """Read the divides database.
-    """
-
-    if PARAMS['use_divides'] and path is not None:
-        df = gpd.read_file(path)
-        try:
-            # dirty fix for RGIV5
-            r5 = df.copy()
-            r5.RGIID = [r.replace('RGI40', 'RGI50') for r in r5.RGIID.values]
-            df = pd.concat([df, r5])
-            PARAMS['divides_gdf'] = df.set_index('RGIID')
-        except AttributeError:
-            # dirty fix for RGIV4
-            r4 = df.copy()
-            r4.RGIId = [r.replace('RGI50', 'RGI40') for r in r5.RGIId.values]
-            df = pd.concat([df, r4])
-            PARAMS['divides_gdf'] = df.set_index('RGIId')
-    else:
-        PARAMS['divides_gdf'] = gpd.GeoDataFrame()
 
 
 def set_intersects_db(path=None):

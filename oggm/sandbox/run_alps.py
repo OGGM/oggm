@@ -86,7 +86,7 @@ gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 task_list = [
     tasks.glacier_masks,
     tasks.compute_centerlines,
-    tasks.compute_downstream_lines,
+    tasks.compute_downstream_line,
     tasks.catchment_area,
     tasks.initialize_flowlines,
     tasks.catchment_width_geom,

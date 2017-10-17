@@ -313,12 +313,8 @@ def test_chhota_shigri():
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
-    centerlines.compute_downstream_lines(gdir)
+    centerlines.compute_downstream_line(gdir)
     geometry.initialize_flowlines(gdir)
-
-    # We should have two groups
-    lines = gdir.read_pickle('downstream_lines', div_id=0)
-    assert len(np.unique(lines.group)) == 2
 
     # Just check if the rest runs
     centerlines.compute_downstream_bedshape(gdir)
@@ -364,12 +360,8 @@ def test_ice_cap():
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
-    centerlines.compute_downstream_lines(gdir)
+    centerlines.compute_downstream_line(gdir)
     geometry.initialize_flowlines(gdir)
-
-    # We should have five groups
-    lines = gdir.read_pickle('downstream_lines', div_id=0)
-    assert len(np.unique(lines.group))==5
 
     # This just checks that it works
     geometry.catchment_area(gdir)
@@ -404,7 +396,7 @@ def test_coxe():
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
-    centerlines.compute_downstream_lines(gdir)
+    centerlines.compute_downstream_line(gdir)
     geometry.initialize_flowlines(gdir)
 
     # Just check if the rest runs

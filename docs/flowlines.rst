@@ -65,7 +65,7 @@ Downstream lines
 
 For the glacier to be able to grow we need to determine the flowlines
 downstream of the current glacier geometry. This is done by the
-:py:func:`tasks.compute_downstream_lines` task:
+:py:func:`tasks.compute_downstream_line` task:
 
 
 .. ipython:: python

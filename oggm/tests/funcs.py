@@ -271,7 +271,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     gis.define_glacier_region(gdir, entity=entity)
     execute_entity_task(gis.glacier_masks, [gdir])
     execute_entity_task(centerlines.compute_centerlines, [gdir])
-    centerlines.compute_downstream_lines(gdir)
+    centerlines.compute_downstream_line(gdir)
     geometry.initialize_flowlines(gdir)
     centerlines.compute_downstream_bedshape(gdir)
     geometry.catchment_area(gdir)

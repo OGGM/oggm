@@ -352,9 +352,6 @@ def plot_catchment_width(gdir, ax=None, salemmap=None, corrected=False,
         if add_intersects and gdir.has_file('intersects', div_id=0):
             gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
             salemmap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
-        if add_intersects and gdir.has_file('divides_intersects', div_id=0):
-            gdf = gpd.read_file(gdir.get_filepath('divides_intersects'))
-            salemmap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines', div_id=i)[::-1]

@@ -26,7 +26,7 @@ from oggm.core.preprocessing import centerlines
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, HAS_NEW_GDAL, requires_py3, RUN_PREPRO_TESTS
+from oggm.tests import is_slow, requires_py3, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir
 from oggm.core.models import flowline
 from oggm import workflow
@@ -173,28 +173,9 @@ class TestGIS(unittest.TestCase):
         gis.glacier_masks(gdir)
 
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
-            np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
-
-    def test_nodivides(self):
-
-        cfg.PARAMS['use_divides'] = False
-        cfg.set_divides_db()
-        hef_file = get_demo_file('Hintereisferner.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2) * 10**-6
-            np.testing.assert_allclose(area, gdir.rgi_area_km2, rtol=1e-1)
-
-        fp = gdir.get_filepath('outlines', div_id=1)
-        self.assertTrue(os.path.exists(fp.replace('.shp', '.cpg')))
-        cfg.PARAMS['use_divides'] = True
-        cfg.set_divides_db()
+            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+            np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
+                                       rtol=1e-1)
 
     def test_intersects(self):
 
@@ -260,16 +241,17 @@ class TestCenterlines(unittest.TestCase):
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
 
-        for div_id in gdir.divide_ids:
-            cls = gdir.read_pickle('centerlines', div_id=div_id)
-            for cl in cls:
-                for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points, cl.inflows):
-                    self.assertTrue(cl.line.coords[j] == ip.coords[0])
-                    self.assertTrue(ob.flows_to_point.coords[0] == ip.coords[0])
-                    self.assertTrue(cl.line.coords[ob.flows_to_indice] == ip.coords[0])
+        cls = gdir.read_pickle('centerlines')
+        for cl in cls:
+            for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
+                                 cl.inflows):
+                self.assertEqual(cl.line.coords[j], ip.coords[0])
+                self.assertEqual(ob.flows_to_point.coords[0],
+                                 ip.coords[0])
+                self.assertEqual(cl.line.coords[ob.flows_to_indice],
+                                 ip.coords[0])
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        self.assertTrue(sorted(lens) == [1, 1, 2])
+        self.assertEqual(len(cls), 3)
 
     def test_downstream(self):
 
@@ -280,17 +262,17 @@ class TestCenterlines(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        centerlines.compute_downstream_lines(gdir)
         geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
 
-        # We should have one group only
-        lines = gdir.read_pickle('downstream_lines', div_id=0)
-        self.assertTrue(np.all(lines.group.values == np.unique(lines.group)))
+        d = gdir.read_pickle('downstream_line')
+        cl = gdir.read_pickle('inversion_flowlines')[-1]
+        self.assertEqual(
+            len(d['full_line'].coords) - len(d['downstream_line'].coords),
+            cl.nx)
 
     def test_downstream_bedshape(self):
 
-        # dummy test to see if it runs
-        # TODO: test!
         hef_file = get_demo_file('Hintereisferner.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
@@ -301,22 +283,25 @@ class TestCenterlines(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        centerlines.compute_downstream_lines(gdir)
         geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
         out = gdir.read_pickle('downstream_bed')
-        cls = gdir.read_pickle('inversion_flowlines')
-        assert len(out) == len(cls)
-
-        for c, o in zip(cls, out):
+        for o, h in zip(out['bedshapes'], out['surface_h']):
             assert np.all(np.isfinite(o))
+            assert np.all(np.isfinite(h))
+
+        tpl = gdir.read_pickle('inversion_flowlines')[-1]
+        c = gdir.read_pickle('downstream_line')['downstream_line']
+        c = centerlines.Centerline(c, dx=tpl.dx)
 
         # Independant reproduction for a few points
-        i0s = [74, 80, 111]
-
+        o = out['bedshapes']
+        i0s = [0, 5, 10, 15, 20]
         for i0 in i0s:
             wi = 11
+            i0 = int(i0)
             cur = c.line.coords[i0]
             n1, n2 = c.normals[i0]
             l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
@@ -368,7 +353,7 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
-        cls = gdir.read_pickle('centerlines', div_id=1)
+        cls = gdir.read_pickle('centerlines')
         for cl in cls:
             x, y = tuple2int(cl.line.xy)
             my_mask[y, x] = 1
@@ -453,21 +438,19 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.catchment_area(gdir)
 
-        for div_id in gdir.divide_ids:
+        cis = gdir.read_pickle('catchment_indices')
 
-            cis = gdir.read_pickle('catchment_indices', div_id=div_id)
+        # The catchment area must be as big as expected
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            mask = nc.variables['glacier_mask'][:]
 
-            # The catchment area must be as big as expected
-            with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=div_id)) as nc:
-                mask = nc.variables['glacier_mask'][:]
-
-            mymask_a = mask * 0
-            mymask_b = mask * 0
-            for i, ci in enumerate(cis):
-                mymask_a[tuple(ci.T)] += 1
-                mymask_b[tuple(ci.T)] = i+1
-            self.assertTrue(np.max(mymask_a) == 1)
-            np.testing.assert_allclose(mask, mymask_a)
+        mymask_a = mask * 0
+        mymask_b = mask * 0
+        for i, ci in enumerate(cis):
+            mymask_a[tuple(ci.T)] += 1
+            mymask_b[tuple(ci.T)] = i+1
+        self.assertTrue(np.max(mymask_a) == 1)
+        np.testing.assert_allclose(mask, mymask_a)
 
     def test_flowlines(self):
 
@@ -480,16 +463,16 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
 
-        for div_id in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-            for cl in cls:
-                for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points, cl.inflows):
-                    self.assertTrue(cl.line.coords[j] == ip.coords[0])
-                    self.assertTrue(ob.flows_to_point.coords[0] == ip.coords[0])
-                    self.assertTrue(cl.line.coords[ob.flows_to_indice] == ip.coords[0])
+        cls = gdir.read_pickle('inversion_flowlines')
+        for cl in cls:
+            for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
+                                 cl.inflows):
+                self.assertEqual(cl.line.coords[j], ip.coords[0])
+                self.assertEqual(ob.flows_to_point.coords[0], ip.coords[0])
+                self.assertEqual(cl.line.coords[ob.flows_to_indice],
+                                 ip.coords[0])
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        self.assertTrue(sorted(lens) == [1, 1, 2])
+        self.assertEqual(len(cls), 3)
 
         x, y = map(np.array, cls[0].line.xy)
         dis = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
@@ -528,16 +511,16 @@ class TestGeometry(unittest.TestCase):
         otherarea = 0.
         hgt = []
         harea = []
-        for i in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_flowlines', div_id=i)
-            for cl in cls:
-                harea.extend(list(cl.widths * cl.dx))
-                hgt.extend(list(cl.surface_h))
-                area += np.sum(cl.widths * cl.dx)
-            with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=i)) as nc:
-                otherarea += np.sum(nc.variables['glacier_mask'][:])
 
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+        cls = gdir.read_pickle('inversion_flowlines')
+        for cl in cls:
+            harea.extend(list(cl.widths * cl.dx))
+            hgt.extend(list(cl.surface_h))
+            area += np.sum(cl.widths * cl.dx)
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            otherarea += np.sum(nc.variables['glacier_mask'][:])
+
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
             mask = nc.variables['glacier_mask'][:]
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
@@ -546,7 +529,8 @@ class TestGeometry(unittest.TestCase):
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
-        np.testing.assert_allclose(area * 10**-6, np.float(tdf['AREA']), rtol=1e-4)
+        np.testing.assert_allclose(area * 10**-6, np.float(tdf['AREA']),
+                                   rtol=1e-4)
 
         # Check for area distrib
         bins = np.arange(utils.nicenumber(np.min(hgt), 50, lower=True),
@@ -863,7 +847,7 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
 
         se = gdir.read_pickle('mu_candidates')[2.5]
         self.assertTrue(se.index[0] == 1802)
@@ -898,20 +882,20 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
         t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
         self.assertEqual(prcp_fac, 2.5)
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac, div_id=0)
+        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac)
 
         # which years to look at
         selind = np.searchsorted(y, mbdf.index)
         t = t[selind]
         p = p[selind]
 
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
+        mu_yr_clim = gdir.read_pickle('mu_candidates')[prcp_fac]
         for t_s, rmd in zip(t_stars, bias):
             mb_per_mu = p - mu_yr_clim.loc[t_s] * t
             md = utils.md(mbdf, mb_per_mu)
@@ -925,7 +909,7 @@ class TestClimate(unittest.TestCase):
 
         # test crop years
         cfg.PARAMS['tstar_search_window'] = [1902, 0]
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         res = climate.t_star_from_refmb(gdir, mbdf)
         t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
         self.assertEqual(prcp_fac, 2.5)
@@ -950,86 +934,6 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(df['bias'], _rmd)
         np.testing.assert_allclose(df['prcp_fac'], 2.5)
 
-    def test_find_tstars__stddev_perglacier_prcp_fac(self):
-
-        hef_file = get_demo_file('Hintereisferner.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-
-        cfg.PARAMS['prcp_scaling_factor'] = 'stddev_perglacier'
-
-        gdirs = []
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
-        climate.mu_candidates(gdir, div_id=0)
-
-        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        res = climate.t_star_from_refmb(gdir, mbdf)
-        t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
-
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac,
-                                                       div_id=0)
-
-        # which years to look at
-        selind = np.searchsorted(y, mbdf.index)
-        t = t[selind]
-        p = p[selind]
-
-        dffac = gdir.read_pickle('prcp_fac_optim').loc[prcp_fac]
-        np.testing.assert_allclose(dffac['avg_bias'], np.mean(bias))
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
-        std_bias = []
-        for t_s, rmd in zip(t_stars, bias):
-            mb_per_mu = p - mu_yr_clim.loc[t_s] * t
-            md = utils.md(mbdf, mb_per_mu)
-            np.testing.assert_allclose(md, rmd, rtol=1e-4)
-            self.assertTrue(np.abs(md / np.mean(mbdf)) < 0.1)
-            r = utils.corrcoef(mbdf, mb_per_mu)
-            self.assertTrue(r > 0.8)
-            std_bias.append(np.std(mb_per_mu) - np.std(mbdf))
-
-        np.testing.assert_allclose(dffac['avg_std_bias'], np.mean(std_bias),
-                                   rtol=1e-4)
-
-        # test crop years
-        cfg.PARAMS['tstar_search_window'] = [1902, 0]
-        climate.mu_candidates(gdir, div_id=0)
-        res = climate.t_star_from_refmb(gdir, mbdf)
-        t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac,
-                                                       div_id=0)
-        selind = np.searchsorted(y, mbdf.index)
-        t = t[selind]
-        p = p[selind]
-        for t_s, rmd in zip(t_stars, bias):
-            mb_per_mu = p - mu_yr_clim.loc[t_s] * t
-            md = utils.md(mbdf, mb_per_mu)
-            np.testing.assert_allclose(md, rmd, rtol=1e-4)
-            self.assertTrue(np.abs(md / np.mean(mbdf)) < 0.1)
-            r = utils.corrcoef(mbdf, mb_per_mu)
-            self.assertTrue(r > 0.8)
-            self.assertTrue(t_s >= 1902)
-
-        # test distribute
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
-        cfg.PARAMS['tstar_search_window'] = [0, 0]
-
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        np.testing.assert_allclose(df['t_star'], t_s)
-        np.testing.assert_allclose(df['bias'], rmd)
-        np.testing.assert_allclose(df['prcp_fac'], prcp_fac)
-
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-
     def test_find_tstars_stddev_perglacier_prcp_fac(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -1048,14 +952,13 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
         t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
 
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac,
-                                                       div_id=0)
+        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac)
 
         # which years to look at
         selind = np.searchsorted(y, mbdf.index)
@@ -1064,7 +967,7 @@ class TestClimate(unittest.TestCase):
 
         dffac = gdir.read_pickle('prcp_fac_optim').loc[prcp_fac]
         np.testing.assert_allclose(dffac['avg_bias'], np.mean(bias))
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
+        mu_yr_clim = gdir.read_pickle('mu_candidates')[prcp_fac]
         std_bias = []
         for t_s, rmd in zip(t_stars, bias):
             mb_per_mu = p - mu_yr_clim.loc[t_s] * t
@@ -1080,12 +983,11 @@ class TestClimate(unittest.TestCase):
 
         # test crop years
         cfg.PARAMS['tstar_search_window'] = [1902, 0]
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         res = climate.t_star_from_refmb(gdir, mbdf)
         t_stars, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
-        mu_yr_clim = gdir.read_pickle('mu_candidates', div_id=0)[prcp_fac]
-        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac,
-                                                       div_id=0)
+        mu_yr_clim = gdir.read_pickle('mu_candidates')[prcp_fac]
+        y, t, p = climate.mb_yearly_climate_on_glacier(gdir, prcp_fac)
         selind = np.searchsorted(y, mbdf.index)
         t = t[selind]
         p = p[selind]
@@ -1171,7 +1073,7 @@ class TestClimate(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star, bias, prcp_fac = res['t_star'], res['bias'],  res['prcp_fac']
@@ -1183,26 +1085,24 @@ class TestClimate(unittest.TestCase):
         climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
                                          prcp_fac=prcp_fac)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
-        mu_ref = gdir.read_pickle('mu_candidates', div_id=0)
+        df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        mu_ref = gdir.read_pickle('mu_candidates')
         mu_ref = mu_ref[prcp_fac].loc[t_star]
         np.testing.assert_allclose(mu_ref, df['mu_star'][0], atol=1e-3)
 
         # Check for apparent mb to be zeros
-        for i in list(gdir.divide_ids):
-            fls = gdir.read_pickle('inversion_flowlines', div_id=i)
-            tmb = 0.
-            for fl in fls:
-                self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
-                tmb += np.sum(fl.apparent_mb * fl.widths)
-                assert not fl.flux_needed_correction
-            np.testing.assert_allclose(tmb, 0., atol=0.01)
-            if i == 0: continue
-            np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
+        fls = gdir.read_pickle('inversion_flowlines')
+        tmb = 0.
+        for fl in fls:
+            self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
+            tmb += np.sum(fl.apparent_mb * fl.widths)
+            assert not fl.flux_needed_correction
+        np.testing.assert_allclose(tmb, 0., atol=0.01)
+        np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
 
         # ------ Look for gradient
         # which years to look at
-        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        fls = gdir.read_pickle('inversion_flowlines')
         mb_on_h = np.array([])
         h = np.array([])
         for fl in fls:
@@ -1267,7 +1167,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star, bias, prcp_fac = res['t_star'],  res['bias'],  res['prcp_fac']
@@ -1282,12 +1182,8 @@ class TestInversion(unittest.TestCase):
         # Volume = 0.573+-0.063
         # maxH = 242+-13
         inversion.prepare_for_inversion(gdir, add_debug_var=True)
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
-                for i in [1, 2, 3]]
-        pid = np.argmax(lens) + 1
-
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input', div_id=pid)
+        cls = gdir.read_pickle('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -1330,10 +1226,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        pid = np.argmax(lens) + 1
-        cls = gdir.read_pickle('inversion_output', div_id=pid)
-        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        cls = gdir.read_pickle('inversion_output')
+        fls = gdir.read_pickle('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -1350,15 +1244,14 @@ class TestInversion(unittest.TestCase):
         inversion.filter_inversion_output(gdir)
         maxs = 0.
         v = 0.
-        for div_id in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_output', div_id=div_id)
-            for cl in cls:
-                thick = cl['thick']
-                _max = np.max(thick)
-                if _max > maxs:
-                    maxs = _max
-                v += np.nansum(cl['volume'])
-        np.testing.assert_allclose(242, maxs, atol=40)
+        cls = gdir.read_pickle('inversion_output')
+        for cl in cls:
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+            v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
 
     def test_invert_hef_from_linear_mb(self):
@@ -1382,12 +1275,9 @@ class TestInversion(unittest.TestCase):
         # Volume = 0.573+-0.063
         # maxH = 242+-13
         inversion.prepare_for_inversion(gdir, add_debug_var=True)
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) \
-                for i in [1, 2, 3]]
-        pid = np.argmax(lens) + 1
 
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input', div_id=pid)
+        cls = gdir.read_pickle('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -1430,10 +1320,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        pid = np.argmax(lens) + 1
-        cls = gdir.read_pickle('inversion_output', div_id=pid)
-        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        cls = gdir.read_pickle('inversion_output')
+        fls = gdir.read_pickle('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -1444,23 +1332,21 @@ class TestInversion(unittest.TestCase):
                 self.assertEqual(cl['volume'][-1], 0)
                 self.assertEqual(cl['thick'][-1], 0)
 
-        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(242, maxs, atol=10)
 
         # Filter
         inversion.filter_inversion_output(gdir)
         maxs = 0.
         v = 0.
-        for div_id in gdir.divide_ids:
-            cls = gdir.read_pickle('inversion_output', div_id=div_id)
-            for cl in cls:
-                thick = cl['thick']
-                _max = np.max(thick)
-                if _max > maxs:
-                    maxs = _max
-                v += np.nansum(cl['volume'])
-        np.testing.assert_allclose(242, maxs, atol=40)
+        cls = gdir.read_pickle('inversion_output')
+        for cl in cls:
+            thick = cl['thick']
+            _max = np.max(thick)
+            if _max > maxs:
+                maxs = _max
+            v += np.nansum(cl['volume'])
+        np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
-
 
     @is_slow
     def test_distribute(self):
@@ -1477,7 +1363,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
@@ -1523,8 +1409,7 @@ class TestInversion(unittest.TestCase):
             t2 = nc.variables['thickness_per_interpolation'][:]
 
         np.testing.assert_allclose(np.sum(t1), np.sum(t2))
-        if not HAS_NEW_GDAL:
-            np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
+        np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
 
     @is_slow
     def test_invert_hef_nofs(self):
@@ -1541,7 +1426,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
@@ -1582,17 +1467,15 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        lens = [len(gdir.read_pickle('centerlines', div_id=i)) for i in [1,2,3]]
-        pid = np.argmax(lens) + 1
-        cls = gdir.read_pickle('inversion_output', div_id=pid)
-        fls = gdir.read_pickle('inversion_flowlines', div_id=pid)
+        cls = gdir.read_pickle('inversion_output')
+        fls = gdir.read_pickle('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        np.testing.assert_allclose(242, maxs, atol=40)
+        np.testing.assert_allclose(242, maxs, atol=45)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1601,7 +1484,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
@@ -1615,7 +1498,7 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
 
         np.testing.assert_allclose(v, ref_v, rtol=0.06)
-        cls = gdir.read_pickle('inversion_output', div_id=pid)
+        cls = gdir.read_pickle('inversion_output')
         maxs = 0.
         for cl in cls:
             thick = cl['thick']
@@ -1645,7 +1528,7 @@ class TestInversion(unittest.TestCase):
         geometry.catchment_width_geom(gdir)
         geometry.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.mu_candidates(gdir, div_id=0)
+        climate.mu_candidates(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
                                          prcp_fac=2.)
         inversion.prepare_for_inversion(gdir)
@@ -1696,7 +1579,6 @@ class TestSlopeMitigation(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.set_divides_db()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 40
@@ -1710,9 +1592,7 @@ class TestSlopeMitigation(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         geometry.initialize_flowlines(gdir)
 
-        self.assertEqual(gdir.n_divides, 1)
-
-        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
+        fls = gdir.read_pickle('inversion_flowlines')
         min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
         for fl in fls:
             dx = fl.dx * gdir.grid.dx
@@ -1856,7 +1736,7 @@ class TestGrindelInvert(unittest.TestCase):
             towrite.append(cl_dic)
 
         # Write out
-        gdir.write_pickle(towrite, 'inversion_input', div_id=1)
+        gdir.write_pickle(towrite, 'inversion_input')
         v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         v_km3 = v * 1e-9
         a_km2 = np.sum(widths * dx) * 1e-6
@@ -1864,7 +1744,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        cl = gdir.read_pickle('inversion_output', div_id=1)[0]
+        cl = gdir.read_pickle('inversion_output')[0]
         rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
         assert rmsd < 10.
 
@@ -1878,8 +1758,8 @@ class TestGrindelInvert(unittest.TestCase):
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        centerlines.compute_downstream_lines(gdir)
         geometry.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
         geometry.catchment_area(gdir)
         geometry.catchment_width_geom(gdir)
@@ -1913,13 +1793,11 @@ class TestGrindelInvert(unittest.TestCase):
         geometry.catchment_width_correction(gdir)
 
         # see that we have as many catchments as flowlines
-        fls = gdir.read_pickle('inversion_flowlines', div_id=1)
-        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments',
-                                               div_id=1))
+        fls = gdir.read_pickle('inversion_flowlines')
+        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments'))
         self.assertEqual(len(fls), len(gdfc))
         # and at least as many intersects
-        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects',
-                                               div_id=1))
+        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects'))
         self.assertGreaterEqual(len(gdfc), len(fls)-1)
 
         # check touch borders qualitatively

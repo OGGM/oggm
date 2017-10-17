@@ -38,7 +38,7 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.core.preprocessing.centerlines import Centerline
 from oggm.utils import tuple2int, line_interpol
-from oggm import entity_task, divide_task
+from oggm import entity_task
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -285,8 +285,7 @@ def _width_change_factor(widths):
 
 
 @entity_task(log, writes=['catchment_indices'])
-@divide_task(log, add_0=False)
-def catchment_area(gdir, div_id=None):
+def catchment_area(gdir):
     """Compute the catchment areas of each tributary line.
 
     The idea is to compute the route of lowest cost for any point on the
@@ -300,10 +299,10 @@ def catchment_area(gdir, div_id=None):
     """
 
     # Variables
-    cls = gdir.read_pickle('centerlines', div_id=div_id)
-    geoms = gdir.read_pickle('geometries', div_id=div_id)
+    cls = gdir.read_pickle('centerlines')
+    geoms = gdir.read_pickle('geometries')
     glacier_pix = geoms['polygon_pix']
-    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    fpath = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(fpath) as nc:
         costgrid = nc.variables['cost_grid'][:]
         mask = nc.variables['glacier_mask'][:]
@@ -312,7 +311,7 @@ def catchment_area(gdir, div_id=None):
     # mask and return
     if len(cls) == 1:
         cl_catchments = [np.array(np.nonzero(mask == 1)).T]
-        gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
+        gdir.write_pickle(cl_catchments, 'catchment_indices')
         return
 
     # Initialise costgrid and the "catching" dict
@@ -325,8 +324,7 @@ def catchment_area(gdir, div_id=None):
             assert (y, x) not in dic_catch
             dic_catch[(y, x)] = set([(y, x)])
 
-    # It is much faster to make the array as small as possible (especially
-    # with divides). We have to trick:
+    # It is much faster to make the array as small as possible. We trick:
     pm = np.nonzero(mask == 1)
     ymi, yma = np.min(pm[0])-1, np.max(pm[0])+2
     xmi, xma = np.min(pm[1])-1, np.max(pm[1])+2
@@ -391,12 +389,11 @@ def catchment_area(gdir, div_id=None):
     cl_catchments = cl_catchments[::-1]  # put it back in order
 
     # Write the data
-    gdir.write_pickle(cl_catchments, 'catchment_indices', div_id=div_id)
+    gdir.write_pickle(cl_catchments, 'catchment_indices')
 
 
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
-@divide_task(log, add_0=False)
-def catchment_intersections(gdir, div_id=None):
+def catchment_intersections(gdir):
     """Computes the intersections between the catchments.
 
     Parameters
@@ -404,7 +401,7 @@ def catchment_intersections(gdir, div_id=None):
     gdir : oggm.GlacierDirectory
     """
 
-    catchment_indices = gdir.read_pickle('catchment_indices', div_id=div_id)
+    catchment_indices = gdir.read_pickle('catchment_indices')
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
                                np.arange(0, gdir.grid.ny, 1))
 
@@ -431,15 +428,13 @@ def catchment_intersections(gdir, div_id=None):
         # salem uses pyproj
         gdfc.crs = gdfc.crs.srs
         gdfi.crs = gdfi.crs.srs
-    gdfc.to_file(gdir.get_filepath('flowline_catchments', div_id=div_id))
+    gdfc.to_file(gdir.get_filepath('flowline_catchments'))
     if len(gdfi) > 0:
-        gdfi.to_file(gdir.get_filepath('catchments_intersects',
-                                       div_id=div_id))
+        gdfi.to_file(gdir.get_filepath('catchments_intersects'))
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-@divide_task(log, add_0=True)
-def initialize_flowlines(gdir, div_id=None):
+def initialize_flowlines(gdir):
     """ Transforms the geometrical Centerlines in the more "physical"
     "Inversion Flowlines".
 
@@ -454,13 +449,8 @@ def initialize_flowlines(gdir, div_id=None):
     """
 
     # variables
-    if div_id == 0 and not gdir.has_file('centerlines', div_id=div_id):
-        # downstream lines haven't been computed
-        return
-
-    cls = gdir.read_pickle('centerlines', div_id=div_id)
-
-    poly = gdir.read_pickle('geometries', div_id=div_id)
+    cls = gdir.read_pickle('centerlines')
+    poly = gdir.read_pickle('geometries')
     poly = poly['polygon_pix'].buffer(0.5)  # a small buffer around to be sure
 
     # Initialise the flowlines
@@ -470,7 +460,7 @@ def initialize_flowlines(gdir, div_id=None):
     fls = []
 
     # Topo for heights
-    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    fpath = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(fpath) as nc:
         topo = nc.variables['topo_smoothed'][:]
 
@@ -498,21 +488,14 @@ def initialize_flowlines(gdir, div_id=None):
         hgts = interpolator((yy, xx))
         assert len(hgts) >= 5
 
-        # Check where the glacier is and where not
-        if div_id != 0:
-            isglacier = np.ones(len(hgts), dtype=np.bool)
-        else:
-            isglacier = [poly.contains(shpg.Point(x, y)) for x, y in
-                         zip(xx, yy)]
-
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
 
         # Check for min slope issues and correct if needed
         if do_filter:
             # Correct only where glacier
-            nhgts = _filter_small_slopes(hgts[isglacier], dx*gdir.grid.dx)
-            isfin = np.isfinite(nhgts)
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
+            isfin = np.isfinite(hgts)
             assert np.any(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
             if perc_bad > 0.8:
@@ -520,17 +503,15 @@ def initialize_flowlines(gdir, div_id=None):
                             'due to negative slopes.'.format(gdir.rgi_id,
                                                              perc_bad))
 
-            hgts[isglacier] = nhgts
-            sp = np.min(np.where(np.isfinite(nhgts))[0])
+            sp = np.min(np.where(np.isfinite(hgts))[0])
             while len(hgts[sp:]) < 5:
                 sp -= 1
             hgts = utils.interp_nans(hgts[sp:])
-            isglacier = isglacier[sp:]
             assert np.all(np.isfinite(hgts))
             assert len(hgts) >= 5
             new_line = shpg.LineString(points[sp:])
 
-        l = Centerline(new_line, dx=dx, surface_h=hgts, is_glacier=isglacier)
+        l = Centerline(new_line, dx=dx, surface_h=hgts)
         l.order = cl.order
         fls.append(l)
 
@@ -542,12 +523,11 @@ def initialize_flowlines(gdir, div_id=None):
         fl.set_flows_to(fls[cls.index(cl.flows_to)])
 
     # Write the data
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=div_id)
+    gdir.write_pickle(fls, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-@divide_task(log, add_0=False)
-def catchment_width_geom(gdir, div_id=None):
+def catchment_width_geom(gdir):
     """Compute geometrical catchment widths for each point of the flowlines.
 
     Updates the 'inversion_flowlines' save file.
@@ -558,15 +538,15 @@ def catchment_width_geom(gdir, div_id=None):
     """
 
     # variables
-    flowlines = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-    catchment_indices = gdir.read_pickle('catchment_indices', div_id=div_id)
+    flowlines = gdir.read_pickle('inversion_flowlines')
+    catchment_indices = gdir.read_pickle('catchment_indices')
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
                                np.arange(0, gdir.grid.ny, 1))
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
-    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    fpath = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         mask_ext = nc.variables['glacier_ext'][:]
@@ -576,20 +556,14 @@ def catchment_width_geom(gdir, div_id=None):
 
     # Intersects between catchments/glaciers
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
-    if gdir.has_file('catchments_intersects', div_id=div_id):
+    if gdir.has_file('catchments_intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects',
-                                              div_id=div_id))
+        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects'))
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
-    if gdir.has_file('divides_intersects', div_id=0):
+    if gdir.has_file('intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('divides_intersects'))
-        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
-        gdfi = pd.concat([gdfi, gdf[['geometry']]])
-    if gdir.has_file('intersects', div_id=0):
-        # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('intersects', div_id=0))
+        gdf = gpd.read_file(gdir.get_filepath('intersects'))
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 
@@ -660,11 +634,11 @@ def catchment_width_geom(gdir, div_id=None):
         fl.is_rectangular = is_rectangular
 
     # Overwrite pickle
-    gdir.write_pickle(flowlines, 'inversion_flowlines', div_id=div_id)
+    gdir.write_pickle(flowlines, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def catchment_width_correction(gdir, div_id=None):
+def catchment_width_correction(gdir):
     """Corrects for NaNs and inconsistencies in the geometrical widths.
 
     Interpolates missing values, ensures consistency of the
@@ -678,40 +652,13 @@ def catchment_width_correction(gdir, div_id=None):
     gdir : oggm.GlacierDirectory
     """
 
-    # The code below makes of this task a "special" divide task.
-    # We keep it as is and remove the divide task decorator
-    if div_id is None:
-        # This is the original call
-        # This time instead of just looping over the divides we add a test
-        # to check for the conservation of the shapefile's area.
-        area = 0.
-        divides = []
-        for i in gdir.divide_ids:
-            log.info('(%s) width correction, divide %d', gdir.rgi_id, i)
-            fls = catchment_width_correction(gdir, div_id=i, reset=True)
-            for fl in fls:
-                area += np.sum(fl.widths) * fl.dx
-            divides.append(fls)
-
-        # Final correction - because of the raster, the gridded area of the
-        # glacier is not that of the actual geometry. correct for that
-        fac = gdir.rgi_area_km2 / (area * gdir.grid.dx**2 * 10**-6)
-        log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
-        for i in gdir.divide_ids:
-            fls = divides[i-1]
-            for fl in fls:
-                fl.widths *= fac
-            # Overwrite centerlines
-            gdir.write_pickle(fls, 'inversion_flowlines', div_id=i)
-        return None
-
     # variables
-    flowlines = gdir.read_pickle('inversion_flowlines', div_id=div_id)
-    catchment_indices = gdir.read_pickle('catchment_indices', div_id=div_id)
+    fls = gdir.read_pickle('inversion_flowlines')
+    catchment_indices = gdir.read_pickle('catchment_indices')
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
-    fpath = gdir.get_filepath('gridded_data', div_id=div_id)
+    fpath = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         ext = nc.variables['glacier_ext'][:]
@@ -728,7 +675,7 @@ def catchment_width_correction(gdir, div_id=None):
         catchment_heights.append(list(_t[np.isfinite(_t)]))
 
     # Loop over lines in a reverse order
-    for fl, catch_h in zip(flowlines, catchment_heights):
+    for fl, catch_h in zip(fls, catchment_heights):
 
         # Interpolate widths
         widths = utils.interp_nans(fl.widths)
@@ -804,7 +751,7 @@ def catchment_width_correction(gdir, div_id=None):
         # next flowline
         tosend = list(catch_h[np.where(catch_h < minb)])
         if (len(tosend) > 0) and (fl.flows_to is not None):
-            ide = flowlines.index(fl.flows_to)
+            ide = fls.index(fl.flows_to)
             catchment_heights[ide] = np.append(catchment_heights[ide], tosend)
         if (len(tosend) > 0) and (fl.flows_to is None):
             raise RuntimeError('This should not happen')
@@ -823,4 +770,16 @@ def catchment_width_correction(gdir, div_id=None):
         # Write it
         fl.widths = new_widths
 
-    return flowlines
+    # Final correction - because of the raster, the gridded area of the
+    # glacier is not that of the actual geometry. correct for that
+    area = 0.
+    for fl in fls:
+        area += np.sum(fl.widths) * fl.dx
+
+    fac = gdir.rgi_area_km2 / (area * gdir.grid.dx**2 * 10**-6)
+    log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
+    for fl in fls:
+        fl.widths *= fac
+
+    # Overwrite centerlines
+    gdir.write_pickle(fls, 'inversion_flowlines')

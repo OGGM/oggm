@@ -223,8 +223,8 @@ def gis_prepro_tasks(gdirs):
     task_list = [
         tasks.glacier_masks,
         tasks.compute_centerlines,
-        tasks.compute_downstream_lines,
         tasks.initialize_flowlines,
+        tasks.compute_downstream_line,
         tasks.compute_downstream_bedshape,
         tasks.catchment_area,
         tasks.catchment_intersections,

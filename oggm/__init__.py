@@ -32,5 +32,5 @@ except ImportError:
     pass
 
 # API
-from oggm.utils import GlacierDirectory, entity_task, divide_task, global_task
+from oggm.utils import GlacierDirectory, entity_task, global_task
 from oggm.core.preprocessing.centerlines import Centerline

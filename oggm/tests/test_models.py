@@ -182,7 +182,7 @@ class TestOtherDivides(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        centerlines.compute_downstream_lines(gdir)
+        centerlines.compute_downstream_line(gdir)
         geometry.initialize_flowlines(gdir)
         centerlines.compute_downstream_bedshape(gdir)
         geometry.catchment_area(gdir)
