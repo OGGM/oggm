@@ -384,7 +384,7 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=10)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -407,7 +407,7 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=10)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
 def test_plot_region_model():
 
     gdirs = random_for_plot()

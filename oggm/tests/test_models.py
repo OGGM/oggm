@@ -865,6 +865,13 @@ class TestIO(unittest.TestCase):
         self.gdir = init_hef(border=DOM_BORDER)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
     def test_flowline_to_dataset(self):
 
         beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
