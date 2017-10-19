@@ -1513,7 +1513,7 @@ class TestHEF(unittest.TestCase):
 
         model.run_until_equilibrium(rate=1e-4)
         self.assertFalse(model.dt_warning)
-        assert model.yr > 100
+        assert model.yr > 50
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m

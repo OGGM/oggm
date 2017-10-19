@@ -206,7 +206,7 @@ class TestWorkflow(unittest.TestCase):
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
         r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        self.assertTrue(r1 < r2)
+        assert r1 < r2
 
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')
@@ -384,7 +384,7 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=10)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -407,7 +407,7 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=10)
 def test_plot_region_model():
 
     gdirs = random_for_plot()

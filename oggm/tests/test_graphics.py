@@ -40,8 +40,7 @@ if not RUN_GRAPHIC_TESTS:
 # Lets go
 
 # TODO: temporary tolerance
-TOLERANCE=20
-BIG_TOLERANCE=32
+TOLERANCE=10
 
 
 @requires_internet
@@ -192,8 +191,7 @@ def test_modelsection_withtrib():
 
 
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=BIG_TOLERANCE)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_modeloutput_map():
 
     gdir = init_hef()
@@ -208,8 +206,7 @@ def test_modeloutput_map():
 
 
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=BIG_TOLERANCE)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
 def test_multiple_models():
 
     # test directory
