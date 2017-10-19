@@ -994,7 +994,7 @@ class TestIO(unittest.TestCase):
                                    fmodel.fls[0].section)
 
     def test_gdir_copy(self):
-        print(self.gdir.dir)
+
         new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)

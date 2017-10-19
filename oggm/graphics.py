@@ -346,7 +346,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
     try:
         smap.set_topography(topo)
     except ValueError:
-        smap.set_topography(topo, crs=gdir.grid)
+        pass
 
     # Maybe plot touches
     xis, yis, cis = [], [], []
@@ -412,7 +412,12 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
     gdir = gdirs[0]
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
-    smap.set_topography(topo)
+
+    # Dirty optim
+    try:
+        smap.set_topography(topo)
+    except ValueError:
+        pass
 
     toplot_th = np.array([])
     toplot_lines = []
@@ -504,20 +509,34 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, how=None):
 
 @_plot_map
 def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
-                         vmax=None, linewidth=3):
+                         vmax=None, linewidth=3, filesuffix='',
+                         modelyr=None):
     """Plots the result of the model output."""
 
     gdir = gdirs[0]
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
-        smap.set_topography(topo, crs=gdir.grid)
+
+    # Dirty optim
+    try:
+        smap.set_topography(topo)
+    except ValueError:
+        pass
 
 
     toplot_th = np.array([])
     toplot_lines = []
     toplot_crs = []
 
-    models = _tolist(model)
+    if model is None:
+        models = []
+        for gdir in gdirs:
+            model = FileModel(gdir.get_filepath('model_run',
+                                                filesuffix=filesuffix))
+            model.run_until(modelyr)
+            models.append(model)
+    else:
+        models = _tolist(model)
     for gdir, model in zip(gdirs, models):
         geom = gdir.read_pickle('geometries')
         poly_pix = geom['polygon_pix']
