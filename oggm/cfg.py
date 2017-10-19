@@ -213,9 +213,6 @@ def initialize(file=None):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global N
-    global A
-    global RHO
     global RGI_REG_NAMES
     global RGI_SUBREG_NAMES
 

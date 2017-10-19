@@ -177,7 +177,7 @@ class TestOtherGlacier(unittest.TestCase):
         rgidf = gpd.GeoDataFrame.from_file(hef_file)
 
         # This is another glacier with divides
-        entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719'].iloc[0]
+        entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719_d01'].iloc[0]
         gdir = GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -212,12 +212,8 @@ class TestOtherGlacier(unittest.TestCase):
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = flowline.FlowlineModel(fls)
-        if cfg.PARAMS['grid_dx_method'] == 'fixed':
-            self.assertEqual(len(fls), 4)
-        if cfg.PARAMS['grid_dx_method'] == 'linear':
-            self.assertEqual(len(fls), 5)
         if cfg.PARAMS['grid_dx_method'] == 'square':
-            self.assertEqual(len(fls), 4)
+            self.assertEqual(len(fls), 3)
         vol = 0.
         area = 0.
         for fl in fls:
@@ -235,7 +231,7 @@ class TestOtherGlacier(unittest.TestCase):
             vol += fl.volume_km3
             area += fl.area_km2
 
-        rtol = 0.03
+        rtol = 0.08
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
         np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
 
