@@ -378,9 +378,6 @@ def oggm_static_paths():
     for k, v in config.iteritems():
         if not k.endswith('_dir'):
             continue
-        if not v:
-            # Default value?
-            v = os.path.join('~', 'OGGM_' + k[:-4])
         PATHS[k] = os.path.abspath(os.path.expanduser(v))
 
     # Other

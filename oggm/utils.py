@@ -2147,6 +2147,8 @@ class GlacierDirectory(object):
         """
 
         if base_dir is None:
+            if cfg.PATHS.get('working_dir', None) is None:
+                raise RuntimeError('You need to set the `working_dir`!')
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
         # RGI IDs are also valid entries

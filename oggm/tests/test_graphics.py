@@ -143,7 +143,7 @@ def test_multiple_inversion():
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
-    cfg.PARAMS['working_dir'] = testdir
+    cfg.PATHS['working_dir'] = testdir
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
