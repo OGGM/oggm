@@ -869,8 +869,8 @@ class TestIO(unittest.TestCase):
         self.rm_dir()
 
     def rm_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
 
     def test_flowline_to_dataset(self):
 
