@@ -1,6 +1,4 @@
 """Climate data and mass-balance computations"""
-from __future__ import division
-
 # Built ins
 import logging
 import os

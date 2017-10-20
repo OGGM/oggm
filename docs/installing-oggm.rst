@@ -45,9 +45,6 @@ Standard SciPy track:
     - xarray
     - joblib
 
-Python 2 support:
-    - six
-
 Configuration file parsing tool:
     - configobj
 

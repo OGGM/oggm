@@ -2,14 +2,10 @@
 
 
 """
-from __future__ import division
-from six.moves import zip
-
-# Built ins
+# Builtins
 import logging
 import warnings
 import copy
-from functools import partial
 from collections import OrderedDict
 
 # External libs

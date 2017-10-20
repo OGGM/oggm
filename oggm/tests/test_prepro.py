@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import warnings
 
 import oggm
@@ -25,7 +23,7 @@ from oggm.core import gis, inversion, climate, centerlines, flowline, \
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, requires_py3, RUN_PREPRO_TESTS
+from oggm.tests import is_slow, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir
 from oggm import workflow
 
@@ -1697,7 +1695,6 @@ class TestGrindelInvert(unittest.TestCase):
         return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
                                            bed_h, shape)]
 
-    @requires_py3
     def test_ideal_glacier(self):
 
         # we are making a
@@ -1753,7 +1750,6 @@ class TestGrindelInvert(unittest.TestCase):
         rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
         assert rmsd < 10.
 
-    @requires_py3
     def test_invert_and_run(self):
 
         from oggm.core import flowline, massbalance
@@ -1785,7 +1781,6 @@ class TestGrindelInvert(unittest.TestCase):
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
-    @requires_py3
     def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)

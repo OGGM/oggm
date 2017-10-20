@@ -2,8 +2,6 @@
 
 This module is simply a shortcut to the core functions
 """
-from __future__ import absolute_import, division
-
 # Entity tasks
 from oggm.core.gis import define_glacier_region
 from oggm.core.gis import glacier_masks

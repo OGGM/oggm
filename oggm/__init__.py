@@ -4,7 +4,6 @@ Copyright: OGGM developers, 2014-2017
 
 License: GPLv3+
 """
-from __future__ import absolute_import, division
 import logging
 
 try:

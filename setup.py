@@ -133,8 +133,7 @@ def check_dependencies(package_names):
         print(errmsg + ', '.join(not_met))
 
 
-req_packages = ['six',
-                'numpy',
+req_packages = ['numpy',
                 'scipy',
                 'pyproj',
                 'pandas',

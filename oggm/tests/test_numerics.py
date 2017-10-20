@@ -1,8 +1,4 @@
-from __future__ import division
-
 import warnings
-
-from six.moves import zip
 
 warnings.filterwarnings("once", category=DeprecationWarning)
 

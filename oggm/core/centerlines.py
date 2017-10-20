@@ -14,9 +14,6 @@ References::
         Alaska and northwest Canada. The Cryosphere, 8(2), 503-519.
         doi:10.5194/tc-8-503-2014
 """
-from __future__ import absolute_import, division
-from six.moves import zip
-
 # Built ins
 import logging
 import copy

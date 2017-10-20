@@ -24,9 +24,6 @@ Bahr  Pfeffer, W. T., Kaser, G., D. B.: Glacier volume estimation as an
     ill-posed boundary value problem, Cryosph. Discuss. Cryosph. Discuss.,
     6(6), 5405-5420, doi:10.5194/tcd-6-5405-2012, 2012.
 """
-from __future__ import division
-from six.moves import zip
-
 # Built ins
 import logging
 import os

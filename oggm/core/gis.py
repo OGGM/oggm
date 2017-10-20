@@ -13,8 +13,6 @@ References::
         a globally complete inventory of glaciers. Journal of Glaciology,
         60(221), 537-552. http://doi.org/10.3189/2014JoG13J176
 """
-from __future__ import absolute_import, division
-
 # Built ins
 import os
 import logging

@@ -1,6 +1,4 @@
 """Mass-balance models"""
-from __future__ import division
-
 # Built ins
 # External libs
 import numpy as np

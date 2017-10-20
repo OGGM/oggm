@@ -1,6 +1,4 @@
 """Useful plotting functions"""
-from __future__ import division
-
 import functools
 import logging
 from collections import OrderedDict
@@ -13,7 +11,6 @@ import numpy as np
 import salem
 import shapely.geometry as shpg
 from matplotlib import cm as colormap
-from six.moves import zip
 
 from oggm.core.flowline import FileModel
 

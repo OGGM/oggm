@@ -14,7 +14,6 @@ from __future__ import print_function
 # serve to show the default.
 
 import sys
-import warnings
 import os
 import shutil
 
