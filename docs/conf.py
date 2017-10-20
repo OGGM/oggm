@@ -101,7 +101,6 @@ import oggm.utils
 import oggm.core.preprocessing.gis
 import oggm.core.preprocessing.centerlines
 import oggm.core.preprocessing.climate
-import oggm.core.preprocessing.geometry
 import oggm.core.preprocessing.inversion
 import oggm.core.models.massbalance
 import oggm.core.models.flowline

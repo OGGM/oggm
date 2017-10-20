@@ -14,19 +14,15 @@ from collections import OrderedDict
 
 # External libs
 import numpy as np
-import netCDF4
-from scipy.interpolate import RegularGridInterpolator
 import shapely.geometry as shpg
 import xarray as xr
 
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
-import oggm.core.preprocessing.geometry
-import oggm.core.preprocessing.centerlines
 import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
-from oggm.core.preprocessing.centerlines import Centerline
+from oggm.core.preprocessing.centerlines import Centerline, line_order
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
@@ -1299,7 +1295,7 @@ def glacier_from_netcdf(path):
 
     # Adds the line level
     for fl in fls:
-        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
+        fl.order = line_order(fl)
 
     return fls
 
@@ -1400,7 +1396,7 @@ def init_present_time_glacier(gdir):
 
     # Adds the line level
     for fl in new_fls:
-        fl.order = oggm.core.preprocessing.centerlines._line_order(fl)
+        fl.order = line_order(fl)
 
     # Write the data
     gdir.write_pickle(new_fls, 'model_flowlines')

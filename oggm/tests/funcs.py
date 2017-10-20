@@ -10,7 +10,7 @@ from scipy import optimize as optimization
 # Local imports
 import oggm
 import oggm.cfg as cfg
-from oggm.core.preprocessing import gis, centerlines, geometry
+from oggm.core.preprocessing import gis, centerlines
 from oggm.core.preprocessing import climate, inversion
 from oggm.core.models import flowline
 from oggm.utils import get_demo_file, mkdir
@@ -271,13 +271,13 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     gis.define_glacier_region(gdir, entity=entity)
     execute_entity_task(gis.glacier_masks, [gdir])
     execute_entity_task(centerlines.compute_centerlines, [gdir])
-    geometry.initialize_flowlines(gdir)
+    centerlines.initialize_flowlines(gdir)
     centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
-    geometry.catchment_area(gdir)
-    geometry.catchment_intersections(gdir)
-    geometry.catchment_width_geom(gdir)
-    geometry.catchment_width_correction(gdir)
+    centerlines.catchment_area(gdir)
+    centerlines.catchment_intersections(gdir)
+    centerlines.catchment_width_geom(gdir)
+    centerlines.catchment_width_correction(gdir)
     climate.process_histalp_nonparallel([gdir])
     climate.mu_candidates(gdir)
     mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']

@@ -10,11 +10,11 @@ from oggm.core.preprocessing.gis import glacier_masks
 from oggm.core.preprocessing.centerlines import compute_centerlines
 from oggm.core.preprocessing.centerlines import compute_downstream_line
 from oggm.core.preprocessing.centerlines import compute_downstream_bedshape
-from oggm.core.preprocessing.geometry import catchment_area
-from oggm.core.preprocessing.geometry import catchment_intersections
-from oggm.core.preprocessing.geometry import initialize_flowlines
-from oggm.core.preprocessing.geometry import catchment_width_geom
-from oggm.core.preprocessing.geometry import catchment_width_correction
+from oggm.core.preprocessing.centerlines import catchment_area
+from oggm.core.preprocessing.centerlines import catchment_intersections
+from oggm.core.preprocessing.centerlines import initialize_flowlines
+from oggm.core.preprocessing.centerlines import catchment_width_geom
+from oggm.core.preprocessing.centerlines import catchment_width_correction
 from oggm.core.preprocessing.climate import mu_candidates
 from oggm.core.preprocessing.climate import process_cru_data
 from oggm.core.preprocessing.climate import process_custom_climate_data

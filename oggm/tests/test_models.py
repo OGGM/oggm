@@ -166,7 +166,7 @@ class TestOtherGlacier(unittest.TestCase):
 
     def test_define_divides(self):
 
-        from oggm.core.preprocessing import (gis, centerlines, geometry,
+        from oggm.core.preprocessing import (gis, centerlines,
                                              climate, inversion)
         from oggm import GlacierDirectory
         import geopandas as gpd
@@ -180,12 +180,12 @@ class TestOtherGlacier(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
                                          prcp_fac=2.5)

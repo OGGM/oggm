@@ -21,7 +21,7 @@ from oggm.tests import is_graphic_test, requires_internet, RUN_GRAPHIC_TESTS
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
-from oggm.core.preprocessing import (gis, centerlines, geometry, climate, inversion)
+from oggm.core.preprocessing import (gis, centerlines, climate, inversion)
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm.core.models import flowline, massbalance
@@ -368,13 +368,13 @@ def test_coxe():
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
-    geometry.initialize_flowlines(gdir)
+    centerlines.initialize_flowlines(gdir)
     centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
-    geometry.catchment_area(gdir)
-    geometry.catchment_intersections(gdir)
-    geometry.catchment_width_geom(gdir)
-    geometry.catchment_width_correction(gdir)
+    centerlines.catchment_area(gdir)
+    centerlines.catchment_intersections(gdir)
+    centerlines.catchment_width_geom(gdir)
+    centerlines.catchment_width_correction(gdir)
     climate.apparent_mb_from_linear_mb(gdir)
     inversion.prepare_for_inversion(gdir)
     inversion.volume_inversion(gdir, use_cfg_params={'glen_a': cfg.A,
