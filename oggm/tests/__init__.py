@@ -20,11 +20,6 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 
 # Some logic to see which environment we are running on
 
-# GDAL version changes the way interpolation is made (sigh...)
-HAS_NEW_GDAL = False
-if osgeo.gdal.__version__ >= '1.11':
-    HAS_NEW_GDAL = True
-
 # Matplotlib version changes plots, too
 HAS_MPL_FOR_TESTS = False
 if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):

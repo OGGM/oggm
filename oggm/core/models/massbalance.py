@@ -210,16 +210,16 @@ class PastMassBalanceModel(MassBalanceModel):
         super(PastMassBalanceModel, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            df = pd.read_csv(gdir.get_filepath('local_mustar'))
             mu_star = df['mu_star'][0]
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
-                df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+                df = pd.read_csv(gdir.get_filepath('local_mustar'))
                 bias = df['bias'][0]
             else:
                 bias = 0.
         if prcp_fac is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            df = pd.read_csv(gdir.get_filepath('local_mustar'))
             prcp_fac = df['prcp_fac'][0]
         self.mu_star = mu_star
         self.bias = bias
@@ -345,7 +345,7 @@ class ConstantMassBalanceModel(MassBalanceModel):
                                           prcp_fac=prcp_fac)
 
         if y0 is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            df = pd.read_csv(gdir.get_filepath('local_mustar'))
             y0 = df['t_star'][0]
 
         # This is a quick'n dirty optimisation
@@ -438,7 +438,7 @@ class RandomMassBalanceModel(MassBalanceModel):
                                           prcp_fac=prcp_fac)
 
         if y0 is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar', div_id=0))
+            df = pd.read_csv(gdir.get_filepath('local_mustar'))
             y0 = df['t_star'][0]
 
         # Climate period

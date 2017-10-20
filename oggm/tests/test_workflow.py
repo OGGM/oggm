@@ -7,21 +7,21 @@ import os
 import shutil
 import unittest
 import pickle
-from functools import partial
-
 import pytest
-
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
+import matplotlib.pyplot as plt
+import salem
+from oggm import graphics
 
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
+from oggm.tests import is_slow, RUN_WORKFLOW_TESTS, ON_TRAVIS
 from oggm.tests import is_graphic_test, BASELINE_DIR
 from oggm.tests.funcs import get_test_dir, use_multiprocessing
 from oggm.core.models import flowline, massbalance
@@ -68,7 +68,7 @@ def up_to_climate(reset=False):
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
-    rgidf = gpd.GeoDataFrame.from_file(rgi_file)
+    rgidf = gpd.read_file(rgi_file)
 
     # Be sure data is downloaded
     cl = utils.get_cru_cl_file()
@@ -84,8 +84,6 @@ def up_to_climate(reset=False):
 
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
-
-    assert gdirs[14].name == 'Hintereisferner'
 
     try:
         tasks.catchment_width_correction(gdirs[0])
@@ -196,8 +194,7 @@ class TestWorkflow(unittest.TestCase):
                              'inversion_optim_results.csv')
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
-        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        self.assertTrue(r1 < r2)
+        assert r1 < 0.1
 
         cfg.PARAMS['invert_with_sliding'] = False
         cfg.PARAMS['optimize_thick'] = False
@@ -207,8 +204,7 @@ class TestWorkflow(unittest.TestCase):
                              'inversion_optim_results.csv')
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
-        r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        self.assertTrue(r1 < r2)
+        assert r1 < 0.12
 
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')
@@ -236,7 +232,7 @@ class TestWorkflow(unittest.TestCase):
         dfc = utils.glacier_characteristics(gdirs)
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
         cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
-        self.assertTrue(cc > 0.4)
+        assert cc > 0.3
 
     @is_slow
     def test_crossval(self):
@@ -269,12 +265,9 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-
-        np.testing.assert_allclose(np.abs(df.cv_bias), np.abs(dfq.cv_bias),
-                                   rtol=0.05)
+        assert np.all(np.abs(df.cv_bias) < 20)
+        assert np.all(np.abs(dfq.cv_bias) < 20)
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
-
-        print(df)
 
         # see if the process didn't brake anything
         mustars = []
@@ -316,8 +309,7 @@ class TestWorkflow(unittest.TestCase):
         shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
         shp = shp.loc[shp.RGIID == 'RGI50-11.00897']
-        self.assertEqual(len(shp), 4)
-        self.assertEqual(shp.MAIN.sum(), 3)
+        self.assertEqual(len(shp), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.argmax()].MAIN, 1)
 
     @is_slow
@@ -368,7 +360,6 @@ class TestWorkflow(unittest.TestCase):
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)
 
-
     @is_slow
     def test_random_mb_seed(self):
         gdirs = up_to_inversion()
@@ -390,12 +381,8 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
 def test_plot_region_inversion():
-
-    import matplotlib.pyplot as plt
-    import salem
-    from oggm import graphics
 
     gdirs = up_to_inversion()
 
@@ -409,7 +396,7 @@ def test_plot_region_inversion():
 
     # Give this to the plot function
     fig, ax = plt.subplots()
-    graphics.plot_region_inversion(gdirs, salemmap=sm, ax=ax)
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5)
 
     fig.tight_layout()
     return fig
@@ -417,12 +404,8 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
 def test_plot_region_model():
-
-    import matplotlib.pyplot as plt
-    import salem
-    from oggm import graphics
 
     gdirs = random_for_plot()
 
@@ -436,9 +419,9 @@ def test_plot_region_model():
 
     # Give this to the plot function
     fig, ax = plt.subplots()
-    graphics.plot_region_model_output(gdirs, salemmap=sm, ax=ax,
-                                      filesuffix='_plot',
-                                      modelyr=10)
+    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
+                                  filesuffix='_plot',
+                                  modelyr=10, linewidth=1.5)
 
     fig.tight_layout()
     return fig

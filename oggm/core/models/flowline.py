@@ -1319,107 +1319,71 @@ def init_present_time_glacier(gdir):
     def_lambda = cfg.PARAMS['trapezoid_lambdas']
     min_shape = cfg.PARAMS['mixed_min_shape']
 
-    # We take the div_0 centerlines and fill them with the inversion results
-    if gdir.is_tidewater:
-        cls = gdir.read_pickle('inversion_flowlines', div_id=1)
-    else:
-        cls = gdir.read_pickle('inversion_flowlines', div_id=0)
-    ds_bss = gdir.read_pickle('downstream_bed')
+    cls = gdir.read_pickle('inversion_flowlines')
+    invs = gdir.read_pickle('inversion_output')
 
-    icls = []
-    for div_id in gdir.divide_ids:
-        icls.extend(gdir.read_pickle('inversion_flowlines', div_id=div_id))
-
-    invs = []
-    for div_id in gdir.divide_ids:
-        invs.extend(gdir.read_pickle('inversion_output', div_id=div_id))
-
-    # This is the not so nice part. Find which cls belongs to which
+    # Fill the tributaries
     new_fls = []
     flows_to_ids = []
-    for cl, ds_bs in zip(cls, ds_bss):
-        icl = None
-        inv = None
-        for totest, tinv in zip(icls, invs):
-            if cl.head == totest.head:
-                icl = totest
-                inv = tinv
-                break
-        if not icl:
-            raise RuntimeError('({}) centerlines could not be '
-                               'matched'.format(gdir.rgi_id))
-
-        if icl.nx <= cl.nx:
-            surface_h = cl.surface_h.copy()
-            line = cl.line
-            nx = cl.nx
-            bed_shape = ds_bs
-        else:
-            # Make sure we are not far off
-            assert (icl.nx - cl.nx) < 5
-            surface_h = icl.surface_h.copy()
-            line = icl.line
-            nx = icl.nx
-            bed_shape = surface_h * np.NaN
-
-        is_gl = np.zeros(nx, dtype=np.bool)
-        is_gl[:icl.nx] = True
+    for cl, inv in zip(cls, invs):
 
         # Get the data to make the model flowlines
-        section = surface_h * 0.
-        section[is_gl] = inv['volume'] / (cl.dx * map_dx)
-        bed_h = surface_h.copy()
-        bed_h[is_gl] -= inv['thick']
+        line = cl.line
+        section = inv['volume'] / (cl.dx * map_dx)
+        surface_h = cl.surface_h
+        bed_h = surface_h - inv['thick']
+        widths_m = cl.widths * map_dx
 
-        assert np.all(icl.widths > 0)
-        bed_shape_gl = 4 * inv['thick'] / (icl.widths * map_dx)**2
-        bed_shape[is_gl] = bed_shape_gl
+        assert np.all(cl.widths > 0)
+        bed_shape = 4 * inv['thick'] / (cl.widths * map_dx) ** 2
 
-        lambdas = bed_shape * np.NaN
-        lambdas_gl = inv['thick'] * np.NaN
-        lambdas_gl[bed_shape_gl < min_shape] = def_lambda
-        lambdas_gl[inv['is_rectangular']] = 0.
+        lambdas = inv['thick'] * np.NaN
+        lambdas[bed_shape < min_shape] = def_lambda
+        lambdas[inv['is_rectangular']] = 0.
 
-        # For the very last pixs of a glacier, the section might be zero after
-        # the inversion, and the bedshapes are chaotic. We use the ones from
-        # the downstream. This is not volume conservative
-        if (not gdir.is_tidewater) and inv['is_last']:
-            lambdas_gl[-5:] = np.nan
-            bed_shape_gl[-5:] = np.nan
-            try:
-                tmp = np.append(bed_shape_gl, bed_shape[icl.nx])
-                bed_shape_gl = utils.interp_nans(tmp)[:-1].clip(min_shape)
-            except IndexError:
-                bed_shape_gl = utils.interp_nans(bed_shape_gl).clip(min_shape)
-            h = inv['thick']
-            n_sect = 2 / 3 * h * np.sqrt(4 * h / bed_shape_gl)
-            section[icl.nx-5:icl.nx] = n_sect[-5:]
-            bed_shape[icl.nx-5:icl.nx] = bed_shape_gl[-5:]
-
-        lambdas[is_gl] = lambdas_gl
-
-        is_trapezoid = np.isfinite(lambdas)
+        # Last pix of not tidewater are always parab (see below)
+        if not gdir.is_tidewater and inv['is_last']:
+            lambdas[-5:] = np.nan
 
         # Update bed_h where we now have a trapeze
-        w0_m = icl.widths * map_dx - lambdas_gl * inv['thick']
+        w0_m = cl.widths * map_dx - lambdas * inv['thick']
         b = 2 * w0_m
-        a = 2 * lambdas_gl
+        a = 2 * lambdas
         with np.errstate(divide='ignore', invalid='ignore'):
-            thick = (np.sqrt(b**2 + 4 * a * section[is_gl]) - b) / a
-        pzero = lambdas_gl == 0
-        thick[pzero] = section[is_gl][pzero] / w0_m[pzero]
-        bed_h_n = surface_h.copy()[is_gl] - thick
-        assert np.all(np.isfinite(bed_h_n[np.isfinite(lambdas_gl)]))
-        bed_h[is_gl & is_trapezoid] = bed_h_n[np.isfinite(lambdas_gl)]
+            thick = (np.sqrt(b ** 2 + 4 * a * section) - b) / a
+        ptrap = (lambdas != 0) & np.isfinite(lambdas)
+        bed_h[ptrap] = cl.surface_h[ptrap] - thick[ptrap]
 
-        # Default widths for everything goes wrong
-        widths_m = np.zeros(nx)
-        widths_m[is_gl] = icl.widths * map_dx
+        # For the very last pixs of a glacier, the section might be zero after
+        # the inversion, and the bedshapes are chaotic. We interpolate from
+        # the downstream. This is not volume conservative
+        if not gdir.is_tidewater and inv['is_last']:
+            dic_ds = gdir.read_pickle('downstream_line')
+            bed_shape[-5:] = np.nan
+
+            # Interpolate
+            bed_shape = utils.interp_nans(np.append(bed_shape,
+                                                    dic_ds['bedshapes'][0]))
+            bed_shape = bed_shape[:-1].clip(min_shape)
+
+            # Correct the section volume
+            h = inv['thick']
+            section[-5:] = (2 / 3 * h * np.sqrt(4 * h / bed_shape))[-5:]
+
+            # Add the downstream
+            bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
+            lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
+            section = np.append(section, dic_ds['bedshapes'] * 0.)
+            surface_h = np.append(surface_h, dic_ds['surface_h'])
+            bed_h = np.append(bed_h, dic_ds['surface_h'])
+            widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
+            line = dic_ds['full_line']
 
         nfl = MixedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
                             surface_h=surface_h, bed_h=bed_h,
                             section=section, bed_shape=bed_shape,
-                            is_trapezoid=is_trapezoid, lambdas=lambdas,
+                            is_trapezoid=np.isfinite(lambdas),
+                            lambdas=lambdas,
                             widths_m=widths_m)
 
         if cl.flows_to:
@@ -1587,12 +1551,10 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                                  init_bias=init_bias,
                                                  ref_area=ref_area)
 
-    # Some parameters for posterity:
+    # Some parameters for posterity (we used to store this):
     params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
                          ite=ite, mb_bias=bias)
 
-    # Write the data
-    gdir.write_pickle(params, 'find_initial_glacier_params')
     path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
         _ = past_model.run_until_and_store(y1, path=path)
