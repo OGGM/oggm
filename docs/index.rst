@@ -12,7 +12,7 @@ any glacier in the world in a fully automated workflow. We rely exclusively on
 publicly available data for calibration and validation.
 
 **This is the model's documentation for users and for developers**. For more
-information about the project and for the latest news, visit
+information about the OGGM project and for the latest news, visit
 `oggm.org <http://oggm.org>`_.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html

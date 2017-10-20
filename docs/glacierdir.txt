@@ -42,7 +42,7 @@ as input:
 .. ipython:: python
 
     base_dir = os.path.join(os.path.expanduser('~'), 'OGGM_docs', 'GlacierDir')
-    entity = gpd.GeoDataFrame.from_file(get_demo_file('Hintereisferner.shp')).iloc[0]
+    entity = gpd.GeoDataFrame.from_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
     gdir.dir
     gdir.rgi_id, gdir.rgi_area_km2
@@ -57,7 +57,7 @@ Note that this directory has just been created and is empty. The
 
 This persistence on disk allows for example to continue a workflow that has
 been previously interrupted. Initialising a GlacierDirectory from a non-empty
-folder won't erase its content (you'll have to set ``reset=True`` explicitely
+folder won't erase its content (you'll have to set ``reset=True`` explicitly
 if you want that):
 
 .. ipython:: python
@@ -70,55 +70,7 @@ sparing the reading of the shapefile every time:
 
 .. ipython:: python
 
-    gdir = oggm.GlacierDirectory('RGI40-11.00897', base_dir=base_dir)
-
-Glacier divides
----------------
-
-The glacier outlines provided by the RGI are the result of an automated
-(sometimes manually corrected) delineation
-procedure. In some cases, the RGI glacier is not the outline of a single
-glacier (in the dynamical sense) but is the outline of a "glacier
-complex".
-
-.. ipython:: python
-
-    cfg.set_divides_db()
-    gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
-    tasks.define_glacier_region(gdir, entity=entity)
-    tasks.glacier_masks(gdir)
-    tasks.compute_centerlines(gdir)
-    @savefig gdir_plot_cls_nodivide.png width=80%
-    graphics.plot_centerlines(gdir)
-
-Obviously, the oultines of HEF should be corrected to reflect the fact that
-the glacier has now separated tributaries. OGGM does not (yet) implement a
-method to divide these glacier complexes into individual glaciers [1]_,
-but it does have a framework to deal with user provided glacier divides.
-An RGI entity can have one or more "divides", stored as polygons in a
-separate shapefile. Currently OGGM ships with a file containing the
-divides for HEF:
-
-.. ipython:: python
-
-    cfg.set_divides_db(get_demo_file('divides_alps.shp'))
-    gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
-    tasks.define_glacier_region(gdir, entity=entity)
-    tasks.glacier_masks(gdir)
-    tasks.compute_centerlines(gdir)
-    @savefig gdir_plot_cls_withdivide.png width=80%
-    graphics.plot_centerlines(gdir)
-
-The divides are handled as sub-directories in the glacier directory: each
-sub-directory stores the files specific to that divide. All the glaciers
-have at least one divide ("divide_01"), the divide ID 0 being reserved for
-the root directory which contains files concerning the entire RGI glacier.
-The tasks that work on divides only can be recognized by their ``div_id=None``
-keyword argument (they also implement the
-:py:class:`~oggm.divide_task` decorator).
-
-
-.. [1] Kienholz, C., Hock, R., & Arendt, A. a. (2013). A new semi-automatic approach for dividing glacier complexes into individual glaciers. Journal of Glaciology, 59(217), 925–937.
+    gdir = oggm.GlacierDirectory('RGI50-11.00897', base_dir=base_dir)
 
 .. _basenames:
 

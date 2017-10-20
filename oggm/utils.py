@@ -2092,8 +2092,7 @@ class GlacierDirectory(object):
 
     If the directory does not exist, it will be created.
 
-    A glacier entity has one or more divides. See :ref:`glacierdir`
-    for more information.
+    See :ref:`glacierdir` for more information.
 
     Attributes
     ----------

@@ -71,7 +71,7 @@ In this case we use a very small subset of the RGI, the outlines of the
 
 .. ipython:: python
 
-    entity = gpd.GeoDataFrame.from_file(get_demo_file('Hintereisferner.shp')).iloc[0]
+    entity = gpd.GeoDataFrame.from_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     entity
 
 This information is enough to define HEF's :py:class:`GlacierDirectory`:
@@ -99,7 +99,7 @@ processes which can run on one glacier at a time (the vast majority of OGGM
 tasks are entity tasks). The first task to apply to an empty GlacierDirectory
 is :py:func:`tasks.define_glacier_region`, which sets the local glacier map
 and topography, and :py:func:`tasks.glacier_masks`, which prepares gridded
-data for the divides:
+topography data:
 
 .. ipython:: python
 

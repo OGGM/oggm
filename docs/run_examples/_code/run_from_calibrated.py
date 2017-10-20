@@ -39,10 +39,7 @@ cfg.PARAMS['border'] = 100
 # Set to True for operational runs
 cfg.PARAMS['continue_on_error'] = False
 
-# Don't use divides for now
-cfg.set_divides_db()
-
-# But we use intersects
+# We use intersects
 # (this is slow, it could be replaced with a subset of the global file)
 rgi_dir = utils.get_rgi_intersects_dir()
 cfg.set_intersects_db(path.join(rgi_dir, '00_rgi50_AllRegs',
@@ -88,8 +85,8 @@ gdirs = workflow.init_glacier_regions(rgidf)
 task_list = [
     tasks.glacier_masks,
     tasks.compute_centerlines,
-    tasks.compute_downstream_line,
     tasks.initialize_flowlines,
+    tasks.compute_downstream_line,
     tasks.compute_downstream_bedshape,
     tasks.catchment_area,
     tasks.catchment_intersections,

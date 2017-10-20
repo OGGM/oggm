@@ -375,7 +375,7 @@ def volume_inversion(gdir, use_cfg_params=None):
         glen_a = use_cfg_params['glen_a']
     elif not cfg.PARAMS['optimize_inversion_params']:
         fs = cfg.PARAMS['inversion_fs']
-        glen_a =cfg.PARAMS['inversion_glen_a']
+        glen_a = cfg.PARAMS['inversion_glen_a']
     else:
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')

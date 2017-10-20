@@ -24,17 +24,17 @@ Script
 If everything went well, you should see an output similar to::
 
 
-    2017-08-02 18:09:29: oggm.cfg: Parameter file: /home/mowglie/Documents/git/oggm-official/oggm/params.cfg
-    2017-08-02 18:10:11: __main__: Starting OGGM run
-    2017-08-02 18:10:11: __main__: Number of glaciers: 4
-    2017-08-02 18:10:11: oggm.workflow: Multiprocessing: using all available processors (N=4)
-    2017-08-02 18:10:11: oggm.core.preprocessing.gis: RGI50-18.02342: define_glacier_region
-    2017-08-02 18:10:11: oggm.core.preprocessing.gis: RGI50-01.10299: define_glacier_region
+    2017-10-21 00:07:17: oggm.cfg: Parameter file: /home/mowglie/Documents/git/oggm-fork/oggm/params.cfg
+    2017-10-21 00:07:27: __main__: Starting OGGM run
+    2017-10-21 00:07:27: __main__: Number of glaciers: 4
+    2017-10-21 00:07:27: oggm.workflow: Multiprocessing: using all available processors (N=4)
+    2017-10-21 00:07:27: oggm.core.gis: (RGI50-01.10299) define_glacier_region
+    2017-10-21 00:07:27: oggm.core.gis: (RGI50-18.02342) define_glacier_region
     (...)
-    2017-08-02 18:11:55: oggm.core.models.flowline: RGI50-01.10299: default time stepping was successful!
-    2017-08-02 18:13:01: oggm.core.models.flowline: RGI50-18.02342: default time stepping was successful!
-    2017-08-02 18:13:01: __main__: Compiling output
-    2017-08-02 18:13:01: __main__: OGGM is done! Time needed: 0:03:32
+    2017-10-21 00:09:30: oggm.core.flowline: (RGI50-01.10299) default time stepping was successful!
+    2017-10-21 00:09:39: oggm.core.flowline: (RGI50-18.02342) default time stepping was successful!
+    2017-10-21 00:09:39: __main__: Compiling output
+    2017-10-21 00:09:39: __main__: OGGM is done! Time needed: 0:02:22
 
 .. note::
 

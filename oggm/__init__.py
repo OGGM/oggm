@@ -33,3 +33,4 @@ except ImportError:
 # API
 from oggm.utils import GlacierDirectory, entity_task, global_task
 from oggm.core.centerlines import Centerline
+from oggm.core.flowline import Flowline
