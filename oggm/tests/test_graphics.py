@@ -12,7 +12,6 @@ import shutil
 
 import os
 import geopandas as gpd
-import numpy as np
 import matplotlib.pyplot as plt
 
 # Local imports
@@ -21,10 +20,10 @@ from oggm.tests import is_graphic_test, requires_internet, RUN_GRAPHIC_TESTS
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
-from oggm.core.preprocessing import (gis, centerlines, climate, inversion)
+from oggm.core import gis, inversion, climate, centerlines, flowline, \
+    massbalance
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
-from oggm.core.models import flowline, massbalance
 from oggm import utils, workflow
 
 # In case some logging happens or so

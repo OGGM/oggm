@@ -1,15 +1,14 @@
 from __future__ import absolute_import, division
 
-import oggm
 import warnings
 
+import oggm
 import oggm.utils
 
 warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
-import glob
 import shutil
 
 import shapely.geometry as shpg
@@ -21,14 +20,13 @@ import salem
 import xarray as xr
 
 # Local imports
-from oggm.core.preprocessing import gis, climate, inversion
-from oggm.core.preprocessing import centerlines
+from oggm.core import gis, inversion, climate, centerlines, flowline, \
+    massbalance
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, requires_py3, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir
-from oggm.core.models import flowline
 from oggm import workflow
 
 cfg.PATHS['working_dir'] = get_test_dir()
@@ -313,7 +311,7 @@ class TestCenterlines(unittest.TestCase):
             n1, n2 = c.normals[i0]
             l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
                                  shpg.Point(cur + wi / 2. * n2)])
-            from oggm.core.preprocessing.centerlines import line_interpol
+            from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
             points = line_interpol(l, 0.5)
             with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
@@ -1704,7 +1702,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         # we are making a
         glen_a = cfg.A * 1
-        from oggm.core.models import flowline, massbalance
+        from oggm.core.models import flowline
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
 
@@ -1983,7 +1981,8 @@ class TestCatching(unittest.TestCase):
         gis.glacier_masks(gdir)
 
         self.assertEqual(gdir.get_task_status(gis.glacier_masks), 'SUCCESS')
-        self.assertIsNone(gdir.get_task_status(centerlines.compute_centerlines))
+        self.assertIsNone(gdir.get_task_status(
+            centerlines.compute_centerlines))
 
         centerlines.compute_downstream_bedshape(gdir)
 

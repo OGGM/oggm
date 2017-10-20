@@ -1,15 +1,17 @@
 # Python imports
-from os import path
-import matplotlib.pyplot as plt
-
-# Module logger
 import logging
-log = logging.getLogger(__name__)
+from os import path
+
+# External modules
+import matplotlib.pyplot as plt
 
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow, graphics
-from oggm.core.models import flowline
+from oggm.core import flowline
+
+# Module logger
+log = logging.getLogger(__name__)
 
 # Initialize OGGM
 cfg.initialize()

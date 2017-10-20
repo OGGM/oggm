@@ -1,18 +1,16 @@
 import os
+
 import geopandas as gpd
-import salem
-import numpy as np
 import netCDF4
-import oggm
-from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file
-import matplotlib.pyplot as plt
-import xarray as xr
-from oggm import utils, workflow
-from oggm.core.models.flowline import (FluxBasedModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+import numpy as np
 from salem import reduce
+
+import oggm
+from oggm import cfg, tasks
+from oggm import utils, workflow
+from oggm.core.massbalance import (RandomMassBalanceModel)
 from oggm.sandbox.sia_2d.models import Upstream2D, filter_ice_border
+from oggm.utils import get_demo_file
 
 cfg.initialize()
 

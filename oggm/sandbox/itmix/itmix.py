@@ -23,8 +23,8 @@ import oggm.cfg as cfg
 # Locals
 from oggm import entity_task
 from oggm import utils
-from oggm.core.preprocessing.gis import gaussian_blur, _mask_per_divide
-from oggm.core.preprocessing.inversion import mass_conservation_inversion
+from oggm.core.gis import gaussian_blur, _mask_per_divide
+from oggm.core.inversion import mass_conservation_inversion
 from oggm.sandbox.itmix.itmix_cfg import DATA_DIR, ITMIX_ODIR
 
 # Module logger

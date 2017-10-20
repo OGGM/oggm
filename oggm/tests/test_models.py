@@ -17,8 +17,8 @@ import pandas as pd
 from numpy.testing import assert_allclose
 
 # Local imports
-from oggm.core.models import massbalance
-from oggm.core.models.massbalance import LinearMassBalanceModel
+from oggm.core import massbalance
+from oggm.core.massbalance import LinearMassBalanceModel
 from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
 from oggm import utils, workflow
@@ -166,8 +166,10 @@ class TestOtherGlacier(unittest.TestCase):
 
     def test_define_divides(self):
 
-        from oggm.core.preprocessing import (gis, centerlines,
-                                             climate, inversion)
+        from oggm.core import centerlines
+        from oggm.core import climate
+        from oggm.core import inversion
+        from oggm.core import gis
         from oggm import GlacierDirectory
         import geopandas as gpd
 
@@ -358,7 +360,7 @@ class TestMassBalance(unittest.TestCase):
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0, otmb + bias, atol=0.2)
 
-        mb_mod = massbalance.ConstantMassBalanceModel(gdir, y0=2003-15)
+        mb_mod = massbalance.ConstantMassBalanceModel(gdir, y0=2003 - 15)
         nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
         ntmb = np.average(nmbh, weights=w)
 
@@ -446,7 +448,7 @@ class TestMassBalance(unittest.TestCase):
 
         # Compare sigma from real climate and mine
         mb_ref = massbalance.PastMassBalanceModel(gdir)
-        mb_mod = massbalance.RandomMassBalanceModel(gdir, y0=2003-15,
+        mb_mod = massbalance.RandomMassBalanceModel(gdir, y0=2003 - 15,
                                                     seed=10)
         mb_ts = []
         mb_ts2 = []
@@ -588,8 +590,8 @@ class TestModelFlowlines(unittest.TestCase):
         area_m2[thick == 0] = 0
 
         rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                           surface_h=surface_h, bed_h=bed_h,
-                                           widths=widths, lambdas=lambdas)
+                                            surface_h=surface_h, bed_h=bed_h,
+                                            widths=widths, lambdas=lambdas)
 
         rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
                                       surface_h=surface_h, bed_h=bed_h,
@@ -663,8 +665,8 @@ class TestModelFlowlines(unittest.TestCase):
 
 
         rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                           surface_h=surface_h, bed_h=bed_h,
-                                           widths=widths, lambdas=lambdas)
+                                            surface_h=surface_h, bed_h=bed_h,
+                                            widths=widths, lambdas=lambdas)
 
         rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
                                       surface_h=surface_h, bed_h=bed_h,
@@ -789,8 +791,8 @@ class TestModelFlowlines(unittest.TestCase):
         section_trap = thick * (widths_0 * map_dx + widths_m) / 2
 
         rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                           surface_h=surface_h, bed_h=bed_h,
-                                           widths=widths, lambdas=lambdas)
+                                            surface_h=surface_h, bed_h=bed_h,
+                                            widths=widths, lambdas=lambdas)
 
 
 
@@ -814,9 +816,9 @@ class TestModelFlowlines(unittest.TestCase):
         section[~is_trap] = section_para[~is_trap]
 
         rec = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                      surface_h=surface_h, bed_h=bed_h,
-                                      section=section, bed_shape=shapes,
-                                      is_trapezoid=is_trap, lambdas=lambdas)
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     section=section, bed_shape=shapes,
+                                     is_trapezoid=is_trap, lambdas=lambdas)
 
         thick = rec1.thick
         thick[~is_trap] = rec2.thick[~is_trap]
@@ -1095,7 +1097,7 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         time_stepping='ambitious')
 
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                               y1, rtol=rtol)
+                                                              y1, rtol=rtol)
 
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
@@ -1117,7 +1119,7 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         time_stepping='ambitious')
 
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                               y1, rtol=rtol)
+                                                              y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
@@ -1138,7 +1140,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         # Hit the correct one
         ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                               y1, rtol=rtol)
+                                                              y1, rtol=rtol)
         past_model.run_until(y1)
         np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
                                    rtol=rtol)
@@ -1469,7 +1471,7 @@ class TestIdealisedInversion(unittest.TestCase):
                                   from_other_shape=bed_shape_gl[:-2],
                                   from_other_bed=sh-ithick)
         model2 = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                        time_stepping='conservative')
+                                         time_stepping='conservative')
         model2.run_until_equilibrium()
         assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
 
@@ -1532,7 +1534,7 @@ class TestHEF(unittest.TestCase):
 
         flowline.init_present_time_glacier(self.gdir)
 
-        mb_mod = massbalance.ConstantMassBalanceModel(self.gdir, y0=2003-15)
+        mb_mod = massbalance.ConstantMassBalanceModel(self.gdir, y0=2003 - 15)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,

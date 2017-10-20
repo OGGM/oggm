@@ -16,9 +16,9 @@ import copy
 from numpy.testing import assert_allclose
 
 # Local imports
-from oggm.core.models.massbalance import LinearMassBalanceModel
+from oggm.core.massbalance import LinearMassBalanceModel
 from oggm.tests import is_slow, is_performance_test, RUN_NUMERIC_TESTS
-from oggm import utils, cfg
+from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
 
 # Tests

@@ -1,17 +1,18 @@
 import os
+
 import geopandas as gpd
-import oggm
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
-import matplotlib.pyplot as plt
+
+import oggm
 from oggm import cfg, tasks
+from oggm.core.climate import (mb_yearly_climate_on_glacier,
+                               t_star_from_refmb,
+                               local_mustar_apparent_mb)
+from oggm.core.massbalance import (ConstantMassBalanceModel)
 from oggm.utils import get_demo_file
-from oggm.core.preprocessing.climate import (mb_yearly_climate_on_glacier,
-                                             t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.models.massbalance import (PastMassBalanceModel,
-                                          ConstantMassBalanceModel)
 
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')

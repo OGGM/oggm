@@ -20,9 +20,9 @@ import xarray as xr
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
-import oggm.core.models.massbalance as mbmods
 from oggm import entity_task
-from oggm.core.preprocessing.centerlines import Centerline, line_order
+import oggm.core.massbalance as mbmods
+from oggm.core.centerlines import Centerline, line_order
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR

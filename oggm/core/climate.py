@@ -885,7 +885,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
     h, w = gdir.get_inversion_flowline_hw()
 
     # Now find the ELA till the integrated mb is zero
-    from oggm.core.models.massbalance import LinearMassBalanceModel
+    from oggm.core.massbalance import LinearMassBalanceModel
     def to_minimize(ela_h):
         mbmod = LinearMassBalanceModel(ela_h[0], grad=mb_gradient)
         smb = mbmod.get_specific_mb(h, w)

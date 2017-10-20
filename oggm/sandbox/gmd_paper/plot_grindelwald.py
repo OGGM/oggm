@@ -1,20 +1,15 @@
 import os
 import zipfile
-import geopandas as gpd
+
+import matplotlib.pyplot as plt
+import netCDF4
 import numpy as np
 import salem
-import netCDF4
+
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file, file_downloader, nicenumber
-import matplotlib.pyplot as plt
-import scipy.optimize as optimization
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.models.flowline import (FluxBasedModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+from oggm.utils import file_downloader, nicenumber
 
 cfg.initialize()
 cfg.PARAMS['border'] = 10

@@ -3,19 +3,19 @@
 # Python imports
 import os
 import zipfile
+
+import matplotlib.pyplot as plt
 # Libs
-import oggm
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import salem
 
 # Locals
 import oggm.cfg as cfg
-from oggm import workflow
-from oggm import tasks
-from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
+from oggm import tasks
+from oggm import workflow
+from oggm.workflow import execute_entity_task
 
 # Initialize OGGM and set up the run parameters
 # ---------------------------------------------
@@ -98,8 +98,8 @@ tasks.distribute_t_stars(gdirs)
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
-from oggm.core.models.massbalance import (ConstantMassBalanceModel,
-                                          PastMassBalanceModel)
+from oggm.core.massbalance import (ConstantMassBalanceModel,
+                                   PastMassBalanceModel)
 for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
 

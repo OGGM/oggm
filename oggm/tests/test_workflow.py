@@ -1,6 +1,7 @@
 from __future__ import division
 
 import warnings
+
 warnings.filterwarnings("once", category=DeprecationWarning)
 
 import os
@@ -21,10 +22,10 @@ from oggm import graphics
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, RUN_WORKFLOW_TESTS, ON_TRAVIS
+from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
 from oggm.tests import is_graphic_test, BASELINE_DIR
 from oggm.tests.funcs import get_test_dir, use_multiprocessing
-from oggm.core.models import flowline, massbalance
+from oggm.core import flowline, massbalance
 from oggm import tasks
 from oggm import utils
 
@@ -277,7 +278,7 @@ class TestWorkflow(unittest.TestCase):
         np.testing.assert_allclose(refmustars, mustars)
 
         # make some mb tests
-        from oggm.core.models.massbalance import PastMassBalanceModel
+        from oggm.core.massbalance import PastMassBalanceModel
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
             h, w = gdir.get_inversion_flowline_hw()

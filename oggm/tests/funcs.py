@@ -3,18 +3,17 @@ import shutil
 from distutils.util import strtobool
 
 import geopandas as gpd
-import shapely.geometry as shpg
 import numpy as np
+import shapely.geometry as shpg
 from scipy import optimize as optimization
 
 # Local imports
 import oggm
 import oggm.cfg as cfg
-from oggm.core.preprocessing import gis, centerlines
-from oggm.core.preprocessing import climate, inversion
-from oggm.core.models import flowline
+from oggm.core import gis, inversion, climate, centerlines, flowline
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
+
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
                        widths=3.):

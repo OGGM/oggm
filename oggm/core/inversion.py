@@ -40,7 +40,7 @@ from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
 from oggm import entity_task, global_task
-from oggm.core.preprocessing.gis import gaussian_blur
+from oggm.core.gis import gaussian_blur
 
 # Module logger
 log = logging.getLogger(__name__)

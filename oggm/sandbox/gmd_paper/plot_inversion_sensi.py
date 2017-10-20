@@ -1,18 +1,18 @@
 import os
+
 import geopandas as gpd
-import numpy as np
-import oggm
-from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file
 import matplotlib.pyplot as plt
+import numpy as np
 import shapely.geometry as shpg
+
+import oggm
+from oggm import cfg, tasks
+from oggm.core.centerlines import (Centerline)
+from oggm.core.flowline import (FluxBasedModel)
+from oggm.core.inversion import (mass_conservation_inversion)
+from oggm.core.massbalance import (LinearMassBalanceModel)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.preprocessing.centerlines import (Centerline)
-from oggm.core.models.flowline import (FluxBasedModel)
-from oggm.core.models.massbalance import (LinearMassBalanceModel)
+from oggm.utils import get_demo_file
 
 # test directory
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Inversions')

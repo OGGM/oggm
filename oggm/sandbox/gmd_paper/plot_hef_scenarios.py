@@ -1,19 +1,15 @@
 import os
+
 import geopandas as gpd
-import numpy as np
-import oggm
-from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file
 import matplotlib.pyplot as plt
 import xarray as xr
-import scipy.optimize as optimization
+
+import oggm
+from oggm import cfg, tasks, graphics
 from oggm import utils
+from oggm.core.flowline import (FileModel)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.models.flowline import (FluxBasedModel, FileModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+from oggm.utils import get_demo_file
 
 cfg.initialize()
 
