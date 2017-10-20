@@ -1551,12 +1551,10 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                                  init_bias=init_bias,
                                                  ref_area=ref_area)
 
-    # Some parameters for posterity:
+    # Some parameters for posterity (we used to store this):
     params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
                          ite=ite, mb_bias=bias)
 
-    # Write the data
-    gdir.write_pickle(params, 'find_initial_glacier_params')
     path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
         _ = past_model.run_until_and_store(y1, path=path)

@@ -13,8 +13,6 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 import unittest
 import copy
 import time
-import shutil
-
 import pandas as pd
 from numpy.testing import assert_allclose
 

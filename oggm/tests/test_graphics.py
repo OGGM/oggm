@@ -156,7 +156,6 @@ def test_multiple_inversion():
     fig, ax = plt.subplots()
     graphics.plot_inversion(gdirs, ax=ax)
     fig.tight_layout()
-
     shutil.rmtree(testdir)
     return fig
 

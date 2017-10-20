@@ -102,7 +102,6 @@ for ks in [5, 7, 9]:
     kernel = gaussian(ks, 1)
     GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
-# TODO: document all files
 _doc = 'A geotiff file containing the DEM (reprojected into the local grid).'
 BASENAMES['dem'] = ('dem.tif', _doc)
 
@@ -133,7 +132,8 @@ _doc = 'A ``dict`` containing the shapely.Polygons of a glacier. The ' \
        'polygon as computed by Shapely.'
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = ''
+_doc = 'A ``dict`` containing the downsteam line geometry as well as the bed' \
+       'shape computed from a parabolic fit.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
 _doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
@@ -161,8 +161,8 @@ _doc = 'Some information (dictionary) about the climate data for this ' \
        'glacier, avoiding many useless accesses to the netCDF file.'
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
-_doc = 'The monthly GCM climate timeseries for this glacier, stored in a netCDF ' \
-       'file.'
+_doc = 'The monthly GCM climate timeseries for this glacier, ' \
+       'stored in a netCDF file.'
 BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
 
 _doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
@@ -190,10 +190,6 @@ BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 _doc = ('When using a linear mass-balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
-
-_doc = ''
-BASENAMES['find_initial_glacier_params'] = ('find_initial_glacier_params.pkl',
-                                            _doc)
 
 _doc = 'A netcdf file containing enough information to reconstruct the ' \
        'entire flowline glacier along the run (can be data expensive).'
