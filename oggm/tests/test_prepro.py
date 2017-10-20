@@ -1704,7 +1704,7 @@ class TestGrindelInvert(unittest.TestCase):
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
 
         fls = self._parabolic_bed()
-        mbmod = massbalance.LinearMassBalanceModel(2800.)
+        mbmod = massbalance.LinearMassBalance(2800.)
         model = flowline.FluxBasedModel(fls, mb_model=mbmod, glen_a=glen_a)
         model.run_until_equilibrium()
 
@@ -1770,7 +1770,7 @@ class TestGrindelInvert(unittest.TestCase):
         v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         inversion.filter_inversion_output(gdir)
         flowline.init_present_time_glacier(gdir)
-        mb_mod = massbalance.ConstantMassBalanceModel(gdir)
+        mb_mod = massbalance.ConstantMassBalance(gdir)
         fls = gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=0, glen_a=glen_a)

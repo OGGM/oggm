@@ -10,7 +10,7 @@ from oggm.core.climate import (t_star_from_refmb,
                                local_mustar_apparent_mb)
 from oggm.core.flowline import (FluxBasedModel)
 from oggm.core.inversion import (mass_conservation_inversion)
-from oggm.core.massbalance import (RandomMassBalanceModel)
+from oggm.core.massbalance import (RandomMassBalance)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file
 
@@ -66,7 +66,7 @@ tasks.filter_inversion_output(gdir)
 # run
 tasks.init_present_time_glacier(gdir)
 
-mb = RandomMassBalanceModel(gdir, seed=1)
+mb = RandomMassBalance(gdir, seed=1)
 fls = gdir.read_pickle('model_flowlines')
 model = FluxBasedModel(fls, mb_model=mb, y0=0, glen_a=glen_a)
 

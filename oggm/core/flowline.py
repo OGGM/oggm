@@ -1531,7 +1531,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     if y0 is None:
         y0 = cfg.PARAMS['y0']
     y1 = gdir.rgi_date.year
-    mb = mbmods.PastMassBalanceModel(gdir)
+    mb = mbmods.PastMassBalance(gdir)
     fls = gdir.read_pickle('model_flowlines')
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, glen_a=glen_a)
@@ -1635,7 +1635,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
 
     ys = 0
     ye = ys + nyears
-    mb = mbmods.RandomMassBalanceModel(gdir, y0=y0, bias=bias, seed=seed)
+    mb = mbmods.RandomMassBalance(gdir, y0=y0, bias=bias, seed=seed)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
@@ -1683,7 +1683,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
-    mb = mbmods.ConstantMassBalanceModel(gdir, y0=y0, bias=bias)
+    mb = mbmods.ConstantMassBalance(gdir, y0=y0, bias=bias)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
@@ -1729,6 +1729,6 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
     if ye is None:
         ye = cfg.PARAMS['ye']
 
-    mb = mbmods.PastMassBalanceModel(gdir, filename=filename,
-                                     input_filesuffix=input_filesuffix)
+    mb = mbmods.PastMassBalance(gdir, filename=filename,
+                                input_filesuffix=input_filesuffix)
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs)

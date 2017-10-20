@@ -10,7 +10,7 @@ from oggm import cfg, tasks
 from oggm.core.centerlines import (Centerline)
 from oggm.core.flowline import (FluxBasedModel)
 from oggm.core.inversion import (mass_conservation_inversion)
-from oggm.core.massbalance import (LinearMassBalanceModel)
+from oggm.core.massbalance import (LinearMassBalance)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file
 
@@ -36,7 +36,7 @@ letkm = dict(color='black', ha='right', va='top', fontsize=18,
              bbox=dict(facecolor='white', edgecolor='black'))
 
 fls = dummy_constant_bed(map_dx=gdir.grid.dx)
-mb = LinearMassBalanceModel(2600.)
+mb = LinearMassBalance(2600.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0.)
 model.run_until_equilibrium()
 fls = []
@@ -68,7 +68,7 @@ ax.legend(loc=3)
 ax.text(tx, ty, 'a', transform=ax.transAxes, **letkm)
 
 fls = dummy_constant_bed_cliff(map_dx=gdir.grid.dx, cliff_height=120)
-mb = LinearMassBalanceModel(2600.)
+mb = LinearMassBalance(2600.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0.)
 model.run_until_equilibrium()
 fls = []
@@ -98,7 +98,7 @@ ax.plot(sh - thick1, 'C3', label='Computed bed')
 ax.text(tx, ty, 'b', transform=ax.transAxes, **letkm)
 
 fls = dummy_noisy_bed(map_dx=gdir.grid.dx)
-mb = LinearMassBalanceModel(2600.)
+mb = LinearMassBalance(2600.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0.)
 model.run_until_equilibrium()
 fls = []
@@ -131,10 +131,10 @@ ax.text(tx, ty, 'c', transform=ax.transAxes, **letkm)
 
 #
 fls = dummy_constant_bed(map_dx=gdir.grid.dx)
-mb = LinearMassBalanceModel(2600.)
+mb = LinearMassBalance(2600.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0.)
 model.run_until_equilibrium()
-mb = LinearMassBalanceModel(2800.)
+mb = LinearMassBalance(2800.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0)
 model.run_until(60)
 fls = []

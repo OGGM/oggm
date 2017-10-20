@@ -12,7 +12,7 @@ import copy
 from numpy.testing import assert_allclose
 
 # Local imports
-from oggm.core.massbalance import LinearMassBalanceModel
+from oggm.core.massbalance import LinearMassBalance
 from oggm.tests import is_slow, is_performance_test, RUN_NUMERIC_TESTS
 from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
@@ -57,7 +57,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         for model in models:
             fls = dummy_constant_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt= 10 *SEC_IN_DAY)
@@ -116,7 +116,7 @@ class TestIdealisedCases(unittest.TestCase):
     @is_slow
     def test_mass_conservation(self):
 
-        mb = LinearMassBalanceModel(2600.)
+        mb = LinearMassBalance(2600.)
 
         fls = dummy_constant_bed()
         model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
@@ -138,7 +138,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         # Calving!
         fls = dummy_constant_bed(hmax=1000., hmin=0., nx=100)
-        mb = LinearMassBalanceModel(450.)
+        mb = LinearMassBalance(450.)
         model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
                                                  glen_a=self.glen_a,
                                                  is_tidewater=True)
@@ -162,7 +162,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         for model, kw in zip(models, kwargs):
             fls = dummy_constant_bed_obstacle()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           **kw)
@@ -248,7 +248,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         for model in models:
             fls = dummy_constant_bed_cliff()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
                           fs=self.fs, fixed_dt= 2 *SEC_IN_DAY)
@@ -326,7 +326,7 @@ class TestIdealisedCases(unittest.TestCase):
         vols = []
         for model in models:
             fls = dummy_constant_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
 
@@ -336,7 +336,7 @@ class TestIdealisedCases(unittest.TestCase):
         ref_vols = []
         for model in models:
             fls = dummy_constant_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
@@ -357,7 +357,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_constant_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -393,7 +393,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 400, 2)
         for step in steps:
             fls = dummy_constant_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = flowline.FluxBasedModel(fls, mb_model=mb,
                                             glen_a=self.glen_a,
@@ -425,7 +425,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_bumpy_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -492,7 +492,7 @@ class TestIdealisedCases(unittest.TestCase):
         fls_orig = dummy_noisy_bed()
         for model, step in zip(models, steps):
             fls = copy.deepcopy(fls_orig)
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -563,7 +563,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 500, 2)
         for model, step in zip(models, steps):
             fls = dummy_width_bed()
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
 
@@ -627,7 +627,7 @@ class TestIdealisedCases(unittest.TestCase):
         volume = []
         yrs = np.arange(1, 500, 2)
         for model, step, fls in zip(models, steps, flss):
-            mb = LinearMassBalanceModel(2600.)
+            mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -697,7 +697,7 @@ class TestIdealisedCases(unittest.TestCase):
         widths = []
         yrs = np.arange(1, 700, 2)
         for model, fls in zip(models, flss):
-            mb = LinearMassBalanceModel(2800.)
+            mb = LinearMassBalance(2800.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -746,7 +746,7 @@ class TestIdealisedCases(unittest.TestCase):
         widths = []
         yrs = np.arange(1, 700, 2)
         for model, fls in zip(models, flss):
-            mb = LinearMassBalanceModel(2800.)
+            mb = LinearMassBalance(2800.)
 
             model = model(fls, mb_model=mb, glen_a=self.glen_a,
                           fixed_dt=10 * SEC_IN_DAY)
@@ -796,7 +796,7 @@ class TestIdealisedCases(unittest.TestCase):
         yrs = np.arange(1, 700, 2)
         # yrs = np.arange(1, 100, 2)
         for model, fls in zip(models, flss):
-            mb = LinearMassBalanceModel(2800.)
+            mb = LinearMassBalance(2800.)
 
             model = model(fls, mb_model=mb, fs=self.fs_old,
                           glen_a=self.aglen_old,
@@ -857,7 +857,7 @@ class TestSandbox(unittest.TestCase):
         # Flowline case
         fls = dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=map_dx,
                                  widths=1.)
-        mb = LinearMassBalanceModel(2600.)
+        mb = LinearMassBalance(2600.)
 
         flmodel = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                           glen_a=cfg.A)

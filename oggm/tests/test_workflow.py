@@ -211,7 +211,7 @@ class TestWorkflow(unittest.TestCase):
         glen_a = d['glen_a']
         for gdir in gdirs:
             flowline.init_present_time_glacier(gdir)
-            mb_mod = massbalance.ConstantMassBalanceModel(gdir)
+            mb_mod = massbalance.ConstantMassBalance(gdir)
             fls = gdir.read_pickle('model_flowlines')
             model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                             fs=fs, glen_a=glen_a)
@@ -276,12 +276,12 @@ class TestWorkflow(unittest.TestCase):
         np.testing.assert_allclose(refmustars, mustars)
 
         # make some mb tests
-        from oggm.core.massbalance import PastMassBalanceModel
+        from oggm.core.massbalance import PastMassBalance
         for rid in df.index:
             gdir = [g for g in gdirs if g.rgi_id == rid][0]
             h, w = gdir.get_inversion_flowline_hw()
             cfg.PARAMS['use_bias_for_run'] = False
-            mbmod = PastMassBalanceModel(gdir)
+            mbmod = PastMassBalance(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
@@ -289,7 +289,7 @@ class TestWorkflow(unittest.TestCase):
             np.testing.assert_allclose(df.loc[rid].bias,
                                        mm['mine'] - mm['ref'], atol=1e-3)
             cfg.PARAMS['use_bias_for_run'] = True
-            mbmod = PastMassBalanceModel(gdir)
+            mbmod = PastMassBalance(gdir)
             mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
@@ -366,13 +366,13 @@ class TestWorkflow(unittest.TestCase):
         years = np.arange(1800, 2201)
         odf = pd.DataFrame(index=years)
         for gd in gdirs[:6]:
-            mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
+            mb = massbalance.RandomMassBalance(gd, y0=1970, seed=seed)
             h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertLessEqual(odf.corr().mean().mean(), 0.5)
         seed = 1
         for gd in gdirs[:6]:
-            mb = massbalance.RandomMassBalanceModel(gd, y0=1970, seed=seed)
+            mb = massbalance.RandomMassBalance(gd, y0=1970, seed=seed)
             h, w = gd.get_inversion_flowline_hw()
             odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
         self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)

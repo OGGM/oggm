@@ -10,7 +10,7 @@ from oggm import cfg, tasks
 from oggm.core.centerlines import (Centerline)
 from oggm.core.flowline import (FluxBasedModel)
 from oggm.core.inversion import (mass_conservation_inversion)
-from oggm.core.massbalance import (LinearMassBalanceModel)
+from oggm.core.massbalance import (LinearMassBalance)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file
 
@@ -32,7 +32,7 @@ f, axs = plt.subplots(2, 2, figsize=(10, 7), sharey=True, sharex=True)
 axs = np.asarray(axs).flatten()
 
 fls = dummy_constant_bed(map_dx=gdir.grid.dx)
-mb = LinearMassBalanceModel(2600.)
+mb = LinearMassBalance(2600.)
 model = FluxBasedModel(fls, mb_model=mb, y0=0.)
 model.run_until_equilibrium()
 fls = []

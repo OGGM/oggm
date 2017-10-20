@@ -8,7 +8,7 @@ from salem import reduce
 import oggm
 from oggm import cfg, tasks
 from oggm import utils, workflow
-from oggm.core.massbalance import (RandomMassBalanceModel)
+from oggm.core.massbalance import (RandomMassBalance)
 from oggm.sandbox.sia_2d.models import Upstream2D, filter_ice_border
 from oggm.utils import get_demo_file
 
@@ -105,26 +105,26 @@ def run_task(gdir, grid=None, mb_model=None, glen_a=cfg.A, outf=None,
 # Multiprocessing
 tasks = []
 
-mbmod = RandomMassBalanceModel(gdir, seed=0)
+mbmod = RandomMassBalance(gdir, seed=0)
 outf = db_dir + 'out_def_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_border,
                          'print_stdout':'Task1'}))
 
-mbmod = RandomMassBalanceModel(gdir, seed=0)
+mbmod = RandomMassBalance(gdir, seed=0)
 mbmod.temp_bias = 0.5
 outf = db_dir + 'out_tbias_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_border,
                          'print_stdout': 'Task2'}))
 
-mbmod = RandomMassBalanceModel(gdir, seed=0)
+mbmod = RandomMassBalance(gdir, seed=0)
 outf = db_dir + 'out_filter_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,
                          'ice_thick_filter':filter_ice_tributaries,
                          'print_stdout': 'Task3'}))
 
-mbmod = RandomMassBalanceModel(gdir, seed=0)
+mbmod = RandomMassBalance(gdir, seed=0)
 mbmod.temp_bias = 0.5
 outf = db_dir + 'out_filter_bias_100m.nc'
 tasks.append((run_task, {'grid': grid, 'mb_model': mbmod, 'outf': outf,

@@ -383,8 +383,8 @@ def test_coxe():
     fls = gdir.read_pickle('model_flowlines')
 
     p = gdir.read_pickle('linear_mb_params')
-    mb_mod = massbalance.LinearMassBalanceModel(ela_h=p['ela_h'],
-                                                grad=p['grad'])
+    mb_mod = massbalance.LinearMassBalance(ela_h=p['ela_h'],
+                                           grad=p['grad'])
     mb_mod.temp_bias = -0.3
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0,
                                     is_tidewater=True)

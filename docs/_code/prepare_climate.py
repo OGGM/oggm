@@ -11,7 +11,7 @@ from oggm import cfg, tasks
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb,
                                local_mustar_apparent_mb)
-from oggm.core.massbalance import (ConstantMassBalanceModel)
+from oggm.core.massbalance import (ConstantMassBalance)
 from oggm.utils import get_demo_file
 
 cfg.initialize()
@@ -67,7 +67,7 @@ res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 # For the mass flux
 majid = gdir.read_pickle('major_divide', div_id=0)
 cl = gdir.read_pickle('inversion_input', div_id=majid)[-1]
-mbmod = ConstantMassBalanceModel(gdir)
+mbmod = ConstantMassBalance(gdir)
 mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.RHO
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
 fdf['Flux'] = cl['flux']
