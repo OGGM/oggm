@@ -204,7 +204,7 @@ class TestWorkflow(unittest.TestCase):
                              'inversion_optim_results.csv')
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
-        assert r1 < 0.1
+        assert r1 < 0.12
 
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')
