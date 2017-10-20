@@ -28,7 +28,7 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 log = logging.getLogger(__name__)
 
 
-class ModelFlowline(Centerline):
+class Flowline(Centerline):
     """The is the input flowline for the model."""
 
     def __init__(self, line=None, dx=1, map_dx=None,
@@ -46,7 +46,7 @@ class ModelFlowline(Centerline):
             coords = np.arange(0, len(surface_h)-0.5, dx)
             line = shpg.LineString(np.vstack([coords, coords*0.]).T)
 
-        super(ModelFlowline, self).__init__(line, dx, surface_h)
+        super(Flowline, self).__init__(line, dx, surface_h)
 
         self._thick = (surface_h - bed_h).clip(0.)
         self.map_dx = map_dx
@@ -115,7 +115,7 @@ class ModelFlowline(Centerline):
         return ds
 
 
-class ParabolicFlowline(ModelFlowline):
+class ParabolicBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None,
@@ -130,8 +130,8 @@ class ParabolicFlowline(ModelFlowline):
         ----------
         #TODO: document properties
         """
-        super(ParabolicFlowline, self).__init__(line, dx, map_dx,
-                                                surface_h, bed_h)
+        super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
+                                                   surface_h, bed_h)
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
@@ -154,7 +154,7 @@ class ParabolicFlowline(ModelFlowline):
         ds['bed_shape'] = (['x'],  self.bed_shape)
 
 
-class VerticalWallFlowline(ModelFlowline):
+class RectangularBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None,
@@ -169,8 +169,8 @@ class VerticalWallFlowline(ModelFlowline):
         ----------
         #TODO: document properties
         """
-        super(VerticalWallFlowline, self).__init__(line, dx, map_dx,
-                                                   surface_h, bed_h)
+        super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
+                                                     surface_h, bed_h)
 
         self._widths = widths
 
@@ -197,7 +197,7 @@ class VerticalWallFlowline(ModelFlowline):
         ds['widths'] = (['x'],  self._widths)
 
 
-class TrapezoidalFlowline(ModelFlowline):
+class TrapezoidalBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
@@ -212,8 +212,8 @@ class TrapezoidalFlowline(ModelFlowline):
         ----------
         #TODO: document properties
         """
-        super(TrapezoidalFlowline, self).__init__(line, dx, map_dx,
-                                                   surface_h, bed_h)
+        super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
+                                                     surface_h, bed_h)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
 
@@ -253,7 +253,7 @@ class TrapezoidalFlowline(ModelFlowline):
         ds['lambdas'] = (['x'],  self._lambdas)
 
 
-class MixedFlowline(ModelFlowline):
+class MixedBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
@@ -271,9 +271,9 @@ class MixedFlowline(ModelFlowline):
         width_m is optional - for thick=0
         """
 
-        super(MixedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
-                                            surface_h=surface_h.copy(),
-                                            bed_h=bed_h.copy())
+        super(MixedBedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
+                                               surface_h=surface_h.copy(),
+                                               bed_h=bed_h.copy())
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)
@@ -333,9 +333,9 @@ class MixedFlowline(ModelFlowline):
     def section(self):
         out = TWO_THIRDS * self.widths_m * self.thick
         if self._do_trapeze:
-            out[self._ptrap] = (self.widths_m[self._ptrap] + \
-                                self._w0_m[self._ptrap]) / 2 \
-                                * self.thick[self._ptrap]
+            out[self._ptrap] = ((self.widths_m[self._ptrap] +
+                                 self._w0_m[self._ptrap]) / 2 *
+                                self.thick[self._ptrap])
         return out
 
     @section.setter
@@ -345,7 +345,8 @@ class MixedFlowline(ModelFlowline):
             b = 2 * self._w0_m[self._ptrap]
             a = 2 * self._lambdas[self._ptrap]
             with np.errstate(divide='ignore', invalid='ignore'):
-                out[self._ptrap] = (np.sqrt(b ** 2 + 4 * a * val[self._ptrap]) - b) / a
+                out[self._ptrap] = ((np.sqrt(b ** 2 + 4 * a * val[self._ptrap])
+                                     - b) / a)
             out[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = out
 
@@ -1371,12 +1372,12 @@ def init_present_time_glacier(gdir):
             widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             line = dic_ds['full_line']
 
-        nfl = MixedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
-                            surface_h=surface_h, bed_h=bed_h,
-                            section=section, bed_shape=bed_shape,
-                            is_trapezoid=np.isfinite(lambdas),
-                            lambdas=lambdas,
-                            widths_m=widths_m)
+        nfl = MixedBedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
+                               surface_h=surface_h, bed_h=bed_h,
+                               section=section, bed_shape=bed_shape,
+                               is_trapezoid=np.isfinite(lambdas),
+                               lambdas=lambdas,
+                               widths_m=widths_m)
 
         if cl.flows_to:
             flows_to_ids.append(cls.index(cl.flows_to))

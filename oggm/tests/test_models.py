@@ -513,9 +513,9 @@ class TestModelFlowlines(unittest.TestCase):
         widths[:30] = 40
         widths[-30:] = 10
 
-        rec = flowline.VerticalWallFlowline(line=line, dx=dx, map_dx=map_dx,
-                                            surface_h=surface_h, bed_h=bed_h,
-                                            widths=widths)
+        rec = flowline.RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                              surface_h=surface_h, bed_h=bed_h,
+                                              widths=widths)
         thick = surface_h - bed_h
         widths_m = widths * map_dx
         section = thick * widths_m
@@ -584,14 +584,14 @@ class TestModelFlowlines(unittest.TestCase):
         area_m2 = map_dx * widths_m
         area_m2[thick == 0] = 0
 
-        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                            surface_h=surface_h, bed_h=bed_h,
-                                            widths=widths, lambdas=lambdas)
+        rec1 = flowline.TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                               surface_h=surface_h, bed_h=bed_h,
+                                               widths=widths, lambdas=lambdas)
 
-        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                      surface_h=surface_h, bed_h=bed_h,
-                                      section=section, bed_shape=lambdas,
-                                      is_trapezoid=is_trap, lambdas=lambdas)
+        rec2 = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                         surface_h=surface_h, bed_h=bed_h,
+                                         section=section, bed_shape=lambdas,
+                                         is_trapezoid=is_trap, lambdas=lambdas)
 
         recs = [rec1, rec2]
         for rec in recs:
@@ -659,14 +659,14 @@ class TestModelFlowlines(unittest.TestCase):
         is_trap = np.ones(len(lambdas), dtype=np.bool)
 
 
-        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                            surface_h=surface_h, bed_h=bed_h,
-                                            widths=widths, lambdas=lambdas)
+        rec1 = flowline.TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                               surface_h=surface_h, bed_h=bed_h,
+                                               widths=widths, lambdas=lambdas)
 
-        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                      surface_h=surface_h, bed_h=bed_h,
-                                      section=section, bed_shape=lambdas,
-                                      is_trapezoid=is_trap, lambdas=lambdas)
+        rec2 = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                         surface_h=surface_h, bed_h=bed_h,
+                                         section=section, bed_shape=lambdas,
+                                         is_trapezoid=is_trap, lambdas=lambdas)
 
         recs = [rec1, rec2]
         for rec in recs:
@@ -724,14 +724,14 @@ class TestModelFlowlines(unittest.TestCase):
         is_trap = np.zeros(len(shapes), dtype=np.bool)
 
 
-        rec1 = flowline.ParabolicFlowline(line=line, dx=dx, map_dx=map_dx,
-                                          surface_h=surface_h, bed_h=bed_h,
-                                          bed_shape=shapes)
+        rec1 = flowline.ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                             surface_h=surface_h, bed_h=bed_h,
+                                             bed_shape=shapes)
 
-        rec2 = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                      surface_h=surface_h, bed_h=bed_h,
-                                      section=section, bed_shape=shapes,
-                                      is_trapezoid=is_trap, lambdas=shapes)
+        rec2 = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                         surface_h=surface_h, bed_h=bed_h,
+                                         section=section, bed_shape=shapes,
+                                         is_trapezoid=is_trap, lambdas=shapes)
 
         recs = [rec1, rec2]
         for rec in recs:
@@ -785,9 +785,9 @@ class TestModelFlowlines(unittest.TestCase):
         widths = widths_m / map_dx
         section_trap = thick * (widths_0 * map_dx + widths_m) / 2
 
-        rec1 = flowline.TrapezoidalFlowline(line=line, dx=dx, map_dx=map_dx,
-                                            surface_h=surface_h, bed_h=bed_h,
-                                            widths=widths, lambdas=lambdas)
+        rec1 = flowline.TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                               surface_h=surface_h, bed_h=bed_h,
+                                               widths=widths, lambdas=lambdas)
 
 
 
@@ -800,9 +800,9 @@ class TestModelFlowlines(unittest.TestCase):
         widths = widths_m / map_dx
         section_para = 2 / 3 * widths_m * thick
 
-        rec2 = flowline.ParabolicFlowline(line=line, dx=dx, map_dx=map_dx,
-                                          surface_h=surface_h, bed_h=bed_h,
-                                          bed_shape=shapes)
+        rec2 = flowline.ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                             surface_h=surface_h, bed_h=bed_h,
+                                             bed_shape=shapes)
 
         is_trap = np.ones(len(shapes), dtype=np.bool)
         is_trap[100:] = False
@@ -810,10 +810,10 @@ class TestModelFlowlines(unittest.TestCase):
         section = section_trap.copy()
         section[~is_trap] = section_para[~is_trap]
 
-        rec = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                     surface_h=surface_h, bed_h=bed_h,
-                                     section=section, bed_shape=shapes,
-                                     is_trapezoid=is_trap, lambdas=lambdas)
+        rec = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                        surface_h=surface_h, bed_h=bed_h,
+                                        section=section, bed_shape=shapes,
+                                        is_trapezoid=is_trap, lambdas=lambdas)
 
         thick = rec1.thick
         thick[~is_trap] = rec2.thick[~is_trap]

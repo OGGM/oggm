@@ -1692,8 +1692,8 @@ class TestGrindelInvert(unittest.TestCase):
 
         coords = np.arange(0, nx-0.5, 1)
         line = shpg.LineString(np.vstack([coords, coords*0.]).T)
-        return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
-                                           bed_h, shape)]
+        return [flowline.ParabolicBedFlowline(line, dx, map_dx, surface_h,
+                                              bed_h, shape)]
 
     def test_ideal_glacier(self):
 

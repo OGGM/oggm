@@ -25,8 +25,8 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
     widths = surface_h * 0. + widths
     coords = np.arange(0, nx- 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -46,8 +46,8 @@ def dummy_constant_bed_cliff(hmax=3000., hmin=1000., nx=200, map_dx=100.,
 
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_constant_bed_obstacle(hmax=3000., hmin=1000., nx=200):
@@ -68,8 +68,8 @@ def dummy_constant_bed_obstacle(hmax=3000., hmin=1000., nx=200):
 
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_bumpy_bed():
@@ -84,8 +84,8 @@ def dummy_bumpy_bed():
     bed_h = surface_h
     widths = surface_h * 0. + 3.
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_noisy_bed(map_dx=100.):
@@ -99,8 +99,8 @@ def dummy_noisy_bed(map_dx=100.):
     bed_h = surface_h
     widths = surface_h * 0. + 3.
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_parabolic_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -119,8 +119,8 @@ def dummy_parabolic_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
 
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
-                                       bed_h, shape)]
+    return [flowline.ParabolicBedFlowline(line, dx, map_dx, surface_h,
+                                          bed_h, shape)]
 
 
 def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
@@ -144,11 +144,11 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
-    fls = flowline.MixedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                 surface_h=surface_h, bed_h=bed_h,
-                                 section=section, bed_shape=shape,
-                                 is_trapezoid=is_trapezoid,
-                                 lambdas=lambdas, widths_m=widths_m)
+    fls = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                    surface_h=surface_h, bed_h=bed_h,
+                                    section=section, bed_shape=shape,
+                                    is_trapezoid=is_trapezoid,
+                                    lambdas=lambdas, widths_m=widths_m)
 
     return [fls]
 
@@ -166,8 +166,8 @@ def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
-    return [flowline.TrapezoidalFlowline(line, dx, map_dx, surface_h,
-                                         bed_h, widths, lambdas)]
+    return [flowline.TrapezoidalBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths, lambdas)]
 
 
 def dummy_width_bed():
@@ -184,8 +184,8 @@ def dummy_width_bed():
 
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-    return [flowline.VerticalWallFlowline(line, dx, map_dx, surface_h,
-                                          bed_h, widths)]
+    return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
+                                            bed_h, widths)]
 
 
 def dummy_width_bed_tributary(map_dx=100.):
@@ -199,11 +199,11 @@ def dummy_width_bed_tributary(map_dx=100.):
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
-    fl_0 = flowline.VerticalWallFlowline(line, dx, map_dx, surface_h, bed_h,
-                                         widths)
+    fl_0 = flowline.RectangularBedFlowline(line, dx, map_dx, surface_h, bed_h,
+                                           widths)
     coords = np.arange(0, 19.1, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0. + 1]).T)
-    fl_1 = flowline.VerticalWallFlowline(line, dx, map_dx, surface_h[0:20],
+    fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx, surface_h[0:20],
                                          bed_h[0:20], widths[0:20])
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
