@@ -181,6 +181,8 @@ setup(
     classifiers=CLASSIFIERS,
     # What does your project relate to?
     keywords=['geosciences', 'glaciers', 'climate', 'gis'],
+    # We are a python 3 only shop
+    python_requires='>=3.3',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Decided not to let pip install the dependencies, this is too brutal
