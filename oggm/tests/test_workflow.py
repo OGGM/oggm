@@ -195,9 +195,7 @@ class TestWorkflow(unittest.TestCase):
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
         r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        if not ON_TRAVIS:
-            # TODO: bad practice here
-            assert r1 < r2
+        assert r1 < r2
 
         cfg.PARAMS['invert_with_sliding'] = False
         cfg.PARAMS['optimize_thick'] = False
@@ -208,9 +206,7 @@ class TestWorkflow(unittest.TestCase):
         df = pd.read_csv(fpath, index_col=0)
         r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
         r2 = rmsd(df['ref_volume_km3'], df['vas_volume_km3'])
-        if not ON_TRAVIS:
-            # TODO: bad practice here
-            assert r1 < r2
+        assert r1 < r2
 
         # Init glacier
         d = gdirs[0].read_pickle('inversion_params')
@@ -271,12 +267,9 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-
-        if not ON_TRAVIS:
-            # TODO: bad practice here
-            np.testing.assert_allclose(np.abs(df.cv_bias),
-                                       np.abs(dfq.cv_bias),
-                                       rtol=0.1)
+        np.testing.assert_allclose(np.abs(df.cv_bias),
+                                   np.abs(dfq.cv_bias),
+                                   rtol=0.1)
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
 
         # see if the process didn't brake anything
