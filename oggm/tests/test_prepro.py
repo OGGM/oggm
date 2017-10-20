@@ -1702,7 +1702,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         # we are making a
         glen_a = cfg.A * 1
-        from oggm.core.models import flowline
+        from oggm.core import flowline
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
 
@@ -1756,7 +1756,7 @@ class TestGrindelInvert(unittest.TestCase):
     @requires_py3
     def test_invert_and_run(self):
 
-        from oggm.core.models import flowline, massbalance
+        from oggm.core import flowline, massbalance
 
         glen_a = cfg.A*2
 

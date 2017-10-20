@@ -33,7 +33,7 @@ class Model2D(object):
             map resolution (m)
         dy : float
             map resolution (m)
-        mb_model : oggm.core.models.massbalance model
+        mb_model : oggm.core.massbalance model
             the mass-balance model to use for the simulation
         y0 : int
             the starting year
@@ -231,7 +231,7 @@ class Upstream2D(Model2D):
             map resolution (m)
         dy : float
             map resolution (m)
-        mb_model : oggm.core.models.massbalance model
+        mb_model : oggm.core.massbalance model
             the mass-balance model to use for the simulation
         y0 : int
             the starting year

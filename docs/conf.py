@@ -98,12 +98,6 @@ except ImportError:
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm
 import oggm.utils
-import oggm.core.preprocessing.gis
-import oggm.core.preprocessing.centerlines
-import oggm.core.preprocessing.climate
-import oggm.core.preprocessing.inversion
-import oggm.core.models.massbalance
-import oggm.core.models.flowline
 import oggm.tasks
 print("oggm: %s, %s" % (oggm.__version__, oggm.__file__))
 
