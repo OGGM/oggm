@@ -345,7 +345,8 @@ def test_ice_cap():
 
 
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
+                               tolerance=TOLERANCE+5)
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')

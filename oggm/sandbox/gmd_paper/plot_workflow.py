@@ -1,26 +1,20 @@
 import os
-import shutil
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import scipy.optimize as optimization
 
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.core.climate import (t_star_from_refmb,
-                               local_mustar_apparent_mb)
-from oggm.core.flowline import (FluxBasedModel)
-from oggm.core.inversion import (mass_conservation_inversion)
-from oggm.core.massbalance import (RandomMassBalance)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm import utils
 
 cfg.initialize()
 cfg.PARAMS['border'] = 15
 cfg.PARAMS['auto_skip_task'] = True
+reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Workflow')
 cfg.PATHS['working_dir'] = base_dir
-utils.mkdir(base_dir)
+utils.mkdir(base_dir, reset=reset)
 
 entity = gpd.read_file(utils.get_demo_file('HEF_MajDivide.shp')).iloc[0]
 

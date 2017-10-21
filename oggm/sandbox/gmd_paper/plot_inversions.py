@@ -19,13 +19,13 @@ base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Inversions')
 
 # Init
 cfg.initialize()
-cfg.set_divides_db()
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 tasks.define_glacier_region(gdir, entity=entity)
 
 # Models
-from oggm.tests.test_models import (dummy_constant_bed, dummy_noisy_bed, dummy_constant_bed_cliff)
+from oggm.tests.test_models import (dummy_constant_bed, dummy_noisy_bed,
+                                    dummy_constant_bed_cliff)
 
 # Figure
 f, axs = plt.subplots(2, 2, figsize=(10, 7), sharey=True, sharex=True)
@@ -47,13 +47,13 @@ for fl in model.fls:
     flo.widths = fl.widths[pg]
     flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
-for did in [0, 1]:
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
+
+gdir.write_pickle(fls, 'inversion_flowlines')
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
 np.testing.assert_allclose(v, model.volume_m3, rtol=0.05)
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 # plot
 ax = axs[0]
 thick1 = inv['thick']
@@ -79,13 +79,12 @@ for fl in model.fls:
     flo.widths = fl.widths[pg]
     flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
-for did in [0, 1]:
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
+gdir.write_pickle(fls, 'inversion_flowlines')
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
 np.testing.assert_allclose(v, model.volume_m3, rtol=0.05)
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 # plot
 ax = axs[1]
 thick1 = inv['thick']
@@ -109,13 +108,13 @@ for fl in model.fls:
     flo.widths = fl.widths[pg]
     flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
-for did in [0, 1]:
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
+
+gdir.write_pickle(fls, 'inversion_flowlines')
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
 np.testing.assert_allclose(v, model.volume_m3, rtol=0.05)
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 # plot
 ax = axs[2]
 thick1 = inv['thick']
@@ -146,14 +145,14 @@ for fl in model.fls:
     flo.widths = fl.widths[pg]
     flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
-for did in [0, 1]:
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
+
+gdir.write_pickle(fls, 'inversion_flowlines')
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
 # expected errors
 assert v > model.volume_m3
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 # plot
 ax = axs[3]
 thick1 = inv['thick']

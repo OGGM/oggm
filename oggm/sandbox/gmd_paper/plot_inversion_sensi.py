@@ -12,14 +12,14 @@ from oggm.core.flowline import (FluxBasedModel)
 from oggm.core.inversion import (mass_conservation_inversion)
 from oggm.core.massbalance import (LinearMassBalance)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, mkdir
 
 # test directory
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Inversions')
+mkdir(base_dir, reset=True)
 
 # Init
 cfg.initialize()
-cfg.set_divides_db()
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 tasks.define_glacier_region(gdir, entity=entity)
@@ -44,22 +44,22 @@ for fl in model.fls:
     flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
     fls.append(flo)
 for did in [0, 1]:
-    gdir.write_pickle(fls, 'inversion_flowlines', div_id=did)
+    gdir.write_pickle(fls, 'inversion_flowlines')
 
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 
 tasks.apparent_mb_from_linear_mb(gdir, mb_gradient=3*5)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
-inv2 = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv2 = gdir.read_pickle('inversion_output')[-1]
 
 tasks.apparent_mb_from_linear_mb(gdir, mb_gradient=3/5)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
-inv3 = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv3 = gdir.read_pickle('inversion_output')[-1]
 
 # plot
 ax = axs[0]
@@ -78,13 +78,13 @@ ax.legend(loc=3)
 tasks.apparent_mb_from_linear_mb(gdir)
 tasks.prepare_for_inversion(gdir)
 v, _ = mass_conservation_inversion(gdir)
-inv = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv = gdir.read_pickle('inversion_output')[-1]
 
 v, _ = mass_conservation_inversion(gdir, glen_a=cfg.A/5)
-inv2 = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv2 = gdir.read_pickle('inversion_output')[-1]
 
 v, _ = mass_conservation_inversion(gdir, glen_a=cfg.A*5)
-inv3 = gdir.read_pickle('inversion_output', div_id=1)[-1]
+inv3 = gdir.read_pickle('inversion_output')[-1]
 
 # plot
 ax = axs[1]

@@ -10,21 +10,23 @@ from oggm.core.climate import (t_star_from_refmb,
                                local_mustar_apparent_mb)
 from oggm.core.inversion import (mass_conservation_inversion)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, mkdir
 
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 25
 cfg.PARAMS['auto_skip_task'] = True
+reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Invert_hef')
+mkdir(base_dir, reset=reset)
+
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)

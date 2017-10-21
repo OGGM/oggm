@@ -9,12 +9,15 @@ import salem
 import oggm
 from oggm import cfg, tasks, graphics
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.utils import file_downloader, nicenumber
+from oggm.utils import file_downloader, nicenumber, mkdir
 
 cfg.initialize()
 cfg.PARAMS['border'] = 10
+reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Grindelwald')
+cfg.PATHS['working_dir'] = base_dir
+mkdir(base_dir, reset=reset)
 
 rgif = 'https://dl.dropboxusercontent.com/u/20930277/rgiv5_grindelwald.zip'
 rgif = file_downloader(rgif)
@@ -28,14 +31,14 @@ gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_line(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 
-with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
     mask = nc.variables['glacier_mask'][:]
     topo = nc.variables['topo_smoothed'][:]
 rhgt = topo[np.where(mask)][:]

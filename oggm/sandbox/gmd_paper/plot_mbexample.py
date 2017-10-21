@@ -22,12 +22,11 @@ cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'MB')
 entity = gpd.read_file(get_demo_file('Hintereisferner.shp')).iloc[0]
-gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
+gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_width_geom(gdir)
@@ -43,7 +42,7 @@ local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
 
 # For plots
 mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]
-years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, pcp_fac, div_id=0)
+years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, pcp_fac)
 
 # which years to look at
 selind = np.searchsorted(years, mbdf.index)
