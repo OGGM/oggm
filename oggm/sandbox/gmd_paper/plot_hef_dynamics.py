@@ -12,8 +12,7 @@ from oggm.utils import get_demo_file
 
 cfg.initialize()
 
-# Don't use divides for now, or intersects
-cfg.set_divides_db()
+# Don't use intersects
 cfg.set_intersects_db()
 
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
@@ -23,13 +22,13 @@ cfg.PARAMS['auto_skip_task'] = True
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'dynamics')
 cfg.PATHS['working_dir'] = base_dir
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
-gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
+gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_line(gdir)
 tasks.compute_downstream_bedshape(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)

@@ -1570,7 +1570,7 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
         fls = gdir.read_pickle('model_flowlines')
         if zero_initial_glacier:
             for fl in fls:
-                fl.thick = fl.thick * 0.,
+                fl.thick = fl.thick * 0.
         model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
