@@ -9,8 +9,7 @@ from distutils.version import LooseVersion
 import matplotlib.ft2font
 import matplotlib.pyplot as plt
 import osgeo.gdal
-import six
-from six.moves.urllib.request import urlopen
+from urllib.request import urlopen
 
 from oggm import cfg
 
@@ -117,12 +116,6 @@ def requires_internet(test):
     # Test decorator
     msg = 'requires internet'
     return test if HAS_INTERNET else unittest.skip(msg)(test)
-
-
-def requires_py3(test):
-    # Test decorator
-    msg = "requires python3"
-    return unittest.skip(msg)(test) if six.PY2 else test
 
 
 def is_graphic_test(test):

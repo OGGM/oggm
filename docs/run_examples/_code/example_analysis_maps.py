@@ -1,15 +1,17 @@
 # Python imports
-from os import path
-import matplotlib.pyplot as plt
-
-# Module logger
 import logging
-log = logging.getLogger(__name__)
+from os import path
+
+# External modules
+import matplotlib.pyplot as plt
 
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow, graphics
-from oggm.core.models import flowline
+from oggm.core import flowline
+
+# Module logger
+log = logging.getLogger(__name__)
 
 # Initialize OGGM
 cfg.initialize()
@@ -33,11 +35,11 @@ for i in range(4):
     # Use the model ouptut file to simulate the glacier evolution
     model = flowline.FileModel(gdir.get_filepath('model_run',
                                                  filesuffix='_commitment'))
-    graphics.plot_modeloutput_map(gdirs[i], model=model, ax=ax, subset=False,
+    graphics.plot_modeloutput_map(gdirs[i], model=model, ax=ax,
                                   lonlat_contours_kwargs={'interval': 0})
     ax = axs[1, i]
     model.run_until(200)
-    graphics.plot_modeloutput_map(gdirs[i], model=model, ax=ax, subset=False,
+    graphics.plot_modeloutput_map(gdirs[i], model=model, ax=ax,
                                   lonlat_contours_kwargs={'interval': 0})
 
 plt.subplots_adjust(wspace=0.4, hspace=0.08, top=0.98, bottom=0.02)

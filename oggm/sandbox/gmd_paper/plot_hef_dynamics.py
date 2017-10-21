@@ -1,40 +1,37 @@
 import os
+
 import geopandas as gpd
-import numpy as np
-import oggm
-from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file
 import matplotlib.pyplot as plt
 import xarray as xr
-import scipy.optimize as optimization
+
+import oggm
+from oggm import cfg, tasks
 from oggm import utils
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.models.flowline import (FluxBasedModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+from oggm.utils import get_demo_file, mkdir
 
 cfg.initialize()
 
-# Don't use divides for now, or intersects
-cfg.set_divides_db()
+# Don't use intersects
 cfg.set_intersects_db()
 
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 60
 cfg.PARAMS['auto_skip_task'] = True
+reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'dynamics')
 cfg.PATHS['working_dir'] = base_dir
+mkdir(base_dir, reset=reset)
+
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
-gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
+gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_line(gdir)
 tasks.compute_downstream_bedshape(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)

@@ -1,25 +1,23 @@
 import os
 import zipfile
-import geopandas as gpd
+
+import matplotlib.pyplot as plt
+import netCDF4
 import numpy as np
 import salem
-import netCDF4
+
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file, file_downloader, nicenumber
-import matplotlib.pyplot as plt
-import scipy.optimize as optimization
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.models.flowline import (FluxBasedModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+from oggm.utils import file_downloader, nicenumber, mkdir
 
 cfg.initialize()
 cfg.PARAMS['border'] = 10
+reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Grindelwald')
+cfg.PATHS['working_dir'] = base_dir
+mkdir(base_dir, reset=reset)
 
 rgif = 'https://dl.dropboxusercontent.com/u/20930277/rgiv5_grindelwald.zip'
 rgif = file_downloader(rgif)
@@ -33,14 +31,14 @@ gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_line(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 
-with netCDF4.Dataset(gdir.get_filepath('gridded_data', div_id=0)) as nc:
+with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
     mask = nc.variables['glacier_mask'][:]
     topo = nc.variables['topo_smoothed'][:]
 rhgt = topo[np.where(mask)][:]

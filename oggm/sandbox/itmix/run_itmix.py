@@ -9,6 +9,7 @@ from __future__ import division
 
 # Log message format
 import logging
+
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
 
@@ -30,7 +31,7 @@ from oggm import tasks
 from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 from oggm.sandbox import itmix
-from oggm.core.preprocessing.inversion import distribute_thickness
+from oggm.core.inversion import distribute_thickness
 
 # ITMIX paths
 from oggm.sandbox.itmix.itmix_cfg import DATA_DIR, WORKING_DIR, PLOTS_DIR

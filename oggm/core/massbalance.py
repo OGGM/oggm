@@ -1,6 +1,4 @@
 """Mass-balance models"""
-from __future__ import division
-
 # Built ins
 # External libs
 import numpy as np
@@ -140,7 +138,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
 
-class LinearMassBalanceModel(MassBalanceModel):
+class LinearMassBalance(MassBalanceModel):
     """Constant mass-balance as a linear function of altitude.
 
     The "temperature bias" doesn't makes much sense in this context, but we
@@ -157,7 +155,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         grad: float
             Mass-balance gradient (unit: [mm ice yr-1 m-1])
         """
-        super(LinearMassBalanceModel, self).__init__()
+        super(LinearMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
@@ -178,7 +176,7 @@ class LinearMassBalanceModel(MassBalanceModel):
         return self.get_monthly_mb(heights, year=year)
 
 
-class PastMassBalanceModel(MassBalanceModel):
+class PastMassBalance(MassBalanceModel):
     """Mass balance during the climate data period."""
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
@@ -207,7 +205,7 @@ class PastMassBalanceModel(MassBalanceModel):
             the file suffix of the input climate file
         """
 
-        super(PastMassBalanceModel, self).__init__()
+        super(PastMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -310,7 +308,7 @@ class PastMassBalanceModel(MassBalanceModel):
         return (mb_annual - self.bias) / SEC_IN_YEAR / cfg.RHO
 
 
-class ConstantMassBalanceModel(MassBalanceModel):
+class ConstantMassBalance(MassBalanceModel):
     """Constant mass-balance during a chosen period.
 
     This is useful for equilibrium experiments.
@@ -340,9 +338,9 @@ class ConstantMassBalanceModel(MassBalanceModel):
             the half-size of the time window (window size = 2 * halfsize + 1)
         """
 
-        super(ConstantMassBalanceModel, self).__init__()
-        self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
-                                          prcp_fac=prcp_fac)
+        super(ConstantMassBalance, self).__init__()
+        self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
+                                     prcp_fac=prcp_fac)
 
         if y0 is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -393,7 +391,7 @@ class ConstantMassBalanceModel(MassBalanceModel):
         return self.interp_yr(heights)
 
 
-class RandomMassBalanceModel(MassBalanceModel):
+class RandomMassBalance(MassBalanceModel):
     """Random shuffle of all MB years within a given time period.
 
     This is useful for finding a possible past glacier state or for sensitivity
@@ -432,10 +430,10 @@ class RandomMassBalanceModel(MassBalanceModel):
             Random seed used to initialize the pseudo-random number generator.
         """
 
-        super(RandomMassBalanceModel, self).__init__()
+        super(RandomMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
-        self.mbmod = PastMassBalanceModel(gdir, mu_star=mu_star, bias=bias,
-                                          prcp_fac=prcp_fac)
+        self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
+                                     prcp_fac=prcp_fac)
 
         if y0 is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))

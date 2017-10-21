@@ -3,7 +3,7 @@ Bed inversion
 
 To compute the initial ice thickness :math:`h_0`, OGGM follows a methodology
 largely inspired from [Farinotti_etal_2009]_, but fully automatised and relying
-on different approaches to mass-balance and to calibration.
+on different methods for the mass-balance and the calibration.
 
 Basics
 ------
@@ -93,6 +93,17 @@ approximations which should be better handled in the future.
 Distributed ice thickness
 -------------------------
 
+To obtain a 2D map of the glacier bed, the flowline thicknesses need to be
+interpolated to the glacier mask. The current implementation of this
+step in OGGM is currently very simple, but provides nice looking maps:
+
+
+
+.. ipython:: python
+
+    tasks.catchment_area(gdir)
+    @savefig plot_fls_catchments.png width=80%
+    graphics.plot_distributed_thickness(gdir)
 
 
 References

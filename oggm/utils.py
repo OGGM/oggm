@@ -1,12 +1,5 @@
 """Some useful functions that did not fit into the other modules.
 """
-from __future__ import absolute_import, division
-
-import six.moves.cPickle as pickle
-from six import string_types
-from six.moves.urllib.request import urlretrieve, urlopen
-from six.moves.urllib.error import HTTPError, URLError, ContentTooShortError
-from six.moves.urllib.parse import urlparse
 
 # Builtins
 import glob
@@ -18,6 +11,7 @@ import sys
 import math
 import datetime
 import logging
+import pickle
 from collections import OrderedDict
 from functools import partial, wraps
 import json
@@ -26,6 +20,9 @@ import fnmatch
 import platform
 import struct
 import importlib
+from urllib.request import urlretrieve, urlopen
+from urllib.error import HTTPError, URLError, ContentTooShortError
+from urllib.parse import urlparse
 
 # External libs
 import geopandas as gpd
@@ -1219,7 +1216,6 @@ def write_centerlines_to_shape(gdirs, filename):
     crs = {'init': 'epsg:4326'}
 
     # some writing function from geopandas rep
-    from six import iteritems
     from shapely.geometry import mapping
     import fiona
 
@@ -1228,7 +1224,7 @@ def write_centerlines_to_shape(gdirs, filename):
             'id': str(i),
             'type': 'Feature',
             'properties':
-                dict((k, v) for k, v in iteritems(row) if k != 'geometry'),
+                dict((k, v) for k, v in row.items() if k != 'geometry'),
             'geometry': mapping(row['geometry'])}
 
     with fiona.open(filename, 'w', driver='ESRI Shapefile',
@@ -1679,7 +1675,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     tuple: (list with path(s) to the DEM file, data source)
     """
 
-    if source is not None and not isinstance(source, string_types):
+    if source is not None and not isinstance(source, str):
         # check all user options
         for s in source:
             demf, source_str = get_topo_file(lon_ex, lat_ex,
@@ -2096,8 +2092,7 @@ class GlacierDirectory(object):
 
     If the directory does not exist, it will be created.
 
-    A glacier entity has one or more divides. See :ref:`glacierdir`
-    for more information.
+    See :ref:`glacierdir` for more information.
 
     Attributes
     ----------
@@ -2152,7 +2147,7 @@ class GlacierDirectory(object):
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
         # RGI IDs are also valid entries
-        if isinstance(rgi_entity, string_types):
+        if isinstance(rgi_entity, str):
             _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
             rgi_entity = read_shapefile(_shp)

@@ -1,25 +1,18 @@
 import os
+
 import geopandas as gpd
-import numpy as np
-import oggm
-from oggm import cfg, tasks, graphics
-from oggm.utils import get_demo_file
 import matplotlib.pyplot as plt
 import xarray as xr
-import scipy.optimize as optimization
+
+import oggm
+from oggm import cfg, tasks, graphics
 from oggm import utils
+from oggm.core.flowline import (FileModel)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.core.preprocessing.climate import (t_star_from_refmb,
-                                             local_mustar_apparent_mb)
-from oggm.core.preprocessing.inversion import (mass_conservation_inversion)
-from oggm.core.models.flowline import (FluxBasedModel, FileModel)
-from oggm.core.models.massbalance import (RandomMassBalanceModel)
+from oggm.utils import get_demo_file, mkdir
 
 cfg.initialize()
-
-# Don't use divides for now, or intersects
-# cfg.set_divides_db()
-# cfg.set_intersects_db()
+reset = True
 
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 60
@@ -27,14 +20,16 @@ cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'scenarios')
 cfg.PATHS['working_dir'] = base_dir
-entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
+mkdir(base_dir, reset=reset)
+
+entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
-tasks.compute_downstream_line(gdir)
 tasks.initialize_flowlines(gdir)
+tasks.compute_downstream_line(gdir)
 tasks.compute_downstream_bedshape(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_intersections(gdir)
@@ -51,13 +46,13 @@ tasks.init_present_time_glacier(gdir)
 
 df = utils.glacier_characteristics([gdir], path=False)
 
-reset = False
+reset = True
 seed = 0
 
-tasks.random_glacier_evolution(gdir, nyears=400, seed=0, y0=2000,
+tasks.random_glacier_evolution(gdir, nyears=800, seed=0, y0=2000,
                                filesuffix='_2000_def', reset=reset)
 
-tasks.random_glacier_evolution(gdir, nyears=400, seed=0, y0=1920,
+tasks.random_glacier_evolution(gdir, nyears=800, seed=0, y0=1920,
                                filesuffix='_1920_def', reset=reset)
 
 
@@ -65,8 +60,6 @@ f = gdir.get_filepath('model_diagnostics', filesuffix='_2000_def')
 ds1 = xr.open_dataset(f)
 f = gdir.get_filepath('model_diagnostics', filesuffix='_1920_def')
 ds2 = xr.open_dataset(f)
-
-# f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(9, 4))
 
 
 f = plt.figure(figsize=(9, 6))
@@ -93,9 +86,9 @@ fp = gdir.get_filepath('model_run', filesuffix='_2000_def')
 model = FileModel(fp)
 model.run_until(800)
 ax = axs[3]
-graphics.plot_modeloutput_map(gdir, model=model, ax=ax, reset=True, title='',
+graphics.plot_modeloutput_map(gdir, model=model, ax=ax, title='',
                               lonlat_contours_kwargs=llkw, cbar_ax=ax.cax,
-                              subset=False, linewidth=1.5,
+                              linewidth=1.5,
                               add_scalebar=False, vmax=300)
 ax.text(tx, ty, 'c: [1985-2015]', transform=ax.transAxes, **letkm)
 
@@ -104,10 +97,9 @@ fp = gdir.get_filepath('model_run', filesuffix='_1920_def')
 model = FileModel(fp)
 model.run_until(800)
 ax = axs[2]
-graphics.plot_modeloutput_map(gdir, model=model, ax=ax, reset=True, title='',
+graphics.plot_modeloutput_map(gdir, model=model, ax=ax, title='',
                               lonlat_contours_kwargs=llkw,
                               add_colorbar=False, linewidth=1.5,
-                              subset=False,
                               add_scalebar=False, vmax=300)
 ax.text(tx, ty, 'b: [1905-1935]', transform=ax.transAxes, **letkm)
 

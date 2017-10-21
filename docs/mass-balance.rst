@@ -8,8 +8,8 @@ Mass-balance
 The mass-balance (MB) model implemented in OGGM is an extended version of the
 temperature index model presented by `Marzeion et al., (2012)`_.
 While the equation governing the mass-balance is that of a traditional
-temperature index model, our approach to calibration requires that we spend
-some time describing it.
+temperature index model, our special approach to calibration requires
+that we spend some time describing it.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
@@ -238,7 +238,7 @@ Here are some more details:
 - the mass-balance in OGGM is computed from the altitudes and widths
   of the flowlines grid points (see :ref:`flowlines`). The easiest way to let
   OGGM compute the mass-balance for you is to use the
-  :py:class:`core.models.massbalance.PastMassBalanceModel`.
+  :py:class:`core.massbalance.PastMassBalance`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
   algorithm (see :py:func:`tasks.distribute_t_stars`)
 - if more than one :math:`t^*` is found for some reference glaciers, than the

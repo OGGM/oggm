@@ -9,6 +9,7 @@ from __future__ import division
 
 # Log message format
 import logging
+
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
 
@@ -17,24 +18,20 @@ log = logging.getLogger(__name__)
 
 # Python imports
 import os
-import shutil
 from functools import partial
 # Libs
 import pandas as pd
 import geopandas as gpd
-import numpy as np
-import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file
 from oggm import tasks
 from oggm.workflow import execute_entity_task
-from oggm import graphics, utils
+from oggm import graphics
 from oggm.sandbox import itmix
-from oggm.core.preprocessing.inversion import distribute_thickness
+from oggm.core.inversion import distribute_thickness
 
 # ITMIX paths
 DATA_DIR = '/home/mowglie/tmp/RUN_SYNTH/'

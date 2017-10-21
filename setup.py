@@ -133,8 +133,7 @@ def check_dependencies(package_names):
         print(errmsg + ', '.join(not_met))
 
 
-req_packages = ['six',
-                'numpy',
+req_packages = ['numpy',
                 'scipy',
                 'pyproj',
                 'pandas',
@@ -182,6 +181,8 @@ setup(
     classifiers=CLASSIFIERS,
     # What does your project relate to?
     keywords=['geosciences', 'glaciers', 'climate', 'gis'],
+    # We are a python 3 only shop
+    python_requires='>=3.3',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Decided not to let pip install the dependencies, this is too brutal

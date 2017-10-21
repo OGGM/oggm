@@ -1,4 +1,3 @@
-from __future__ import division
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest

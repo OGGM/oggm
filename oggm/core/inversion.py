@@ -24,9 +24,6 @@ Bahr  Pfeffer, W. T., Kaser, G., D. B.: Glacier volume estimation as an
     ill-posed boundary value problem, Cryosph. Discuss. Cryosph. Discuss.,
     6(6), 5405-5420, doi:10.5194/tcd-6-5405-2012, 2012.
 """
-from __future__ import division
-from six.moves import zip
-
 # Built ins
 import logging
 import os
@@ -40,7 +37,7 @@ from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
 from oggm import entity_task, global_task
-from oggm.core.preprocessing.gis import gaussian_blur
+from oggm.core.gis import gaussian_blur
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -378,7 +375,7 @@ def volume_inversion(gdir, use_cfg_params=None):
         glen_a = use_cfg_params['glen_a']
     elif not cfg.PARAMS['optimize_inversion_params']:
         fs = cfg.PARAMS['inversion_fs']
-        glen_a =cfg.PARAMS['inversion_glen_a']
+        glen_a = cfg.PARAMS['inversion_glen_a']
     else:
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')

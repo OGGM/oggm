@@ -2,8 +2,6 @@
 
 A number of globals are defined here to be available everywhere.
 """
-from __future__ import absolute_import, division
-
 import logging
 import os
 import shutil

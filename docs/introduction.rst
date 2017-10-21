@@ -14,10 +14,7 @@ Preprocessing
   glacier's location, a suitable source for the topographical data is
   downloaded automatically (here SRTM) and interpolated to the local grid.
   The map's spatial resolution depends on the size of the glacier
-  (for HEF, 50~m). Optionally, an automated partitioning algorithm dividing
-  glacier complexes into single dynamical entities can be applied (see Fig. b:
-  the HEF RGI outline represents in fact three independent glaciers which used
-  to be connected in the past).
+  (for HEF, 50~m).
 
 Flowlines
   The glacier centerlines are computed using a geometrical routing algorithm
@@ -49,7 +46,7 @@ Ice thickness inversion
 
 Glacier evolution
   A dynamical flowline model is used to simulate the advance and retreat of the
-  glacier under preselected climate time series. Here (Fig. f), a 100-yrs long
+  glacier under preselected climate time series. Here (Fig. f), a 175-yrs long
   random climate sequence leads to a slight glacier advance.
 
 

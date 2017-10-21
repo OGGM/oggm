@@ -21,6 +21,8 @@ result_images
 eggs
 
 # specific
+*.cache
+baseline/
 *.lock
 oggm/tests/tmp_*
 *.html

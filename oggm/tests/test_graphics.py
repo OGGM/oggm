@@ -1,5 +1,3 @@
-from __future__ import division
-
 import unittest
 import warnings
 
@@ -12,7 +10,6 @@ import shutil
 
 import os
 import geopandas as gpd
-import numpy as np
 import matplotlib.pyplot as plt
 
 # Local imports
@@ -21,10 +18,10 @@ from oggm.tests import is_graphic_test, requires_internet, RUN_GRAPHIC_TESTS
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
-from oggm.core.preprocessing import (gis, centerlines, geometry, climate, inversion)
+from oggm.core import gis, inversion, climate, centerlines, flowline, \
+    massbalance
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file
-from oggm.core.models import flowline, massbalance
 from oggm import utils, workflow
 
 # In case some logging happens or so
@@ -348,7 +345,8 @@ def test_ice_cap():
 
 
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
+                               tolerance=TOLERANCE+5)
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')
@@ -368,13 +366,13 @@ def test_coxe():
     gis.define_glacier_region(gdir, entity=entity)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
-    geometry.initialize_flowlines(gdir)
+    centerlines.initialize_flowlines(gdir)
     centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
-    geometry.catchment_area(gdir)
-    geometry.catchment_intersections(gdir)
-    geometry.catchment_width_geom(gdir)
-    geometry.catchment_width_correction(gdir)
+    centerlines.catchment_area(gdir)
+    centerlines.catchment_intersections(gdir)
+    centerlines.catchment_width_geom(gdir)
+    centerlines.catchment_width_correction(gdir)
     climate.apparent_mb_from_linear_mb(gdir)
     inversion.prepare_for_inversion(gdir)
     inversion.volume_inversion(gdir, use_cfg_params={'glen_a': cfg.A,
@@ -386,8 +384,8 @@ def test_coxe():
     fls = gdir.read_pickle('model_flowlines')
 
     p = gdir.read_pickle('linear_mb_params')
-    mb_mod = massbalance.LinearMassBalanceModel(ela_h=p['ela_h'],
-                                                grad=p['grad'])
+    mb_mod = massbalance.LinearMassBalance(ela_h=p['ela_h'],
+                                           grad=p['grad'])
     mb_mod.temp_bias = -0.3
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0,
                                     is_tidewater=True)

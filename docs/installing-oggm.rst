@@ -7,10 +7,9 @@ OGGM itself is a pure python package, but it has several dependencies wich
 are not trivial to install. The instructions below are
 self-explanatory and should work on any platform.
 
-OGGM is fully `tested`_ with python `version`_ 3.5 on linux and partially
-tested with python 3.4 on `windows`_ (windows should be used for development
-purposes only). OGGM might work with python version 2.7, but it isn't tested
-any more and we `strongly recommend`_ to use python 3.
+OGGM is fully `tested`_ with python `version`_ 3.6 on linux and partially
+tested on `windows`_ (windows should be used for development
+purposes only). OGGM doesn't work with python version 2.7.
 
 .. note::
 
@@ -44,9 +43,6 @@ Standard SciPy track:
     - pandas
     - xarray
     - joblib
-
-Python 2 support:
-    - six
 
 Configuration file parsing tool:
     - configobj

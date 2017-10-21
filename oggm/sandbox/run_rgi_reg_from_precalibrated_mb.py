@@ -3,22 +3,16 @@ use a precalibrated list of tstars for the run, i.e. won't calibrate the mass
 balance anymore.
 """
 
+# Module logger
+import logging
 # Python imports
 import os
 import shutil
-import zipfile
 from glob import glob
-import oggm
 
-# Module logger
-import logging
 log = logging.getLogger(__name__)
 
 # Libs
-import oggm
-import numpy as np
-import pandas as pd
-import geopandas as gpd
 import matplotlib.pyplot as plt
 import salem
 
@@ -28,7 +22,7 @@ from oggm import workflow
 from oggm import tasks
 from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
-from oggm.core.models import flowline
+from oggm.core import flowline
 
 # Time
 import time

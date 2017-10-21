@@ -1,15 +1,12 @@
-from __future__ import absolute_import, division
-
-import oggm
 import warnings
 
+import oggm
 import oggm.utils
 
 warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
-import glob
 import shutil
 
 import shapely.geometry as shpg
@@ -21,14 +18,13 @@ import salem
 import xarray as xr
 
 # Local imports
-from oggm.core.preprocessing import gis, geometry, climate, inversion
-from oggm.core.preprocessing import centerlines
+from oggm.core import gis, inversion, climate, centerlines, flowline, \
+    massbalance
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, requires_py3, RUN_PREPRO_TESTS
+from oggm.tests import is_slow, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir
-from oggm.core.models import flowline
 from oggm import workflow
 
 cfg.PATHS['working_dir'] = get_test_dir()
@@ -269,7 +265,7 @@ class TestCenterlines(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
 
         d = gdir.read_pickle('downstream_line')
@@ -290,7 +286,7 @@ class TestCenterlines(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
@@ -313,7 +309,7 @@ class TestCenterlines(unittest.TestCase):
             n1, n2 = c.normals[i0]
             l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
                                  shpg.Point(cur + wi / 2. * n2)])
-            from oggm.core.preprocessing.geometry import line_interpol
+            from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
             points = line_interpol(l, 0.5)
             with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
@@ -443,7 +439,7 @@ class TestGeometry(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.catchment_area(gdir)
+        centerlines.catchment_area(gdir)
 
         cis = gdir.read_pickle('catchment_indices')
 
@@ -468,7 +464,7 @@ class TestGeometry(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
 
         cls = gdir.read_pickle('inversion_flowlines')
         for cl in cls:
@@ -495,10 +491,10 @@ class TestGeometry(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_intersections(gdir)
-        geometry.catchment_width_geom(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
 
     def test_width(self):
 
@@ -509,10 +505,10 @@ class TestGeometry(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
 
         area = 0.
         otherarea = 0.
@@ -848,10 +844,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir)
@@ -883,10 +879,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir)
@@ -953,10 +949,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
         climate.mu_candidates(gdir)
@@ -1031,10 +1027,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
 
@@ -1075,10 +1071,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
@@ -1169,10 +1165,10 @@ class TestInversion(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
@@ -1270,10 +1266,10 @@ class TestInversion(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.apparent_mb_from_linear_mb(gdir)
 
         # OK. Values from Fischer and Kuhn 2013
@@ -1365,10 +1361,10 @@ class TestInversion(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
@@ -1428,10 +1424,10 @@ class TestInversion(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
@@ -1486,10 +1482,10 @@ class TestInversion(unittest.TestCase):
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
@@ -1530,10 +1526,10 @@ class TestInversion(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
@@ -1597,7 +1593,7 @@ class TestSlopeMitigation(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
 
         fls = gdir.read_pickle('inversion_flowlines')
         min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
@@ -1696,20 +1692,19 @@ class TestGrindelInvert(unittest.TestCase):
 
         coords = np.arange(0, nx-0.5, 1)
         line = shpg.LineString(np.vstack([coords, coords*0.]).T)
-        return [flowline.ParabolicFlowline(line, dx, map_dx, surface_h,
-                                           bed_h, shape)]
+        return [flowline.ParabolicBedFlowline(line, dx, map_dx, surface_h,
+                                              bed_h, shape)]
 
-    @requires_py3
     def test_ideal_glacier(self):
 
         # we are making a
         glen_a = cfg.A * 1
-        from oggm.core.models import flowline, massbalance
+        from oggm.core import flowline
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
 
         fls = self._parabolic_bed()
-        mbmod = massbalance.LinearMassBalanceModel(2800.)
+        mbmod = massbalance.LinearMassBalance(2800.)
         model = flowline.FluxBasedModel(fls, mb_model=mbmod, glen_a=glen_a)
         model.run_until_equilibrium()
 
@@ -1755,28 +1750,27 @@ class TestGrindelInvert(unittest.TestCase):
         rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
         assert rmsd < 10.
 
-    @requires_py3
     def test_invert_and_run(self):
 
-        from oggm.core.models import flowline, massbalance
+        from oggm.core import flowline, massbalance
 
         glen_a = cfg.A*2
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
+        centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
         climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
         inversion.prepare_for_inversion(gdir)
         v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         inversion.filter_inversion_output(gdir)
         flowline.init_present_time_glacier(gdir)
-        mb_mod = massbalance.ConstantMassBalanceModel(gdir)
+        mb_mod = massbalance.ConstantMassBalance(gdir)
         fls = gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                         fs=0, glen_a=glen_a)
@@ -1787,17 +1781,16 @@ class TestGrindelInvert(unittest.TestCase):
         after_vol = model.volume_m3
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
 
-    @requires_py3
     def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
-        geometry.initialize_flowlines(gdir)
-        geometry.catchment_area(gdir)
-        geometry.catchment_intersections(gdir)
-        geometry.catchment_width_geom(gdir)
-        geometry.catchment_width_correction(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
 
         # see that we have as many catchments as flowlines
         fls = gdir.read_pickle('inversion_flowlines')
@@ -1983,7 +1976,8 @@ class TestCatching(unittest.TestCase):
         gis.glacier_masks(gdir)
 
         self.assertEqual(gdir.get_task_status(gis.glacier_masks), 'SUCCESS')
-        self.assertIsNone(gdir.get_task_status(centerlines.compute_centerlines))
+        self.assertIsNone(gdir.get_task_status(
+            centerlines.compute_centerlines))
 
         centerlines.compute_downstream_bedshape(gdir)
 

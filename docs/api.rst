@@ -38,18 +38,26 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.define_glacier_region
     tasks.glacier_masks
     tasks.compute_centerlines
-    tasks.compute_downstream_line
-    tasks.catchment_area
     tasks.initialize_flowlines
+    tasks.compute_downstream_line
+    tasks.compute_downstream_bedshape
+    tasks.catchment_area
+    tasks.catchment_intersections
     tasks.catchment_width_geom
     tasks.catchment_width_correction
-    tasks.process_custom_climate_data
     tasks.process_cru_data
+    tasks.process_custom_climate_data
+    tasks.process_cesm_data
+    tasks.apparent_mb_from_linear_mb
     tasks.mu_candidates
     tasks.prepare_for_inversion
     tasks.volume_inversion
     tasks.distribute_thickness
     tasks.init_present_time_glacier
+    tasks.random_glacier_evolution
+    tasks.iterative_initial_glacier_search
+    tasks.run_from_climate_data
+    tasks.run_constant_climate
 
 Global tasks
 ============
@@ -72,7 +80,7 @@ Classes
 Listed here are the classes which are relevant at the API level (i.e. classes
 which are used and re-used across modules and tasks).
 
-TODO: add the flowline classes, the model classes, etc.
+TODO: add the model classes, etc.
 
 
 
@@ -82,14 +90,15 @@ TODO: add the flowline classes, the model classes, etc.
 
     GlacierDirectory
     Centerline
+    Flowline
 
 
 Mass-balance
 ============
 
-Mass-balance models found in the ``core.models.massbalance`` module.
+Mass-balance models found in the ``core.massbalance`` module.
 
-.. currentmodule:: oggm.core.models.massbalance
+.. currentmodule:: oggm.core.massbalance
 
 They follow the :py:func:`MassBalanceModel` interface. Here is a quick summary
 of the units and conventions used by all models:
@@ -122,7 +131,7 @@ Interface
 ---------
 
 
-.. currentmodule:: oggm.core.models.massbalance
+.. currentmodule:: oggm.core.massbalance
 
 .. autosummary::
     :toctree: generated/
@@ -141,7 +150,7 @@ Models
     :toctree: generated/
     :nosignatures:
 
-    LinearMassBalanceModel
-    PastMassBalanceModel
-    ConstantMassBalanceModel
-    RandomMassBalanceModel
+    LinearMassBalance
+    PastMassBalance
+    ConstantMassBalance
+    RandomMassBalance

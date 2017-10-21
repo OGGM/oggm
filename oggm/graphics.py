@@ -1,24 +1,18 @@
 """Useful plotting functions"""
-from __future__ import division
-from six.moves import zip
-
-import oggm
-
-from collections import OrderedDict
-import warnings
-import logging
 import functools
+import logging
+from collections import OrderedDict
 
 import geopandas as gpd
-import matplotlib.pyplot as plt
-from matplotlib import cm as colormap
 import matplotlib.colors as colors
-import shapely.geometry as shpg
-import numpy as np
+import matplotlib.pyplot as plt
 import netCDF4
+import numpy as np
 import salem
+import shapely.geometry as shpg
+from matplotlib import cm as colormap
 
-from oggm.core.models.flowline import FileModel
+from oggm.core.flowline import FileModel
 
 # Module logger
 log = logging.getLogger(__name__)

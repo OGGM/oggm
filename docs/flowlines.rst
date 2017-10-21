@@ -33,21 +33,21 @@ The relevant task is :py:func:`tasks.compute_centerlines`:
     @savefig plot_fls_centerlines.png width=80%
     graphics.plot_centerlines(gdir)
 
-Each of the three divides has a major centerline (always the longest one), and
-sometimes tributaries (in this case only one for the largest divide). The
-:py:class:`Centerline` objects are stored as a list, the last one being
+The glacier has a major centerline (the longest one), and
+tributaries (in this case two ). The :py:class:`Centerline` objects are stored
+as a list, the last one being
 the major one. Navigation between inflows (can be more than one) and
 outflow (only one or none) is facilitated by the ``inflows`` and
 ``flows_to`` attributes:
 
 .. ipython:: python
 
-    fls = gdir.read_pickle('centerlines', div_id='major')
+    fls = gdir.read_pickle('centerlines')
     fls[0]  # a Centerline object
-    # make sure the first flowline flows into the major one:
+    # make sure the first flowline realy flows into the major one:
     assert fls[0].flows_to is fls[-1]
 
-At this stage, the centerlines coordinates are still defined on the original
+At this stage, the centerline coordinates are still defined on the original
 grid, and they are not considered as "flowlines" by OGGM. A rather simple task
 (:py:func:`tasks.initialize_flowlines`) converts them to flowlines which
 now have a regular coordinate spacing along the flowline (which they will
@@ -71,18 +71,16 @@ downstream of the current glacier geometry. This is done by the
 .. ipython:: python
 
     @savefig plot_fls_downstream.png width=80%
-    graphics.plot_centerlines(gdir, add_downstream=True)
+    graphics.plot_centerlines(gdir, use_flowlines=True, add_downstream=True)
 
-Note that the task also determines the new tributaries originating from the
-glacier divides (while the concept of divides is necessary for the
-preprocessing, all divides are then merged to make one glacier for the
-actual run).
+The downsteam lines area also computed using a routing algorithm minimizing
+the distance to cover and upward slopes.
 
 
 Catchment areas
 ---------------
 
-Each tributary flowline has it's own "catchment area". These areas are computed
+Each flowline has it's own "catchment area". These areas are computed
 using similar flow routing methods as the one used for determining the
 flowlines. Their role is to attribute each glacier pixel to the right
 tributory (this will also influence the later computation of the glacier

@@ -4,7 +4,6 @@ Copyright: OGGM developers, 2014-2017
 
 License: GPLv3+
 """
-from __future__ import absolute_import, division
 import logging
 
 try:
@@ -33,4 +32,5 @@ except ImportError:
 
 # API
 from oggm.utils import GlacierDirectory, entity_task, global_task
-from oggm.core.preprocessing.centerlines import Centerline
+from oggm.core.centerlines import Centerline
+from oggm.core.flowline import Flowline

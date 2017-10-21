@@ -3,19 +3,19 @@
 # Python imports
 import os
 import zipfile
+
+import matplotlib.pyplot as plt
 # Libs
-import oggm
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import salem
 
 # Locals
 import oggm.cfg as cfg
-from oggm import workflow
-from oggm import tasks
-from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
+from oggm import tasks
+from oggm import workflow
+from oggm.workflow import execute_entity_task
 
 # Initialize OGGM and set up the run parameters
 # ---------------------------------------------
@@ -98,16 +98,16 @@ tasks.distribute_t_stars(gdirs)
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
-from oggm.core.models.massbalance import (ConstantMassBalanceModel,
-                                          PastMassBalanceModel)
+from oggm.core.massbalance import (ConstantMassBalance,
+                                   PastMassBalance)
 for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
 
-    mb_mod = ConstantMassBalanceModel(gd, bias=0)  # bias=0 because of calib!
+    mb_mod = ConstantMassBalance(gd, bias=0)  # bias=0 because of calib!
     mb = mb_mod.get_specific_mb(heights, widths)
     np.testing.assert_allclose(mb, 0, atol=10)  # numerical errors
 
-    mb_mod = PastMassBalanceModel(gd)  # Here we need the computed bias
+    mb_mod = PastMassBalance(gd)  # Here we need the computed bias
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
@@ -122,9 +122,9 @@ cvdf = pd.read_csv(file, index_col=0)
 for gd in gdirs:
     t_cvdf = cvdf.loc[gd.rgi_id]
     heights, widths = gd.get_inversion_flowline_hw()
-    mb_mod = PastMassBalanceModel(gd, mu_star=t_cvdf.cv_mustar,
-                                  bias=t_cvdf.cv_bias,
-                                  prcp_fac=t_cvdf.cv_prcp_fac)
+    mb_mod = PastMassBalance(gd, mu_star=t_cvdf.cv_mustar,
+                             bias=t_cvdf.cv_bias,
+                             prcp_fac=t_cvdf.cv_prcp_fac)
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
                                            year=refmb.index)
@@ -138,9 +138,9 @@ for gd in gdirs:
     cvdf.loc[gd.rgi_id, 'CV_MB_SIGMA_BIAS'] = refmb.OGGM.std() / \
                                               std_ref
     cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
-    mb_mod = PastMassBalanceModel(gd, mu_star=t_cvdf.interp_mustar,
-                                  bias=t_cvdf.cv_bias,
-                                  prcp_fac=t_cvdf.cv_prcp_fac)
+    mb_mod = PastMassBalance(gd, mu_star=t_cvdf.interp_mustar,
+                             bias=t_cvdf.cv_bias,
+                             prcp_fac=t_cvdf.cv_prcp_fac)
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = refmb.OGGM.mean() - \
                                             refmb.ANNUAL_BALANCE.mean()
@@ -214,7 +214,7 @@ for gd in gdirs:
 
     fn = bname + '4_mbref.png'
     if not os.path.exists(fn):
-        mb_mod = PastMassBalanceModel(gd)
+        mb_mod = PastMassBalance(gd)
         refmb = gd.get_ref_mb_data().copy()
         heights, widths = gd.get_inversion_flowline_hw()
         refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
