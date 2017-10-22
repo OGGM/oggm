@@ -2554,6 +2554,29 @@ class GlacierDirectory(object):
         out = self._mbdf.loc[y0:y1]
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
+    def get_ref_length_data(self):
+        """Get the glacier lenght data from P. Leclercq's data base.
+
+         https://folk.uio.no/paulwl/data.php
+
+         For some glaciers only!
+         """
+
+        df = pd.read_csv(get_demo_file('rgi_leclercq_links_2012_RGIV5.csv'))
+        df = df.loc[df.RGI_ID == self.rgi_id]
+        if len(df) == 0:
+            raise RuntimeError('No length data found for this glacier!')
+        ide = df.LID.values[0]
+
+        f = get_demo_file('Glacier_Lengths_Leclercq.nc')
+        with xr.open_dataset(f) as dsg:
+            # The database is not sorted by ID. Don't ask me...
+            grp_id = np.argwhere(dsg['index'].values == ide)[0][0] + 1
+        with xr.open_dataset(f, group=str(grp_id)) as ds:
+            df = ds.to_dataframe()
+            df.name = ds.glacier_name
+        return df
+
     def log(self, func, err=None):
         """Logs a message to the glacier directory.
 
