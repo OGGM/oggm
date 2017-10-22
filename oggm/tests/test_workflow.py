@@ -264,8 +264,8 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-        assert np.all(np.abs(df.cv_bias) < 30)
-        assert np.all(np.abs(dfq.cv_bias) < 30)
+        assert np.all(np.abs(df.cv_bias) < 50)
+        assert np.all(np.abs(dfq.cv_bias) < 50)
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
 
         # see if the process didn't brake anything
@@ -380,7 +380,7 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -403,7 +403,7 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_model():
 
     gdirs = random_for_plot()
