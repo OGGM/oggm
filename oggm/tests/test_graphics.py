@@ -136,6 +136,7 @@ def test_multiple_inversion():
 
     # Init
     cfg.initialize()
+    workflow.reset_multiprocessing()
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
@@ -212,6 +213,7 @@ def test_multiple_models():
 
     # Init
     cfg.initialize()
+    workflow.reset_multiprocessing()
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PARAMS['optimize_inversion_params'] = True
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
