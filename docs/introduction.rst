@@ -3,8 +3,7 @@ Introduction
 
 
 We illustrate with an example how the OGGM workflow is applied to the
-Hintereisferner (HEF) glacier in the Ötztal Alps, Austria (see the Figure
-at the bottom of this page).
+Tasman Glacier in New Zealand.
 Here we describe shortly the purpose of each processing step, while more
 details are provided in the other sections:
 
@@ -13,8 +12,7 @@ Preprocessing
   gridded map of the glacier (Fig. a). Depending on the
   glacier's location, a suitable source for the topographical data is
   downloaded automatically (here SRTM) and interpolated to the local grid.
-  The map's spatial resolution depends on the size of the glacier
-  (for HEF, 50~m).
+  The map's spatial resolution depends on the size of the glacier.
 
 Flowlines
   The glacier centerlines are computed using a geometrical routing algorithm
@@ -46,8 +44,8 @@ Ice thickness inversion
 
 Glacier evolution
   A dynamical flowline model is used to simulate the advance and retreat of the
-  glacier under preselected climate time series. Here (Fig. f), a 175-yrs long
-  random climate sequence leads to a slight glacier advance.
+  glacier under preselected climate time series. Here (Fig. f), a 120-yrs long
+  random climate sequence leads to a glacier advance.
 
 
 .. figure:: _static/ex_workflow.png

@@ -836,6 +836,18 @@ class TestIdealisedCases(unittest.TestCase):
             plt.legend()
             plt.show()
 
+    @is_slow
+    def test_boundaries(self):
+
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2000.)
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a,
+                                        fs=self.fs)
+        with pytest.raises(RuntimeError) as excinfo:
+            model.run_until(300)
+        assert 'exceeds domain boundaries' in str(excinfo.value)
+
 
 @pytest.mark.skip(reason='Currently not in OGGM')
 class TestSandbox(unittest.TestCase):

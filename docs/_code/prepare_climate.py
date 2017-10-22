@@ -117,7 +117,6 @@ def example_plot_massflux():
     fig, ax = plt.subplots(figsize=(8, 4))
     fdf.plot(ax=ax, secondary_y='Mass balance', style=['C1-', 'C0-'])
     plt.axhline(0., color='grey', linestyle=':')
-    ax.set_ylim([0, 1.5])
     ax.set_ylabel('Flux [m$^3$ s$^{-1}$]')
     ax.right_ax.set_ylabel('MB [kg m$^{-2}$ yr$^{-1}$]')
     ax.set_xlabel('Distance along flowline (m)')

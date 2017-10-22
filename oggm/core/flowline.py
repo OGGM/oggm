@@ -370,7 +370,7 @@ class FlowlineModel(object):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=True, is_tidewater=False,
-                 mb_elev_feedback='annual'):
+                 mb_elev_feedback='annual', check_for_boundaries=True):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -396,6 +396,9 @@ class FlowlineModel(object):
             mass-balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
+        check_for_boundaries : bool
+            whether the model should raise an error when the glacier exceeds
+            the domain boundaries.
         """
 
         self.is_tidewater = is_tidewater
@@ -425,6 +428,8 @@ class FlowlineModel(object):
             glen_a = cfg.A
         self.glen_a = glen_a
         self.fs = fs
+
+        self.check_for_boundaries = check_for_boundaries and not is_tidewater
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (N+2) * self.glen_a
@@ -569,9 +574,9 @@ class FlowlineModel(object):
             self.step(t-self.t)
 
         # Check for domain bounds
-        if self.fls[-1].thick[-1] > 10:
-            if not self.is_tidewater:
-                raise RuntimeError('Glacier exceeds domain boundaries.')
+        if self.check_for_boundaries:
+            if self.fls[-1].thick[-1] > 10:
+                    raise RuntimeError('Glacier exceeds domain boundaries.')
 
         # Check for NaNs
         for fl in self.fls:
@@ -1641,6 +1646,7 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
 
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
                                      zero_initial_glacier=zero_initial_glacier)
+
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,

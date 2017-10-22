@@ -264,8 +264,8 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
-        assert np.all(np.abs(df.cv_bias) < 20)
-        assert np.all(np.abs(dfq.cv_bias) < 20)
+        assert np.all(np.abs(df.cv_bias) < 50)
+        assert np.all(np.abs(dfq.cv_bias) < 50)
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
 
         # see if the process didn't brake anything
@@ -380,7 +380,7 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -395,7 +395,7 @@ def test_plot_region_inversion():
 
     # Give this to the plot function
     fig, ax = plt.subplots()
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5)
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=280)
 
     fig.tight_layout()
     return fig
@@ -403,7 +403,7 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=15)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_model():
 
     gdirs = random_for_plot()
@@ -419,7 +419,7 @@ def test_plot_region_model():
     # Give this to the plot function
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
-                                  filesuffix='_plot',
+                                  filesuffix='_plot', vmax=280,
                                   modelyr=10, linewidth=1.5)
 
     fig.tight_layout()
