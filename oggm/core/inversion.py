@@ -221,8 +221,8 @@ def optimize_inversion_params(gdirs):
 
     # Do we even need to do this?
     if not cfg.PARAMS['optimize_inversion_params']:
-        log.info('User did not want to optimize the inversion params')
-        return
+        raise RuntimeError('User did not want to optimize the '
+                           'inversion params')
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
@@ -359,28 +359,34 @@ def optimize_inversion_params(gdirs):
 
 
 @entity_task(log, writes=['inversion_output'])
-def volume_inversion(gdir, use_cfg_params=None):
+def volume_inversion(gdir, glen_a=None, fs=None):
     """Computes the inversion the glacier.
 
-    If fs and fd are not given, it will use the optimized params.
+    If glen_a and fs are not given, it will use the optimized params.
 
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
-    use_cfg_params : set to a dict of params (experimental)
+    glen_a : float, optional
+        the ice creep parameter (defaults to cfg.PARAMS['inversion_glen_a'])
+    fs : float, optional
+        the sliding parameter (defaults to cfg.PARAMS['inversion_fs'])
     """
 
-    if use_cfg_params is not None:
-        fs = use_cfg_params['fs']
-        glen_a = use_cfg_params['glen_a']
-    elif not cfg.PARAMS['optimize_inversion_params']:
-        fs = cfg.PARAMS['inversion_fs']
-        glen_a = cfg.PARAMS['inversion_glen_a']
-    else:
+    if fs is not None and glen_a is None:
+        raise ValueError('Cannot set fs without glen_a.')
+
+    if glen_a is None and cfg.PARAMS['optimize_inversion_params']:
         # use the optimized ones
         d = gdir.read_pickle('inversion_params')
         fs = d['fs']
         glen_a = d['glen_a']
+
+    if glen_a is None:
+        glen_a = cfg.PARAMS['inversion_glen_a']
+
+    if fs is None:
+        fs = cfg.PARAMS['inversion_fs']
 
     # go
     return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True)

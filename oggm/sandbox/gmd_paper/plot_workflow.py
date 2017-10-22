@@ -40,7 +40,7 @@ tasks.distribute_t_stars([gdir])
 
 glen_a = cfg.A
 tasks.prepare_for_inversion(gdir)
-tasks.volume_inversion(gdir, use_cfg_params={'fs':0, 'glen_a':glen_a})
+tasks.volume_inversion(gdir, glen_a=cfg.A, fs=0)
 tasks.filter_inversion_output(gdir)
 
 # run

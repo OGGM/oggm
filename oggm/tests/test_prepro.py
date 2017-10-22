@@ -1535,7 +1535,7 @@ class TestInversion(unittest.TestCase):
         climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
                                          prcp_fac=2.)
         inversion.prepare_for_inversion(gdir)
-        inversion.volume_inversion(gdir, use_cfg_params={'fd':12, 'fs':0})
+        inversion.volume_inversion(gdir)
 
         rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
                             'RGI50-11.fake')

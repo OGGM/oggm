@@ -149,8 +149,7 @@ class TestInitialize(unittest.TestCase):
         self.homedir = os.path.expanduser('~')
 
     def test_defaults(self):
-        expected = os.path.join(self.homedir, 'OGGM_WORKING_DIRECTORY')
-        self.assertEqual(cfg.PATHS['working_dir'], expected)
+        self.assertFalse(cfg.PATHS['working_dir'])
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')

@@ -294,7 +294,7 @@ def test_chhota_shigri():
         climate.apparent_mb_from_linear_mb(gdir)
     workflow.execute_entity_task(inversion.prepare_for_inversion, gdirs)
     workflow.execute_entity_task(inversion.volume_inversion, gdirs,
-                                 use_cfg_params={'glen_a': cfg.A, 'fs': 0})
+                                 glen_a=cfg.A, fs=0)
     workflow.execute_entity_task(inversion.filter_inversion_output, gdirs)
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
 
@@ -375,8 +375,7 @@ def test_coxe():
     centerlines.catchment_width_correction(gdir)
     climate.apparent_mb_from_linear_mb(gdir)
     inversion.prepare_for_inversion(gdir)
-    inversion.volume_inversion(gdir, use_cfg_params={'glen_a': cfg.A,
-                                                     'fs': 0})
+    inversion.volume_inversion(gdir, glen_a=cfg.A, fs=0)
     inversion.filter_inversion_output(gdir)
 
     flowline.init_present_time_glacier(gdir)

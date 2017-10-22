@@ -73,7 +73,7 @@ fdf['Flux'] = cl['flux']
 fdf['Mass balance'] = mbx
 
 # For the distributed thickness
-tasks.volume_inversion(gdir, use_cfg_params={'fs': 0, 'glen_a': cfg.A*3})
+tasks.volume_inversion(gdir, glen_a=cfg.A*3, fs=0)
 tasks.distribute_thickness(gdir, how='per_interpolation')
 
 
