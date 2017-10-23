@@ -280,11 +280,11 @@ def initialize(file=None):
     PARAMS[_k] = cp.as_bool(_k)
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files
+    from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
     download_oggm_files()
 
     # Parse RGI metadata
-    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-master', 'rgi_meta')
+    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'rgi_meta')
     RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
                                 index_col=0)
     RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),

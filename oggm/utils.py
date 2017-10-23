@@ -55,7 +55,11 @@ from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
 # Module logger
 logger = logging.getLogger(__name__)
 
+# Github repository and commit hash/branch name/tag name on that repository
+# The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
+SAMPLE_DATA_COMMIT = '4ccda1dbcd37ecdabe1b80854b244905f51c6c65'
+
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
              '.1701201703.v3.24.01/'
 
@@ -425,67 +429,17 @@ def download_oggm_files():
 def _download_oggm_files_unlocked():
     """Checks if the demo data is already on the cache and downloads it."""
 
-    master_sha_url = 'https://api.github.com/repos/%s/commits/master' % \
-                     SAMPLE_DATA_GH_REPO
-    master_zip_url = 'https://github.com/%s/archive/master.zip' % \
-                     SAMPLE_DATA_GH_REPO
-    rename_output = False
-    shafile = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-commit.txt')
+    zip_url = 'https://github.com/%s/archive/%s.zip' % \
+              (SAMPLE_DATA_GH_REPO, SAMPLE_DATA_COMMIT)
     odir = os.path.join(cfg.CACHE_DIR)
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master')
-
-    # a file containing the online's file's hash and the time of last check
-    if os.path.exists(shafile):
-        with open(shafile, 'r') as sfile:
-            local_sha = sfile.read().strip()
-        last_mod = os.path.getmtime(shafile)
-    else:
-        # very first download
-        local_sha = '0000'
-        last_mod = 0
-
-    # test only every hour
-    if (time.time() - last_mod) > 3600 and cfg.PARAMS['has_internet']:
-        write_sha = True
-        try:
-            # this might fail with HTTP 403 when server overload
-            resp = urlopen(master_sha_url)
-
-            # following try/finally is just for py2/3 compatibility
-            # https://mail.python.org/pipermail/python-list/2016-March/704073.html
-            try:
-                json_str = resp.read().decode('utf-8')
-            finally:
-                resp.close()
-            json_obj = json.loads(json_str)
-            master_sha = json_obj['sha']
-            # if not same, delete entire dir
-            if local_sha != master_sha:
-                empty_cache()
-            # use sha based download url to avoid cache issues
-            master_zip_url = 'https://github.com/%s/archive/%s.zip' % \
-                (SAMPLE_DATA_GH_REPO, master_sha)
-            rename_output = "oggm-sample-data-%s" % master_sha
-        except (HTTPError, URLError):
-            master_sha = 'error'
-            write_sha = False
-    else:
-        write_sha = False
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT)
 
     # download only if necessary
     if not os.path.exists(sdir):
-        ofile = file_downloader(master_zip_url)
+        ofile = file_downloader(zip_url)
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(odir)
-        # rename dir in case of download from different url
-        if rename_output:
-            fdir = os.path.join(cfg.CACHE_DIR, rename_output)
-            shutil.move(fdir, sdir)
-
-    # sha did change, replace
-    if write_sha:
-        with open(shafile, 'w') as sfile:
-            sfile.write(master_sha)
+        assert os.path.isdir(sdir)
 
     # list of files for output
     out = dict()
@@ -1399,7 +1353,7 @@ def get_cru_cl_file():
 
     download_oggm_files()
 
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'cru')
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'cru')
     fpath = os.path.join(sdir, 'cru_cl2.nc')
     if os.path.exists(fpath):
         return fpath
@@ -1430,7 +1384,7 @@ def get_wgms_files():
 
     # Roll our own
     download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'wgms')
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'wgms')
     outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
     assert os.path.exists(outf)
     datadir = os.path.join(sdir, 'mbdata')
@@ -1454,7 +1408,7 @@ def get_glathida_file():
 
     # Roll our own
     download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master', 'glathida')
+    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'glathida')
     outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
     assert os.path.exists(outf)
     return outf
