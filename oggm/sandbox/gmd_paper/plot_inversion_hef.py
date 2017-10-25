@@ -6,8 +6,7 @@ import numpy as np
 
 import oggm
 from oggm import cfg, tasks
-from oggm.core.climate import (t_star_from_refmb,
-                               local_mustar_apparent_mb)
+from oggm.core.climate import (t_star_from_refmb, local_mustar, apparent_mb)
 from oggm.core.inversion import (mass_conservation_inversion)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file, mkdir
@@ -35,9 +34,10 @@ tasks.catchment_width_correction(gdir)
 tasks.process_cru_data(gdir)
 tasks.mu_candidates(gdir, reset=True)
 res = t_star_from_refmb(gdir, gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
-local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
-                         bias=res['bias'][-1],
-                         prcp_fac=res['prcp_fac'], reset=True)
+local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+             prcp_fac=res['prcp_fac'], reset=True)
+apparent_mb(gdir, reset=True)
+
 tasks.prepare_for_inversion(gdir, reset=True)
 
 
@@ -86,9 +86,9 @@ for i, f in enumerate(facs):
     cfg.PARAMS['prcp_scaling_factor'] = f
     tasks.mu_candidates(gdir, reset=True)
     res = t_star_from_refmb(gdir, gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
-    local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
-                             bias=res['bias'][-1],
-                             prcp_fac=res['prcp_fac'], reset=True)
+    local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+                 prcp_fac=res['prcp_fac'], reset=True)
+    apparent_mb(gdir, reset=True)
     tasks.prepare_for_inversion(gdir, reset=True)
 
     v, _ = mass_conservation_inversion(gdir, glen_a=cfg.A)

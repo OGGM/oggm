@@ -245,9 +245,12 @@ def climate_tasks(gdirs):
         _process_task = tasks.process_cru_data
     execute_entity_task(_process_task, gdirs)
 
-    # Then, only global tasks
+    # Then, global tasks
     tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
+
+    # And the apparent mass-balance
+    execute_entity_task(tasks.apparent_mb, gdirs)
 
 
 def inversion_tasks(gdirs):

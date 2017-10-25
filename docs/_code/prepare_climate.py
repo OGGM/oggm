@@ -10,7 +10,7 @@ import oggm
 from oggm import cfg, tasks
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb,
-                               local_mustar_apparent_mb)
+                               local_mustar, apparent_mb)
 from oggm.core.massbalance import (ConstantMassBalance)
 from oggm.utils import get_demo_file
 from oggm import graphics
@@ -38,8 +38,9 @@ tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
-local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
-                         prcp_fac=res['prcp_fac'])
+local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+             prcp_fac=res['prcp_fac'], reset=True)
+apparent_mb(gdir, reset=True)
 
 # For flux plot
 tasks.prepare_for_inversion(gdir, add_debug_var=True)

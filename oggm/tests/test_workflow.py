@@ -159,6 +159,7 @@ def up_to_distrib(reset=False):
             workflow.execute_entity_task(tasks.process_cru_data, gdirs)
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('cru', f)
 
@@ -242,6 +243,7 @@ class TestWorkflow(unittest.TestCase):
         # in case we ran crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
 
         # before crossval
         refmustars = []
@@ -256,6 +258,7 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Test if quicker crossval is also OK
         tasks.quick_crossval_t_stars(gdirs)
@@ -265,6 +268,7 @@ class TestWorkflow(unittest.TestCase):
         # after crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
         tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
         assert np.all(np.abs(df.cv_bias) < 50)
         assert np.all(np.abs(dfq.cv_bias) < 50)
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
@@ -396,7 +400,7 @@ def test_plot_region_inversion():
 
     # Give this to the plot function
     fig, ax = plt.subplots()
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=280)
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=250)
 
     fig.tight_layout()
     return fig
@@ -420,7 +424,7 @@ def test_plot_region_model():
     # Give this to the plot function
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
-                                  filesuffix='_plot', vmax=280,
+                                  filesuffix='_plot', vmax=250,
                                   modelyr=10, linewidth=1.5)
 
     fig.tight_layout()

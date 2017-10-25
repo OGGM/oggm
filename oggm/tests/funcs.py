@@ -281,9 +281,9 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     climate.mu_candidates(gdir)
     mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
     res = climate.t_star_from_refmb(gdir, mbdf)
-    climate.local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1],
-                                     bias=res['bias'][-1],
-                                     prcp_fac=res['prcp_fac'])
+    climate.local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+                         prcp_fac=res['prcp_fac'])
+    climate.apparent_mb(gdir)
 
     inversion.prepare_for_inversion(gdir, add_debug_var=True,
                                     invert_with_rectangular=invert_with_rectangular)

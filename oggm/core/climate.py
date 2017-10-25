@@ -15,6 +15,7 @@ from scipy import optimize as optimization
 # Locals
 from oggm import cfg
 from oggm import utils
+from oggm.core import centerlines
 from oggm import entity_task, global_task
 
 # Module logger
@@ -782,10 +783,9 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * cfg.RHO / gdir.rgi_area_m2
 
 
-@entity_task(log, writes=['local_mustar', 'inversion_flowlines'])
-def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
-                             compute_apparent_mb=True):
-    """Compute local mustar and apparent mb from tstar.
+@entity_task(log, writes=['local_mustar'])
+def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
+    """Compute the local mustar from interpolated tstars.
 
     Parameters
     ----------
@@ -796,9 +796,6 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         the associated reference bias
     prcp_fac: int
         the associated precipitation factor
-    compute_apparent_mb: bool
-        if you want to compute the apparent MB at the same time (recommended,
-        unless you are cross-validating for example).
     """
 
     assert bias is not None
@@ -833,8 +830,28 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
     df['bias'] = [bias]
     df.to_csv(gdir.get_filepath('local_mustar'), index=False)
 
-    if not compute_apparent_mb:
-        return
+
+@entity_task(log, writes=['inversion_flowlines'])
+def apparent_mb(gdir):
+    """Compute the apparent mb from the calibrated mustar.
+
+    Parameters
+    ----------
+    """
+
+    # Calibrated data
+    df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+    tstar = df['t_star']
+    prcp_fac = df['prcp_fac']
+    mu_star = df['mu_star']
+    bias = df['bias']
+
+    # Climate period
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+    yr = [tstar-mu_hp, tstar+mu_hp]
+
+    # Do we have a calving glacier?
+    cmb = calving_mb(gdir)
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
@@ -848,7 +865,28 @@ def local_mustar_apparent_mb(gdir, tstar=None, bias=None, prcp_fac=None,
         y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h, prcp_fac,
                                               year_range=yr,
                                               flatten=False)
-        fl.set_apparent_mb(np.mean(p, axis=1) - mustar*np.mean(t, axis=1))
+        fl.set_apparent_mb(np.mean(p, axis=1) - mu_star*np.mean(t, axis=1))
+
+    # Sometimes, low lying tributaries have a non-physically consistent
+    # Mass-balance. We should remove these, and start all over again until
+    # all tributaries are consistent
+    do_filter = [fl.flux_needed_correction for fl in fls]
+    if cfg.PARAMS['filter_for_neg_flux'] and np.any(do_filter):
+        assert not do_filter[-1]  # This should not happen
+        # Keep only the good lines
+        heads = [fl.head for fl in fls if not fl.flux_needed_correction]
+        centerlines.compute_centerlines(gdir, heads=heads)
+        centerlines.initialize_flowlines(gdir)
+        if gdir.has_file('downstream_line'):
+            centerlines.compute_downstream_line(gdir)
+            centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac)
+        # Ok, re-call ourselves
+        return apparent_mb(gdir, reset=True)
 
     # Check and write
     aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
@@ -1076,14 +1114,13 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs, compute_apparent_mb=True, ref_df=None):
+def distribute_t_stars(gdirs, ref_df=None):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
     Parameters
     ----------
     gdirs : list of oggm.GlacierDirectory objects
-    compute_apparent_mb : bool (defaults to True)
     """
 
     log.info('Distribute t* and mu*')
@@ -1114,10 +1151,8 @@ def distribute_t_stars(gdirs, compute_apparent_mb=True, ref_df=None):
             bias = np.average(amin.bias, weights=1./distances)
 
         # Go
-        local_mustar_apparent_mb(gdir, tstar=tstar, bias=bias,
-                                 prcp_fac=prcp_fac,
-                                 compute_apparent_mb=compute_apparent_mb,
-                                 reset=True)
+        local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac,
+                     reset=True)
 
 
 @global_task
@@ -1153,7 +1188,7 @@ def crossval_t_stars(gdirs):
         # redo the computations
         with utils.DisableLogger():
             compute_ref_t_stars(ref_gdirs)
-            distribute_t_stars([gdir], compute_apparent_mb=False)
+            distribute_t_stars([gdir])
 
         # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1189,7 +1224,7 @@ def quick_crossval_t_stars(gdirs):
     full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
                                            'ref_tstars.csv'), index_col=0)
     with utils.DisableLogger():
-        distribute_t_stars(rgdirs, compute_apparent_mb=False)
+        distribute_t_stars(rgdirs)
 
     n = len(full_ref_df)
     for i, rid in enumerate(full_ref_df.index):
@@ -1208,8 +1243,7 @@ def quick_crossval_t_stars(gdirs):
 
         # redo the computations
         with utils.DisableLogger():
-            distribute_t_stars([gdir], ref_df=tmp_ref_df,
-                               compute_apparent_mb=False)
+            distribute_t_stars([gdir], ref_df=tmp_ref_df)
 
         # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))

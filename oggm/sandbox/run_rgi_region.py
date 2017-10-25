@@ -117,9 +117,10 @@ if RUN_GIS_PREPRO:
 if RUN_CLIMATE_PREPRO:
     # Climate related tasks
     # see if we can distribute
-    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
+    execute_entity_task(tasks.process_cru_data, gdirs)
     tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
+    execute_entity_task(tasks.apparent_mb, gdirs)
 
 if RUN_INVERSION:
     # Inversion

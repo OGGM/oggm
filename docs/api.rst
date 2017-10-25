@@ -48,6 +48,8 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_cru_data
     tasks.process_custom_climate_data
     tasks.process_cesm_data
+    tasks.local_mustar
+    tasks.apparent_mb
     tasks.apparent_mb_from_linear_mb
     tasks.mu_candidates
     tasks.prepare_for_inversion
