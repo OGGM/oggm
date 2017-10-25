@@ -111,13 +111,16 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
     Takes care of checking if the file is already cached.
-    Only calls the actuall download function when no cached version exists.
+    Only calls the actual download function when no cached version exists.
     """
     cache_dir = cfg.PATHS['dl_cache_dir']
     cache_ro = cfg.PARAMS['dl_cache_readonly']
     fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
 
     if not cache_dir:
+        # Defaults to working directory: it must be set!
+        if not cfg.PATHS['working_dir']:
+            raise ValueError("Need a valid PATHS['working_dir']!")
         cache_dir = fb_cache_dir
         cache_ro = False
 
@@ -1129,6 +1132,10 @@ def pipe_log(gdir, task_func_name, err=None):
 
     time_str = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
+    # Defaults to working directory: it must be set!
+    if not cfg.PATHS['working_dir']:
+        raise ValueError("Need a valid PATHS['working_dir']!")
+
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     mkdir(fpath)
 
@@ -1971,7 +1978,7 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, reset=None, **kwargs):
+        def _entity_task(gdir, reset=None, print_log=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
@@ -1982,7 +1989,8 @@ class entity_task(object):
                 return
 
             # Log what we are doing
-            self.log.info('(%s) %s', gdir.rgi_id, task_func.__name__)
+            if print_log:
+                self.log.info('(%s) %s', gdir.rgi_id, task_func.__name__)
 
             # Run the task
             try:
@@ -1998,8 +2006,10 @@ class entity_task(object):
                 if fsuffix:
                     task_func_name += fsuffix
                 pipe_log(gdir, task_func_name, err=err)
-                self.log.error('%s occurred during task %s on %s!',
-                        type(err).__name__, task_func.__name__, gdir.rgi_id)
+                if print_log:
+                    self.log.error('%s occurred during task %s on %s!',
+                                   type(err).__name__, task_func.__name__,
+                                   gdir.rgi_id)
                 if not cfg.PARAMS['continue_on_error']:
                     raise
             return out
@@ -2096,8 +2106,8 @@ class GlacierDirectory(object):
         """
 
         if base_dir is None:
-            if cfg.PATHS.get('working_dir', None) is None:
-                raise RuntimeError('You need to set the `working_dir`!')
+            if not cfg.PATHS.get('working_dir', None):
+                raise ValueError("Need a valid PATHS['working_dir']!")
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
         # RGI IDs are also valid entries
@@ -2497,6 +2507,29 @@ class GlacierDirectory(object):
         y1 = y1 or ci['hydro_yr_1']
         out = self._mbdf.loc[y0:y1]
         return out.dropna(subset=['ANNUAL_BALANCE'])
+
+    def get_ref_length_data(self):
+        """Get the glacier lenght data from P. Leclercq's data base.
+
+         https://folk.uio.no/paulwl/data.php
+
+         For some glaciers only!
+         """
+
+        df = pd.read_csv(get_demo_file('rgi_leclercq_links_2012_RGIV5.csv'))
+        df = df.loc[df.RGI_ID == self.rgi_id]
+        if len(df) == 0:
+            raise RuntimeError('No length data found for this glacier!')
+        ide = df.LID.values[0]
+
+        f = get_demo_file('Glacier_Lengths_Leclercq.nc')
+        with xr.open_dataset(f) as dsg:
+            # The database is not sorted by ID. Don't ask me...
+            grp_id = np.argwhere(dsg['index'].values == ide)[0][0] + 1
+        with xr.open_dataset(f, group=str(grp_id)) as ds:
+            df = ds.to_dataframe()
+            df.name = ds.glacier_name
+        return df
 
     def log(self, func, err=None):
         """Logs a message to the glacier directory.

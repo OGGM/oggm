@@ -74,6 +74,7 @@ def up_to_climate(reset=False):
 
     # Params
     cfg.PARAMS['border'] = 70
+    cfg.PARAMS['optimize_inversion_params'] = True
     cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
     cfg.PARAMS['invert_with_rectangular'] = False

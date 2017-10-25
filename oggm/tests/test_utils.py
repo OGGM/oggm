@@ -9,6 +9,7 @@ import gzip
 import salem
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 from numpy.testing import assert_array_equal, assert_allclose
 
 import oggm
@@ -149,13 +150,36 @@ class TestInitialize(unittest.TestCase):
         self.homedir = os.path.expanduser('~')
 
     def test_defaults(self):
-        expected = os.path.join(self.homedir, 'OGGM_WORKING_DIRECTORY')
-        self.assertEqual(cfg.PATHS['working_dir'], expected)
+        self.assertFalse(cfg.PATHS['working_dir'])
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
+
+class TestGlacierDirectory(unittest.TestCase):
+
+    def setUp(self):
+        cfg.initialize()
+        self.testdir = os.path.join(get_test_dir(), 'tmp_gir')
+        self.reset_dir()
+
+    def tearDown(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    def reset_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+
+    def test_leclercq(self):
+
+        hef_file = utils.get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        df = gdir.get_ref_length_data()
+        assert df.name == 'Hintereis'
+        assert len(df) == 105
 
 
 def touch(path):

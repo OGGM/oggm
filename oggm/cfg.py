@@ -222,15 +222,9 @@ def initialize(file=None):
         log.critical('Param file could not be parsed (%s): %s', file, e)
         sys.exit()
 
-    # Default
-    PATHS['working_dir'] = cp['working_dir']
-    if not PATHS['working_dir']:
-        PATHS['working_dir'] = os.path.join(os.path.expanduser('~'),
-                                            'OGGM_WORKING_DIRECTORY')
-
     # Paths
     oggm_static_paths()
-
+    PATHS['working_dir'] = cp['working_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
     PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
@@ -437,9 +431,10 @@ def set_intersects_db(path=None):
 
 def reset_working_dir():
     """Deletes the working directory."""
-    if os.path.exists(PATHS['working_dir']):
-        shutil.rmtree(PATHS['working_dir'])
-    os.makedirs(PATHS['working_dir'])
+    if PATHS['working_dir']:
+        if os.path.exists(PATHS['working_dir']):
+            shutil.rmtree(PATHS['working_dir'])
+        os.makedirs(PATHS['working_dir'])
 
 
 def pack_config():

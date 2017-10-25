@@ -87,8 +87,7 @@ execute_entity_task(tasks.process_cru_data, gdirs)
 
 # Inversion
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
-execute_entity_task(tasks.volume_inversion, gdirs,
-                    use_cfg_params={'glen_a': cfg.A, 'fs': 0})
+execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
 execute_entity_task(tasks.filter_inversion_output, gdirs,)
 
 # Run

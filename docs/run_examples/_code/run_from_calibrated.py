@@ -103,8 +103,7 @@ tasks.distribute_t_stars(gdirs)
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 # We use the default parameters for this run
-execute_entity_task(tasks.volume_inversion, gdirs,
-                    use_cfg_params={'glen_a': cfg.A, 'fs': 0})
+execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
 execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 # Final preparation for the run
