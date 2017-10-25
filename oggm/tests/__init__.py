@@ -12,6 +12,7 @@ import osgeo.gdal
 from urllib.request import urlopen
 
 from oggm import cfg
+from oggm.utils import SAMPLE_DATA_COMMIT
 
 # Defaults
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
@@ -23,7 +24,7 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 HAS_MPL_FOR_TESTS = False
 if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
-    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-master',
+    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
                                 'baseline_images')
     ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
     if ftver >= LooseVersion('2.8.0'):
