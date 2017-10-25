@@ -184,8 +184,8 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_histalp_nonparallel([gdir])
-        climate.local_mustar_apparent_mb(gdir, tstar=1930, bias=0,
-                                         prcp_fac=2.5)
+        climate.local_mustar(gdir, tstar=1930, bias=0, prcp_fac=2.5)
+        climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
         v, ainv = inversion.mass_conservation_inversion(gdir)
         flowline.init_present_time_glacier(gdir)

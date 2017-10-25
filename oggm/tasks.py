@@ -17,6 +17,8 @@ from oggm.core.climate import mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import process_cesm_data
+from oggm.core.climate import local_mustar
+from oggm.core.climate import apparent_mb
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import volume_inversion

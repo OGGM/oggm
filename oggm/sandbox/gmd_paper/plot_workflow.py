@@ -37,6 +37,7 @@ tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 tasks.process_cru_data(gdir)
 tasks.distribute_t_stars([gdir])
+tasks.apparent_mb(gdir)
 
 glen_a = cfg.A
 tasks.prepare_for_inversion(gdir)

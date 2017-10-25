@@ -1085,8 +1085,8 @@ class TestClimate(unittest.TestCase):
         t_star = t_star[-1]
         bias = bias[-1]
 
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
-                                         prcp_fac=prcp_fac)
+        climate.local_mustar(gdir, tstar=t_star, bias=bias, prcp_fac=prcp_fac)
+        climate.apparent_mb(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
         mu_ref = gdir.read_pickle('mu_candidates')
@@ -1128,6 +1128,62 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
+
+class TestFilterNegFlux(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_filter(self):
+
+        entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
+        entity = entity.loc[entity.RGIId == 'RGI50-11.00666'].iloc[0]
+
+        cfg.PARAMS['filter_for_neg_flux'] = False
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.local_mustar(gdir, tstar=1931, bias=0, prcp_fac=2.5)
+        climate.apparent_mb(gdir)
+
+        fls1 = gdir.read_pickle('inversion_flowlines')
+        assert np.any([fl.flux_needed_correction for fl in fls1])
+
+        cfg.PARAMS['filter_for_neg_flux'] = True
+        climate.apparent_mb(gdir)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        assert len(fls) < len(fls1)
+        assert not np.any([fl.flux_needed_correction for fl in fls])
 
 class TestInversion(unittest.TestCase):
 
@@ -1175,9 +1231,8 @@ class TestInversion(unittest.TestCase):
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
         t_star, bias, prcp_fac = res['t_star'],  res['bias'],  res['prcp_fac']
         t_star = t_star[-1]
-        bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
-                                         prcp_fac=prcp_fac)
+        climate.local_mustar(gdir, tstar=t_star, bias=bias, prcp_fac=prcp_fac)
+        climate.apparent_mb(gdir)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -1372,8 +1427,8 @@ class TestInversion(unittest.TestCase):
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
-                                         prcp_fac=prcp_fac)
+        climate.local_mustar(gdir, tstar=t_star, bias=bias, prcp_fac=prcp_fac)
+        climate.apparent_mb(gdir)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -1435,8 +1490,8 @@ class TestInversion(unittest.TestCase):
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
-                                         prcp_fac=prcp_fac)
+        climate.local_mustar(gdir, tstar=t_star, bias=bias, prcp_fac=prcp_fac)
+        climate.apparent_mb(gdir)
 
         # OK. Values from Fischer and Kuhn 2013
         # Area: 8.55
@@ -1482,6 +1537,7 @@ class TestInversion(unittest.TestCase):
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
+        cfg.PARAMS['filter_for_neg_flux'] = False
         centerlines.initialize_flowlines(gdir)
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
@@ -1493,8 +1549,8 @@ class TestInversion(unittest.TestCase):
         t_star, bias, prcp_fac = res['t_star'], res['bias'], res['prcp_fac']
         t_star = t_star[-1]
         bias = bias[-1]
-        climate.local_mustar_apparent_mb(gdir, tstar=t_star, bias=bias,
-                                         prcp_fac=prcp_fac)
+        climate.local_mustar(gdir, tstar=t_star, bias=bias, prcp_fac=prcp_fac)
+        climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
@@ -1510,6 +1566,7 @@ class TestInversion(unittest.TestCase):
                 maxs = _max
 
         np.testing.assert_allclose(242, maxs, atol=31)
+        cfg.PARAMS['filter_for_neg_flux'] = True
 
     def test_continue_on_error(self):
 
@@ -1532,8 +1589,8 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
-        climate.local_mustar_apparent_mb(gdir, tstar=1970, bias=0,
-                                         prcp_fac=2.)
+        climate.local_mustar(gdir, tstar=1970, bias=0, prcp_fac=2.)
+        climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
         inversion.volume_inversion(gdir)
 
@@ -1765,7 +1822,8 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.local_mustar_apparent_mb(gdir, tstar=1975, bias=0., prcp_fac=1)
+        climate.local_mustar(gdir, tstar=1975, bias=0., prcp_fac=1)
+        climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
         v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         inversion.filter_inversion_output(gdir)

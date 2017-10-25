@@ -9,8 +9,7 @@ import xarray as xr
 import oggm
 from oggm import cfg, tasks
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
-                               t_star_from_refmb,
-                               local_mustar_apparent_mb)
+                               t_star_from_refmb, local_mustar, apparent_mb)
 from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file
 
@@ -37,8 +36,9 @@ tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
-local_mustar_apparent_mb(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
-                         prcp_fac=res['prcp_fac'])
+local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
+             prcp_fac=res['prcp_fac'], reset=True)
+apparent_mb(gdir, reset=True)
 
 # For plots
 mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]

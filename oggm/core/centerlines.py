@@ -241,7 +241,7 @@ class Centerline(object):
         # mass conservation downstream. This is quite bad and calls for a
         # better solution
         add_flux = flux[-1]
-        # We filter only lines with two negative gridpoints, the
+        # We filter only lines with two negative grid points, the
         # rest we can cope with
         if cfg.PARAMS['correct_for_neg_flux'] and flux[-2] < 0:
             # Some glacier geometries imply that some tributaries have a

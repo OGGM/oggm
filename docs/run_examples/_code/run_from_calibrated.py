@@ -99,6 +99,7 @@ for task in task_list:
 # Climate tasks -- only data IO and tstar interpolation!
 execute_entity_task(tasks.process_cru_data, gdirs)
 tasks.distribute_t_stars(gdirs)
+execute_entity_task(tasks.apparent_mb, gdirs)
 
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
