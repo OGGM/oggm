@@ -1561,7 +1561,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
 
 
 def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                              zero_initial_glacier=False):
+                              zero_initial_glacier=False, model_fls=None):
     """Quick n dirty function to avoid copy-paste smell"""
 
     run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
@@ -1572,11 +1572,13 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
         log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
-        fls = gdir.read_pickle('model_flowlines')
+        if model_fls is None:
+            model_fls = gdir.read_pickle('model_flowlines')
         if zero_initial_glacier:
-            for fl in fls:
+            for fl in model_fls:
                 fl.thick = fl.thick * 0.
-        model = FluxBasedModel(fls, mb_model=mb, y0=ys, time_stepping=step,
+        model = FluxBasedModel(model_fls, mb_model=mb, y0=ys,
+                               time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
         try:
@@ -1593,8 +1595,9 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
-                             seed=None, temperature_bias=None, filesuffix='',
+def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
+                             bias=None, seed=None, temperature_bias=None,
+                             filesuffix='', init_model_fls=None,
                              zero_initial_glacier=False,
                              **kwargs):
     """Random glacier dynamics for benchmarking purposes.
@@ -1605,9 +1608,11 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      ----------
      nyears : int
          length of the simulation
-     y0 : int
+     y0 : int, optional
          central year of the random climate period. The default is to be
          centred on t*.
+     halfsize : int, optional
+         the half-size of the time window (window size = 2 * halfsize + 1)
      bias : float
          bias of the mb model. Default is to use the calibrated one, which
          is often a better idea. For t* experiments it can be useful to set it
@@ -1621,6 +1626,9 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
      filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
+     init_model_fls : []
+         list of flowlines to use to initialise the model (the default is the
+         present_time_glacier file from the glacier directory)
      zero_initial_glacier : bool
          if true, the ice thickness is set to zero before the simulation
      kwargs : dict
@@ -1640,17 +1648,20 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, bias=None,
 
     ys = 0
     ye = ys + nyears
-    mb = mbmods.RandomMassBalance(gdir, y0=y0, bias=bias, seed=seed)
+    mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
+                                  bias=bias, seed=seed)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                                     model_fls=init_model_fls,
                                      zero_initial_glacier=zero_initial_glacier)
 
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
                          temperature_bias=None, filesuffix='',
+                         init_model_fls=None,
                          zero_initial_glacier=False,
                          **kwargs):
     """Run a glacier under a constant climate for a given climate period.
@@ -1674,6 +1685,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
          previous experiments)
      zero_initial_glacier : bool
          if true, the ice thickness is set to zero before the simulation
+     init_model_fls : []
+         list of flowlines to use to initialise the model (the default is the
+         present_time_glacier file from the glacier directory)
      kwargs : dict
          kwargs to pass to the FluxBasedModel instance
      """
@@ -1694,12 +1708,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
         mb.temp_bias = temperature_bias
 
     return _run_with_numerical_tests(gdir, filesuffix, mb, 0, nyears, kwargs,
+                                     model_fls=init_model_fls,
                                      zero_initial_glacier=zero_initial_glacier)
 
 
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
-                          input_filesuffix='', filesuffix='', **kwargs):
+                          input_filesuffix='', filesuffix='',
+                          init_model_fls=None, **kwargs):
     """ Runs glacier with climate input from a general circulation model.
 
      Parameters
@@ -1715,6 +1731,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
          filesuffix for the input climate file
      filesuffix : str
          for the output file
+     init_model_fls : []
+         list of flowlines to use to initialise the model (the default is the
+         present_time_glacier file from the glacier directory)
      kwargs : dict
          kwargs to pass to the FluxBasedModel instance
      """
@@ -1737,4 +1756,5 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
 
     mb = mbmods.PastMassBalance(gdir, filename=filename,
                                 input_filesuffix=input_filesuffix)
-    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs)
+    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
+                                     model_fls=init_model_fls)
