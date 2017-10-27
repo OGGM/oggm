@@ -1159,9 +1159,9 @@ def distribute_t_stars(gdirs, ref_df=None):
 def crossval_t_stars(gdirs):
     """Cross-validate the interpolation of tstar to each individual glacier.
 
-    This is a naive, thorough check (redoes many, many useless calculations).
-
-    you can use quick_crossval_t_stars for most purposes,
+    This is a thorough check (redoes many calculations) because it recomputes
+    the chosen tstars at each time. You should use quick_crossval_t_stars
+    instead.
 
     Parameters
     ----------

@@ -271,6 +271,7 @@ class TestWorkflow(unittest.TestCase):
         workflow.execute_entity_task(tasks.apparent_mb, gdirs)
         assert np.all(np.abs(df.cv_bias) < 50)
         assert np.all(np.abs(dfq.cv_bias) < 50)
+        # The biases aren't entirely equivalent and its ok
         np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
 
         # see if the process didn't brake anything
@@ -385,7 +386,7 @@ class TestWorkflow(unittest.TestCase):
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -408,7 +409,7 @@ def test_plot_region_inversion():
 
 @is_slow
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=20)
 def test_plot_region_model():
 
     gdirs = random_for_plot()
