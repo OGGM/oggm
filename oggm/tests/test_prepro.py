@@ -360,6 +360,7 @@ class TestCenterlines(unittest.TestCase):
         kdf = gpd.read_file(kienholz_file)
 
         # add fake attribs
+        entity.RGIID = 'RGI40-00.00000'
         entity.O1REGION = 0
         entity.BGNDATE = 0
         entity.NAME = 'Baltoro'
@@ -1170,6 +1171,8 @@ class TestClimate(unittest.TestCase):
 
     def test_automated_workflow(self):
 
+        workflow.reset_multiprocessing()
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1178,7 +1181,8 @@ class TestClimate(unittest.TestCase):
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
 
-        entity['RGIId'] = 'RGI60-11.00897'
+        hef_file = get_demo_file('Hintereisferner_RGI6.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         assert gdir.rgi_version == '6'

@@ -697,7 +697,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    # @is_download
+    @is_download
     def test_download_rgi6(self):
 
         tmp = cfg.PATHS['rgi_dir']

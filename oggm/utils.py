@@ -58,10 +58,12 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '1fb733ba552b429cd8ea3c124094c9bda59f6227'
+SAMPLE_DATA_COMMIT = '49cfc77a55bdeb42d10e3c8d4b748612544b8957'
 
-CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
-             '.1701201703.v3.24.01/'
+CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts'
+              '.1701201703.v3.24.01/')
+
+_RGI_METADATA = dict()
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
@@ -373,6 +375,37 @@ def show_versions(logger=None):
     for k, stat in deps_blob:
         _print("%s: %s" % (k, stat))
 
+
+def parse_rgi_meta(version=None):
+    """Read the meta information (region and sub-region names)"""
+
+    global _RGI_METADATA
+
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
+
+    if version in _RGI_METADATA:
+        return _RGI_METADATA[version]
+
+    # Parse RGI metadata
+    _d = os.path.join(cfg.CACHE_DIR,
+                      'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                      'rgi_meta')
+
+    reg_names = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'), index_col=0)
+    if version in ['4', '5']:
+        # The files where different back then
+        subreg_names = pd.read_csv(os.path.join(_d, 'rgi_subregions_V5.csv'),
+                                   index_col=0)
+    else:
+        f = os.path.join(_d, 'rgi_subregions_V{}.csv'.format(version))
+        subreg_names = pd.read_csv(f)
+        subreg_names.index = ['{:02d}-{:02d}'.format(s1, s2) for s1, s2 in
+                              zip(subreg_names['O1'], subreg_names['O2'])]
+        subreg_names = subreg_names[['Full_name']]
+
+    _RGI_METADATA[version] = (reg_names, subreg_names)
+    return _RGI_METADATA[version]
 
 class SuperclassMeta(type):
     """Metaclass for abstract base classes.
@@ -1392,13 +1425,14 @@ def get_wgms_files(version=None):
 
     if version in ['4', '5']:
         outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
-        outf = pd.read_csv(outf)
+        outf = pd.read_csv(outf, dtype={'RGI_REG': object})
     elif version in ['6']:
         outf = os.path.join(sdir, '00_rgi60_links.csv')
         # Uniformize (ugly)
         outf = pd.read_csv(outf, skiprows=[0, 1])
         outf['RGI60_ID'] = outf['RGIId']
         outf['WGMS_ID'] = outf['FoGId']
+        outf['RGI_REG'] = [s.split('-')[1].split('.')[0] for s in outf.RGIId]
 
     return outf, datadir
 
@@ -1725,6 +1759,25 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
                            'lon:{1}!'.format(lat_ex, lon_ex))
 
 
+def get_ref_mb_glaciers(gdirs):
+    """Get the list of glaciers we have valid data for."""
+
+    # Get the links
+    v = gdirs[0].rgi_version
+    flink, _ = get_wgms_files(version=v)
+    dfids = flink['RGI{}0_ID'.format(v)].values
+
+    # We remove tidewater glaciers and glaciers with < 5 years
+    ref_gdirs = []
+    for g in gdirs:
+        if g.rgi_id not in dfids or g.is_tidewater:
+            continue
+        mbdf = g.get_ref_mb_data()
+        if len(mbdf) >= 5:
+            ref_gdirs.append(g)
+    return ref_gdirs
+
+
 def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     """Merge the runs output of the glacier directories into one file.
 
@@ -2047,6 +2100,8 @@ def global_task(task_func):
 
 def filter_rgi_name(name):
     """Remove spurious characters and trailing blanks from RGI glacier name.
+
+    This seems to be unnecessary with RGI V6
     """
 
     if name is None or len(name) == 0:
@@ -2170,34 +2225,46 @@ class GlacierDirectory(object):
                                   '{:02d}'.format(int(rgi_entity.O2Region)))
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
-            gtype = rgi_entity.GlacType
+
+            try:
+                gtype = rgi_entity.GlacType
+            except AttributeError:
+                # RGI V6
+                gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+
+        # rgi version can be useful
+        self.rgi_version = self.rgi_id.split('-')[0][-2]
+        if self.rgi_version not in ['4', '5', '6']:
+            raise RuntimeError('RGI Version not understood: '
+                               '{}'.format(self.rgi_version))
 
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
         # region
-        n = cfg.RGI_REG_NAMES.loc[int(self.rgi_region)].values[0]
+        reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version)
+        n = reg_names.loc[int(self.rgi_region)].values[0]
         self.rgi_region_name = self.rgi_region + ': ' + n
-        n = cfg.RGI_SUBREG_NAMES.loc[self.rgi_subregion].values[0]
+        n = subreg_names.loc[self.rgi_subregion].values[0]
         self.rgi_subregion_name = self.rgi_subregion + ': ' + n
 
         # Read glacier attrs
-        keys = {'0': 'Glacier',
-                '1': 'Ice cap',
-                '2': 'Perennial snowfield',
-                '3': 'Seasonal snowfield',
-                '9': 'Not assigned',
-                }
-        self.glacier_type = keys[gtype[0]]
-        keys = {'0': 'Land-terminating',
-                '1': 'Marine-terminating',
-                '2': 'Lake-terminating',
-                '3': 'Dry calving',
-                '4': 'Regenerated',
-                '5': 'Shelf-terminating',
-                '9': 'Not assigned',
-                }
-        self.terminus_type = keys[gtype[1]]
+        gtkeys = {'0': 'Glacier',
+                  '1': 'Ice cap',
+                  '2': 'Perennial snowfield',
+                  '3': 'Seasonal snowfield',
+                  '9': 'Not assigned',
+                  }
+        ttkeys = {'0': 'Land-terminating',
+                  '1': 'Marine-terminating',
+                  '2': 'Lake-terminating',
+                  '3': 'Dry calving',
+                  '4': 'Regenerated',
+                  '5': 'Shelf-terminating',
+                  '9': 'Not assigned',
+                  }
+        self.glacier_type = gtkeys[gtype[0]]
+        self.terminus_type = ttkeys[gtype[1]]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
         self.inversion_calving_rate = 0.
@@ -2210,12 +2277,6 @@ class GlacierDirectory(object):
         except:
             rgi_date = None
         self.rgi_date = rgi_date
-
-        # rgi version can be useful, too
-        self.rgi_version = self.rgi_id.split('-')[0][-2]
-        if self.rgi_version not in ['4', '5', '6']:
-            raise RuntimeError('RGI Version not understood: '
-                               '{}'.format(self.rgi_version))
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
@@ -2519,11 +2580,16 @@ class GlacierDirectory(object):
             self._mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period
-        y0, y1 = cfg.PARAMS['run_period']
+        if not self.has_file('climate_info'):
+            raise RuntimeError('Please process some climate data before call')
         ci = self.read_pickle('climate_info')
-        y0 = y0 or ci['hydro_yr_0']
-        y1 = y1 or ci['hydro_yr_1']
-        out = self._mbdf.loc[y0:y1]
+        y0 = ci['hydro_yr_0']
+        y1 = ci['hydro_yr_1']
+        if len(self._mbdf) > 1:
+            out = self._mbdf.loc[y0:y1]
+        else:
+            # Some files are just empty
+            out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
     def get_ref_length_data(self):

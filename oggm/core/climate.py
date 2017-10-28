@@ -874,17 +874,18 @@ def apparent_mb(gdir):
     if cfg.PARAMS['filter_for_neg_flux'] and np.any(do_filter):
         assert not do_filter[-1]  # This should not happen
         # Keep only the good lines
-        heads = [fl.head for fl in fls if not fl.flux_needed_correction]
-        centerlines.compute_centerlines(gdir, heads=heads)
-        centerlines.initialize_flowlines(gdir)
+        heads = [fl.orig_head for fl in fls if not fl.flux_needed_correction]
+        centerlines.compute_centerlines(gdir, heads=heads, reset=True)
+        centerlines.initialize_flowlines(gdir, reset=True)
         if gdir.has_file('downstream_line'):
-            centerlines.compute_downstream_line(gdir)
-            centerlines.compute_downstream_bedshape(gdir)
-        centerlines.catchment_area(gdir)
-        centerlines.catchment_intersections(gdir)
-        centerlines.catchment_width_geom(gdir)
-        centerlines.catchment_width_correction(gdir)
-        local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac)
+            centerlines.compute_downstream_line(gdir, reset=True)
+            centerlines.compute_downstream_bedshape(gdir, reset=True)
+        centerlines.catchment_area(gdir, reset=True)
+        centerlines.catchment_intersections(gdir, reset=True)
+        centerlines.catchment_width_geom(gdir, reset=True)
+        centerlines.catchment_width_correction(gdir, reset=True)
+        local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac,
+                     reset=True)
         # Ok, re-call ourselves
         return apparent_mb(gdir, reset=True)
 
@@ -959,25 +960,6 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
                       'linear_mb_params')
 
 
-def _get_ref_glaciers(gdirs):
-    """Get the list of glaciers we have valid data for."""
-
-    # Get the links
-    v = gdirs[0].rgi_version
-    flink, _ = utils.get_wgms_files(version=v)
-    dfids = flink['RGI{}0_ID'.format(v)].values
-
-    # We remove tidewater glaciers and glaciers with < 5 years
-    ref_gdirs = []
-    for g in gdirs:
-        if g.rgi_id not in dfids or g.is_tidewater:
-            continue
-        mbdf = g.get_ref_mb_data()
-        if len(mbdf) >= 5:
-            ref_gdirs.append(g)
-    return ref_gdirs
-
-
 def _get_optimal_scaling_factor(ref_gdirs):
     """Get the precipitation scaling factor that minimizes the std dev error.
     """
@@ -1017,7 +999,7 @@ def compute_ref_t_stars(gdirs):
     log.info('Compute the reference t* and mu* for WGMS glaciers')
 
     # Reference glaciers only if in the list and period is good
-    ref_gdirs = _get_ref_glaciers(gdirs)
+    ref_gdirs = utils.get_ref_mb_glaciers(gdirs)
 
     prcp_sf = None
     if cfg.PARAMS['prcp_scaling_factor'] == 'stddev':
@@ -1172,7 +1154,7 @@ def crossval_t_stars(gdirs):
     full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
                                            'ref_tstars.csv'), index_col=0)
 
-    rgdirs = _get_ref_glaciers(gdirs)
+    rgdirs = utils.get_ref_mb_glaciers(gdirs)
     n = len(full_ref_df)
     for i, rid in enumerate(full_ref_df.index):
 
@@ -1215,7 +1197,7 @@ def quick_crossval_t_stars(gdirs):
 
     log.info('Cross-validate the t* and mu* determination')
 
-    rgdirs = _get_ref_glaciers(gdirs)
+    rgdirs = utils.get_ref_mb_glaciers(gdirs)
 
     # This might be redundant but we redo the calc here
     with utils.DisableLogger():
