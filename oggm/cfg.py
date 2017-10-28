@@ -227,7 +227,6 @@ def initialize(file=None):
     PATHS['working_dir'] = cp['working_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
-    PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
     PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
     PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
 
@@ -252,6 +251,7 @@ def initialize(file=None):
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
     PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
+    PARAMS['rgi_version'] = cp['rgi_version']
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -286,7 +286,7 @@ def initialize(file=None):
                                    index_col=0)
 
     # Delete non-floats
-    ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
+    ltr = ['working_dir', 'dem_file', 'climate_file',
            'glathida_rgi_links', 'grid_dx_method',
            'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
@@ -296,7 +296,8 @@ def initialize(file=None):
            'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
            'tstar_search_window', 'use_bias_for_run', 'run_period',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
-           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux']
+           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
+           'rgi_version']
     for k in ltr:
         cp.pop(k, None)
 

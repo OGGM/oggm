@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '921eab245e52233c048cb283abd2cf3f5509e0f9'
+SAMPLE_DATA_COMMIT = '1fb733ba552b429cd8ea3c124094c9bda59f6227'
 
 CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
              '.1701201703.v3.24.01/'
@@ -435,7 +435,8 @@ def _download_oggm_files_unlocked():
     zip_url = 'https://github.com/%s/archive/%s.zip' % \
               (SAMPLE_DATA_GH_REPO, SAMPLE_DATA_COMMIT)
     odir = os.path.join(cfg.CACHE_DIR)
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT)
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT)
 
     # download only if necessary
     if not os.path.exists(sdir):
@@ -1371,7 +1372,7 @@ def get_cru_cl_file():
         return fpath
 
 
-def get_wgms_files():
+def get_wgms_files(version=None):
     """Get the path to the default WGMS-RGI link file and the data dir.
 
     Returns
@@ -1379,23 +1380,26 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['wgms_rgi_links']:
-        if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
-            raise ValueError('Wrong wgms_rgi_links path provided.')
-        # User provided data
-        outf = cfg.PATHS['wgms_rgi_links']
-        datadir = os.path.join(os.path.dirname(outf), 'mbdata')
-        if not os.path.exists(datadir):
-            raise ValueError('The WGMS data directory is missing')
-        return outf, datadir
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
 
-    # Roll our own
     download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'wgms')
-    outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
-    assert os.path.exists(outf)
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                        'wgms')
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
+
+    if version in ['4', '5']:
+        outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
+        outf = pd.read_csv(outf)
+    elif version in ['6']:
+        outf = os.path.join(sdir, '00_rgi60_links.csv')
+        # Uniformize (ugly)
+        outf = pd.read_csv(outf, skiprows=[0, 1])
+        outf['RGI60_ID'] = outf['RGIId']
+        outf['WGMS_ID'] = outf['FoGId']
+
     return outf, datadir
 
 
@@ -1421,10 +1425,14 @@ def get_glathida_file():
     return outf
 
 
-def get_rgi_dir():
+def get_rgi_dir(version=None):
     """Returns a path to the RGI directory.
 
     If the RGI files are not present, download them.
+
+    Parameters
+    ----------
+    version: '5', '6', None being the one specified in params
 
     Returns
     -------
@@ -1432,23 +1440,30 @@ def get_rgi_dir():
     """
 
     with _get_download_lock():
-        return _get_rgi_dir_unlocked()
+        return _get_rgi_dir_unlocked(version=version)
 
 
-def _get_rgi_dir_unlocked():
+def _get_rgi_dir_unlocked(version=None):
 
     rgi_dir = cfg.PATHS['rgi_dir']
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
         raise ValueError('The RGI data directory has to be'
                          'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
-    rgi_dir = os.path.join(rgi_dir, 'RGIV5')
+    rgi_dir = os.path.join(rgi_dir, 'RGIV' + version)
     mkdir(rgi_dir)
 
-    dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
-    test_file = os.path.join(rgi_dir, '000_rgi50_manifest.txt')
+    if version == '5':
+        dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+    else:
+        dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+
+    test_file = os.path.join(rgi_dir,
+                             '000_rgi{}0_manifest.txt'.format(version))
 
     if not os.path.exists(test_file):
         # if not there download it
@@ -1457,7 +1472,7 @@ def _get_rgi_dir_unlocked():
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
         # Extract subdirs
-        pattern = '*_rgi50_*.zip'
+        pattern = '*_rgi{}0_*.zip'.format(version)
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
                 zfile = os.path.join(root, filename)
@@ -2197,7 +2212,10 @@ class GlacierDirectory(object):
         self.rgi_date = rgi_date
 
         # rgi version can be useful, too
-        self.rgi_version = self.rgi_id.split('-')[0]
+        self.rgi_version = self.rgi_id.split('-')[0][-2]
+        if self.rgi_version not in ['4', '5', '6']:
+            raise RuntimeError('RGI Version not understood: '
+                               '{}'.format(self.rgi_version))
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
@@ -2487,9 +2505,9 @@ class GlacierDirectory(object):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
         if self._mbdf is None:
-            flink, mbdatadir = get_wgms_files()
-            flink = pd.read_csv(flink)
-            wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+            flink, mbdatadir = get_wgms_files(version=self.rgi_version)
+            c = 'RGI{}0_ID'.format(self.rgi_version)
+            wid = flink.loc[flink[c] == self.rgi_id]
             if len(wid) == 0:
                 raise RuntimeError('Not a reference glacier!')
             wid = wid.WGMS_ID.values[0]

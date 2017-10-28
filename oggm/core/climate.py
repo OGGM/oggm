@@ -962,13 +962,15 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
 def _get_ref_glaciers(gdirs):
     """Get the list of glaciers we have valid data for."""
 
-    flink, _ = utils.get_wgms_files()
-    dfids = pd.read_csv(flink)[gdirs[0].rgi_version + '_ID'].values
+    # Get the links
+    v = gdirs[0].rgi_version
+    flink, _ = utils.get_wgms_files(version=v)
+    dfids = flink['RGI{}0_ID'.format(v)].values
 
-    # TODO: we removed marine glaciers here. Is it ok?
+    # We remove tidewater glaciers and glaciers with < 5 years
     ref_gdirs = []
     for g in gdirs:
-        if g.rgi_id not in dfids or g.terminus_type != 'Land-terminating':
+        if g.rgi_id not in dfids or g.is_tidewater:
             continue
         mbdf = g.get_ref_mb_data()
         if len(mbdf) >= 5:
@@ -1042,19 +1044,16 @@ def compute_ref_t_stars(gdirs):
     # know how to start
     if len(only_one) == 0:
         # TODO: hardcoded stuff here, for the test workflow
-        if 'RGI50-11.00897' in per_glacier:
-            only_one.append('RGI50-11.00897')
-            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI50-11.00897']
-            per_glacier['RGI50-11.00897'] = (gdir, [t_star[-1]],
-                                             [res_bias[-1]], prcp_fac)
-        elif 'RGI40-11.00897' in per_glacier:
-            only_one.append('RGI40-11.00897')
-            gdir, t_star, res_bias, prcp_fac = per_glacier['RGI40-11.00897']
-            per_glacier['RGI40-11.00897'] = (gdir, [t_star[-1]],
-                                             [res_bias[-1]], prcp_fac)
-        else:
-            raise RuntimeError('We need at least one glacier with one '
-                               'tstar only.')
+        for v in ['4', '5', '6']:
+            rid = 'RGI{}0-11.00897'.format(v)
+            if rid in per_glacier:
+                only_one.append(rid)
+                gdir, t_star, res_bias, prcp_fac = per_glacier[rid]
+                per_glacier[rid] = (gdir, [t_star[-1]], [res_bias[-1]],
+                                    prcp_fac)
+    if len(only_one) == 0:
+        raise RuntimeError('We need at least one glacier with one '
+                           'tstar only.')
 
     log.info('%d out of %d have only one possible t*. Start from here',
              len(only_one), len(ref_gdirs))

@@ -69,6 +69,7 @@ class TestGIS(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['working_dir'] = self.testdir
 
     def tearDown(self):
         self.rm_dir()
@@ -98,6 +99,21 @@ class TestGIS(unittest.TestCase):
         # This is not guaranteed to be equal because of projection issues
         np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
 
+    def test_divides_as_glaciers(self):
+
+        hef_rgi = gpd.GeoDataFrame.from_file(get_demo_file('divides_alps.shp'))
+        hef_rgi = hef_rgi.loc[hef_rgi.RGIId == 'RGI50-11.00897']
+
+        # Rename the RGI ID
+        hef_rgi['RGIId'] = ['RGI50-11.00897' + d for d in
+                            ['_d01', '_d02', '_d03']]
+
+        # Just check that things are working
+        gdirs = workflow.init_glacier_regions(hef_rgi)
+        workflow.gis_prepro_tasks(gdirs)
+
+        assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
+        assert gdirs[-1].rgi_id == 'RGI50-11.00897_d03'
 
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -542,6 +558,30 @@ class TestGeometry(unittest.TestCase):
         h1, b = np.histogram(hgt, weights=harea, density=True, bins=bins)
         h2, b = np.histogram(rhgt, density=True, bins=bins)
         self.assertTrue(utils.rmsd(h1*100*50, h2*100*50) < 1)
+
+    def test_nodivides_correct_slope(self):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+        for fl in fls:
+            dx = fl.dx * gdir.grid.dx
+            slope = np.arctan(-np.gradient(fl.surface_h, dx))
+            self.assertTrue(np.all(slope >= min_slope))
 
 
 class TestClimate(unittest.TestCase):
@@ -1128,6 +1168,23 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
+    def test_automated_workflow(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        assert gdir.rgi_version == '5'
+        gis.define_glacier_region(gdir, entity=entity)
+        workflow.gis_prepro_tasks([gdir])
+        workflow.climate_tasks([gdir])
+
+        entity['RGIId'] = 'RGI60-11.00897'
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        assert gdir.rgi_version == '6'
+        workflow.gis_prepro_tasks([gdir])
+        workflow.climate_tasks([gdir])
+
 
 class TestFilterNegFlux(unittest.TestCase):
 
@@ -1607,101 +1664,6 @@ class TestInversion(unittest.TestCase):
         dfc = utils.glacier_characteristics([gdir])
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
         self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
-
-
-class TestSlopeMitigation(unittest.TestCase):
-
-    def setUp(self):
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = self.testdir
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 10
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        utils.mkdir(self.testdir)
-
-    def test_nodivides_correct_slope(self):
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 40
-
-        hef_file = get_demo_file('Hintereisferner.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        centerlines.compute_centerlines(gdir)
-        centerlines.initialize_flowlines(gdir)
-
-        fls = gdir.read_pickle('inversion_flowlines')
-        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
-        for fl in fls:
-            dx = fl.dx * gdir.grid.dx
-            slope = np.arctan(-np.gradient(fl.surface_h, dx))
-            self.assertTrue(np.all(slope >= min_slope))
-
-
-class TestDividesAsGlaciers(unittest.TestCase):
-
-    def setUp(self):
-
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = self.testdir
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 10
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
-
-    def test_hef(self):
-
-        hef_rgi = gpd.GeoDataFrame.from_file(get_demo_file('divides_alps.shp'))
-        hef_rgi = hef_rgi.loc[hef_rgi.RGIId == 'RGI50-11.00897']
-
-        # Rename the RGI ID
-        hef_rgi['RGIId'] = ['RGI50-11.00897' + d for d in
-                            ['_d01', '_d02', '_d03']]
-
-        # Just check that things are working
-        gdirs = workflow.init_glacier_regions(hef_rgi)
-        workflow.gis_prepro_tasks(gdirs)
-
-        assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
-        assert gdirs[-1].rgi_id == 'RGI50-11.00897_d03'
 
 
 class TestGrindelInvert(unittest.TestCase):
