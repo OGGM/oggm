@@ -28,6 +28,9 @@ WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
+# We are running the calibration ourselves
+cfg.PARAMS['run_mb_calibration'] = True
+
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 

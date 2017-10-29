@@ -50,19 +50,6 @@ utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
-# Download the precalibrated tstar file
-#
-# Note that to be exact, this procedure can only be applied if the model
-# parameters don't change between the calibration and the run.
-# After testing, it appears that changing the 'border' parameter won't affect
-# the results much (as expected), so it's ok to change this parameter above.
-# All other parameters (e.g. topo smoothing, dx, precip factor...)
-# will need a re-calibration (see the calibration recipe)
-f = 'https://www.dropbox.com/s/23a61yxwgpprs9q/ref_tstars_no_tidewater.csv?dl=1'
-mbf = utils.file_downloader(f)
-# Copy the file in the working directory, where OGGM expects to find it
-shutil.copyfile(mbf, path.join(WORKING_DIR, 'ref_tstars.csv'))
-
 # Download the RGI file for the run
 # We us a set of four glaciers here but this could be an entire RGI region,
 # or any glacier list you'd like to model
@@ -111,7 +98,8 @@ execute_entity_task(tasks.filter_inversion_output, gdirs)
 execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
 # Random climate representative for the tstar climate, without bias
-# In an ideal world this would imply that the glaciers remain stable
+# In an ideal world this would imply that the glaciers remain stable,
+# but it doesn't have to be so
 execute_entity_task(tasks.random_glacier_evolution, gdirs,
                     nyears=200, bias=0, seed=1,
                     filesuffix='_tstar')
@@ -124,4 +112,4 @@ utils.compile_run_output(gdirs, filesuffix='_tstar')
 # Log
 m, s = divmod(time.time() - start, 60)
 h, m = divmod(m, 60)
-log.info("OGGM is done! Time needed: %d:%02d:%02d" % (h, m, s))
+log.info('OGGM is done! Time needed: %d:%02d:%02d' % (h, m, s))

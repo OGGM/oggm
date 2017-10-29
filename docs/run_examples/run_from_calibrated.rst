@@ -2,18 +2,29 @@
 
 .. _run-from-calibrated:
 
-1. Set-up a run with previously calibrated mass-balance
-=======================================================
+1. Set-up a default run for a list of glaciers
+==============================================
 
 This example shows how to run the OGGM  model for a list of selected glaciers
-(here, four). We use a previously calibrated list of :math:`t^*` for the
-run, which means that we don't have to calibrate the mass balance anymore.
-
+(here, four).
 For this example we download the list of glaciers from Fabien's dropbox, but
 you can use any list of glaciers for this. See the
 `prepare_glacier_list.ipynb <https://github.com/OGGM/oggm/blob/master/docs/notebooks/prepare_glacier_list.ipynb>`_
 notebook in the ``oggm/docs/notebooks`` directory for an example on how to
 prepare such a file.
+
+Note that the default in OGGM is to use a previously calibrated list of
+:math:`t^*` for the run, which means that we don't have to calibrate the
+mass balance model ourselves (thankfully, otherwise you would have to add
+all the calibration glaciers to your list too).
+
+Note that to be exact, this procedure can only be applied if the model
+parameters don't change between the calibration and the run.
+After testing, it appears that changing the 'border' parameter won't affect
+the results much (as expected), so it's ok to change this parameter.
+Some other parameters (e.g. topo smoothing, dx, precip factor, alternative
+climate data...) will probably need a re-calibration
+(see the OGGM calibration recipe for this).
 
 
 Script
@@ -117,7 +128,7 @@ This code snippet should produce the following plot:
     model, this looks like a longer glacier... (this cover is very thin, so
     that it doesn't influence the volume much).
 
-More analysis
+More analyses
 -------------
 
 Here is a more complex example to demonstrate how to plot the glacier
