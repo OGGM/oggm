@@ -16,10 +16,26 @@ import oggm
 from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve
 
 # In case some logging happens or so
 cfg.PATHS['working_dir'] = get_test_dir()
+
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
+
+
+def clean_dir(testdir):
+    shutil.rmtree(testdir)
+    os.makedirs(testdir)
 
 
 class TestFuncs(unittest.TestCase):
@@ -278,6 +294,25 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
         assert os.path.exists(os.path.join(rgi, '01_rgi50_Region', 'test.txt'))
 
+        # Make a fake RGI file
+        rgi_dir = os.path.join(self.dldir, 'rgi60')
+        utils.mkdir(rgi_dir)
+        make_fake_zipdir(os.path.join(rgi_dir, '01_rgi60_Region'),
+                         fakefile='test.txt')
+        rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi60_manifest.txt')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+            self.assertEqual(url, expected)
+            return rgi_f
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi = utils.get_rgi_dir(version='6')
+
+        assert os.path.isdir(rgi)
+        assert os.path.exists(os.path.join(rgi, '000_rgi60_manifest.txt'))
+        assert os.path.exists(os.path.join(rgi, '01_rgi60_Region', 'test.txt'))
+
     def test_rgi_intersects(self):
 
         # Make a fake RGI file
@@ -324,14 +359,14 @@ class TestFakeDownloads(unittest.TestCase):
     def test_cru(self):
 
         # Create fake cru file
-        cf = os.path.join(self.dldir, 'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+        cf = os.path.join(self.dldir, 'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
         with gzip.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/'
-                        'cru_ts_3.24.01/cruts.1701201703.v3.24.01/tmp/'
-                        'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
+                        'cruts.1709081022.v4.01/tmp/'
+                        'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
             self.assertEqual(url, expected)
             return cf
 
@@ -454,7 +489,7 @@ class TestDataFiles(unittest.TestCase):
         cfg.initialize()
 
         lf, df = utils.get_wgms_files()
-        self.assertTrue(os.path.exists(lf))
+        self.assertTrue(os.path.exists(df))
 
         lf = utils.get_glathida_file()
         self.assertTrue(os.path.exists(lf))
@@ -672,8 +707,20 @@ class TestDataFiles(unittest.TestCase):
         tmp = cfg.PATHS['rgi_dir']
         cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
 
-        of = utils.get_rgi_dir()
+        of = utils.get_rgi_dir(version='5')
         of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp
+
+    @is_download
+    def test_download_rgi6(self):
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
+
+        of = utils.get_rgi_dir(version='6')
+        of = os.path.join(of, '01_rgi60_Alaska', '01_rgi60_Alaska.shp')
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['rgi_dir'] = tmp

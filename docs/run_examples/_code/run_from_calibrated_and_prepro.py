@@ -1,7 +1,5 @@
 # Python imports
 from os import path
-import shutil
-import zipfile
 import oggm
 
 # Module logger
@@ -56,4 +54,4 @@ utils.compile_run_output(gdirs, filesuffix='_commitment')
 # Log
 m, s = divmod(time.time() - start, 60)
 h, m = divmod(m, 60)
-log.info("OGGM is done! Time needed: %d:%02d:%02d" % (h, m, s))
+log.info('OGGM is done! Time needed: %d:%02d:%02d' % (h, m, s))

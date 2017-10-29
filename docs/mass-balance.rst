@@ -179,14 +179,14 @@ value to be interpolated to glaciers where no observations are available**.
 The benefit of this approach is best shown with the results of a cross-validation
 study realized by `Marzeion et al., (2012)`_ (and confirmed by OGGM):
 
-.. figure:: _static/marzeion_mus.png
+.. figure:: _static/mb_crossval.png
     :width: 100%
 
-    Benefit of spatially interpolating :math:`t^*` instead of :math:`\mu^*`;
-    (a) error distribution of :math:`\mu^*` if determined as the mean of
-    :math:`\mu^*` of all other glaciers with mass balance measurements in the
-    respective region; (b) error distribution of :math:`\mu^*` if determined
-    by interpolation of :math:`t^*`. Source: `Marzeion et al., (2012)`_.
+    Benefit of spatially interpolating :math:`t^{*}` instead of :math:`\mu ^{*}` as shown
+    by leave-one-glacier-out cross-validation (N = 255). **Left**: error
+    distribution of the computed mass-balance if determined by the
+    interpolated :math:`t^{*}`. **Right**: error distribution of the mass-balance
+    if determined by interpolation of :math:`\mu ^{*}`.
 
 This substantial improvement in model performance is due to several factors:
 

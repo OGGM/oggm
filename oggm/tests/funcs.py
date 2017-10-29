@@ -13,6 +13,7 @@ import oggm.cfg as cfg
 from oggm.core import gis, inversion, climate, centerlines, flowline
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
+from oggm.utils import _urlretrieve
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -207,6 +208,14 @@ def dummy_width_bed_tributary(map_dx=100.):
                                          bed_h[0:20], widths[0:20])
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
+
+
+def patch_url_retrieve(url, *args, **kwargs):
+    """A simple patch to OGGM's download function to make sure we don't
+    download elsewhere than expected."""
+
+    assert 'github' in url
+    return _urlretrieve(url, *args, **kwargs)
 
 
 def use_multiprocessing():

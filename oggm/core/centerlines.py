@@ -58,7 +58,7 @@ class Centerline(object):
     It is instanciated and updated by _join_lines() exclusively
     """
 
-    def __init__(self, line, dx=None, surface_h=None):
+    def __init__(self, line, dx=None, surface_h=None, orig_head=None):
         """ Instanciate.
 
         Parameters
@@ -91,6 +91,7 @@ class Centerline(object):
         self._surface_h = surface_h
         self._widths = None
         self.is_rectangular = None
+        self.orig_head = orig_head  # Useful for debugging and for filtering
 
         # Set by external funcs
         self.orig_centerline_id = None  # id of original centerline object
@@ -438,7 +439,7 @@ def _filter_lines(lines, heads, k, r):
     return olines, oheads
 
 
-def _filter_lines_slope(lines, topo, gdir):
+def _filter_lines_slope(lines, heads, topo, gdir):
     """Filter the centerline candidates by slope: if they go up, remove
 
     Kienholz et al. (2014), Ch. 4.3.1
@@ -470,7 +471,8 @@ def _filter_lines_slope(lines, topo, gdir):
     interpolator = RegularGridInterpolator(xy, topo)
 
     olines = [lines[0]]
-    for line in lines[1:]:
+    oheads = [heads[0]]
+    for line, head in zip(lines[1:], heads[1:]):
 
         # The code below mimicks what initialize_flowlines will do
         # this is a bit smelly but necessary
@@ -494,8 +496,9 @@ def _filter_lines_slope(lines, topo, gdir):
         # arbitrary threshold with which we filter the lines, otherwise bye bye
         if np.sum(slope >= min_slope) >= 5:
             olines.append(line)
+            oheads.append(head)
 
-    return olines
+    return olines, oheads
 
 
 def _projection_point(centerline, point):
@@ -519,7 +522,7 @@ def _projection_point(centerline, point):
     return flow_point
 
 
-def _join_lines(lines):
+def _join_lines(lines, heads):
     """Re-joins the lines that have been cut by _filter_lines
 
      Compute the rooting scheme.
@@ -533,7 +536,8 @@ def _join_lines(lines):
     Centerline instances, updated with flow routing properties
      """
 
-    olines = [Centerline(l) for l in lines[::-1]]
+    olines = [Centerline(l, orig_head=h) for l, h
+              in zip(lines[::-1], heads[::-1])]
     nl = len(olines)
     if nl == 1:
         return olines
@@ -811,18 +815,18 @@ def compute_centerlines(gdir, heads=None):
     dx_cls = cfg.PARAMS['flowline_dx']
     radius = cfg.PARAMS['flowline_junction_pix'] * dx_cls
     radius += 6 * dx_cls
-    olines, _ = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
+    olines, oheads = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
     log.debug('(%s) number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
-        olines = _filter_lines_slope(olines, topo, gdir)
+        olines, oheads = _filter_lines_slope(olines, oheads, topo, gdir)
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
     # And rejoin the cutted tails
-    olines = _join_lines(olines)
+    olines = _join_lines(olines, oheads)
 
     # Adds the line level
     for cl in olines:
@@ -1588,7 +1592,7 @@ def initialize_flowlines(gdir):
             assert len(hgts) >= 5
             new_line = shpg.LineString(points[sp:])
 
-        l = Centerline(new_line, dx=dx, surface_h=hgts)
+        l = Centerline(new_line, dx=dx, surface_h=hgts, orig_head=cl.orig_head)
         l.order = cl.order
         fls.append(l)
 

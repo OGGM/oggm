@@ -116,9 +116,7 @@ def prepare_divides(rgi_f):
     print('Start RGI reg ' + rgi_reg + ' ...')
     start_time = time.time()
 
-    flink, _ = get_wgms_files()
-    wgms = pd.read_csv(flink)
-
+    wgms, _ = get_wgms_files()
     f = glob(INDIR_DIVIDES + '*/*-' + rgi_reg + '.shp')[0]
 
     df = gpd.read_file(f)

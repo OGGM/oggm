@@ -72,8 +72,6 @@ IS_INITIALIZED = False
 PARAMS = OrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
-RGI_REG_NAMES = False
-RGI_SUBREG_NAMES = False
 LRUHANDLERS = OrderedDict()
 
 # Constants
@@ -207,8 +205,6 @@ def initialize(file=None):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global RGI_REG_NAMES
-    global RGI_SUBREG_NAMES
 
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
@@ -227,12 +223,6 @@ def initialize(file=None):
     PATHS['working_dir'] = cp['working_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
-    PATHS['wgms_rgi_links'] = cp['wgms_rgi_links']
-    PATHS['glathida_rgi_links'] = cp['glathida_rgi_links']
-    PATHS['leclercq_rgi_links'] = cp['leclercq_rgi_links']
-
-    # run params
-    PARAMS['run_period'] = [int(vk) for vk in cp.as_list('run_period')]
 
     # Multiprocessing pool
     PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
@@ -252,6 +242,8 @@ def initialize(file=None):
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
     PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
+    PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
+    PARAMS['rgi_version'] = cp['rgi_version']
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -278,25 +270,19 @@ def initialize(file=None):
     from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
     download_oggm_files()
 
-    # Parse RGI metadata
-    _d = os.path.join(CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'rgi_meta')
-    RGI_REG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'),
-                                index_col=0)
-    RGI_SUBREG_NAMES = pd.read_csv(os.path.join(_d, 'rgi_subregions.csv'),
-                                   index_col=0)
-
     # Delete non-floats
-    ltr = ['working_dir', 'dem_file', 'climate_file', 'wgms_rgi_links',
-           'glathida_rgi_links', 'grid_dx_method',
+    ltr = ['working_dir', 'dem_file', 'climate_file',
+           'grid_dx_method', 'run_mb_calibration',
            'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding',
            'optimize_inversion_params', 'use_multiple_flowlines',
-           'leclercq_rgi_links', 'optimize_thick', 'mpi_recv_buf_size',
-           'tstar_search_window', 'use_bias_for_run', 'run_period',
+           'optimize_thick', 'mpi_recv_buf_size',
+           'tstar_search_window', 'use_bias_for_run',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
-           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux']
+           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
+           'rgi_version']
     for k in ltr:
         cp.pop(k, None)
 

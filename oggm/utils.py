@@ -58,10 +58,12 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '921eab245e52233c048cb283abd2cf3f5509e0f9'
+SAMPLE_DATA_COMMIT = '939fa1cd32946c1f5cf97987ab3499761e19c0d2'
 
-CRU_SERVER = 'https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts' \
-             '.1701201703.v3.24.01/'
+CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
+              '.1709081022.v4.01/')
+
+_RGI_METADATA = dict()
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
@@ -136,7 +138,8 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         cache_path = fb_path
 
     if not cfg.PARAMS['has_internet']:
-        raise NoInternetException("Download required, but has_internet is False.")
+        raise NoInternetException("Download required, but "
+                                  "`has_internet` is False.")
 
     mkdir(os.path.dirname(cache_path))
 
@@ -374,6 +377,37 @@ def show_versions(logger=None):
         _print("%s: %s" % (k, stat))
 
 
+def parse_rgi_meta(version=None):
+    """Read the meta information (region and sub-region names)"""
+
+    global _RGI_METADATA
+
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
+
+    if version in _RGI_METADATA:
+        return _RGI_METADATA[version]
+
+    # Parse RGI metadata
+    _d = os.path.join(cfg.CACHE_DIR,
+                      'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                      'rgi_meta')
+
+    reg_names = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'), index_col=0)
+    if version in ['4', '5']:
+        # The files where different back then
+        subreg_names = pd.read_csv(os.path.join(_d, 'rgi_subregions_V5.csv'),
+                                   index_col=0)
+    else:
+        f = os.path.join(_d, 'rgi_subregions_V{}.csv'.format(version))
+        subreg_names = pd.read_csv(f)
+        subreg_names.index = ['{:02d}-{:02d}'.format(s1, s2) for s1, s2 in
+                              zip(subreg_names['O1'], subreg_names['O2'])]
+        subreg_names = subreg_names[['Full_name']]
+
+    _RGI_METADATA[version] = (reg_names, subreg_names)
+    return _RGI_METADATA[version]
+
 class SuperclassMeta(type):
     """Metaclass for abstract base classes.
 
@@ -435,7 +469,8 @@ def _download_oggm_files_unlocked():
     zip_url = 'https://github.com/%s/archive/%s.zip' % \
               (SAMPLE_DATA_GH_REPO, SAMPLE_DATA_COMMIT)
     odir = os.path.join(cfg.CACHE_DIR)
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT)
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT)
 
     # download only if necessary
     if not os.path.exists(sdir):
@@ -861,7 +896,7 @@ def smooth1d(array, window_size=None, kernel='gaussian'):
 
 def line_interpol(line, dx):
     """Interpolates a shapely LineString to a regularly spaced one.
-    
+
     Shapely's interpolate function does not guaranty equally
     spaced points in space. This is what this function is for.
 
@@ -1371,7 +1406,7 @@ def get_cru_cl_file():
         return fpath
 
 
-def get_wgms_files():
+def get_wgms_files(version=None):
     """Get the path to the default WGMS-RGI link file and the data dir.
 
     Returns
@@ -1379,23 +1414,27 @@ def get_wgms_files():
     (file, dir): paths to the files
     """
 
-    if cfg.PATHS['wgms_rgi_links']:
-        if not os.path.exists(cfg.PATHS['wgms_rgi_links']):
-            raise ValueError('Wrong wgms_rgi_links path provided.')
-        # User provided data
-        outf = cfg.PATHS['wgms_rgi_links']
-        datadir = os.path.join(os.path.dirname(outf), 'mbdata')
-        if not os.path.exists(datadir):
-            raise ValueError('The WGMS data directory is missing')
-        return outf, datadir
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
 
-    # Roll our own
     download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'wgms')
-    outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
-    assert os.path.exists(outf)
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                        'wgms')
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
+
+    if version in ['4', '5']:
+        outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
+        outf = pd.read_csv(outf, dtype={'RGI_REG': object})
+    elif version in ['6']:
+        outf = os.path.join(sdir, '00_rgi60_links.csv')
+        # Uniformize (ugly)
+        outf = pd.read_csv(outf, skiprows=[0, 1])
+        outf['RGI60_ID'] = outf['RGIId']
+        outf['WGMS_ID'] = outf['FoGId']
+        outf['RGI_REG'] = [s.split('-')[1].split('.')[0] for s in outf.RGIId]
+
     return outf, datadir
 
 
@@ -1407,12 +1446,6 @@ def get_glathida_file():
     file: paths to the file
     """
 
-    if cfg.PATHS['glathida_rgi_links']:
-        if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
-            raise ValueError('Wrong glathida_rgi_links path provided.')
-        # User provided data
-        return cfg.PATHS['glathida_rgi_links']
-
     # Roll our own
     download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'glathida')
@@ -1421,10 +1454,14 @@ def get_glathida_file():
     return outf
 
 
-def get_rgi_dir():
+def get_rgi_dir(version=None):
     """Returns a path to the RGI directory.
 
     If the RGI files are not present, download them.
+
+    Parameters
+    ----------
+    version: '5', '6', None being the one specified in params
 
     Returns
     -------
@@ -1432,23 +1469,30 @@ def get_rgi_dir():
     """
 
     with _get_download_lock():
-        return _get_rgi_dir_unlocked()
+        return _get_rgi_dir_unlocked(version=version)
 
 
-def _get_rgi_dir_unlocked():
+def _get_rgi_dir_unlocked(version=None):
 
     rgi_dir = cfg.PATHS['rgi_dir']
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
         raise ValueError('The RGI data directory has to be'
                          'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
-    rgi_dir = os.path.join(rgi_dir, 'RGIV5')
+    rgi_dir = os.path.join(rgi_dir, 'RGIV' + version)
     mkdir(rgi_dir)
 
-    dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
-    test_file = os.path.join(rgi_dir, '000_rgi50_manifest.txt')
+    if version == '5':
+        dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+    else:
+        dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+
+    test_file = os.path.join(rgi_dir,
+                             '000_rgi{}0_manifest.txt'.format(version))
 
     if not os.path.exists(test_file):
         # if not there download it
@@ -1457,7 +1501,7 @@ def _get_rgi_dir_unlocked():
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
         # Extract subdirs
-        pattern = '*_rgi50_*.zip'
+        pattern = '*_rgi{}0_*.zip'.format(version)
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
                 zfile = os.path.join(root, filename)
@@ -1588,10 +1632,12 @@ def _get_cru_file_unlocked(var=None):
     if len(search) == 1:
         ofile = search[0]
     elif len(search) > 1:
-        raise ValueError('The CRU filename should match "{}".'.format(bname))
+        raise RuntimeError('You seem to have more than one file in your CRU '
+                           'directory: {}. Help me by deleting the one'
+                           'you dont want to use anymore.'.format(cru_dir))
     else:
         # if not there download it
-        cru_filename = 'cru_ts3.24.01.1901.2015.{}.dat.nc'.format(var)
+        cru_filename = 'cru_ts4.01.1901.2016.{}.dat.nc'.format(var)
         cru_url = CRU_SERVER + '{}/'.format(var) + cru_filename + '.gz'
         dlfile = file_downloader(cru_url)
         ofile = os.path.join(cru_dir, cru_filename)
@@ -1708,6 +1754,25 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     else:
         raise RuntimeError('No topography file available for extent lat:{0},'
                            'lon:{1}!'.format(lat_ex, lon_ex))
+
+
+def get_ref_mb_glaciers(gdirs):
+    """Get the list of glaciers we have valid data for."""
+
+    # Get the links
+    v = gdirs[0].rgi_version
+    flink, _ = get_wgms_files(version=v)
+    dfids = flink['RGI{}0_ID'.format(v)].values
+
+    # We remove tidewater glaciers and glaciers with < 5 years
+    ref_gdirs = []
+    for g in gdirs:
+        if g.rgi_id not in dfids or g.is_tidewater:
+            continue
+        mbdf = g.get_ref_mb_data()
+        if len(mbdf) >= 5:
+            ref_gdirs.append(g)
+    return ref_gdirs
 
 
 def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
@@ -2032,6 +2097,8 @@ def global_task(task_func):
 
 def filter_rgi_name(name):
     """Remove spurious characters and trailing blanks from RGI glacier name.
+
+    This seems to be unnecessary with RGI V6
     """
 
     if name is None or len(name) == 0:
@@ -2155,34 +2222,46 @@ class GlacierDirectory(object):
                                   '{:02d}'.format(int(rgi_entity.O2Region)))
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
-            gtype = rgi_entity.GlacType
+
+            try:
+                gtype = rgi_entity.GlacType
+            except AttributeError:
+                # RGI V6
+                gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+
+        # rgi version can be useful
+        self.rgi_version = self.rgi_id.split('-')[0][-2]
+        if self.rgi_version not in ['4', '5', '6']:
+            raise RuntimeError('RGI Version not understood: '
+                               '{}'.format(self.rgi_version))
 
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
         # region
-        n = cfg.RGI_REG_NAMES.loc[int(self.rgi_region)].values[0]
+        reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version)
+        n = reg_names.loc[int(self.rgi_region)].values[0]
         self.rgi_region_name = self.rgi_region + ': ' + n
-        n = cfg.RGI_SUBREG_NAMES.loc[self.rgi_subregion].values[0]
+        n = subreg_names.loc[self.rgi_subregion].values[0]
         self.rgi_subregion_name = self.rgi_subregion + ': ' + n
 
         # Read glacier attrs
-        keys = {'0': 'Glacier',
-                '1': 'Ice cap',
-                '2': 'Perennial snowfield',
-                '3': 'Seasonal snowfield',
-                '9': 'Not assigned',
-                }
-        self.glacier_type = keys[gtype[0]]
-        keys = {'0': 'Land-terminating',
-                '1': 'Marine-terminating',
-                '2': 'Lake-terminating',
-                '3': 'Dry calving',
-                '4': 'Regenerated',
-                '5': 'Shelf-terminating',
-                '9': 'Not assigned',
-                }
-        self.terminus_type = keys[gtype[1]]
+        gtkeys = {'0': 'Glacier',
+                  '1': 'Ice cap',
+                  '2': 'Perennial snowfield',
+                  '3': 'Seasonal snowfield',
+                  '9': 'Not assigned',
+                  }
+        ttkeys = {'0': 'Land-terminating',
+                  '1': 'Marine-terminating',
+                  '2': 'Lake-terminating',
+                  '3': 'Dry calving',
+                  '4': 'Regenerated',
+                  '5': 'Shelf-terminating',
+                  '9': 'Not assigned',
+                  }
+        self.glacier_type = gtkeys[gtype[0]]
+        self.terminus_type = ttkeys[gtype[1]]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
         self.inversion_calving_rate = 0.
@@ -2195,9 +2274,6 @@ class GlacierDirectory(object):
         except:
             rgi_date = None
         self.rgi_date = rgi_date
-
-        # rgi version can be useful, too
-        self.rgi_version = self.rgi_id.split('-')[0]
 
         # The divides dirs are created by gis.define_glacier_region, but we
         # make the root dir
@@ -2487,9 +2563,9 @@ class GlacierDirectory(object):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
         if self._mbdf is None:
-            flink, mbdatadir = get_wgms_files()
-            flink = pd.read_csv(flink)
-            wid = flink.loc[flink[self.rgi_version +'_ID'] == self.rgi_id]
+            flink, mbdatadir = get_wgms_files(version=self.rgi_version)
+            c = 'RGI{}0_ID'.format(self.rgi_version)
+            wid = flink.loc[flink[c] == self.rgi_id]
             if len(wid) == 0:
                 raise RuntimeError('Not a reference glacier!')
             wid = wid.WGMS_ID.values[0]
@@ -2501,11 +2577,16 @@ class GlacierDirectory(object):
             self._mbdf = pd.read_csv(reff).set_index('YEAR')
 
         # logic for period
-        y0, y1 = cfg.PARAMS['run_period']
+        if not self.has_file('climate_info'):
+            raise RuntimeError('Please process some climate data before call')
         ci = self.read_pickle('climate_info')
-        y0 = y0 or ci['hydro_yr_0']
-        y1 = y1 or ci['hydro_yr_1']
-        out = self._mbdf.loc[y0:y1]
+        y0 = ci['hydro_yr_0']
+        y1 = ci['hydro_yr_1']
+        if len(self._mbdf) > 1:
+            out = self._mbdf.loc[y0:y1]
+        else:
+            # Some files are just empty
+            out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
     def get_ref_length_data(self):
