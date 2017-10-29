@@ -996,6 +996,13 @@ def compute_ref_t_stars(gdirs):
     gdirs: list of oggm.GlacierDirectory objects
     """
 
+    if not cfg.PARAMS['run_mb_calibration']:
+        raise RuntimeError('Are you sure you want to calibrate the reference '
+                           't*? There is a pre-calibrated version available. '
+                           'If you know what you are doing and still want to '
+                           'calibrate, set the `run_mb_calibration` parameter '
+                           'to `True`.')
+
     log.info('Compute the reference t* and mu* for WGMS glaciers')
 
     # Reference glaciers only if in the list and period is good
@@ -1107,8 +1114,16 @@ def distribute_t_stars(gdirs, ref_df=None):
     log.info('Distribute t* and mu*')
 
     if ref_df is None:
-        ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                          'ref_tstars.csv'))
+        fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+        if not cfg.PARAMS['run_mb_calibration']:
+            # Make some checks and use the default one
+            if (('climate_file' in cfg.PATHS) and
+                    os.path.exists(cfg.PATHS['climate_file'])):
+                raise RuntimeError('If you are using a custom climate file '
+                                   'you should run your own MB calibration.')
+            fn = 'oggm_ref_tstars_rgi{}_cru4.csv'.format(gdirs[0].rgi_version)
+            fp = utils.get_demo_file(fn)
+        ref_df = pd.read_csv(fp)
 
     for gdir in gdirs:
 

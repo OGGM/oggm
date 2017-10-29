@@ -24,7 +24,7 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, RUN_PREPRO_TESTS
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve
 from oggm import workflow
 
 cfg.PATHS['working_dir'] = get_test_dir()
@@ -32,6 +32,17 @@ cfg.PATHS['working_dir'] = get_test_dir()
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
     raise unittest.SkipTest('Skipping all prepro tests.')
+
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
 
 
 def read_svgcoords(svg_file):
@@ -604,6 +615,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
+        cfg.PARAMS['run_mb_calibration'] = True
 
     def tearDown(self):
         self.rm_dir()
@@ -1171,6 +1183,11 @@ class TestClimate(unittest.TestCase):
 
     def test_automated_workflow(self):
 
+        cfg.PARAMS['run_mb_calibration'] = False
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
         workflow.reset_multiprocessing()
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1188,6 +1205,7 @@ class TestClimate(unittest.TestCase):
         assert gdir.rgi_version == '6'
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
+        cfg.PARAMS['run_mb_calibration'] = True
 
 
 class TestFilterNegFlux(unittest.TestCase):

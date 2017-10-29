@@ -237,8 +237,8 @@ def climate_tasks(gdirs):
     """Helper function: run all climate tasks."""
 
     # I don't know where this logic is best placed...
-    if ('climate_file' in cfg.PATHS) and \
-            os.path.exists(cfg.PATHS['climate_file']):
+    if (('climate_file' in cfg.PATHS) and
+            os.path.exists(cfg.PATHS['climate_file'])):
         _process_task = tasks.process_custom_climate_data
     else:
         # OK, so use the default CRU "high-resolution" method
@@ -246,7 +246,8 @@ def climate_tasks(gdirs):
     execute_entity_task(_process_task, gdirs)
 
     # Then, global tasks
-    tasks.compute_ref_t_stars(gdirs)
+    if cfg.PARAMS['run_mb_calibration']:
+        tasks.compute_ref_t_stars(gdirs)
     tasks.distribute_t_stars(gdirs)
 
     # And the apparent mass-balance

@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '49cfc77a55bdeb42d10e3c8d4b748612544b8957'
+SAMPLE_DATA_COMMIT = '939fa1cd32946c1f5cf97987ab3499761e19c0d2'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -138,7 +138,8 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         cache_path = fb_path
 
     if not cfg.PARAMS['has_internet']:
-        raise NoInternetException("Download required, but has_internet is False.")
+        raise NoInternetException("Download required, but "
+                                  "`has_internet` is False.")
 
     mkdir(os.path.dirname(cache_path))
 
@@ -1445,12 +1446,6 @@ def get_glathida_file():
     file: paths to the file
     """
 
-    if cfg.PATHS['glathida_rgi_links']:
-        if not os.path.exists(cfg.PATHS['glathida_rgi_links']):
-            raise ValueError('Wrong glathida_rgi_links path provided.')
-        # User provided data
-        return cfg.PATHS['glathida_rgi_links']
-
     # Roll our own
     download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'glathida')
@@ -1632,12 +1627,14 @@ def _get_cru_file_unlocked(var=None):
         raise ValueError('CRU variable {} does not exist!'.format(var))
 
     # The user files may have different dates, so search for patterns
-    bname = 'cru_ts4.01*.{}.dat.nc'.format(var)
+    bname = 'cru_ts*.{}.dat.nc'.format(var)
     search = glob.glob(os.path.join(cru_dir, bname))
     if len(search) == 1:
         ofile = search[0]
     elif len(search) > 1:
-        raise ValueError('The CRU filename should match "{}".'.format(bname))
+        raise RuntimeError('You seem to have more than one file in your CRU '
+                           'directory: {}. Help me by deleting the one'
+                           'you dont want to use anymore.'.format(cru_dir))
     else:
         # if not there download it
         cru_filename = 'cru_ts4.01.1901.2016.{}.dat.nc'.format(var)

@@ -16,10 +16,26 @@ import oggm
 from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve
 
 # In case some logging happens or so
 cfg.PATHS['working_dir'] = get_test_dir()
+
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
+
+
+def clean_dir(testdir):
+    shutil.rmtree(testdir)
+    os.makedirs(testdir)
 
 
 class TestFuncs(unittest.TestCase):
