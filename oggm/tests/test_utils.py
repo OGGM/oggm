@@ -343,14 +343,14 @@ class TestFakeDownloads(unittest.TestCase):
     def test_cru(self):
 
         # Create fake cru file
-        cf = os.path.join(self.dldir, 'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+        cf = os.path.join(self.dldir, 'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
         with gzip.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/'
-                        'cru_ts_3.24.01/cruts.1701201703.v3.24.01/tmp/'
-                        'cru_ts3.24.01.1901.2015.tmp.dat.nc.gz')
+            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
+                        'cruts.1709081022.v4.01/tmp/'
+                        'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
             self.assertEqual(url, expected)
             return cf
 

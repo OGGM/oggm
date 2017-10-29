@@ -60,8 +60,8 @@ logger = logging.getLogger(__name__)
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 SAMPLE_DATA_COMMIT = '49cfc77a55bdeb42d10e3c8d4b748612544b8957'
 
-CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_3.24.01/cruts'
-              '.1701201703.v3.24.01/')
+CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
+              '.1709081022.v4.01/')
 
 _RGI_METADATA = dict()
 
@@ -895,7 +895,7 @@ def smooth1d(array, window_size=None, kernel='gaussian'):
 
 def line_interpol(line, dx):
     """Interpolates a shapely LineString to a regularly spaced one.
-    
+
     Shapely's interpolate function does not guaranty equally
     spaced points in space. This is what this function is for.
 
@@ -1632,7 +1632,7 @@ def _get_cru_file_unlocked(var=None):
         raise ValueError('CRU variable {} does not exist!'.format(var))
 
     # The user files may have different dates, so search for patterns
-    bname = 'cru_ts*.{}.dat.nc'.format(var)
+    bname = 'cru_ts4.01*.{}.dat.nc'.format(var)
     search = glob.glob(os.path.join(cru_dir, bname))
     if len(search) == 1:
         ofile = search[0]
@@ -1640,7 +1640,7 @@ def _get_cru_file_unlocked(var=None):
         raise ValueError('The CRU filename should match "{}".'.format(bname))
     else:
         # if not there download it
-        cru_filename = 'cru_ts3.24.01.1901.2015.{}.dat.nc'.format(var)
+        cru_filename = 'cru_ts4.01.1901.2016.{}.dat.nc'.format(var)
         cru_url = CRU_SERVER + '{}/'.format(var) + cru_filename + '.gz'
         dlfile = file_downloader(cru_url)
         ofile = os.path.join(cru_dir, cru_filename)
