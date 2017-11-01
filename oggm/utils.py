@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '939fa1cd32946c1f5cf97987ab3499761e19c0d2'
+SAMPLE_DATA_COMMIT = '4d1384503c98a67750175e34dce16f8c45499b73'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1424,16 +1424,8 @@ def get_wgms_files(version=None):
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
 
-    if version in ['4', '5']:
-        outf = os.path.join(sdir, 'rgi_wgms_links_20170217_RGIV5.csv')
-        outf = pd.read_csv(outf, dtype={'RGI_REG': object})
-    elif version in ['6']:
-        outf = os.path.join(sdir, '00_rgi60_links.csv')
-        # Uniformize (ugly)
-        outf = pd.read_csv(outf, skiprows=[0, 1])
-        outf['RGI60_ID'] = outf['RGIId']
-        outf['WGMS_ID'] = outf['FoGId']
-        outf['RGI_REG'] = [s.split('-')[1].split('.')[0] for s in outf.RGIId]
+    outf = os.path.join(sdir, 'rgi_wgms_links_20171101.csv')
+    outf = pd.read_csv(outf, dtype={'RGI_REG': object})
 
     return outf, datadir
 

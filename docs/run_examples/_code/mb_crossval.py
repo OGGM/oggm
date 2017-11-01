@@ -71,6 +71,11 @@ ax1.vlines(cvdf['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
                                        label='5% and 95%\npercentiles')
+ax1.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
+         horizontalalignment='left',
+         verticalalignment='top',
+         transform=ax1.transAxes)
+
 ax1.set_ylim(0, 120)
 ax1.set_ylabel('N Glaciers')
 ax1.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
