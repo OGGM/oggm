@@ -2350,7 +2350,7 @@ class GlacierDirectory(object):
 
         return os.path.exists(self.get_filepath(filename))
 
-    def read_pickle(self, filename, use_compression=None):
+    def read_pickle(self, filename, use_compression=None, filesuffix=''):
         """Reads a pickle located in the directory.
 
         Parameters
@@ -2360,6 +2360,9 @@ class GlacierDirectory(object):
         use_compression : bool
             whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+
         Returns
         -------
         An object read from the pickle
@@ -2367,12 +2370,14 @@ class GlacierDirectory(object):
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
-        with _open(self.get_filepath(filename), 'rb') as f:
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with _open(fp, 'rb') as f:
             out = pickle.load(f)
 
         return out
 
-    def write_pickle(self, var, filename, use_compression=None):
+    def write_pickle(self, var, filename, use_compression=None,
+                     filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -2384,11 +2389,14 @@ class GlacierDirectory(object):
         use_compression : bool
             whether or not the file ws compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
         """
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
-        with _open(self.get_filepath(filename), 'wb') as f:
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=-1)
 
     def create_gridded_ncdf_file(self, fname):
