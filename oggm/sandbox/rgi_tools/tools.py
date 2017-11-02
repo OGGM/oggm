@@ -15,7 +15,7 @@ from oggm.utils import haversine, mkdir, get_wgms_files
 
 INDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/results_global_partitioning/altitude_filter/'
 
-OUTDIR_INTERSECTS = '/home/users/fmaussion/RGI_Corrected_Intersects/'
+OUTDIR_INTERSECTS = '/home/mowglie/tmp/RGI_V6_Intersects/'
 OUTDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/RGI_V5_Modified/'
 
 
