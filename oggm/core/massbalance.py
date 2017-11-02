@@ -161,7 +161,6 @@ class LinearMassBalance(MassBalanceModel):
         self.ela_h = ela_h
         self.grad = grad
 
-
     @MassBalanceModel.temp_bias.setter
     def temp_bias(self, value):
         """Temperature bias to change the ELA."""

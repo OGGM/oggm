@@ -244,7 +244,7 @@ def optimize_inversion_params(gdirs):
     gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
     ref_area_km2 = gtd_df.RGI_AREA.values
     ref_area_m2 = ref_area_km2 * 1e6
-    gtd_df.VOLUME = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
+    gtd_df['VOLUME'] = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
     ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
     ref_volume_km3 = ref_cs * ref_area_km2**1.375
     ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.

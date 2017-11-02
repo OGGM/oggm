@@ -198,8 +198,8 @@ def process_cesm_data(gdir, filesuffix=''):
 
     # from normal years to hydrological years
     # TODO: we don't check if the files actually start in January but we should
-    precp = precp[9:-3]
-    temp = temp[9:-3]
+    precp = precp[9:-3].load()
+    temp = temp[9:-3].load()
     y0 = int(temp.time.values[0].strftime('%Y'))
     y1 = int(temp.time.values[-1].strftime('%Y'))
     time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
@@ -762,7 +762,7 @@ def t_star_from_refmb(gdir, mbdf):
     gdir.write_pickle(odf, 'prcp_fac_optim')
 
     # we take the closest result and see later if it needs cleverer handling
-    amin = np.argmin(np.abs(odf.avg_std_bias))  # this gives back an index!
+    amin = odf.avg_std_bias.abs().idxmin()  # this gives back an index!
     return out[amin]
 
 
