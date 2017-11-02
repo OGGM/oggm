@@ -132,7 +132,8 @@ def _inversion_simple(a3, a0):
     return (-a0)**cfg.ONE_FIFTH
 
 
-def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
+def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
+                                filesuffix=''):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -148,6 +149,8 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
         default behavior is to compute the thickness and write the
         results in the pickle. Set to False in order to spare time
         during calibration.
+    filesuffix : str
+        add a suffix to the output file
     
     Returns
     -------
@@ -201,7 +204,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True):
             cl['volume'] = volume
         out_volume += np.sum(volume)
     if write:
-        gdir.write_pickle(cls, 'inversion_output')
+        gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
 
     return out_volume, gdir.rgi_area_km2 * 1e6
 
@@ -359,7 +362,7 @@ def optimize_inversion_params(gdirs):
 
 
 @entity_task(log, writes=['inversion_output'])
-def volume_inversion(gdir, glen_a=None, fs=None):
+def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
     """Computes the inversion the glacier.
 
     If glen_a and fs are not given, it will use the optimized params.
@@ -371,6 +374,10 @@ def volume_inversion(gdir, glen_a=None, fs=None):
         the ice creep parameter (defaults to cfg.PARAMS['inversion_glen_a'])
     fs : float, optional
         the sliding parameter (defaults to cfg.PARAMS['inversion_fs'])
+    fs : float, optional
+        the sliding parameter (defaults to cfg.PARAMS['inversion_fs'])
+    filesuffix : str
+        add a suffix to the output file
     """
 
     if fs is not None and glen_a is None:
@@ -389,7 +396,8 @@ def volume_inversion(gdir, glen_a=None, fs=None):
         fs = cfg.PARAMS['inversion_fs']
 
     # go
-    return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True)
+    return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True,
+                                       filesuffix=filesuffix)
 
 
 @entity_task(log, writes=['inversion_output'])
