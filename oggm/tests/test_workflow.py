@@ -328,7 +328,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertTrue(shp is not None)
         shp = shp.loc[shp.RGIID == 'RGI50-11.00897']
         self.assertEqual(len(shp), 3)
-        self.assertEqual(shp.loc[shp.LE_SEGMENT.argmax()].MAIN, 1)
+        self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
 
     @is_slow
     def test_random(self):
