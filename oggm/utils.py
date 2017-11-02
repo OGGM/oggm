@@ -1506,7 +1506,7 @@ def _get_rgi_dir_unlocked(version=None):
     return rgi_dir
 
 
-def get_rgi_intersects_dir(reset=False):
+def get_rgi_intersects_dir(version=None, reset=False):
     """Returns a path to the RGI directory containing the intersects.
 
     If the files are not present, download them.
@@ -1517,12 +1517,14 @@ def get_rgi_intersects_dir(reset=False):
     """
 
     with _get_download_lock():
-        return _get_rgi_intersects_dir_unlocked(reset=reset)
+        return _get_rgi_intersects_dir_unlocked(version=version, reset=reset)
 
 
-def _get_rgi_intersects_dir_unlocked(reset=False):
+def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
 
     rgi_dir = cfg.PATHS['rgi_dir']
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
@@ -1532,9 +1534,13 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir, reset=reset)
 
-    dfile = ('https://www.dropbox.com/s/y73sdxygdiq7whv/' +
-             'RGI_V5_Intersects.zip?dl=1')
-    test_file = os.path.join(rgi_dir, 'RGI_V5_Intersects',
+    dfile = 'https://www.dropbox.com/s/'
+    if version == '5':
+        dfile += 'y73sdxygdiq7whv/RGI_V5_Intersects.zip?dl=1'
+    elif version == '6':
+        dfile += 'vawryxl8lkzxowu/RGI_V6_Intersects.zip?dl=1'
+
+    test_file = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects',
                              'Intersects_OGGM_Manifest.txt')
     if not os.path.exists(test_file):
         # if not there download it
@@ -1543,47 +1549,7 @@ def _get_rgi_intersects_dir_unlocked(reset=False):
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
 
-    return os.path.join(rgi_dir, 'RGI_V5_Intersects')
-
-
-def get_rgi_corrected_dir(reset=False):
-    """Returns a path to the RGI directory containing the new divided files.
-
-    If the files are not present, download them.
-
-    Returns
-    -------
-    path to the directory
-    """
-
-    with _get_download_lock():
-        return _get_rgi_corrected_dir_unlocked(reset=reset)
-
-
-def _get_rgi_corrected_dir_unlocked(reset=False):
-
-    rgi_dir = cfg.PATHS['rgi_dir']
-
-    # Be sure the user gave a sensible path to the RGI dir
-    if not rgi_dir:
-        raise ValueError('The RGI data directory has to be'
-                         'specified explicitly.')
-
-    rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
-    mkdir(rgi_dir, reset=reset)
-
-    dfile = ('https://www.dropbox.com/s/85xdglv0zredue9/' +
-             'RGIV5_Corrected.zip?dl=1')
-    test_file = os.path.join(rgi_dir, 'RGIV5_Corrected',
-                             'RGIV5_Corrected_OGGM_Manifest.txt')
-    if not os.path.exists(test_file):
-        # if not there download it
-        ofile = file_downloader(dfile, reset=reset)
-        # Extract root
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(rgi_dir)
-
-    return os.path.join(rgi_dir, 'RGIV5_Corrected')
+    return os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
 
 
 def get_cru_file(var=None):

@@ -335,26 +335,25 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(os.path.join(rgi,
                                            'Intersects_OGGM_Manifest.txt'))
 
-    def test_rgi_corrected(self):
-
         # Make a fake RGI file
-        rgi_dir = os.path.join(self.dldir, 'rgi50')
+        rgi_dir = os.path.join(self.dldir, 'rgi60')
         utils.mkdir(rgi_dir)
-        make_fake_zipdir(os.path.join(rgi_dir, 'RGIV5_Corrected'),
-                         fakefile='RGIV5_Corrected_OGGM_Manifest.txt')
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V6_Intersects'),
+                         fakefile='Intersects_OGGM_Manifest.txt')
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://www.dropbox.com/s/85xdglv0zredue9/' +
-                        'RGIV5_Corrected.zip?dl=1')
+            expected = ('https://www.dropbox.com/s/vawryxl8lkzxowu/' +
+                        'RGI_V6_Intersects.zip?dl=1')
             self.assertEqual(url, expected)
             return rgi_f
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            rgi = utils.get_rgi_corrected_dir()
+            rgi = utils.get_rgi_intersects_dir(version='6')
 
         assert os.path.isdir(rgi)
-        assert os.path.exists(os.path.join(rgi, 'RGIV5_Corrected_OGGM_Manifest.txt'))
+        assert os.path.exists(os.path.join(rgi,
+                                           'Intersects_OGGM_Manifest.txt'))
 
     def test_cru(self):
 
@@ -734,18 +733,6 @@ class TestDataFiles(unittest.TestCase):
         of = utils.get_rgi_intersects_dir()
         of = os.path.join(of, '01_rgi50_Alaska',
                           'intersects_01_rgi50_Alaska.shp')
-        self.assertTrue(os.path.exists(of))
-
-        cfg.PATHS['rgi_dir'] = tmp
-
-    @is_download
-    def test_download_rgi_corrected(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_corrected_dir()
-        of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['rgi_dir'] = tmp
