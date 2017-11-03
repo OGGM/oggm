@@ -725,8 +725,10 @@ def mkdir(path, reset=False):
     if reset and os.path.exists(path):
         shutil.rmtree(path)
 
-    if not os.path.exists(path):
+    try:
         os.makedirs(path)
+    except FileExistsError:
+        pass
 
 
 def include_patterns(*patterns):
@@ -1819,15 +1821,51 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     return ds
 
 
+def compile_task_log(gdirs, task_names=[], filesuffix='', path=True):
+    """Gathers the log output for the selected task(s)
+    
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    task_names : list of str
+        The tasks to check for
+    filesuffix : str
+        add suffix to output file
+    path:
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+
+    out_df = []
+    for gdir in gdirs:
+        d = OrderedDict()
+        d['rgi_id'] = gdir.rgi_id
+        for task_name in task_names:
+            ts = gdir.get_task_status(task_name)
+            if ts is None:
+                ts = ''
+            d[task_name] = ts.replace(',', ' ')
+        out_df.append(d)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                       'task_log'+filesuffix+'.csv'))
+        else:
+            out.to_csv(path)
+    return out
+
+
 def glacier_characteristics(gdirs, filesuffix='', path=True,
                             inversion_only=False):
     """Gathers as many statistics as possible about a list of glacier
     directories.
-    
+
     It can be used to do result diagnostics and other stuffs. If the data
     necessary for a statistic is not available (e.g.: flowlines length) it
     will simply be ignored.
-    
+
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
@@ -2017,32 +2055,34 @@ class entity_task(object):
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
+            task_name = task_func.__name__
+
+            # Filesuffix are typically used to differentiate tasks
+            fsuffix = kwargs.get('filesuffix', False)
+            if fsuffix:
+                task_name += fsuffix
+
             # Do we need to run this task?
-            s = gdir.get_task_status(task_func)
+            s = gdir.get_task_status(task_name)
             if not reset and s and ('SUCCESS' in s):
                 return
 
             # Log what we are doing
             if print_log:
-                self.log.info('(%s) %s', gdir.rgi_id, task_func.__name__)
+                self.log.info('(%s) %s', gdir.rgi_id, task_name)
 
             # Run the task
             try:
                 out = task_func(gdir, **kwargs)
-                gdir.log(task_func)
+                gdir.log(task_name)
             except Exception as err:
                 # Something happened
                 out = None
-                gdir.log(task_func, err=err)
-                task_func_name = task_func.__name__
-                # Filesuffix are typically used to differenciate tasks
-                fsuffix = kwargs.get('filesuffix', False)
-                if fsuffix:
-                    task_func_name += fsuffix
-                pipe_log(gdir, task_func_name, err=err)
+                gdir.log(task_name, err=err)
+                pipe_log(gdir, task_name, err=err)
                 if print_log:
                     self.log.error('%s occurred during task %s on %s!',
-                                   type(err).__name__, task_func.__name__,
+                                   type(err).__name__, task_name,
                                    gdir.rgi_id)
                 if not cfg.PARAMS['continue_on_error']:
                     raise
@@ -2310,7 +2350,7 @@ class GlacierDirectory(object):
                                self.rgi_id)
         if setup == 'run':
             paths = ['model_flowlines', 'inversion_params',
-                     'local_mustar', 'climate_monthly']
+                     'local_mustar', 'climate_monthly', 'gridded_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,
                             ignore=include_patterns(*paths))
@@ -2589,7 +2629,7 @@ class GlacierDirectory(object):
             df.name = ds.glacier_name
         return df
 
-    def log(self, func, err=None):
+    def log(self, task_name, err=None):
         """Logs a message to the glacier directory.
 
         It is usually called by the :py:class:`entity_task` decorator, normally
@@ -2606,7 +2646,7 @@ class GlacierDirectory(object):
 
         # a line per function call
         nowsrt = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-        line = nowsrt + ';' + func.__name__ + ';'
+        line = nowsrt + ';' + task_name + ';'
         if err is None:
             line += 'SUCCESS'
         else:
@@ -2614,7 +2654,7 @@ class GlacierDirectory(object):
         with open(self.logfile, 'a') as logfile:
             logfile.write(line + '\n')
 
-    def get_task_status(self, func):
+    def get_task_status(self, task_name):
         """Opens this directory's log file to see if a task was already run.
 
         It is usually called by the :py:class:`entity_task` decorator, normally
@@ -2622,8 +2662,8 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        func : a function
-            the tasks which wants to know
+        task_name : str
+            the name of the task which has to be tested for
 
         Returns
         -------
@@ -2637,7 +2677,7 @@ class GlacierDirectory(object):
         with open(self.logfile) as logfile:
             lines = logfile.readlines()
 
-        lines = [l.replace('\n', '') for l in lines if func.__name__ in l]
+        lines = [l.replace('\n', '') for l in lines if task_name in l]
         if lines:
             # keep only the last log
             return lines[-1].split(';')[-1]
