@@ -1819,7 +1819,8 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
     return ds
 
 
-def glacier_characteristics(gdirs, filesuffix='', path=True):
+def glacier_characteristics(gdirs, filesuffix='', path=True,
+                            inversion_only=False):
     """Gathers as many statistics as possible about a list of glacier
     directories.
     
@@ -1835,6 +1836,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
     path:
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    inversion_only: bool
+        if one wants to summarize the inversion output only
     """
 
     out_df = []
@@ -1854,7 +1857,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
         # The rest is less certain. We put this in a try block and see
         try:
             # Masks related stuff
-            if gdir.has_file('gridded_data'):
+            if gdir.has_file('gridded_data') and not inversion_only:
                 fpath = gdir.get_filepath('gridded_data')
                 with netCDF4.Dataset(fpath) as nc:
                     mask = nc.variables['glacier_mask'][:]
@@ -1864,7 +1867,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
 
             # Centerlines
-            if gdir.has_file('centerlines'):
+            if gdir.has_file('centerlines') and not inversion_only:
                 cls = gdir.read_pickle('centerlines')
                 longuest = 0.
                 for cl in cls:
@@ -1873,7 +1876,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
 
             # MB and flowline related stuff
-            if gdir.has_file('inversion_flowlines'):
+            if gdir.has_file('inversion_flowlines') and not inversion_only:
                 amb = np.array([])
                 h = np.array([])
                 widths = np.array([])
@@ -1902,7 +1905,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['avg_slope'] = np.mean(slope)
 
             # MB calib
-            if gdir.has_file('local_mustar'):
+            if gdir.has_file('local_mustar') and not inversion_only:
                 df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
                 d['t_star'] = df['t_star']
                 d['prcp_fac'] = df['prcp_fac']
@@ -1910,7 +1913,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['mb_bias'] = df['bias']
 
             # Climate
-            if gdir.has_file('climate_monthly'):
+            if gdir.has_file('climate_monthly') and not inversion_only:
                 cf = gdir.get_filepath('climate_monthly')
                 with xr.open_dataset(cf) as cds:
                     d['clim_alt'] = cds.ref_hgt
@@ -1936,7 +1939,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
 
             # Calving
-            if gdir.has_file('calving_output'):
+            if gdir.has_file('calving_output') and not inversion_only:
                 all_calving_data = []
                 all_width = []
                 cl = gdir.read_pickle('calving_output')
