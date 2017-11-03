@@ -247,6 +247,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
         cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
         assert cc > 0.3
+        assert np.all(dfc.t_star > 1900)
 
     @is_slow
     def test_crossval(self):
