@@ -725,8 +725,10 @@ def mkdir(path, reset=False):
     if reset and os.path.exists(path):
         shutil.rmtree(path)
 
-    if not os.path.exists(path):
+    try:
         os.makedirs(path)
+    except FileExistsError:
+        pass
 
 
 def include_patterns(*patterns):
@@ -2348,7 +2350,7 @@ class GlacierDirectory(object):
                                self.rgi_id)
         if setup == 'run':
             paths = ['model_flowlines', 'inversion_params',
-                     'local_mustar', 'climate_monthly']
+                     'local_mustar', 'climate_monthly', 'gridded_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,
                             ignore=include_patterns(*paths))
