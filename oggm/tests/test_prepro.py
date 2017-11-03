@@ -1917,8 +1917,8 @@ class TestGCMClimate(unittest.TestCase):
 
                 # Let's do some basic checks
                 scru = cru.sel(time=slice('1961', '1990'))
-                scesm = cesm.isel(time=((cesm.year >= 1961) &
-                                        (cesm.year <= 1990)))
+                scesm = cesm.load().isel(time=((cesm.year >= 1961) &
+                                               (cesm.year <= 1990)))
                 # Climate during the chosen period should be the same
                 np.testing.assert_allclose(scru.temp.mean(),
                                            scesm.temp.mean(),
@@ -2017,13 +2017,14 @@ class TestCatching(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
 
-        self.assertEqual(gdir.get_task_status(gis.glacier_masks), 'SUCCESS')
+        self.assertEqual(gdir.get_task_status(gis.glacier_masks.__name__),
+                         'SUCCESS')
         self.assertIsNone(gdir.get_task_status(
-            centerlines.compute_centerlines))
+            centerlines.compute_centerlines.__name__))
 
         centerlines.compute_downstream_bedshape(gdir)
 
-        s = gdir.get_task_status(centerlines.compute_downstream_bedshape)
+        s = gdir.get_task_status(centerlines.compute_downstream_bedshape.__name__)
         assert 'FileNotFoundError' in s
 
         # Try overwrite
@@ -2041,3 +2042,17 @@ class TestCatching(unittest.TestCase):
             lines = logfile.readlines()
         isrun = ['glacier_masks' in l for l in lines]
         assert np.sum(isrun) == 2
+
+        df = utils.compile_task_log([gdir], path=False)
+        assert len(df) == 1
+        assert len(df.columns) == 0
+
+        tn = ['glacier_masks', 'compute_downstream_bedshape', 'not_a_task']
+        df = utils.compile_task_log([gdir], task_names=tn,
+                                    path=False)
+        assert len(df) == 1
+        assert len(df.columns) == 3
+        df = df.iloc[0]
+        assert df['glacier_masks'] == 'SUCCESS'
+        assert df['compute_downstream_bedshape'] != 'SUCCESS'
+        assert df['not_a_task'] == ''
