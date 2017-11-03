@@ -1901,6 +1901,14 @@ def glacier_characteristics(gdirs, filesuffix='', path=True):
                 d['avg_width'] = np.mean(widths)
                 d['avg_slope'] = np.mean(slope)
 
+            # MB calib
+            if gdir.has_file('local_mustar'):
+                df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+                d['t_star'] = df['t_star']
+                d['prcp_fac'] = df['prcp_fac']
+                d['mu_star'] = df['mu_star']
+                d['mb_bias'] = df['bias']
+
             # Climate
             if gdir.has_file('climate_monthly'):
                 cf = gdir.get_filepath('climate_monthly')
