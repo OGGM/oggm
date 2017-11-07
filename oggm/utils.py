@@ -12,6 +12,7 @@ import math
 import datetime
 import logging
 import pickle
+import warnings
 from collections import OrderedDict
 from functools import partial, wraps
 import json
@@ -1817,6 +1818,119 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'run_output' + filesuffix + '.nc')
+        ds.to_netcdf(path)
+    return ds
+
+
+def compile_climate_input(gdirs, path=True, filename='climate_monthly',
+                          filesuffix=''):
+    """Merge the climate input files in the glacier directories into one file.
+
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    path: where to store (default is on the working dir).
+    filename: BASENAME of the climate input files
+    filesuffix: the filesuffix of the climate file
+    """
+
+    # Get the dimensions of all this
+    rgi_ids = [gd.rgi_id for gd in gdirs]
+
+    # The first gdir might have blown up, try some others
+    i = 0
+    while True:
+        if i >= len(gdirs):
+            raise RuntimeError('Found no valid glaciers!')
+        try:
+            ppath = gdirs[i].get_filepath(filename=filename,
+                                          filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_clim:
+                time = ds_clim.time.values
+            break
+        except:
+            i += 1
+
+    with warnings.catch_warnings():
+        # Long time series are currently a pain pandas
+        warnings.filterwarnings("ignore", message='Unable to decode time axis')
+        ds_clim = xr.open_dataset(ppath)
+
+    if str('numpy.datetime64') in str(type(ds_clim.temp.time.values[0])):
+        y0 = ds_clim.temp.time.values[0].astype('datetime64[Y]')
+        y1 = ds_clim.temp.time.values[-1].astype('datetime64[Y]')
+    elif str('netcdftime._netcdftime.DatetimeGregorian') \
+            in str(type(ds_clim.temp.time.values[0])):
+        y0 = ds_clim.temp.time.values[0].strftime('%Y')
+        y1 = ds_clim.temp.time.values[-1].strftime('%Y')
+    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    pkeep = np.ones(len(time), dtype=np.bool)
+    year = time.year.values[pkeep]
+    month = time.month.values[pkeep]
+    months = month.astype(np.float32)
+    months[months == 1] = 31/365
+    months[months == 2] = 59/365
+    months[months == 3] = 90/365
+    months[months == 4] = 120/365
+    months[months == 5] = 151/365
+    months[months == 6] = 181/365
+    months[months == 7] = 212/365
+    months[months == 8] = 243/365
+    months[months == 9] = 273/365
+    months[months == 10] = 304/365
+    months[months == 11] = 334/365
+    months[months == 12] = 0
+    time = year + months
+    ds = xr.Dataset(coords={'time': ('time', time),
+                            'year': ('time', year),
+                            'month': ('time', months),
+                            'rgi_id': ('rgi_id', rgi_ids)
+                            })
+
+    shape = (len(time), len(rgi_ids))
+    temp = np.zeros(shape)
+    prcp = np.zeros(shape)
+    grad = np.zeros(shape)
+    ref_hgt = np.zeros(len(rgi_ids))
+    ref_pix_lon = np.zeros(len(rgi_ids))
+    ref_pix_lat = np.zeros(len(rgi_ids))
+
+    for i, gdir in enumerate(gdirs):
+        try:
+            ppath = gdir.get_filepath(filename=filename,
+                                      filesuffix=filesuffix)
+            with xr.open_dataset(ppath) as ds_clim:
+                prcp[:, i] = ds_clim.prcp.values[pkeep]
+                temp[:, i] = ds_clim.temp.values[pkeep]
+                grad[:, i] = ds_clim.grad
+                ref_hgt[i] = ds_clim.ref_hgt
+                ref_pix_lon[i] = ds_clim.ref_pix_lon
+                ref_pix_lat[i] = ds_clim.ref_pix_lat
+        except:
+            temp[:, i] = np.NaN
+            prcp[:, i] = np.NaN
+
+    ds['temp'] = (('time', 'rgi_id'), temp)
+    ds['temp'].attrs['units'] = 'DegC'
+    ds['temp'].attrs['description'] = '2m Temperature at height ref_hgt'
+    ds['prcp'] = (('time', 'rgi_id'), prcp)
+    ds['prcp'].attrs['units'] = 'kg m-2'
+    ds['prcp'].attrs['description'] = 'total monthly precipitation amount'
+    ds['grad'] = (('time', 'rgi_id'), grad)
+    ds['grad'].attrs['units'] = 'degC m-1'
+    ds['grad'].attrs['description'] = 'temperature gradient'
+    ds['ref_hgt'] = ('rgi_id', ref_hgt)
+    ds['ref_hgt'].attrs['units'] = 'm'
+    ds['ref_hgt'].attrs['description'] = 'reference height'
+    ds['ref_pix_lon'] = ('rgi_id', ref_pix_lon)
+    ds['ref_pix_lon'].attrs['description'] = 'longitude'
+    ds['ref_pix_lat'] = ('rgi_id', ref_pix_lat)
+    ds['ref_pix_lat'].attrs['description'] = 'latitude'
+
+    if path:
+        if path is True:
+            path = os.path.join(cfg.PATHS['working_dir'],
+                                'climate_input' + filesuffix + '.nc')
         ds.to_netcdf(path)
     return ds
 
