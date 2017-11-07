@@ -30,6 +30,9 @@ if not os.path.exists(CACHE_DIR):
 # Path to the config file
 CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 
+# config was changed, indicates that multiprocessing needs a reset
+CONFIG_MODIFIED = False
+
 
 class DocumentedDict(dict):
     """Quick "magic" to document the BASENAMES entries."""
@@ -45,8 +48,10 @@ class DocumentedDict(dict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to separate value and documentation
+        global CONFIG_MODIFIED
         try:
             self._set_key(key, value[0], docstr=value[1])
+            CONFIG_MODIFIED = True
         except:
             raise ValueError('DocumentedDict accepts only tuple of len 2')
 
@@ -60,19 +65,28 @@ class DocumentedDict(dict):
                self._doc[key]
 
 
-class PathOrderedDict(OrderedDict):
+class ResettingOrderedDict(OrderedDict):
+    """OrderedDict wrapper that resets our multiprocessing on set"""
+
+    def __setitem__(self, key, value):
+        global CONFIG_MODIFIED
+        OrderedDict.__setitem__(self, key, value)
+        CONFIG_MODIFIED = True
+
+
+class PathOrderedDict(ResettingOrderedDict):
     """Quick "magic" to be sure that paths are expanded correctly."""
 
     def __setitem__(self, key, value):
         # Overrides the original dic to expand the path
-        OrderedDict.__setitem__(self, key, os.path.expanduser(value))
+        ResettingOrderedDict.__setitem__(self, key, os.path.expanduser(value))
 
 # Globals
 IS_INITIALIZED = False
-PARAMS = OrderedDict()
+PARAMS = ResettingOrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
-LRUHANDLERS = OrderedDict()
+LRUHANDLERS = ResettingOrderedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
