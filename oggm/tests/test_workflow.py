@@ -92,9 +92,6 @@ def up_to_climate(reset=False):
     cfg.PARAMS['invert_with_rectangular'] = False
     cfg.PARAMS['run_mb_calibration'] = True
 
-    # Reset MP
-    workflow.reset_multiprocessing()
-
     # Go
     gdirs = workflow.init_glacier_regions(rgidf)
 
@@ -131,7 +128,6 @@ def up_to_inversion(reset=False):
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
         cfg.PATHS['cru_dir'] = ''
-        workflow.reset_multiprocessing()
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -165,7 +161,6 @@ def up_to_distrib(reset=False):
         cfg.PATHS['climate_file'] = ''
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        workflow.reset_multiprocessing()
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")

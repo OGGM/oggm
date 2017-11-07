@@ -1188,7 +1188,6 @@ class TestClimate(unittest.TestCase):
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
-        workflow.reset_multiprocessing()
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
