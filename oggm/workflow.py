@@ -36,6 +36,10 @@ def init_mp_pool(reset=False):
     global _mp_pool
     if _mp_pool and not reset:
         return _mp_pool
+    cfg.CONFIG_MODIFIED = False
+    if _mp_pool and reset:
+        _mp_pool.terminate()
+        _mp_pool = None
     cfg_contents = cfg.pack_config()
     global_lock = mp.Manager().Lock()
     mpp = cfg.PARAMS['mp_processes']
@@ -100,6 +104,7 @@ def reset_multiprocessing():
     if _mp_pool:
         _mp_pool.terminate()
         _mp_pool = None
+    cfg.CONFIG_MODIFIED = False
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -126,7 +131,7 @@ def execute_entity_task(task, gdirs, **kwargs):
             return
 
     if cfg.PARAMS['use_multiprocessing']:
-        mppool = init_mp_pool()
+        mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
         mppool.map(pc, gdirs, chunksize=1)
     else:
         for gdir in gdirs:
