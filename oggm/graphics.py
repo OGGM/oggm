@@ -614,7 +614,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
 
     # Where trapezoid change color
-    if hasattr(cls, 'do_trapeze') and cls.do_trapeze:
+    if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
         bed_t = cls.bed_h * np.NaN
         pt = cls.is_trapezoid & (~cls.is_rectangular)
         bed_t[pt] = cls.bed_h[pt]
@@ -701,7 +701,7 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
         ax.plot(x, cls.bed_h, color='k', linewidth=2.5, label='Bed (Parab.)')
 
         # Where trapezoid change color
-        if hasattr(cls, 'do_trapeze') and cls.do_trapeze:
+        if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
             bed_t = cls.bed_h * np.NaN
             pt = cls.is_trapezoid & (~cls.is_rectangular)
             bed_t[pt] = cls.bed_h[pt]

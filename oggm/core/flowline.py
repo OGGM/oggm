@@ -289,6 +289,7 @@ class MixedBedFlowline(Flowline):
         self._lambdas = lambdas.copy()
         self._ptrap = np.where(is_trapezoid)[0]
         self.is_trapezoid = is_trapezoid
+        self.is_rectangular = self.is_trapezoid & (self._lambdas == 0)
 
         # Sanity
         self.bed_shape[is_trapezoid] = np.NaN
@@ -318,14 +319,6 @@ class MixedBedFlowline(Flowline):
         self._prec = np.where(is_trapezoid & (lambdas == 0))
 
         assert np.allclose(section, self.section)
-
-    @property
-    def do_trapeze(self):
-        return self._do_trapeze
-
-    @property
-    def is_rectangular(self):
-        return self.is_trapezoid & (self._lambdas == 0)
 
     @property
     def widths_m(self):
