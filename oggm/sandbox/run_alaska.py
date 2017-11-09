@@ -40,11 +40,11 @@ cfg.initialize()
 
 # Compute a calving flux or not
 No_calving = False
-With_calving = False
+With_calving = True
 
 # Set's where is going to run PC or Cluster
 Cluster = False
-PC = False
+PC = True
 
 # Local paths (where to write output and where are the input files)
 if PC:
@@ -90,17 +90,6 @@ cfg.set_intersects_db(os.path.join(rgi_dir, '00_rgi50_AllRegs',
 utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
-
-# Copy the pre-calibrated t-star file
-# ---------------------------------
-# Note that to be exact, this procedure can only be applied if the run
-# parameters don't change between the calibration and the run.
-# After testing, it appears that changing the 'border' parameter won't affect
-# the results much (expectedly), so that it's ok to change it. All the rest
-# (e.g. smoothing, dx, prcp factor...) should imply a re-calibration
-mbf = 'https://github.com/OGGM/oggm-sample-data/blob/master/wgms/oggm_ref_tstars_rgi5_cru4.csv'
-mbf = utils.file_downloader(mbf)
-shutil.copyfile(mbf, os.path.join(WORKING_DIR, 'ref_tstars.csv'))
 
 # Some globals for more control on what to run
 RUN_GIS_mask = False
@@ -204,8 +193,6 @@ if RUN_GIS_mask:
 task_list = [
     tasks.compute_centerlines,
     tasks.initialize_flowlines,
-    tasks.compute_downstream_line,
-    tasks.compute_downstream_bedshape,
     tasks.catchment_area,
     tasks.catchment_intersections,
     tasks.catchment_width_geom,
@@ -218,7 +205,7 @@ if RUN_GIS_PREPRO:
 
 if RUN_CLIMATE_PREPRO:
     for gdir in gdirs:
-            gdir.inversion_calving_rate = 0
+        gdir.inversion_calving_rate = 0
     cfg.PARAMS['correct_for_neg_flux'] = False
     cfg.PARAMS['filter_for_neg_flux'] = False
     execute_entity_task(tasks.process_cru_data, gdirs)
@@ -244,7 +231,6 @@ if No_calving:
 # Calving loop
 # -----------------------------------
 if With_calving:
-
     # Re-initializing climate tasks and inversion without calving to be sure
     for gdir in gdirs:
         gdir.inversion_calving_rate = 0
@@ -438,7 +424,7 @@ if With_calving:
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
     execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var=True)
-    execute_entity_task(tasks.volume_inversion, gdirs)
+    execute_entity_task(tasks.volume_inversion, gdirs, filesuffix='_with_calving')
 
     # Write out glacier statistics
     utils.glacier_characteristics(gdirs, filesuffix='_with_calving')
