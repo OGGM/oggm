@@ -1,3 +1,4 @@
+from os import path
 import warnings
 
 import oggm
@@ -1945,6 +1946,72 @@ class TestGCMClimate(unittest.TestCase):
                 np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
                 # N more than 20%? (silly test)
                 np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+
+    def test_compile_climate_input(self):
+
+        filename = 'cesm_data'
+        filesuffix = '1'
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        climate.process_cru_data(gdir)
+        utils.compile_climate_input(gdirs)
+
+        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_temp_file'] = f
+        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = f
+        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = f
+        climate.process_cesm_data(gdir, filesuffix=filesuffix)
+        utils.compile_climate_input(gdirs, filename=filename,
+                                    filesuffix=filesuffix)
+
+        with warnings.catch_warnings():
+            # Long time series are currently a pain pandas
+            warnings.filterwarnings("ignore",
+                                    message='Unable to decode time axis')
+            path_cru1 = path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
+            clim_cru1 = xr.open_dataset(path_cru1)
+            path_cru2 = gdir.get_filepath(filename='climate_monthly')
+            clim_cru2 = xr.open_dataset(path_cru2)
+
+            np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
+                                       clim_cru2.prcp)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
+                                       clim_cru2.temp)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.grad),
+                                       clim_cru2.grad)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_hgt),
+                                       clim_cru2.ref_hgt)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lat),
+                                       clim_cru2.ref_pix_lat)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lon),
+                                       clim_cru2.ref_pix_lon)
+
+            path_cesm1 = path.join(cfg.PATHS['working_dir'], 'climate_input1.nc')
+            clim_cesm1 = xr.open_dataset(path_cesm1)
+            path_cesm2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
+            clim_cesm2 = xr.open_dataset(path_cesm2)
+
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
+                                       clim_cesm2.prcp)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
+                                       clim_cesm2.temp)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.grad),
+                                       clim_cesm2.grad)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_hgt),
+                                       clim_cesm2.ref_hgt)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lat),
+                                       clim_cesm2.ref_pix_lat)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lon),
+                                       clim_cesm2.ref_pix_lon)
 
 
 class TestCatching(unittest.TestCase):

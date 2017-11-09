@@ -1863,27 +1863,18 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
             in str(type(ds_clim.temp.time.values[0])):
         y0 = ds_clim.temp.time.values[0].strftime('%Y')
         y1 = ds_clim.temp.time.values[-1].strftime('%Y')
+    elif str('datetime.datetime') in str(type(ds_clim.temp.time.values[0])):
+        y0 = ds_clim.temp.time.values[0].strftime('%Y')
+        y1 = ds_clim.temp.time.values[-1].strftime('%Y')
+
     time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
     pkeep = np.ones(len(time), dtype=np.bool)
     year = time.year.values[pkeep]
     month = time.month.values[pkeep]
-    months = month.astype(np.float32)
-    months[months == 1] = 31/365
-    months[months == 2] = 59/365
-    months[months == 3] = 90/365
-    months[months == 4] = 120/365
-    months[months == 5] = 151/365
-    months[months == 6] = 181/365
-    months[months == 7] = 212/365
-    months[months == 8] = 243/365
-    months[months == 9] = 273/365
-    months[months == 10] = 304/365
-    months[months == 11] = 334/365
-    months[months == 12] = 0
-    time = year + months
+    time = date_to_year(year, month)
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
-                            'month': ('time', months),
+                            'month': ('time', month),
                             'rgi_id': ('rgi_id', rgi_ids)
                             })
 
