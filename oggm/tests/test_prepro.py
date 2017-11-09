@@ -27,8 +27,6 @@ from oggm.tests import is_slow, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve
 from oggm import workflow
 
-cfg.PATHS['working_dir'] = get_test_dir()
-
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
     raise unittest.SkipTest('Skipping all prepro tests.')

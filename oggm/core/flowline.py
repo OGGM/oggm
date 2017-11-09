@@ -320,6 +320,14 @@ class MixedBedFlowline(Flowline):
         assert np.allclose(section, self.section)
 
     @property
+    def do_trapeze(self):
+        return self._do_trapeze
+
+    @property
+    def is_rectangular(self):
+        return self.is_trapezoid & (self._lambdas == 0)
+
+    @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
         out = np.sqrt(4*self.thick/self.bed_shape)
@@ -1670,7 +1678,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
      ----------
      nyears : int
          length of the simulation (default: as long as needed for reaching
-         equilbrium)
+         equilibrium)
      y0 : int
          central year of the requested climate period. The default is to be
          centred on t*.
