@@ -1845,23 +1845,25 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         try:
             ppath = gdirs[i].get_filepath(filename=filename,
                                           filesuffix=filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
-                time = ds_clim.time.values
+            with warnings.catch_warnings():
+                # Long time series are currently a pain pandas
+                warnings.filterwarnings("ignore", message='Unable to decode')
+                with xr.open_dataset(ppath) as ds_clim:
+                    _ = ds_clim.time.values
             break
         except:
             i += 1
 
     with warnings.catch_warnings():
-        # Long time series are currently a pain pandas
         warnings.filterwarnings("ignore", message='Unable to decode time axis')
-        ds_clim = xr.open_dataset(ppath)
 
-    if str('numpy.datetime64') in str(type(ds_clim.temp.time.values[0])):
-        y0 = ds_clim.temp.time.values[0].astype('datetime64[Y]')
-        y1 = ds_clim.temp.time.values[-1].astype('datetime64[Y]')
-    else :
-        y0 = ds_clim.temp.time.values[0].strftime('%Y')
-        y1 = ds_clim.temp.time.values[-1].strftime('%Y')
+        with xr.open_dataset(ppath) as ds_clim:
+            try:
+                y0 = ds_clim.temp.time.values[0].astype('datetime64[Y]')
+                y1 = ds_clim.temp.time.values[-1].astype('datetime64[Y]')
+            except AttributeError:
+                y0 = ds_clim.temp.time.values[0].strftime('%Y')
+                y1 = ds_clim.temp.time.values[-1].strftime('%Y')
 
     time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
     pkeep = np.ones(len(time), dtype=np.bool)
@@ -1886,13 +1888,15 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         try:
             ppath = gdir.get_filepath(filename=filename,
                                       filesuffix=filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
-                prcp[:, i] = ds_clim.prcp.values[pkeep]
-                temp[:, i] = ds_clim.temp.values[pkeep]
-                grad[:, i] = ds_clim.grad
-                ref_hgt[i] = ds_clim.ref_hgt
-                ref_pix_lon[i] = ds_clim.ref_pix_lon
-                ref_pix_lat[i] = ds_clim.ref_pix_lat
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message='Unable to decode')
+                with xr.open_dataset(ppath) as ds_clim:
+                    prcp[:, i] = ds_clim.prcp.values[pkeep]
+                    temp[:, i] = ds_clim.temp.values[pkeep]
+                    grad[:, i] = ds_clim.grad
+                    ref_hgt[i] = ds_clim.ref_hgt
+                    ref_pix_lon[i] = ds_clim.ref_pix_lon
+                    ref_pix_lat[i] = ds_clim.ref_pix_lat
         except:
             temp[:, i] = np.NaN
             prcp[:, i] = np.NaN
