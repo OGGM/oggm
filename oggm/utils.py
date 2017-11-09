@@ -1859,11 +1859,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     if str('numpy.datetime64') in str(type(ds_clim.temp.time.values[0])):
         y0 = ds_clim.temp.time.values[0].astype('datetime64[Y]')
         y1 = ds_clim.temp.time.values[-1].astype('datetime64[Y]')
-    elif str('netcdftime._netcdftime.DatetimeGregorian') \
-            in str(type(ds_clim.temp.time.values[0])):
-        y0 = ds_clim.temp.time.values[0].strftime('%Y')
-        y1 = ds_clim.temp.time.values[-1].strftime('%Y')
-    elif str('datetime.datetime') in str(type(ds_clim.temp.time.values[0])):
+    else :
         y0 = ds_clim.temp.time.values[0].strftime('%Y')
         y1 = ds_clim.temp.time.values[-1].strftime('%Y')
 
