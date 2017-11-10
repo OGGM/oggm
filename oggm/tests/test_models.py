@@ -964,9 +964,9 @@ class TestIO(unittest.TestCase):
 
         ds_ = xr.open_dataset(diag_path)
         # the identical (i.e. attrs + names) doesn't work because of date
-        xr.testing.assert_equal(ds_diag, ds_)
-        for v in ds_diag.variables:
-            xr.testing.assert_identical(ds_diag[v], ds_[v])
+        del ds_diag.attrs['creation_date']
+        del ds_.attrs['creation_date']
+        xr.testing.assert_identical(ds_diag, ds_)
 
         fmodel = flowline.FileModel(run_path)
         fls = dummy_constant_bed()

@@ -1989,10 +1989,12 @@ class TestGCMClimate(unittest.TestCase):
                                            clim_cru2.ref_pix_lat)
                 np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lon),
                                            clim_cru2.ref_pix_lon)
-                np.testing.assert_allclose(clim_cru1.month,
+                np.testing.assert_allclose(clim_cru1.calendar_month,
                                            clim_cru2['time.month'])
-                np.testing.assert_allclose(clim_cru1.year,
+                np.testing.assert_allclose(clim_cru1.calendar_year,
                                            clim_cru2['time.year'])
+                np.testing.assert_allclose(clim_cru1.hydro_month[[0, -1]],
+                                           [1, 12])
 
             # CESM
             f1 = path.join(cfg.PATHS['working_dir'], 'climate_input_cesm.nc')

@@ -654,7 +654,7 @@ class FlowlineModel(object):
         diag_ds['length_m'].attrs['unit'] = 'm 3'
         diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
-                                                 'Altitude')
+                                                 'Altitude  (ELA)')
         diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
         if self.is_tidewater:
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
