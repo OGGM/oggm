@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '4d1384503c98a67750175e34dce16f8c45499b73'
+SAMPLE_DATA_COMMIT = '8b615dcd19cce3c193ddc8ccf1c0afa1d1bafc7e'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1172,7 +1172,9 @@ def pipe_log(gdir, task_func_name, err=None):
 
     # Defaults to working directory: it must be set!
     if not cfg.PATHS['working_dir']:
-        raise ValueError("Need a valid PATHS['working_dir']!")
+        warnings.warn("Cannot log to file without a valid "
+                      "cfg.PATHS['working_dir']!", RuntimeWarning)
+        return
 
     fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
     mkdir(fpath)
@@ -2442,8 +2444,9 @@ class GlacierDirectory(object):
             of the times)
         setup : str
             set up you want the copied directory to be useful for. Currently
-            supported are 'all' (copy the entire directory) and 'run' (copy)
-            the necessary files for a dynamical run).
+            supported are 'all' (copy the entire directory), 'inversion'
+            (copy the necessary files for the inversion AND the run)
+            and 'run' (copy the necessary files for a dynamical run).
         """
 
         base_dir = os.path.abspath(base_dir)
@@ -2451,6 +2454,13 @@ class GlacierDirectory(object):
                                self.rgi_id)
         if setup == 'run':
             paths = ['model_flowlines', 'inversion_params',
+                     'local_mustar', 'climate_monthly', 'gridded_data']
+            paths = ('*' + p + '*' for p in paths)
+            shutil.copytree(self.dir, new_dir,
+                            ignore=include_patterns(*paths))
+        elif setup == 'inversion':
+            paths = ['inversion_params', 'downstream_line',
+                     'inversion_flowlines', 'glacier_grid',
                      'local_mustar', 'climate_monthly', 'gridded_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,

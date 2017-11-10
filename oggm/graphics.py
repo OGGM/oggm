@@ -616,8 +616,13 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     # Where trapezoid change color
     if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
         bed_t = cls.bed_h * np.NaN
-        bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
-        ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+        pt = cls.is_trapezoid & (~cls.is_rectangular)
+        bed_t[pt] = cls.bed_h[pt]
+        ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
+                label='Bed (Trap.)')
+        bed_t = cls.bed_h * np.NaN
+        bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
+        ax.plot(x, bed_t, color='crimson', linewidth=2.5, label='Bed (Rect.)')
 
     # Plot glacier
     surfh = cls.surface_h
@@ -698,8 +703,14 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
         # Where trapezoid change color
         if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
             bed_t = cls.bed_h * np.NaN
-            bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
-            ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+            pt = cls.is_trapezoid & (~cls.is_rectangular)
+            bed_t[pt] = cls.bed_h[pt]
+            ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
+                    label='Bed (Trap.)')
+            bed_t = cls.bed_h * np.NaN
+            bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
+            ax.plot(x, bed_t, color='crimson', linewidth=2.5,
+                    label='Bed (Rect.)')
 
         # Plot glacier
         surfh = cls.surface_h

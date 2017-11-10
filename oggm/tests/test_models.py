@@ -33,9 +33,6 @@ do_plot = False
 
 DOM_BORDER = 80
 
-# In case some logging happens or so
-cfg.PATHS['working_dir'] = get_test_dir()
-
 
 class TestInitFlowline(unittest.TestCase):
 
@@ -858,6 +855,7 @@ class TestIO(unittest.TestCase):
             os.makedirs(self.test_dir)
 
         self.gdir = init_hef(border=DOM_BORDER)
+        flowline.init_present_time_glacier(self.gdir)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
     def tearDown(self):
@@ -1001,11 +999,24 @@ class TestIO(unittest.TestCase):
         flowline.init_present_time_glacier(new_gdir)
         shutil.rmtree(new_dir)
 
-        self.gdir.copy_to_basedir(new_dir)
+        self.gdir.copy_to_basedir(new_dir, setup='run')
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
         flowline.random_glacier_evolution(new_gdir, nyears=10)
+        shutil.rmtree(new_dir)
+
+        self.gdir.copy_to_basedir(new_dir, setup='inversion')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
+
+        inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
+        inversion.volume_inversion(new_gdir)
+        inversion.filter_inversion_output(new_gdir)
+        flowline.init_present_time_glacier(new_gdir)
+        cfg.PARAMS['use_optimized_inversion_params'] = False
+        flowline.run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
 
     def test_hef(self):

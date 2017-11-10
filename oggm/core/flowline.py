@@ -289,6 +289,7 @@ class MixedBedFlowline(Flowline):
         self._lambdas = lambdas.copy()
         self._ptrap = np.where(is_trapezoid)[0]
         self.is_trapezoid = is_trapezoid
+        self.is_rectangular = self.is_trapezoid & (self._lambdas == 0)
 
         # Sanity
         self.bed_shape[is_trapezoid] = np.NaN
@@ -1670,7 +1671,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
      ----------
      nyears : int
          length of the simulation (default: as long as needed for reaching
-         equilbrium)
+         equilibrium)
      y0 : int
          central year of the requested climate period. The default is to be
          centred on t*.
