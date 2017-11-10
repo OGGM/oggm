@@ -7,6 +7,7 @@ import logging
 import warnings
 import copy
 from collections import OrderedDict
+from time import gmtime, strftime
 
 # External libs
 import numpy as np
@@ -14,6 +15,7 @@ import shapely.geometry as shpg
 import xarray as xr
 
 # Locals
+from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
@@ -553,6 +555,10 @@ class FlowlineModel(object):
             flows_to_id.append(trib[0] if trib[0] is not None else -1)
 
         ds = xr.Dataset()
+        ds.attrs['description'] = 'OGGM model output'
+        ds.attrs['oggm_version'] = __version__
+        ds.attrs['calendar'] = '365-day no leap'
+        ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         ds['flowlines'] = ('flowlines', np.arange(len(flows_to_id)))
         ds['flows_to_id'] = ('flowlines', flows_to_id)
         ds.to_netcdf(path)
@@ -585,16 +591,27 @@ class FlowlineModel(object):
                 raise FloatingPointError('NaN in numerical solution.')
 
     def run_until_and_store(self, y1, run_path=None, diag_path=None):
-        """Runs the model and returns intermediate steps in two datasets
-        (model run and diagnostics).
+        """Runs the model and returns intermediate steps in xarray datasets.
 
-        You can store the whole in netcdf files, too.
+        The function returns two datasets:
+        - model run: this dataset stores the entire glacier geometry. It is
+          useful to visualize the glacier geometry or to restart a new run
+          from a modelled geometry. The glacier state is stored at the begining
+          of each hydrological year (not in between in order to spare disk
+          space)
+        - model diagnostics: this dataset stores a few diagnostic variables
+          such as the volume, area, length and ELA of the glacier. It is
+          stored at a monthly timestep.
+
+        You can store the dataset to disk in netcdf files by providing the
+        run_path and diag_path arguments.
         """
 
         # time
         monthly_time = utils.monthly_timeseries(self.yr, y1)
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
         yrs, months = utils.floatyear_to_date(monthly_time)
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
 
         # init output
         if run_path is not None:
@@ -603,17 +620,47 @@ class FlowlineModel(object):
         nm = len(monthly_time)
         sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
         widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
-        diag_ds = xr.Dataset(coords=OrderedDict(time=('time', monthly_time),
-                                                year=('time', yrs),
-                                                month=('time', months),
-                                                ))
+        diag_ds = xr.Dataset()
+
+        # Global attributes
+        diag_ds.attrs['description'] = 'OGGM model output'
+        diag_ds.attrs['oggm_version'] = __version__
+        diag_ds.attrs['calendar'] = '365-day no leap'
+        diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
+                                                  gmtime())
+
+        # Coordinates
+        diag_ds.coords['time'] = ('time', monthly_time)
+        diag_ds.coords['hydro_year'] = ('time', yrs)
+        diag_ds.coords['hydro_month'] = ('time', months)
+        diag_ds.coords['calendar_year'] = ('time', cyrs)
+        diag_ds.coords['calendar_month'] = ('time', cmonths)
+
+        diag_ds['time'].attrs['description'] = 'Floating hydrological year'
+        diag_ds['hydro_year'].attrs['description'] = 'Hydrological year'
+        diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
+        diag_ds['calendar_year'].attrs['description'] = 'Calendar year'
+        diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
+
+        # Variables and attributes
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
+        diag_ds['volume_m3'].attrs['unit'] = 'm 3'
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
+        diag_ds['area_m2'].attrs['unit'] = 'm 2'
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['length_m'].attrs['description'] = 'Glacier length'
+        diag_ds['length_m'].attrs['unit'] = 'm 3'
         diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
+                                                 'Altitude')
+        diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
         if self.is_tidewater:
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
-
+            diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
+                                                          'calving flux')
+            diag_ds['calving_m3'].attrs['unit'] = 'm 3'
 
         # Run
         j = 0
@@ -637,7 +684,13 @@ class FlowlineModel(object):
         run_ds = []
         for (s, w) in zip(sects, widths):
             ds = xr.Dataset()
+            ds.attrs['description'] = 'OGGM model output'
+            ds.attrs['oggm_version'] = __version__
+            ds.attrs['calendar'] = '365-day no leap'
+            ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
+                                                 gmtime())
             ds.coords['time'] = yearly_time
+            ds['time'].attrs['description'] = 'Floating hydrological year'
             varcoords = OrderedDict(time=('time', yearly_time),
                                     year=('time', yearly_time))
             ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),

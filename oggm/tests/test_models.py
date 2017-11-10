@@ -928,11 +928,13 @@ class TestIO(unittest.TestCase):
         vol_diag = []
         a_diag = []
         l_diag = []
+        ela_diag = []
         for yr in years:
             model.run_until(yr)
             vol_diag.append(model.volume_m3)
             a_diag.append(model.area_m2)
             l_diag.append(model.length_m)
+            ela_diag.append(model.mb_model.get_ela(year=yr))
             if int(yr) == yr:
                 vol_ref.append(model.volume_m3)
                 a_ref.append(model.area_m2)
@@ -946,6 +948,7 @@ class TestIO(unittest.TestCase):
         np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
         np.testing.assert_allclose(ds_diag.area_m2, a_diag)
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
+        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
         fls = dummy_constant_bed()
         run_path = os.path.join(self.test_dir, 'ts_ideal.nc')
@@ -960,7 +963,10 @@ class TestIO(unittest.TestCase):
                                   diag_path=diag_path)
 
         ds_ = xr.open_dataset(diag_path)
-        xr.testing.assert_identical(ds_diag, ds_)
+        # the identical (i.e. attrs + names) doesn't work because of date
+        xr.testing.assert_equal(ds_diag, ds_)
+        for v in ds_diag.variables:
+            xr.testing.assert_identical(ds_diag[v], ds_[v])
 
         fmodel = flowline.FileModel(run_path)
         fls = dummy_constant_bed()

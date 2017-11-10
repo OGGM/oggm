@@ -14,7 +14,7 @@ from oggm.utils import SuperclassMeta, lazy_property
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
-    """An interface for mass balance models.
+    """Common logic for the mass balance models.
 
     All mass-balance models should implement this interface.
     """
@@ -47,7 +47,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         heights: ndarray
             the atitudes at which the mass-balance will be computed
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------
@@ -91,7 +91,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         widths: ndarray
             the widths of the flowline (necessary for the weighted average)
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------
@@ -111,7 +111,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------

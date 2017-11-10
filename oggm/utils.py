@@ -1095,6 +1095,8 @@ def floatyear_to_date(yr, hydro_year=True):
 
     Parameters
     ----------
+    yr : float
+        The floating year
     hydro_year : bool
         If the float year follows the  "hydrological year" convention or
         not (default:True)
@@ -1132,6 +1134,10 @@ def date_to_floatyear(y, m, hydro_year=True):
 
     Parameters
     ----------
+    y : int
+        the year
+    m : int
+        the month
     hydro_year : bool
         If the float year follows the  "hydrological year" convention or
         not (default:True)
@@ -1140,6 +1146,64 @@ def date_to_floatyear(y, m, hydro_year=True):
     bsec = BEGINSEC_IN_MONTHS_HYDRO if hydro_year else BEGINSEC_IN_MONTHS
     ids = np.asarray(m, dtype=np.int) - 1
     return y + bsec[ids] / SEC_IN_YEAR
+
+
+def hydrodate_to_calendardate(y, m):
+    """Converts a hydrological (year, month) pair to a calendar date.
+
+    Parameters
+    ----------
+    y : int
+        the year
+    m : int
+        the month
+    """
+
+    try:
+        if m <= 3:
+            out_y = y - 1
+            out_m = m + 9
+        else:
+            out_y = y
+            out_m = m - 3
+    except (TypeError, ValueError):
+        # TODO: inefficient but no time right now
+        out_y = np.zeros(len(y), np.int64)
+        out_m = np.zeros(len(y), np.int64)
+        for i, (_y, _m) in enumerate(zip(y, m)):
+            _y, _m = hydrodate_to_calendardate(_y, _m)
+            out_y[i] = _y
+            out_m[i] = _m
+    return out_y, out_m
+
+
+def calendardate_to_hydrodate(y, m):
+    """Converts a calendar (year, month) pair to a hydrological date.
+
+    Parameters
+    ----------
+    y : int
+        the year
+    m : int
+        the month
+    """
+
+    try:
+        if m >= 10:
+            out_y = y + 1
+            out_m = m - 9
+        else:
+            out_y = y
+            out_m = m + 3
+    except (TypeError, ValueError):
+        # TODO: inefficient but no time right now
+        out_y = np.zeros(len(y), np.int64)
+        out_m = np.zeros(len(y), np.int64)
+        for i, (_y, _m) in enumerate(zip(y, m)):
+            _y, _m = calendardate_to_hydrodate(_y, _m)
+            out_y[i] = _y
+            out_m[i] = _m
+    return out_y, out_m
 
 
 def monthly_timeseries(y0, y1=None, ny=None, hydro_year=True,
