@@ -531,7 +531,7 @@ class FlowlineModel(object):
             heights = self._mb_current_heights[fl_id]
 
         date = utils.floatyear_to_date(year)
-        if self.mb_elev_feedback == 'annual':
+        if self.mb_elev_feedback in ['annual', 'never']:
             # ignore month changes
             date = (date[0], date[0])
 
