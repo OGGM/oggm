@@ -51,7 +51,8 @@ import multiprocessing as mp
 
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
+from oggm.cfg import (SEC_IN_YEAR, CUMSEC_IN_MONTHS, BEGINSEC_IN_MONTHS,
+                      CUMSEC_IN_MONTHS_HYDRO, BEGINSEC_IN_MONTHS_HYDRO)
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -1083,39 +1084,69 @@ def polygon_intersections(gdf):
     return out
 
 
-def year_to_date(yr):
-    """Converts a float year to an actual (year, month) tuple.
+def floatyear_to_date(yr, hydro_year=True):
+    """Converts a float year to an actual (year, month) pair.
 
-    Note that this doesn't account for leap years.
+    Note that this doesn't account for leap years (365-day no leap calendar).
+    The default is to use the hydrological year convention, i.e. the first
+    month of the year is October. In practice, this makes a very small
+    difference: the intervals between months are not exactly the same if
+    you start with October or January.
+
+    Parameters
+    ----------
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
 
+    cumsec = CUMSEC_IN_MONTHS_HYDRO if hydro_year else CUMSEC_IN_MONTHS
     try:
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
         sec = round(sec * SEC_IN_YEAR)
-        out_m = np.nonzero(sec < CUMSEC_IN_MONTHS)[0][0] + 1
+        out_m = np.nonzero(sec < cumsec)[0][0] + 1
     except TypeError:
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
-            y, m = year_to_date(y)
+            y, m = floatyear_to_date(y, hydro_year=hydro_year)
             out_y[i] = y
             out_m[i] = m
     return out_y, out_m
 
 
-def date_to_year(y, m):
-    """Converts an integer (year, month) to a float year.
+def date_to_floatyear(y, m, hydro_year=True):
+    """Converts an integer (year, month) pair to a float year.
 
-    Note that this doesn't account for leap years.
+    Note that this doesn't account for leap years (365-day no leap calendar).
+    The default is to use the hydrological year convention, i.e. the first
+    month of the year is October. In practice, this makes a very small
+    difference: the intervals between months are not exactly the same if
+    you start with October or January.
+
+    Parameters
+    ----------
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
+
+    bsec = BEGINSEC_IN_MONTHS_HYDRO if hydro_year else BEGINSEC_IN_MONTHS
     ids = np.asarray(m, dtype=np.int) - 1
-    return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
+    return y + bsec[ids] / SEC_IN_YEAR
 
 
-def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
-    """Creates a monthly timeseries in units of floating years.
+def monthly_timeseries(y0, y1=None, ny=None, hydro_year=True,
+                       include_last_year=False):
+    """Creates a monthly timeseries in units of float years.
+
+    Parameters
+    ----------
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
 
     if y1 is not None:
@@ -1126,7 +1157,7 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    out = date_to_year(years, months)
+    out = date_to_floatyear(years, months, hydro_year=hydro_year)
     if not include_last_year:
         out = out[:-11]
     return out
@@ -1871,7 +1902,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     pkeep = np.ones(len(time), dtype=np.bool)
     year = time.year.values[pkeep]
     month = time.month.values[pkeep]
-    time = date_to_year(year, month)
+    time = date_to_floatyear(year, month)
     ds = xr.Dataset(coords={'time': ('time', time),
                             'year': ('time', year),
                             'month': ('time', month),

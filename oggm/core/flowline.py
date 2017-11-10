@@ -528,7 +528,7 @@ class FlowlineModel(object):
             # All calls we replace
             heights = self._mb_current_heights[fl_id]
 
-        date = utils.year_to_date(year)
+        date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback == 'annual':
             # ignore month changes
             date = (date[0], date[0])
@@ -594,7 +594,7 @@ class FlowlineModel(object):
         # time
         monthly_time = utils.monthly_timeseries(self.yr, y1)
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
-        yrs, months = utils.year_to_date(monthly_time)
+        yrs, months = utils.floatyear_to_date(monthly_time)
 
         # init output
         if run_path is not None:
