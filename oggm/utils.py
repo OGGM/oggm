@@ -15,6 +15,7 @@ import pickle
 import warnings
 from collections import OrderedDict
 from functools import partial, wraps
+from time import gmtime, strftime
 import json
 import time
 import fnmatch
@@ -50,8 +51,10 @@ except ImportError:
 import multiprocessing as mp
 
 # Locals
+from oggm import __version__
 import oggm.cfg as cfg
-from oggm.cfg import CUMSEC_IN_MONTHS, SEC_IN_YEAR, BEGINSEC_IN_MONTHS
+from oggm.cfg import (SEC_IN_YEAR, CUMSEC_IN_MONTHS, BEGINSEC_IN_MONTHS,
+                      CUMSEC_IN_MONTHS_HYDRO, BEGINSEC_IN_MONTHS_HYDRO)
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -1083,39 +1086,137 @@ def polygon_intersections(gdf):
     return out
 
 
-def year_to_date(yr):
-    """Converts a float year to an actual (year, month) tuple.
+def floatyear_to_date(yr, hydro_year=True):
+    """Converts a float year to an actual (year, month) pair.
 
-    Note that this doesn't account for leap years.
+    Note that this doesn't account for leap years (365-day no leap calendar).
+    The default is to use the hydrological year convention, i.e. the first
+    month of the year is October. In practice, this makes a very small
+    difference: the intervals between months are not exactly the same if
+    you start with October or January.
+
+    Parameters
+    ----------
+    yr : float
+        The floating year
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
 
+    cumsec = CUMSEC_IN_MONTHS_HYDRO if hydro_year else CUMSEC_IN_MONTHS
     try:
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
         sec = round(sec * SEC_IN_YEAR)
-        out_m = np.nonzero(sec < CUMSEC_IN_MONTHS)[0][0] + 1
+        if sec == SEC_IN_YEAR:
+            # Floating errors
+            out_y += 1
+            sec = 0
+        out_m = np.nonzero(sec < cumsec)[0][0] + 1
     except TypeError:
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
-            y, m = year_to_date(y)
+            y, m = floatyear_to_date(y, hydro_year=hydro_year)
             out_y[i] = y
             out_m[i] = m
     return out_y, out_m
 
 
-def date_to_year(y, m):
-    """Converts an integer (year, month) to a float year.
+def date_to_floatyear(y, m, hydro_year=True):
+    """Converts an integer (year, month) pair to a float year.
 
-    Note that this doesn't account for leap years.
+    Note that this doesn't account for leap years (365-day no leap calendar).
+    The default is to use the hydrological year convention, i.e. the first
+    month of the year is October. In practice, this makes a very small
+    difference: the intervals between months are not exactly the same if
+    you start with October or January.
+
+    Parameters
+    ----------
+    y : int
+        the year
+    m : int
+        the month
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
+
+    bsec = BEGINSEC_IN_MONTHS_HYDRO if hydro_year else BEGINSEC_IN_MONTHS
     ids = np.asarray(m, dtype=np.int) - 1
-    return y + BEGINSEC_IN_MONTHS[ids] / SEC_IN_YEAR
+    return y + bsec[ids] / SEC_IN_YEAR
 
 
-def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
-    """Creates a monthly timeseries in units of floating years.
+def hydrodate_to_calendardate(y, m):
+    """Converts a hydrological (year, month) pair to a calendar date.
+
+    Parameters
+    ----------
+    y : int
+        the year
+    m : int
+        the month
+    """
+
+    try:
+        if m <= 3:
+            out_y = y - 1
+            out_m = m + 9
+        else:
+            out_y = y
+            out_m = m - 3
+    except (TypeError, ValueError):
+        # TODO: inefficient but no time right now
+        out_y = np.zeros(len(y), np.int64)
+        out_m = np.zeros(len(y), np.int64)
+        for i, (_y, _m) in enumerate(zip(y, m)):
+            _y, _m = hydrodate_to_calendardate(_y, _m)
+            out_y[i] = _y
+            out_m[i] = _m
+    return out_y, out_m
+
+
+def calendardate_to_hydrodate(y, m):
+    """Converts a calendar (year, month) pair to a hydrological date.
+
+    Parameters
+    ----------
+    y : int
+        the year
+    m : int
+        the month
+    """
+
+    try:
+        if m >= 10:
+            out_y = y + 1
+            out_m = m - 9
+        else:
+            out_y = y
+            out_m = m + 3
+    except (TypeError, ValueError):
+        # TODO: inefficient but no time right now
+        out_y = np.zeros(len(y), np.int64)
+        out_m = np.zeros(len(y), np.int64)
+        for i, (_y, _m) in enumerate(zip(y, m)):
+            _y, _m = calendardate_to_hydrodate(_y, _m)
+            out_y[i] = _y
+            out_m[i] = _m
+    return out_y, out_m
+
+
+def monthly_timeseries(y0, y1=None, ny=None, hydro_year=True,
+                       include_last_year=False):
+    """Creates a monthly timeseries in units of float years.
+
+    Parameters
+    ----------
+    hydro_year : bool
+        If the float year follows the  "hydrological year" convention or
+        not (default:True)
     """
 
     if y1 is not None:
@@ -1126,7 +1227,7 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    out = date_to_year(years, months)
+    out = date_to_floatyear(years, months, hydro_year=hydro_year)
     if not include_last_year:
         out = out[:-11]
     return out
@@ -1739,15 +1840,18 @@ def get_ref_mb_glaciers(gdirs):
 
 
 def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
-    """Merge the runs output of the glacier directories into one file.
-
+    """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
     ----------
-    gdirs: the list of GlacierDir to process.
-    path: where to store (default is on the working dir).
-    monthly: wether to store monthly values (default is yearly)
-    filesuffix: the filesuffix of the run
+    gdirs : []
+        the list of GlacierDir to process.
+    path : str
+        where to store (default is on the working dir).
+    monthly : bool
+        whether to store monthly values (default is yearly)
+    filesuffix : str
+        the filesuffix of the run
     """
 
     # Get the dimensions of all this
@@ -1762,27 +1866,54 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
             ppath = gdirs[i].get_filepath('model_diagnostics',
                                           filesuffix=filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                time = ds_diag.time.values
-                year = ds_diag.year.values
-                month = ds_diag.month.values
+                _ = ds_diag.time.values
             break
         except:
             i += 1
 
-    # Monthly or not
-    if monthly:
-        pkeep = np.ones(len(time), dtype=np.bool)
-    else:
-        pkeep = np.where(month == 1)
+    # OK found it, open it and prepare the output
 
-    time = time[pkeep]
-    year = year[pkeep]
-    month = month[pkeep]
-    ds = xr.Dataset(coords={'time': ('time', time),
-                            'year': ('time', year),
-                            'month': ('time', month),
-                            'rgi_id': ('rgi_id', rgi_ids)
-                            })
+    with xr.open_dataset(ppath) as ds_diag:
+        time = ds_diag.time.values
+        yrs = ds_diag.hydro_year.values
+        months = ds_diag.hydro_month.values
+        cyrs = ds_diag.calendar_year.values
+        cmonths = ds_diag.calendar_month.values
+
+        # Monthly or not
+        if monthly:
+            pkeep = np.ones(len(time), dtype=np.bool)
+        else:
+            pkeep = np.where(months == 1)
+        time = time[pkeep]
+        yrs = yrs[pkeep]
+        months = months[pkeep]
+        cyrs = cyrs[pkeep]
+        cmonths = cmonths[pkeep]
+
+        # Prepare output
+        ds = xr.Dataset()
+
+        # Global attributes
+        ds.attrs['description'] = 'OGGM model output'
+        ds.attrs['oggm_version'] = __version__
+        ds.attrs['calendar'] = '365-day no leap'
+        ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
+        # Coordinates
+        ds.coords['time'] = ('time', time)
+        ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
+        ds.coords['hydro_year'] = ('time', yrs)
+        ds.coords['hydro_month'] = ('time', months)
+        ds.coords['calendar_year'] = ('time', cyrs)
+        ds.coords['calendar_month'] = ('time', cmonths)
+        ds['time'].attrs['description'] = 'Floating hydrological year'
+        ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
+        ds['hydro_year'].attrs['description'] = 'Hydrological year'
+        ds['hydro_month'].attrs['description'] = 'Hydrological month'
+        ds['calendar_year'].attrs['description'] = 'Calendar year'
+        ds['calendar_month'].attrs['description'] = 'Calendar month'
+
     shape = (len(time), len(rgi_ids))
     vol = np.zeros(shape)
     area = np.zeros(shape)
@@ -1804,17 +1935,17 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
             ela[:, i] = np.NaN
 
     ds['volume'] = (('time', 'rgi_id'), vol)
-    ds['volume'].attrs['units'] = 'm3'
     ds['volume'].attrs['description'] = 'Total glacier volume'
+    ds['volume'].attrs['units'] = 'm 3'
     ds['area'] = (('time', 'rgi_id'), area)
-    ds['area'].attrs['units'] = 'm2'
     ds['area'].attrs['description'] = 'Total glacier area'
+    ds['area'].attrs['units'] = 'm 2'
     ds['length'] = (('time', 'rgi_id'), length)
-    ds['length'].attrs['units'] = 'm'
     ds['length'].attrs['description'] = 'Glacier length'
+    ds['length'].attrs['units'] = 'm'
     ds['ela'] = (('time', 'rgi_id'), ela)
-    ds['ela'].attrs['units'] = 'm'
     ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
+    ds['ela'].attrs['units'] = 'm a.s.l'
 
     if path:
         if path is True:
@@ -1830,10 +1961,14 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
 
     Parameters
     ----------
-    gdirs: the list of GlacierDir to process.
-    path: where to store (default is on the working dir).
-    filename: BASENAME of the climate input files
-    filesuffix: the filesuffix of the climate file
+    gdirs : []
+        the list of GlacierDir to process.
+    path : str
+        where to store (default is on the working dir).
+    filename : str
+        BASENAME of the climate input files
+    filesuffix : str
+        the filesuffix of the compiled file
     """
 
     # Get the dimensions of all this
@@ -1867,24 +2002,43 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
                 y0 = ds_clim.temp.time.values[0].strftime('%Y')
                 y1 = ds_clim.temp.time.values[-1].strftime('%Y')
 
-    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
-    pkeep = np.ones(len(time), dtype=np.bool)
-    year = time.year.values[pkeep]
-    month = time.month.values[pkeep]
-    time = date_to_year(year, month)
-    ds = xr.Dataset(coords={'time': ('time', time),
-                            'year': ('time', year),
-                            'month': ('time', month),
-                            'rgi_id': ('rgi_id', rgi_ids)
-                            })
+    # We know the file is structured like this
+    ctime = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    cyrs = ctime.year
+    cmonths = ctime.month
+    yrs, months = calendardate_to_hydrodate(cyrs, cmonths)
+    time = date_to_floatyear(yrs, months)
+
+    # Prepare output
+    ds = xr.Dataset()
+
+    # Global attributes
+    ds.attrs['description'] = 'OGGM model output'
+    ds.attrs['oggm_version'] = __version__
+    ds.attrs['calendar'] = '365-day no leap'
+    ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+
+    # Coordinates
+    ds.coords['time'] = ('time', time)
+    ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
+    ds.coords['hydro_year'] = ('time', yrs)
+    ds.coords['hydro_month'] = ('time', months)
+    ds.coords['calendar_year'] = ('time', cyrs)
+    ds.coords['calendar_month'] = ('time', cmonths)
+    ds['time'].attrs['description'] = 'Floating hydrological year'
+    ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
+    ds['hydro_year'].attrs['description'] = 'Hydrological year'
+    ds['hydro_month'].attrs['description'] = 'Hydrological month'
+    ds['calendar_year'].attrs['description'] = 'Calendar year'
+    ds['calendar_month'].attrs['description'] = 'Calendar month'
 
     shape = (len(time), len(rgi_ids))
-    temp = np.zeros(shape)
-    prcp = np.zeros(shape)
-    grad = np.zeros(shape)
-    ref_hgt = np.zeros(len(rgi_ids))
-    ref_pix_lon = np.zeros(len(rgi_ids))
-    ref_pix_lat = np.zeros(len(rgi_ids))
+    temp = np.zeros(shape) * np.NaN
+    prcp = np.zeros(shape) * np.NaN
+    grad = np.zeros(shape) * np.NaN
+    ref_hgt = np.zeros(len(rgi_ids)) * np.NaN
+    ref_pix_lon = np.zeros(len(rgi_ids)) * np.NaN
+    ref_pix_lat = np.zeros(len(rgi_ids)) * np.NaN
 
     for i, gdir in enumerate(gdirs):
         try:
@@ -1893,15 +2047,14 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message='Unable to decode')
                 with xr.open_dataset(ppath) as ds_clim:
-                    prcp[:, i] = ds_clim.prcp.values[pkeep]
-                    temp[:, i] = ds_clim.temp.values[pkeep]
+                    prcp[:, i] = ds_clim.prcp.values
+                    temp[:, i] = ds_clim.temp.values
                     grad[:, i] = ds_clim.grad
                     ref_hgt[i] = ds_clim.ref_hgt
                     ref_pix_lon[i] = ds_clim.ref_pix_lon
                     ref_pix_lat[i] = ds_clim.ref_pix_lat
         except:
-            temp[:, i] = np.NaN
-            prcp[:, i] = np.NaN
+            pass
 
     ds['temp'] = (('time', 'rgi_id'), temp)
     ds['temp'].attrs['units'] = 'DegC'

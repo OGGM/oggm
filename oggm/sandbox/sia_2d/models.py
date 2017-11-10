@@ -136,7 +136,7 @@ class Model2D(object):
         if self.mb_elev_feedback == 'always':
             return self._mb_call(self.bed_topo + self.ice_thick, year)
 
-        date = utils.year_to_date(year)
+        date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback == 'annual':
             # ignore month changes
             date = (date[0], date[0])

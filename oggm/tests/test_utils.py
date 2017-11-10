@@ -78,82 +78,123 @@ class TestFuncs(unittest.TestCase):
         expected = 'Special Glacier'
         self.assertTrue(utils.filter_rgi_name(name), expected)
 
-    def test_year_to_date(self):
+    def test_floatyear_to_date(self):
 
-        r = utils.year_to_date(0)
+        r = utils.floatyear_to_date(0)
         self.assertEqual(r, (0, 1))
 
-        y, m = utils.year_to_date([0, 1])
+        y, m = utils.floatyear_to_date([0, 1])
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [1, 1])
 
-        y, m = utils.year_to_date([0.00001, 1.00001])
+        y, m = utils.floatyear_to_date([0.00001, 1.00001])
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [1, 1])
 
-        y, m = utils.year_to_date([0.99999, 1.99999])
+        y, m = utils.floatyear_to_date([0.99999, 1.99999])
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + cfg.CUMSEC_IN_MONTHS[2] / cfg.SEC_IN_YEAR
-        r = utils.year_to_date(yr)
+        yr = 1998 + cfg.CUMSEC_IN_MONTHS_HYDRO[2] / cfg.SEC_IN_YEAR
+        r = utils.floatyear_to_date(yr)
         self.assertEqual(r, (1998, 4))
 
-        yr = 1998 + (cfg.CUMSEC_IN_MONTHS[2] - 1) / cfg.SEC_IN_YEAR
-        r = utils.year_to_date(yr)
+        yr = 1998 + (cfg.CUMSEC_IN_MONTHS_HYDRO[2] - 1) / cfg.SEC_IN_YEAR
+        r = utils.floatyear_to_date(yr)
         self.assertEqual(r, (1998, 3))
 
-    def test_date_to_year(self):
+        yr = 1998 + cfg.CUMSEC_IN_MONTHS[2] / cfg.SEC_IN_YEAR
+        r = utils.floatyear_to_date(yr, hydro_year=False)
+        self.assertEqual(r, (1998, 4))
 
-        r = utils.date_to_year(0, 1)
+    def test_date_to_floatyear(self):
+
+        r = utils.date_to_floatyear(0, 1)
         self.assertEqual(r, 0)
 
-        r = utils.date_to_year(1, 1)
+        r = utils.date_to_floatyear(1, 1)
         self.assertEqual(r, 1)
 
-        r = utils.date_to_year([0, 1], [1, 1])
+        r = utils.date_to_floatyear([0, 1], [1, 1])
         np.testing.assert_array_equal(r, [0, 1])
 
-        yr = utils.date_to_year([1998, 1998], [6, 7])
-        y, m = utils.year_to_date(yr)
+        yr = utils.date_to_floatyear([1998, 1998], [6, 7])
+        y, m = utils.floatyear_to_date(yr)
         np.testing.assert_array_equal(y, [1998, 1998])
         np.testing.assert_array_equal(m, [6, 7])
 
-        yr = utils.date_to_year([1998, 1998], [2, 3])
-        y, m = utils.year_to_date(yr)
+        yr = utils.date_to_floatyear([1998, 1998], [2, 3])
+        y, m = utils.floatyear_to_date(yr)
         np.testing.assert_array_equal(y, [1998, 1998])
         np.testing.assert_array_equal(m, [2, 3])
 
         time = pd.date_range('1/1/1800', periods=300*12-11, freq='MS')
-        yr = utils.date_to_year(time.year, time.month)
-        y, m = utils.year_to_date(yr)
+        yr = utils.date_to_floatyear(time.year, time.month)
+        y, m = utils.floatyear_to_date(yr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         myr = utils.monthly_timeseries(1800, 2099)
-        y, m = utils.year_to_date(myr)
+        y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         myr = utils.monthly_timeseries(1800, ny=300)
-        y, m = utils.year_to_date(myr)
+        y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-1', freq='M')
         myr = utils.monthly_timeseries(1, 6000)
-        y, m = utils.year_to_date(myr)
+        y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-12', freq='M')
         myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
-        y, m = utils.year_to_date(myr)
+        y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
+        yrh = utils.date_to_floatyear(np.arange(12)+1, np.arange(12)+1)
+        yrn = utils.date_to_floatyear(np.arange(12)+1, np.arange(12)+1,
+                                      hydro_year=False)
+        assert not np.allclose(yrh, yrn)
+
         with self.assertRaises(ValueError):
             utils.monthly_timeseries(1)
+
+    def test_hydro_convertion(self):
+
+        y, m = utils.hydrodate_to_calendardate(1, 1)
+        assert (y, m) == (0, 10)
+        y, m = utils.hydrodate_to_calendardate(1, 4)
+        assert (y, m) == (1, 1)
+        y, m = utils.hydrodate_to_calendardate(1, 12)
+        assert (y, m) == (1, 9)
+
+        y, m = utils.hydrodate_to_calendardate([1, 1, 1], [1, 4, 12])
+        np.testing.assert_array_equal(y, [0, 1, 1])
+        np.testing.assert_array_equal(m, [10, 1, 9])
+
+        y, m = utils.calendardate_to_hydrodate(1, 1)
+        assert (y, m) == (1, 4)
+        y, m = utils.calendardate_to_hydrodate(1, 9)
+        assert (y, m) == (1, 12)
+        y, m = utils.calendardate_to_hydrodate(1, 10)
+        assert (y, m) == (2, 1)
+
+        y, m = utils.calendardate_to_hydrodate([1, 1, 1], [1, 9, 10])
+        np.testing.assert_array_equal(y, [1, 1, 2])
+        np.testing.assert_array_equal(m, [4, 12, 1])
+
+        # Roundtrip
+        time = pd.period_range('0001-01', '1000-12', freq='M')
+        y, m = utils.calendardate_to_hydrodate(time.year, time.month)
+        y, m = utils.hydrodate_to_calendardate(y, m)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
 
 
 class TestInitialize(unittest.TestCase):

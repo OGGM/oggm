@@ -8,13 +8,13 @@ from scipy.interpolate import interp1d
 from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS_HYDRO
 from oggm import utils
 from oggm.utils import SuperclassMeta, lazy_property
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
-    """An interface for mass balance models.
+    """Common logic for the mass balance models.
 
     All mass-balance models should implement this interface.
     """
@@ -47,7 +47,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         heights: ndarray
             the atitudes at which the mass-balance will be computed
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------
@@ -91,7 +91,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         widths: ndarray
             the widths of the flowline (necessary for the weighted average)
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------
@@ -111,7 +111,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         year: float, optional
-            the time (in the "floating year" convention)
+            the time (in the "hydrological floating year" convention)
 
         Returns
         -------
@@ -238,6 +238,7 @@ class PastMassBalance(MassBalanceModel):
             ny, r = divmod(len(time), 12)
             if r != 0:
                 raise ValueError('Climate data should be N full years')
+            # This is where we switch to hydro float year format
             # Last year gives the tone of the hydro year
             self.years = np.repeat(np.arange(time[-1].year-ny+1,
                                              time[-1].year+1), 12)
@@ -250,7 +251,7 @@ class PastMassBalance(MassBalanceModel):
 
     def get_monthly_mb(self, heights, year=None):
 
-        y, m = utils.year_to_date(year)
+        y, m = utils.floatyear_to_date(year)
         pok = np.where((self.years == y) & (self.months == m))[0][0]
 
         # Read timeseries
@@ -271,8 +272,8 @@ class PastMassBalance(MassBalanceModel):
         prcpsol *= np.clip(fac, 0, 1)
 
         mb_month = prcpsol - self.mu_star * tempformelt - \
-                   self.bias * SEC_IN_MONTHS[m-1] / SEC_IN_YEAR
-        return mb_month / SEC_IN_MONTHS[m-1] / cfg.RHO
+                   self.bias * SEC_IN_MONTHS_HYDRO[m-1] / SEC_IN_YEAR
+        return mb_month / SEC_IN_MONTHS_HYDRO[m-1] / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
 
@@ -377,13 +378,13 @@ class ConstantMassBalance(MassBalanceModel):
         for m in months:
             mb_on_h = self.hbins*0.
             for yr in self.years:
-                yr = utils.date_to_year(yr, m)
+                yr = utils.date_to_floatyear(yr, m)
                 mb_on_h += self.mbmod.get_monthly_mb(self.hbins, year=yr)
             interp_m.append(interp1d(self.hbins, mb_on_h / len(self.years)))
         return interp_m
 
     def get_monthly_mb(self, heights, year=None):
-        yr, m = utils.year_to_date(year)
+        yr, m = utils.floatyear_to_date(year)
         return self.interp_m[m-1](heights)
 
     def get_annual_mb(self, heights, year=None):
@@ -461,8 +462,8 @@ class RandomMassBalance(MassBalanceModel):
         return self._state_yr[year]
 
     def get_monthly_mb(self, heights, year=None):
-        ryr, m = utils.year_to_date(year)
-        ryr = utils.date_to_year(self.get_state_yr(ryr), m)
+        ryr, m = utils.floatyear_to_date(year)
+        ryr = utils.date_to_floatyear(self.get_state_yr(ryr), m)
         return self.mbmod.get_monthly_mb(heights, year=ryr)
 
     def get_annual_mb(self, heights, year=None):
