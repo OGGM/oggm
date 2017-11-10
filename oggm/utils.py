@@ -1105,6 +1105,10 @@ def floatyear_to_date(yr, hydro_year=True):
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
         sec = round(sec * SEC_IN_YEAR)
+        if sec == SEC_IN_YEAR:
+            # Floating errors
+            out_y += 1
+            sec = 0
         out_m = np.nonzero(sec < cumsec)[0][0] + 1
     except TypeError:
         # TODO: inefficient but no time right now
