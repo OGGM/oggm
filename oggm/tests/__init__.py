@@ -28,9 +28,9 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
                                 'baseline_images')
     ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
     if ftver >= LooseVersion('2.8.0'):
-        BASELINE_DIR = os.path.join(BASELINE_DIR, 'alt')
+        BASELINE_DIR = os.path.join(BASELINE_DIR, 'freetype_28')
     else:
-        BASELINE_DIR = os.path.join(BASELINE_DIR, '2.0.x')
+        BASELINE_DIR = os.path.join(BASELINE_DIR, 'freetype_old')
 
 
 # Some control on which tests to run (useful to avoid too long tests)
