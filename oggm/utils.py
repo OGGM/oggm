@@ -2081,7 +2081,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     return ds
 
 
-def compile_task_log(gdirs, task_names=[], filesuffix='', path=True):
+def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
+                     append=True):
     """Gathers the log output for the selected task(s)
     
     Parameters
@@ -2094,6 +2095,9 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True):
     path:
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    append:
+        If a task log file already exists in the working directory, the new
+        logs will be added to the existing file
     """
 
     out_df = []
@@ -2110,10 +2114,12 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True):
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
-            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                       'task_log'+filesuffix+'.csv'))
-        else:
-            out.to_csv(path)
+            path = os.path.join(cfg.PATHS['working_dir'],
+                                'task_log'+filesuffix+'.csv')
+        if os.path.exists(path) and append:
+            odf = pd.read_csv(path, index_col=0)
+            out = pd.concat([odf, out], axis=1)
+        out.to_csv(path)
     return out
 
 
