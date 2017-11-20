@@ -2020,31 +2020,25 @@ class TestCatching(unittest.TestCase):
 
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
+
 
         # Init
         cfg.initialize()
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = get_test_dir()
-        self.log_dir = os.path.join(get_test_dir(), 'log')
+        cfg.PATHS['working_dir'] = self.testdir
+        self.log_dir = os.path.join(self.testdir, 'log')
         self.clean_dir()
 
     def tearDown(self):
         self.rm_dir()
-        shutil.rmtree(self.log_dir)
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
 
     def clean_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
-        if os.path.exists(self.log_dir):
-            shutil.rmtree(self.log_dir)
-        os.makedirs(self.log_dir)
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.log_dir, reset=True)
 
     def test_pipe_log(self):
 
@@ -2114,11 +2108,23 @@ class TestCatching(unittest.TestCase):
         assert len(df.columns) == 0
 
         tn = ['glacier_masks', 'compute_downstream_bedshape', 'not_a_task']
-        df = utils.compile_task_log([gdir], task_names=tn,
-                                    path=False)
+        df = utils.compile_task_log([gdir], task_names=tn)
         assert len(df) == 1
         assert len(df.columns) == 3
         df = df.iloc[0]
         assert df['glacier_masks'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert df['not_a_task'] == ''
+
+        # Append
+        centerlines.compute_centerlines(gdir)
+        tn = ['compute_centerlines']
+        df = utils.compile_task_log([gdir], task_names=tn)
+        assert len(df) == 1
+        assert len(df.columns) == 4
+        df = df.iloc[0]
+        assert df['glacier_masks'] == 'SUCCESS'
+        assert df['compute_centerlines'] == 'SUCCESS'
+        assert df['compute_downstream_bedshape'] != 'SUCCESS'
+        assert not np.isfinite(df['not_a_task'])
+
