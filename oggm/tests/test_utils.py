@@ -16,7 +16,7 @@ import oggm
 from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve, init_hef
 
 _url_retrieve = None
 
@@ -196,7 +196,6 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(m, time.month)
 
 
-
 class TestInitialize(unittest.TestCase):
 
     def setUp(self):
@@ -211,7 +210,8 @@ class TestInitialize(unittest.TestCase):
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
         self.assertEqual(cfg.PATHS['working_dir'], expected)
 
-class TestGlacierDirectory(unittest.TestCase):
+
+class TestWorkflowTools(unittest.TestCase):
 
     def setUp(self):
         cfg.initialize()
@@ -225,7 +225,7 @@ class TestGlacierDirectory(unittest.TestCase):
     def reset_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
-    def test_leclercq(self):
+    def test_leclercq_data(self):
 
         hef_file = utils.get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -234,6 +234,22 @@ class TestGlacierDirectory(unittest.TestCase):
         df = gdir.get_ref_length_data()
         assert df.name == 'Hintereis'
         assert len(df) == 105
+
+    def test_glacier_characs(self):
+
+        gdir = init_hef()
+
+        df = utils.glacier_characteristics([gdir])
+        assert len(df) == 1
+        assert np.all(~df.isna())
+        assert len(df.columns) == 36
+        df = df.iloc[0]
+        np.testing.assert_allclose(df['dem_mean_elev'],
+                                   df['flowline_mean_elev'], atol=5)
+        np.testing.assert_allclose(df['tstar_avg_prcp'],
+                                   2811, atol=5)
+        np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
+                                   2811, atol=50)
 
 
 def touch(path):

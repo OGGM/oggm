@@ -9,8 +9,8 @@ from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS_HYDRO
-from oggm import utils
-from oggm.utils import SuperclassMeta, lazy_property
+from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
+                        date_to_floatyear, monthly_timeseries)
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
@@ -249,9 +249,17 @@ class PastMassBalance(MassBalanceModel):
             self.grad = nc.variables['grad'][:]
             self.ref_hgt = nc.ref_hgt
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_climate(self, heights, year=None):
+        """Monthly climate information at given heights.
 
-        y, m = utils.floatyear_to_date(year)
+        Note that prcp is corrected with the precipitation factor.
+
+        Returns
+        -------
+        (temp, tempformelt, prcp, prcpsol)
+        """
+
+        y, m = floatyear_to_date(year)
         pok = np.where((self.years == y) & (self.months == m))[0][0]
 
         # Read timeseries
@@ -267,20 +275,26 @@ class PastMassBalance(MassBalanceModel):
         tempformelt[:] = np.clip(tempformelt, 0, tempformelt.max())
 
         # Compute solid precipitation from total precipitation
-        prcpsol = np.ones(npix) * iprcp
+        prcp = np.ones(npix) * iprcp
         fac = 1 - (temp - self.t_solid) / (self.t_liq - self.t_solid)
-        prcpsol *= np.clip(fac, 0, 1)
+        prcpsol = prcp * np.clip(fac, 0, 1)
 
-        mb_month = prcpsol - self.mu_star * tempformelt - \
-                   self.bias * SEC_IN_MONTHS_HYDRO[m-1] / SEC_IN_YEAR
+        return temp, tempformelt, prcp, prcpsol
+
+    def get_monthly_mb(self, heights, year=None):
+
+        _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
+        y, m = floatyear_to_date(year)
+        mb_month = prcpsol - self.mu_star * tmelt
+        mb_month -= self.bias * SEC_IN_MONTHS_HYDRO[m-1] / SEC_IN_YEAR
         return mb_month / SEC_IN_MONTHS_HYDRO[m-1] / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
 
-        pok = np.where(self.years == np.floor(year))[0]
-
+        year = np.floor(year)
+        pok = np.where(self.years == year)[0]
         if len(pok) < 1:
-            raise ValueError('Year {} not in record'.format(year))
+            raise ValueError('Year {} not in record'.format(int(year)))
 
         # Read timeseries
         itemp = self.temp[pok] + self.temp_bias
@@ -351,6 +365,8 @@ class ConstantMassBalance(MassBalanceModel):
             zminmax = [nc.min_h_dem-50, nc.max_h_dem+1000]
         self.hbins = np.arange(*zminmax, step=5)
         self.valid_bounds = self.hbins[[0, -1]]
+        self.y0 = y0
+        self.halfsize = halfsize
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @MassBalanceModel.temp_bias.setter
@@ -378,13 +394,43 @@ class ConstantMassBalance(MassBalanceModel):
         for m in months:
             mb_on_h = self.hbins*0.
             for yr in self.years:
-                yr = utils.date_to_floatyear(yr, m)
+                yr = date_to_floatyear(yr, m)
                 mb_on_h += self.mbmod.get_monthly_mb(self.hbins, year=yr)
             interp_m.append(interp1d(self.hbins, mb_on_h / len(self.years)))
         return interp_m
 
+    def get_climate(self, heights, year=None):
+        """Average climate information at given heights.
+
+        Note that prcp is corrected with the precipitation factor.
+
+        Returns
+        -------
+        (temp, tempformelt, prcp, prcpsol)
+        """
+        yrs = monthly_timeseries(self.years[0], self.years[-1],
+                                 include_last_year=True)
+        heights = np.atleast_1d(heights)
+        nh = len(heights)
+        shape = (len(yrs), nh)
+        temp = np.zeros(shape)
+        tempformelt = np.zeros(shape)
+        prcp = np.zeros(shape)
+        prcpsol = np.zeros(shape)
+        for i, yr in enumerate(yrs):
+            t, tm, p, ps = self.mbmod.get_monthly_climate(heights, year=yr)
+            temp[i, :] = t
+            tempformelt[i, :] = tm
+            prcp[i, :] = p
+            prcpsol[i, :] = ps
+        # Note that we do not weight for number of days per month - bad
+        return (np.mean(temp, axis=0),
+                np.mean(tempformelt, axis=0) * 12,
+                np.mean(prcp, axis=0) * 12,
+                np.mean(prcpsol, axis=0) * 12)
+
     def get_monthly_mb(self, heights, year=None):
-        yr, m = utils.floatyear_to_date(year)
+        yr, m = floatyear_to_date(year)
         return self.interp_m[m-1](heights)
 
     def get_annual_mb(self, heights, year=None):
@@ -462,8 +508,8 @@ class RandomMassBalance(MassBalanceModel):
         return self._state_yr[year]
 
     def get_monthly_mb(self, heights, year=None):
-        ryr, m = utils.floatyear_to_date(year)
-        ryr = utils.date_to_floatyear(self.get_state_yr(ryr), m)
+        ryr, m = floatyear_to_date(year)
+        ryr = date_to_floatyear(self.get_state_yr(ryr), m)
         return self.mbmod.get_monthly_mb(heights, year=ryr)
 
     def get_annual_mb(self, heights, year=None):
