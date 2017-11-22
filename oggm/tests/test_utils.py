@@ -239,7 +239,7 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.glacier_characteristics([gdir])
+        df = utils.glacier_characteristics([gdir], path=False)
         assert len(df) == 1
         assert np.all(~df.isna())
         assert len(df.columns) == 36

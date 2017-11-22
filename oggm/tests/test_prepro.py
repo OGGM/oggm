@@ -1681,9 +1681,9 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
-        dfc = utils.glacier_characteristics([gdir])
+        dfc = utils.glacier_characteristics([gdir], path=False)
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
-        self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
+        self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 
 
 class TestGrindelInvert(unittest.TestCase):
