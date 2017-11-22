@@ -1611,6 +1611,27 @@ def _get_rgi_dir_unlocked(version=None):
     return rgi_dir
 
 
+def get_rgi_region_file(region, version=None):
+    """Returns a path to the RGI directory.
+
+    If the RGI files are not present, download them.
+
+    Parameters
+    ----------
+    region: str, from '01' to '19'
+    version: '5', '6', None being the one specified in params
+
+    Returns
+    -------
+    path to the RGI shapefile
+    """
+
+    rgi_dir = get_rgi_dir(version=version)
+    f = list(glob.glob(rgi_dir + "/{}_*/{}_*.shp".format(region, region)))
+    assert len(f) == 1
+    return f[0]
+
+
 def get_rgi_intersects_dir(version=None, reset=False):
     """Returns a path to the RGI directory containing the intersects.
 
