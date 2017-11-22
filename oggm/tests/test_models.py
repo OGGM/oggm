@@ -396,6 +396,38 @@ class TestMassBalance(unittest.TestCase):
             plt.legend();
             plt.show()
 
+        # Climate info
+        h = np.sort(h)
+        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        t, tm, p, ps = cmb_mod.get_climate(h)
+
+        # Simple sanity checks
+        assert np.all(np.diff(t) <= 0)
+        assert np.all(np.diff(tm) <= 0)
+        assert np.all(np.diff(p) == 0)
+        assert np.all(np.diff(ps) >= 0)
+
+        if do_plot:  # pragma: no cover
+            f, axs = plt.subplots(1, 3, figsize=(9, 3))
+            axs = axs.flatten()
+            axs[0].plot(h, t, label='Temp')
+            axs[0].legend();
+            axs[1].plot(h, tm, label='TempMelt')
+            axs[1].legend();
+            axs[2].plot(h, p, label='Prcp')
+            axs[2].plot(h, ps, label='SolidPrcp')
+            axs[2].legend();
+            plt.tight_layout()
+            plt.show()
+
+        # ELA
+        elah = cmb_mod.get_ela()
+        t, tm, p, ps = cmb_mod.get_climate([elah])
+        mb = ps - cmb_mod.mbmod.mu_star * tm
+        # not perfect becauseof time/months issues
+        np.testing.assert_allclose(mb, 0, atol=0.03)
+
+
     def test_random_mb(self):
 
         gdir = init_hef(border=DOM_BORDER)

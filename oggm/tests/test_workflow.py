@@ -240,8 +240,9 @@ class TestWorkflow(unittest.TestCase):
         # Test the glacier charac
         dfc = utils.glacier_characteristics(gdirs)
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
-        cc = dfc[['dem_mean_elev', 'clim_temp_avgh']].corr().values[0, 1]
-        assert cc > 0.3
+        cc = dfc[['flowline_mean_elev',
+                  'tstar_avg_temp_mean_elev']].corr().values[0, 1]
+        assert cc < -0.8
         assert np.all(dfc.t_star > 1900)
 
     @is_slow

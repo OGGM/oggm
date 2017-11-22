@@ -16,14 +16,13 @@ import warnings
 from collections import OrderedDict
 from functools import partial, wraps
 from time import gmtime, strftime
-import json
 import time
 import fnmatch
 import platform
 import struct
 import importlib
-from urllib.request import urlretrieve, urlopen
-from urllib.error import HTTPError, URLError, ContentTooShortError
+from urllib.request import urlretrieve
+from urllib.error import HTTPError, ContentTooShortError
 from urllib.parse import urlparse
 
 # External libs
@@ -1559,7 +1558,10 @@ def get_rgi_dir(version=None):
 
     Parameters
     ----------
-    version: '5', '6', None being the one specified in params
+    region: str
+        from '01' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
 
     Returns
     -------
@@ -1610,6 +1612,29 @@ def _get_rgi_dir_unlocked(version=None):
                 # delete the zipfile after success
                 os.remove(zfile)
     return rgi_dir
+
+
+def get_rgi_region_file(region, version=None):
+    """Returns a path to a RGI region file.
+
+    If the RGI files are not present, download them.
+
+    Parameters
+    ----------
+    region: str
+        from '01' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
+
+    Returns
+    -------
+    path to the RGI shapefile
+    """
+
+    rgi_dir = get_rgi_dir(version=version)
+    f = list(glob.glob(rgi_dir + "/{}_*/{}_*.shp".format(region, region)))
+    assert len(f) == 1
+    return f[0]
 
 
 def get_rgi_intersects_dir(version=None, reset=False):
@@ -2143,6 +2168,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     inversion_only: bool
         if one wants to summarize the inversion output only
     """
+    from oggm.core.massbalance import ConstantMassBalance
 
     out_df = []
     for gdir in gdirs:
@@ -2158,78 +2184,9 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         d['glacier_type'] = gdir.glacier_type
         d['terminus_type'] = gdir.terminus_type
 
-        # The rest is less certain. We put this in a try block and see
+        # The rest is less certain. We put these in a try block and see
+        # We're good with any error - we store the dict anyway below
         try:
-            # Masks related stuff
-            if gdir.has_file('gridded_data') and not inversion_only:
-                fpath = gdir.get_filepath('gridded_data')
-                with netCDF4.Dataset(fpath) as nc:
-                    mask = nc.variables['glacier_mask'][:]
-                    topo = nc.variables['topo'][:]
-                d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-                d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-                d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-
-            # Centerlines
-            if gdir.has_file('centerlines') and not inversion_only:
-                cls = gdir.read_pickle('centerlines')
-                longuest = 0.
-                for cl in cls:
-                    longuest = np.max([longuest, cl.dis_on_line[-1]])
-                d['n_centerlines'] = len(cls)
-                d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
-
-            # MB and flowline related stuff
-            if gdir.has_file('inversion_flowlines') and not inversion_only:
-                amb = np.array([])
-                h = np.array([])
-                widths = np.array([])
-                slope = np.array([])
-                fls = gdir.read_pickle('inversion_flowlines')
-                dx = fls[0].dx * gdir.grid.dx
-                for fl in fls:
-                    amb = np.append(amb, fl.apparent_mb)
-                    hgt = fl.surface_h
-                    h = np.append(h, hgt)
-                    widths = np.append(widths, fl.widths * dx)
-                    slope = np.append(slope,
-                                      np.arctan(-np.gradient(hgt, dx)))
-
-                pacc = np.where(amb >= 0)
-                pab = np.where(amb < 0)
-                d['aar'] = np.sum(widths[pacc]) / np.sum(widths[pab])
-                try:
-                    # Try to get the slope
-                    mb_slope, _, _, _, _ = stats.linregress(h[pab], amb[pab])
-                    d['mb_grad'] = mb_slope
-                except:
-                    # we don't mind if something goes wrong
-                    d['mb_grad'] = np.NaN
-                d['avg_width'] = np.mean(widths)
-                d['avg_slope'] = np.mean(slope)
-
-            # MB calib
-            if gdir.has_file('local_mustar') and not inversion_only:
-                df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
-                d['t_star'] = df['t_star']
-                d['prcp_fac'] = df['prcp_fac']
-                d['mu_star'] = df['mu_star']
-                d['mb_bias'] = df['bias']
-
-            # Climate
-            if gdir.has_file('climate_monthly') and not inversion_only:
-                cf = gdir.get_filepath('climate_monthly')
-                with xr.open_dataset(cf) as cds:
-                    d['clim_alt'] = cds.ref_hgt
-                    t = cds.temp.mean(dim='time').values
-                    if 'dem_mean_elev' in d:
-                        t = (t - (d['dem_mean_elev'] - d['clim_alt']) *
-                             cfg.PARAMS['temp_default_gradient'])
-                    else:
-                        t = np.NaN
-                    d['clim_temp_avgh'] = t
-                    d['clim_prcp'] = cds.prcp.mean(dim='time').values * 12
-
             # Inversion
             if gdir.has_file('inversion_output'):
                 vol = []
@@ -2241,22 +2198,99 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
                 d['vas_volume_km3'] = 0.034*(area**1.375)
                 d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
-
-            # Calving
-            if gdir.has_file('calving_output') and not inversion_only:
-                all_calving_data = []
-                all_width = []
-                cl = gdir.read_pickle('calving_output')
-                for c in cl:
-                    all_calving_data = c['calving_fluxes'][-1]
-                    all_width = c['t_width']
-                d['calving_flux'] = all_calving_data
-                d['calving_front_width'] = all_width
-            else:
-                d['calving_flux'] = np.NaN
-                d['calving_front_width'] = np.NaN
         except:
-            # We're good with any error - we store the dict anyway below
+            pass
+        if inversion_only:
+            continue
+        try:
+            # Masks related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with netCDF4.Dataset(fpath) as nc:
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
+            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+        except:
+            pass
+        try:
+            # Centerlines
+            cls = gdir.read_pickle('centerlines')
+            longuest = 0.
+            for cl in cls:
+                longuest = np.max([longuest, cl.dis_on_line[-1]])
+            d['n_centerlines'] = len(cls)
+            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+        except:
+            pass
+        try:
+            # Flowline related stuff
+            h = np.array([])
+            widths = np.array([])
+            slope = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines')
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * dx)
+                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+            d['flowline_mean_elev'] = np.average(h, weights=widths)
+            d['flowline_max_elev'] = np.max(h)
+            d['flowline_min_elev'] = np.min(h)
+            d['flowline_avg_width'] = np.mean(widths)
+            d['flowline_avg_slope'] = np.mean(slope)
+        except:
+            pass
+        try:
+            # MB calib
+            df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+            d['t_star'] = df['t_star']
+            d['prcp_fac'] = df['prcp_fac']
+            d['mu_star'] = df['mu_star']
+            d['mb_bias'] = df['bias']
+        except:
+            pass
+        try:
+            # Climate and MB at t*
+            h, w = gdir.get_inversion_flowline_hw()
+            mbmod = ConstantMassBalance(gdir, bias=0)
+            mbh = mbmod.get_annual_mb(h, w) * SEC_IN_YEAR * cfg.RHO
+            pacc = np.where(mbh >= 0)
+            pab = np.where(mbh < 0)
+            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w[pab])
+            try:
+                # Try to get the slope
+                mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
+                d['tstar_mb_grad'] = mb_slope
+            except:
+                # we don't mind if something goes wrong
+                d['tstar_mb_grad'] = np.NaN
+            d['tstar_ela_h'] = mbmod.get_ela()
+            # Climate
+            t, _, p, ps = mbmod.get_climate([d['tstar_ela_h'],
+                                             d['flowline_mean_elev'],
+                                             d['flowline_max_elev'],
+                                             d['flowline_min_elev']])
+            for n, v in zip(['temp', 'prcpsol'], [t, ps]):
+                d['tstar_avg_' + n + '_ela_h'] = v[0]
+                d['tstar_avg_' + n + '_mean_elev'] = v[1]
+                d['tstar_avg_' + n + '_max_elev'] = v[2]
+                d['tstar_avg_' + n + '_min_elev'] = v[3]
+            d['tstar_avg_prcp'] = p[0]
+        except:
+            pass
+        try:
+            # Calving
+            all_calving_data = []
+            all_width = []
+            cl = gdir.read_pickle('calving_output')
+            for c in cl:
+                all_calving_data = c['calving_fluxes'][-1]
+                all_width = c['t_width']
+            d['calving_flux'] = all_calving_data
+            d['calving_front_width'] = all_width
+        except:
             pass
 
         out_df.append(d)
