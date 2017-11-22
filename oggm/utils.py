@@ -1558,7 +1558,10 @@ def get_rgi_dir(version=None):
 
     Parameters
     ----------
-    version: '5', '6', None being the one specified in params
+    region: str
+        from '01' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
 
     Returns
     -------
@@ -1612,14 +1615,16 @@ def _get_rgi_dir_unlocked(version=None):
 
 
 def get_rgi_region_file(region, version=None):
-    """Returns a path to the RGI directory.
+    """Returns a path to a RGI region file.
 
     If the RGI files are not present, download them.
 
     Parameters
     ----------
-    region: str, from '01' to '19'
-    version: '5', '6', None being the one specified in params
+    region: str
+        from '01' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
 
     Returns
     -------

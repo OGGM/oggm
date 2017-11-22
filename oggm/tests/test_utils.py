@@ -352,7 +352,7 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_dir = os.path.join(self.dldir, 'rgi60')
         utils.mkdir(rgi_dir)
         make_fake_zipdir(os.path.join(rgi_dir, '01_rgi60_Region'),
-                         fakefile='test.txt')
+                         fakefile='01_rgi60_Region.shp')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi60_manifest.txt')
 
         def down_check(url, cache_name=None, reset=False):
@@ -365,7 +365,15 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi, '000_rgi60_manifest.txt'))
-        assert os.path.exists(os.path.join(rgi, '01_rgi60_Region', 'test.txt'))
+        assert os.path.exists(os.path.join(rgi, '01_rgi60_Region',
+                                           '01_rgi60_Region.shp'))
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            rgi_f = utils.get_rgi_region_file('01', version='6')
+
+        assert os.path.exists(rgi_f)
+        assert '01_rgi60_Region.shp' in rgi_f
+
 
     def test_rgi_intersects(self):
 
