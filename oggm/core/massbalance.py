@@ -329,7 +329,7 @@ class ConstantMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 y0=None, halfsize=15):
+                 y0=None, halfsize=15, filename='climate_monthly', input_filesuffix=''):
         """Initialize
 
         Parameters
@@ -354,7 +354,7 @@ class ConstantMassBalance(MassBalanceModel):
 
         super(ConstantMassBalance, self).__init__()
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
-                                     prcp_fac=prcp_fac)
+                                     prcp_fac=prcp_fac, filename='climate_monthly', input_filesuffix='')
 
         if y0 is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))
