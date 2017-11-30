@@ -941,7 +941,9 @@ def line_interpol(line, dx):
                     opbs.extend([shpg.Point(c) for c in p.coords])
             pbs = opbs
         else:
-            assert pbs.type == 'MultiPoint'
+            if pbs.type != 'MultiPoint':
+                raise RuntimeError('line_interpol: we expect a MultiPoint'
+                                    'but got a {}.'.format(pbs.type))
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
@@ -1077,7 +1079,10 @@ def polygon_intersections(gdf):
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
             for line in mult_intersect:
-                assert isinstance(line, shpg.linestring.LineString)
+                if not isinstance(line, shpg.linestring.LineString):
+                    raise RuntimeError('polygon_intersections: we expect'
+                                       'a LineString but got a '
+                                       '{}.'.format(line.type))
                 line = gpd.GeoDataFrame([[i, j, line]],
                                         columns=out_cols)
                 out = out.append(line)
