@@ -1665,6 +1665,45 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
+
+    @is_slow
+    def test_random_sh(self):
+
+        flowline.init_present_time_glacier(self.gdir)
+
+        self.gdir.hemisphere = 'sh'
+        climate.process_cru_data(self.gdir)
+
+        flowline.random_glacier_evolution(self.gdir, nyears=20, seed=4,
+                                          bias=0, filesuffix='_rdn')
+        flowline.run_constant_climate(self.gdir, nyears=20,
+                                      bias=0, filesuffix='_ct')
+
+        paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
+                 self.gdir.get_filepath('model_run', filesuffix='_ct'),
+                 ]
+        for path in paths:
+            with flowline.FileModel(path) as model:
+                vol = model.volume_km3_ts()
+                len = model.length_m_ts()
+                area = model.area_km2_ts()
+                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                           rtol=0.1)
+                np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                           rtol=0.1)
+                if do_plot:
+                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                    vol.plot(ax=ax1)
+                    ax1.set_title('Volume')
+                    area.plot(ax=ax2)
+                    ax2.set_title('Area')
+                    len.plot(ax=ax3)
+                    ax3.set_title('Length')
+                    plt.tight_layout()
+                    plt.show()
+
+        self.gdir.hemisphere = 'nh'
+
     @is_slow
     def test_cesm(self):
 

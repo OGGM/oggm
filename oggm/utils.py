@@ -2566,6 +2566,9 @@ class GlacierDirectory(object):
         self.inversion_calving_rate = 0.
         self.is_icecap = self.glacier_type == 'Ice cap'
 
+        # Hemisphere
+        self.hemisphere = 'sh' if self.cenlat < 0 else 'nh'
+
         # convert the date
         try:
             rgi_date = pd.to_datetime(rgi_datestr[0:4],
