@@ -76,7 +76,7 @@ def gaussian_blur(in_array, size):
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
 
 
-def _check_geometry(geometry):
+def _check_geometry(geometry, gdir=None):
     """RGI polygons are not always clean: try to make these better.
 
     In particular, MultiPolygons should be converted to Polygons
@@ -94,9 +94,11 @@ def _check_geometry(geometry):
                 interiors.append(p.exterior)
             else:
                 # This should not happen. Check that we have a small geom here
+                rid = gdir.rgi_id + ': ' if gdir is not None else ''
+                msg = ('{}problem while correcting geometry. Area '
+                       'was: {} but it should be smaller.'.format(rid, p.area))
                 if p.area > 1e-4:
-                    log.warning('warning while correcting geometry. Area was: '
-                                '{} but it should be smaller.'.format(p.area))
+                    log.warning(msg)
         geometry = shpg.Polygon(exterior, interiors)
 
     assert 'Polygon' in geometry.type
@@ -245,7 +247,7 @@ def define_glacier_region(gdir, entity=None):
     project = partial(pyproj.transform, proj_in, proj_out)
     # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
-    geometry = _check_geometry(geometry)
+    geometry = _check_geometry(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
     # Corners, incl. a buffer of N pix

@@ -52,8 +52,7 @@ import multiprocessing as mp
 # Locals
 from oggm import __version__
 import oggm.cfg as cfg
-from oggm.cfg import (SEC_IN_YEAR, CUMSEC_IN_MONTHS, BEGINSEC_IN_MONTHS,
-                      CUMSEC_IN_MONTHS_HYDRO, BEGINSEC_IN_MONTHS_HYDRO)
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -941,7 +940,9 @@ def line_interpol(line, dx):
                     opbs.extend([shpg.Point(c) for c in p.coords])
             pbs = opbs
         else:
-            assert pbs.type == 'MultiPoint'
+            if pbs.type != 'MultiPoint':
+                raise RuntimeError('line_interpol: we expect a MultiPoint'
+                                    'but got a {}.'.format(pbs.type))
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
@@ -1077,7 +1078,10 @@ def polygon_intersections(gdf):
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
             for line in mult_intersect:
-                assert isinstance(line, shpg.linestring.LineString)
+                if not isinstance(line, shpg.linestring.LineString):
+                    raise RuntimeError('polygon_intersections: we expect'
+                                       'a LineString but got a '
+                                       '{}.'.format(line.type))
                 line = gpd.GeoDataFrame([[i, j, line]],
                                         columns=out_cols)
                 out = out.append(line)
@@ -1085,25 +1089,18 @@ def polygon_intersections(gdf):
     return out
 
 
-def floatyear_to_date(yr, hydro_year=True):
+def floatyear_to_date(yr):
     """Converts a float year to an actual (year, month) pair.
 
-    Note that this doesn't account for leap years (365-day no leap calendar).
-    The default is to use the hydrological year convention, i.e. the first
-    month of the year is October. In practice, this makes a very small
-    difference: the intervals between months are not exactly the same if
-    you start with October or January.
+    Note that this doesn't account for leap years (365-day no leap calendar),
+    and that the months all have the same length.
 
     Parameters
     ----------
     yr : float
         The floating year
-    hydro_year : bool
-        If the float year follows the  "hydrological year" convention or
-        not (default:True)
     """
 
-    cumsec = CUMSEC_IN_MONTHS_HYDRO if hydro_year else CUMSEC_IN_MONTHS
     try:
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
@@ -1112,26 +1109,23 @@ def floatyear_to_date(yr, hydro_year=True):
             # Floating errors
             out_y += 1
             sec = 0
-        out_m = np.nonzero(sec < cumsec)[0][0] + 1
+        out_m = int(sec / SEC_IN_MONTH) + 1
     except TypeError:
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(yr), np.int64)
         out_m = np.zeros(len(yr), np.int64)
         for i, y in enumerate(yr):
-            y, m = floatyear_to_date(y, hydro_year=hydro_year)
+            y, m = floatyear_to_date(y)
             out_y[i] = y
             out_m[i] = m
     return out_y, out_m
 
 
-def date_to_floatyear(y, m, hydro_year=True):
+def date_to_floatyear(y, m):
     """Converts an integer (year, month) pair to a float year.
 
-    Note that this doesn't account for leap years (365-day no leap calendar).
-    The default is to use the hydrological year convention, i.e. the first
-    month of the year is October. In practice, this makes a very small
-    difference: the intervals between months are not exactly the same if
-    you start with October or January.
+    Note that this doesn't account for leap years (365-day no leap calendar),
+    and that the months all have the same length.
 
     Parameters
     ----------
@@ -1139,17 +1133,12 @@ def date_to_floatyear(y, m, hydro_year=True):
         the year
     m : int
         the month
-    hydro_year : bool
-        If the float year follows the  "hydrological year" convention or
-        not (default:True)
     """
 
-    bsec = BEGINSEC_IN_MONTHS_HYDRO if hydro_year else BEGINSEC_IN_MONTHS
-    ids = np.asarray(m, dtype=np.int) - 1
-    return y + bsec[ids] / SEC_IN_YEAR
+    return np.asanyarray(y) + (np.asanyarray(m)-1) * SEC_IN_MONTH / SEC_IN_YEAR
 
 
-def hydrodate_to_calendardate(y, m):
+def hydrodate_to_calendardate(y, m, start_month=10):
     """Converts a hydrological (year, month) pair to a calendar date.
 
     Parameters
@@ -1158,27 +1147,30 @@ def hydrodate_to_calendardate(y, m):
         the year
     m : int
         the month
+    start_month : int
+        the first month of the hydrological year
     """
 
+    e = 13 - start_month
     try:
-        if m <= 3:
+        if m <= e:
             out_y = y - 1
-            out_m = m + 9
+            out_m = m + start_month - 1
         else:
             out_y = y
-            out_m = m - 3
+            out_m = m - e
     except (TypeError, ValueError):
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(y), np.int64)
         out_m = np.zeros(len(y), np.int64)
         for i, (_y, _m) in enumerate(zip(y, m)):
-            _y, _m = hydrodate_to_calendardate(_y, _m)
+            _y, _m = hydrodate_to_calendardate(_y, _m, start_month=start_month)
             out_y[i] = _y
             out_m[i] = _m
     return out_y, out_m
 
 
-def calendardate_to_hydrodate(y, m):
+def calendardate_to_hydrodate(y, m, start_month=10):
     """Converts a calendar (year, month) pair to a hydrological date.
 
     Parameters
@@ -1187,35 +1179,33 @@ def calendardate_to_hydrodate(y, m):
         the year
     m : int
         the month
+    start_month : int
+        the first month of the hydrological year
     """
 
     try:
-        if m >= 10:
+        if m >= start_month:
             out_y = y + 1
-            out_m = m - 9
+            out_m = m - start_month + 1
         else:
             out_y = y
-            out_m = m + 3
+            out_m = m + 13 - start_month
     except (TypeError, ValueError):
         # TODO: inefficient but no time right now
         out_y = np.zeros(len(y), np.int64)
         out_m = np.zeros(len(y), np.int64)
         for i, (_y, _m) in enumerate(zip(y, m)):
-            _y, _m = calendardate_to_hydrodate(_y, _m)
+            _y, _m = calendardate_to_hydrodate(_y, _m, start_month=start_month)
             out_y[i] = _y
             out_m[i] = _m
     return out_y, out_m
 
 
-def monthly_timeseries(y0, y1=None, ny=None, hydro_year=True,
-                       include_last_year=False):
+def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """Creates a monthly timeseries in units of float years.
 
     Parameters
     ----------
-    hydro_year : bool
-        If the float year follows the  "hydrological year" convention or
-        not (default:True)
     """
 
     if y1 is not None:
@@ -1226,7 +1216,7 @@ def monthly_timeseries(y0, y1=None, ny=None, hydro_year=True,
         raise ValueError("Need at least two positional arguments.")
     months = np.tile(np.arange(12)+1, len(years))
     years = years.repeat(12)
-    out = date_to_floatyear(years, months, hydro_year=hydro_year)
+    out = date_to_floatyear(years, months)
     if not include_last_year:
         out = out[:-11]
     return out

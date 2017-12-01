@@ -8,7 +8,7 @@ from scipy.interpolate import interp1d
 from scipy import optimize as optimization
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTHS_HYDRO
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries)
 
@@ -286,8 +286,8 @@ class PastMassBalance(MassBalanceModel):
         _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
         y, m = floatyear_to_date(year)
         mb_month = prcpsol - self.mu_star * tmelt
-        mb_month -= self.bias * SEC_IN_MONTHS_HYDRO[m-1] / SEC_IN_YEAR
-        return mb_month / SEC_IN_MONTHS_HYDRO[m-1] / cfg.RHO
+        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+        return mb_month / SEC_IN_MONTH / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
 

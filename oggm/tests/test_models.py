@@ -17,7 +17,7 @@ from oggm.core.massbalance import LinearMassBalance
 from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
 from oggm import utils, workflow
-from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTHS_HYDRO
+from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 
 # Tests
 from oggm.tests.funcs import *
@@ -281,7 +281,7 @@ class TestMassBalance(unittest.TestCase):
             my_mb_on_h = ref_mb_on_h*0.
             for m in np.arange(12):
                 yrm = utils.date_to_floatyear(yr, m + 1)
-                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTHS_HYDRO[m]*cfg.RHO
+                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTH*cfg.RHO
                 my_mb_on_h += tmp
 
             np.testing.assert_allclose(ref_mb_on_h,
@@ -380,10 +380,10 @@ class TestMassBalance(unittest.TestCase):
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS_HYDRO[m] * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
             monthly_1[m] = np.average(tmp, weights=w)
             cmb_mod.temp_bias = 1
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS_HYDRO[m] * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
             monthly_2[m] = np.average(tmp, weights=w)
 
         # check that the winter months are close but summer months no
@@ -489,8 +489,8 @@ class TestMassBalance(unittest.TestCase):
         ref_mb = np.zeros(12)
         my_mb = np.zeros(12)
         for yr, m in zip(yrs, time.month):
-            ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) * SEC_IN_MONTHS_HYDRO[m-1], weights=w)
-            my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTHS_HYDRO[m-1], weights=w)
+            ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) * SEC_IN_MONTH, weights=w)
+            my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH, weights=w)
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         self.assertTrue(utils.rmsd(ref_mb, my_mb) < 0.1)
