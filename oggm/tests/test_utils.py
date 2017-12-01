@@ -95,17 +95,13 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + cfg.CUMSEC_IN_MONTHS_HYDRO[2] / cfg.SEC_IN_YEAR
-        r = utils.floatyear_to_date(yr)
-        self.assertEqual(r, (1998, 4))
-
-        yr = 1998 + (cfg.CUMSEC_IN_MONTHS_HYDRO[2] - 1) / cfg.SEC_IN_YEAR
+        yr = 1998 + 2 / 12
         r = utils.floatyear_to_date(yr)
         self.assertEqual(r, (1998, 3))
 
-        yr = 1998 + cfg.CUMSEC_IN_MONTHS[2] / cfg.SEC_IN_YEAR
-        r = utils.floatyear_to_date(yr, hydro_year=False)
-        self.assertEqual(r, (1998, 4))
+        yr = 1998 + 1 / 12
+        r = utils.floatyear_to_date(yr)
+        self.assertEqual(r, (1998, 2))
 
     def test_date_to_floatyear(self):
 
@@ -156,16 +152,12 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        yrh = utils.date_to_floatyear(np.arange(12)+1, np.arange(12)+1)
-        yrn = utils.date_to_floatyear(np.arange(12)+1, np.arange(12)+1,
-                                      hydro_year=False)
-        assert not np.allclose(yrh, yrn)
-
         with self.assertRaises(ValueError):
             utils.monthly_timeseries(1)
 
     def test_hydro_convertion(self):
 
+        # October
         y, m = utils.hydrodate_to_calendardate(1, 1)
         assert (y, m) == (0, 10)
         y, m = utils.hydrodate_to_calendardate(1, 4)
@@ -192,6 +184,31 @@ class TestFuncs(unittest.TestCase):
         time = pd.period_range('0001-01', '1000-12', freq='M')
         y, m = utils.calendardate_to_hydrodate(time.year, time.month)
         y, m = utils.hydrodate_to_calendardate(y, m)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+        # April
+        y, m = utils.hydrodate_to_calendardate(1, 1, start_month=4)
+        assert (y, m) == (0, 4)
+        y, m = utils.hydrodate_to_calendardate(1, 4, start_month=4)
+        assert (y, m) == (0, 7)
+        y, m = utils.hydrodate_to_calendardate(1, 9, start_month=4)
+        assert (y, m) == (0, 12)
+        y, m = utils.hydrodate_to_calendardate(1, 10, start_month=4)
+        assert (y, m) == (1, 1)
+        y, m = utils.hydrodate_to_calendardate(1, 12, start_month=4)
+        assert (y, m) == (1, 3)
+
+        y, m = utils.hydrodate_to_calendardate([1, 1, 1], [1, 4, 12],
+                                               start_month=4)
+        np.testing.assert_array_equal(y, [0, 0, 1])
+        np.testing.assert_array_equal(m, [4, 7, 3])
+
+        # Roundtrip
+        time = pd.period_range('0001-01', '1000-12', freq='M')
+        y, m = utils.calendardate_to_hydrodate(time.year, time.month,
+                                               start_month=4)
+        y, m = utils.hydrodate_to_calendardate(y, m, start_month=4)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
