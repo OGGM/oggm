@@ -214,8 +214,7 @@ def process_cesm_data(gdir, filesuffix=''):
     assert r == 0
 
     # Convert m s-1 to mm mth-1
-    dim = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    ndays = np.tile(np.roll(dim, 13-10), y1 - y0)
+    ndays = np.tile(np.roll(cfg.DAYS_IN_MONTH, 13-10), y1 - y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
