@@ -2191,6 +2191,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         except:
             pass
         if inversion_only:
+            out_df.append(d)
             continue
         try:
             # Masks related stuff
