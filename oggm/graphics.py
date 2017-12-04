@@ -201,10 +201,14 @@ def plot_domain(gdirs, ax=None, smap=None):
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
+    try:
+        smap.set_data(topo)
+    except ValueError:
+        pass
+
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
-    smap.set_data(topo)
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid

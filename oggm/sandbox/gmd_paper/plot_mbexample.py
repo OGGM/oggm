@@ -11,7 +11,7 @@ from oggm import cfg, tasks
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb, local_mustar, apparent_mb)
 from oggm.sandbox.gmd_paper import PLOT_DIR
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, mkdir
 
 cfg.initialize()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
@@ -20,6 +20,8 @@ cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'MB')
+mkdir(base_dir, reset=False)
+
 entity = gpd.read_file(get_demo_file('Hintereisferner.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
