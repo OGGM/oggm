@@ -17,12 +17,13 @@ reset = True
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 60
 cfg.PARAMS['auto_skip_task'] = True
+cfg.PARAMS['run_mb_calibration'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'scenarios')
 cfg.PATHS['working_dir'] = base_dir
 mkdir(base_dir, reset=reset)
 
-entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
+entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
 tasks.define_glacier_region(gdir, entity=entity)

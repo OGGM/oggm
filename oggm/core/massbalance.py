@@ -361,9 +361,17 @@ class ConstantMassBalance(MassBalanceModel):
             y0 = df['t_star'][0]
 
         # This is a quick'n dirty optimisation
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            zminmax = [nc.min_h_dem-50, nc.max_h_dem+1000]
-        self.hbins = np.arange(*zminmax, step=5)
+        try:
+            fls = gdir.read_pickle('model_flowlines')
+            h = []
+            for fl in fls:
+                h = np.append(h, fl.surface_h)
+            zminmax = np.round([np.min(h)-250, np.max(h)+1501])
+        except FileNotFoundError:
+            # in case we don't have them
+            with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+                zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
+        self.hbins = np.arange(*zminmax, step=10)
         self.valid_bounds = self.hbins[[0, -1]]
         self.y0 = y0
         self.halfsize = halfsize
