@@ -73,6 +73,10 @@ class Flowline(Centerline):
     def surface_h(self):
         return self._thick + self.bed_h
 
+    @surface_h.setter
+    def surface_h(self, value):
+        self.thick = value - self.bed_h
+
     @property
     def length_m(self):
         # We define the length a bit differently: but more robust
