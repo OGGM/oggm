@@ -2133,7 +2133,7 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
                                 'task_log'+filesuffix+'.csv')
         if os.path.exists(path) and append:
             odf = pd.read_csv(path, index_col=0)
-            out = pd.concat([odf, out], axis=1)
+            out = odf.join(out, rsuffix='_n')
         out.to_csv(path)
     return out
 
