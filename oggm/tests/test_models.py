@@ -562,6 +562,7 @@ class TestModelFlowlines(unittest.TestCase):
         # We set something and everything stays same
         rec.thick = thick
         assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
         assert_allclose(rec.widths, widths)
         assert_allclose(rec.widths_m, widths_m)
         assert_allclose(rec.section, section)
@@ -569,6 +570,15 @@ class TestModelFlowlines(unittest.TestCase):
         assert_allclose(rec.volume_m3, vol_m3.sum())
         rec.section = section
         assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, vol_m3.sum())
+        rec.surface_h = surface_h
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
         assert_allclose(rec.widths, widths)
         assert_allclose(rec.widths_m, widths_m)
         assert_allclose(rec.section, section)
@@ -634,6 +644,7 @@ class TestModelFlowlines(unittest.TestCase):
             # We set something and everything stays same
             rec.thick = thick
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -641,6 +652,15 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.volume_m3, vol_m3.sum())
             rec.section = section
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.surface_h = surface_h
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -709,6 +729,7 @@ class TestModelFlowlines(unittest.TestCase):
             # We set something and everything stays same
             rec.thick = thick
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -716,6 +737,15 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.volume_m3, vol_m3.sum())
             rec.section = section
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.surface_h = surface_h
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -786,7 +816,7 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.section, section)
             assert_allclose(rec.area_m2, area_m2.sum())
             assert_allclose(rec.volume_m3, vol_m3.sum())
-
+            assert_allclose(rec.surface_h, surface_h)
 
     def test_mixed(self):
 
@@ -877,6 +907,17 @@ class TestModelFlowlines(unittest.TestCase):
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2)
         assert_allclose(rec.volume_m3, volume_m3)
+        rec.surface_h = rec.surface_h
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2)
+        assert_allclose(rec.volume_m3, volume_m3)
+        rec.surface_h = rec.surface_h - 10
+        assert_allclose(rec.thick, thick - 10)
+        assert_allclose(rec.surface_h, surface_h - 10)
 
 
 class TestIO(unittest.TestCase):
