@@ -362,11 +362,12 @@ class ConstantMassBalance(MassBalanceModel):
 
         # This is a quick'n dirty optimisation
         try:
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_pickle('model_flowlines')
+            h = []
             for fl in fls:
                 h = np.append(h, fl.surface_h)
             zminmax = [np.min(h)-250, np.max(h)+1500]
-        except:
+        except FileNotFoundError:
             # in case we don't have them
             with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
                 zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
