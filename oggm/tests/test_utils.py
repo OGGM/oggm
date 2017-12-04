@@ -258,7 +258,7 @@ class TestWorkflowTools(unittest.TestCase):
 
         df = utils.glacier_characteristics([gdir], path=False)
         assert len(df) == 1
-        assert np.all(~df.isna())
+        assert np.all(~df.isnull())
         assert len(df.columns) == 36
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],

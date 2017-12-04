@@ -744,6 +744,77 @@ class TestClimate(unittest.TestCase):
                 totest = nc_c.prcp - nc_h.prcp
                 self.assertTrue(totest.mean() < 100)
 
+    def test_sh(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        # We have to make a non cropped custom file
+        fpath = cfg.PATHS['climate_file']
+        ds = xr.open_dataset(fpath)
+        ds = ds.sel(time=slice('1802-01-01', '2002-12-01'))
+        nf = os.path.join(self.testdir, 'testdata.nc')
+        ds.to_netcdf(nf)
+        cfg.PATHS['climate_file'] = nf
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # Trick
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_custom_climate_data(gdirs[0])
+        ci = gdirs[0].read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1803)
+        self.assertEqual(ci['hydro_yr_1'], 2002)
+
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        climate.process_cru_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(
+                os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+
+            assert nc_h['time.month'][0] == 4
+            assert nc_h['time.year'][0] == 1802
+            assert nc_h['time.month'][-1] == 3
+            assert nc_h['time.year'][-1] == 2002
+
+            with xr.open_dataset(
+                    os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+
+                assert nc_c['time.month'][0] == 4
+                assert nc_c['time.year'][0] == 1901
+                assert nc_c['time.month'][-1] == 3
+                assert nc_c['time.year'][-1] == 2014
+
+                # put on the same altitude
+                # (using default gradient because better)
+                temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                totest = temp_cor - nc_h.temp
+                self.assertTrue(totest.mean() < 0.5)
+                # precip
+                totest = nc_c.prcp - nc_h.prcp
+                self.assertTrue(totest.mean() < 100)
+
     def test_mb_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')

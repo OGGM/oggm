@@ -487,6 +487,13 @@ def glacier_masks(gdir):
         glacier_mask[:] = 0
         glacier_mask[np.where(regions == (am+1))] = 1
 
+    # Last sanity check based on the masked dem
+    tmp_max = np.max(dem[np.where(glacier_mask == 1)])
+    tmp_min = np.min(dem[np.where(glacier_mask == 1)])
+    if tmp_max < (tmp_min + 1):
+        raise RuntimeError('({}) min equal max in the masked DEM.'
+                           .format(gdir.rgi_id))
+
     # write out the grids in the netcdf file
     nc = gdir.create_gridded_ncdf_file('gridded_data')
 
@@ -497,8 +504,8 @@ def glacier_masks(gdir):
 
     v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
-    v.long_name = 'DEM topography smoothed' \
-                  ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window'])
+    v.long_name = ('DEM topography smoothed' 
+                   ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
     v[:] = smoothed_dem
 
     v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
