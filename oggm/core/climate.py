@@ -165,7 +165,8 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['cesm_data'])
-def process_cesm_data(gdir, filesuffix=''):
+def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
+                      fpath_precl=None):
     """Processes and writes the climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -176,27 +177,30 @@ def process_cesm_data(gdir, filesuffix=''):
     Parameters
     ----------
     filesuffix : str
-        append a suffix to the filename (useful for model runs).
+        append a suffix to the filename (useful for ensemble experiments).
+    fpath_temp : str
+        path to the temp file (default: cfg.PATHS['gcm_temp_file'])
+    fpath_precc : str
+        path to the precc file (default: cfg.PATHS['gcm_precc_file'])
+    fpath_precl : str
+        path to the precl file (default: cfg.PATHS['gcm_precl_file'])
     """
 
     # GCM temperature and precipitation data
-    if not (('gcm_temp_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_temp_file'])):
-        raise IOError('GCM temp file not found')
-
-    if not (('gcm_precc_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precc_file'])):
-        raise IOError('GCM precc file not found')
-
-    if not (('gcm_precl_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precl_file'])):
-        raise IOError('GCM precl file not found')
+    if fpath_temp is None:
+        if not ('gcm_temp_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_temp_file']")
+        fpath_temp = cfg.PATHS['gcm_temp_file']
+    if fpath_precc is None:
+        if not ('gcm_precc_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precc_file']")
+        fpath_precc = cfg.PATHS['gcm_precc_file']
+    if fpath_precl is None:
+        if not ('gcm_precl_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precl_file']")
+        fpath_precl = cfg.PATHS['gcm_precl_file']
 
     # read the files
-    fpath_temp = cfg.PATHS['gcm_temp_file']
-    fpath_precc = cfg.PATHS['gcm_precc_file']
-    fpath_precl = cfg.PATHS['gcm_precl_file']
-
     with warnings.catch_warnings():
         # Long time series are currently a pain pandas
         warnings.filterwarnings("ignore", message='Unable to decode time axis')
