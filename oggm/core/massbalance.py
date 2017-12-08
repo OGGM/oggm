@@ -372,7 +372,8 @@ class ConstantMassBalance(MassBalanceModel):
             for fl in fls:
                 # We use bed because of overdeepenings
                 h = np.append(h, fl.bed_h)
-            zminmax = np.round([np.min(h)-50, np.max(h)+1500])
+                h = np.append(h, fl.surface_h)
+            zminmax = np.round([np.min(h)-50, np.max(h)+2000])
         except FileNotFoundError:
             # in case we don't have them
             with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
