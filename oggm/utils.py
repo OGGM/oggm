@@ -2167,6 +2167,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
 
         # Easy stats - this should always be possible
         d['rgi_id'] = gdir.rgi_id
+        d['rgi_region'] = gdir.rgi_region
+        d['rgi_subregion'] = gdir.rgi_subregion
         d['name'] = gdir.name
         d['cenlon'] = gdir.cenlon
         d['cenlat'] = gdir.cenlat

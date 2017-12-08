@@ -145,7 +145,7 @@ class LinearMassBalance(MassBalanceModel):
     implemented a simple empirical rule: + 1K -> ELA + 150 m
     """
 
-    def __init__(self, ela_h, grad=3.):
+    def __init__(self, ela_h, grad=3., max_mb=None):
         """ Initialize.
 
         Parameters
@@ -153,13 +153,16 @@ class LinearMassBalance(MassBalanceModel):
         ela_h: float
             Equilibrium line altitude (units: [m])
         grad: float
-            Mass-balance gradient (unit: [mm ice yr-1 m-1])
+            Mass-balance gradient (unit: [mm w.e. yr-1 m-1])
+        max_mb: float
+            Cap the mass balance to a certain value (unit: [mm w.e. yr-1])
         """
         super(LinearMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
         self.grad = grad
+        self.max_mb = max_mb
 
     @MassBalanceModel.temp_bias.setter
     def temp_bias(self, value):
@@ -169,6 +172,8 @@ class LinearMassBalance(MassBalanceModel):
 
     def get_monthly_mb(self, heights, year=None):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
+        if self.max_mb is not None:
+            mb = mb.clip(None, self.max_mb)
         return mb / SEC_IN_YEAR / cfg.RHO
 
     def get_annual_mb(self, heights, year=None):
@@ -365,8 +370,10 @@ class ConstantMassBalance(MassBalanceModel):
             fls = gdir.read_pickle('model_flowlines')
             h = []
             for fl in fls:
+                # We use bed because of overdeepenings
+                h = np.append(h, fl.bed_h)
                 h = np.append(h, fl.surface_h)
-            zminmax = np.round([np.min(h)-250, np.max(h)+1501])
+            zminmax = np.round([np.min(h)-50, np.max(h)+2000])
         except FileNotFoundError:
             # in case we don't have them
             with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
@@ -443,7 +450,6 @@ class ConstantMassBalance(MassBalanceModel):
 
     def get_annual_mb(self, heights, year=None):
         return self.interp_yr(heights)
-
 
 class RandomMassBalance(MassBalanceModel):
     """Random shuffle of all MB years within a given time period.
