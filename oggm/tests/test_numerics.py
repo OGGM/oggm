@@ -846,8 +846,7 @@ class TestIdealisedCases(unittest.TestCase):
         assert 'exceeds domain boundaries' in str(excinfo.value)
 
 
-@pytest.mark.skip(reason='Currently not in OGGM')
-class TestSandbox(unittest.TestCase):
+class TestSia2d(unittest.TestCase):
 
     def setUp(self):
         pass
@@ -855,6 +854,7 @@ class TestSandbox(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @is_slow
     def test_constant_bed(self):
 
         map_dx = 100.
@@ -885,7 +885,7 @@ class TestSandbox(unittest.TestCase):
         # Make a 2D bed out of the 1D
         bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3))
 
-        from oggm.sandbox.sia_2d.models import Upstream2D
+        from oggm.core.sia2d import Upstream2D
         sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
                              glen_a=cfg.A, ice_thick_filter=None)
 
