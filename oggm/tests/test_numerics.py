@@ -858,9 +858,10 @@ class TestSia2d(unittest.TestCase):
     def test_constant_bed(self):
 
         map_dx = 100.
-        yrs = np.arange(1, 700, 5)
+        yrs = np.arange(1, 400, 5)
         lens = []
         volume = []
+        areas = []
         surface_h = []
 
         # Flowline case
@@ -873,13 +874,16 @@ class TestSia2d(unittest.TestCase):
 
         length = yrs * 0.
         vol = yrs * 0.
+        area = yrs * 0
         for i, y in enumerate(yrs):
             flmodel.run_until(y)
             length[i] = fls[-1].length_m
             vol[i] = fls[-1].volume_km3
+            area[i] = fls[-1].area_km2
 
         lens.append(length)
         volume.append(vol)
+        areas.append(area)
         surface_h.append(fls[-1].surface_h.copy())
 
         # Make a 2D bed out of the 1D
@@ -891,14 +895,17 @@ class TestSia2d(unittest.TestCase):
 
         length = yrs * 0.
         vol = yrs * 0.
+        area = yrs * 0
         for i, y in enumerate(yrs):
             sdmodel.run_until(y)
             surf_1d = sdmodel.ice_thick[:, 1]
             length[i] = np.sum(surf_1d > 0) * sdmodel.dx
-            vol[i] = np.sum(surf_1d) * sdmodel.dx ** 2 * 1e-9
+            vol[i] = sdmodel.volume_km3 / 3
+            area[i] = sdmodel.area_km2 / 3
 
         lens.append(length)
         volume.append(vol)
+        areas.append(area)
         surface_h.append(sdmodel.surface_h[:, 1])
 
         if do_plot:
@@ -932,5 +939,23 @@ class TestSia2d(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=3e-3)
 
         self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1] ) < 2e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) < 1.0)
+        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 2e-3)
+        self.assertTrue(utils.rmsd(areas[0], areas[1]) < 2e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 1.0)
+
+        # Equilibrium
+        sdmodel.run_until_equilibrium()
+        flmodel.run_until_equilibrium()
+        assert_allclose(sdmodel.volume_km3 / 3, flmodel.volume_km3, atol=2e-3)
+        assert_allclose(sdmodel.area_km2 / 3, flmodel.area_km2, atol=2e-3)
+
+        # Store
+        run_ds = sdmodel.run_until_and_store(sdmodel.yr+50)
+        ts = run_ds['ice_thickness'].mean(dim=['y', 'x'])
+        assert_allclose(ts, ts.values[0], atol=1)
+
+    @pytest.mark.skip(reason='Currently not in OGGM')
+    def test_bueler(self):
+        # TODO: add formal test like Alex's
+        # https://github.com/alexjarosch/sia-fluxlim
+        pass
