@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '22da1500d1d602b7ab7c80519c7caf61fb03766e'
+SAMPLE_DATA_COMMIT = '3332594f9e8050246af131b8a493dbc958449368'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -391,10 +391,10 @@ def parse_rgi_meta(version=None):
         return _RGI_METADATA[version]
 
     # Parse RGI metadata
+    _ = get_demo_file('rgi_regions.csv')
     _d = os.path.join(cfg.CACHE_DIR,
                       'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
                       'rgi_meta')
-
     reg_names = pd.read_csv(os.path.join(_d, 'rgi_regions.csv'), index_col=0)
     if version in ['4', '5']:
         # The files where different back then
@@ -2604,7 +2604,7 @@ class GlacierDirectory(object):
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
         summary += ['  Terminus type: ' + str(self.terminus_type)]
-        summary += ['  Area: ' + str(self.rgi_area_km2) + ' mk2']
+        summary += ['  Area: ' + str(self.rgi_area_km2) + ' km2']
         summary += ['  Lon, Lat: (' + str(self.cenlon) + ', ' +
                     str(self.cenlat) + ')']
         if os.path.isfile(self.get_filepath('glacier_grid')):
