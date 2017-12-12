@@ -24,7 +24,8 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
 HAS_MPL_FOR_TESTS = False
 if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     HAS_MPL_FOR_TESTS = True
-    BASELINE_DIR = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+    BASELINE_DIR = os.path.join(cfg.CACHE_DIR,
+                                'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
                                 'baseline_images')
     ftver = LooseVersion(matplotlib.ft2font.__freetype_version__)
     if ftver >= LooseVersion('2.8.0'):
@@ -44,6 +45,7 @@ RUN_NUMERIC_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
+RUN_BENCHMARK_TESTS = True
 RUN_PERFORMANCE_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     # specific to travis to reduce global test time
@@ -69,30 +71,42 @@ if os.environ.get('TRAVIS') is not None:
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
+            RUN_BENCHMARK_TESTS = False
         if env == 'numerics':
             RUN_PREPRO_TESTS = False
             RUN_NUMERIC_TESTS = True
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
+            RUN_BENCHMARK_TESTS = False
         if env == 'models':
             RUN_PREPRO_TESTS = False
             RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = True
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = False
+            RUN_BENCHMARK_TESTS = False
         if env == 'workflow':
             RUN_PREPRO_TESTS = False
             RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = True
             RUN_GRAPHIC_TESTS = False
+            RUN_BENCHMARK_TESTS = False
         if env == 'graphics':
             RUN_PREPRO_TESTS = False
             RUN_NUMERIC_TESTS = False
             RUN_MODEL_TESTS = False
             RUN_WORKFLOW_TESTS = False
             RUN_GRAPHIC_TESTS = True
+            RUN_BENCHMARK_TESTS = False
+        if env == 'benchmark':
+            RUN_PREPRO_TESTS = False
+            RUN_NUMERIC_TESTS = False
+            RUN_MODEL_TESTS = False
+            RUN_WORKFLOW_TESTS = False
+            RUN_GRAPHIC_TESTS = False
+            RUN_BENCHMARK_TESTS = True
 elif 'ip-' in socket.gethostname():
     # we are on AWS (hacky way)
     ON_AWS = True

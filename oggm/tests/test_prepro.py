@@ -169,7 +169,7 @@ class TestGIS(unittest.TestCase):
           Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
-          Area: 8.036 mk2
+          Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
           Grid (nx, ny): (159, 114)
           Grid (dx, dy): (50.0, -50.0)
@@ -1332,6 +1332,7 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
         assert len(fls) < len(fls1)
         assert not np.any([fl.flux_needed_correction for fl in fls])
+
 
 class TestInversion(unittest.TestCase):
 
