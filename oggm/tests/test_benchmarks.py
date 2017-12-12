@@ -4,6 +4,7 @@ import geopandas as gpd
 import numpy as np
 import os
 import shutil
+import salem
 import oggm
 
 # Locals
@@ -13,13 +14,26 @@ from oggm.workflow import execute_entity_task
 from oggm.tests.funcs import get_test_dir
 from oggm.tests import RUN_BENCHMARK_TESTS
 from oggm.utils import get_demo_file
+from oggm.core.massbalance import ConstantMassBalance
 
 # do we event want to run the tests?
 if not RUN_BENCHMARK_TESTS:
     raise unittest.SkipTest('Skipping all benchmark tests.')
 
+do_plot = False
+
 
 class TestSouthGlacier(unittest.TestCase):
+
+    # Test case optained from ITMIX
+    # Data available at:
+    # oggm-sample-data/tree/master/benchmarks/south_glacier
+    #
+    # Citation:
+    #
+    # Flowers, G.E., N. Roux, S. Pimentel, and C.G. Schoof (2011). Present
+    # dynamics and future prognosis of a slowly surging glacier.
+    # The Cryosphere, 5, 299-313. DOI: 10.5194/tc-5-299-2011, 2011.
 
     def setUp(self):
 
@@ -46,7 +60,74 @@ class TestSouthGlacier(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
-    def test_inversion(self):
+    def test_mb(self):
+
+        # This is a function to produce the MB function needed by Anna
+
+        # Download the RGI file for the run
+        # Make a new dataframe of those
+        rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf)
+
+        # Preprocessing tasks
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Climate tasks -- only data IO and tstar interpolation!
+        execute_entity_task(tasks.process_cru_data, gdirs)
+        tasks.distribute_t_stars(gdirs)
+        execute_entity_task(tasks.apparent_mb, gdirs)
+
+        mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
+        demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
+
+        mbref = mbref.get_vardata()
+        mbref[mbref == -9999] = np.NaN
+        demref = demref.get_vardata()[np.isfinite(mbref)]
+        mbref = mbref[np.isfinite(mbref)] * 1000
+
+        # compute the bias to make it 0 SMB on the 2D DEM
+        mbmod = ConstantMassBalance(gdirs[0], bias=0)
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        mbmod = ConstantMassBalance(gdirs[0], bias=np.average(mymb))
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
+
+        # Same for ref
+        mbref = mbref - np.average(mbref)
+        np.testing.assert_allclose(np.average(mbref), 0., atol=1e-3)
+
+        # Fit poly
+        p = np.polyfit(demref, mbref, deg=2)
+        poly = np.poly1d(p)
+        myfit = poly(demref)
+        np.testing.assert_allclose(np.average(myfit), 0., atol=1e-3)
+
+        if do_plot:
+            import matplotlib.pyplot as plt
+            plt.scatter(mbref, demref, s=5, label='Obs (2007-2012), shifted to '
+                                                   'Avg(SMB) = 0')
+            plt.scatter(mymb, demref, s=5, label='OGGM MB at t*')
+            plt.scatter(myfit, demref, s=5, label='Polyfit', c='C3')
+            plt.xlabel('MB (mm w.e yr-1)')
+            plt.ylabel('Altidude (m)')
+            plt.legend()
+            plt.show()
+
+    def test_workflow(self):
+
+        # This is a check that the inversion workflow works fine
 
         # Download the RGI file for the run
         # Make a new dataframe of those
@@ -81,3 +162,9 @@ class TestSouthGlacier(unittest.TestCase):
 
         df = utils.glacier_characteristics(gdirs)
         assert df.inv_thickness_m[0] < 100
+
+        if do_plot:
+            import matplotlib.pyplot as plt
+            from oggm.graphics import plot_inversion
+            plot_inversion(gdirs)
+            plt.show()
