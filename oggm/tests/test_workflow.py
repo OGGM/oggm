@@ -89,7 +89,6 @@ def up_to_climate(reset=False):
     cfg.PARAMS['optimize_inversion_params'] = True
     cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
-    cfg.PARAMS['invert_with_rectangular'] = False
     cfg.PARAMS['run_mb_calibration'] = True
 
     # Go

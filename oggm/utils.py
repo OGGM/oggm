@@ -410,6 +410,7 @@ def parse_rgi_meta(version=None):
     _RGI_METADATA[version] = (reg_names, subreg_names)
     return _RGI_METADATA[version]
 
+
 class SuperclassMeta(type):
     """Metaclass for abstract base classes.
 
