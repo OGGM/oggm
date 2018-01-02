@@ -1623,7 +1623,7 @@ def get_rgi_region_file(region, version=None):
     """
 
     rgi_dir = get_rgi_dir(version=version)
-    f = list(glob.glob(rgi_dir + "/{}_*/{}_*.shp".format(region, region)))
+    f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 
