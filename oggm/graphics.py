@@ -659,7 +659,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               bbox_to_anchor=(1.34, 1.0),
               frameon=False)
 
@@ -743,6 +743,6 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               loc='best', frameon=False)
     fig.tight_layout()

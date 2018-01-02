@@ -410,6 +410,7 @@ def parse_rgi_meta(version=None):
     _RGI_METADATA[version] = (reg_names, subreg_names)
     return _RGI_METADATA[version]
 
+
 class SuperclassMeta(type):
     """Metaclass for abstract base classes.
 
@@ -1622,7 +1623,7 @@ def get_rgi_region_file(region, version=None):
     """
 
     rgi_dir = get_rgi_dir(version=version)
-    f = list(glob.glob(rgi_dir + "/{}_*/{}_*.shp".format(region, region)))
+    f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 

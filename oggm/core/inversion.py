@@ -60,12 +60,6 @@ def prepare_for_inversion(gdir, add_debug_var=False,
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
 
-    # for testing only
-    if 'invert_with_rectangular' in cfg.PARAMS:
-        invert_with_rectangular = cfg.PARAMS['invert_with_rectangular']
-    if 'invert_all_rectangular' in cfg.PARAMS:
-        invert_all_rectangular = cfg.PARAMS['invert_all_rectangular']
-
     towrite = []
     for fl in fls:
 
