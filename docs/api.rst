@@ -124,9 +124,9 @@ the floating year can be used for conversion to months and years:
 
 .. ipython:: python
 
-    from oggm.utils import year_to_date, date_to_year
-    date_to_year(1982, 12)
-    year_to_date(1.2)
+    from oggm.utils import floatyear_to_date, date_to_floatyear
+    date_to_floatyear(1982, 12)
+    floatyear_to_date(1.2)
 
 
 Interface

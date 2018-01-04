@@ -136,7 +136,7 @@ class Model2D(object):
         if self.mb_elev_feedback == 'always':
             return self._mb_call(self.bed_topo + self.ice_thick, year)
 
-        date = utils.year_to_date(year)
+        date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback == 'annual':
             # ignore month changes
             date = (date[0], date[0])
@@ -355,11 +355,12 @@ class Upstream2D(Model2D):
         D_k_dn = self.gamma * H_k_dn ** (N + 1) * H_k_upstream_dn * s_k_grad_dn
 
         # --- Check the cfl condition
-        dt_cfl = (self.cfl * min(self.dx ** 2., self.dy ** 2.) /
-                  max(max(max(abs(D_k_up.flatten())),
-                          max(abs(D_k_dn.flatten()))),
-                      max(max(abs(D_l_up.flatten())),
-                          max(abs(D_l_dn.flatten())))))
+        divisor = max(max(np.max(np.abs(D_k_up)), np.max(np.abs(D_k_dn))),
+                      max(np.max(np.abs(D_l_up)), np.max(np.abs(D_l_dn))))
+        if divisor == 0:
+            dt_cfl = self.max_dt
+        else:
+            dt_cfl = (self.cfl * min(self.dx ** 2., self.dy ** 2.) / divisor)
 
         # --- Calculate Final diffusion term
         div_k = (D_k_up * (S[ix_(self.kp, self.l)] - S[ix_(self.k, self.l)]) /

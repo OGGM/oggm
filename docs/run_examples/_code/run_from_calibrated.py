@@ -41,7 +41,7 @@ cfg.PARAMS['continue_on_error'] = False
 
 # We use intersects
 # (this is slow, it could be replaced with a subset of the global file)
-rgi_dir = utils.get_rgi_intersects_dir()
+rgi_dir = utils.get_rgi_intersects_dir(version='5')
 cfg.set_intersects_db(path.join(rgi_dir, '00_rgi50_AllRegs',
                                 'intersects_rgi50_AllRegs.shp'))
 

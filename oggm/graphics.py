@@ -201,10 +201,14 @@ def plot_domain(gdirs, ax=None, smap=None):
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
+    try:
+        smap.set_data(topo)
+    except ValueError:
+        pass
+
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
-    smap.set_data(topo)
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
@@ -616,8 +620,13 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     # Where trapezoid change color
     if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
         bed_t = cls.bed_h * np.NaN
-        bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
-        ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+        pt = cls.is_trapezoid & (~cls.is_rectangular)
+        bed_t[pt] = cls.bed_h[pt]
+        ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
+                label='Bed (Trap.)')
+        bed_t = cls.bed_h * np.NaN
+        bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
+        ax.plot(x, bed_t, color='crimson', linewidth=2.5, label='Bed (Rect.)')
 
     # Plot glacier
     surfh = cls.surface_h
@@ -650,7 +659,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               bbox_to_anchor=(1.34, 1.0),
               frameon=False)
 
@@ -698,8 +707,14 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
         # Where trapezoid change color
         if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
             bed_t = cls.bed_h * np.NaN
-            bed_t[cls._ptrap] = cls.bed_h[cls._ptrap]
-            ax.plot(x, bed_t, color='#990000', linewidth=2.5, label='Bed (Trap.)')
+            pt = cls.is_trapezoid & (~cls.is_rectangular)
+            bed_t[pt] = cls.bed_h[pt]
+            ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
+                    label='Bed (Trap.)')
+            bed_t = cls.bed_h * np.NaN
+            bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
+            ax.plot(x, bed_t, color='crimson', linewidth=2.5,
+                    label='Bed (Rect.)')
 
         # Plot glacier
         surfh = cls.surface_h
@@ -728,6 +743,6 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               loc='best', frameon=False)
     fig.tight_layout()
