@@ -101,9 +101,12 @@ def process_custom_climate_data(gdir):
     nc_ts = salem.GeoNetcdf(fpath)
 
     # set temporal subset for the ts data (hydro years)
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
     y0, y1 = yrs[0], yrs[-1]
-    nc_ts.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                     t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time
     ny, r = divmod(len(time), 12)
     if r != 0:
@@ -131,10 +134,29 @@ def process_custom_climate_data(gdir):
     ilat = np.argmin(np.abs(lat - gdir.cenlat))
     ref_pix_lon = lon[ilon]
     ref_pix_lat = lat[ilat]
-    iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
-                                                          ilat, def_grad,
-                                                          g_minmax,
-                                                          use_grad)
+
+    # read the data
+    temp = nc_ts.get_vardata('temp')
+    prcp = nc_ts.get_vardata('prcp')
+    hgt = nc_ts.get_vardata('hgt')
+    igrad = np.zeros(len(time)) + def_grad
+    ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
+    itemp = ttemp[:, 1, 1]
+    thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
+    ihgt = thgt[1, 1]
+    thgt = thgt.flatten()
+    iprcp = prcp[:, ilat, ilon]
+    nc_ts.close()
+
+    # Now the gradient
+    if use_grad:
+        for t, loct in enumerate(ttemp):
+            slope, _, _, p_val, _ = stats.linregress(thgt,
+                                                     loct.flatten())
+            igrad[t] = slope if (p_val < 0.01) else def_grad
+        # dont exagerate too much
+        igrad = np.clip(igrad, g_minmax[0], g_minmax[1])
+
     gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
                                     ref_pix_lon, ref_pix_lat)
     # metadata
@@ -143,7 +165,8 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['cesm_data'])
-def process_cesm_data(gdir, filesuffix=''):
+def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
+                      fpath_precl=None):
     """Processes and writes the climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -154,27 +177,30 @@ def process_cesm_data(gdir, filesuffix=''):
     Parameters
     ----------
     filesuffix : str
-        append a suffix to the filename (useful for model runs).
+        append a suffix to the filename (useful for ensemble experiments).
+    fpath_temp : str
+        path to the temp file (default: cfg.PATHS['gcm_temp_file'])
+    fpath_precc : str
+        path to the precc file (default: cfg.PATHS['gcm_precc_file'])
+    fpath_precl : str
+        path to the precl file (default: cfg.PATHS['gcm_precl_file'])
     """
 
     # GCM temperature and precipitation data
-    if not (('gcm_temp_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_temp_file'])):
-        raise IOError('GCM temp file not found')
-
-    if not (('gcm_precc_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precc_file'])):
-        raise IOError('GCM precc file not found')
-
-    if not (('gcm_precl_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precl_file'])):
-        raise IOError('GCM precl file not found')
+    if fpath_temp is None:
+        if not ('gcm_temp_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_temp_file']")
+        fpath_temp = cfg.PATHS['gcm_temp_file']
+    if fpath_precc is None:
+        if not ('gcm_precc_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precc_file']")
+        fpath_precc = cfg.PATHS['gcm_precc_file']
+    if fpath_precl is None:
+        if not ('gcm_precl_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precl_file']")
+        fpath_precl = cfg.PATHS['gcm_precl_file']
 
     # read the files
-    fpath_temp = cfg.PATHS['gcm_temp_file']
-    fpath_precc = cfg.PATHS['gcm_precc_file']
-    fpath_precl = cfg.PATHS['gcm_precl_file']
-
     with warnings.catch_warnings():
         # Long time series are currently a pain pandas
         warnings.filterwarnings("ignore", message='Unable to decode time axis')
@@ -197,12 +223,15 @@ def process_cesm_data(gdir, filesuffix=''):
             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
 
     # from normal years to hydrological years
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     # TODO: we don't check if the files actually start in January but we should
-    precp = precp[9:-3].load()
-    temp = temp[9:-3].load()
+    precp = precp[sm-1:sm-13].load()
+    temp = temp[sm-1:sm-13].load()
     y0 = int(temp.time.values[0].strftime('%Y'))
     y1 = int(temp.time.values[-1].strftime('%Y'))
-    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    time = pd.period_range('{}-{:02d}'.format(y0, sm),
+                           '{}-{:02d}'.format(y1, em), freq='M')
     temp['time'] = time
     precp['time'] = time
     # Workaround for https://github.com/pydata/xarray/issues/1565
@@ -214,7 +243,7 @@ def process_cesm_data(gdir, filesuffix=''):
     assert r == 0
 
     # Convert m s-1 to mm mth-1
-    ndays = np.tile(cfg.DAYS_IN_MONTH_HYDRO, y1 - y0)
+    ndays = np.tile(np.roll(cfg.DAYS_IN_MONTH, 13-sm), y1 - y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
@@ -246,7 +275,7 @@ def process_cesm_data(gdir, filesuffix=''):
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
     time1 = dsindex.variables['time']
-    time2 = time1[9:-3] - ndays  # from normal years to hydrological years
+    time2 = time1[sm-1:sm-13] - ndays  # to hydrological years
     time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
 
     assert np.all(np.isfinite(ts_pre.values))
@@ -286,10 +315,14 @@ def process_cru_data(gdir):
     nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
     y0, y1 = yrs[0], yrs[-1]
-    nc_ts_tmp.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
-    nc_ts_pre.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                         t1='{}-{:02d}-01'.format(y1, em))
+    nc_ts_pre.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                         t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts_pre.time
     ny, r = divmod(len(time), 12)
     assert r == 0
@@ -461,8 +494,10 @@ def mb_climate_on_height(gdir, heights, prcp_fac,
     """
 
     if year_range is not None:
-        t0 = datetime.datetime(year_range[0]-1, 10, 1)
-        t1 = datetime.datetime(year_range[1], 9, 1)
+        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+        em = sm - 1 if (sm > 1) else 12
+        t0 = datetime.datetime(year_range[0]-1, sm, 1)
+        t1 = datetime.datetime(year_range[1], em, 1)
         return mb_climate_on_height(gdir, heights, prcp_fac,
                                     time_range=[t0, t1])
 

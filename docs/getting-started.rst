@@ -62,7 +62,8 @@ input:
 
 .. ipython:: python
 
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif') # topography
+    cfg.PATHS['working_dir'] = os.path.expanduser('~/doc_wd')  # working directory
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')  # topography
 
 The starting point of a run is always a valid `RGI <http://www.glims.org/RGI/>`_ file.
 In this case we use a very small subset of the RGI, the outlines of the

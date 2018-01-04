@@ -16,9 +16,9 @@ except ImportError:
                       'pip install -e .')
 
 # Spammers
-logging.getLogger("Fiona").setLevel(logging.ERROR)
-logging.getLogger("shapely").setLevel(logging.ERROR)
-logging.getLogger("rasterio").setLevel(logging.ERROR)
+logging.getLogger("Fiona").setLevel(logging.CRITICAL)
+logging.getLogger("shapely").setLevel(logging.CRITICAL)
+logging.getLogger("rasterio").setLevel(logging.CRITICAL)
 
 # Basic config
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',

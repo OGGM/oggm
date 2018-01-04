@@ -1,3 +1,4 @@
+from os import path
 import warnings
 
 import oggm
@@ -26,8 +27,6 @@ from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve
 from oggm import workflow
-
-cfg.PATHS['working_dir'] = get_test_dir()
 
 # do we event want to run the tests?
 if not RUN_PREPRO_TESTS:
@@ -170,7 +169,7 @@ class TestGIS(unittest.TestCase):
           Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
-          Area: 8.036 mk2
+          Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
           Grid (nx, ny): (159, 114)
           Grid (dx, dy): (50.0, -50.0)
@@ -745,6 +744,77 @@ class TestClimate(unittest.TestCase):
                 totest = nc_c.prcp - nc_h.prcp
                 self.assertTrue(totest.mean() < 100)
 
+    def test_sh(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        # We have to make a non cropped custom file
+        fpath = cfg.PATHS['climate_file']
+        ds = xr.open_dataset(fpath)
+        ds = ds.sel(time=slice('1802-01-01', '2002-12-01'))
+        nf = os.path.join(self.testdir, 'testdata.nc')
+        ds.to_netcdf(nf)
+        cfg.PATHS['climate_file'] = nf
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # Trick
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_custom_climate_data(gdirs[0])
+        ci = gdirs[0].read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1803)
+        self.assertEqual(ci['hydro_yr_1'], 2002)
+
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        climate.process_cru_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(
+                os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+
+            assert nc_h['time.month'][0] == 4
+            assert nc_h['time.year'][0] == 1802
+            assert nc_h['time.month'][-1] == 3
+            assert nc_h['time.year'][-1] == 2002
+
+            with xr.open_dataset(
+                    os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+
+                assert nc_c['time.month'][0] == 4
+                assert nc_c['time.year'][0] == 1901
+                assert nc_c['time.month'][-1] == 3
+                assert nc_c['time.year'][-1] == 2014
+
+                # put on the same altitude
+                # (using default gradient because better)
+                temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                totest = temp_cor - nc_h.temp
+                self.assertTrue(totest.mean() < 0.5)
+                # precip
+                totest = nc_c.prcp - nc_h.prcp
+                self.assertTrue(totest.mean() < 100)
+
     def test_mb_climate(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')
@@ -1263,6 +1333,7 @@ class TestFilterNegFlux(unittest.TestCase):
         assert len(fls) < len(fls1)
         assert not np.any([fl.flux_needed_correction for fl in fls])
 
+
 class TestInversion(unittest.TestCase):
 
     def setUp(self):
@@ -1682,9 +1753,9 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
-        dfc = utils.glacier_characteristics([gdir])
+        dfc = utils.glacier_characteristics([gdir], path=False)
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
-        self.assertFalse(np.isfinite(dfc.clim_temp_avgh.values[0]))
+        self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 
 
 class TestGrindelInvert(unittest.TestCase):
@@ -1946,6 +2017,74 @@ class TestGCMClimate(unittest.TestCase):
                 # N more than 20%? (silly test)
                 np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
 
+    def test_compile_climate_input(self):
+
+        filename = 'cesm_data'
+        filesuffix = '_cesm'
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        climate.process_cru_data(gdir)
+        utils.compile_climate_input([gdir])
+
+        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['gcm_temp_file'] = f
+        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precc_file'] = f
+        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        cfg.PATHS['gcm_precl_file'] = f
+        climate.process_cesm_data(gdir, filesuffix=filesuffix)
+        utils.compile_climate_input([gdir], filename=filename,
+                                    filesuffix=filesuffix)
+
+        with warnings.catch_warnings():
+            # Long time series are currently a pain pandas
+            warnings.filterwarnings("ignore", message='Unable to decode')
+
+            # CRU
+            f1 = path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
+            f2 = gdir.get_filepath(filename='climate_monthly')
+            with xr.open_dataset(f1) as clim_cru1, xr.open_dataset(f2) as clim_cru2:
+                np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
+                                           clim_cru2.prcp)
+                np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
+                                           clim_cru2.temp)
+                np.testing.assert_allclose(np.squeeze(clim_cru1.grad),
+                                           clim_cru2.grad)
+                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_hgt),
+                                           clim_cru2.ref_hgt)
+                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lat),
+                                           clim_cru2.ref_pix_lat)
+                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lon),
+                                           clim_cru2.ref_pix_lon)
+                np.testing.assert_allclose(clim_cru1.calendar_month,
+                                           clim_cru2['time.month'])
+                np.testing.assert_allclose(clim_cru1.calendar_year,
+                                           clim_cru2['time.year'])
+                np.testing.assert_allclose(clim_cru1.hydro_month[[0, -1]],
+                                           [1, 12])
+
+            # CESM
+            f1 = path.join(cfg.PATHS['working_dir'], 'climate_input_cesm.nc')
+            f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
+            with xr.open_dataset(f1) as clim_cesm1, xr.open_dataset(f2) as clim_cesm2:
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
+                                           clim_cesm2.prcp)
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
+                                           clim_cesm2.temp)
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.grad),
+                                           clim_cesm2.grad)
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_hgt),
+                                           clim_cesm2.ref_hgt)
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lat),
+                                           clim_cesm2.ref_pix_lat)
+                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lon),
+                                           clim_cesm2.ref_pix_lon)
+
 
 class TestCatching(unittest.TestCase):
 
@@ -1953,31 +2092,25 @@ class TestCatching(unittest.TestCase):
 
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
+
 
         # Init
         cfg.initialize()
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['working_dir'] = get_test_dir()
-        self.log_dir = os.path.join(get_test_dir(), 'log')
+        cfg.PATHS['working_dir'] = self.testdir
+        self.log_dir = os.path.join(self.testdir, 'log')
         self.clean_dir()
 
     def tearDown(self):
         self.rm_dir()
-        shutil.rmtree(self.log_dir)
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
 
     def clean_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
-        if os.path.exists(self.log_dir):
-            shutil.rmtree(self.log_dir)
-        os.makedirs(self.log_dir)
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.log_dir, reset=True)
 
     def test_pipe_log(self):
 
@@ -2047,11 +2180,23 @@ class TestCatching(unittest.TestCase):
         assert len(df.columns) == 0
 
         tn = ['glacier_masks', 'compute_downstream_bedshape', 'not_a_task']
-        df = utils.compile_task_log([gdir], task_names=tn,
-                                    path=False)
+        df = utils.compile_task_log([gdir], task_names=tn)
         assert len(df) == 1
         assert len(df.columns) == 3
         df = df.iloc[0]
         assert df['glacier_masks'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert df['not_a_task'] == ''
+
+        # Append
+        centerlines.compute_centerlines(gdir)
+        tn = ['compute_centerlines']
+        df = utils.compile_task_log([gdir], task_names=tn)
+        assert len(df) == 1
+        assert len(df.columns) == 4
+        df = df.iloc[0]
+        assert df['glacier_masks'] == 'SUCCESS'
+        assert df['compute_centerlines'] == 'SUCCESS'
+        assert df['compute_downstream_bedshape'] != 'SUCCESS'
+        assert not np.isfinite(df['not_a_task'])
+
