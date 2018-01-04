@@ -19,7 +19,7 @@ base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Grindelwald')
 cfg.PATHS['working_dir'] = base_dir
 mkdir(base_dir, reset=reset)
 
-rgif = 'https://dl.dropboxusercontent.com/u/20930277/rgiv5_grindelwald.zip'
+rgif = 'https://www.dropbox.com/s/zkprlr5ad5voysh/rgiv5_grindelwald.zip?dl=1'
 rgif = file_downloader(rgif)
 with zipfile.ZipFile(rgif) as zf:
     zf.extractall(base_dir)
@@ -60,7 +60,7 @@ axs = np.asarray(axs).flatten()
 llkw = {'interval': 0}
 letkm = dict(color='black', ha='right', va='top', fontsize=18,
              bbox=dict(facecolor='white', edgecolor='black'))
-xt, yt = 109.2, 1.75
+xt, yt = 109.3, 1.5
 
 im = graphics.plot_catchment_areas(gdir, ax=axs[0], title='',
                                    lonlat_contours_kwargs=llkw,

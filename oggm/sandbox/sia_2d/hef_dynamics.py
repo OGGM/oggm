@@ -9,7 +9,7 @@ import oggm
 from oggm import cfg, tasks
 from oggm import utils, workflow
 from oggm.core.massbalance import (RandomMassBalance)
-from oggm.sandbox.sia_2d.models import Upstream2D, filter_ice_border
+from oggm.core.sia2d import Upstream2D, filter_ice_border
 from oggm.utils import get_demo_file
 
 cfg.initialize()

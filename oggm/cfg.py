@@ -11,7 +11,6 @@ from collections import OrderedDict
 from distutils.util import strtobool
 
 import numpy as np
-import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
@@ -81,6 +80,7 @@ class PathOrderedDict(ResettingOrderedDict):
         # Overrides the original dic to expand the path
         ResettingOrderedDict.__setitem__(self, key, os.path.expanduser(value))
 
+
 # Globals
 IS_INITIALIZED = False
 PARAMS = ResettingOrderedDict()
@@ -92,11 +92,8 @@ LRUHANDLERS = ResettingOrderedDict()
 SEC_IN_YEAR = 365*24*3600
 SEC_IN_DAY = 24*3600
 SEC_IN_HOUR = 3600
-DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-DAYS_IN_MONTH_HYDRO = [31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30]
-SEC_IN_MONTHS = [d * SEC_IN_DAY for d in DAYS_IN_MONTH]
-CUMSEC_IN_MONTHS = np.cumsum(SEC_IN_MONTHS)
-BEGINSEC_IN_MONTHS = np.insert(CUMSEC_IN_MONTHS[:-1], [0], 0)
+SEC_IN_MONTH = 2628000
+DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
 RHO = 900.  # ice density
 G = 9.81  # gravity
@@ -243,7 +240,6 @@ def initialize(file=None):
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
     # Some non-trivial params
-
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
@@ -258,6 +254,8 @@ def initialize(file=None):
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
     PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
+    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
+    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -292,8 +290,8 @@ def initialize(file=None):
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding',
            'optimize_inversion_params', 'use_multiple_flowlines',
-           'optimize_thick', 'mpi_recv_buf_size',
-           'tstar_search_window', 'use_bias_for_run',
+           'optimize_thick', 'mpi_recv_buf_size', 'hydro_month_nh',
+           'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version']

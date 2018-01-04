@@ -1,5 +1,5 @@
 import os
-import shutil
+import zipfile
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import scipy.optimize as optimization
@@ -10,19 +10,21 @@ from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm import utils
 
 cfg.initialize()
-cfg.PARAMS['grid_dx_method'] = 'fixed'
-cfg.PARAMS['fixed_dx'] = 100
 cfg.PARAMS['border'] = 20
 cfg.PARAMS['auto_skip_task'] = True
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'Workflow')
 cfg.PATHS['working_dir'] = base_dir
+utils.mkdir(base_dir)
 
-mbf = 'https://dl.dropboxusercontent.com/u/20930277/ref_tstars_no_tidewater.csv'
-mbf = utils.file_downloader(mbf)
-shutil.copyfile(mbf, os.path.join(base_dir, 'ref_tstars.csv'))
+rgif = 'https://www.dropbox.com/s/bvku83j9bci9r3p/rgiv5_tasman.zip?dl=1'
+rgif = utils.file_downloader(rgif)
+with zipfile.ZipFile(rgif) as zf:
+    zf.extractall(base_dir)
+rgif = os.path.join(base_dir, 'rgiv5_tasman.shp')
+rgidf = gpd.read_file(rgif)
+entity = rgidf.iloc[0]
 
-entity = gpd.read_file('/home/mowglie/Documents/OGGM/Tasman/tasman.shp').iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 
 tasks.define_glacier_region(gdir, entity=entity)
@@ -49,13 +51,6 @@ tasks.init_present_time_glacier(gdir)
 tasks.random_glacier_evolution(gdir, bias=0., temperature_bias=-1,
                                nyears=120, glen_a=glen_a,
                                check_for_boundaries=False)
-
-# ds = utils.compile_run_output([gdir], path=False)
-# ds.volume.plot();
-# plt.figure()
-# ds.length.plot();
-# plt.show()
-# exit(0)
 
 f = plt.figure(figsize=(10, 12))
 from mpl_toolkits.axes_grid1 import ImageGrid

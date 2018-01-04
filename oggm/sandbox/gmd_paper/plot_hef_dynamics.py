@@ -18,6 +18,7 @@ cfg.set_intersects_db()
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 60
 cfg.PARAMS['auto_skip_task'] = True
+cfg.PARAMS['run_mb_calibration'] = True
 reset = False
 
 base_dir = os.path.join(os.path.expanduser('~/tmp'), 'OGGM_GMD', 'dynamics')
@@ -50,6 +51,7 @@ tasks.init_present_time_glacier(gdir)
 df = utils.glacier_characteristics([gdir], path=False)
 
 reset = False
+seed = 5
 seed = 0
 tasks.random_glacier_evolution(gdir, nyears=800, bias=0, seed=seed,
                                filesuffix='_fromzero_def', reset=reset,
