@@ -28,11 +28,12 @@ from oggm.tests.test_models import (dummy_constant_bed, dummy_noisy_bed,
                                     dummy_constant_bed_cliff)
 
 # Figure
-f, axs = plt.subplots(2, 2, figsize=(10, 7), sharey=True, sharex=True)
+f = 0.7
+f, axs = plt.subplots(2, 2, figsize=(10*f, 7*f), sharey=True, sharex=True)
 axs = np.asarray(axs).flatten()
 
-tx, ty = 0.985, .981
-letkm = dict(color='black', ha='right', va='top', fontsize=18,
+tx, ty = .98, .97
+letkm = dict(color='black', ha='right', va='top', fontsize=12,
              bbox=dict(facecolor='white', edgecolor='black'))
 
 fls = dummy_constant_bed(map_dx=gdir.grid.dx)
@@ -64,6 +65,7 @@ ax.plot(sh, 'k', label='Glacier surface')
 ax.plot(bh, 'C0', label='Real bed', linewidth=2)
 ax.plot(sh - thick1, 'C3', label='Computed bed')
 ax.set_ylabel('Elevation [m]')
+ax.set_ylim([1950, 3100])
 ax.legend(loc=3)
 ax.text(tx, ty, 'a', transform=ax.transAxes, **letkm)
 

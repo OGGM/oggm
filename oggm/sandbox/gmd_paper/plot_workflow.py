@@ -2,11 +2,11 @@ import os
 import zipfile
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import scipy.optimize as optimization
+import numpy as np
 
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.sandbox.gmd_paper import PLOT_DIR
+from oggm.sandbox.gmd_paper import PLOT_DIR, LCMAP
 from oggm import utils
 
 cfg.initialize()
@@ -52,7 +52,8 @@ tasks.random_glacier_evolution(gdir, bias=0., temperature_bias=-1,
                                nyears=120, glen_a=glen_a,
                                check_for_boundaries=False)
 
-f = plt.figure(figsize=(10, 12))
+f = 0.9
+f = plt.figure(figsize=(7, 10))
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 axs = ImageGrid(f, 111,  # as in plt.subplot(111)
@@ -66,7 +67,7 @@ axs = ImageGrid(f, 111,  # as in plt.subplot(111)
                 )
 
 llkw = {'interval': 0}
-letkm = dict(color='black', ha='left', va='top', fontsize=20,
+letkm = dict(color='black', ha='left', va='top', fontsize=16,
              bbox=dict(facecolor='white', edgecolor='black'))
 
 graphics.plot_domain(gdir, ax=axs[0], title='', add_colorbar=False,
@@ -76,34 +77,33 @@ axs[0].text(xt, yt, 'a', **letkm)
 
 im = graphics.plot_centerlines(gdir, ax=axs[1], title='', add_colorbar=True,
                                lonlat_contours_kwargs=llkw, cbar_ax=axs[1].cax,
-                               add_scalebar=False)
+                               add_scalebar=False, lines_cmap=LCMAP)
 axs[1].text(xt, yt, 'b', **letkm)
 
 graphics.plot_catchment_width(gdir, ax=axs[2], title='', add_colorbar=False,
                               lonlat_contours_kwargs=llkw,
-                              add_scalebar=False)
+                              add_scalebar=False, lines_cmap=LCMAP)
 axs[2].text(xt, yt, 'c', **letkm)
 
 graphics.plot_catchment_width(gdir, ax=axs[3], title='', corrected=True,
                               add_colorbar=False,
                               lonlat_contours_kwargs=llkw,
-                              add_scalebar=False)
+                              add_scalebar=False, lines_cmap=LCMAP)
 axs[3].text(xt, yt, 'd', **letkm)
 
 f.delaxes(axs[3].cax)
 
-graphics.plot_inversion(gdir, ax=axs[4], title='', linewidth=1.5,
+graphics.plot_inversion(gdir, ax=axs[4], title='', linewidth=1.3,
                         add_colorbar=False, vmax=650,
                         lonlat_contours_kwargs=llkw,
                         add_scalebar=False)
 axs[4].text(xt, yt, 'e', **letkm)
 
 graphics.plot_modeloutput_map(gdir, ax=axs[5], modelyr=120, title='',
-                              linewidth=1.5, add_colorbar=True,
+                              linewidth=1.3, add_colorbar=True,
                               cbar_ax=axs[5].cax, vmax=650,
                               lonlat_contours_kwargs=llkw,
                               add_scalebar=False)
 axs[5].text(xt, yt, 'f', **letkm)
 
-# plt.tight_layout()
 plt.savefig(PLOT_DIR + 'workflow_tas.pdf', dpi=150, bbox_inches='tight')
