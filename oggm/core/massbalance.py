@@ -334,7 +334,8 @@ class ConstantMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 y0=None, halfsize=15):
+                 y0=None, halfsize=15, filename='climate_monthly', 
+                 input_filesuffix=''):
         """Initialize
 
         Parameters
@@ -355,11 +356,17 @@ class ConstantMassBalance(MassBalanceModel):
             is to use tstar as center.
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
+        input_filesuffix : str
+            the file suffix of the input climate file
         """
 
         super(ConstantMassBalance, self).__init__()
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
-                                     prcp_fac=prcp_fac)
+                                     prcp_fac=prcp_fac, filename=filename, 
+                                     input_filesuffix=input_filesuffix)
 
         if y0 is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))
