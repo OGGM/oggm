@@ -1,5 +1,6 @@
 # Python imports
 import unittest
+import netCDF4
 import geopandas as gpd
 import numpy as np
 import os
@@ -14,6 +15,7 @@ from oggm.workflow import execute_entity_task
 from oggm.tests.funcs import get_test_dir
 from oggm.tests import RUN_BENCHMARK_TESTS
 from oggm.utils import get_demo_file
+from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
 # do we event want to run the tests?
@@ -168,3 +170,86 @@ class TestSouthGlacier(unittest.TestCase):
             from oggm.graphics import plot_inversion
             plot_inversion(gdirs)
             plt.show()
+
+
+class TestCoxeGlacier(unittest.TestCase):
+
+    # Test case for a tidewater glacier
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        self.rgi_file = get_demo_file('rgi_RGI50-01.10299.shp')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        cfg.PARAMS['border'] = 40
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_set_width(self):
+        entity = gpd.GeoDataFrame.from_file(self.rgi_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # Test that area and area-altitude elev is fine
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo_smoothed'][:]
+        rhgt = topo[np.where(mask)][:]
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        hgt, widths = gdir.get_inversion_flowline_hw()
+
+        bs = 100
+        bins = np.arange(utils.nicenumber(np.min(hgt), bs, lower=True),
+                         utils.nicenumber(np.max(hgt), bs) + 1,
+                         bs)
+        h1, b = np.histogram(hgt, weights=widths, density=True, bins=bins)
+        h2, b = np.histogram(rhgt, density=True, bins=bins)
+        h1 = h1 / np.sum(h1)
+        h2 = h2 / np.sum(h2)
+        assert utils.rmsd(h1, h2) < 0.02  # les than 2% error
+        new_area = np.sum(widths * fls[-1].dx * gdir.grid.dx)
+        np.testing.assert_allclose(new_area, gdir.rgi_area_m2)
+
+        centerlines.terminus_width_correction(gdir, new_width=714)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        hgt, widths = gdir.get_inversion_flowline_hw()
+
+        # Check for area distrib
+        bins = np.arange(utils.nicenumber(np.min(hgt), bs, lower=True),
+                         utils.nicenumber(np.max(hgt), bs) + 1,
+                         bs)
+        h1, b = np.histogram(hgt, weights=widths, density=True, bins=bins)
+        h2, b = np.histogram(rhgt, density=True, bins=bins)
+        h1 = h1 / np.sum(h1)
+        h2 = h2 / np.sum(h2)
+        assert utils.rmsd(h1, h2) < 0.02  # les than 2% error
+        new_area = np.sum(widths * fls[-1].dx * gdir.grid.dx)
+        np.testing.assert_allclose(new_area, gdir.rgi_area_m2)
