@@ -99,39 +99,24 @@ g = salem.mercator_grid(center_ll=(-19.61, 63.63),
                         extent=(18000, 14500))
 # And a map accordingly
 sm = salem.Map(g, countries=False)
-sm.set_lonlat_contours(add_xtick_labels=False)
+# sm.set_lonlat_contours(add_xtick_labels=False, yinterval=0.05, xinterval=0.1)
+sm.set_lonlat_contours(interval=0)
 z = sm.set_topography('/home/mowglie/disk/OGGM_INPUT/tmp/ISL.tif')
 sm.set_data(z)
 
 # Figs
-f = 0.9
-f, axs = plt.subplots(2, 1, figsize=(7*f, 10*f))
+f = 0.75
+f, axs = plt.subplots(2, 1, figsize=(7 * f, 10 * f))
 
 graphics.plot_domain(gdirs, ax=axs[0], smap=sm)
 
-
 sm.set_data()
-sm.set_lonlat_contours()
+# sm.set_lonlat_contours(yinterval=0.05, xinterval=0.1)
+sm.set_lonlat_contours(interval=0)
 sm.set_geometry()
 sm.set_text()
 graphics.plot_inversion(gdirs, ax=axs[1], smap=sm,
                         linewidth=1, add_scalebar=False,
-                              title='', vmax=250)
+                        title='', vmax=250)
 plt.tight_layout()
 plt.savefig(PLOT_DIR + 'iceland.pdf', dpi=150, bbox_inches='tight')
-exit(0)
-
-lw = 1
-graphics.plot_modeloutput_map(gdirs, smap=sm, filesuffix='_tbias',
-                              modelyr=0, linewidth=lw)
-plt.savefig('/home/mowglie/yr000.png', dpi=150)
-plt.figure()
-sm.set_geometry()
-graphics.plot_modeloutput_map(gdirs, smap=sm, filesuffix='_tbias',
-                              modelyr=150, linewidth=lw)
-plt.savefig('/home/mowglie/yr150.png', dpi=150)
-plt.figure()
-sm.set_geometry()
-graphics.plot_modeloutput_map(gdirs, smap=sm, filesuffix='_tbias',
-                              modelyr=300, linewidth=lw)
-plt.savefig('/home/mowglie/yr300.png', dpi=150)

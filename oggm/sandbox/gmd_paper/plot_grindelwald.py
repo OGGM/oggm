@@ -8,7 +8,7 @@ import salem
 
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.sandbox.gmd_paper import PLOT_DIR
+from oggm.sandbox.gmd_paper import PLOT_DIR, LCMAP
 from oggm.utils import file_downloader, nicenumber, mkdir
 
 cfg.initialize()
@@ -54,29 +54,34 @@ h2, b = np.histogram(rhgt, density=True, bins=bins)
 h1 = h1 / np.sum(h1)
 h2 = h2 / np.sum(h2)
 
-f, axs = plt.subplots(2, 2, figsize=(9, 8))
+LCMAP = plt.get_cmap('Purples')(np.linspace(0.4, 1, 5)[::-1])
+MCMAP = graphics.truncate_colormap(plt.get_cmap('Blues'), 0.2, 0.8, 255)
+
+f, axs = plt.subplots(2, 2, figsize=(8.5, 7))
 axs = np.asarray(axs).flatten()
 
 llkw = {'interval': 0}
-letkm = dict(color='black', ha='right', va='top', fontsize=18,
+letkm = dict(color='black', ha='right', va='top', fontsize=12,
              bbox=dict(facecolor='white', edgecolor='black'))
-xt, yt = 109.3, 1.5
+xt, yt = 109, 2.
 
 im = graphics.plot_catchment_areas(gdir, ax=axs[0], title='',
                                    lonlat_contours_kwargs=llkw,
-                                   add_scalebar=True)
+                                   add_scalebar=True, lines_cmap=LCMAP,
+                                   mask_cmap=MCMAP)
 
 axs[0].text(xt, yt, 'a', **letkm)
 
 graphics.plot_catchment_width(gdir, ax=axs[1], title='', add_colorbar=False,
                               lonlat_contours_kwargs=llkw,
-                              add_scalebar=False)
+                              add_scalebar=False, lines_cmap=LCMAP)
 axs[1].text(xt, yt, 'b', **letkm)
 
 graphics.plot_catchment_width(gdir, ax=axs[2], title='', corrected=True,
                               add_colorbar=False,
                               lonlat_contours_kwargs=llkw,
-                              add_scalebar=False, add_touches=True)
+                              add_scalebar=False, add_touches=True,
+                              lines_cmap=LCMAP)
 axs[2].text(xt, yt, 'c', **letkm)
 
 width = 0.6 * (bins[1] - bins[0])
@@ -85,7 +90,7 @@ axs[3].bar(center, h2, align='center', width=width, alpha=0.5, color='C0', label
 axs[3].bar(center, h1, align='center', width=width, alpha=0.5, color='C3', label='OGGM')
 axs[3].set_xlabel('Altitude (m)')
 plt.legend(loc='best')
-axs[3].text(3780, 0.224, 'd', **letkm)
+axs[3].text(3775, 0.223, 'd', **letkm)
 
 dy = np.abs(np.diff(axs[3].get_ylim()))
 dx = np.abs(np.diff(axs[3].get_xlim()))

@@ -12,7 +12,7 @@ from oggm.sandbox.gmd_paper import PLOT_DIR
 from oggm.utils import get_demo_file, mkdir
 
 cfg.initialize()
-reset = True
+reset = False
 
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 cfg.PARAMS['border'] = 60
@@ -48,7 +48,7 @@ tasks.init_present_time_glacier(gdir)
 
 df = utils.glacier_characteristics([gdir], path=False)
 
-reset = True
+reset = False
 seed = 0
 
 tasks.random_glacier_evolution(gdir, nyears=800, seed=0, y0=2000,
@@ -63,8 +63,8 @@ ds1 = xr.open_dataset(f)
 f = gdir.get_filepath('model_diagnostics', filesuffix='_1920_def')
 ds2 = xr.open_dataset(f)
 
-
-f = plt.figure(figsize=(9, 6))
+f = 0.9
+f = plt.figure(figsize=(9*f, 6*f))
 from mpl_toolkits.axes_grid1 import ImageGrid
 axs = ImageGrid(f, 111,  # as in plt.subplot(111)
                 nrows_ncols=(2, 2),
@@ -79,8 +79,8 @@ f.delaxes(axs[0])
 f.delaxes(axs[1])
 f.delaxes(axs[1].cax)
 
-tx, ty = 0.019, .975
-letkm = dict(color='black', ha='left', va='top', fontsize=14,
+tx, ty = 0.023, .972
+letkm = dict(color='black', ha='left', va='top', fontsize=12,
              bbox=dict(facecolor='white', edgecolor='black'))
 llkw = {'interval': 0}
 
@@ -107,11 +107,11 @@ ax.text(tx, ty, 'b: [1905-1935]', transform=ax.transAxes, **letkm)
 
 ax = f.add_axes([0.25, 0.57, 0.6, 0.3])
 ax.axhline(df.inv_volume_km3.values[0], 0, 800, color='k')
-(ds2.volume_m3 * 1e-9).plot(ax=ax, label='[1905-1935]')
-(ds1.volume_m3 * 1e-9).plot(ax=ax, label='[1985-2015]')
+(ds2.volume_m3 * 1e-9).plot(ax=ax, label='[1905-1935]', color='C0')
+(ds1.volume_m3 * 1e-9).plot(ax=ax, label='[1985-2015]', color='C3')
 ax.set_xlabel('Years')
 ax.set_ylabel('Volume [km$^3$]')
-ax.legend(loc=[0.72, 0.2])
-ax.text(0.01, .97, 'a', transform=ax.transAxes, **letkm)
+ax.legend(loc=[0.65, 0.2])
+ax.text(0.012, .965, 'a', transform=ax.transAxes, **letkm)
 
 plt.savefig(PLOT_DIR + 'hef_scenarios.pdf', dpi=150, bbox_inches='tight')
