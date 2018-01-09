@@ -233,7 +233,7 @@ class TestCoxeGlacier(unittest.TestCase):
         h2, b = np.histogram(rhgt, density=True, bins=bins)
         h1 = h1 / np.sum(h1)
         h2 = h2 / np.sum(h2)
-        assert utils.rmsd(h1, h2) < 0.02  # les than 2% error
+        assert utils.rmsd(h1, h2) < 0.02  # less than 2% error
         new_area = np.sum(widths * fls[-1].dx * gdir.grid.dx)
         np.testing.assert_allclose(new_area, gdir.rgi_area_m2)
 
@@ -241,6 +241,9 @@ class TestCoxeGlacier(unittest.TestCase):
 
         fls = gdir.read_pickle('inversion_flowlines')
         hgt, widths = gdir.get_inversion_flowline_hw()
+
+        # Check that the width is ok
+        np.testing.assert_allclose(fls[-1].widths[-1] * gdir.grid.dx, 714)
 
         # Check for area distrib
         bins = np.arange(utils.nicenumber(np.min(hgt), bs, lower=True),
@@ -250,6 +253,6 @@ class TestCoxeGlacier(unittest.TestCase):
         h2, b = np.histogram(rhgt, density=True, bins=bins)
         h1 = h1 / np.sum(h1)
         h2 = h2 / np.sum(h2)
-        assert utils.rmsd(h1, h2) < 0.02  # les than 2% error
+        assert utils.rmsd(h1, h2) < 0.02  # less than 2% error
         new_area = np.sum(widths * fls[-1].dx * gdir.grid.dx)
         np.testing.assert_allclose(new_area, gdir.rgi_area_m2)
