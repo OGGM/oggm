@@ -19,8 +19,8 @@ import salem
 import xarray as xr
 
 # Local imports
-from oggm.core import gis, inversion, climate, centerlines, flowline, \
-    massbalance
+from oggm.core import (gis, inversion, climate, centerlines, flowline,
+                       massbalance)
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
@@ -569,6 +569,11 @@ class TestGeometry(unittest.TestCase):
         h1, b = np.histogram(hgt, weights=harea, density=True, bins=bins)
         h2, b = np.histogram(rhgt, density=True, bins=bins)
         self.assertTrue(utils.rmsd(h1*100*50, h2*100*50) < 1)
+
+        # Check that utility function is doing what is expected
+        hh, ww = gdir.get_inversion_flowline_hw()
+        new_area = np.sum(ww * cl.dx * gdir.grid.dx)
+        np.testing.assert_allclose(new_area * 10**-6, np.float(tdf['AREA']))
 
     def test_nodivides_correct_slope(self):
 
