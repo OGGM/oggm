@@ -39,12 +39,12 @@ rgi_reg = '01'
 cfg.initialize()
 
 # Compute a calving flux or not
-No_calving = True
+No_calving = False
 With_calving = True
 
 # Set's where is going to run PC or Cluster
-Cluster = True
-PC = False
+Cluster = False
+PC = True
 
 # Local paths (where to write output and where are the input files)
 if PC:
@@ -93,10 +93,10 @@ utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
 # Some globals for more control on what to run
-RUN_GIS_mask = True
-RUN_GIS_PREPRO = True # run GIS pre-processing tasks (before climate)
-RUN_CLIMATE_PREPRO = True # run climate pre-processing tasks
-RUN_INVERSION = True  # run bed inversion
+RUN_GIS_mask = False
+RUN_GIS_PREPRO = False # run GIS pre-processing tasks (before climate)
+RUN_CLIMATE_PREPRO = False # run climate pre-processing tasks
+RUN_INVERSION = False  # run bed inversion
 
 # Read RGI file
 rgidf = salem.read_shapefile(RGI_FILE, cached=True)
@@ -111,7 +111,7 @@ if PC:
                 'RGI50-01.00570', 'RGI50-01.22699']
 
     # Glaciers in the McNabb data base
-    terminus_data_ids = ['RGI50-01.10689', 'RGI50-01.23642']
+    terminus_data_ids = ['RGI50-01.23642', 'RGI50-01.10689']
 
     keep_indexes = [((i in keep_ids) or (i in ids_with_mb) or
                       (i in terminus_data_ids)) for i in rgidf.RGIID]
@@ -422,7 +422,7 @@ if With_calving:
     execute_entity_task(tasks.volume_inversion, gdirs)
 
     # Write out glacier statistics
-    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_marine_terminating')
+    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_few_glaciers_marine_terminating')
 
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)
