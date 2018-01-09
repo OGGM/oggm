@@ -71,6 +71,7 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # Make it large if you expect your glaciers to grow large
 cfg.PARAMS['border'] = 80
 cfg.PARAMS['optimize_inversion_params'] = True
+#cfg.PARAMS['inversion_glen_a'] = 2.6e-24
 
 # Set to True for cluster runs
 if Cluster:
@@ -110,7 +111,7 @@ if PC:
                 'RGI50-01.00570', 'RGI50-01.22699']
 
     # Glaciers in the McNabb data base
-    terminus_data_ids = ['RGI50-01.10689', 'RGI50-01.23642']
+    terminus_data_ids = ['RGI50-01.23642', 'RGI50-01.10689']
 
     keep_indexes = [((i in keep_ids) or (i in ids_with_mb) or
                       (i in terminus_data_ids)) for i in rgidf.RGIID]
@@ -120,38 +121,15 @@ if PC:
 if Cluster:
     # exclude the columbia glacier and other errors
     errors = ['RGI50-01.10689',
-              'RGI50-01.02582', 'RGI50-01.22208', 'RGI50-01.24541',
-              'RGI50-01.03465', 'RGI50-01.22209', 'RGI50-01.24542',
-              'RGI50-01.05242', 'RGI50-01.22572', 'RGI50-01.24551',
-              'RGI50-01.05607', 'RGI50-01.23094', 'RGI50-01.24580',
-              'RGI50-01.06005', 'RGI50-01.23128', 'RGI50-01.24600',
-              'RGI50-01.07446', 'RGI50-01.24055', 'RGI50-01.24601',
-              'RGI50-01.07577', 'RGI50-01.24066', 'RGI50-01.24602',
-              'RGI50-01.07630', 'RGI50-01.24231', 'RGI50-01.24603',
-              'RGI50-01.09693', 'RGI50-01.24237', 'RGI50-01.24604',
-              'RGI50-01.10177', 'RGI50-01.24245', 'RGI50-01.24605',
-              'RGI50-01.10453', 'RGI50-01.24246', 'RGI50-01.24607',
-              'RGI50-01.10687', 'RGI50-01.24248', 'RGI50-01.26517',
-              'RGI50-01.10956', 'RGI50-01.24249', 'RGI50-01.26664',
-              'RGI50-01.11897', 'RGI50-01.24250', 'RGI50-01.26665',
-              'RGI50-01.12077', 'RGI50-01.24252', 'RGI50-01.26684',
-              'RGI50-01.13749', 'RGI50-01.24256', 'RGI50-01.26762',
-              'RGI50-01.13755', 'RGI50-01.24257', 'RGI50-01.26776',
-              'RGI50-01.14063', 'RGI50-01.24258', 'RGI50-01.26971',
-              'RGI50-01.14232', 'RGI50-01.24259', 'RGI50-01.26978',
-              'RGI50-01.14344', 'RGI50-01.24260', 'RGI50-01.26991',
-              'RGI50-01.14539', 'RGI50-01.24261', 'RGI50-01.26992',
-              'RGI50-01.14602', 'RGI50-01.24264', 'RGI50-01.27061',
-              'RGI50-01.14631', 'RGI50-01.24287', 'RGI50-01.27106',
-              'RGI50-01.14873', 'RGI50-01.24288', 'RGI50-01.27107',
-              'RGI50-01.22207', 'RGI50-01.24293', 'RGI50-01.20295',
-              'RGI50-01.00625', 'RGI50-01.01521', 'RGI50-01.07718',
-              'RGI50-01.07806', 'RGI50-01.11922', 'RGI50-01.20294',
-              'RGI50-01.22839', 'RGI50-01.00745', 'RGI50-01.02482',
-              'RGI50-01.07803', 'RGI50-01.11323', 'RGI50-01.20246']
+              'RGI50-01.00625',  'RGI50-01.01521',  'RGI50-01.07718',
+              'RGI50-01.07806',  'RGI50-01.11922',  'RGI50-01.20294',
+              'RGI50-01.22839',  'RGI50-01.00745',  'RGI50-01.02482',
+              'RGI50-01.07803',  'RGI50-01.11323',  'RGI50-01.20246',
+              'RGI50-01.20295']
 
     keep_indexes = [(i not in errors) for i in rgidf.RGIID]
     rgidf = rgidf.iloc[keep_indexes]
+    #rgidf = rgidf
 
 # Sort for more efficient parallel computing = Bea's rgi has capitals
 rgidf = rgidf.sort_values('AREA', ascending=False)
@@ -216,7 +194,7 @@ if RUN_INVERSION:
     # Inversion tasks
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
     tasks.optimize_inversion_params(gdirs)
-    execute_entity_task(tasks.volume_inversion, gdirs, )
+    execute_entity_task(tasks.volume_inversion, gdirs)
     # execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 # Compile output if no calving
@@ -256,7 +234,7 @@ if With_calving:
             to calculate the water depth of the calving front.
         """
         # Read width database:
-        data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb.csv')
+        data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb_plus_chris_13-12-2017.csv')
 
         dfids = pd.read_csv(data_link)['RGI_ID'].values
         dfwidth = pd.read_csv(data_link)['width'].values
@@ -282,12 +260,13 @@ if With_calving:
         thick = cl['volume'][-1] / cl['dx'] / width
 
         # We calculate the water_depth UNCOMMENT THIS to use bathymetry
-        # if gdir.rgi_id in dfids:
-        #     # we read the depth from the database
-        #     w_depth = dfdepth[index[0][0]]
-        # else:
-        #     w_depth = thick - t_altitude
-        w_depth = thick - t_altitude
+        if gdir.rgi_id in dfids:
+             # we read the depth from the database
+             w_depth = thick - t_altitude
+             #w_depth = dfdepth[index[0][0]]
+        else:
+             w_depth = thick - t_altitude
+        #w_depth = thick - t_altitude
 
         #print('t_altitude_fromfun', t_altitude)
         #print('depth_fromfun', w_depth)
@@ -299,13 +278,15 @@ if With_calving:
 
     # Selecting the tidewater glaciers on the region
     for gdir in gdirs:
-        if gdir.is_tidewater:
+        #if gdir.is_tidewater:
+        if gdir.terminus_type == 'Marine-terminating':
             # Starting the calving loop, with a maximum of 50 cycles
             i = 0
             data_calving = []
             w_depth = []
             thick = []
             t_width = []
+            mu_star_calving = []
             forwrite = []
 
             # Our first guess of calving is that of a water depth of 1m
@@ -319,12 +300,12 @@ if With_calving:
             thick = t_altitude + 1
             w_depth = thick - t_altitude
 
-            print('t_altitude', t_altitude)
-            print('depth', w_depth)
-            print('thick', thick)
+            #print('t_altitude', t_altitude)
+            #print('depth', w_depth)
+            #print('thick', thick)
 
             # Read width database:
-            data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb.csv')
+            data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb_plus_chris_13-12-2017.csv')
             dfids = pd.read_csv(data_link)['RGI_ID'].values
             dfwidth = pd.read_csv(data_link)['width'].values
             #dfdepth = pd.read_csv(data_link)['depth'].values
@@ -339,6 +320,13 @@ if With_calving:
                 # we read the McNabb width
                 width = dfwidth[index[0][0]]
                 # print('width',width)
+            # We calculate the water_depth UNCOMMENT THIS to use bathymetry
+            if gdir.rgi_id in dfids:
+                #we read the depth from the database
+                #w_depth = dfdepth[index[0][0]]
+                w_depth = thick - t_altitude
+            else:
+                w_depth = thick - t_altitude
 
             # Lets compute the theoretical calving out of it
             pre_calving = 2 * thick * w_depth * width / 1e9
@@ -350,6 +338,8 @@ if With_calving:
             tasks.apparent_mb(gdir)
             tasks.prepare_for_inversion(gdir, add_debug_var=True)
             tasks.volume_inversion(gdir)
+            df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+            mu_star = df['mu_star']
 
             while i < 50:
                 # First calculates a calving flux from model output
@@ -359,8 +349,8 @@ if With_calving:
 
                 # Stores the data, and we see it
                 data_calving += [F_calving]
-                w_depth += [new_depth]
-                thick += [new_thick]
+                w_depth = np.append(w_depth, new_depth)
+                thick = np.append(thick, new_thick)
                 t_width = t_width
                 # print('Calving rate calculated', F_calving)
 
@@ -375,17 +365,21 @@ if With_calving:
                 tasks.prepare_for_inversion(gdir, add_debug_var=True)
                 tasks.volume_inversion(gdir)
                 # tasks.distribute_thickness(gdir, how='per_altitude')
+                df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+                mu_star = df['mu_star']
+                mu_star_calving = np.append(mu_star_calving, mu_star)
 
                 i += 1
                 avg_one = np.average(data_calving[-4:])
                 avg_two = np.average(data_calving[-5:-1])
                 difference = abs(avg_two - avg_one)
-                if difference < 0.05 * avg_two or data_calving[-1] == 0:
+
+                if mu_star < 0.0 or difference < 0.05 * avg_two or data_calving[-1] == 0:
                     break
 
             # Making a dictionary for calving
             cal_dic = dict(calving_fluxes=data_calving, water_depth=w_depth,
-                           H_ice=thick, t_width=t_width)
+                           H_ice=thick, t_width=t_width, mu_star_calving=mu_star_calving)
             forwrite.append(cal_dic)
             # We write out everything
             gdir.write_pickle(forwrite, 'calving_output')
@@ -401,7 +395,8 @@ if With_calving:
 
     # Assigning to each tidewater glacier its own last_calving flux calculated
     for gdir in gdirs:
-        if gdir.is_tidewater:
+        #if gdir.is_tidewater:
+        if gdir.terminus_type == 'Marine-terminating':
             calving_output = gdir.read_pickle('calving_output')
             for objt in calving_output:
                 all_calving_data = objt['calving_fluxes']
@@ -424,10 +419,10 @@ if With_calving:
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
     execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var=True)
-    execute_entity_task(tasks.volume_inversion, gdirs, filesuffix='_with_calving')
+    execute_entity_task(tasks.volume_inversion, gdirs)
 
     # Write out glacier statistics
-    utils.glacier_characteristics(gdirs, filesuffix='_with_calving')
+    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_few_glaciers_marine_terminating')
 
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)
