@@ -1857,10 +1857,56 @@ def catchment_width_correction(gdir):
     for fl in fls:
         area += np.sum(fl.widths) * fl.dx
 
-    fac = gdir.rgi_area_km2 / (area * gdir.grid.dx**2 * 10**-6)
+    fac = gdir.rgi_area_m2 / (area * gdir.grid.dx**2)
     log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
     for fl in fls:
         fl.widths *= fac
+
+    # Overwrite centerlines
+    gdir.write_pickle(fls, 'inversion_flowlines')
+
+
+@entity_task(log, writes=['inversion_flowlines'])
+def terminus_width_correction(gdir, new_width=None):
+    """Sets a new value for the terminus width.
+
+    This can be useful for e.g. tiddewater glaciers where we know the width
+    and don't like the OGGM one.
+
+    This task preserves the glacier area but will change the fit of the
+    altitude-area distribution slightly.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+    new_width : float
+       the new width of the terminus (in meters)
+    """
+
+    if new_width is None:
+        raise ValueError('We need a width to run this task!')
+
+    # variables
+    fls = gdir.read_pickle('inversion_flowlines')
+    fl = fls[-1]
+    mapdx = gdir.grid.dx
+
+    # Change the value and interpolate
+    width = copy.deepcopy(fl.widths)
+    width[-5:] = np.NaN
+    width[-1] = new_width / mapdx
+    width = utils.interp_nans(width)
+
+    # Correct for RGI area
+    area_to_match = gdir.rgi_area_m2 - np.sum(width[-5:] * mapdx**2 * fl.dx)
+    area_before = np.sum(width[:-5] * mapdx**2 * fl.dx)
+    for tfl in fls[:-1]:
+        area_before += np.sum(tfl.widths * mapdx**2 * fl.dx)
+    cor_factor = area_to_match / area_before
+    for tfl in fls:
+        tfl.widths = tfl.widths * cor_factor
+    width[:-5] = width[:-5] * cor_factor
+    fl.widths = width
 
     # Overwrite centerlines
     gdir.write_pickle(fls, 'inversion_flowlines')

@@ -41,7 +41,11 @@ apparent_mb(gdir, reset=True)
 tasks.prepare_for_inversion(gdir, reset=True)
 
 
-f, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+f = 0.85
+f, (ax1, ax2) = plt.subplots(1, 2, figsize=(8*f, 4*f), sharey=True)
+cs = plt.get_cmap('Purples')(np.linspace(0.5, 1, 3)[::-1])
+lw = 2
+alpha = 0.8
 
 facs = np.append((np.arange(9)+1)*0.1, (np.arange(19)+2) * 0.5)
 vols1 = facs * 0.
@@ -61,19 +65,20 @@ for i, f in enumerate(facs):
 v_vas = 0.034*((a*1e-6)**1.375)
 v_fischer = 0.573
 
-tx, ty = 0.0175, .983
-letkm = dict(color='black', ha='left', va='top', fontsize=16,
+tx, ty = 0.02, .979
+letkm = dict(color='black', ha='left', va='top', fontsize=12,
              bbox=dict(facecolor='white', edgecolor='black'))
 
-ax1.plot(facs, vols1, label='No sliding')
-ax1.plot(facs, vols2, label='0.5 f$_s$')
-ax1.plot(facs, vols3, label='Default f$_s$')
+ax1.plot(facs, vols1, label='No sliding', color=cs[0], linewidth=lw, alpha=alpha)
+ax1.plot(facs, vols2, label='0.5 f$_s$', color=cs[1], linewidth=lw, alpha=alpha)
+ax1.plot(facs, vols3, label='Default f$_s$', color=cs[2], linewidth=lw, alpha=alpha)
 ax1.hlines(v_vas, facs[0], facs[-1], linestyles=':',
            label='VAS')
 ax1.hlines(v_fischer, facs[0], facs[-1], linestyles='--',
            label='Fischer et al.')
 ax1.set_xlabel("A factor")
 ax1.set_ylabel("Total volume [km$^3$]")
+ax1.set_ylim([0.45, 1.5])
 ax1.text(tx, ty, 'a', transform=ax1.transAxes, **letkm)
 ax1.legend(loc=1)
 
@@ -101,9 +106,9 @@ for i, f in enumerate(facs):
     vols3[i] = v * 1e-9
 
 
-ax2.plot(facs, vols1, label='Default A')
-ax2.plot(facs, vols2, label='2 A')
-ax2.plot(facs, vols3, label='4 A')
+ax2.plot(facs, vols1, label='Default A', color=cs[0], linewidth=lw, alpha=alpha)
+ax2.plot(facs, vols2, label='2 A', color=cs[1], linewidth=lw, alpha=alpha)
+ax2.plot(facs, vols3, label='4 A', color=cs[2], linewidth=lw, alpha=alpha)
 ax2.hlines(v_vas, facs[0], facs[-1], linestyles=':')
 ax2.hlines(v_fischer, facs[0], facs[-1], linestyles='--')
 ax2.hlines(v_vas, facs[0], facs[-1], linestyles=':',

@@ -63,7 +63,7 @@ pdf['bias'] = diff
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 
 # plot functions
-f = 0.9
+f = 0.7
 f, axs = plt.subplots(3, 1, figsize=(8*f, 10*f), sharex=True)
 
 d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
@@ -75,39 +75,49 @@ del temp.index.name
 prcp = d.prcp.groupby(d.year).sum().to_series()
 del prcp.index.name
 
-temp.plot(ax=axs[0], label='Annual temp', color='C1')
-temp.rolling(31, center=True, min_periods=15).mean().plot(ax=axs[0], linewidth=3,
-                                                          color='C1',
+c = 'DimGrey'
+cl = 'k'
+
+letkm = dict(color='black', ha='left', va='bottom', fontsize=12,
+             bbox=dict(facecolor='white', edgecolor='black'))
+xt, yt = 0.015, 0.03
+
+temp.plot(ax=axs[0], label='Annual temp', color=c)
+temp.rolling(31, center=True, min_periods=15).mean().plot(ax=axs[0], linewidth=2,
+                                                          color=cl,
                                                           label='31-yr avg')
 axs[0].legend(loc='best')
 axs[0].set_ylabel(r'°C')
 axs[0].set_xlim(1901, 2015)
+axs[0].text(xt, yt, 'a', **letkm, transform=axs[0].transAxes)
 
-prcp.plot(ax=axs[1], label='Annual prcp', color='C0')
-prcp.rolling(31, center=True, min_periods=15).mean().plot(ax=axs[1], linewidth=3,
-                                                          color='C0',
+prcp.plot(ax=axs[1], label='Annual prcp', color=c)
+prcp.rolling(31, center=True, min_periods=15).mean().plot(ax=axs[1], linewidth=2,
+                                                          color=cl,
                                                           label='31-yr avg')
 axs[1].legend(loc='best')
 axs[1].set_ylabel(r'mm yr$^{-1}$')
+axs[1].text(xt, yt, 'b', **letkm, transform=axs[1].transAxes)
 
-pdf[r'$\mu (t)$'].plot(ax=axs[2], linewidth=3, color='C2')
-axsup = pdf['bias'].plot(ax=axs[2], secondary_y=True, linewidth=3, color='C3',
-                         label='bias (right)')
+pdf[r'$\mu (t)$'].plot(ax=axs[2], linewidth=2, color='C0')
+axsup = pdf['bias'].plot(ax=axs[2], secondary_y=True, linewidth=2, color='C3',
+                         label='bias')
 
 plt.hlines(0, 1901, 2015, linestyles='-')
-axs[2].set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
+axs[2].set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
 plt.ylabel(r'bias (mm w.e. yr$^{-1}$)')
 yl = plt.gca().get_ylim()
 for ts in res['t_star']:
     plt.plot((ts, ts), (yl[0], 0), linestyle=':', color='grey')
 plt.ylim(yl)
+axs[2].text(xt, yt, 'c', **letkm, transform=axs[2].transAxes)
 
 handles, labels = [],[]
 for ax in [axs[2], axsup]:
     for h,l in zip(*ax.get_legend_handles_labels()):
         handles.append(h)
         labels.append(l)
-plt.legend(handles, labels, loc=6)
+plt.legend(handles, labels, loc=9, ncol=2)
 
 plt.tight_layout()
 plt.savefig(PLOT_DIR + 'mb_ex.pdf', dpi=150, bbox_inches='tight')

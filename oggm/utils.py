@@ -2879,7 +2879,7 @@ class GlacierDirectory(object):
         for fl in fls:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
-        return h, w * fl.dx * self.grid.dx
+        return h, w * self.grid.dx
 
     def get_ref_mb_data(self):
         """Get the reference mb data from WGMS (for some glaciers only!)."""

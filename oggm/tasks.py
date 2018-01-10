@@ -13,6 +13,7 @@ from oggm.core.centerlines import catchment_intersections
 from oggm.core.centerlines import initialize_flowlines
 from oggm.core.centerlines import catchment_width_geom
 from oggm.core.centerlines import catchment_width_correction
+from oggm.core.centerlines import terminus_width_correction
 from oggm.core.climate import mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_custom_climate_data

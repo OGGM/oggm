@@ -3,6 +3,7 @@ import os
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import xarray as xr
+import numpy as np
 
 import oggm
 from oggm import cfg, tasks
@@ -26,7 +27,7 @@ cfg.PATHS['working_dir'] = base_dir
 mkdir(base_dir, reset=reset)
 
 entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
-gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
+gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=reset)
 
 tasks.define_glacier_region(gdir, entity=entity)
 tasks.glacier_masks(gdir)
@@ -90,28 +91,32 @@ ds4 = xr.open_dataset(f)
 f = gdir.get_filepath('model_diagnostics', filesuffix='_fromzero_ct')
 ds5 = xr.open_dataset(f)
 
-letkm = dict(color='black', ha='left', va='top', fontsize=14,
+letkm = dict(color='black', ha='left', va='top', fontsize=12,
              bbox=dict(facecolor='white', edgecolor='black'))
-tx, ty = 0.017, .980
-f, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 4))
+tx, ty = 0.02, .977
+cs = plt.get_cmap('Purples')(np.linspace(0.5, 1, 3))[[1, 0, 2]]
+alpha=0.8
+
+f = 0.8
+f, (ax1, ax2) = plt.subplots(1, 2, figsize=(9*f, 4*f))
 
 ax = ax1
-ax.axhline(df.inv_volume_km3.values[0], 0, 800, color='k')
-(ds1.volume_m3 * 1e-9).plot(ax=ax, linewidth=2, label='Default')
-(ds2.volume_m3 * 1e-9).plot(ax=ax, label='Sliding')
-(ds4.volume_m3 * 1e-9).plot(ax=ax, label=r'A / 2')
-(ds5.volume_m3 * 1e-9).plot(ax=ax, label=r'Constant climate')
+ax.axhline(df.inv_volume_km3.values[0], 0, 800, color='k', linewidth=0.8)
+(ds4.volume_m3 * 1e-9).plot(ax=ax, label=r'A / 2', color=cs[2], alpha=alpha)
+(ds1.volume_m3 * 1e-9).plot(ax=ax, label='Default', color=cs[0], alpha=alpha)
+(ds2.volume_m3 * 1e-9).plot(ax=ax, label='Sliding', color=cs[1], alpha=alpha)
+# (ds5.volume_m3 * 1e-9).plot(ax=ax, label=r'Constant climate', color=cs[3], alpha=alpha)
 ax.set_xlabel('Years')
 ax.set_ylabel('Volume [km$^3$]')
 ax.text(tx, ty, 'a', transform=ax.transAxes, **letkm)
 
 ax = ax2
 ax.axhline(gdir.read_pickle('model_flowlines')[-1].length_m / 1000, 0, 800,
-            color='k')
-(ds1.length_m / 1000).plot(ax=ax, linewidth=2, label='Default')
-(ds2.length_m / 1000).plot(ax=ax, label='Sliding')
-(ds4.length_m / 1000).plot(ax=ax, label=r'A / 2')
-(ds5.length_m / 1000).plot(ax=ax, label=r'Constant climate')
+           color='k', linewidth=0.8)
+(ds4.length_m / 1000).plot(ax=ax, label=r'A / 2', color=cs[2], alpha=alpha)
+(ds1.length_m / 1000).plot(ax=ax, label='Default', color=cs[0], alpha=alpha)
+(ds2.length_m / 1000).plot(ax=ax, label='Sliding', color=cs[1], alpha=alpha)
+# (ds5.length_m / 1000).plot(ax=ax, label=r'Constant climate', color=cs[3], alpha=alpha)
 ax.set_xlabel('Years')
 ax.set_ylabel('Length [km]')
 ax.text(tx, ty, 'b', transform=ax.transAxes, **letkm)
