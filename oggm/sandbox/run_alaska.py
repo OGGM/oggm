@@ -39,7 +39,7 @@ rgi_reg = '01'
 cfg.initialize()
 
 # Compute a calving flux or not
-No_calving = True
+No_calving = False
 With_calving = True
 
 # Set's where is going to run PC or Cluster
@@ -140,6 +140,8 @@ log.info('Number of glaciers: {}'.format(len(rgidf)))
 # Go - initialize working directories
 # -----------------------------------
 gdirs = workflow.init_glacier_regions(rgidf)
+
+glen_a_factors = []
 
 # Get terminus widths
 data_link = os.path.join(DATA_INPUT, 'merged.csv')
@@ -254,7 +256,14 @@ if With_calving:
 
         thick = cl['thick'][-1]
 
-        w_depth = thick - t_altitude
+        if gdir.rgi_id in dfmac.index:
+            w_depth = dfmac.loc[gdir.rgi_id]['depth']
+            if np.isnan(w_depth):
+                w_depth = thick - t_altitude
+
+        else:
+            w_depth = thick - t_altitude
+
         print('t_altitude_fromfun', t_altitude)
         print('depth_fromfun', w_depth)
         print('thick_fromfun', thick)
@@ -285,7 +294,13 @@ if With_calving:
             t_altitude = cl['hgt'][-1]
 
             thick = t_altitude + 1
-            w_depth = thick - t_altitude
+            if gdir.rgi_id in dfmac.index:
+                w_depth = dfmac.loc[gdir.rgi_id]['depth']
+                if np.isnan(w_depth):
+                    w_depth = thick - t_altitude
+
+            else:
+                w_depth = thick - t_altitude
 
             print('t_altitude', t_altitude)
             print('depth', w_depth)
@@ -387,7 +402,7 @@ if With_calving:
     execute_entity_task(tasks.volume_inversion, gdirs, filesuffix='_with_calving')
 
     # Write out glacier statistics
-    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_few_glaciers_marine_terminating')
+    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_fix_depth')
 
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)
