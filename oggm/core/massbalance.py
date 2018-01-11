@@ -458,6 +458,7 @@ class ConstantMassBalance(MassBalanceModel):
     def get_annual_mb(self, heights, year=None):
         return self.interp_yr(heights)
 
+
 class RandomMassBalance(MassBalanceModel):
     """Random shuffle of all MB years within a given time period.
 
@@ -470,7 +471,8 @@ class RandomMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 y0=None, halfsize=15, seed=None):
+                 y0=None, halfsize=15, seed=None, filename='climate_monthly',
+                 input_filesuffix=''):
         """Initialize.
 
         Parameters
@@ -495,12 +497,18 @@ class RandomMassBalance(MassBalanceModel):
             the half-size of the time window (window size = 2 * halfsize + 1)
         seed : int, optional
             Random seed used to initialize the pseudo-random number generator.
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
+        input_filesuffix : str
+            the file suffix of the input climate file
         """
 
         super(RandomMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
-                                     prcp_fac=prcp_fac)
+                                     prcp_fac=prcp_fac, filename=filename,
+                                     input_filesuffix=input_filesuffix)
 
         if y0 is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))

@@ -1619,7 +1619,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
 
 
 def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                              zero_initial_glacier=False, model_fls=None):
+                              zero_initial_glacier=False, init_model_fls=None):
     """Quick n dirty function to avoid copy-paste smell"""
 
     run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
@@ -1630,10 +1630,10 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
     steps = ['default', 'conservative', 'ultra-conservative']
     for step in steps:
         log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
-        if model_fls is None:
+        if init_model_fls is None:
             fls = gdir.read_pickle('model_flowlines')
         else:
-            fls = model_fls
+            fls = init_model_fls
         if zero_initial_glacier:
             for fl in fls:
                 fl.thick = fl.thick * 0.
@@ -1657,6 +1657,7 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
 @entity_task(log)
 def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
                              bias=None, seed=None, temperature_bias=None,
+                             filename='climate_monthly', input_filesuffix='',
                              filesuffix='', init_model_fls=None,
                              zero_initial_glacier=False,
                              **kwargs):
@@ -1683,6 +1684,11 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
          be usefull if you want to have the same climate years for all of them
      temperature_bias : float
          add a bias to the temperature timeseries
+     filename : str
+         name of the climate file, e.g. 'climate_monthly' (default) or
+         'cesm_data'
+     input_filesuffix: str
+         filesuffix for the input climate file
      filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
@@ -1709,18 +1715,20 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
     ys = 0
     ye = ys + nyears
     mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
-                                  bias=bias, seed=seed)
+                                  bias=bias, seed=seed, filename=filename,
+                                  input_filesuffix=input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                                     model_fls=init_model_fls,
+                                     init_model_fls=init_model_fls,
                                      zero_initial_glacier=zero_initial_glacier)
 
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
                          temperature_bias=None, filesuffix='',
+                         filename='climate_monthly', input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
                          **kwargs):
@@ -1740,6 +1748,11 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
          to zero
      temperature_bias : float
          add a bias to the temperature timeseries
+     filename : str
+         name of the climate file, e.g. 'climate_monthly' (default) or
+         'cesm_data'
+     input_filesuffix: str
+         filesuffix for the input climate file
      filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
@@ -1763,12 +1776,13 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
-    mb = mbmods.ConstantMassBalance(gdir, y0=y0, bias=bias)
+    mb = mbmods.ConstantMassBalance(gdir, y0=y0, bias=bias, filename=filename,
+                                    input_filesuffix=input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
     return _run_with_numerical_tests(gdir, filesuffix, mb, 0, nyears, kwargs,
-                                     model_fls=init_model_fls,
+                                     init_model_fls=init_model_fls,
                                      zero_initial_glacier=zero_initial_glacier)
 
 
@@ -1817,4 +1831,4 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
     mb = mbmods.PastMassBalance(gdir, filename=filename,
                                 input_filesuffix=input_filesuffix)
     return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                                     model_fls=init_model_fls)
+                                     init_model_fls=init_model_fls)
