@@ -399,11 +399,15 @@ def filter_inversion_output(gdir):
     """Filters the last few grid point whilst conserving total volume.
     """
 
+    if gdir.is_tidewater:
+        # No need for filter in tidewater case
+        return
+
     cls = gdir.read_pickle('inversion_output')
     for cl in cls:
 
         init_vol = np.sum(cl['volume'])
-        if init_vol == 0 or gdir.is_tidewater or not cl['is_last']:
+        if init_vol == 0 or not cl['is_last']:
             continue
 
         w = cl['width']
