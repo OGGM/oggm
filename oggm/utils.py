@@ -2157,7 +2157,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
     inversion_only: bool
-        if one wants to summarize the inversion output only
+        if one wants to summarize the inversion output only (including calving)
     """
     from oggm.core.massbalance import ConstantMassBalance
 
@@ -2191,6 +2191,18 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
                 d['vas_volume_km3'] = 0.034*(area**1.375)
                 d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+        except:
+            pass
+        try:
+            # Calving
+            all_calving_data = []
+            all_width = []
+            cl = gdir.read_pickle('calving_output')
+            for c in cl:
+                all_calving_data = c['calving_fluxes'][-1]
+                all_width = c['t_width']
+            d['calving_flux'] = all_calving_data
+            d['calving_front_width'] = all_width
         except:
             pass
         if inversion_only:
@@ -2272,18 +2284,6 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['tstar_avg_' + n + '_max_elev'] = v[2]
                 d['tstar_avg_' + n + '_min_elev'] = v[3]
             d['tstar_avg_prcp'] = p[0]
-        except:
-            pass
-        try:
-            # Calving
-            all_calving_data = []
-            all_width = []
-            cl = gdir.read_pickle('calving_output')
-            for c in cl:
-                all_calving_data = c['calving_fluxes'][-1]
-                all_width = c['t_width']
-            d['calving_flux'] = all_calving_data
-            d['calving_front_width'] = all_width
         except:
             pass
 
