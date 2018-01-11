@@ -819,7 +819,8 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar'])
-def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
+def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None,
+                 minimum_mustar=0.):
     """Compute the local mustar from interpolated tstars.
 
     Parameters
@@ -831,6 +832,10 @@ def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
         the associated reference bias
     prcp_fac: int
         the associated precipitation factor
+    minimum_mustar: float
+        if mustar goes below this threshold, clip it to that value.
+        If you want this to happen with `minimum_mustar=0.` you will have
+        to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
     assert bias is not None
@@ -855,6 +860,11 @@ def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
     mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
     if not np.isfinite(mustar):
         raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
+    if not cfg.PARAMS['allow_negative_mustar']:
+        if mustar < 0:
+            raise RuntimeError('{} has a negative mu'.format(gdir.rgi_id))
+    # For the calving param it might be useful to clip the mu
+    mustar = np.clip(mustar, minimum_mustar, np.max(mustar))
 
     # Scalars in a small dataframe for later
     df = pd.DataFrame()
@@ -1137,13 +1147,20 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs, ref_df=None):
+def distribute_t_stars(gdirs, ref_df=None, minimum_mustar=0.):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
     Parameters
     ----------
-    gdirs : list of oggm.GlacierDirectory objects
+    gdirs : []
+        list of oggm.GlacierDirectory objects
+    ref_df : pd.Dataframe
+        replace the default calibration list
+    minimum_mustar: float
+        if mustar goes below this threshold, clip it to that value.
+        If you want this to happen with `minimum_mustar=0.` you will have
+        to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
     log.info('Distribute t* and mu*')
@@ -1183,7 +1200,7 @@ def distribute_t_stars(gdirs, ref_df=None):
 
         # Go
         local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac,
-                     reset=True)
+                     reset=True, minimum_mustar=minimum_mustar)
 
 
 @global_task

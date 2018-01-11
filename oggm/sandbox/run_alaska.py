@@ -1,5 +1,4 @@
 # This will run OGGM preprocessing on the RGI region of your choice
-from __future__ import division
 import oggm
 
 # Module logger
@@ -8,24 +7,18 @@ log = logging.getLogger(__name__)
 
 # Python imports
 import os
-import sys
-from glob import glob
-import shutil
-from functools import partial
+import glob
 # Libs
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 import salem
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file
 from oggm import tasks
-from oggm.workflow import execute_entity_task, reset_multiprocessing
+from oggm.workflow import execute_entity_task
 from oggm import graphics, utils
 # Time
 import time
@@ -39,7 +32,7 @@ rgi_reg = '01'
 cfg.initialize()
 
 # Compute a calving flux or not
-No_calving = True
+No_calving = False
 With_calving = True
 
 # Set's where is going to run PC or Cluster
@@ -65,12 +58,14 @@ if Cluster:
 
 
 # Configuration of the run
-cfg.PARAMS['rgi_version'] = "5"
+rgi_version = '5'
+cfg.PARAMS['rgi_version'] = rgi_version
 cfg.PATHS['working_dir'] = WORKING_DIR
 # How many grid points around the glacier?
 # Make it large if you expect your glaciers to grow large
 cfg.PARAMS['border'] = 80
-cfg.PARAMS['optimize_inversion_params'] = True
+cfg.PARAMS['optimize_inversion_params'] = False
+cfg.PARAMS['allow_negative_mustar'] = True
 #cfg.PARAMS['inversion_glen_a'] = 2.6e-24
 
 # Set to True for cluster runs
@@ -82,10 +77,11 @@ else:
     cfg.PARAMS['continue_on_error'] = False
 
 # We use intersects
-# (this is slow, it could be replaced with a subset of the global file)
-rgi_dir = utils.get_rgi_intersects_dir()
-cfg.set_intersects_db(os.path.join(rgi_dir, '00_rgi50_AllRegs',
-                                'intersects_rgi50_AllRegs.shp'))
+rgi_dir = utils.get_rgi_intersects_dir(version=rgi_version)
+rgi_shp = list(glob(os.path.join(rgi_dir, "*", '*intersects*' + rgi_reg +
+                                 '_rgi' + rgi_version + '0_*.shp')))
+assert len(rgi_shp) == 1
+cfg.set_intersects_db(rgi_shp[0])
 
 # Pre-download other files which will be needed later
 utils.get_cru_cl_file()
@@ -141,9 +137,48 @@ log.info('Number of glaciers: {}'.format(len(rgidf)))
 # -----------------------------------
 gdirs = workflow.init_glacier_regions(rgidf)
 
+glen_a_factors = []
+
 # Get terminus widths
 data_link = os.path.join(DATA_INPUT, 'merged.csv')
 dfmac = pd.read_csv(data_link, index_col=0)
+
+
+# Defining a calving function
+def calving_from_depth(gdir):
+    """ Finds a calving flux based on the approaches proposed by
+        Huss and Hock, (2015) and Oerlemans and Nick (2005).
+        We take the initial output of the model and surface elevation data
+        to calculate the water depth of the calving front.
+    """
+    # Read inversion output
+    cl = gdir.read_pickle('inversion_output')[-1]
+    fl = gdir.read_pickle('inversion_flowlines')[-1]
+
+    width = fl.widths[-1] * gdir.grid.dx
+
+    t_altitude = cl['hgt'][-1]  # this gives us the altitude at the terminus
+    if t_altitude < 0:
+        t_altitude = 0
+
+    thick = cl['thick'][-1]
+
+    if gdir.rgi_id in dfmac.index:
+        w_depth = dfmac.loc[gdir.rgi_id]['depth']
+        if np.isnan(w_depth):
+            w_depth = thick - t_altitude
+
+    else:
+        w_depth = thick - t_altitude
+
+    print('t_altitude_fromfun', t_altitude)
+    print('depth_fromfun', w_depth)
+    print('thick_fromfun', thick)
+    # print('width', width)
+    out = 2 * thick * w_depth * width / 1e9
+    if out < 0:
+        out = 0
+    return out, w_depth, thick, width
 
 if RUN_GIS_mask:
     if PC:
@@ -185,6 +220,7 @@ if RUN_GIS_PREPRO:
     for task in task_list:
         execute_entity_task(task, gdirs)
 
+    # For some glaciers we use a width we know
     for gdir in gdirs:
         if gdir.rgi_id in dfmac.index:
             width = dfmac.loc[gdir.rgi_id]['width']
@@ -202,9 +238,9 @@ if RUN_CLIMATE_PREPRO:
 if RUN_INVERSION:
     # Inversion tasks
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
-    tasks.optimize_inversion_params(gdirs)
+    # tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
-    # execute_entity_task(tasks.filter_inversion_output, gdirs)
+    execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 # Compile output if no calving
 if No_calving:
@@ -226,43 +262,14 @@ if With_calving:
     cfg.PARAMS['filter_for_neg_flux'] = False
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
-    execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var = True)
-    tasks.optimize_inversion_params(gdirs)
+    execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var=True)
+    # tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
 
     for gdir in gdirs:
         cl = gdir.read_pickle('inversion_output')[-1]
         if gdir.is_tidewater:
             assert cl['volume'][-1] == 0.
-
-    # Defining a calving function
-    def calving_from_depth(gdir):
-        """ Finds a calving flux based on the approaches proposed by
-            Huss and Hock, (2015) and Oerlemans and Nick (2005).
-            We take the initial output of the model and surface elevation data
-            to calculate the water depth of the calving front.
-        """
-        # Read inversion output
-        cl = gdir.read_pickle('inversion_output')[-1]
-        fl = gdir.read_pickle('inversion_flowlines')[-1]
-
-        width = fl.widths[-1] * gdir.grid.dx
-
-        t_altitude = cl['hgt'][-1]  # this gives us the altitude at the terminus
-        if t_altitude < 0:
-            t_altitude = 0
-
-        thick = cl['thick'][-1]
-
-        w_depth = thick - t_altitude
-        print('t_altitude_fromfun', t_altitude)
-        print('depth_fromfun', w_depth)
-        print('thick_fromfun', thick)
-        #print('width', width)
-        out = 2 * thick * w_depth * width / 1e9
-        if out < 0:
-            out = 0
-        return out, w_depth, thick, width
 
     # Selecting the tidewater glaciers on the region
     for gdir in gdirs:
@@ -285,7 +292,13 @@ if With_calving:
             t_altitude = cl['hgt'][-1]
 
             thick = t_altitude + 1
-            w_depth = thick - t_altitude
+            if gdir.rgi_id in dfmac.index:
+                w_depth = dfmac.loc[gdir.rgi_id]['depth']
+                if np.isnan(w_depth):
+                    w_depth = thick - t_altitude
+
+            else:
+                w_depth = thick - t_altitude
 
             print('t_altitude', t_altitude)
             print('depth', w_depth)
@@ -293,16 +306,20 @@ if With_calving:
             fl = gdir.read_pickle('inversion_flowlines')[-1]
             width = fl.widths[-1] * gdir.grid.dx
 
+            if gdir.rgi_id in dfmac.index:
+                np.testing.assert_allclose(width,
+                                           dfmac.loc[gdir.rgi_id]['width'])
+
             # Lets compute the theoretical calving out of it
             pre_calving = 2 * thick * w_depth * width / 1e9
             gdir.inversion_calving_rate = pre_calving
             print('pre_calving', pre_calving)
 
             # Recompute all with calving
-            tasks.distribute_t_stars([gdir])
+            tasks.distribute_t_stars([gdir], minimum_mustar=0.)
             tasks.apparent_mb(gdir)
             tasks.prepare_for_inversion(gdir, add_debug_var=True)
-            tasks.volume_inversion(gdir)
+            tasks.volume_inversion(gdir, glen_a=None, fs=None)
             df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
             mu_star = df['mu_star']
 
@@ -323,7 +340,7 @@ if With_calving:
                 gdir.inversion_calving_rate = F_calving
 
                 # Recompute mu with calving
-                tasks.distribute_t_stars([gdir])
+                tasks.distribute_t_stars([gdir], minimum_mustar=0.)
                 tasks.apparent_mb(gdir)
 
                 # Inversion with calving, inv optimization is not iterative
@@ -339,7 +356,7 @@ if With_calving:
                 avg_two = np.average(data_calving[-5:-1])
                 difference = abs(avg_two - avg_one)
 
-                if mu_star < 0.0 or difference < 0.05 * avg_two or data_calving[-1] == 0:
+                if difference < 0.05 * avg_two or data_calving[-1] == 0:
                     break
 
             # Making a dictionary for calving
@@ -355,7 +372,7 @@ if With_calving:
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
     execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var=True)
-    tasks.optimize_inversion_params(gdirs)
+    # tasks.optimize_inversion_params(gdirs)
     execute_entity_task(tasks.volume_inversion, gdirs)
 
     # Assigning to each tidewater glacier its own last_calving flux calculated
@@ -387,7 +404,7 @@ if With_calving:
     execute_entity_task(tasks.volume_inversion, gdirs, filesuffix='_with_calving')
 
     # Write out glacier statistics
-    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_few_glaciers_marine_terminating')
+    utils.glacier_characteristics(gdirs, filesuffix='_with_calving_fix_depth')
 
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)
