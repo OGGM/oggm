@@ -39,7 +39,7 @@ rgi_reg = '01'
 cfg.initialize()
 
 # Compute a calving flux or not
-No_calving = False
+No_calving = True
 With_calving = True
 
 # Set's where is going to run PC or Cluster
@@ -141,6 +141,10 @@ log.info('Number of glaciers: {}'.format(len(rgidf)))
 # -----------------------------------
 gdirs = workflow.init_glacier_regions(rgidf)
 
+# Get terminus widths
+data_link = os.path.join(DATA_INPUT, 'merged.csv')
+dfmac = pd.read_csv(data_link, index_col=0)
+
 if RUN_GIS_mask:
     if PC:
 
@@ -180,6 +184,11 @@ task_list = [
 if RUN_GIS_PREPRO:
     for task in task_list:
         execute_entity_task(task, gdirs)
+
+    for gdir in gdirs:
+        if gdir.rgi_id in dfmac.index:
+            width = dfmac.loc[gdir.rgi_id]['width']
+            tasks.terminus_width_correction(gdir, new_width=width)
 
 if RUN_CLIMATE_PREPRO:
     for gdir in gdirs:
@@ -233,44 +242,23 @@ if With_calving:
             We take the initial output of the model and surface elevation data
             to calculate the water depth of the calving front.
         """
-        # Read width database:
-        data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb_plus_chris_13-12-2017.csv')
-
-        dfids = pd.read_csv(data_link)['RGI_ID'].values
-        dfwidth = pd.read_csv(data_link)['width'].values
-        #dfdepth = pd.read_csv(data_link)['depth'].values
-        index = np.where(dfids == gdir.rgi_id)
-
+        # Read inversion output
         cl = gdir.read_pickle('inversion_output')[-1]
+        fl = gdir.read_pickle('inversion_flowlines')[-1]
 
-        if gdir.rgi_id not in dfids:
-            # We read the model output, of the last pixel of the inversion
-            width = cl['width'][-1]
-            # print('width',width)
-
-        else:
-            # we read the McNabb width
-            width = dfwidth[index[0][0]]
-            # print('width',width)
+        width = fl.widths[-1] * gdir.grid.dx
 
         t_altitude = cl['hgt'][-1]  # this gives us the altitude at the terminus
         if t_altitude < 0:
             t_altitude = 0
 
-        thick = cl['volume'][-1] / cl['dx'] / width
+        thick = cl['thick'][-1]
 
-        # We calculate the water_depth UNCOMMENT THIS to use bathymetry
-        if gdir.rgi_id in dfids:
-             # we read the depth from the database
-             w_depth = thick - t_altitude
-             #w_depth = dfdepth[index[0][0]]
-        else:
-             w_depth = thick - t_altitude
-        #w_depth = thick - t_altitude
-
-        #print('t_altitude_fromfun', t_altitude)
-        #print('depth_fromfun', w_depth)
-        #print('thick_fromfun', thick)
+        w_depth = thick - t_altitude
+        print('t_altitude_fromfun', t_altitude)
+        print('depth_fromfun', w_depth)
+        print('thick_fromfun', thick)
+        #print('width', width)
         out = 2 * thick * w_depth * width / 1e9
         if out < 0:
             out = 0
@@ -278,7 +266,6 @@ if With_calving:
 
     # Selecting the tidewater glaciers on the region
     for gdir in gdirs:
-        #if gdir.is_tidewater:
         if gdir.terminus_type == 'Marine-terminating':
             # Starting the calving loop, with a maximum of 50 cycles
             i = 0
@@ -300,33 +287,11 @@ if With_calving:
             thick = t_altitude + 1
             w_depth = thick - t_altitude
 
-            #print('t_altitude', t_altitude)
-            #print('depth', w_depth)
+            print('t_altitude', t_altitude)
+            print('depth', w_depth)
             #print('thick', thick)
-
-            # Read width database:
-            data_link = os.path.join(DATA_INPUT, 'Terminus_width_McNabb_plus_chris_13-12-2017.csv')
-            dfids = pd.read_csv(data_link)['RGI_ID'].values
-            dfwidth = pd.read_csv(data_link)['width'].values
-            #dfdepth = pd.read_csv(data_link)['depth'].values
-            index = np.where(dfids == gdir.rgi_id)
-
-            if gdir.rgi_id not in dfids:
-                # We read the model output, of the last pixel of the inversion
-                width = cl['width'][-1]
-                # print('width',width)
-
-            else:
-                # we read the McNabb width
-                width = dfwidth[index[0][0]]
-                # print('width',width)
-            # We calculate the water_depth UNCOMMENT THIS to use bathymetry
-            if gdir.rgi_id in dfids:
-                #we read the depth from the database
-                #w_depth = dfdepth[index[0][0]]
-                w_depth = thick - t_altitude
-            else:
-                w_depth = thick - t_altitude
+            fl = gdir.read_pickle('inversion_flowlines')[-1]
+            width = fl.widths[-1] * gdir.grid.dx
 
             # Lets compute the theoretical calving out of it
             pre_calving = 2 * thick * w_depth * width / 1e9
@@ -419,7 +384,7 @@ if With_calving:
     tasks.distribute_t_stars(gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
     execute_entity_task(tasks.prepare_for_inversion, gdirs, add_debug_var=True)
-    execute_entity_task(tasks.volume_inversion, gdirs)
+    execute_entity_task(tasks.volume_inversion, gdirs, filesuffix='_with_calving')
 
     # Write out glacier statistics
     utils.glacier_characteristics(gdirs, filesuffix='_with_calving_few_glaciers_marine_terminating')
