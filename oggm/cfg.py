@@ -268,6 +268,7 @@ def initialize(file=None):
     if _factor not in ['stddev', 'stddev_perglacier']:
         _factor = cp.as_float('prcp_scaling_factor')
     PARAMS['prcp_scaling_factor'] = _factor
+    PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -294,7 +295,7 @@ def initialize(file=None):
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version']
+           'rgi_version', 'allow_negative_mustar']
     for k in ltr:
         cp.pop(k, None)
 
