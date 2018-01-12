@@ -271,6 +271,9 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
     ts_pre = ts_pre.groupby(ts_pre.month) + loc_pre
+    # Precipitation isn't a good variable to shift -- let's make sure it
+    # doesn't go below zero at least
+    ts_pre.values = ts_pre.values.clip(0)
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
@@ -388,7 +391,7 @@ def process_cru_data(gdir):
     ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
     # convert to timeserie and hydroyears
     ts_grad = ts_grad.tolist()
-    ts_grad = ts_grad[9:] + ts_grad[0:9]
+    ts_grad = ts_grad[em:] + ts_grad[0:em]
     ts_grad = np.asarray(ts_grad * ny)
 
     # maybe this will throw out of bounds warnings
@@ -447,6 +450,9 @@ def process_cru_data(gdir):
     ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
                           coords={'time': time})
     ts_pre = ts_pre.groupby('time.month') + loc_pre
+    # Precipitation isn't a good variable to shift -- let's make sure it
+    # doesn't go below zero at least
+    ts_pre.values = ts_pre.values.clip(0)
 
     # done
     loc_hgt = loc_hgt[1, 1]
