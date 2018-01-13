@@ -289,6 +289,15 @@ def define_glacier_region(gdir, entity=None):
                 # salem uses pyproj
                 gdf.crs = gdf.crs.srs
             gdf.to_file(gdir.get_filepath('intersects'))
+    else:
+        # Sanity check
+        if cfg.PARAMS['use_intersects']:
+            raise RuntimeError('You seem to have forgotten to set the '
+                               'intersects file for this run. OGGM works '
+                               'better with such a file. If you know what '
+                               'your are doing, set '
+                               "cfg.PARAMS['use_intersects'] = False to "
+                               "suppress this error.")
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
