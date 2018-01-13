@@ -133,6 +133,7 @@ def test_multiple_inversion():
 
     # Init
     cfg.initialize()
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
@@ -210,6 +211,7 @@ def test_multiple_models():
 
     # Init
     cfg.initialize()
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PARAMS['optimize_inversion_params'] = True
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -281,6 +283,7 @@ def test_chhota_shigri():
     cfg.initialize()
     cfg.PATHS['dem_file'] = get_demo_file('dem_chhota_shigri.tif')
     cfg.PARAMS['border'] = 80
+    cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['working_dir'] = testdir
 
     hef_file = get_demo_file('divides_RGI50-14.15990.shp')
@@ -319,6 +322,7 @@ def test_ice_cap():
     utils.mkdir(testdir, reset=True)
 
     cfg.initialize()
+    cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-05.08389.tif')
     cfg.PARAMS['border'] = 60
     cfg.PATHS['working_dir'] = testdir
@@ -353,6 +357,7 @@ def test_coxe():
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
     cfg.PARAMS['border'] = 40
     cfg.PARAMS['use_multiple_flowlines'] = False

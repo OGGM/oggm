@@ -304,8 +304,7 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Empty defaults
-    from oggm.utils import get_demo_file
-    set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+    set_intersects_db()
     IS_INITIALIZED = True
 
 

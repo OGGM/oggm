@@ -78,6 +78,7 @@ class TestGIS(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
 
@@ -227,6 +228,7 @@ class TestCenterlines(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -444,6 +446,7 @@ class TestGeometry(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -615,6 +618,7 @@ class TestClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -1294,6 +1298,7 @@ class TestFilterNegFlux(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
@@ -1351,6 +1356,7 @@ class TestInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -1773,6 +1779,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiple_flowlines'] = False
         # not crop
         cfg.PARAMS['max_thick_to_width_ratio'] = 10
@@ -1933,6 +1940,7 @@ class TestGCMClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
@@ -2101,6 +2109,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
