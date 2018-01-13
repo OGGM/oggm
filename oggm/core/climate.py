@@ -254,9 +254,10 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # of precip -- scaled anomalies
     ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
     ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
-    if np.any(ts_pre_avg < 0.1):
-        raise RuntimeError('Monthly precipitation below 0.1 mm')
-    ts_pre = (precp.groupby(precp.month) - ts_pre_avg) / ts_pre_avg
+    ts_pre_ano = precp.groupby(precp.month) - ts_pre_avg
+    # scaled anomalies is the default. Standard anomalies above
+    # are used late where ts_pre_avg == 0
+    ts_pre = (precp.groupby(precp.month) / ts_pre_avg) - 1
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -272,7 +273,13 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
-    ts_pre = ts_pre.groupby(ts_pre.month) * loc_pre + loc_pre
+    # scaled anomalies
+    ts_pre = (ts_pre + 1).groupby(ts_pre.month) * loc_pre
+    # standard anomalies
+    ts_pre_ano = ts_pre_ano.groupby(ts_pre_ano.month) + loc_pre
+    ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                             ts_pre.values,
+                             ts_pre_ano.values)
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)

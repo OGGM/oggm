@@ -2019,8 +2019,8 @@ class TestGCMClimate(unittest.TestCase):
                 scesm2 = scesm2.groupby(scesm2.month).mean()
                 # No more than one degree? (silly test)
                 np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
-                # N more than 20%? (silly test)
-                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+                # N more than 30%? (silly test)
+                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
 
     def test_compile_climate_input(self):
 
