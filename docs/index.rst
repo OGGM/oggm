@@ -11,11 +11,11 @@ It can simulate past and future mass-balance, volume and geometry of (almost)
 any glacier in the world in a fully automated workflow. We rely exclusively on
 publicly available data for calibration and validation.
 
-**This is the model's documentation for users and developers as of version
-1.0**. For the documentation of the latest (cutting-edge) repository version,
-visit `oggm.readthedocs.io/en/latest <http://oggm.readthedocs.io/en/latest/>`_.
+**This is the model's documentation for users and developers of the
+latest (cutting-edge) repository version**. For the documentation of the latest
+stable release, visit `oggm.readthedocs.io/en/stable <http://oggm.readthedocs.io/en/stable/>`_.
 
-For more information about the OGGM project and for the latest news, visit
+**For more information about the OGGM project and for the latest news, visit**
 `oggm.org <http://oggm.org>`_.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
