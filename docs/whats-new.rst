@@ -4,6 +4,11 @@
 Version history
 ===============
 
+v1.X (unreleased)
+-----------------
+
+Changes since the last release:
+
 
 .. _whats-new.1.0:
 

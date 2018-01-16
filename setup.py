@@ -10,7 +10,7 @@ import sys, warnings, importlib, re
 MAJOR = 1
 MINOR = 0
 MICRO = 0
-ISRELEASED = True
+ISRELEASED = False
 VERSION = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
 QUALIFIER = ''
 
@@ -42,9 +42,6 @@ a simple (yet explicit) ice dynamics module. It can simulate past and
 future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
-
-The project is currently in development. Get in touch with us if
-you want to contribute.
 
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
