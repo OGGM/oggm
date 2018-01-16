@@ -22,7 +22,7 @@ URL = 'http://oggm.org'
 CLASSIFIERS = [
         # How mature is this project? Common values are
         # 3 - Alpha  4 - Beta  5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         # Indicate who your project is intended for
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU General Public License ' +
@@ -30,6 +30,7 @@ CLASSIFIERS = [
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ]
 
 DESCRIPTION = 'Open Global Glacier Model'
@@ -49,7 +50,8 @@ you want to contribute.
 
 Links
 -----
-- HTML documentation: http://oggm.org
+- Project website: http://oggm.org
+- HTML documentation: http://oggm.readthedocs.io
 - Source code: http://github.com/oggm/oggm
 """
 
@@ -182,7 +184,7 @@ setup(
     # What does your project relate to?
     keywords=['geosciences', 'glaciers', 'climate', 'gis'],
     # We are a python 3 only shop
-    python_requires='>=3.3',
+    python_requires='>=3.4',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Decided not to let pip install the dependencies, this is too brutal
@@ -190,9 +192,7 @@ setup(
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
     # data files that need to be installed
-    package_data={'oggm.tests': list(file_walk('oggm/tests/baseline_images',
-                                               remove='oggm/tests/')),
-                  'oggm': ['params.cfg']},
+    package_data={'oggm': ['params.cfg']},
     # Old
     data_files=[],
     # Executable scripts
