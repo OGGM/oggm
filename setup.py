@@ -7,10 +7,10 @@ from codecs import open  # To use a consistent encoding
 from os import path, walk
 import sys, warnings, importlib, re
 
-MAJOR = 0
-MINOR = 1
-MICRO = 1
-ISRELEASED = False
+MAJOR = 1
+MINOR = 0
+MICRO = 0
+ISRELEASED = True
 VERSION = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
 QUALIFIER = ''
 
