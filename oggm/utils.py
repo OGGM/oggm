@@ -2264,7 +2264,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             mbh = mbmod.get_annual_mb(h, w) * SEC_IN_YEAR * cfg.RHO
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
-            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w[pab])
+            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
             try:
                 # Try to get the slope
                 mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])

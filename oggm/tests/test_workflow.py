@@ -243,6 +243,9 @@ class TestWorkflow(unittest.TestCase):
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
         assert cc < -0.8
         assert np.all(dfc.t_star > 1900)
+        assert np.all(dfc.tstar_aar.mean() > 0.5)
+
+
 
     @is_slow
     def test_crossval(self):

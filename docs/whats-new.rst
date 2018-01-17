@@ -9,6 +9,8 @@ v1.X (unreleased)
 
 Changes since the last release:
 
+- Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 .. _whats-new.1.0:
 
