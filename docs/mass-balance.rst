@@ -27,10 +27,10 @@ Climate data
 ------------
 
 The MB model implemented in OGGM needs monthly time series of temperature and
-precipitation. The current default is to download and use the `CRU TS v3.24`_
+precipitation. The current default is to download and use the `CRU TS`_
 data provided by the Climatic Research Unit of the University of East Anglia.
 
-.. _CRU TS v3.24: https://crudata.uea.ac.uk/cru/data/hrg/
+.. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
 
 
 CRU (default)
@@ -48,8 +48,11 @@ The raw, coarse (0.5°) dataset is then downscaled to a higher resolution grid
 (CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
 described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
 this downscaling to add any new information than already available at the
-original resolution, but this allows us to have an elevation-dependent dataset,
-from which we can compute the temperature at the elevation of the glacier.
+original resolution, but this allows us to have an elevation-dependent dataset
+based on a presumably better climatology. The monthly anomalies are computed
+following [Harris_etal_2010]_ : we use standard anomalies for temperature and
+scaled (fractional) anomalies for precipitation. At the locations where the
+monthly precipitation climatology is 0 we fall back to the standard anomalies.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
@@ -68,6 +71,21 @@ folder for an example.
 
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
+
+
+GCM data
+~~~~~~~~
+
+OGGM can also use climate model output to drive the mass-balance model. In
+this case we still rely on gridded observations (CRU) for the baseline
+climatology and apply the GCM anomalies computed from a preselected reference
+period (currently: 1961-1990). This method is often called the
+`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+
+Currently we can process data from the
+`CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
+project (see :py:func:`tasks.process_cesm_data`) only, but adding other models
+should be relatively easy.
 
 
 Elevation dependency
@@ -227,6 +245,13 @@ resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
 
+References
+----------
+
+.. [Harris_etal_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
+   D. H. (2014). Updated high-resolution grids of monthly climatic observations
+   - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
+   623–642. https://doi.org/10.1002/joc.3711
 
 Implementation details
 ----------------------
@@ -252,7 +277,6 @@ Here are some more details:
   (:py:func:`tasks.crossval_t_stars`). Currently, this cross-validation is done
   with fixed geometry (it will be extended to a full validation
   with the dynamical model at a later stage).
-
 
 Code used to generate these examples:
 
