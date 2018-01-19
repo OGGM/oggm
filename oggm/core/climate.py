@@ -281,6 +281,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     ts_pre.values = np.where(np.isfinite(ts_pre.values),
                              ts_pre.values,
                              ts_pre_ano.values)
+    # The last step might create negative values (unlikely). Clip them
+    ts_pre.values = ts_pre.values.clip(0)
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)

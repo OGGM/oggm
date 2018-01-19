@@ -13,6 +13,13 @@ Changes since the last release:
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Added a utility function to easily get intersects files (:pull:`402`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The method used to apply CRU and GCM anomalies to the climatology has
+  changed for precipitation: we now use scaled anomalies instead of the
+  standard anomalies. The previous method might have lead to negative
+  values in some cases. This change probably has consequences
+  on the model results and needs to be assessed: this will be done at a
+  later stage. Related PR: :pull:`393`
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 .. _whats-new.1.0:
 
