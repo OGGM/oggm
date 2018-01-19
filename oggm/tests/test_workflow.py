@@ -318,7 +318,7 @@ class TestWorkflow(unittest.TestCase):
         # Just to increase coveralls, hehe
         gdirs = up_to_climate()
         fpath = os.path.join(TEST_DIR, 'centerlines.shp')
-        write_centerlines_to_shape(gdirs, fpath)
+        write_centerlines_to_shape(gdirs, path=fpath)
 
         import salem
         shp = salem.read_shapefile(fpath)
