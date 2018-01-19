@@ -77,7 +77,7 @@ GCM data
 ~~~~~~~~
 
 OGGM can also use climate model output to drive the mass-balance model. In
-these case we still rely on gridded observations (CRU) for the baseline
+this case we still rely on gridded observations (CRU) for the baseline
 climatology and apply the GCM anomalies computed from a preselected reference
 period (currently: 1961-1990). This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
