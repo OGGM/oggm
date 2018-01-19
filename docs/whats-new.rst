@@ -11,6 +11,8 @@ Changes since the last release:
 
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added a utility function to easily get intersects files (:pull:`402`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 .. _whats-new.1.0:
 

@@ -1674,6 +1674,34 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     return os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
 
 
+def get_rgi_intersects_region_file(region, version=None):
+    """Returns a path to a RGI regional intersect file.
+
+    If the RGI files are not present, download them. Setting region=00 gives
+    you the global file.
+
+    Parameters
+    ----------
+    region: str
+        from '00' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
+
+    Returns
+    -------
+    path to the RGI shapefile
+    """
+
+    rgi_dir = get_rgi_intersects_dir(version=version)
+    if region == '00':
+        version = 'AllRegs'
+        region = '*'
+    f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
+                                    '_rgi*' + version + '*.shp')))
+    assert len(f) == 1
+    return f[0]
+
+
 def get_cru_file(var=None):
     """Returns a path to the desired CRU TS file.
 
