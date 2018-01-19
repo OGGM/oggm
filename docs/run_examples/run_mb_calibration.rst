@@ -2,7 +2,7 @@
 
 .. _run-calibration:
 
-2. Run the mass-balance calibration
+3. Run the mass-balance calibration
 ===================================
 
 Sometimes you will need to do the mass-balance calibration yourself. For
