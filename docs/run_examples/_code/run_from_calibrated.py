@@ -40,6 +40,7 @@ cfg.PARAMS['border'] = 100
 cfg.PARAMS['continue_on_error'] = False
 
 # We use intersects
+# Here we use the global file but there are regional files too (faster)
 cfg.set_intersects_db(utils.get_rgi_intersects_region_file('00', version='5'))
 
 # Pre-download other files which will be needed later

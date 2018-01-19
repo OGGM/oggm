@@ -10,7 +10,7 @@ For region-wide or global simulations, we recommend to use a cluster
 environment. OGGM should work well on cloud computing services like Amazon
 or Google Cloud, too.
 
-Before you start, make sure you had a look at the :ref:`input-data` section.
+**Before you start, make sure you had a look at the** :ref:`input-data` **section.**
 
 .. toctree::
     :maxdepth: 1
