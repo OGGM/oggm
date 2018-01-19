@@ -256,8 +256,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
     ts_pre_ano = precp.groupby(precp.month) - ts_pre_avg
     # scaled anomalies is the default. Standard anomalies above
-    # are used late where ts_pre_avg == 0
-    ts_pre = (precp.groupby(precp.month) / ts_pre_avg) - 1
+    # are used later for where ts_pre_avg == 0
+    ts_pre = precp.groupby(precp.month) / ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -274,9 +274,10 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
     # scaled anomalies
-    ts_pre = (ts_pre + 1).groupby(ts_pre.month) * loc_pre
+    ts_pre = ts_pre.groupby(ts_pre.month) * loc_pre
     # standard anomalies
     ts_pre_ano = ts_pre_ano.groupby(ts_pre_ano.month) + loc_pre
+    # Correct infinite values with standard anomalies
     ts_pre.values = np.where(np.isfinite(ts_pre.values),
                              ts_pre.values,
                              ts_pre_ano.values)
@@ -416,8 +417,8 @@ def process_cru_data(gdir):
     ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
     ts_pre_ano = ts_pre.groupby('time.month') - ts_pre_avg
     # scaled anomalies is the default. Standard anomalies above
-    # are used late where ts_pre_avg == 0
-    ts_pre = (ts_pre.groupby('time.month') / ts_pre_avg) - 1
+    # are used later for where ts_pre_avg == 0
+    ts_pre = ts_pre.groupby('time.month') / ts_pre_avg
 
     # interpolate to HR grid
     if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
@@ -468,12 +469,15 @@ def process_cru_data(gdir):
     ts_pre_ano = xr.DataArray(ts_pre_ano[:, 1, 1], dims=['time'],
                               coords={'time': time})
     # scaled anomalies
-    ts_pre = (ts_pre + 1).groupby('time.month') * loc_pre
+    ts_pre = ts_pre.groupby('time.month') * loc_pre
     # standard anomalies
     ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
+    # Correct infinite values with standard anomalies
     ts_pre.values = np.where(np.isfinite(ts_pre.values),
                              ts_pre.values,
                              ts_pre_ano.values)
+    # The last step might create negative values (unlikely). Clip them
+    ts_pre.values = ts_pre.values.clip(0)
 
     # done
     loc_hgt = loc_hgt[1, 1]
