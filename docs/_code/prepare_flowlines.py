@@ -5,6 +5,7 @@ from oggm import cfg, tasks, graphics
 from oggm.utils import get_demo_file
 
 cfg.initialize()
+cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
 base_dir = os.path.join(os.path.expanduser('~'), 'OGGM_docs', 'Flowlines')

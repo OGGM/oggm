@@ -17,7 +17,7 @@ import logging
 log = logging.getLogger(__name__)
 
 # RGI Version
-rgi_version = '5'
+rgi_version = '6'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
@@ -31,14 +31,14 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # We are running the calibration ourselves
 cfg.PARAMS['run_mb_calibration'] = True
 
+# No need for intersects since this has an effect on the inversion only
+cfg.PARAMS['use_intersects'] = False
+
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
 # Set to True for operational runs
 cfg.PARAMS['continue_on_error'] = False
-
-# No need for intersects
-cfg.set_intersects_db()
 
 # Pre-download other files which will be needed later
 _ = utils.get_cru_file(var='tmp')
@@ -60,7 +60,7 @@ for reg in df['RGI_REG'].unique():
     sh = gpd.read_file(fs)
     rgidf.append(sh.loc[sh.RGIId.isin(rids)])
 rgidf = pd.concat(rgidf)
-rgidf.csr = sh.crs  # for geolocalisation
+rgidf.crs = sh.crs  # for geolocalisation
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:

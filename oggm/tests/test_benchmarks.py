@@ -47,6 +47,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
         cfg.PATHS['cru_dir'] = os.path.dirname(cfg.PATHS['dem_file'])
@@ -188,6 +189,7 @@ class TestCoxeGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
         cfg.PARAMS['border'] = 40
 

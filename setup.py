@@ -7,9 +7,9 @@ from codecs import open  # To use a consistent encoding
 from os import path, walk
 import sys, warnings, importlib, re
 
-MAJOR = 0
-MINOR = 1
-MICRO = 1
+MAJOR = 1
+MINOR = 0
+MICRO = 0
 ISRELEASED = False
 VERSION = '%d.%d.%d' % (MAJOR, MINOR, MICRO)
 QUALIFIER = ''
@@ -22,7 +22,7 @@ URL = 'http://oggm.org'
 CLASSIFIERS = [
         # How mature is this project? Common values are
         # 3 - Alpha  4 - Beta  5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         # Indicate who your project is intended for
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU General Public License ' +
@@ -30,6 +30,7 @@ CLASSIFIERS = [
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ]
 
 DESCRIPTION = 'Open Global Glacier Model'
@@ -42,14 +43,12 @@ future mass-balance, volume and geometry of any glacier in a fully
 automated workflow. We rely exclusively on publicly available data for
 calibration and validation.
 
-The project is currently in development. Get in touch with us if
-you want to contribute.
-
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 Links
 -----
-- HTML documentation: http://oggm.org
+- Project website: http://oggm.org
+- HTML documentation: http://oggm.readthedocs.io
 - Source code: http://github.com/oggm/oggm
 """
 
@@ -182,7 +181,7 @@ setup(
     # What does your project relate to?
     keywords=['geosciences', 'glaciers', 'climate', 'gis'],
     # We are a python 3 only shop
-    python_requires='>=3.3',
+    python_requires='>=3.4',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Decided not to let pip install the dependencies, this is too brutal
@@ -190,9 +189,7 @@ setup(
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
     # data files that need to be installed
-    package_data={'oggm.tests': list(file_walk('oggm/tests/baseline_images',
-                                               remove='oggm/tests/')),
-                  'oggm': ['params.cfg']},
+    package_data={'oggm': ['params.cfg']},
     # Old
     data_files=[],
     # Executable scripts

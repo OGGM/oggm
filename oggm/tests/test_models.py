@@ -143,6 +143,7 @@ class TestOtherGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = utils.get_demo_file('histalp_merged_hef.nc')
 
@@ -1255,6 +1256,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 

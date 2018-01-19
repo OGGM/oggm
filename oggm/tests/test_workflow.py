@@ -74,8 +74,8 @@ def up_to_climate(reset=False):
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
-
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
@@ -243,6 +243,7 @@ class TestWorkflow(unittest.TestCase):
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
         assert cc < -0.8
         assert np.all(dfc.t_star > 1900)
+        assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @is_slow
     def test_crossval(self):

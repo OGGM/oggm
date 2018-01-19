@@ -397,7 +397,6 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(rgi_f)
         assert '01_rgi60_Region.shp' in rgi_f
 
-
     def test_rgi_intersects(self):
 
         # Make a fake RGI file
@@ -405,6 +404,12 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(rgi_dir)
         make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects'),
                          fakefile='Intersects_OGGM_Manifest.txt')
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects',
+                                      '11_rgi50_CentralEurope'),
+                         fakefile='intersects_11_rgi50_CentralEurope.shp')
+        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects',
+                                      '00_rgi50_AllRegs'),
+                         fakefile='intersects_rgi50_AllRegs.shp')
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
@@ -415,6 +420,8 @@ class TestFakeDownloads(unittest.TestCase):
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
             rgi = utils.get_rgi_intersects_dir()
+            utils.get_rgi_intersects_region_file('11', version='5')
+            utils.get_rgi_intersects_region_file('00', version='5')
 
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi,

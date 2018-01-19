@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '3332594f9e8050246af131b8a493dbc958449368'
+SAMPLE_DATA_COMMIT = '4266c0f0b420c11e3378662158c7e2d596657bc1'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1537,7 +1537,7 @@ def get_glathida_file():
     # Roll our own
     download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'glathida')
-    outf = os.path.join(sdir, 'rgi_glathida_links_2014_RGIV5.csv')
+    outf = os.path.join(sdir, 'rgi_glathida_links.csv')
     assert os.path.exists(outf)
     return outf
 
@@ -1672,6 +1672,34 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
             zf.extractall(rgi_dir)
 
     return os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
+
+
+def get_rgi_intersects_region_file(region, version=None):
+    """Returns a path to a RGI regional intersect file.
+
+    If the RGI files are not present, download them. Setting region=00 gives
+    you the global file.
+
+    Parameters
+    ----------
+    region: str
+        from '00' to '19'
+    version: str
+        '5', '6', defaults to None (linking to the one specified in cfg.params)
+
+    Returns
+    -------
+    path to the RGI shapefile
+    """
+
+    rgi_dir = get_rgi_intersects_dir(version=version)
+    if region == '00':
+        version = 'AllRegs'
+        region = '*'
+    f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
+                                    '_rgi*' + version + '*.shp')))
+    assert len(f) == 1
+    return f[0]
 
 
 def get_cru_file(var=None):
@@ -2264,7 +2292,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             mbh = mbmod.get_annual_mb(h, w) * SEC_IN_YEAR * cfg.RHO
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
-            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w[pab])
+            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
             try:
                 # Try to get the slope
                 mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])

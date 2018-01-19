@@ -153,13 +153,17 @@ No scientific python installation is complete without installing
 OGGM
 ~~~~
 
-**If you are using conda**, you can install OGGM as a normal python package
-(in that case you will be able to use the model but you cannot change its
-code)::
+**If you are using conda**, you can install OGGM as a normal conda package::
 
     conda install -c oggm -c conda-forge oggm
 
+**If you are using pip**, you can install OGGM from `PyPI <https://pypi.python.org/pypi/oggm>`_::
 
+    pip install oggm
+
+
+In this case you will be able to use the model but you cannot change its
+code.
 If you want to explore the code or participate to its
 development, we recommend to clone the git repository (or your own fork ,
 see also :ref:`contributing`)::
@@ -197,23 +201,27 @@ expected. From the oggm directory, type::
 The tests can run for a couple of minutes. If everything worked fine, you
 should see something like::
 
-    ==== test session starts ====
-    platform linux -- Python 3.4.3, pytest-3.0.5, py-1.4.31, pluggy-0.4.0
+    =============================== test session starts ===============================
+    platform linux -- Python 3.5.2, pytest-3.3.1, py-1.5.2, pluggy-0.6.0
+    Matplotlib: 2.1.1
+    Freetype: 2.6.1
     rootdir:
-    plugins:
-    collected 92 items
+    plugins: mpl-0.9
+    collected 164 items
 
-    oggm/tests/test_graphics.py ..............
-    oggm/tests/test_models.py .........s....sssssssssssssssss
-    oggm/tests/test_prepro.py ...s................s.s...
-    oggm/tests/test_utils.py ...sss..ss.sssss.
-    oggm/tests/test_workflow.py ssss
+    oggm/tests/test_benchmarks.py ...                                           [  1%]
+    oggm/tests/test_graphics.py ...................                             [ 13%]
+    oggm/tests/test_models.py ................sss.ss.....sssssss                [ 34%]
+    oggm/tests/test_numerics.py .ssssssssssssssss                               [ 44%]
+    oggm/tests/test_prepro.py .......s........................s..s.......       [ 70%]
+    oggm/tests/test_utils.py .....................sss.s.sss.sssss..ss.          [ 95%]
+    oggm/tests/test_workflow.py sssssss                                         [100%]
 
-    ===== 57 passed, 35 skipped in 102.50 seconds ====
+    ==================== 112 passed, 52 skipped in 187.35 seconds =====================
 
 
 You can safely ignore deprecation warnings and other DLL messages as long as
-the tests end with ``OK``.
+the tests end without errors.
 
 **Congrats**, you are now set-up for the :ref:`getting-started` section!
 
