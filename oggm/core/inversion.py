@@ -223,19 +223,20 @@ def optimize_inversion_params(gdirs):
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
+    col_name = 'RGI{}0_ID'.format(gdirs[0].rgi_version)
     try:
-        gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort_values(by=[col_name])
     except AttributeError:
-        gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort(columns=[col_name])
 
-    dfids = gtd_df['RGI_ID'].values
+    dfids = gtd_df[col_name].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
     if len(ref_gdirs) == 0:
         raise RuntimeError('No reference GlaThiDa glaciers. Maybe something '
                            'went wrong with the link list?')
     ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
-    gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
+    gtd_df = gtd_df.set_index(col_name).loc[ref_rgiids]
 
     # Account for area differences between glathida and rgi
     gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
