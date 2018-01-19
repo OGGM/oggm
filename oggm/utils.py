@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '4266c0f0b420c11e3378662158c7e2d596657bc1'
+SAMPLE_DATA_COMMIT = 'c3d5a67182e0e6faa8de464753e4ffe156218cfe'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1288,8 +1288,22 @@ def pipe_log(gdir, task_func_name, err=None):
             f.write(sep + '\n')
 
 
-def write_centerlines_to_shape(gdirs, filename):
-    """Write centerlines in a shapefile"""
+def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
+    """Write the centerlines in a shapefile.
+
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    filesuffix : str
+        add suffix to output file
+    path:
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+
+    if path is True:
+        path = os.path.join(cfg.PATHS['working_dir'],
+                            'glacier_centerlines'+filesuffix+'.shp')
 
     olist = []
     for gdir in gdirs:
@@ -1319,7 +1333,7 @@ def write_centerlines_to_shape(gdirs, filename):
                 dict((k, v) for k, v in row.items() if k != 'geometry'),
             'geometry': mapping(row['geometry'])}
 
-    with fiona.open(filename, 'w', driver='ESRI Shapefile',
+    with fiona.open(path, 'w', driver='ESRI Shapefile',
                     crs=crs, schema=shema) as c:
         for i, row in odf.iterrows():
             c.write(feature(i, row))

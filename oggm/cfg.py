@@ -306,6 +306,9 @@ def initialize(file=None):
     # Empty defaults
     set_intersects_db()
     IS_INITIALIZED = True
+    # Pre extract cru cl to avoid problems by multiproc
+    from oggm.utils import get_cru_cl_file
+    get_cru_cl_file()
 
 
 def oggm_static_paths():
