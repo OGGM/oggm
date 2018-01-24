@@ -20,7 +20,8 @@ cfg.initialize()
 
 # Local paths (where to find the OGGM run output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_RGIV{}'.format(rgi_version))
+                        'OGGM_ref_mb_RGIV{}_OGGM{}'.format(rgi_version,
+                                                           oggm.__version__))
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Read the rgi file
@@ -89,7 +90,13 @@ plt.tight_layout()
 fn = path.join(WORKING_DIR, 'mb_crossval_rgi{}.pdf'.format(rgi_version))
 plt.savefig(fn)
 
-print('Median bias: {:.2f}'.format(cvdf['CV_MB_BIAS'].median()))
-print('Mean bias: {:.2f}'.format(cvdf['CV_MB_BIAS'].mean()))
-print('RMS: {:.2f}'.format(np.sqrt(np.mean(cvdf['CV_MB_BIAS']**2))))
-print('Sigma bias: {:.2f}'.format(np.mean(cvdf['CV_MB_SIGMA_BIAS'])))
+scores = 'Median bias: {:.2f}\n'.format(cvdf['CV_MB_BIAS'].median())
+scores += 'Mean bias: {:.2f}\n'.format(cvdf['CV_MB_BIAS'].mean())
+scores += 'RMS: {:.2f}\n'.format(np.sqrt(np.mean(cvdf['CV_MB_BIAS']**2)))
+scores += 'Sigma bias: {:.2f}\n'.format(np.mean(cvdf['CV_MB_SIGMA_BIAS']))
+
+# Output
+print(scores)
+fn = path.join(WORKING_DIR, 'scores.txt')
+with open(fn, 'w') as f:
+    f.write(scores)

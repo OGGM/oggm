@@ -24,7 +24,8 @@ cfg.initialize()
 
 # Local paths (where to write the OGGM run output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_RGIV{}'.format(rgi_version))
+                        'OGGM_ref_mb_RGIV{}_OGGM{}'.format(rgi_version,
+                                                           oggm.__version__))
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
