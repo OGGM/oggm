@@ -210,7 +210,7 @@ def dummy_width_bed_tributary(map_dx=100.):
     return [fl_1, fl_0]
 
 
-def patch_url_retrieve(url, *args, **kwargs):
+def patch_url_retrieve_github(url, *args, **kwargs):
     """A simple patch to OGGM's download function to make sure we don't
     download elsewhere than expected."""
 

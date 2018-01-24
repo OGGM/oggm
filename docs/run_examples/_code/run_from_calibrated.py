@@ -51,7 +51,7 @@ utils.get_cru_file(var='pre')
 # Download the RGI file for the run
 # We us a set of four glaciers here but this could be an entire RGI region,
 # or any glacier list you'd like to model
-dl = 'https://www.dropbox.com/s/6cwi7b4q4zqgh4a/RGI_example_glaciers.zip?dl=1'
+dl = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/RGI_example_glaciers.zip'
 with zipfile.ZipFile(utils.file_downloader(dl)) as zf:
     zf.extractall(WORKING_DIR)
 rgidf = salem.read_shapefile(path.join(WORKING_DIR, 'RGI_example_glaciers',
