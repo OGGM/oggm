@@ -8,6 +8,7 @@ import logging
 
 try:
     from .version import version as __version__
+    from .version import isreleased as __isreleased__
 except ImportError:
     raise ImportError('oggm is not properly installed. If you are running '
                       'from the source directory, please instead create a '

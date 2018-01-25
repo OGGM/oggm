@@ -11,9 +11,8 @@ It can simulate past and future mass-balance, volume and geometry of (almost)
 any glacier in the world in a fully automated workflow. We rely exclusively on
 publicly available data for calibration and validation.
 
-**This is the model's documentation for users and developers of the
-latest (cutting-edge) repository version**. For the documentation of the latest
-stable release, visit `oggm.readthedocs.io/en/stable <http://oggm.readthedocs.io/en/stable/>`_.
+[version-specific-text]
+
 
 **For more information about the OGGM project and for the latest news, visit**
 `oggm.org <http://oggm.org>`_.
@@ -49,7 +48,7 @@ Using OGGM
 
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* :doc:`glacierdir-gen`
+* :doc:`glacierdir`
 * :doc:`input-data`
 * :doc:`mpi`
 * :doc:`run`
@@ -63,7 +62,7 @@ Using OGGM
 
     installing-oggm.rst
     getting-started.rst
-    glacierdir-gen.rst
+    glacierdir.rst
     input-data.rst
     mpi.rst
     run.rst

@@ -1,6 +1,6 @@
 .. currentmodule:: oggm
 
-.. _run-from-calibrated:
+.. _run-preprocess:
 
 1. Preprocess a subset of an RGI Region
 =======================================

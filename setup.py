@@ -104,13 +104,14 @@ def write_version_py(filename=None):
     cnt = """\
 version = '%s'
 short_version = '%s'
+isreleased = %s
 """
     if not filename:
         filename = path.join(path.dirname(__file__), 'oggm', 'version.py')
 
     a = open(filename, 'w')
     try:
-        a.write(cnt % (FULLVERSION, VERSION))
+        a.write(cnt % (FULLVERSION, VERSION, ISRELEASED))
     finally:
         a.close()
 
