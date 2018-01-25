@@ -13,6 +13,7 @@ publicly available data for calibration and validation.
 
 [version-specific-text]
 
+
 **For more information about the OGGM project and for the latest news, visit**
 `oggm.org <http://oggm.org>`_.
 
