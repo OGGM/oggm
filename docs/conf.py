@@ -409,11 +409,42 @@ intersphinx_mapping = {
 
 # -- OGGM Stuffs ----------------------------------------------------
 
+text_version = ('**This is the model documentation for users and developers '
+                'as of version {}**. '
+                'For the documentation of the latest (cutting-edge) repository '
+                'version, visit `oggm.readthedocs.io/en/latest '
+                '<http://oggm.readthedocs.io/en/latest/>`_.'
+                ''.format(oggm.__version__))
+
+text_dev = ('**This is the model documentation for users and developers of '
+            'the latest (cutting-edge) repository version**. For the '
+            'documentation of the latest stable release, visit '
+            '`oggm.readthedocs.io/en/stable '
+            '<http://oggm.readthedocs.io/en/stable/>`_.')
+
+
+def write_index():
+    """This is to write the docs for the index automatically."""
+
+    here = os.path.dirname(__file__)
+    origfile = os.path.join(here, 'templates/index.txt')
+    filename = os.path.join(here, 'index.rst')
+
+    text = text_version if oggm.__isreleased__ else text_dev
+    with open(origfile) as f1:
+        with open(filename, 'w') as f2:
+            for line in f1:
+                if '[version-specific-text]' in line:
+                    line = text
+                f2.write(line)
+
+
 def write_gdir_doc():
     """This is to write the docs for glacierdir automatically."""
 
-    origfile = os.path.join(os.path.dirname(__file__), 'glacierdir.txt')
-    filename = os.path.join(os.path.dirname(__file__), 'glacierdir-gen.rst')
+    here = os.path.dirname(__file__)
+    origfile = os.path.join(here, 'templates/glacierdir.txt')
+    filename = os.path.join(here, 'glacierdir.rst')
 
     shutil.copyfile(origfile, filename)
 
@@ -430,4 +461,5 @@ def write_gdir_doc():
     finally:
         file.close()
 
+write_index()
 write_gdir_doc()

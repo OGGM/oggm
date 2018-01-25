@@ -11,7 +11,8 @@ It can simulate past and future mass-balance, volume and geometry of (almost)
 any glacier in the world in a fully automated workflow. We rely exclusively on
 publicly available data for calibration and validation.
 
-**This is the model documentation for users and developers as of version 1.0.0+11-gb0387c4**. For the documentation of the latest (cutting-edge) repository version, visit `oggm.readthedocs.io/en/latest <http://oggm.readthedocs.io/en/latest/>`_.
+[version-specific-text]
+
 **For more information about the OGGM project and for the latest news, visit**
 `oggm.org <http://oggm.org>`_.
 
