@@ -7,7 +7,7 @@
 
 This example shows how to run the OGGM  model for a list of selected glaciers
 (here, four).
-For this example we download the list of glaciers from Fabien's dropbox, but
+For this example we download the list of glaciers from our server, but
 you can use any list of glaciers for this. See the
 `prepare_glacier_list.ipynb <https://github.com/OGGM/oggm/blob/master/docs/notebooks/prepare_glacier_list.ipynb>`_
 notebook in the ``oggm/docs/notebooks`` directory for an example on how to

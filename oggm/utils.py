@@ -1670,11 +1670,11 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir, reset=reset)
 
-    dfile = 'https://www.dropbox.com/s/'
+    dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/'
     if version == '5':
-        dfile += 'y73sdxygdiq7whv/RGI_V5_Intersects.zip?dl=1'
+        dfile += 'RGI_V5_Intersects.zip'
     elif version == '6':
-        dfile += 'vawryxl8lkzxowu/RGI_V6_Intersects.zip?dl=1'
+        dfile += 'RGI_V6_Intersects.zip'
 
     test_file = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects',
                              'Intersects_OGGM_Manifest.txt')
