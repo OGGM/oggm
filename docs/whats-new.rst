@@ -7,19 +7,39 @@ Version history
 v1.X (unreleased)
 -----------------
 
-Changes since the last release:
+Breaking changes
+~~~~~~~~~~~~~~~~
 
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- Added a utility function to easily get intersects files (:pull:`402`).
-  By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The method used to apply CRU and GCM anomalies to the climatology has
   changed for precipitation: we now use scaled anomalies instead of the
-  standard anomalies. The previous method might have lead to negative
-  values in some cases. This change probably has consequences
-  on the model results and needs to be assessed: this will be done at a
-  later stage. Related PR: :pull:`393`
+  standard anomalies (:pull:`393`). The previous method might have lead to
+  negative values in some cases. The corresponding reference t* have also
+  been updated (:pull:`407`). This change has some consequences on the
+  the model results: cross-validation indicates very similar scores, but
+  the influence on global model output has not been assessed yet.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+
+Enhancements
+~~~~~~~~~~~~
+
+- Added a utility function to easily get intersects files (:pull:`402`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The old GlaThiDa file linking the total volume of glaciers (T database) to
+  RGI has been updated to RGI Version 6 (:pull:`403`).
+  Generally, we do not recommend to use these data for calibration or
+  validation because of largely unknown uncertainties.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
+Internals
+~~~~~~~~~
+
+- We now use a dedicated server for input data such as modified RGI files
+ (:pull:`408`). By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Test fix for googlemaps.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 .. _whats-new.1.0:
 
