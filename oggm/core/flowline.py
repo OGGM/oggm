@@ -1462,169 +1462,17 @@ def init_present_time_glacier(gdir):
     gdir.write_pickle(new_fls, 'model_flowlines')
 
 
-def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
-                         rtol=0.01, atol=10, max_ite=100,
-                         init_bias=0., equi_rate=0.0005,
-                         ref_area=None):
-    """ Iterative search for a plausible starting time glacier"""
-
-    # Objective
-    if ref_area is None:
-        ref_area = final_model.area_m2
-    log.info('iterative_initial_glacier_search '
-             'in year %d. Ref area to catch: %.3f km2. '
-             'Tolerance: %.2f %%',
-             np.int64(y0), ref_area * 1e-6, rtol * 100)
-
-    # are we trying to grow or to shrink the glacier?
-    prev_model = copy.deepcopy(final_model)
-    prev_fls = copy.deepcopy(prev_model.fls)
-    prev_model.reset_y0(y0)
-    prev_model.run_until(y1)
-    prev_area = prev_model.area_m2
-
-    # Just in case we already hit the correct starting state
-    if np.allclose(prev_area, ref_area, atol=atol, rtol=rtol):
-        model = copy.deepcopy(final_model)
-        model.reset_y0(y0)
-        log.info('iterative_initial_glacier_search: inital '
-                 'starting glacier converges '
-                 'to itself with a final dif of %.2f %%',
-                 utils.rel_err(ref_area, prev_area) * 100)
-        return 0, None, model
-
-    if prev_area < ref_area:
-        sign_mb = -1.
-        log.info('iterative_initial_glacier_search, ite: %d. '
-                 'Glacier would be too '
-                 'small of %.2f %%. Continue', 0,
-                 utils.rel_err(ref_area, prev_area) * 100)
-    else:
-        log.info('iterative_initial_glacier_search, ite: %d. '
-                 'Glacier would be too '
-                 'big of %.2f %%. Continue', 0,
-                 utils.rel_err(ref_area, prev_area) * 100)
-        sign_mb = 1.
-
-    # Log prefix
-    logtxt = 'iterative_initial_glacier_search'
-
-    # Loop until 100 iterations
-    c = 0
-    bias_step = 0.1
-    mb_bias = init_bias - bias_step
-    reduce_step = 0.01
-
-    mb = copy.deepcopy(firstguess_mb)
-    mb.temp_bias = sign_mb * mb_bias
-    grow_model = FluxBasedModel(copy.deepcopy(final_model.fls), mb_model=mb,
-                                fs=final_model.fs,
-                                glen_a=final_model.glen_a,
-                                min_dt=final_model.min_dt,
-                                max_dt=final_model.max_dt)
-    while True and (c < max_ite):
-        c += 1
-
-        # Grow
-        mb_bias += bias_step
-        mb.temp_bias = sign_mb * mb_bias
-        log.info(logtxt + ', ite: %d. New bias: %.2f', c, sign_mb * mb_bias)
-        grow_model.reset_flowlines(copy.deepcopy(prev_fls))
-        grow_model.reset_y0(0.)
-        grow_model.run_until_equilibrium(rate=equi_rate)
-        log.info(logtxt + ', ite: %d. Grew to equilibrium for %d years, '
-                          'new area: %.3f km2', c, grow_model.yr,
-                           grow_model.area_km2)
-
-        # Shrink
-        new_fls = copy.deepcopy(grow_model.fls)
-        new_model = copy.deepcopy(final_model)
-        new_model.reset_flowlines(copy.deepcopy(new_fls))
-        new_model.reset_y0(y0)
-        new_model.run_until(y1)
-        new_area = new_model.area_m2
-
-        # Maybe we done?
-        if np.allclose(new_area, ref_area, atol=atol, rtol=rtol):
-            new_model.reset_flowlines(new_fls)
-            new_model.reset_y0(y0)
-            log.info(logtxt + ', ite: %d. Converged with a '
-                     'final dif of %.2f %%', c,
-                     utils.rel_err(ref_area, new_area)*100)
-            return c, mb_bias, new_model
-
-        # See if we did a step to far or if we have to continue growing
-        do_cont_1 = (sign_mb < 0.) and (new_area < ref_area)
-        do_cont_2 = (sign_mb > 0.) and (new_area > ref_area)
-        if do_cont_1 or do_cont_2:
-            # Reset the previous state and continue
-            prev_fls = new_fls
-
-            log.info(logtxt + ', ite: %d. Dif of %.2f %%. '
-                              'Continue', c,
-                     utils.rel_err(ref_area, new_area)*100)
-            continue
-
-        # Ok. We went too far. Reduce the bias step but keep previous state
-        mb_bias -= bias_step
-        bias_step /= reduce_step
-        log.info(logtxt + ', ite: %d. Went too far.', c)
-        if bias_step < 0.1:
-            break
-
-    raise RuntimeError('Did not converge after {} iterations'.format(c))
-
-
-@entity_task(log, writes=['model_run'])
-def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
-                                     write_steps=True):
-    """Iterative search for the glacier in year y0.
-
-    this is outdated and doesn't really work.
-    """
-
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    if y0 is None:
-        y0 = cfg.PARAMS['y0']
-    y1 = gdir.rgi_date.year
-    mb = mbmods.PastMassBalance(gdir)
-    fls = gdir.read_pickle('model_flowlines')
-
-    model = FluxBasedModel(fls, mb_model=mb, y0=0., fs=fs, glen_a=glen_a)
-    assert np.isclose(model.area_km2, gdir.rgi_area_km2, rtol=0.05)
-
-    mb = mbmods.BackwardsMassBalanceModel(gdir)
-    ref_area = gdir.rgi_area_m2
-    ite, bias, past_model = _find_inital_glacier(model, mb, y0, y1,
-                                                 rtol=rtol,
-                                                 init_bias=init_bias,
-                                                 ref_area=ref_area)
-
-    # Some parameters for posterity (we used to store this):
-    params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
-                         ite=ite, mb_bias=bias)
-
-    path = gdir.get_filepath('model_run', delete=True)
-    if write_steps:
-        _ = past_model.run_until_and_store(y1, path=path)
-    else:
-        past_model.to_netcdf(path)
-
-
-def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                              zero_initial_glacier=False, init_model_fls=None):
+def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
+                     ys=None, ye=None,
+                     zero_initial_glacier=False, init_model_fls=None,
+                     **kwargs):
     """Quick n dirty function to avoid copy-paste smell"""
 
-    run_path = gdir.get_filepath('model_run', filesuffix=filesuffix,
+    run_path = gdir.get_filepath('model_run',
+                                 filesuffix=output_filesuffix,
                                  delete=True)
-    diag_path = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix,
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
                                   delete=True)
 
     steps = ['default', 'conservative', 'ultra-conservative']
@@ -1637,7 +1485,7 @@ def _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
         if zero_initial_glacier:
             for fl in fls:
                 fl.thick = fl.thick * 0.
-        model = FluxBasedModel(fls, mb_model=mb, y0=ys,
+        model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                                time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
@@ -1720,9 +1568,10 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                                     init_model_fls=init_model_fls,
-                                     zero_initial_glacier=zero_initial_glacier)
+    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
+                            ys=ys, ye=ye, init_model_fls=init_model_fls,
+                            zero_initial_glacier=zero_initial_glacier,
+                            **kwargs)
 
 
 @entity_task(log)
@@ -1781,15 +1630,17 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return _run_with_numerical_tests(gdir, filesuffix, mb, 0, nyears, kwargs,
-                                     init_model_fls=init_model_fls,
-                                     zero_initial_glacier=zero_initial_glacier)
+    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
+                            ys=0, ye=nyears, init_model_fls=init_model_fls,
+                            zero_initial_glacier=zero_initial_glacier,
+                            **kwargs)
 
 
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
                           input_filesuffix='', filesuffix='',
-                          init_model_fls=None, **kwargs):
+                          init_model_fls=None, zero_initial_glacier=False,
+                          **kwargs):
     """ Runs glacier with climate input from a general circulation model.
 
      Parameters
@@ -1808,6 +1659,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
      init_model_fls : []
          list of flowlines to use to initialise the model (the default is the
          present_time_glacier file from the glacier directory)
+     zero_initial_glacier : bool
+         if true, the ice thickness is set to zero before the simulation
      kwargs : dict
          kwargs to pass to the FluxBasedModel instance
      """
@@ -1830,5 +1683,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
 
     mb = mbmods.PastMassBalance(gdir, filename=filename,
                                 input_filesuffix=input_filesuffix)
-    return _run_with_numerical_tests(gdir, filesuffix, mb, ys, ye, kwargs,
-                                     init_model_fls=init_model_fls)
+
+    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
+                            ys=ys, ye=ye, init_model_fls=init_model_fls,
+                            **kwargs)

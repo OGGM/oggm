@@ -57,7 +57,6 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.distribute_thickness
     tasks.init_present_time_glacier
     tasks.random_glacier_evolution
-    tasks.iterative_initial_glacier_search
     tasks.run_from_climate_data
     tasks.run_constant_climate
 

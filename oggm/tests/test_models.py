@@ -1173,6 +1173,9 @@ class TestBackwardsIdealized(unittest.TestCase):
     @is_slow
     def test_iterative_back(self):
 
+        # This test could be deleted
+        from oggm.sandbox.ideas import _find_inital_glacier
+
         y0 = 0.
         y1 = 150.
         rtol = 0.02
@@ -1182,13 +1185,14 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a,
                                         time_stepping='ambitious')
 
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
 
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 > past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
@@ -1204,12 +1208,13 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a,
                                         time_stepping='ambitious')
 
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
@@ -1225,14 +1230,18 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a)
 
         # Hit the correct one
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
         past_model.run_until(y1)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
     @is_slow
     def test_fails(self):
+
+        # This test could be deleted
+        from oggm.sandbox.ideas import _find_inital_glacier
 
         y0 = 0.
         y1 = 100.
@@ -1240,7 +1249,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         mb = LinearMassBalance(self.ela - 150.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
                                         fs=self.fs, glen_a=self.glen_a)
-        self.assertRaises(RuntimeError, flowline._find_inital_glacier, model,
+        self.assertRaises(RuntimeError, _find_inital_glacier, model,
                           mb, y0, y1, rtol=0.02, max_ite=5)
 
 
@@ -1884,58 +1893,4 @@ class TestHEF(unittest.TestCase):
                 (ds.volume*1e-9).plot(label=lab)
             plt.xlabel('Vol (km3)')
             plt.legend()
-            plt.show()
-
-    @is_slow
-    def test_find_t0(self):
-
-        self.skipTest('This test is too unstable')
-
-        gdir = init_hef(border=DOM_BORDER, invert_with_sliding=False)
-
-        flowline.init_present_time_glacier(gdir)
-        glacier = gdir.read_pickle('model_flowlines')
-        df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
-        df.columns = ['Leclercq']
-        df = df.loc[1950:]
-
-        vol_ref = flowline.FlowlineModel(glacier).volume_km3
-
-        init_bias = 94.  # so that "went too far" comes once on travis
-        rtol = 0.005
-
-        flowline.iterative_initial_glacier_search(gdir, y0=df.index[0], init_bias=init_bias,
-                                                  rtol=rtol, write_steps=True)
-
-        past_model = flowline.FileModel(gdir.get_filepath('model_run'))
-
-        vol_start = past_model.volume_km3
-        bef_fls = copy.deepcopy(past_model.fls)
-
-        mylen = past_model.length_m_ts()
-        df['oggm'] = mylen[12::12].values
-        df = df-df.iloc[-1]
-
-        past_model.run_until(2003)
-
-        vol_end = past_model.volume_km3
-        np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)
-
-        rmsd = utils.rmsd(df.Leclercq, df.oggm)
-        self.assertTrue(rmsd < 1000.)
-
-        if do_plot:  # pragma: no cover
-            df.plot()
-            plt.ylabel('Glacier length (relative to 2003)')
-            plt.show()
-            fig = plt.figure()
-            lab = 'ref (vol={:.2f}km3)'.format(vol_ref)
-            plt.plot(glacier[-1].surface_h, 'k', label=lab)
-            lab = 'oggm start (vol={:.2f}km3)'.format(vol_start)
-            plt.plot(bef_fls[-1].surface_h, 'b', label=lab)
-            lab = 'oggm end (vol={:.2f}km3)'.format(vol_end)
-            plt.plot(past_model.fls[-1].surface_h, 'r', label=lab)
-
-            plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
             plt.show()
