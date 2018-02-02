@@ -425,8 +425,8 @@ def test_plot_region_model():
     gdirs = random_for_plot()
 
     dfc = utils.compile_task_log(gdirs,
-                                 task_names=['random_glacier_evolution_plot'])
-    assert np.all(dfc['random_glacier_evolution_plot'] == 'SUCCESS')
+                                 task_names=['run_random_climate_plot'])
+    assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
 
     # We prepare for the plot, which needs our own map to proceed.
     # Lets do a local mercator grid

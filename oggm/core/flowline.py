@@ -1534,8 +1534,9 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
-                       filename='climate_monthly', input_filesuffix='',
-                       filesuffix='', init_model_fls=None,
+                       climate_filename='climate_monthly',
+                       climate_input_filesuffix='',
+                       output_filesuffix='', init_model_fls=None,
                        zero_initial_glacier=False,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
@@ -1559,12 +1560,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
          be usefull if you want to have the same climate years for all of them
      temperature_bias : float
          add a bias to the temperature timeseries
-     filename : str
+     climate_filename : str
          name of the climate file, e.g. 'climate_monthly' (default) or
          'cesm_data'
-     input_filesuffix: str
+     climate_input_filesuffix: str
          filesuffix for the input climate file
-     filesuffix : str
+     output_filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
      init_model_fls : []
@@ -1577,21 +1578,25 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
      """
 
     mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
-                                  bias=bias, seed=seed, filename=filename,
-                                  input_filesuffix=input_filesuffix)
+                                  bias=bias, seed=seed,
+                                  filename=climate_filename,
+                                  input_filesuffix=climate_input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
-                            ys=0, ye=nyears, init_model_fls=init_model_fls,
+    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
+                            mb_model=mb, ys=0, ye=nyears,
+                            init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
 
 
 @entity_task(log)
-def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
-                         temperature_bias=None, filesuffix='',
-                         filename='climate_monthly', input_filesuffix='',
+def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                         bias=None, temperature_bias=None,
+                         output_filesuffix='',
+                         climate_filename='climate_monthly',
+                         climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
                          **kwargs):
@@ -1605,18 +1610,20 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
      y0 : int
          central year of the requested climate period. The default is to be
          centred on t*.
+     halfsize : int, optional
+         the half-size of the time window (window size = 2 * halfsize + 1)
      bias : float
          bias of the mb model. Default is to use the calibrated one, which
          is often a better idea. For t* experiments it can be useful to set it
          to zero
      temperature_bias : float
          add a bias to the temperature timeseries
-     filename : str
+     climate_filename : str
          name of the climate file, e.g. 'climate_monthly' (default) or
          'cesm_data'
-     input_filesuffix: str
+     climate_input_filesuffix: str
          filesuffix for the input climate file
-     filesuffix : str
+     output_filesuffix : str
          this add a suffix to the output file (useful to avoid overwriting
          previous experiments)
      zero_initial_glacier : bool
@@ -1628,21 +1635,25 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
          kwargs to pass to the FluxBasedModel instance
      """
 
-    mb = mbmods.ConstantMassBalance(gdir, y0=y0, bias=bias, filename=filename,
-                                    input_filesuffix=input_filesuffix)
+    mb = mbmods.ConstantMassBalance(gdir, y0=y0, halfsize=halfsize,
+                                    bias=bias, filename=climate_filename,
+                                    input_filesuffix=climate_input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
-                            ys=0, ye=nyears, init_model_fls=init_model_fls,
+    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
+                            mb_model=mb, ys=0, ye=nyears,
+                            init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
 
 
 @entity_task(log)
-def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
-                          input_filesuffix='', filesuffix='',
+def run_from_climate_data(gdir, ys=None, ye=None,
+                          climate_filename='climate_monthly',
+                          climate_input_filesuffix='', output_filesuffix='',
                           init_model_fls=None, zero_initial_glacier=False,
+                          spinup=False,
                           **kwargs):
     """ Runs glacier with climate input from CRU or a GCM.
 
@@ -1652,12 +1663,12 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
          start year of the model run (default: from the config file)
      y1 : int
          end year of the model run (default: from the config file)
-     filename : str
+     climate_filename : str
          name of the climate file, e.g. 'climate_monthly' (default) or
          'cesm_data'
-     input_filesuffix: str
+     climate_input_filesuffix: str
          filesuffix for the input climate file
-     filesuffix : str
+     output_filesuffix : str
          for the output file
      init_model_fls : []
          list of flowlines to use to initialise the model (the default is the
@@ -1673,10 +1684,18 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
     if ye is None:
         ye = cfg.PARAMS['ye']
 
-    mb = mbmods.PastMassBalance(gdir, filename=filename,
-                                input_filesuffix=input_filesuffix)
+    if spinup:
+        tmp_mod = FileModel(
+            gdir.get_filepath('model_run', filesuffix=output_filesuffix))
+        tmp_mod.run_until(500)
+        init_model_fls = tmp_mod.fls
+        output_filesuffix = ''.join(['with_', output_filesuffix])
 
-    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
-                            ys=ys, ye=ye, init_model_fls=init_model_fls,
+    mb = mbmods.PastMassBalance(gdir, filename=climate_filename,
+                                input_filesuffix=climate_input_filesuffix)
+
+    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
+                            mb_model=mb, ys=ys, ye=ye,
+                            init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)

@@ -2152,7 +2152,7 @@ class TestCatching(unittest.TestCase):
 
         spl = first_line.split(';')
         assert len(spl) == 4
-        assert spl[1].strip() == 'random_glacier_evolution_testme'
+        assert spl[1].strip() == 'run_random_climate_testme'
 
     def test_task_status(self):
 

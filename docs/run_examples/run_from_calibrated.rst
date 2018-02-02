@@ -52,13 +52,13 @@ If everything went well, you should see an output similar to::
 
 .. note::
 
-   During the ``random_glacier_evolution`` task some numerical warnings might
+   During the ``run_random_climate`` task some numerical warnings might
    occur. These are expected to happen and are caught by the solver, which then
    tries a more conservative time stepping scheme.
 
 .. note::
 
-    The ``random_glacier_evolution`` task can be replaced by any climate
+    The ``run_random_climate`` task can be replaced by any climate
     scenario built by the user. For this you'll have to develop your own task,
     which will be the topic of another example script.
 
@@ -74,8 +74,9 @@ a new experiment. The code can be simplified to:
 
 .. note::
 
-    Note the use of the ``filesuffix`` keyword argument. This allows to store
-    the output of different runs in different files, useful for later analyses.
+    Note the use of the ``output_filesuffix`` keyword argument. This allows to
+    store the output of different runs in different files,
+    useful for later analyses.
 
 
 Some analyses

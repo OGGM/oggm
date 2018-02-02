@@ -45,7 +45,7 @@ gdirs = workflow.init_glacier_regions(rgidf)
 # This is a kinf of "commitment" run
 execute_entity_task(tasks.run_random_climate, gdirs,
                     nyears=200, y0=2000, seed=1,
-                    filesuffix='_commitment')
+                    output_filesuffix='_commitment')
 
 # Compile output
 log.info('Compiling output')

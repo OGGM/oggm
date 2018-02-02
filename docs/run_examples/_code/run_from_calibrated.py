@@ -100,7 +100,7 @@ execute_entity_task(tasks.init_present_time_glacier, gdirs)
 # but it doesn't have to be so
 execute_entity_task(tasks.run_random_climate, gdirs,
                     nyears=200, bias=0, seed=1,
-                    filesuffix='_tstar')
+                    output_filesuffix='_tstar')
 
 # Compile output
 log.info('Compiling output')

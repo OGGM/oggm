@@ -1690,9 +1690,9 @@ class TestHEF(unittest.TestCase):
 
         flowline.init_present_time_glacier(self.gdir)
         flowline.run_random_climate(self.gdir, nyears=100, seed=4,
-                                    bias=0, filesuffix='_rdn')
+                                    bias=0, output_filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=100,
-                                      bias=0, filesuffix='_ct')
+                                      bias=0, output_filesuffix='_ct')
 
         paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
                  self.gdir.get_filepath('model_run', filesuffix='_ct'),
@@ -1727,9 +1727,9 @@ class TestHEF(unittest.TestCase):
         climate.process_cru_data(self.gdir)
 
         flowline.run_random_climate(self.gdir, nyears=20, seed=4,
-                                    bias=0, filesuffix='_rdn')
+                                    bias=0, output_filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=20,
-                                      bias=0, filesuffix='_ct')
+                                      bias=0, output_filesuffix='_ct')
 
         paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
                  self.gdir.get_filepath('model_run', filesuffix='_ct'),
@@ -1847,10 +1847,10 @@ class TestHEF(unittest.TestCase):
         # See what that means for a run
         flowline.init_present_time_glacier(gdir)
         flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
-                                       filesuffix='_hist')
+                                       output_filesuffix='_hist')
         flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
-                                       filename='cesm_data',
-                                       filesuffix='_cesm')
+                                       climate_filename='cesm_data',
+                                       output_filesuffix='_cesm')
 
         ds1 = utils.compile_run_output([gdir], path=False, filesuffix='_hist')
         ds2 = utils.compile_run_output([gdir], path=False, filesuffix='_cesm')
