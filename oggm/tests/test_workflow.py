@@ -337,7 +337,8 @@ class TestWorkflow(unittest.TestCase):
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
-                                     nyears=200, seed=0, filesuffix='_test')
+                                     nyears=200, seed=0,
+                                     output_filesuffix='_test')
 
         for gd in gdirs:
 
