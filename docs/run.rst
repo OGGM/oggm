@@ -18,3 +18,4 @@ or Google Cloud, too.
     run_examples/run_rgi_region.rst
     run_examples/run_from_calibrated.rst
     run_examples/run_mb_calibration.rst
+    run_examples/run_with_spinup.rst

@@ -20,6 +20,14 @@ Breaking changes
   the model results: cross-validation indicates very similar scores, but
   the influence on global model output has not been assessed yet.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- It is now possible to run a spinup simulation using the standard
+  workflow (:pull:`411`). For this to happen it was necessary to clean
+  the many `*filesuffix` options. The new names are more explicit
+  but not backwards compatible. The previous `filesuffix` is now
+  called `output_filesuffix`. The previous `input_filesuffix` is now
+  called `climate_input_filesuffix`. See the PR linked above for more
+  info.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
