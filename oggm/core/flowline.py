@@ -1463,13 +1463,42 @@ def init_present_time_glacier(gdir):
 
 
 def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
-                     ys=None, ye=None,
-                     zero_initial_glacier=False, init_model_fls=None,
+                     ys=None, ye=None, zero_initial_glacier=False,
+                     init_model_fls=None,
                      **kwargs):
-    """Quick n dirty function to avoid copy-paste smell"""
+    """Trial-error-and-retry algorithm to run the flowline model.
 
-    run_path = gdir.get_filepath('model_run',
-                                 filesuffix=output_filesuffix,
+     Runs a model simulation with the default time stepping scheme and,
+     if failing, tries a more conservative one.
+     This is a rather clumsy way to deal with numerical instabilities:
+     for most glaciers the default numerical parameters work fine, but for some
+     glaciers numerical instabilities might arise and lead to overfloating
+     errors or NaNs. This catches those, and tries again.
+
+     Pros of the method:
+     - it is cheap, because the "quicker" time stepping is tested first
+     - it is easy
+
+     Cons:
+     - the model might be unstable without necessarily leading to NaN in the
+       solution. These cases will not be caught
+     - it is inelegant
+
+     Possibly a method based on mass-conservation checks would be more robust.
+     """
+
+    if cfg.PARAMS['use_optimized_inversion_params']:
+        d = gdir.read_pickle('inversion_params')
+        fs = d['fs']
+        glen_a = d['glen_a']
+    else:
+        fs = cfg.PARAMS['flowline_fs']
+        glen_a = cfg.PARAMS['flowline_glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
                                  delete=True)
     diag_path = gdir.get_filepath('model_diagnostics',
                                   filesuffix=output_filesuffix,
@@ -1503,15 +1532,13 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
 
 
 @entity_task(log)
-def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
-                             bias=None, seed=None, temperature_bias=None,
-                             filename='climate_monthly', input_filesuffix='',
-                             filesuffix='', init_model_fls=None,
-                             zero_initial_glacier=False,
-                             **kwargs):
-    """Random glacier dynamics for benchmarking purposes.
-
-     This runs the random mass-balance model for a certain number of years.
+def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                       bias=None, seed=None, temperature_bias=None,
+                       filename='climate_monthly', input_filesuffix='',
+                       filesuffix='', init_model_fls=None,
+                       zero_initial_glacier=False,
+                       **kwargs):
+    """Runs the random mass-balance model for a given number of years.
 
      Parameters
      ----------
@@ -1549,27 +1576,14 @@ def random_glacier_evolution(gdir, nyears=1000, y0=None, halfsize=15,
          kwargs to pass to the FluxBasedModel instance
      """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-
-    ys = 0
-    ye = ys + nyears
     mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
                                   bias=bias, seed=seed, filename=filename,
                                   input_filesuffix=input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
-                            ys=ys, ye=ye, init_model_fls=init_model_fls,
+    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
+                            ys=0, ye=nyears, init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
 
@@ -1581,7 +1595,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
                          init_model_fls=None,
                          zero_initial_glacier=False,
                          **kwargs):
-    """Run a glacier under a constant climate for a given climate period.
+    """Runs the constant mass-balance model for a given number of years.
 
      Parameters
      ----------
@@ -1614,23 +1628,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, bias=None,
          kwargs to pass to the FluxBasedModel instance
      """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-
     mb = mbmods.ConstantMassBalance(gdir, y0=y0, bias=bias, filename=filename,
                                     input_filesuffix=input_filesuffix)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
+    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
                             ys=0, ye=nyears, init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
@@ -1641,7 +1644,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
                           input_filesuffix='', filesuffix='',
                           init_model_fls=None, zero_initial_glacier=False,
                           **kwargs):
-    """ Runs glacier with climate input from a general circulation model.
+    """ Runs glacier with climate input from CRU or a GCM.
 
      Parameters
      ----------
@@ -1665,17 +1668,6 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
          kwargs to pass to the FluxBasedModel instance
      """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-
     if ys is None:
         ys = cfg.PARAMS['ys']
     if ye is None:
@@ -1684,6 +1676,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, filename='climate_monthly',
     mb = mbmods.PastMassBalance(gdir, filename=filename,
                                 input_filesuffix=input_filesuffix)
 
-    return robust_model_run(gdir, input_filesuffix=filesuffix, mb_model=mb,
+    return robust_model_run(gdir, output_filesuffix=filesuffix, mb_model=mb,
                             ys=ys, ye=ye, init_model_fls=init_model_fls,
+                            zero_initial_glacier=zero_initial_glacier,
                             **kwargs)

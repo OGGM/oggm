@@ -1083,7 +1083,7 @@ class TestIO(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
-        flowline.random_glacier_evolution(new_gdir, nyears=10)
+        flowline.run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 
         self.gdir.copy_to_basedir(new_dir, setup='inversion')
@@ -1689,8 +1689,8 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=100, seed=4,
-                                          bias=0, filesuffix='_rdn')
+        flowline.run_random_climate(self.gdir, nyears=100, seed=4,
+                                    bias=0, filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=100,
                                       bias=0, filesuffix='_ct')
 
@@ -1726,8 +1726,8 @@ class TestHEF(unittest.TestCase):
         self.gdir.hemisphere = 'sh'
         climate.process_cru_data(self.gdir)
 
-        flowline.random_glacier_evolution(self.gdir, nyears=20, seed=4,
-                                          bias=0, filesuffix='_rdn')
+        flowline.run_random_climate(self.gdir, nyears=20, seed=4,
+                                    bias=0, filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=20,
                                       bias=0, filesuffix='_ct')
 
@@ -1870,7 +1870,7 @@ class TestHEF(unittest.TestCase):
         # Mutliproc
         tasks = []
         for feedback in feedbacks:
-            tasks.append((flowline.random_glacier_evolution,
+            tasks.append((flowline.run_random_climate,
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
                                filesuffix=feedback)))
         workflow.execute_parallel_tasks(self.gdir, tasks)
