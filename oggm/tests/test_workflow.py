@@ -182,7 +182,7 @@ def random_for_plot():
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
     workflow.execute_entity_task(flowline.run_random_climate, gdirs,
-                                 nyears=10, seed=0, filesuffix='_plot')
+                                 nyears=10, seed=0, output_filesuffix='_plot')
     return gdirs
 
 

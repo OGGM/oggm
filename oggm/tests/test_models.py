@@ -1,3 +1,4 @@
+import oggm
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 
@@ -1872,7 +1873,7 @@ class TestHEF(unittest.TestCase):
         for feedback in feedbacks:
             tasks.append((flowline.run_random_climate,
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
-                               filesuffix=feedback)))
+                               output_filesuffix=feedback)))
         workflow.execute_parallel_tasks(self.gdir, tasks)
 
         out = []
