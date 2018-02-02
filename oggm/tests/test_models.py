@@ -1044,6 +1044,7 @@ class TestIO(unittest.TestCase):
         xr.testing.assert_identical(ds_diag, ds_)
 
         fmodel = flowline.FileModel(run_path)
+        assert fmodel.last_yr == 500
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
@@ -1861,6 +1862,18 @@ class TestHEF(unittest.TestCase):
                         rtol=0.1)
         # ELA should be close
         assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
+
+        # Do a spinup run
+        flowline.run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
+                                      output_filesuffix='_spinup')
+        flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
+                                       init_model_filesuffix='_spinup',
+                                       output_filesuffix='_afterspinup')
+        ds3 = utils.compile_run_output([gdir], path=False,
+                                       filesuffix='_afterspinup')
+        assert (ds1.volume.isel(rgi_id=0, time=-1) <
+                0.7*ds3.volume.isel(rgi_id=0, time=-1))
+
 
     @is_slow
     def test_elevation_feedback(self):

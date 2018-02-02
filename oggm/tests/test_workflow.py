@@ -176,8 +176,11 @@ def up_to_distrib(reset=False):
 def random_for_plot():
 
     # Fake Reset (all these tests are horribly coded)
-    with open(CLI_LOGF, 'wb') as f:
-        pickle.dump('none', f)
+    try:
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
+    except FileNotFoundError:
+        pass
     gdirs = up_to_inversion()
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)

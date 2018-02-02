@@ -1226,6 +1226,7 @@ class FileModel(object):
             ds = xr.open_dataset(path, group='fl_{}'.format(flid))
             ds.load()
             dss.append(ds)
+        self.last_yr = ds.year.values[-1]
         self.dss = dss
         self.reset_y0()
 
@@ -1652,8 +1653,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 def run_from_climate_data(gdir, ys=None, ye=None,
                           climate_filename='climate_monthly',
                           climate_input_filesuffix='', output_filesuffix='',
+                          init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
-                          spinup=False,
                           **kwargs):
     """ Runs glacier with climate input from CRU or a GCM.
 
@@ -1670,9 +1671,16 @@ def run_from_climate_data(gdir, ys=None, ye=None,
          filesuffix for the input climate file
      output_filesuffix : str
          for the output file
+     init_model_filesuffix : str
+         if you want to start from a previous model run state. Can be
+         combined with `init_model_yr`
+     init_model_yr : int
+         the year of the initial run you want to starte from. The default
+         is to take the last year of the simulation.
      init_model_fls : []
          list of flowlines to use to initialise the model (the default is the
-         present_time_glacier file from the glacier directory)
+         present_time_glacier file from the glacier directory).
+         Ignored if `init_model_filesuffix` is set
      zero_initial_glacier : bool
          if true, the ice thickness is set to zero before the simulation
      kwargs : dict
@@ -1684,12 +1692,13 @@ def run_from_climate_data(gdir, ys=None, ye=None,
     if ye is None:
         ye = cfg.PARAMS['ye']
 
-    if spinup:
-        tmp_mod = FileModel(
-            gdir.get_filepath('model_run', filesuffix=output_filesuffix))
-        tmp_mod.run_until(500)
-        init_model_fls = tmp_mod.fls
-        output_filesuffix = ''.join(['with_', output_filesuffix])
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
 
     mb = mbmods.PastMassBalance(gdir, filename=climate_filename,
                                 input_filesuffix=climate_input_filesuffix)
