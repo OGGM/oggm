@@ -26,8 +26,7 @@ from oggm.core.inversion import volume_inversion
 from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import distribute_thickness
 from oggm.core.flowline import init_present_time_glacier
-from oggm.core.flowline import random_glacier_evolution
-from oggm.core.flowline import iterative_initial_glacier_search
+from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
 

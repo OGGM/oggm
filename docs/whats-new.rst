@@ -20,6 +20,15 @@ Breaking changes
   the model results: cross-validation indicates very similar scores, but
   the influence on global model output has not been assessed yet.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- It is now possible to run a simulation with spinup in the standard
+  workflow (:pull:`411`). For this to happen it was necessary to clean up
+  the many `*filesuffix` options. The new names are more explicit
+  but not backwards compatible. The previous `filesuffix` is now
+  called `output_filesuffix`. The previous `input_filesuffix` is now
+  called `climate_input_filesuffix`. The `random_glacier_evolution` task
+  is now called `run_random_climate` for consistency with the other tasks
+  See the PR linked above for more info.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~

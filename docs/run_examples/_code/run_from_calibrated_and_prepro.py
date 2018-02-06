@@ -43,9 +43,9 @@ gdirs = workflow.init_glacier_regions(rgidf)
 # We can step directly to a new experiment!
 # Random climate representative for the recent climate (1985-2015)
 # This is a kinf of "commitment" run
-execute_entity_task(tasks.random_glacier_evolution, gdirs,
+execute_entity_task(tasks.run_random_climate, gdirs,
                     nyears=200, y0=2000, seed=1,
-                    filesuffix='_commitment')
+                    output_filesuffix='_commitment')
 
 # Compile output
 log.info('Compiling output')

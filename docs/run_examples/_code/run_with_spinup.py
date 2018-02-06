@@ -1,7 +1,5 @@
 # Python imports
 from os import path
-import shutil
-import zipfile
 import oggm
 
 # Module logger
@@ -10,11 +8,13 @@ log = logging.getLogger(__name__)
 
 # Libs
 import salem
+import matplotlib.pyplot as plt
 
 # Locals
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
+from oggm.utils import get_demo_file
 
 # For timing the run
 import time
@@ -24,7 +24,7 @@ start = time.time()
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
+WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_spinup_run')
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
@@ -40,22 +40,15 @@ cfg.PARAMS['border'] = 100
 cfg.PARAMS['continue_on_error'] = False
 
 # We use intersects
-# Here we use the global file but there are regional files too (faster)
-cfg.set_intersects_db(utils.get_rgi_intersects_region_file('00', version='5'))
+cfg.set_intersects_db(utils.get_rgi_intersects_region_file('11', version='5'))
 
 # Pre-download other files which will be needed later
 utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
-# Download the RGI file for the run
-# We us a set of four glaciers here but this could be an entire RGI region,
-# or any glacier list you'd like to model
-dl = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/RGI_example_glaciers.zip'
-with zipfile.ZipFile(utils.file_downloader(dl)) as zf:
-    zf.extractall(WORKING_DIR)
-rgidf = salem.read_shapefile(path.join(WORKING_DIR, 'RGI_example_glaciers',
-                                       'RGI_example_glaciers.shp'))
+# Use the Hintereisferner RGI file for the run
+rgidf = salem.read_shapefile(get_demo_file('Hintereisferner_RGI5.shp'))
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
@@ -81,10 +74,16 @@ task_list = [
 for task in task_list:
     execute_entity_task(task, gdirs)
 
-# Climate tasks -- only data IO and tstar interpolation!
+# Climate tasks -- data IO and tstar interpolation
 execute_entity_task(tasks.process_cru_data, gdirs)
 tasks.distribute_t_stars(gdirs)
 execute_entity_task(tasks.apparent_mb, gdirs)
+
+# Additional climate file (CESM)
+cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+execute_entity_task(tasks.process_cesm_data, gdirs)
 
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -95,19 +94,42 @@ execute_entity_task(tasks.filter_inversion_output, gdirs)
 # Final preparation for the run
 execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-# Random climate representative for the tstar climate, without bias
-# In an ideal world this would imply that the glaciers remain stable,
-# but it doesn't have to be so
-execute_entity_task(tasks.run_random_climate, gdirs,
-                    nyears=200, bias=0, seed=1,
-                    output_filesuffix='_tstar')
+# Run the last 200 years with the default starting point (current glacier)
+# and CESM data as input
+execute_entity_task(tasks.run_from_climate_data, gdirs,
+                    climate_filename='cesm_data',
+                    ys=1801, ye=2000,
+                    output_filesuffix='_no_spinup')
+
+# Run the spinup simulation - t* climate with a cold temperature bias
+execute_entity_task(tasks.run_constant_climate, gdirs,
+                    nyears=100, bias=0, temperature_bias=-0.5,
+                    output_filesuffix='_spinup')
+# Run a past climate run based on this spinup
+execute_entity_task(tasks.run_from_climate_data, gdirs,
+                    climate_filename='cesm_data',
+                    ys=1801, ye=2000,
+                    init_model_filesuffix='_spinup',
+                    output_filesuffix='_with_spinup')
 
 # Compile output
 log.info('Compiling output')
 utils.glacier_characteristics(gdirs)
-utils.compile_run_output(gdirs, filesuffix='_tstar')
+ds1 = utils.compile_run_output(gdirs, filesuffix='_no_spinup')
+ds2 = utils.compile_run_output(gdirs, filesuffix='_with_spinup')
 
 # Log
 m, s = divmod(time.time() - start, 60)
 h, m = divmod(m, 60)
 log.info('OGGM is done! Time needed: %d:%02d:%02d' % (h, m, s))
+
+# Plot
+f, ax = plt.subplots(figsize=(9, 4))
+(ds1.volume.sum(dim='rgi_id') * 1e-9).plot(ax=ax, label='No spinup')
+(ds2.volume.sum(dim='rgi_id') * 1e-9).plot(ax=ax, label='With spinup')
+ax.set_ylabel('Volume (km$^3$)')
+ax.set_xlabel('')
+ax.set_title('Hintereisferner volume under CESM forcing')
+plt.legend()
+plt.tight_layout()
+plt.show()

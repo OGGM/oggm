@@ -176,13 +176,16 @@ def up_to_distrib(reset=False):
 def random_for_plot():
 
     # Fake Reset (all these tests are horribly coded)
-    with open(CLI_LOGF, 'wb') as f:
-        pickle.dump('none', f)
+    try:
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
+    except FileNotFoundError:
+        pass
     gdirs = up_to_inversion()
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-    workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
-                                 nyears=10, seed=0, filesuffix='_plot')
+    workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+                                 nyears=10, seed=0, output_filesuffix='_plot')
     return gdirs
 
 
@@ -336,8 +339,9 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
-                                     nyears=200, seed=0, filesuffix='_test')
+        workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+                                     nyears=200, seed=0,
+                                     output_filesuffix='_test')
 
         for gd in gdirs:
 
@@ -425,8 +429,8 @@ def test_plot_region_model():
     gdirs = random_for_plot()
 
     dfc = utils.compile_task_log(gdirs,
-                                 task_names=['random_glacier_evolution_plot'])
-    assert np.all(dfc['random_glacier_evolution_plot'] == 'SUCCESS')
+                                 task_names=['run_random_climate_plot'])
+    assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
 
     # We prepare for the plot, which needs our own map to proceed.
     # Lets do a local mercator grid

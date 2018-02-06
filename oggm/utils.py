@@ -2394,7 +2394,8 @@ class entity_task(object):
             task_name = task_func.__name__
 
             # Filesuffix are typically used to differentiate tasks
-            fsuffix = kwargs.get('filesuffix', False)
+            fsuffix = (kwargs.get('filesuffix', False) or
+                       kwargs.get('output_filesuffix', False))
             if fsuffix:
                 task_name += fsuffix
 
