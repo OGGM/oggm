@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import ix_
 import xarray as xr
+import os
 
 from oggm import cfg, utils
 from oggm.cfg import RHO, G, N, SEC_IN_YEAR, SEC_IN_DAY
@@ -153,12 +154,18 @@ class Model2D(object):
         """Advance one step."""
         raise NotImplementedError
 
-    def run_until(self, y1):
+    def run_until(self, y1, stop_if_border=False):
         """Run until a selected year."""
 
-        t = (y1-self.y0) * SEC_IN_YEAR
+        t = (y1 - self.y0) * SEC_IN_YEAR
         while self.t < t:
-            self.step(t-self.t)
+            self.step(t - self.t)
+            if stop_if_border:
+                if (np.any(self.ice_thick[0, :] > 10) or
+                        np.any(self.ice_thick[-1, :] > 10) or
+                        np.any(self.ice_thick[:, 0] > 10) or
+                        np.any(self.ice_thick[:, -1] > 10)):
+                    raise RuntimeError('Glacier exceeds boundaries')
             if self.ice_thick_filter is not None:
                 self.ice_thick = self.ice_thick_filter(self.ice_thick)
 
@@ -185,16 +192,19 @@ class Model2D(object):
             raise RuntimeError('Did not find equilibrium.')
 
     def run_until_and_store(self, ye, step=2, run_path=None, grid=None,
-                            print_stdout=False):
+                            print_stdout=False, stop_if_border=False):
         """Run until a selected year and store the output in a NetCDF file."""
 
         yrs = np.arange(np.floor(self.yr), np.floor(ye) + 1, step)
         out_thick = np.zeros((len(yrs), self.ny, self.nx))
         for i, yr in enumerate(yrs):
             if print_stdout and (yr / 10) == int(yr / 10):
-                print('{}: year {} of {}\r'.format(print_stdout,
-                                                 int(yr), int(ye)))
-            self.run_until(yr)
+                print('{}: year {} of {}, '
+                      'max thick {:.1f}m\r'.format(print_stdout,
+                                                   int(yr),
+                                                   int(ye),
+                                                   self.ice_thick.max()))
+            self.run_until(yr, stop_if_border=stop_if_border)
             out_thick[i, :, :] = self.ice_thick
 
         run_ds = grid.to_dataset() if grid else xr.Dataset()
@@ -207,6 +217,8 @@ class Model2D(object):
 
         # write output?
         if run_path is not None:
+            if os.path.exists(run_path):
+                os.remove(run_path)
             run_ds.to_netcdf(run_path)
 
         return run_ds

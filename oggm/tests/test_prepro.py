@@ -2100,6 +2100,73 @@ class TestGCMClimate(unittest.TestCase):
                                            clim_cesm2.ref_pix_lon)
 
 
+class TestIdealizedGdir(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PARAMS['use_multiple_flowlines'] = False
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_invert(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
+        v1, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+        tt1 = gdir.read_pickle('inversion_input')[0]
+        gdir1 = gdir
+
+        fl = gdir.read_pickle('inversion_flowlines')[0]
+        map_dx = gdir.grid.dx
+        gdir = utils.idealized_gdir(fl.surface_h,
+                                    fl.widths * map_dx,
+                                    map_dx,
+                                    flowline_dx=fl.dx,
+                                    base_dir=self.testdir)
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
+        v2, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+
+        tt2 = gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_allclose(tt1['width'], tt2['width'])
+        np.testing.assert_allclose(tt1['slope_angle'], tt2['slope_angle'])
+        np.testing.assert_allclose(tt1['dx'], tt2['dx'])
+        np.testing.assert_allclose(tt1['flux_a0'], tt2['flux_a0'])
+        np.testing.assert_allclose(v1, v2)
+        np.testing.assert_allclose(gdir1.rgi_area_km2, gdir.rgi_area_km2)
+
+
 class TestCatching(unittest.TestCase):
 
     def setUp(self):

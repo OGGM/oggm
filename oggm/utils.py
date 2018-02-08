@@ -407,6 +407,9 @@ def parse_rgi_meta(version=None):
                               zip(subreg_names['O1'], subreg_names['O2'])]
         subreg_names = subreg_names[['Full_name']]
 
+    # For idealized
+    reg_names.loc[0] = ['None']
+    subreg_names.loc['00-00'] = ['None']
     _RGI_METADATA[version] = (reg_names, subreg_names)
     return _RGI_METADATA[version]
 
@@ -2456,6 +2459,64 @@ def filter_rgi_name(name):
         return filter_rgi_name(name[:-1])
 
     return name.strip().title()
+
+
+def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
+                   base_dir=None, reset=False):
+    """Creates a glacier directory with flowline input data only.
+
+    This is useful for testing, or for idealized experiments.
+
+    Parameters
+    ----------
+    surface_h : ndarray
+        the surface elevation of the flowline's grid points (in m).
+    widths_m : ndarray
+        the widths of the flowline's grid points (in m).
+    map_dx : float
+        the grid spacing (in m)
+    flowline_dx : int
+        the flowline grid spacing (in units of map_dx, often it should be 1)
+    base_dir : str
+        path to the directory where to open the directory.
+        Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
+    reset : bool, default=False
+        empties the directory at construction
+
+    Returns
+    -------
+    a GlacierDirectory instance
+    """
+
+    from oggm.core.centerlines import Centerline
+
+    # Area from geometry
+    area_km2 = np.sum(widths_m * map_dx * flowline_dx) * 1e-6
+
+    # Dummy entity - should probably also change the geometry
+    entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
+    entity.Area = area_km2
+    entity.CenLat = 0
+    entity.CenLon = 0
+    entity.Name = ''
+    entity.RGIId = 'RGI50-00.00000'
+    entity.O1Region = '00'
+    entity.O2Region = '0'
+    gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset)
+
+    # Idealized flowline
+    coords = np.arange(0, len(surface_h)-0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+    fl = Centerline(line, dx=flowline_dx, surface_h=surface_h)
+    fl.widths = widths_m / map_dx
+    fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    gdir.write_pickle([fl], 'inversion_flowlines')
+
+    # Idealized map
+    grid = salem.Grid(nxny=(1, 1), dxdy=(map_dx, map_dx), x0y0=(0, 0))
+    grid.to_json(gdir.get_filepath('glacier_grid'))
+
+    return gdir
 
 
 class GlacierDirectory(object):
