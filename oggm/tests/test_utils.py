@@ -215,7 +215,7 @@ class TestFuncs(unittest.TestCase):
     def test_rgi_meta(self):
         cfg.initialize()
         reg_names, subreg_names = utils.parse_rgi_meta(version='6')
-        assert len(reg_names) == 19
+        assert len(reg_names) == 20
         assert reg_names.loc[3].values[0] == 'Arctic Canada North'
 
 
