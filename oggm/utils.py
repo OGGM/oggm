@@ -4,6 +4,7 @@
 # Builtins
 import glob
 import os
+import tempfile
 import gzip
 import shutil
 import zipfile
@@ -308,6 +309,24 @@ def del_empty_dirs(s_dir):
     if b_empty:
         os.rmdir(s_dir)
     return b_empty
+
+
+def gettempdir(dirname='', reset=False):
+    """Get a temporary directory.
+
+    Parameters
+    ----------
+    dirname : str
+        if you want to give it a name
+    reset : bool
+        if it has to be emptied first.
+
+    Returns
+    -------
+    the path to the temporary directory
+    """
+    return mkdir(os.path.join(tempfile.gettempdir(), 'OGGM', dirname),
+                 reset=reset)
 
 
 def get_sys_info():
@@ -726,15 +745,19 @@ def mkdir(path, reset=False):
     Parameters
     ----------
     reset: erase the content of the directory if exists
+
+    Returns
+    -------
+    the path
     """
 
     if reset and os.path.exists(path):
         shutil.rmtree(path)
-
     try:
         os.makedirs(path)
     except FileExistsError:
         pass
+    return path
 
 
 def include_patterns(*patterns):

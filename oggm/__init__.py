@@ -32,6 +32,6 @@ except ImportError:
     pass
 
 # API
-from oggm.utils import GlacierDirectory, entity_task, global_task
+from oggm.utils import GlacierDirectory, entity_task, global_task, gettempdir
 from oggm.core.centerlines import Centerline
 from oggm.core.flowline import Flowline

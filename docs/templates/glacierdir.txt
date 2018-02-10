@@ -33,7 +33,7 @@ Initalising a glacier directory
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PARAMS['border'] = 20
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-    path = os.path.join(os.path.expanduser('~'), 'OGGM_docs', 'GlacierDir')
+    path = os.path.join(oggm.gettempdir(), 'OGGM_docs', 'GlacierDir')
     if os.path.exists(path):
         shutil.rmtree(path)
 
@@ -42,7 +42,7 @@ as input:
 
 .. ipython:: python
 
-    base_dir = os.path.join(os.path.expanduser('~'), 'OGGM_docs', 'GlacierDir')
+    base_dir = os.path.join(oggm.gettempdir(), 'OGGM_docs', 'GlacierDir')
     entity = gpd.GeoDataFrame.from_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
     gdir.dir
