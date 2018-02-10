@@ -75,7 +75,7 @@ class Model2D(object):
 
         self.dx = dx
         self.dy = dy
-        self.dxdy = dx*dy
+        self.dxdy = dx * dy
 
         self.y0 = None
         self.t = None
@@ -170,7 +170,7 @@ class Model2D(object):
                 self.ice_thick = self.ice_thick_filter(self.ice_thick)
 
         if np.any(~np.isfinite(self.ice_thick)):
-                raise FloatingPointError('NaN in numerical solution.')
+            raise FloatingPointError('NaN in numerical solution.')
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """Run until an equuilibrium is reached (can take a while)."""
@@ -276,11 +276,12 @@ class Upstream2D(Model2D):
         # default is just beyond R. Hindmarsh's idea of 1/2(n+1)
         self.cfl = cfl
         self.max_dt = max_dt
-    
+
         # extend into 2D
         self.Lx = 0.5 * (self.nx - 1) * self.dx
         self.Ly = 0.5 * (self.ny - 1) * self.dy
 
+        # Some indices
         self.k = np.arange(0, self.ny)
         self.kp = np.hstack([np.arange(1, self.ny), self.ny - 1])
         self.km = np.hstack([0, np.arange(0, self.ny - 1)])
@@ -290,6 +291,17 @@ class Upstream2D(Model2D):
         self.H_upstream_up = np.zeros((self.ny, self.nx))
         self.H_upstream_dn = np.zeros((self.ny, self.nx))
 
+        # Easy optimisation
+        self._ixklp = ix_(self.k, self.lp)
+        self._ixkl = ix_(self.k, self.l)
+        self._ixklm = ix_(self.k, self.lm)
+        self._ixkpl = ix_(self.kp, self.l)
+        self._ixkml = ix_(self.km, self.l)
+        self._ixkplp = ix_(self.kp, self.lp)
+        self._ixkplm = ix_(self.kp, self.lm)
+        self._ixkmlm = ix_(self.km, self.lm)
+        self._ixkmlp = ix_(self.km, self.lp)
+
     def diffusion_upstream_2d(self):
         # Builded upon the Eq. (62) with the term in y in the diffusivity.
         # It differs from diffusion_Upstream_2D_V1 only for the definition of
@@ -298,70 +310,80 @@ class Upstream2D(Model2D):
         H = self.ice_thick
         S = self.surface_h
 
+        # Optim
+        S_ixklp = S[self._ixklp]
+        S_ixkl = S[self._ixkl]
+        S_ixklm = S[self._ixklm]
+        S_ixkml = S[self._ixkml]
+        S_ixkpl = S[self._ixkpl]
+        S_ixkplp = S[self._ixkplp]
+        S_ixkplm = S[self._ixkplm]
+        S_ixkmlm = S[self._ixkmlm]
+        S_ixkmlp = S[self._ixkmlp]
+
+        Hl = H[self._ixkl]
+        Hlp = H[self._ixklp]
+        Hlm = H[self._ixklm]
+        Hk = Hl
+        Hkp = H[self._ixkpl]
+        Hkm = H[self._ixkml]
+
         # --- all the l components
-        H_l_up = 0.5 * (H[ix_(self.k, self.lp)] + H[ix_(self.k, self.l)])
-        H_l_dn = 0.5 * (H[ix_(self.k, self.l)] + H[ix_(self.k, self.lm)])
 
         # applying Eq. (61) to the scheme
-        Hl = H[ix_(self.k, self.l)]
-        Hlp = H[ix_(self.k, self.lp)]
-        Hlm = H[ix_(self.k, self.lm)]
+        H_l_up = 0.5 * (Hlp + Hl)
+        H_l_dn = 0.5 * (Hl + Hlm)
 
         H_l_upstream_up = self.H_upstream_up
-        gt = S[ix_(self.k, self.lp)] > S[ix_(self.k, self.l)]
+        gt = S_ixklp > S_ixkl
         H_l_upstream_up[gt] = Hlp[gt]
         H_l_upstream_up[~gt] = Hl[~gt]
 
         H_l_upstream_dn = self.H_upstream_dn
-        gt = S[ix_(self.k, self.l)] > S[ix_(self.k, self.lm)]
+        gt = S_ixkl > S_ixklm
         H_l_upstream_dn[gt] = Hl[gt]
         H_l_upstream_dn[~gt] = Hlm[~gt]
 
         # applying Eq. (62) to the scheme
-        s_l_grad_up = (((S[ix_(self.kp, self.l)] - S[ix_(self.km, self.l)] +
-                         S[ix_(self.kp, self.lp)] - S[ix_(self.km, self.lp)])
+        S_diff = S_ixkpl - S_ixkml
+        S_lpdiff = S_ixklp - S_ixkl
+        S_lmdiff = S_ixkl - S_ixklm
+        s_l_grad_up = (((S_diff + S_ixkplp - S_ixkmlp)
                         ** 2. / (4 * self.dx) ** 2.) +
-                       ((S[ix_(self.k, self.lp)] - S[ix_(self.k, self.l)])
-                        ** 2. / self.dy ** 2.)) ** ((N - 1.) / 2.)
-        s_l_grad_dn = (((S[ix_(self.kp, self.l)] - S[ix_(self.km, self.l)] +
-                         S[ix_(self.kp, self.lm)] - S[ix_(self.km, self.lm)])
+                       (S_lpdiff ** 2. / self.dy ** 2.)) ** ((N - 1.) / 2.)
+        s_l_grad_dn = (((S_diff + S_ixkplm - S_ixkmlm)
                         ** 2. / (4 * self.dx) ** 2.) +
-                       ((S[ix_(self.k, self.l)] - S[ix_(self.k, self.lm)])
-                        ** 2. / self.dy ** 2.)) ** ((N - 1.) / 2.)
+                       (S_lmdiff ** 2. / self.dy ** 2.)) ** ((N - 1.) / 2.)
 
         D_l_up = self.gamma * H_l_up ** (N + 1) * H_l_upstream_up * s_l_grad_up
         D_l_dn = self.gamma * H_l_dn ** (N + 1) * H_l_upstream_dn * s_l_grad_dn
 
         # --- all the k components
-        H_k_up = 0.5 * (H[ix_(self.kp, self.l)] + H[ix_(self.k, self.l)])
-        H_k_dn = 0.5 * (H[ix_(self.k, self.l)] + H[ix_(self.km, self.l)])
 
         # applying Eq. (61) to the scheme
-        Hk = H[ix_(self.k, self.l)]
-        Hkp = H[ix_(self.kp, self.l)]
-        Hkm = H[ix_(self.km, self.l)]
+        H_k_up = 0.5 * (Hkp + Hl)
+        H_k_dn = 0.5 * (Hl + Hkm)
 
         H_k_upstream_up = self.H_upstream_up
-        gt = S[ix_(self.kp, self.l)] > S[ix_(self.k, self.l)]
+        gt = S_ixkpl > S_ixkl
         H_k_upstream_up[gt] = Hkp[gt]
         H_k_upstream_up[~gt] = Hk[~gt]
 
         H_k_upstream_dn = self.H_upstream_dn
-        gt = S[ix_(self.k, self.l)] > S[ix_(self.km, self.l)]
+        gt = S_ixkl > S_ixkml
         H_k_upstream_dn[gt] = Hk[gt]
         H_k_upstream_dn[~gt] = Hkm[~gt]
 
         # applying Eq. (62) to the scheme
-        s_k_grad_up = (((S[ix_(self.k, self.lp)] - S[ix_(self.k, self.lm)] +
-                         S[ix_(self.kp, self.lp)] - S[ix_(self.kp, self.lm)])
+        S_diff = S_ixklp - S_ixklm
+        S_kpdiff = S_ixkpl - S_ixkl
+        S_kmdiff = S_ixkl - S_ixkml
+        s_k_grad_up = (((S_diff + S_ixkplp - S_ixkplm)
                         ** 2. / (4 * self.dy) ** 2.) +
-                       ((S[ix_(self.kp, self.l)] - S[ix_(self.k, self.l)])
-                        ** 2. / self.dx ** 2.))  ** ((N - 1.) / 2.)
-        s_k_grad_dn = (((S[ix_(self.k, self.lp)] - S[ix_(self.k, self.lm)] +
-                         S[ix_(self.km, self.lp)] - S[ix_(self.km, self.lm)])
+                       (S_kpdiff ** 2. / self.dx ** 2.)) ** ((N - 1.) / 2.)
+        s_k_grad_dn = (((S_diff + S_ixkmlp - S_ixkmlm)
                         ** 2. / (4 * self.dy) ** 2.) +
-                       ((S[ix_(self.k, self.l)] - S[ix_(self.km, self.l)])
-                        ** 2. / self.dx ** 2.)) ** ((N - 1.) / 2.)
+                       (S_kmdiff ** 2. / self.dx ** 2.)) ** ((N - 1.) / 2.)
 
         D_k_up = self.gamma * H_k_up ** (N + 1) * H_k_upstream_up * s_k_grad_up
         D_k_dn = self.gamma * H_k_dn ** (N + 1) * H_k_upstream_dn * s_k_grad_dn
@@ -375,18 +397,12 @@ class Upstream2D(Model2D):
             dt_cfl = (self.cfl * min(self.dx ** 2., self.dy ** 2.) / divisor)
 
         # --- Calculate Final diffusion term
-        div_k = (D_k_up * (S[ix_(self.kp, self.l)] - S[ix_(self.k, self.l)]) /
-                 self.dy - D_k_dn * (S[ix_(self.k, self.l)] -
-                                     S[ix_(self.km, self.l)]) /
-                 self.dy) / self.dy
-        div_l = (D_l_up * (S[ix_(self.k, self.lp)] - S[ix_(self.k, self.l)]) /
-                 self.dx - D_l_dn * (S[ix_(self.k, self.l)] -
-                                     S[ix_(self.k, self.lm)]) /
-                 self.dx) / self.dx
+        div_k = (D_k_up * S_kpdiff / self.dy -
+                 D_k_dn * S_kmdiff / self.dy) / self.dy
+        div_l = (D_l_up * S_lpdiff / self.dx -
+                 D_l_dn * S_lmdiff / self.dx) / self.dx
 
-        div_back = div_l + div_k
-
-        return div_back, dt_cfl
+        return div_l + div_k, dt_cfl
 
     def step(self, dt):
         """Advance one step."""
