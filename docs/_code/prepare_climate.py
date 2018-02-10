@@ -21,7 +21,7 @@ cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 pcp_fac = 2.6
 cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 
-base_dir = os.path.join(os.path.expanduser('~'), 'Climate')
+base_dir = os.path.join(oggm.gettempdir(), 'Climate')
 entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 

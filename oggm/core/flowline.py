@@ -1542,41 +1542,41 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
-     Parameters
-     ----------
-     nyears : int
-         length of the simulation
-     y0 : int, optional
-         central year of the random climate period. The default is to be
-         centred on t*.
-     halfsize : int, optional
-         the half-size of the time window (window size = 2 * halfsize + 1)
-     bias : float
-         bias of the mb model. Default is to use the calibrated one, which
-         is often a better idea. For t* experiments it can be useful to set it
-         to zero
-     seed : int
-         seed for the random generator. If you ignore this, the runs will be
-         different each time. Setting it to a fixed seed accross glaciers can
-         be usefull if you want to have the same climate years for all of them
-     temperature_bias : float
-         add a bias to the temperature timeseries
-     climate_filename : str
-         name of the climate file, e.g. 'climate_monthly' (default) or
-         'cesm_data'
-     climate_input_filesuffix: str
-         filesuffix for the input climate file
-     output_filesuffix : str
-         this add a suffix to the output file (useful to avoid overwriting
-         previous experiments)
-     init_model_fls : []
-         list of flowlines to use to initialise the model (the default is the
-         present_time_glacier file from the glacier directory)
-     zero_initial_glacier : bool
-         if true, the ice thickness is set to zero before the simulation
-     kwargs : dict
-         kwargs to pass to the FluxBasedModel instance
-     """
+    Parameters
+    ----------
+    nyears : int
+        length of the simulation
+    y0 : int, optional
+        central year of the random climate period. The default is to be
+        centred on t*.
+    halfsize : int, optional
+        the half-size of the time window (window size = 2 * halfsize + 1)
+    bias : float
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero
+    seed : int
+        seed for the random generator. If you ignore this, the runs will be
+        different each time. Setting it to a fixed seed accross glaciers can
+        be usefull if you want to have the same climate years for all of them
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    climate_filename : str
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'cesm_data'
+    climate_input_filesuffix: str
+        filesuffix for the input climate file
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
+    """
 
     mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
                                   bias=bias, seed=seed,
@@ -1603,38 +1603,38 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
-     Parameters
-     ----------
-     nyears : int
-         length of the simulation (default: as long as needed for reaching
-         equilibrium)
-     y0 : int
-         central year of the requested climate period. The default is to be
-         centred on t*.
-     halfsize : int, optional
-         the half-size of the time window (window size = 2 * halfsize + 1)
-     bias : float
-         bias of the mb model. Default is to use the calibrated one, which
-         is often a better idea. For t* experiments it can be useful to set it
-         to zero
-     temperature_bias : float
-         add a bias to the temperature timeseries
-     climate_filename : str
-         name of the climate file, e.g. 'climate_monthly' (default) or
-         'cesm_data'
-     climate_input_filesuffix: str
-         filesuffix for the input climate file
-     output_filesuffix : str
-         this add a suffix to the output file (useful to avoid overwriting
-         previous experiments)
-     zero_initial_glacier : bool
-         if true, the ice thickness is set to zero before the simulation
-     init_model_fls : []
-         list of flowlines to use to initialise the model (the default is the
-         present_time_glacier file from the glacier directory)
-     kwargs : dict
-         kwargs to pass to the FluxBasedModel instance
-     """
+    Parameters
+    ----------
+    nyears : int
+        length of the simulation (default: as long as needed for reaching
+        equilibrium)
+    y0 : int
+        central year of the requested climate period. The default is to be
+        centred on t*.
+    halfsize : int, optional
+        the half-size of the time window (window size = 2 * halfsize + 1)
+    bias : float
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    climate_filename : str
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'cesm_data'
+    climate_input_filesuffix: str
+        filesuffix for the input climate file
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
+    """
 
     mb = mbmods.ConstantMassBalance(gdir, y0=y0, halfsize=halfsize,
                                     bias=bias, filename=climate_filename,
@@ -1658,34 +1658,34 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                           **kwargs):
     """ Runs glacier with climate input from CRU or a GCM.
 
-     Parameters
-     ----------
-     ys : int
-         start year of the model run (default: from the config file)
-     y1 : int
-         end year of the model run (default: from the config file)
-     climate_filename : str
-         name of the climate file, e.g. 'climate_monthly' (default) or
-         'cesm_data'
-     climate_input_filesuffix: str
-         filesuffix for the input climate file
-     output_filesuffix : str
-         for the output file
-     init_model_filesuffix : str
-         if you want to start from a previous model run state. Can be
-         combined with `init_model_yr`
-     init_model_yr : int
-         the year of the initial run you want to starte from. The default
-         is to take the last year of the simulation.
-     init_model_fls : []
-         list of flowlines to use to initialise the model (the default is the
-         present_time_glacier file from the glacier directory).
-         Ignored if `init_model_filesuffix` is set
-     zero_initial_glacier : bool
-         if true, the ice thickness is set to zero before the simulation
-     kwargs : dict
-         kwargs to pass to the FluxBasedModel instance
-     """
+    Parameters
+    ----------
+    ys : int
+        start year of the model run (default: from the config file)
+    y1 : int
+        end year of the model run (default: from the config file)
+    climate_filename : str
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'cesm_data'
+    climate_input_filesuffix: str
+        filesuffix for the input climate file
+    output_filesuffix : str
+        for the output file
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to starte from. The default
+        is to take the last year of the simulation.
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory).
+        Ignored if `init_model_filesuffix` is set
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
+    """
 
     if ys is None:
         ys = cfg.PARAMS['ys']
