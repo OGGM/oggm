@@ -45,8 +45,11 @@ Internals
 ~~~~~~~~~
 
 - We now use a dedicated server for input data such as modified RGI files
- (:pull:`408`). By `Fabien Maussion <https://github.com/fmaussion>`_.
+  (:pull:`408`). By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Test fix for googlemaps.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added a utility function (:py:func:`~utils.idealized_gdir`) useful
+  to dow flowline experiments without have to create a local map (:pull:`413`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
