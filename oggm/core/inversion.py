@@ -89,16 +89,16 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                 raise RuntimeError(msg)
             flux[-1] = 0.
 
-        # Optimisation: we need to compute this term of a0 only once
-        flux_a0 = np.where(fl.is_rectangular, 1, 1.5)
-        flux_a0 *= flux / widths
-
         # Shape
         is_rectangular = fl.is_rectangular
         if not invert_with_rectangular:
             is_rectangular[:] = False
         if invert_all_rectangular:
             is_rectangular[:] = True
+
+        # Optimisation: we need to compute this term of a0 only once
+        flux_a0 = np.where(is_rectangular, 1, 1.5)
+        flux_a0 *= flux / widths
 
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
