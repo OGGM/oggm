@@ -40,6 +40,11 @@ Enhancements
   Generally, we do not recommend to use these data for calibration or
   validation because of largely unknown uncertainties.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The computing efficiency of the 2D shallow ice model has been increased
+  by a factor 2 (:pull:`415`), by avoiding useless repetitions of indexing
+  operations. The results shouldn't change at all.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 Internals
 ~~~~~~~~~
