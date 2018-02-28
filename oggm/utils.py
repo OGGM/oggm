@@ -198,7 +198,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
         except:
             pass
         return res
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         return _urlretrieve(url, cache_obj_name=cache_name, reset=reset)
 
 
