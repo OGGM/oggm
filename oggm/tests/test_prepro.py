@@ -262,6 +262,15 @@ class TestCenterlines(unittest.TestCase):
         self.assertEqual(_heads, _headsi[::-1])
         self.assertEqual(_heads, [heads[h] for h in [2,5,6,7]])
 
+    def test_mask_to_polygon(self):
+        from oggm.core.centerlines import _mask_to_polygon
+
+        mask = np.zeros((3, 3))
+        mask[1, 1] = 1
+
+        p1, p2 = _mask_to_polygon(mask)
+        print(p1)
+
     def test_centerlines(self):
 
         hef_file = get_demo_file('Hintereisferner.shp')

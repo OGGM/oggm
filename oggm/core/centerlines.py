@@ -1161,7 +1161,10 @@ def _mask_to_polygon(mask, x=None, y=None, gdir=None):
 
     regions, nregions = label(mask, structure=LABEL_STRUCT)
     if nregions > 1:
-        log.debug('(%s) we had to cut a blob from the catchment', gdir.rgi_id)
+        rid = ''
+        if gdir is not None:
+            rid = gdir.rgi_id
+        log.debug('(%s) we had to cut a blob from the catchment', rid)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
@@ -1169,7 +1172,7 @@ def _mask_to_polygon(mask, x=None, y=None, gdir=None):
         sr = region_sizes.pop(am)
         for ss in region_sizes:
             if (ss / sr) > 0.2:
-                log.warning('(%s) this blob was unusually large', gdir.rgi_id)
+                log.warning('(%s) this blob was unusually large', rid)
         mask[:] = 0
         mask[np.where(regions == (am+1))] = 1
 
