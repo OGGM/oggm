@@ -1472,8 +1472,6 @@ def catchment_intersections(gdir):
     """
 
     catchment_indices = gdir.read_pickle('catchment_indices')
-    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
-                               np.arange(0, gdir.grid.ny, 1))
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1483,7 +1481,7 @@ def catchment_intersections(gdir):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        _, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        _, poly_no = _mask_to_polygon(mask, gdir=gdir)
         gdfc.loc[i, 'geometry'] = poly_no
 
     gdfi = utils.polygon_intersections(gdfc)
@@ -1610,8 +1608,6 @@ def catchment_width_geom(gdir):
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines')
     catchment_indices = gdir.read_pickle('catchment_indices')
-    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
-                               np.arange(0, gdir.grid.ny, 1))
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
@@ -1656,7 +1652,7 @@ def catchment_width_geom(gdir):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        poly, poly_no = _mask_to_polygon(mask, gdir=gdir)
 
         # First guess widths
         for i, (normal, pcoord) in enumerate(zip(fl.normals, fl.line.coords)):
