@@ -266,26 +266,34 @@ class TestCenterlines(unittest.TestCase):
         from oggm.core.centerlines import _mask_to_polygon
 
         mask = np.zeros((5, 5))
-        mask[1:-1, 1:-1] = 1
-        p1, p2 = _mask_to_polygon(mask)
-        assert p1 == p2
-
-        mask = np.zeros((5, 5))
         mask[1, 1] = 1
         p1, p2 = _mask_to_polygon(mask)
         assert p1 == p2
 
-        # There are some asserts in the function that makes this test work
+        mask = np.zeros((5, 5))
+        mask[1:-1, 1:-1] = 1
+        p1, p2 = _mask_to_polygon(mask)
+        assert p1 == p2
+
+        # There are some asserts in the function that
+        # make these test more useful than it looks
         mask = np.zeros((5, 5))
         mask[1:-1, 1:-1] = 1
         mask[2, 2] = 0
-        p1, p2 = _mask_to_polygon(mask)
+        p1, _ = _mask_to_polygon(mask)
+        assert len(p1.interiors) == 1
+        assert p1.exterior == p2.exterior
+
         n = 30
-        mask = np.zeros((n, n))
-        mask[1:-1, 1:-1] = 1
-        for i in range(n*2):
-            mask[np.random.randint(2, n-2), np.random.randint(2, n-2)] = 0
-        p1, p2 = _mask_to_polygon(mask)
+        for i in range(n):
+            mask = np.zeros((n, n))
+            mask[1:-1, 1:-1] = 1
+            _, p2 = _mask_to_polygon(mask)
+            for i in range(n*2):
+                mask[np.random.randint(2, n-2), np.random.randint(2, n-2)] = 0
+            p1, _ = _mask_to_polygon(mask)
+            assert len(p1.interiors) > 1
+            assert p1.exterior == p2.exterior
 
     def test_centerlines(self):
 
