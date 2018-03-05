@@ -28,7 +28,7 @@ import shapely.ops
 import geopandas as gpd
 import scipy.signal
 import shapely.geometry as shpg
-import matplotlib._cntr as cntr
+from skimage import measure
 from scipy import optimize as optimization
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.filters import gaussian_filter1d
@@ -1130,7 +1130,7 @@ def compute_downstream_bedshape(gdir):
     gdir.write_pickle(out, 'downstream_line')
 
 
-def _mask_to_polygon(mask, x=None, y=None, gdir=None):
+def _mask_to_polygon(mask, gdir=None):
     """Converts a mask to a single polygon.
 
     The mask should be a single entity with nunataks: I didnt test for more
@@ -1140,10 +1140,6 @@ def _mask_to_polygon(mask, x=None, y=None, gdir=None):
     ----------
     mask: 2d array with ones and zeros
         the mask to convert
-    x: 2d array with the coordinates
-        if not given it will be generated, give it for optimisation
-    y: 2d array with the coordinates
-        if not given it will be generated, give it for optimisation
     gdir: GlacierDirectory
         for logging
 
@@ -1152,16 +1148,12 @@ def _mask_to_polygon(mask, x=None, y=None, gdir=None):
     (poly, poly_no_nunataks) Shapely polygons
     """
 
-    if (x is None) or (y is None):
-        # do it yourself
-        ny, nx = mask.shape
-        x = np.arange(0, nx, 1)
-        y = np.arange(0, ny, 1)
-        x, y = np.meshgrid(x, y)
-
     regions, nregions = label(mask, structure=LABEL_STRUCT)
     if nregions > 1:
-        log.debug('(%s) we had to cut a blob from the catchment', gdir.rgi_id)
+        rid = ''
+        if gdir is not None:
+            rid = gdir.rgi_id
+        log.debug('(%s) we had to cut a blob from the catchment', rid)
         # Check the size of those
         region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
         am = np.argmax(region_sizes)
@@ -1169,20 +1161,14 @@ def _mask_to_polygon(mask, x=None, y=None, gdir=None):
         sr = region_sizes.pop(am)
         for ss in region_sizes:
             if (ss / sr) > 0.2:
-                log.warning('(%s) this blob was unusually large', gdir.rgi_id)
+                log.warning('(%s) this blob was unusually large', rid)
         mask[:] = 0
         mask[np.where(regions == (am+1))] = 1
 
-    c = cntr.Cntr(x, y, mask)
-    nlist = c.trace(0.5)
-    if len(nlist) == 0:
-        raise RuntimeError('Mask polygon is empty')
-    # The first half are the coordinates. The other stuffs I dont know
-    ngeoms = len(nlist)//2 - 1
-
+    nlist = measure.find_contours(mask, 0.5)
     # First is the exterior, the rest are nunataks
-    e_line = shpg.LinearRing(nlist[0])
-    i_lines = [shpg.LinearRing(ipoly) for ipoly in nlist[1:ngeoms+1]]
+    e_line = shpg.LinearRing(nlist[0][:, ::-1])
+    i_lines = [shpg.LinearRing(ipoly[:, ::-1]) for ipoly in nlist[1:]]
 
     poly = shpg.Polygon(e_line, i_lines).buffer(0)
     if not poly.is_valid:
@@ -1483,8 +1469,6 @@ def catchment_intersections(gdir):
     """
 
     catchment_indices = gdir.read_pickle('catchment_indices')
-    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
-                               np.arange(0, gdir.grid.ny, 1))
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1494,7 +1478,7 @@ def catchment_intersections(gdir):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        _, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        _, poly_no = _mask_to_polygon(mask, gdir=gdir)
         gdfc.loc[i, 'geometry'] = poly_no
 
     gdfi = utils.polygon_intersections(gdfc)
@@ -1621,8 +1605,6 @@ def catchment_width_geom(gdir):
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines')
     catchment_indices = gdir.read_pickle('catchment_indices')
-    xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1),
-                               np.arange(0, gdir.grid.ny, 1))
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
@@ -1667,7 +1649,7 @@ def catchment_width_geom(gdir):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
-        poly, poly_no = _mask_to_polygon(mask, x=xmesh, y=ymesh, gdir=gdir)
+        poly, poly_no = _mask_to_polygon(mask, gdir=gdir)
 
         # First guess widths
         for i, (normal, pcoord) in enumerate(zip(fl.normals, fl.line.coords)):
