@@ -50,6 +50,11 @@ except ImportError:
     from rasterio.tools.merge import merge as merge_tool
 import multiprocessing as mp
 
+try:
+    ModuleNotFoundError
+except NameError:
+    ModuleNotFoundError = ImportError
+
 # Locals
 from oggm import __version__
 import oggm.cfg as cfg
