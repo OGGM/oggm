@@ -275,14 +275,14 @@ class TestCenterlines(unittest.TestCase):
         p1, p2 = _mask_to_polygon(mask)
         assert p1 == p2
 
-        # There are some asserts in the function that
-        # make these test more useful than it looks
         mask = np.zeros((5, 5))
         mask[1:-1, 1:-1] = 1
         mask[2, 2] = 0
         p1, _ = _mask_to_polygon(mask)
         assert len(p1.interiors) == 1
         assert p1.exterior == p2.exterior
+        for i_line in p1.interiors:
+            assert p2.contains(i_line)
 
         n = 30
         for i in range(n):
@@ -294,6 +294,8 @@ class TestCenterlines(unittest.TestCase):
             p1, _ = _mask_to_polygon(mask)
             assert len(p1.interiors) > 1
             assert p1.exterior == p2.exterior
+            for i_line in p1.interiors:
+                assert p2.contains(i_line)
 
     def test_centerlines(self):
 

@@ -1166,7 +1166,7 @@ def _mask_to_polygon(mask, gdir=None):
         mask[np.where(regions == (am+1))] = 1
 
     nlist = measure.find_contours(mask, 0.5)
-    # First is the exterior, the rest are nunataks?
+    # First is the exterior, the rest are nunataks
     e_line = shpg.LinearRing(nlist[0][:, ::-1])
     i_lines = [shpg.LinearRing(ipoly[:, ::-1]) for ipoly in nlist[1:]]
 
@@ -1176,9 +1176,6 @@ def _mask_to_polygon(mask, gdir=None):
     poly_no = shpg.Polygon(e_line).buffer(0)
     if not poly_no.is_valid:
         raise RuntimeError('Mask polygon not valid.')
-    # Check that we are right assuming nunataks
-    for i_line in i_lines:
-        assert poly_no.contains(i_line)
     return poly, poly_no
 
 

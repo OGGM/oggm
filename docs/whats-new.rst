@@ -48,6 +48,7 @@ Enhancements
 
 Bug fixes
 ~~~~~~~~~
+
 - Remove dependency to deprecated matplotlib._cntr module (:issue:`418`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
