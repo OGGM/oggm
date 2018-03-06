@@ -39,14 +39,19 @@ About
 -----
 
 :Status:
-    Experimental - in development
+    .. image:: https://img.shields.io/pypi/v/oggm.svg
+        :target: https://pypi.python.org/pypi/oggm
+        :alt: Pypi version
+        
+    .. image:: https://img.shields.io/pypi/pyversions/oggm.svg
+        :alt: Supported python versions
 
 :Citation:
     .. image:: https://zenodo.org/badge/43965645.svg
         :target: https://zenodo.org/badge/latestdoi/43965645
         :alt: Zenodo
 
-:Tests:
+:Tests:       
     .. image:: https://coveralls.io/repos/github/OGGM/oggm/badge.svg?branch=master
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
