@@ -70,10 +70,9 @@ About
         :alt: Documentation status
 
 :License:
-
-    OGGM is available under the open source `GNU GPLv3 license`_.
-
-    .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
+    .. image:: https://img.shields.io/pypi/l/oggm.svg
+        :target: http://www.gnu.org/licenses/gpl-3.0.en.html
+        :alt: GNU GPLv3 license
 
 :Authors:
 
