@@ -128,8 +128,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         # Check for invalid ELAs
         b0, b1 = self.valid_bounds
         if (np.any(~np.isfinite(self.get_annual_mb([b0, b1], year=year))) or
-            (self.get_annual_mb([b0], year=year)[0] > 0) or
-            (self.get_annual_mb([b1], year=year)[0] < 0)):
+                (self.get_annual_mb([b0], year=year)[0] > 0) or
+                (self.get_annual_mb([b1], year=year)[0] < 0)):
             return np.NaN
 
         def to_minimize(x):
