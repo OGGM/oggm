@@ -44,6 +44,7 @@ About
         :alt: Pypi version
         
     .. image:: https://img.shields.io/pypi/pyversions/oggm.svg
+        :target: https://pypi.python.org/pypi/oggm
         :alt: Supported python versions
 
 :Citation:
