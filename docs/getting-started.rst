@@ -123,9 +123,15 @@ What next?
 This documentation is growing step by step. In the meantime, a good place
 to start is the ``oggm/docs/notebooks`` directory.
 
-You will find two notebooks:
+You will find several notebooks:
 
 - ``getting_started.ipynb``, which set-ups an entire OGGM run
   in the Ötztal region.
 - ``flowline_model.ipynb``, which describes the usage of the flowline model
-  for idealized test cases.
+  for idealized glaciers.
+- ``flowline_with_known_bedrock.ipynb``, which describes the usage of the
+  flowline model with custom boundary conditions.
+- ``specmb_vs_ela.ipynb``, which was used to make the analyses presented in
+  `this blog post <http://oggm.org/2017/10/01/specmb-ela/>`_
+- ``dynamics_and_length_changes.ipynb``, which was used to make the analyses
+  presented in `this blog post <http://oggm.org/2017/10/23/length-changes/>`_
