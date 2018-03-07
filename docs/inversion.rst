@@ -102,7 +102,7 @@ step in OGGM is currently very simple, but provides nice looking maps:
 .. ipython:: python
 
     tasks.catchment_area(gdir)
-    @savefig plot_fls_catchments.png width=80%
+    @savefig plot_distributed_thickness.png width=80%
     graphics.plot_distributed_thickness(gdir)
 
 
