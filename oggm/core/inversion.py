@@ -133,10 +133,10 @@ def _inversion_simple(a3, a0):
 
 def shape_factor_huss(widths, heights, is_rectangular):
     """Compute shape factor for inclusion of lateral drag
-    according to Huss and Farinotti (2012)
+    according to Huss and Farinotti (2012). The shape factor is only applied
+    for parabolic sections.
 
-    Discouraged to use, as this does not make any difference
-    between parabolic and rectangular beds
+    Not yet tested
 
     Parameters
     ----------
@@ -151,7 +151,29 @@ def shape_factor_huss(widths, heights, is_rectangular):
     -------
     shape factor (no units)
     """
-    return widths / (2 * heights + widths)
+    # Ensure bool (for masking)
+    is_rectangular = is_rectangular.astype(bool)
+
+    shape_factors = np.ones(widths.shape)
+    shape_factors[~is_rectangular] = \
+        (widths / (2 * heights + widths))[~is_rectangular]
+
+    return shape_factors
+
+
+# TODO: how to handle zeta > 10? at the moment extrapolation
+# Table 1 from Adhikari (2012) and corresponding interpolation functions
+_ADHIKARI_TABLE_ZETAS = np.array([0.5, 1, 2, 3, 4, 5, 10])
+_ADHIKARI_TABLE_RECTANGULAR = np.array([0.313, 0.558, 0.790, 0.884,
+                                0.929, 0.954, 0.990])
+_ADHIKARI_TABLE_PARABOLIC = np.array([0.251, 0.448, 0.653, 0.748,
+                              0.803, 0.839, 0.917])
+ADHIKARI_FACTORS_RECTANGULAR = interp1d(_ADHIKARI_TABLE_ZETAS,
+                                         _ADHIKARI_TABLE_RECTANGULAR,
+                                         fill_value='extrapolate')
+ADHIKARI_FACTORS_PARABOLIC = interp1d(_ADHIKARI_TABLE_ZETAS,
+                                       _ADHIKARI_TABLE_PARABOLIC,
+                                       fill_value='extrapolate')
 
 
 def shape_factor_adhikari(widths, heights, is_rectangular):
@@ -174,17 +196,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     -------
     shape factors (no units), ndarray of floats
     """
-    # TODO: how to handle zeta > 10? at the moment extrapolation
-    # Table 1 from Adhikari (2012)
-    tabular_zetas = np.array([0.5, 1, 2, 3, 4, 5, 10])
-    factors_rectangular = np.array([0.313, 0.558, 0.790, 0.884,
-                                    0.929, 0.954, 0.990])
-    f_rect = interp1d(tabular_zetas, factors_rectangular,
-                      fill_value='extrapolate')
-    factors_parabolic = np.array([0.251, 0.448, 0.653, 0.748,
-                                  0.803, 0.839, 0.917])
-    f_parab = interp1d(tabular_zetas, factors_parabolic,
-                       fill_value='extrapolate')
+
 
     # Ensure bool (for masking)
     is_rectangular = is_rectangular.astype(bool)
@@ -196,8 +208,10 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape_factors = np.ones(widths.shape)
 
     # TODO: higher order interpolation? (e.g. via InterpolatedUnivariateSpline)
-    shape_factors[is_rectangular] = f_rect(zetas[is_rectangular])
-    shape_factors[~is_rectangular] = f_parab(zetas[~is_rectangular])
+    shape_factors[is_rectangular] = ADHIKARI_FACTORS_RECTANGULAR(
+                                        zetas[is_rectangular])
+    shape_factors[~is_rectangular] = ADHIKARI_FACTORS_PARABOLIC(
+                                        zetas[~is_rectangular])
 
     np.clip(shape_factors, 0.2, 1., out=shape_factors)
 
@@ -206,7 +220,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
 
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     """
-    TODO
+    TODO: Documentation
     Content of the original inner loop of the mass-conservation inversion.
     Extracted to avoid code duplication
     Parameters
@@ -222,14 +236,14 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     -------
 
     """
-    a0s_shaped = a0s / (shape_factor ** 3)
-    if np.any(~np.isfinite(a0s_shaped)):
+    a0s = a0s / (shape_factor ** 3)
+    if np.any(~np.isfinite(a0s)):
         raise RuntimeError('({}) something went wrong with the '
                            'inversion'.format(gdir.rgi_id))
 
     # GO
-    out_thick = np.zeros(len(a0s_shaped))
-    for i, (a0, Q) in enumerate(zip(a0s_shaped, flux_a0)):
+    out_thick = np.zeros(len(a0s))
+    for i, (a0, Q) in enumerate(zip(a0s, flux_a0)):
         if Q > 0.:
             out_thick[i] = _inv_function(a3, a0)
         else:
@@ -274,7 +288,12 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
     a3 = fs / fd
 
     # Shape factor params
-    sf_func = shape_factor_adhikari
+    sf_func = None
+    if cfg.PARAMS['use_shape_factor_for_inversion'] == 'Adhikari' or \
+        cfg.PARAMS['use_shape_factor_for_inversion'] == 'Nye':
+        sf_func = shape_factor_adhikari
+    elif cfg.PARAMS['use_shape_factor_for_inversion'] == 'Huss':
+        sf_func = shape_factor_huss
     sf_tol = 1e-2  # TODO: better as params in cfg?
     max_sf_iter = 20
 
@@ -294,13 +313,15 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
 
         a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
 
-        # Start iteration for shape factor with guess of 1
-        i = 0
-        sf = np.ones(slope.shape)
-        sf_diff = np.ones(slope.shape)
+        sf = np.ones(slope.shape)  # Default shape factor is 1
         # TODO: maybe take height update as criterion for iteration end instead
         # of sf_diff?
-        if cfg.PARAMS['use_shape_factor']:
+        if sf_func is not None:
+
+            # Start iteration for shape factor with guess of 1
+            i = 0
+            sf_diff = np.ones(slope.shape)
+
             while i < max_sf_iter and \
                     np.any(sf_diff > sf_tol):
                 out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
@@ -324,9 +345,10 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
             cl['volume'] = volume
         out_volume += np.sum(volume)
 
-        if cfg.PARAMS['use_shape_factor']:
-            log.info('Shape factor used, took {:d} iterations for '
-                     'convergence.'.format(i))
+        if cfg.PARAMS['use_shape_factor_for_inversion']:
+            log.info('Shape factor {:s} used, took {:d} iterations for '
+                     'convergence.'.format(
+                cfg.PARAMS['use_shape_factor_for_inversion'], i))
 
     if write:
         gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
