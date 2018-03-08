@@ -310,8 +310,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
                 sf = sf_func(w, out_thick, cl['is_rectangular'])
                 sf_diff = sf_diff - sf
                 i += 1
-            # TODO: compute thickness here once more with final shape factor?
-            # Also: Iteration at the moment for all grid points,
+            # TODO: Iteration at the moment for all grid points,
             # even if some already converged. Change?
 
         out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
