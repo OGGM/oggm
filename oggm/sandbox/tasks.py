@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log)
-def run_uncertain_random_climate(gdir, nyears=1000,
+def run_uncertain_random_climate(gdir, nyears=700,
                                  output_filesuffix='',
                                  sigma_t=None,
                                  sigma_p=None,
