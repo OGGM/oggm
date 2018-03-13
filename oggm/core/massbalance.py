@@ -184,7 +184,8 @@ class PastMassBalance(MassBalanceModel):
     """Mass balance during the climate data period."""
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
-                 filename='climate_monthly', input_filesuffix=''):
+                 filename='climate_monthly', input_filesuffix='',
+                 repeat=False, ys=None, ye=None):
         """Initialize.
 
         Parameters
@@ -207,6 +208,15 @@ class PastMassBalance(MassBalanceModel):
             data.
         input_filesuffix : str
             the file suffix of the input climate file
+        repeat : bool
+            Whether the climate period given by [ys, ye] should be repeated
+            indefinitely in a circular way
+        ys : int
+            The start of the climate period where the MB model is valid
+            (default: the period with available data)
+        ye : int
+            The end of the climate period where the MB model is valid
+            (default: the period with available data)
         """
 
         super(PastMassBalance, self).__init__()
@@ -233,6 +243,8 @@ class PastMassBalance(MassBalanceModel):
 
         # Public attrs
         self.temp_bias = 0.
+        self.prcp_bias = 1.
+        self.repeat = repeat
 
         # Read file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
@@ -253,11 +265,14 @@ class PastMassBalance(MassBalanceModel):
             self.prcp = nc.variables['prcp'][:] * prcp_fac
             self.grad = nc.variables['grad'][:]
             self.ref_hgt = nc.ref_hgt
+            self.ys = self.years[0] if ys is None else ys
+            self.ye = self.years[-1] if ye is None else ye
 
     def get_monthly_climate(self, heights, year=None):
         """Monthly climate information at given heights.
 
-        Note that prcp is corrected with the precipitation factor.
+        Note that prcp is corrected with the precipitation factor and that
+        all other model biases are applied.
 
         Returns
         -------
@@ -265,11 +280,16 @@ class PastMassBalance(MassBalanceModel):
         """
 
         y, m = floatyear_to_date(year)
+        if self.repeat:
+            y = self.ys + (y - self.ys) % (self.ye - self.ys + 1)
+        if y < self.ys or y > self.ye:
+            raise ValueError('year out of the valid time bounds: '
+                             '[{}, {}]'.format(self.ys, self.ye))
         pok = np.where((self.years == y) & (self.months == m))[0][0]
 
         # Read timeseries
         itemp = self.temp[pok] + self.temp_bias
-        iprcp = self.prcp[pok]
+        iprcp = self.prcp[pok] * self.prcp_bias
         igrad = self.grad[pok]
 
         # For each height pixel:
@@ -286,24 +306,21 @@ class PastMassBalance(MassBalanceModel):
 
         return temp, tempformelt, prcp, prcpsol
 
-    def get_monthly_mb(self, heights, year=None):
-
-        _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
-        y, m = floatyear_to_date(year)
-        mb_month = prcpsol - self.mu_star * tmelt
-        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
-        return mb_month / SEC_IN_MONTH / cfg.RHO
-
-    def get_annual_mb(self, heights, year=None):
+    def _2d_annual_climate(self, heights, year):
 
         year = np.floor(year)
+        if self.repeat:
+            year = self.ys + (year - self.ys) % (self.ye - self.ys + 1)
+        if year < self.ys or year > self.ye:
+            raise ValueError('year out of the valid time bounds: '
+                             '[{}, {}]'.format(self.ys, self.ye))
         pok = np.where(self.years == year)[0]
         if len(pok) < 1:
             raise ValueError('Year {} not in record'.format(int(year)))
 
         # Read timeseries
         itemp = self.temp[pok] + self.temp_bias
-        iprcp = self.prcp[pok]
+        iprcp = self.prcp[pok] * self.prcp_bias
         igrad = self.grad[pok]
 
         # For each height pixel:
@@ -318,11 +335,37 @@ class PastMassBalance(MassBalanceModel):
         temp2dformelt[:] = np.clip(temp2dformelt, 0, temp2dformelt.max())
 
         # Compute solid precipitation from total precipitation
-        prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
+        prcp = np.atleast_2d(iprcp).repeat(npix, 0)
         fac = 1 - (temp2d - self.t_solid) / (self.t_liq - self.t_solid)
         fac = np.clip(fac, 0, 1)
-        prcpsol *= fac
+        prcpsol = prcp * fac
 
+        return temp2d, temp2dformelt, prcp, prcpsol
+
+    def get_annual_climate(self, heights, year=None):
+        """Annual climate information at given heights.
+
+        Note that prcp is corrected with the precipitation factor and that
+        all other model biases are applied.
+
+        Returns
+        -------
+        (temp, tempformelt, prcp, prcpsol)
+        """
+        t, tfmelt, prcp, prcpsol = self._2d_annual_climate(heights, year)
+        return (t.mean(axis=1), tfmelt.sum(axis=1),
+                prcp.sum(axis=1), prcpsol.sum(axis=1))
+
+    def get_monthly_mb(self, heights, year=None):
+
+        _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
+        mb_month = prcpsol - self.mu_star * tmelt
+        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+        return mb_month / SEC_IN_MONTH / cfg.RHO
+
+    def get_annual_mb(self, heights, year=None):
+
+        _, temp2dformelt, _, prcpsol = self._2d_annual_climate(heights, year)
         mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
         return (mb_annual - self.bias) / SEC_IN_YEAR / cfg.RHO
 
@@ -472,7 +515,7 @@ class RandomMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
                  y0=None, halfsize=15, seed=None, filename='climate_monthly',
-                 input_filesuffix=''):
+                 input_filesuffix='', all_years=False):
         """Initialize.
 
         Parameters
@@ -502,6 +545,9 @@ class RandomMassBalance(MassBalanceModel):
             data.
         input_filesuffix : str
             the file suffix of the input climate file
+        all_years : bool
+            if True, overwrites ``y0`` and ``halfsize`` to use all available
+            years.
         """
 
         super(RandomMassBalance, self).__init__()
@@ -510,13 +556,15 @@ class RandomMassBalance(MassBalanceModel):
                                      prcp_fac=prcp_fac, filename=filename,
                                      input_filesuffix=input_filesuffix)
 
-        if y0 is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar'))
-            y0 = df['t_star'][0]
-
         # Climate period
-        self.years = np.arange(y0-halfsize, y0+halfsize+1)
-        self.yr_range = (y0-halfsize, y0+halfsize+1)
+        if all_years:
+            self.years = self.mbmod.years
+        else:
+            if y0 is None:
+                df = pd.read_csv(gdir.get_filepath('local_mustar'))
+                y0 = df['t_star'][0]
+            self.years = np.arange(y0-halfsize, y0+halfsize+1)
+        self.yr_range = (self.years[0], self.years[-1]+1)
         self.ny = len(self.years)
 
         # RandomState
@@ -544,3 +592,53 @@ class RandomMassBalance(MassBalanceModel):
     def get_annual_mb(self, heights, year=None):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(heights, year=ryr)
+
+
+class UncertainRandomMassBalance(MassBalanceModel):
+    def __init__(self, basis_model,
+                 rdn_temp_bias_seed=None, rdn_temp_bias_sigma=1,
+                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.2,
+                 rdn_bias_seed=None, rdn_bias_sigma=350):
+        super(UncertainRandomMassBalance, self).__init__()
+        self.mbmod = basis_model
+        self.valid_bounds = self.mbmod.valid_bounds
+        self.rng_temp = np.random.RandomState(rdn_temp_bias_seed)
+        self.rng_prcp = np.random.RandomState(rdn_prcp_bias_seed)
+        self.rng_bias = np.random.RandomState(rdn_bias_seed)
+        self._temp_sigma = rdn_temp_bias_sigma
+        self._prcp_sigma = rdn_prcp_bias_sigma
+        self._bias_sigma = rdn_bias_sigma
+        self._state_temp = dict()
+        self._state_prcp = dict()
+        self._state_bias = dict()
+
+    def _get_state_temp(self, year):
+        year = int(year)
+        if year not in self._state_temp:
+            self._state_temp[year] = self.rng_temp.randn() * self._temp_sigma
+        return self._state_temp[year]
+
+    def _get_state_prcp(self, year):
+        year = int(year)
+        if year not in self._state_prcp:
+            self._state_prcp[year] = self.rng_prcp.randn() * self._prcp_sigma
+        return self._state_prcp[year]
+
+    def _get_state_bias(self, year):
+        year = int(year)
+        if year not in self._state_bias:
+            self._state_bias[year] = self.rng_bias.randn() * self._bias_sigma
+        return self._state_bias[year]
+
+    def get_annual_mb(self, heights, year=None):
+        _t = self.mbmod.mbmod.temp_bias
+        _p = self.mbmod.mbmod.prcp_bias
+        _b = self.mbmod.mbmod.bias
+        self.mbmod.mbmod.temp_bias = self._get_state_temp(year) + _t
+        self.mbmod.mbmod.prcp_bias = self._get_state_prcp(year) + _p
+        self.mbmod.mbmod.bias = self._get_state_bias(year) + _b
+        out = self.mbmod.get_annual_mb(heights, year=year)
+        self.mbmod.mbmod.temp_bias = _t
+        self.mbmod.mbmod.prcp_bias = _p
+        self.mbmod.mbmod.bias = _b
+        return out
