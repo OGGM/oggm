@@ -203,7 +203,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
 
     # TODO: could check for division by 0, but at the moment
     # this is covered by interpolation and clip, resulting in a factor of 1
-    zetas = widths / heights
+    zetas = widths / 2. / heights
 
     shape_factors = np.ones(widths.shape)
 
