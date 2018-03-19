@@ -224,7 +224,7 @@ class TestFuncs(unittest.TestCase):
         factors_parabolic = np.array([0.2, 0.251, 0.448, 0.653,
                                       0.748, 0.803, 0.839, 0.917, 1.])
         w = np.array([0.1, 0.5, 1, 2, 3, 4, 5, 10, 50])
-        h = np.ones(w.shape)
+        h = 0.5 * np.ones(w.shape)
         is_rect = h.copy()
         np.testing.assert_equal(shape_factor_adhikari(w, h, is_rect),
                                 factors_rectangular)
