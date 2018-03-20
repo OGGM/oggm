@@ -854,19 +854,19 @@ class FluxBasedModel(FlowlineModel):
 
             sf_func = None
             sf = np.ones(thick.shape)  # Default shape factor is 1
-            if cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == \
-                    'Adhikari' or \
-                    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == 'Nye':
+            use_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+            if use_sf == 'Adhikari' or use_sf == 'Nye':
                 sf_func = shape_factor_adhikari
-            elif cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == 'Huss':
+            elif use_sf == 'Huss':
                 sf_func = shape_factor_huss
 
-            sf = sf_func(fl.widths_m, thick, fl.is_rectangular)
             # TODO: avoid  unnecessary new array initialization by adding
             # sf_stag to  self._stags
-            sf_stag = np.zeros(thick_stag.shape)
-            sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
-            sf_stag[[0, -1]] = sf[[0, -1]]
+            sf_stag = np.ones(thick_stag.shape)
+            if sf_func is not None:
+                sf = sf_func(fl.widths_m, thick, fl.is_rectangular)
+                sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
+                sf_stag[[0, -1]] = sf[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a

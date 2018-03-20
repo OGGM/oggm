@@ -292,10 +292,10 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
 
     # Shape factor params
     sf_func = None
-    if cfg.PARAMS['use_shape_factor_for_inversion'] == 'Adhikari' or \
-        cfg.PARAMS['use_shape_factor_for_inversion'] == 'Nye':
+    use_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    if use_sf == 'Adhikari' or use_sf == 'Nye':
         sf_func = shape_factor_adhikari
-    elif cfg.PARAMS['use_shape_factor_for_inversion'] == 'Huss':
+    elif use_sf == 'Huss':
         sf_func = shape_factor_huss
     sf_tol = 1e-2  # TODO: better as params in cfg?
     max_sf_iter = 20
@@ -337,6 +337,9 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
             # TODO: Iteration at the moment for all grid points,
             # even if some already converged. Change?
 
+            log.info('Shape factor {:s} used, took {:d} iterations for '
+                     'convergence.'.format(use_sf, i))
+
         out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
                                    sf, _inv_function)
 
@@ -347,11 +350,6 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
             cl['thick'] = out_thick
             cl['volume'] = volume
         out_volume += np.sum(volume)
-
-        if cfg.PARAMS['use_shape_factor_for_inversion']:
-            log.info('Shape factor {:s} used, took {:d} iterations for '
-                     'convergence.'.format(
-                cfg.PARAMS['use_shape_factor_for_inversion'], i))
 
     if write:
         gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
