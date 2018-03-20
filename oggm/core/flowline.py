@@ -862,10 +862,15 @@ class FluxBasedModel(FlowlineModel):
                 sf_func = shape_factor_huss
 
             sf = sf_func(fl.widths_m, thick, fl.is_rectangular)
+            # TODO: avoid  unnecessary new array initialization by adding
+            # sf_stag to  self._stags
+            sf_stag = np.zeros(thick_stag.shape)
+            sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
+            sf_stag[[0, -1]] = sf[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a
-            rhogh = (RHO*G*slope_stag*sf)**N
+            rhogh = (RHO*G*slope_stag*sf_stag)**N
             u_stag = (thick_stag**(N+1)) * self._fd * rhogh + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
