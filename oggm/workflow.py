@@ -170,10 +170,12 @@ def execute_parallel_tasks(gdir, tasks):
         _tasks.append(partial(task, gdir, **kwargs))
 
     if cfg.PARAMS['use_multiprocessing']:
-
+        # TODO: the use of mp.Process here is bad
+        mpp = cfg.PARAMS['mp_processes']
+        mpp = mp.cpu_count() if mpp == -1 else mpp
         while _tasks:
             t_tasks = []
-            for i in range(min((8, len(_tasks)))):
+            for i in range(min((mpp, len(_tasks)))):
                 t_tasks.append(_tasks.pop(0))
             proc = []
             for task in t_tasks:
