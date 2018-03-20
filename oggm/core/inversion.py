@@ -151,6 +151,7 @@ def shape_factor_huss(widths, heights, is_rectangular):
     -------
     shape factor (no units)
     """
+
     # Ensure bool (for masking)
     is_rectangular = is_rectangular.astype(bool)
 
@@ -197,7 +198,6 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape factors (no units), ndarray of floats
     """
 
-
     # Ensure bool (for masking)
     is_rectangular = is_rectangular.astype(bool)
 
@@ -214,6 +214,8 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
                                         zetas[~is_rectangular])
 
     np.clip(shape_factors, 0.2, 1., out=shape_factors)
+    # Set NaN values resulting from zero height to a shape factor of 1
+    shape_factors[np.isnan(shape_factors)] = 1.
 
     return shape_factors
 
@@ -236,6 +238,7 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     -------
 
     """
+
     a0s = a0s / (shape_factor ** 3)
     if np.any(~np.isfinite(a0s)):
         raise RuntimeError('({}) something went wrong with the '
