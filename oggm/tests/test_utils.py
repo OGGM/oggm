@@ -17,7 +17,7 @@ from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github, init_hef
-from oggm.core.inversion import shape_factor_adhikari
+from oggm.utils import shape_factor_adhikari
 _url_retrieve = None
 
 
