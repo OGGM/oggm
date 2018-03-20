@@ -21,7 +21,6 @@ from oggm import utils
 from oggm import entity_task
 import oggm.core.massbalance as mbmods
 from oggm.core.centerlines import Centerline, line_order
-from oggm.core.inversion import shape_factor_adhikari, shape_factor_huss
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
@@ -811,6 +810,19 @@ class FluxBasedModel(FlowlineModel):
         # Loop over tributaries to determine the flux rate
         flxs = []
         aflxs = []
+
+        # Do we want to use shape factors?
+        sf_func = None
+        use_sf = None
+        # Use .get to obatin default None for non-existing key
+        # necessary to pass some tests
+        # TODO: remove after tests are adapted
+        use_sf = cfg.PARAMS.get('use_shape_factor_for_fluxbasedmodel')
+        if use_sf == 'Adhikari' or use_sf == 'Nye':
+            sf_func = utils.shape_factor_adhikari
+        elif use_sf == 'Huss':
+            sf_func = utils.shape_factor_huss
+
         for fl, trib, (slope_stag, thick_stag, section_stag, znxm1, znx) \
                 in zip(self.fls, self._trib, self._stags):
 
@@ -852,13 +864,7 @@ class FluxBasedModel(FlowlineModel):
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
 
-            sf_func = None
             sf = np.ones(thick.shape)  # Default shape factor is 1
-            use_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-            if use_sf == 'Adhikari' or use_sf == 'Nye':
-                sf_func = shape_factor_adhikari
-            elif use_sf == 'Huss':
-                sf_func = shape_factor_huss
 
             # TODO: avoid  unnecessary new array initialization by adding
             # sf_stag to  self._stags

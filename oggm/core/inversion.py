@@ -38,7 +38,6 @@ import netCDF4
 from scipy import optimize as optimization
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
-from scipy.interpolate import interp1d
 # Locals
 from oggm import utils, cfg
 from oggm import entity_task, global_task
@@ -130,96 +129,6 @@ def _inversion_simple(a3, a0):
 
     return (-a0)**cfg.ONE_FIFTH
 
-
-def shape_factor_huss(widths, heights, is_rectangular):
-    """Compute shape factor for inclusion of lateral drag
-    according to Huss and Farinotti (2012). The shape factor is only applied
-    for parabolic sections.
-
-    Not yet tested
-
-    Parameters
-    ----------
-    widths: ndarray of floats
-        widths of the sections
-    heights: float or ndarray of floats
-        height of the sections
-    is_rectangular: bool or ndarray of bools
-        determines, whether section has a rectangular or parabolic shape
-
-    Returns
-    -------
-    shape factor (no units)
-    """
-
-    # Ensure bool (for masking)
-    is_rectangular = is_rectangular.astype(bool)
-
-    shape_factors = np.ones(widths.shape)
-    shape_factors[~is_rectangular] = \
-        (widths / (2 * heights + widths))[~is_rectangular]
-
-    return shape_factors
-
-
-# TODO: how to handle zeta > 10? at the moment extrapolation
-# Table 1 from Adhikari (2012) and corresponding interpolation functions
-_ADHIKARI_TABLE_ZETAS = np.array([0.5, 1, 2, 3, 4, 5, 10])
-_ADHIKARI_TABLE_RECTANGULAR = np.array([0.313, 0.558, 0.790, 0.884,
-                                0.929, 0.954, 0.990])
-_ADHIKARI_TABLE_PARABOLIC = np.array([0.251, 0.448, 0.653, 0.748,
-                              0.803, 0.839, 0.917])
-ADHIKARI_FACTORS_RECTANGULAR = interp1d(_ADHIKARI_TABLE_ZETAS,
-                                         _ADHIKARI_TABLE_RECTANGULAR,
-                                         fill_value='extrapolate')
-ADHIKARI_FACTORS_PARABOLIC = interp1d(_ADHIKARI_TABLE_ZETAS,
-                                       _ADHIKARI_TABLE_PARABOLIC,
-                                       fill_value='extrapolate')
-
-
-def shape_factor_adhikari(widths, heights, is_rectangular):
-    """Compute shape factor for inclusion of lateral drag according to
-    Adhikari (2012)
-
-    TODO: should we expand this here to also include
-    the factors suggested for sliding?
-
-    Parameters
-    ----------
-    widths: ndarray of floats
-        widths of the sections
-    heights: ndarray of floats
-        heights of the sections
-    is_rectangular: ndarray of bools
-        determines, whether section has a rectangular or parabolic shape
-
-    Returns
-    -------
-    shape factors (no units), ndarray of floats
-    """
-
-    # Ensure bool (for masking)
-    is_rectangular = is_rectangular.astype(bool)
-
-    # TODO: could check for division by 0, but at the moment
-    # this is covered by interpolation and clip, resulting in a factor of 1
-    zetas = widths / 2. / heights
-
-    shape_factors = np.ones(widths.shape)
-
-    # TODO: higher order interpolation? (e.g. via InterpolatedUnivariateSpline)
-    shape_factors[is_rectangular] = ADHIKARI_FACTORS_RECTANGULAR(
-                                        zetas[is_rectangular])
-    shape_factors[~is_rectangular] = ADHIKARI_FACTORS_PARABOLIC(
-                                        zetas[~is_rectangular])
-
-    np.clip(shape_factors, 0.2, 1., out=shape_factors)
-    # Set NaN values resulting from zero height to a shape factor of 1
-    shape_factors[np.isnan(shape_factors)] = 1.
-
-    return shape_factors
-
-
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     """
     TODO: Documentation
@@ -292,11 +201,15 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
 
     # Shape factor params
     sf_func = None
-    use_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    use_sf = None
+    # Use .get to obatin default None for non-existing key
+    # necessary to pass some tests
+    # TODO: remove after tests are adapted
+    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion')
     if use_sf == 'Adhikari' or use_sf == 'Nye':
-        sf_func = shape_factor_adhikari
+        sf_func = utils.shape_factor_adhikari
     elif use_sf == 'Huss':
-        sf_func = shape_factor_huss
+        sf_func = utils.shape_factor_huss
     sf_tol = 1e-2  # TODO: better as params in cfg?
     max_sf_iter = 20
 
