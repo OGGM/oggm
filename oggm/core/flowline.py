@@ -21,6 +21,7 @@ from oggm import utils
 from oggm import entity_task
 import oggm.core.massbalance as mbmods
 from oggm.core.centerlines import Centerline, line_order
+from oggm.core.inversion import shape_factor_adhikari, shape_factor_huss
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
@@ -851,9 +852,20 @@ class FluxBasedModel(FlowlineModel):
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
 
+            sf_func = None
+            sf = np.ones(thick.shape)  # Default shape factor is 1
+            if cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == \
+                    'Adhikari' or \
+                    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == 'Nye':
+                sf_func = shape_factor_adhikari
+            elif cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] == 'Huss':
+                sf_func = shape_factor_huss
+
+            sf = sf_func(fl.widths_m, thick, fl.is_rectangular)
+
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a
-            rhogh = (RHO*G*slope_stag)**N
+            rhogh = (RHO*G*slope_stag*sf)**N
             u_stag = (thick_stag**(N+1)) * self._fd * rhogh + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
