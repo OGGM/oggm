@@ -44,7 +44,13 @@ Enhancements
   by a factor 2 (:pull:`415`), by avoiding useless repetitions of indexing
   operations. The results shouldn't change at all.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-
+- Added optional shape factors for mass-conservation inversion and
+  FluxBasedModel to account for lateral drag dependent on the bed shape
+  (:pull:`429`). Accepted settings for shape factors are `None`,
+  `'Adhikari'` (Adhikari & Marshall 2012), `'Nye'` (Nye, 1965; equivalent to
+  Adhikari) and `'Huss'` (Huss & Farinotti 2012). Thorough tests with
+  applied shape factors are still missing.
+  By `Philipp Gregor <https://github.com/phigre>`_.
 
 Bug fixes
 ~~~~~~~~~
