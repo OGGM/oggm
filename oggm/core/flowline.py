@@ -786,6 +786,17 @@ class FluxBasedModel(FlowlineModel):
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
 
+        # Do we want to use shape factors?
+        self.sf_func = None
+        # Use .get to obtain default None for non-existing key
+        # necessary to pass some tests
+        # TODO: change to direct dictionary query after tests are adapted?
+        use_sf = cfg.PARAMS.get('use_shape_factor_for_fluxbasedmodel')
+        if use_sf == 'Adhikari' or use_sf == 'Nye':
+            self.sf_func = utils.shape_factor_adhikari
+        elif use_sf == 'Huss':
+            self.sf_func = utils.shape_factor_huss
+
         # Optim
         self._stags = []
         for fl, trib in zip(self.fls, self._trib):
@@ -797,9 +808,10 @@ class FluxBasedModel(FlowlineModel):
             a = np.zeros(nx+1)
             b = np.zeros(nx+1)
             c = np.zeros(nx+1)
-            d = np.zeros(nx-1)
-            e = np.zeros(nx)
-            self._stags.append((a, b, c, d, e))
+            d = np.ones(nx+1)  # shape factor default is 1
+            e = np.zeros(nx-1)
+            f = np.zeros(nx)
+            self._stags.append((a, b, c, d, e, f))
 
     def step(self, dt):
         """Advance one step."""
@@ -811,20 +823,8 @@ class FluxBasedModel(FlowlineModel):
         flxs = []
         aflxs = []
 
-        # Do we want to use shape factors?
-        sf_func = None
-        use_sf = None
-        # Use .get to obatin default None for non-existing key
-        # necessary to pass some tests
-        # TODO: remove after tests are adapted
-        use_sf = cfg.PARAMS.get('use_shape_factor_for_fluxbasedmodel')
-        if use_sf == 'Adhikari' or use_sf == 'Nye':
-            sf_func = utils.shape_factor_adhikari
-        elif use_sf == 'Huss':
-            sf_func = utils.shape_factor_huss
-
-        for fl, trib, (slope_stag, thick_stag, section_stag, znxm1, znx) \
-                in zip(self.fls, self._trib, self._stags):
+        for fl, trib, (slope_stag, thick_stag, section_stag, sf_stag,
+                       znxm1, znx) in zip(self.fls, self._trib, self._stags):
 
             surface_h = fl.surface_h
             thick = fl.thick
@@ -864,20 +864,20 @@ class FluxBasedModel(FlowlineModel):
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
 
-            sf = np.ones(thick.shape)  # Default shape factor is 1
-
-            # TODO: avoid  unnecessary new array initialization by adding
-            # sf_stag to  self._stags
-            sf_stag = np.ones(thick_stag.shape)
-            if sf_func is not None:
-                sf = sf_func(fl.widths_m, thick, fl.is_rectangular)
+            if self.sf_func is not None:
+                # TODO: maybe compute new shape factors only every year?
+                sf = self.sf_func(fl.widths_m, fl.thick, fl.is_rectangular)
+                if is_trib or self.is_tidewater:
+                    # for water termination or inflowing tributary, the sf
+                    # makes no sense
+                    sf = np.append(sf, 1.)
                 sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
                 sf_stag[[0, -1]] = sf[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a
-            rhogh = (RHO*G*slope_stag*sf_stag)**N
-            u_stag = (thick_stag**(N+1)) * self._fd * rhogh + \
+            rhogh = (RHO*G*slope_stag)**N
+            u_stag = (thick_stag**(N+1)) * self._fd * rhogh * sf_stag**N + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
@@ -915,7 +915,7 @@ class FluxBasedModel(FlowlineModel):
 
         # A second loop for the mass exchange
         for fl, flx_stag, aflx, trib in zip(self.fls, flxs, aflxs,
-                                                 self._trib):
+                                            self._trib):
 
             dx = fl.dx_meter
 
