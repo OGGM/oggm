@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '5e15bb8c19191950b3ea0dbfe87d0d68e15aedc9'
+SAMPLE_DATA_COMMIT = 'f8b7bab312c8830bfa56ed340ad763ecd6033655'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -125,7 +125,11 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """
     cache_dir = cfg.PATHS['dl_cache_dir']
     cache_ro = cfg.PARAMS['dl_cache_readonly']
-    fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
+    try:
+        # this is for real runs
+        fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
+    except KeyError:
+        fb_cache_dir = ''
 
     if not cache_dir:
         # Defaults to working directory: it must be set!
