@@ -27,56 +27,6 @@ from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 log = logging.getLogger(__name__)
 
 
-class UncertainRandomMassBalance(mbmods.MassBalanceModel):
-    def __init__(self, basis_model,
-                 rdn_temp_bias_seed=None, rdn_temp_bias_sigma=1,
-                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.2,
-                 rdn_bias_seed=None, rdn_bias_sigma=350):
-        super(UncertainRandomMassBalance, self).__init__()
-        self.mbmod = basis_model
-        self.valid_bounds = self.mbmod.valid_bounds
-        self.rng_temp = np.random.RandomState(rdn_temp_bias_seed)
-        self.rng_prcp = np.random.RandomState(rdn_prcp_bias_seed)
-        self.rng_bias = np.random.RandomState(rdn_bias_seed)
-        self._temp_sigma = rdn_temp_bias_sigma
-        self._prcp_sigma = rdn_prcp_bias_sigma
-        self._bias_sigma = rdn_bias_sigma
-        self._state_temp = dict()
-        self._state_prcp = dict()
-        self._state_bias = dict()
-
-    def _get_state_temp(self, year):
-        year = int(year)
-        if year not in self._state_temp:
-            self._state_temp[year] = self.rng_temp.randn() * self._temp_sigma
-        return self._state_temp[year]
-
-    def _get_state_prcp(self, year):
-        year = int(year)
-        if year not in self._state_prcp:
-            self._state_prcp[year] = self.rng_prcp.randn() * self._prcp_sigma
-        return self._state_prcp[year]
-
-    def _get_state_bias(self, year):
-        year = int(year)
-        if year not in self._state_bias:
-            self._state_bias[year] = self.rng_bias.randn() * self._bias_sigma
-        return self._state_bias[year]
-
-    def get_annual_mb(self, heights, year=None):
-        _t = self.mbmod.mbmod.temp_bias
-        _p = self.mbmod.mbmod.prcp_bias
-        _b = self.mbmod.mbmod.bias
-        self.mbmod.mbmod.temp_bias = self._get_state_temp(year) + _t
-        self.mbmod.mbmod.prcp_bias = self._get_state_prcp(year) + _p
-        self.mbmod.mbmod.bias = self._get_state_bias(year) + _b
-        out = self.mbmod.get_annual_mb(heights, year=year)
-        self.mbmod.mbmod.temp_bias = _t
-        self.mbmod.mbmod.prcp_bias = _p
-        self.mbmod.mbmod.bias = _b
-        return out
-
-
 @entity_task(log)
 def run_uncertain_random_climate(gdir, nyears=700,
                                  output_filesuffix='',
@@ -139,13 +89,13 @@ def run_uncertain_random_climate(gdir, nyears=700,
     mb.mbmod.prcp_bias = orig_mb_pbias
     mb.mbmod.bias = orig_mb_sbias + opti_bias
 
-    rmb = UncertainRandomMassBalance(mb,
-                                     rdn_temp_bias_seed=rdn_temp_bias_seed,
-                                     rdn_temp_bias_sigma=sigma_t,
-                                     rdn_prcp_bias_seed=rdn_prcp_bias_seed,
-                                     rdn_prcp_bias_sigma=sigma_p,
-                                     rdn_bias_seed=rdn_bias_seed,
-                                     rdn_bias_sigma=sigma_smb)
+    rmb = mbmods.UncertainMassBalance(mb,
+                                      rdn_temp_bias_seed=rdn_temp_bias_seed,
+                                      rdn_temp_bias_sigma=sigma_t,
+                                      rdn_prcp_bias_seed=rdn_prcp_bias_seed,
+                                      rdn_prcp_bias_sigma=sigma_p,
+                                      rdn_bias_seed=rdn_bias_seed,
+                                      rdn_bias_sigma=sigma_smb)
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
                             mb_model=rmb, ys=0, ye=nyears,
