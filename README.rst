@@ -38,7 +38,7 @@ Get in touch
 About
 -----
 
-:Status:
+:Version:
     .. image:: https://img.shields.io/pypi/v/oggm.svg
         :target: https://pypi.python.org/pypi/oggm
         :alt: Pypi version
@@ -48,6 +48,10 @@ About
         :alt: Supported python versions
 
 :Citation:
+    .. image:: https://img.shields.io/badge/Citation-GMD%20paper-orange.svg
+        :target: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+        :alt: GMD Paper
+
     .. image:: https://zenodo.org/badge/43965645.svg
         :target: https://zenodo.org/badge/latestdoi/43965645
         :alt: Zenodo
