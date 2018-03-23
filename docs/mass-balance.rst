@@ -22,7 +22,6 @@ that we spend some time describing it.
         exec(code)
 
 
-
 Climate data
 ------------
 
