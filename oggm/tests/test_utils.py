@@ -864,3 +864,26 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual(len(fdem), 3)
         for fp in fdem:
             self.assertTrue(os.path.exists(fp))
+
+
+class TestSkyIsFalling(unittest.TestCase):
+
+    def test_projplot(self):
+
+        # this caused many problems on Linux Mint distributions
+        # this is just to be sure that on your system, everything is fine
+        import pyproj
+        import matplotlib.pyplot as plt
+
+        wgs84 = pyproj.Proj(proj='latlong', datum='WGS84')
+        fig = plt.figure()
+        plt.close()
+
+        srs = ('+units=m +proj=lcc +lat_1=29.0 +lat_2=29.0 '
+               '+lat_0=29.0 +lon_0=89.8')
+
+        proj_out = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
+        proj_in = pyproj.Proj(srs, preserve_units=True)
+
+        lon, lat = pyproj.transform(proj_in, proj_out, -2235000, -2235000)
+        np.testing.assert_allclose(lon, 70.75731, atol=1e-5)
