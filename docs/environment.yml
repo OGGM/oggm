@@ -3,21 +3,21 @@ channels:
   - conda-forge
 dependencies:
   - python=3.6
-  - numpy=1.12.0
-  - scipy=0.18.1
-  - gdal=2.1.0
-  - matplotlib=2.0.0
-  - pandas=0.19.2
+  - numpy
+  - scipy
+  - gdal
+  - matplotlib
+  - pandas
   - geopandas
-  - Pillow=3.0.0  # because RTD installs this version anyway
-  - joblib=0.11
+  - Pillow
+  - joblib
   - netCDF4
-  - scikit-image=0.12.3
+  - scikit-image
   - configobj
-  - pyproj=1.9.5.1
+  - pyproj
   - krb5
   - conda-forge/label/dev::rasterio
-  - xarray=0.9.1
+  - xarray
   - boto3
   - numpydoc
   - ipython
