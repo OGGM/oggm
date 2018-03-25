@@ -17,10 +17,15 @@ purposes only). OGGM doesn't work with python version 2.7.
    ecosystem before trying to install and run OGGM.
 
 For most users we recommend to install python and the package dependencies
-withs the conda_ package manager:
+with the conda_ package manager:
 `Install with conda (all platforms)`_. Linux users and people
 with experience with `pip`_ can follow the specific instructions
 `Install with virtualenv (linux/debian)`_.
+
+.. warning::
+
+   If you are using a **Linux Mint** distribution you may want to test if you are
+   affected by the pyproj bug `described here <https://github.com/conda-forge/pyproj-feedstock/issues/10>`_
 
 
 .. _tested: https://travis-ci.org/OGGM/oggm
@@ -99,9 +104,10 @@ Conda environment
 We recommend to create a specific `environment`_ for OGGM. In a terminal
 window, type::
 
-    conda create --name oggm_env python=3.5
+    conda create --name oggm_env python=3.X
 
 
+where ``3.X`` is the python version shipped with conda (currently 3.6).
 You can of course use any other name for your environment.
 
 Don't forget to activate it before going on::
