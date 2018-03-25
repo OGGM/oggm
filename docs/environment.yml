@@ -3,25 +3,24 @@ channels:
   - conda-forge
 dependencies:
   - python=3.6
-  - numpy=1.12.0
-  - scipy=0.18.1
-  - gdal=2.1.0
-  - matplotlib=2.0.0
-  - pandas=0.19.2
-  - geopandas=0.2.1
-  - Pillow=3.0.0  # because RTD installs this version anyway
+  - numpy=1.14.0rc1
+  - scipy=1.0.1
+  - gdal=2.2.3
+  - matplotlib=2.2.2
+  - pandas=0.22.0
+  - geopandas=1.0.0
+  - Pillow=5.0.0
   - joblib=0.11
-  - netCDF4=1.2.7
-  - scikit-image=0.12.3
+  - netCDF4=1.3.1
+  - scikit-image=0.13.1
   - configobj
   - pyproj=1.9.5.1
   - krb5
-  - geos=3.5.0 # https://github.com/conda-forge/fiona-feedstock/issues/21
   - conda-forge/label/dev::rasterio
-  - xarray=0.9.1
+  - xarray=0.10.2
   - boto3
   - numpydoc
-  - ipython
+  - ipython=6.2.1
   - sphinx
   - pip:
     - motionless
