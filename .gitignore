@@ -14,6 +14,7 @@ examples/*checkpoints
 # Tests stuffs
 oggm/tests/result_images
 result_images
+.pytest_cache
 
 # Packages
 *.egg
@@ -26,7 +27,8 @@ baseline/
 *.lock
 oggm/tests/tmp_*
 *.html
-docs/*-gen.rst
+docs/glacierdir.rst
+docs/index.rst
 docs/_build
 docs/_build_html
 docs/generated

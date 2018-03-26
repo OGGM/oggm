@@ -101,9 +101,12 @@ def process_custom_climate_data(gdir):
     nc_ts = salem.GeoNetcdf(fpath)
 
     # set temporal subset for the ts data (hydro years)
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
     y0, y1 = yrs[0], yrs[-1]
-    nc_ts.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                     t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time
     ny, r = divmod(len(time), 12)
     if r != 0:
@@ -131,10 +134,29 @@ def process_custom_climate_data(gdir):
     ilat = np.argmin(np.abs(lat - gdir.cenlat))
     ref_pix_lon = lon[ilon]
     ref_pix_lat = lat[ilat]
-    iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
-                                                          ilat, def_grad,
-                                                          g_minmax,
-                                                          use_grad)
+
+    # read the data
+    temp = nc_ts.get_vardata('temp')
+    prcp = nc_ts.get_vardata('prcp')
+    hgt = nc_ts.get_vardata('hgt')
+    igrad = np.zeros(len(time)) + def_grad
+    ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
+    itemp = ttemp[:, 1, 1]
+    thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
+    ihgt = thgt[1, 1]
+    thgt = thgt.flatten()
+    iprcp = prcp[:, ilat, ilon]
+    nc_ts.close()
+
+    # Now the gradient
+    if use_grad:
+        for t, loct in enumerate(ttemp):
+            slope, _, _, p_val, _ = stats.linregress(thgt,
+                                                     loct.flatten())
+            igrad[t] = slope if (p_val < 0.01) else def_grad
+        # dont exagerate too much
+        igrad = np.clip(igrad, g_minmax[0], g_minmax[1])
+
     gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
                                     ref_pix_lon, ref_pix_lat)
     # metadata
@@ -143,7 +165,8 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['cesm_data'])
-def process_cesm_data(gdir, filesuffix=''):
+def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
+                      fpath_precl=None):
     """Processes and writes the climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -154,27 +177,30 @@ def process_cesm_data(gdir, filesuffix=''):
     Parameters
     ----------
     filesuffix : str
-        append a suffix to the filename (useful for model runs).
+        append a suffix to the filename (useful for ensemble experiments).
+    fpath_temp : str
+        path to the temp file (default: cfg.PATHS['gcm_temp_file'])
+    fpath_precc : str
+        path to the precc file (default: cfg.PATHS['gcm_precc_file'])
+    fpath_precl : str
+        path to the precl file (default: cfg.PATHS['gcm_precl_file'])
     """
 
     # GCM temperature and precipitation data
-    if not (('gcm_temp_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_temp_file'])):
-        raise IOError('GCM temp file not found')
-
-    if not (('gcm_precc_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precc_file'])):
-        raise IOError('GCM precc file not found')
-
-    if not (('gcm_precl_file' in cfg.PATHS) and
-                    os.path.exists(cfg.PATHS['gcm_precl_file'])):
-        raise IOError('GCM precl file not found')
+    if fpath_temp is None:
+        if not ('gcm_temp_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_temp_file']")
+        fpath_temp = cfg.PATHS['gcm_temp_file']
+    if fpath_precc is None:
+        if not ('gcm_precc_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precc_file']")
+        fpath_precc = cfg.PATHS['gcm_precc_file']
+    if fpath_precl is None:
+        if not ('gcm_precl_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['gcm_precl_file']")
+        fpath_precl = cfg.PATHS['gcm_precl_file']
 
     # read the files
-    fpath_temp = cfg.PATHS['gcm_temp_file']
-    fpath_precc = cfg.PATHS['gcm_precc_file']
-    fpath_precl = cfg.PATHS['gcm_precl_file']
-
     with warnings.catch_warnings():
         # Long time series are currently a pain pandas
         warnings.filterwarnings("ignore", message='Unable to decode time axis')
@@ -197,12 +223,15 @@ def process_cesm_data(gdir, filesuffix=''):
             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
 
     # from normal years to hydrological years
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     # TODO: we don't check if the files actually start in January but we should
-    precp = precp[9:-3].load()
-    temp = temp[9:-3].load()
+    precp = precp[sm-1:sm-13].load()
+    temp = temp[sm-1:sm-13].load()
     y0 = int(temp.time.values[0].strftime('%Y'))
     y1 = int(temp.time.values[-1].strftime('%Y'))
-    time = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
+    time = pd.period_range('{}-{:02d}'.format(y0, sm),
+                           '{}-{:02d}'.format(y1, em), freq='M')
     temp['time'] = time
     precp['time'] = time
     # Workaround for https://github.com/pydata/xarray/issues/1565
@@ -214,7 +243,7 @@ def process_cesm_data(gdir, filesuffix=''):
     assert r == 0
 
     # Convert m s-1 to mm mth-1
-    ndays = np.tile(np.roll(cfg.DAYS_IN_MONTH, 13-10), y1 - y0)
+    ndays = np.tile(np.roll(cfg.DAYS_IN_MONTH, 13-sm), y1 - y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
@@ -222,10 +251,13 @@ def process_cesm_data(gdir, filesuffix=''):
     ts_tmp_avg = temp.sel(time=(temp.year >= 1961) & (temp.year <= 1990))
     ts_tmp_avg = ts_tmp_avg.groupby(ts_tmp_avg.month).mean(dim='time')
     ts_tmp = temp.groupby(temp.month) - ts_tmp_avg
-    # of precip
+    # of precip -- scaled anomalies
     ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
     ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
-    ts_pre = precp.groupby(precp.month) - ts_pre_avg
+    ts_pre_ano = precp.groupby(precp.month) - ts_pre_avg
+    # scaled anomalies is the default. Standard anomalies above
+    # are used later for where ts_pre_avg == 0
+    ts_pre = precp.groupby(precp.month) / ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -241,12 +273,21 @@ def process_cesm_data(gdir, filesuffix=''):
     ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
-    ts_pre = ts_pre.groupby(ts_pre.month) + loc_pre
+    # scaled anomalies
+    ts_pre = ts_pre.groupby(ts_pre.month) * loc_pre
+    # standard anomalies
+    ts_pre_ano = ts_pre_ano.groupby(ts_pre_ano.month) + loc_pre
+    # Correct infinite values with standard anomalies
+    ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                             ts_pre.values,
+                             ts_pre_ano.values)
+    # The last step might create negative values (unlikely). Clip them
+    ts_pre.values = ts_pre.values.clip(0)
 
     # load dates in right format to save
     dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
     time1 = dsindex.variables['time']
-    time2 = time1[9:-3] - ndays  # from normal years to hydrological years
+    time2 = time1[sm-1:sm-13] - ndays  # to hydrological years
     time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
 
     assert np.all(np.isfinite(ts_pre.values))
@@ -286,10 +327,14 @@ def process_cru_data(gdir):
     nc_ts_pre = salem.GeoNetcdf(utils.get_cru_file('pre'), monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
     y0, y1 = yrs[0], yrs[-1]
-    nc_ts_tmp.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
-    nc_ts_pre.set_period(t0='{}-10-01'.format(y0), t1='{}-09-01'.format(y1))
+    nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                         t1='{}-{:02d}-01'.format(y1, em))
+    nc_ts_pre.set_period(t0='{}-{:02d}-01'.format(y0, sm),
+                         t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts_pre.time
     ny, r = divmod(len(time), 12)
     assert r == 0
@@ -355,7 +400,7 @@ def process_cru_data(gdir):
     ts_grad = np.clip(ts_grad, g_minmax[0], g_minmax[1])
     # convert to timeserie and hydroyears
     ts_grad = ts_grad.tolist()
-    ts_grad = ts_grad[9:] + ts_grad[0:9]
+    ts_grad = ts_grad[em:] + ts_grad[0:em]
     ts_grad = np.asarray(ts_grad * ny)
 
     # maybe this will throw out of bounds warnings
@@ -372,7 +417,10 @@ def process_cru_data(gdir):
     ts_pre = nc_ts_pre.get_vardata('pre', as_xarray=True)
     ts_pre_avg = ts_pre.sel(time=slice('1961-01-01', '1990-12-01'))
     ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
-    ts_pre = ts_pre.groupby('time.month') - ts_pre_avg
+    ts_pre_ano = ts_pre.groupby('time.month') - ts_pre_avg
+    # scaled anomalies is the default. Standard anomalies above
+    # are used later for where ts_pre_avg == 0
+    ts_pre = ts_pre.groupby('time.month') / ts_pre_avg
 
     # interpolate to HR grid
     if np.any(~np.isfinite(ts_tmp[:, 1, 1])):
@@ -384,6 +432,7 @@ def process_cru_data(gdir):
                 if np.all(np.isfinite(ts_tmp[:, idj, idi])):
                     ts_tmp[:, 1, 1] = ts_tmp[:, idj, idi]
                     ts_pre[:, 1, 1] = ts_pre[:, idj, idi]
+                    ts_pre_ano[:, 1, 1] = ts_pre_ano[:, idj, idi]
                     found_it = True
         if not found_it:
             msg = '({}) there is no climate data'.format(gdir.rgi_id)
@@ -394,12 +443,18 @@ def process_cru_data(gdir):
                                               interp='nearest')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
                                               interp='nearest')
+        ts_pre_ano = ncclim.grid.map_gridded_data(ts_pre_ano.values,
+                                                  nc_ts_pre.grid,
+                                                  interp='nearest')
     else:
         # We can do bilinear
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
                                               interp='linear')
         ts_pre = ncclim.grid.map_gridded_data(ts_pre.values, nc_ts_pre.grid,
                                               interp='linear')
+        ts_pre_ano = ncclim.grid.map_gridded_data(ts_pre_ano.values,
+                                                  nc_ts_pre.grid,
+                                                  interp='linear')
 
     # take the center pixel and add it to the CRU CL clim
     # for temp
@@ -413,7 +468,18 @@ def process_cru_data(gdir):
                            coords={'month': ts_pre_avg.month})
     ts_pre = xr.DataArray(ts_pre[:, 1, 1], dims=['time'],
                           coords={'time': time})
-    ts_pre = ts_pre.groupby('time.month') + loc_pre
+    ts_pre_ano = xr.DataArray(ts_pre_ano[:, 1, 1], dims=['time'],
+                              coords={'time': time})
+    # scaled anomalies
+    ts_pre = ts_pre.groupby('time.month') * loc_pre
+    # standard anomalies
+    ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
+    # Correct infinite values with standard anomalies
+    ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                             ts_pre.values,
+                             ts_pre_ano.values)
+    # The last step might create negative values (unlikely). Clip them
+    ts_pre.values = ts_pre.values.clip(0)
 
     # done
     loc_hgt = loc_hgt[1, 1]
@@ -461,8 +527,10 @@ def mb_climate_on_height(gdir, heights, prcp_fac,
     """
 
     if year_range is not None:
-        t0 = datetime.datetime(year_range[0]-1, 10, 1)
-        t1 = datetime.datetime(year_range[1], 9, 1)
+        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+        em = sm - 1 if (sm > 1) else 12
+        t0 = datetime.datetime(year_range[0]-1, sm, 1)
+        t1 = datetime.datetime(year_range[1], em, 1)
         return mb_climate_on_height(gdir, heights, prcp_fac,
                                     time_range=[t0, t1])
 
@@ -784,7 +852,8 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar'])
-def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
+def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None,
+                 minimum_mustar=0.):
     """Compute the local mustar from interpolated tstars.
 
     Parameters
@@ -796,6 +865,10 @@ def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
         the associated reference bias
     prcp_fac: int
         the associated precipitation factor
+    minimum_mustar: float
+        if mustar goes below this threshold, clip it to that value.
+        If you want this to happen with `minimum_mustar=0.` you will have
+        to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
     assert bias is not None
@@ -820,6 +893,11 @@ def local_mustar(gdir, tstar=None, bias=None, prcp_fac=None):
     mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
     if not np.isfinite(mustar):
         raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
+    if not cfg.PARAMS['allow_negative_mustar']:
+        if mustar < 0:
+            raise RuntimeError('{} has a negative mu'.format(gdir.rgi_id))
+    # For the calving param it might be useful to clip the mu
+    mustar = np.clip(mustar, minimum_mustar, np.max(mustar))
 
     # Scalars in a small dataframe for later
     df = pd.DataFrame()
@@ -1102,13 +1180,20 @@ def compute_ref_t_stars(gdirs):
 
 
 @global_task
-def distribute_t_stars(gdirs, ref_df=None):
+def distribute_t_stars(gdirs, ref_df=None, minimum_mustar=0.):
     """After the computation of the reference tstars, apply
     the interpolation to each individual glacier.
 
     Parameters
     ----------
-    gdirs : list of oggm.GlacierDirectory objects
+    gdirs : []
+        list of oggm.GlacierDirectory objects
+    ref_df : pd.Dataframe
+        replace the default calibration list
+    minimum_mustar: float
+        if mustar goes below this threshold, clip it to that value.
+        If you want this to happen with `minimum_mustar=0.` you will have
+        to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
     log.info('Distribute t* and mu*')
@@ -1148,7 +1233,7 @@ def distribute_t_stars(gdirs, ref_df=None):
 
         # Go
         local_mustar(gdir, tstar=tstar, bias=bias, prcp_fac=prcp_fac,
-                     reset=True)
+                     reset=True, minimum_mustar=minimum_mustar)
 
 
 @global_task

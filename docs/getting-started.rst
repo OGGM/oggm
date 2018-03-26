@@ -62,7 +62,9 @@ input:
 
 .. ipython:: python
 
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif') # topography
+    cfg.PATHS['working_dir'] = oggm.gettempdir('oggm_wd')  # working directory
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')  # topography
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))  # intersects
 
 The starting point of a run is always a valid `RGI <http://www.glims.org/RGI/>`_ file.
 In this case we use a very small subset of the RGI, the outlines of the
@@ -121,9 +123,15 @@ What next?
 This documentation is growing step by step. In the meantime, a good place
 to start is the ``oggm/docs/notebooks`` directory.
 
-You will find two notebooks:
+You will find several notebooks:
 
 - ``getting_started.ipynb``, which set-ups an entire OGGM run
   in the Ötztal region.
 - ``flowline_model.ipynb``, which describes the usage of the flowline model
-  for idealized test cases.
+  for idealized glaciers.
+- ``flowline_with_known_bedrock.ipynb``, which describes the usage of the
+  flowline model with custom boundary conditions.
+- ``specmb_vs_ela.ipynb``, which was used to make the analyses presented in
+  `this blog post about the non linear relationship between specific mass-balance and glacier geometry <http://oggm.org/2017/10/01/specmb-ela/>`_
+- ``dynamics_and_length_changes.ipynb``, which was used to make the analyses
+  presented in `this blog post about the long term length changes of glaciers <http://oggm.org/2017/10/23/length-changes/>`_

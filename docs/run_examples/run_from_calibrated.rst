@@ -2,12 +2,12 @@
 
 .. _run-from-calibrated:
 
-1. Set-up a default run for a list of glaciers
-==============================================
+2. Complete run for a list of glaciers
+======================================
 
 This example shows how to run the OGGM  model for a list of selected glaciers
 (here, four).
-For this example we download the list of glaciers from Fabien's dropbox, but
+For this example we download the list of glaciers from our server, but
 you can use any list of glaciers for this. See the
 `prepare_glacier_list.ipynb <https://github.com/OGGM/oggm/blob/master/docs/notebooks/prepare_glacier_list.ipynb>`_
 notebook in the ``oggm/docs/notebooks`` directory for an example on how to
@@ -30,6 +30,9 @@ climate data...) will probably need a re-calibration
 Script
 ------
 
+This script decomposes the steps in a bit more detail than the previous
+example:
+
 .. literalinclude:: _code/run_from_calibrated.py
 
 If everything went well, you should see an output similar to::
@@ -49,13 +52,13 @@ If everything went well, you should see an output similar to::
 
 .. note::
 
-   During the ``random_glacier_evolution`` task some numerical warnings might
+   During the ``run_random_climate`` task some numerical warnings might
    occur. These are expected to happen and are caught by the solver, which then
    tries a more conservative time stepping scheme.
 
 .. note::
 
-    The ``random_glacier_evolution`` task can be replaced by any climate
+    The ``run_random_climate`` task can be replaced by any climate
     scenario built by the user. For this you'll have to develop your own task,
     which will be the topic of another example script.
 
@@ -71,8 +74,9 @@ a new experiment. The code can be simplified to:
 
 .. note::
 
-    Note the use of the ``filesuffix`` keyword argument. This allows to store
-    the output of different runs in different files, useful for later analyses.
+    Note the use of the ``output_filesuffix`` keyword argument. This allows to
+    store the output of different runs in different files,
+    useful for later analyses.
 
 
 Some analyses
@@ -80,7 +84,7 @@ Some analyses
 
 The output directory contains the compiled output files from the run. The
 ``glacier_characteristics.csv`` file contains various information about each
-glacier obation after the preprocessing, either from the RGI directly
+glacier after the preprocessing, either from the RGI directly
 (location, name, glacier type...) or from the model itself (hypsometry,
 inversion model output...).
 

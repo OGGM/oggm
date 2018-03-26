@@ -56,10 +56,9 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.volume_inversion
     tasks.distribute_thickness
     tasks.init_present_time_glacier
-    tasks.random_glacier_evolution
-    tasks.iterative_initial_glacier_search
-    tasks.run_from_climate_data
+    tasks.run_random_climate
     tasks.run_constant_climate
+    tasks.run_from_climate_data
 
 Global tasks
 ============
@@ -124,9 +123,9 @@ the floating year can be used for conversion to months and years:
 
 .. ipython:: python
 
-    from oggm.utils import year_to_date, date_to_year
-    date_to_year(1982, 12)
-    year_to_date(1.2)
+    from oggm.utils import floatyear_to_date, date_to_floatyear
+    date_to_floatyear(1982, 12)
+    floatyear_to_date(1.2)
 
 
 Interface

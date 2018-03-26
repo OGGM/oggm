@@ -60,12 +60,6 @@ def prepare_for_inversion(gdir, add_debug_var=False,
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
 
-    # for testing only
-    if 'invert_with_rectangular' in cfg.PARAMS:
-        invert_with_rectangular = cfg.PARAMS['invert_with_rectangular']
-    if 'invert_all_rectangular' in cfg.PARAMS:
-        invert_all_rectangular = cfg.PARAMS['invert_all_rectangular']
-
     towrite = []
     for fl in fls:
 
@@ -95,16 +89,16 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                 raise RuntimeError(msg)
             flux[-1] = 0.
 
-        # Optimisation: we need to compute this term of a0 only once
-        flux_a0 = np.where(fl.is_rectangular, 1, 1.5)
-        flux_a0 *= flux / widths
-
         # Shape
         is_rectangular = fl.is_rectangular
         if not invert_with_rectangular:
             is_rectangular[:] = False
         if invert_all_rectangular:
             is_rectangular[:] = True
+
+        # Optimisation: we need to compute this term of a0 only once
+        flux_a0 = np.where(is_rectangular, 1, 1.5)
+        flux_a0 *= flux / widths
 
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
@@ -229,19 +223,20 @@ def optimize_inversion_params(gdirs):
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
+    col_name = 'RGI{}0_ID'.format(gdirs[0].rgi_version)
     try:
-        gtd_df = pd.read_csv(fpath).sort_values(by=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort_values(by=[col_name])
     except AttributeError:
-        gtd_df = pd.read_csv(fpath).sort(columns=['RGI_ID'])
+        gtd_df = pd.read_csv(fpath).sort(columns=[col_name])
 
-    dfids = gtd_df['RGI_ID'].values
+    dfids = gtd_df[col_name].values
 
     ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
     if len(ref_gdirs) == 0:
         raise RuntimeError('No reference GlaThiDa glaciers. Maybe something '
                            'went wrong with the link list?')
     ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
-    gtd_df = gtd_df.set_index('RGI_ID').loc[ref_rgiids]
+    gtd_df = gtd_df.set_index(col_name).loc[ref_rgiids]
 
     # Account for area differences between glathida and rgi
     gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
@@ -405,11 +400,15 @@ def filter_inversion_output(gdir):
     """Filters the last few grid point whilst conserving total volume.
     """
 
+    if gdir.is_tidewater:
+        # No need for filter in tidewater case
+        return
+
     cls = gdir.read_pickle('inversion_output')
     for cl in cls:
 
         init_vol = np.sum(cl['volume'])
-        if init_vol == 0 or gdir.is_tidewater or not cl['is_last']:
+        if init_vol == 0 or not cl['is_last']:
             continue
 
         w = cl['width']

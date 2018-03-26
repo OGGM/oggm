@@ -21,6 +21,7 @@ matrix:
     - env: OGGM_TEST_ENV=prepro MPL=
     - env: OGGM_TEST_ENV=numerics MPL=
     - env: OGGM_TEST_ENV=models MPL=
+    - env: OGGM_TEST_ENV=benchmark MPL=
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
     - env: OGGM_TEST_ENV=graphics MPL=--mpl

@@ -11,7 +11,6 @@ from collections import OrderedDict
 from distutils.util import strtobool
 
 import numpy as np
-import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
@@ -80,6 +79,7 @@ class PathOrderedDict(ResettingOrderedDict):
     def __setitem__(self, key, value):
         # Overrides the original dic to expand the path
         ResettingOrderedDict.__setitem__(self, key, os.path.expanduser(value))
+
 
 # Globals
 IS_INITIALIZED = False
@@ -240,7 +240,6 @@ def initialize(file=None):
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
     # Some non-trivial params
-
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['topo_interp'] = cp['topo_interp']
@@ -255,6 +254,8 @@ def initialize(file=None):
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
     PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
+    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
+    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -267,6 +268,7 @@ def initialize(file=None):
     if _factor not in ['stddev', 'stddev_perglacier']:
         _factor = cp.as_float('prcp_scaling_factor')
     PARAMS['prcp_scaling_factor'] = _factor
+    PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
@@ -289,11 +291,11 @@ def initialize(file=None):
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding',
            'optimize_inversion_params', 'use_multiple_flowlines',
-           'optimize_thick', 'mpi_recv_buf_size',
-           'tstar_search_window', 'use_bias_for_run',
+           'optimize_thick', 'mpi_recv_buf_size', 'hydro_month_nh',
+           'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version']
+           'rgi_version', 'allow_negative_mustar']
     for k in ltr:
         cp.pop(k, None)
 
@@ -302,9 +304,11 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Empty defaults
-    from oggm.utils import get_demo_file
-    set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+    set_intersects_db()
     IS_INITIALIZED = True
+    # Pre extract cru cl to avoid problems by multiproc
+    from oggm.utils import get_cru_cl_file
+    get_cru_cl_file()
 
 
 def oggm_static_paths():

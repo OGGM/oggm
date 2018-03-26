@@ -23,7 +23,7 @@ from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
 from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
 from oggm.tests import is_graphic_test, BASELINE_DIR
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
-                              patch_url_retrieve)
+                              patch_url_retrieve_github)
 from oggm.core import flowline, massbalance
 from oggm import tasks
 from oggm import utils
@@ -41,7 +41,7 @@ _url_retrieve = None
 
 def setup_module(module):
     module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve
+    utils._urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
@@ -74,8 +74,8 @@ def up_to_climate(reset=False):
 
     # Working dir
     cfg.PATHS['working_dir'] = TEST_DIR
-
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
@@ -89,7 +89,6 @@ def up_to_climate(reset=False):
     cfg.PARAMS['optimize_inversion_params'] = True
     cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
-    cfg.PARAMS['invert_with_rectangular'] = False
     cfg.PARAMS['run_mb_calibration'] = True
 
     # Go
@@ -177,13 +176,16 @@ def up_to_distrib(reset=False):
 def random_for_plot():
 
     # Fake Reset (all these tests are horribly coded)
-    with open(CLI_LOGF, 'wb') as f:
-        pickle.dump('none', f)
+    try:
+        with open(CLI_LOGF, 'wb') as f:
+            pickle.dump('none', f)
+    except FileNotFoundError:
+        pass
     gdirs = up_to_inversion()
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-    workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
-                                 nyears=10, seed=0, filesuffix='_plot')
+    workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+                                 nyears=10, seed=0, output_filesuffix='_plot')
     return gdirs
 
 
@@ -244,6 +246,7 @@ class TestWorkflow(unittest.TestCase):
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
         assert cc < -0.8
         assert np.all(dfc.t_star > 1900)
+        assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @is_slow
     def test_crossval(self):
@@ -318,7 +321,7 @@ class TestWorkflow(unittest.TestCase):
         # Just to increase coveralls, hehe
         gdirs = up_to_climate()
         fpath = os.path.join(TEST_DIR, 'centerlines.shp')
-        write_centerlines_to_shape(gdirs, fpath)
+        write_centerlines_to_shape(gdirs, path=fpath)
 
         import salem
         shp = salem.read_shapefile(fpath)
@@ -336,8 +339,9 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        workflow.execute_entity_task(flowline.random_glacier_evolution, gdirs,
-                                     nyears=200, seed=0, filesuffix='_test')
+        workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+                                     nyears=200, seed=0,
+                                     output_filesuffix='_test')
 
         for gd in gdirs:
 
@@ -425,8 +429,8 @@ def test_plot_region_model():
     gdirs = random_for_plot()
 
     dfc = utils.compile_task_log(gdirs,
-                                 task_names=['random_glacier_evolution_plot'])
-    assert np.all(dfc['random_glacier_evolution_plot'] == 'SUCCESS')
+                                 task_names=['run_random_climate_plot'])
+    assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
 
     # We prepare for the plot, which needs our own map to proceed.
     # Lets do a local mercator grid

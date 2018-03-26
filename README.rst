@@ -38,15 +38,25 @@ Get in touch
 About
 -----
 
-:Status:
-    Experimental - in development
+:Version:
+    .. image:: https://img.shields.io/pypi/v/oggm.svg
+        :target: https://pypi.python.org/pypi/oggm
+        :alt: Pypi version
+        
+    .. image:: https://img.shields.io/pypi/pyversions/oggm.svg
+        :target: https://pypi.python.org/pypi/oggm
+        :alt: Supported python versions
 
 :Citation:
+    .. image:: https://img.shields.io/badge/Citation-GMD%20paper-orange.svg
+        :target: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+        :alt: GMD Paper
+
     .. image:: https://zenodo.org/badge/43965645.svg
         :target: https://zenodo.org/badge/latestdoi/43965645
         :alt: Zenodo
 
-:Tests:
+:Tests:       
     .. image:: https://coveralls.io/repos/github/OGGM/oggm/badge.svg?branch=master
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
@@ -64,10 +74,9 @@ About
         :alt: Documentation status
 
 :License:
-
-    OGGM is available under the open source `GNU GPLv3 license`_.
-
-    .. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
+    .. image:: https://img.shields.io/pypi/l/oggm.svg
+        :target: http://www.gnu.org/licenses/gpl-3.0.en.html
+        :alt: GNU GPLv3 license
 
 :Authors:
 

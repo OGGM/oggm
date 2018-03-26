@@ -19,13 +19,13 @@ import salem
 import xarray as xr
 
 # Local imports
-from oggm.core import gis, inversion, climate, centerlines, flowline, \
-    massbalance
+from oggm.core import (gis, inversion, climate, centerlines, flowline,
+                       massbalance)
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests import is_slow, RUN_PREPRO_TESTS
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm import workflow
 
 # do we event want to run the tests?
@@ -37,7 +37,7 @@ _url_retrieve = None
 
 def setup_module(module):
     module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve
+    utils._urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
@@ -78,6 +78,7 @@ class TestGIS(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
 
@@ -169,7 +170,7 @@ class TestGIS(unittest.TestCase):
           Subregion: 11-01: Alps
           Glacier type: Not assigned
           Terminus type: Land-terminating
-          Area: 8.036 mk2
+          Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
           Grid (nx, ny): (159, 114)
           Grid (dx, dy): (50.0, -50.0)
@@ -227,6 +228,7 @@ class TestCenterlines(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -259,6 +261,41 @@ class TestCenterlines(unittest.TestCase):
 
         self.assertEqual(_heads, _headsi[::-1])
         self.assertEqual(_heads, [heads[h] for h in [2,5,6,7]])
+
+    def test_mask_to_polygon(self):
+        from oggm.core.centerlines import _mask_to_polygon
+
+        mask = np.zeros((5, 5))
+        mask[1, 1] = 1
+        p1, p2 = _mask_to_polygon(mask)
+        assert p1 == p2
+
+        mask = np.zeros((5, 5))
+        mask[1:-1, 1:-1] = 1
+        p1, p2 = _mask_to_polygon(mask)
+        assert p1 == p2
+
+        mask = np.zeros((5, 5))
+        mask[1:-1, 1:-1] = 1
+        mask[2, 2] = 0
+        p1, _ = _mask_to_polygon(mask)
+        assert len(p1.interiors) == 1
+        assert p1.exterior == p2.exterior
+        for i_line in p1.interiors:
+            assert p2.contains(i_line)
+
+        n = 30
+        for i in range(n):
+            mask = np.zeros((n, n))
+            mask[1:-1, 1:-1] = 1
+            _, p2 = _mask_to_polygon(mask)
+            for i in range(n*2):
+                mask[np.random.randint(2, n-2), np.random.randint(2, n-2)] = 0
+            p1, _ = _mask_to_polygon(mask)
+            assert len(p1.interiors) > 1
+            assert p1.exterior == p2.exterior
+            for i_line in p1.interiors:
+                assert p2.contains(i_line)
 
     def test_centerlines(self):
 
@@ -424,8 +461,8 @@ class TestCenterlines(unittest.TestCase):
         nb = len(np.where(rest == 2)[0])
         nc = len(np.where(rest == 1)[0])
         nd = len(np.where(rest == 0)[0])
-        denom = np.float64((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
-        hss = np.float64(2.) * ((na*nd)-(nb*nc)) / denom
+        denom = np.float((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
+        hss = np.float(2.) * ((na*nd)-(nb*nc)) / denom
         if cfg.PARAMS['grid_dx_method'] == 'linear':
             self.assertTrue(hss > 0.53)
         if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
@@ -444,6 +481,7 @@ class TestGeometry(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
 
@@ -570,10 +608,16 @@ class TestGeometry(unittest.TestCase):
         h2, b = np.histogram(rhgt, density=True, bins=bins)
         self.assertTrue(utils.rmsd(h1*100*50, h2*100*50) < 1)
 
+        # Check that utility function is doing what is expected
+        hh, ww = gdir.get_inversion_flowline_hw()
+        new_area = np.sum(ww * cl.dx * gdir.grid.dx)
+        np.testing.assert_allclose(new_area * 10**-6, np.float(tdf['AREA']))
+
     def test_nodivides_correct_slope(self):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 40
@@ -610,6 +654,7 @@ class TestClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -738,6 +783,77 @@ class TestClimate(unittest.TestCase):
                 # put on the same altitude
                 # (using default gradient because better)
                 temp_cor = nc_c.temp -0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                totest = temp_cor - nc_h.temp
+                self.assertTrue(totest.mean() < 0.5)
+                # precip
+                totest = nc_c.prcp - nc_h.prcp
+                self.assertTrue(totest.mean() < 100)
+
+    def test_sh(self):
+
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        # We have to make a non cropped custom file
+        fpath = cfg.PATHS['climate_file']
+        ds = xr.open_dataset(fpath)
+        ds = ds.sel(time=slice('1802-01-01', '2002-12-01'))
+        nf = os.path.join(self.testdir, 'testdata.nc')
+        ds.to_netcdf(nf)
+        cfg.PATHS['climate_file'] = nf
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # Trick
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        assert gdir.hemisphere == 'nh'
+        gdir.hemisphere = 'sh'
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_custom_climate_data(gdirs[0])
+        ci = gdirs[0].read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1803)
+        self.assertEqual(ci['hydro_yr_1'], 2002)
+
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        climate.process_cru_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['hydro_yr_0'], 1902)
+        self.assertEqual(ci['hydro_yr_1'], 2014)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(
+                os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+
+            assert nc_h['time.month'][0] == 4
+            assert nc_h['time.year'][0] == 1802
+            assert nc_h['time.month'][-1] == 3
+            assert nc_h['time.year'][-1] == 2002
+
+            with xr.open_dataset(
+                    os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+
+                assert nc_c['time.month'][0] == 4
+                assert nc_c['time.year'][0] == 1901
+                assert nc_c['time.month'][-1] == 3
+                assert nc_c['time.year'][-1] == 2014
+
+                # put on the same altitude
+                # (using default gradient because better)
+                temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
                 totest = temp_cor - nc_h.temp
                 self.assertTrue(totest.mean() < 0.5)
                 # precip
@@ -1218,6 +1334,7 @@ class TestFilterNegFlux(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
@@ -1262,6 +1379,7 @@ class TestFilterNegFlux(unittest.TestCase):
         assert len(fls) < len(fls1)
         assert not np.any([fl.flux_needed_correction for fl in fls])
 
+
 class TestInversion(unittest.TestCase):
 
     def setUp(self):
@@ -1274,6 +1392,7 @@ class TestInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -1696,6 +1815,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiple_flowlines'] = False
         # not crop
         cfg.PARAMS['max_thick_to_width_ratio'] = 10
@@ -1856,6 +1976,7 @@ class TestGCMClimate(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
@@ -1942,8 +2063,8 @@ class TestGCMClimate(unittest.TestCase):
                 scesm2 = scesm2.groupby(scesm2.month).mean()
                 # No more than one degree? (silly test)
                 np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
-                # N more than 20%? (silly test)
-                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.2)
+                # N more than 30%? (silly test)
+                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
 
     def test_compile_climate_input(self):
 
@@ -2014,6 +2135,73 @@ class TestGCMClimate(unittest.TestCase):
                                            clim_cesm2.ref_pix_lon)
 
 
+class TestIdealizedGdir(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PARAMS['use_multiple_flowlines'] = False
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_invert(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
+        v1, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+        tt1 = gdir.read_pickle('inversion_input')[0]
+        gdir1 = gdir
+
+        fl = gdir.read_pickle('inversion_flowlines')[0]
+        map_dx = gdir.grid.dx
+        gdir = utils.idealized_gdir(fl.surface_h,
+                                    fl.widths * map_dx,
+                                    map_dx,
+                                    flowline_dx=fl.dx,
+                                    base_dir=self.testdir)
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
+        v2, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+
+        tt2 = gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_allclose(tt1['width'], tt2['width'])
+        np.testing.assert_allclose(tt1['slope_angle'], tt2['slope_angle'])
+        np.testing.assert_allclose(tt1['dx'], tt2['dx'])
+        np.testing.assert_allclose(tt1['flux_a0'], tt2['flux_a0'])
+        np.testing.assert_allclose(v1, v2)
+        np.testing.assert_allclose(gdir1.rgi_area_km2, gdir.rgi_area_km2)
+
+
 class TestCatching(unittest.TestCase):
 
     def setUp(self):
@@ -2024,6 +2212,7 @@ class TestCatching(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
@@ -2054,8 +2243,8 @@ class TestCatching(unittest.TestCase):
         gis.glacier_masks(gdir)
 
         # This will "run" but log an error
-        from oggm.tasks import random_glacier_evolution
-        workflow.execute_entity_task(random_glacier_evolution,
+        from oggm.tasks import run_random_climate
+        workflow.execute_entity_task(run_random_climate,
                                      [(gdir, {'filesuffix':'_testme'})])
 
         tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
@@ -2065,7 +2254,7 @@ class TestCatching(unittest.TestCase):
 
         spl = first_line.split(';')
         assert len(spl) == 4
-        assert spl[1].strip() == 'random_glacier_evolution_testme'
+        assert spl[1].strip() == 'run_random_climate_testme'
 
     def test_task_status(self):
 

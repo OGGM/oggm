@@ -210,7 +210,7 @@ def dummy_width_bed_tributary(map_dx=100.):
     return [fl_1, fl_0]
 
 
-def patch_url_retrieve(url, *args, **kwargs):
+def patch_url_retrieve_github(url, *args, **kwargs):
     """A simple patch to OGGM's download function to make sure we don't
     download elsewhere than expected."""
 
@@ -260,6 +260,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
 
     # Init
     cfg.initialize()
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = border

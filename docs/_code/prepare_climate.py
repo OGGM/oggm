@@ -16,11 +16,12 @@ from oggm.utils import get_demo_file
 from oggm import graphics
 
 cfg.initialize()
+cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-pcp_fac = 2.6
+pcp_fac = 2.5
 cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 
-base_dir = os.path.join(os.path.expanduser('~'), 'Climate')
+base_dir = os.path.join(oggm.gettempdir(), 'Climate')
 entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 

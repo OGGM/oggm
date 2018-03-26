@@ -13,6 +13,7 @@ from oggm.core.centerlines import catchment_intersections
 from oggm.core.centerlines import initialize_flowlines
 from oggm.core.centerlines import catchment_width_geom
 from oggm.core.centerlines import catchment_width_correction
+from oggm.core.centerlines import terminus_width_correction
 from oggm.core.climate import mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_custom_climate_data
@@ -25,8 +26,7 @@ from oggm.core.inversion import volume_inversion
 from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import distribute_thickness
 from oggm.core.flowline import init_present_time_glacier
-from oggm.core.flowline import random_glacier_evolution
-from oggm.core.flowline import iterative_initial_glacier_search
+from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
 

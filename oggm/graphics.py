@@ -2,6 +2,7 @@
 import functools
 import logging
 from collections import OrderedDict
+import itertools
 
 import geopandas as gpd
 import matplotlib.colors as colors
@@ -35,7 +36,7 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     return new_cmap
 
 
-def gencolor(n, cmap='Set1'):
+def gencolor_generator(n, cmap='Set1'):
     """ Color generator intended to work with qualitative color scales."""
     # don't use more than 9 discrete colors
     n_colors = min(n, 9)
@@ -43,6 +44,14 @@ def gencolor(n, cmap='Set1'):
     colors = cmap(range(n_colors))
     for i in range(n):
         yield colors[i % n_colors]
+
+
+def gencolor(n, cmap='Set1'):
+
+    if isinstance(cmap, str):
+        return gencolor_generator(n, cmap=cmap)
+    else:
+        return itertools.cycle(cmap)
 
 
 def _plot_map(plotfunc):
@@ -201,10 +210,14 @@ def plot_domain(gdirs, ax=None, smap=None):
     with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
+    try:
+        smap.set_data(topo)
+    except ValueError:
+        pass
+
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
-    smap.set_data(topo)
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
@@ -224,7 +237,7 @@ def plot_domain(gdirs, ax=None, smap=None):
 
 @_plot_map
 def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
-                     add_downstream=False):
+                     add_downstream=False, lines_cmap='Set1'):
     """Plots the centerlines of a glacier directory."""
 
     if add_downstream and not use_flowlines:
@@ -243,7 +256,6 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
     smap.set_data(topo)
-
     for gdir in gdirs:
         crs = gdir.grid.center_grid
         geom = gdir.read_pickle('geometries')
@@ -262,7 +274,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
-        color = gencolor(len(cls) + 1, cmap='Set1')
+        color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             if add_downstream and not gdir.is_tidewater and l is cls[0]:
                 line = gdir.read_pickle('downstream_line')['full_line']
@@ -284,7 +296,8 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
 
 @_plot_map
-def plot_catchment_areas(gdirs, ax=None, smap=None):
+def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
+                         mask_cmap='Set2'):
     """Plots the catchments out of a glacier directory.
     """
 
@@ -310,7 +323,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None):
 
     # plot Centerlines
     cls = gdir.read_pickle('centerlines')[::-1]
-    color = gencolor(len(cls) + 1, cmap='Set1')
+    color = gencolor(len(cls) + 1, cmap=lines_cmap)
     for l, c in zip(cls, color):
         smap.set_geometry(l.line, crs=crs, color=c,
                              linewidth=2.5, zorder=50)
@@ -320,7 +333,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None):
     for j, ci in enumerate(cis[::-1]):
         mask[tuple(ci.T)] = j+1
 
-    smap.set_cmap('Set2')
+    smap.set_cmap(mask_cmap)
     smap.set_data(mask)
     smap.plot(ax)
 
@@ -329,7 +342,8 @@ def plot_catchment_areas(gdirs, ax=None, smap=None):
 
 @_plot_map
 def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
-                         add_intersects=False, add_touches=False):
+                         add_intersects=False, add_touches=False,
+                         lines_cmap='Set1'):
     """Plots the catchment widths out of a glacier directory.
     """
 
@@ -364,7 +378,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines')[::-1]
-        color = gencolor(len(cls) + 1, cmap='Set1')
+        color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             smap.set_geometry(l.line, crs=crs, color=c,
                               linewidth=2.5, zorder=50)
@@ -655,7 +669,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               bbox_to_anchor=(1.34, 1.0),
               frameon=False)
 
@@ -739,6 +753,6 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
     # Legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(),
+    ax.legend(list(by_label.values()), list(by_label.keys()),
               loc='best', frameon=False)
     fig.tight_layout()

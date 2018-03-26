@@ -1,3 +1,4 @@
+import oggm
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)
 
@@ -143,6 +144,7 @@ class TestOtherGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = utils.get_demo_file('histalp_merged_hef.nc')
 
@@ -424,8 +426,8 @@ class TestMassBalance(unittest.TestCase):
         elah = cmb_mod.get_ela()
         t, tm, p, ps = cmb_mod.get_climate([elah])
         mb = ps - cmb_mod.mbmod.mu_star * tm
-        # not perfect becauseof time/months issues
-        np.testing.assert_allclose(mb, 0, atol=0.03)
+        # not perfect because of time/months/zinterp issues
+        np.testing.assert_allclose(mb, 0, atol=0.08)
 
 
     def test_random_mb(self):
@@ -562,6 +564,7 @@ class TestModelFlowlines(unittest.TestCase):
         # We set something and everything stays same
         rec.thick = thick
         assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
         assert_allclose(rec.widths, widths)
         assert_allclose(rec.widths_m, widths_m)
         assert_allclose(rec.section, section)
@@ -569,6 +572,15 @@ class TestModelFlowlines(unittest.TestCase):
         assert_allclose(rec.volume_m3, vol_m3.sum())
         rec.section = section
         assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2.sum())
+        assert_allclose(rec.volume_m3, vol_m3.sum())
+        rec.surface_h = surface_h
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
         assert_allclose(rec.widths, widths)
         assert_allclose(rec.widths_m, widths_m)
         assert_allclose(rec.section, section)
@@ -634,6 +646,7 @@ class TestModelFlowlines(unittest.TestCase):
             # We set something and everything stays same
             rec.thick = thick
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -641,6 +654,15 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.volume_m3, vol_m3.sum())
             rec.section = section
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.surface_h = surface_h
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -709,6 +731,7 @@ class TestModelFlowlines(unittest.TestCase):
             # We set something and everything stays same
             rec.thick = thick
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -716,6 +739,15 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.volume_m3, vol_m3.sum())
             rec.section = section
             assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
+            assert_allclose(rec.widths, widths)
+            assert_allclose(rec.widths_m, widths_m)
+            assert_allclose(rec.section, section)
+            assert_allclose(rec.area_m2, area_m2.sum())
+            assert_allclose(rec.volume_m3, vol_m3.sum())
+            rec.surface_h = surface_h
+            assert_allclose(rec.thick, thick)
+            assert_allclose(rec.surface_h, surface_h)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
             assert_allclose(rec.section, section)
@@ -786,7 +818,7 @@ class TestModelFlowlines(unittest.TestCase):
             assert_allclose(rec.section, section)
             assert_allclose(rec.area_m2, area_m2.sum())
             assert_allclose(rec.volume_m3, vol_m3.sum())
-
+            assert_allclose(rec.surface_h, surface_h)
 
     def test_mixed(self):
 
@@ -877,6 +909,17 @@ class TestModelFlowlines(unittest.TestCase):
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2)
         assert_allclose(rec.volume_m3, volume_m3)
+        rec.surface_h = rec.surface_h
+        assert_allclose(rec.thick, thick)
+        assert_allclose(rec.surface_h, surface_h)
+        assert_allclose(rec.widths, widths)
+        assert_allclose(rec.widths_m, widths_m)
+        assert_allclose(rec.section, section)
+        assert_allclose(rec.area_m2, area_m2)
+        assert_allclose(rec.volume_m3, volume_m3)
+        rec.surface_h = rec.surface_h - 10
+        assert_allclose(rec.thick, thick - 10)
+        assert_allclose(rec.surface_h, surface_h - 10)
 
 
 class TestIO(unittest.TestCase):
@@ -1001,6 +1044,7 @@ class TestIO(unittest.TestCase):
         xr.testing.assert_identical(ds_diag, ds_)
 
         fmodel = flowline.FileModel(run_path)
+        assert fmodel.last_yr == 500
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
@@ -1041,7 +1085,7 @@ class TestIO(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
-        flowline.random_glacier_evolution(new_gdir, nyears=10)
+        flowline.run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 
         self.gdir.copy_to_basedir(new_dir, setup='inversion')
@@ -1131,6 +1175,9 @@ class TestBackwardsIdealized(unittest.TestCase):
     @is_slow
     def test_iterative_back(self):
 
+        # This test could be deleted
+        from oggm.sandbox.ideas import _find_inital_glacier
+
         y0 = 0.
         y1 = 150.
         rtol = 0.02
@@ -1140,13 +1187,14 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a,
                                         time_stepping='ambitious')
 
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
 
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 > past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
@@ -1162,12 +1210,13 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a,
                                         time_stepping='ambitious')
 
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
         bef_fls = copy.deepcopy(past_model.fls)
         past_model.run_until(y1)
         self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
@@ -1183,14 +1232,18 @@ class TestBackwardsIdealized(unittest.TestCase):
                                         fs=self.fs, glen_a=self.glen_a)
 
         # Hit the correct one
-        ite, bias, past_model = flowline._find_inital_glacier(model, mb, y0,
-                                                              y1, rtol=rtol)
+        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
+                                                     y1, rtol=rtol)
         past_model.run_until(y1)
-        np.testing.assert_allclose(past_model.area_m2, self.glacier[-1].area_m2,
+        np.testing.assert_allclose(past_model.area_m2,
+                                   self.glacier[-1].area_m2,
                                    rtol=rtol)
 
     @is_slow
     def test_fails(self):
+
+        # This test could be deleted
+        from oggm.sandbox.ideas import _find_inital_glacier
 
         y0 = 0.
         y1 = 100.
@@ -1198,7 +1251,7 @@ class TestBackwardsIdealized(unittest.TestCase):
         mb = LinearMassBalance(self.ela - 150.)
         model = flowline.FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
                                         fs=self.fs, glen_a=self.glen_a)
-        self.assertRaises(RuntimeError, flowline._find_inital_glacier, model,
+        self.assertRaises(RuntimeError, _find_inital_glacier, model,
                           mb, y0, y1, rtol=0.02, max_ite=5)
 
 
@@ -1214,6 +1267,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
@@ -1637,10 +1691,10 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.random_glacier_evolution(self.gdir, nyears=100, seed=4,
-                                          bias=0, filesuffix='_rdn')
+        flowline.run_random_climate(self.gdir, nyears=100, seed=4,
+                                    bias=0, output_filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=100,
-                                      bias=0, filesuffix='_ct')
+                                      bias=0, output_filesuffix='_ct')
 
         paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
                  self.gdir.get_filepath('model_run', filesuffix='_ct'),
@@ -1664,6 +1718,45 @@ class TestHEF(unittest.TestCase):
                     ax3.set_title('Length')
                     plt.tight_layout()
                     plt.show()
+
+
+    @is_slow
+    def test_random_sh(self):
+
+        flowline.init_present_time_glacier(self.gdir)
+
+        self.gdir.hemisphere = 'sh'
+        climate.process_cru_data(self.gdir)
+
+        flowline.run_random_climate(self.gdir, nyears=20, seed=4,
+                                    bias=0, output_filesuffix='_rdn')
+        flowline.run_constant_climate(self.gdir, nyears=20,
+                                      bias=0, output_filesuffix='_ct')
+
+        paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
+                 self.gdir.get_filepath('model_run', filesuffix='_ct'),
+                 ]
+        for path in paths:
+            with flowline.FileModel(path) as model:
+                vol = model.volume_km3_ts()
+                len = model.length_m_ts()
+                area = model.area_km2_ts()
+                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                           rtol=0.1)
+                np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                           rtol=0.1)
+                if do_plot:
+                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                    vol.plot(ax=ax1)
+                    ax1.set_title('Volume')
+                    area.plot(ax=ax2)
+                    ax2.set_title('Area')
+                    len.plot(ax=ax3)
+                    ax3.set_title('Length')
+                    plt.tight_layout()
+                    plt.show()
+
+        self.gdir.hemisphere = 'nh'
 
     @is_slow
     def test_cesm(self):
@@ -1756,10 +1849,10 @@ class TestHEF(unittest.TestCase):
         # See what that means for a run
         flowline.init_present_time_glacier(gdir)
         flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
-                                       filesuffix='_hist')
+                                       output_filesuffix='_hist')
         flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
-                                       filename='cesm_data',
-                                       filesuffix='_cesm')
+                                       climate_filename='cesm_data',
+                                       output_filesuffix='_cesm')
 
         ds1 = utils.compile_run_output([gdir], path=False, filesuffix='_hist')
         ds2 = utils.compile_run_output([gdir], path=False, filesuffix='_cesm')
@@ -1770,6 +1863,18 @@ class TestHEF(unittest.TestCase):
         # ELA should be close
         assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
 
+        # Do a spinup run
+        flowline.run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
+                                      output_filesuffix='_spinup')
+        flowline.run_from_climate_data(gdir, ys=1961, ye=1990,
+                                       init_model_filesuffix='_spinup',
+                                       output_filesuffix='_afterspinup')
+        ds3 = utils.compile_run_output([gdir], path=False,
+                                       filesuffix='_afterspinup')
+        assert (ds1.volume.isel(rgi_id=0, time=-1) <
+                0.7*ds3.volume.isel(rgi_id=0, time=-1))
+
+
     @is_slow
     def test_elevation_feedback(self):
 
@@ -1779,9 +1884,9 @@ class TestHEF(unittest.TestCase):
         # Mutliproc
         tasks = []
         for feedback in feedbacks:
-            tasks.append((flowline.random_glacier_evolution,
+            tasks.append((flowline.run_random_climate,
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
-                               filesuffix=feedback)))
+                               output_filesuffix=feedback)))
         workflow.execute_parallel_tasks(self.gdir, tasks)
 
         out = []
@@ -1802,58 +1907,4 @@ class TestHEF(unittest.TestCase):
                 (ds.volume*1e-9).plot(label=lab)
             plt.xlabel('Vol (km3)')
             plt.legend()
-            plt.show()
-
-    @is_slow
-    def test_find_t0(self):
-
-        self.skipTest('This test is too unstable')
-
-        gdir = init_hef(border=DOM_BORDER, invert_with_sliding=False)
-
-        flowline.init_present_time_glacier(gdir)
-        glacier = gdir.read_pickle('model_flowlines')
-        df = pd.read_csv(utils.get_demo_file('hef_lengths.csv'), index_col=0)
-        df.columns = ['Leclercq']
-        df = df.loc[1950:]
-
-        vol_ref = flowline.FlowlineModel(glacier).volume_km3
-
-        init_bias = 94.  # so that "went too far" comes once on travis
-        rtol = 0.005
-
-        flowline.iterative_initial_glacier_search(gdir, y0=df.index[0], init_bias=init_bias,
-                                                  rtol=rtol, write_steps=True)
-
-        past_model = flowline.FileModel(gdir.get_filepath('model_run'))
-
-        vol_start = past_model.volume_km3
-        bef_fls = copy.deepcopy(past_model.fls)
-
-        mylen = past_model.length_m_ts()
-        df['oggm'] = mylen[12::12].values
-        df = df-df.iloc[-1]
-
-        past_model.run_until(2003)
-
-        vol_end = past_model.volume_km3
-        np.testing.assert_allclose(vol_ref, vol_end, rtol=0.05)
-
-        rmsd = utils.rmsd(df.Leclercq, df.oggm)
-        self.assertTrue(rmsd < 1000.)
-
-        if do_plot:  # pragma: no cover
-            df.plot()
-            plt.ylabel('Glacier length (relative to 2003)')
-            plt.show()
-            fig = plt.figure()
-            lab = 'ref (vol={:.2f}km3)'.format(vol_ref)
-            plt.plot(glacier[-1].surface_h, 'k', label=lab)
-            lab = 'oggm start (vol={:.2f}km3)'.format(vol_start)
-            plt.plot(bef_fls[-1].surface_h, 'b', label=lab)
-            lab = 'oggm end (vol={:.2f}km3)'.format(vol_end)
-            plt.plot(past_model.fls[-1].surface_h, 'r', label=lab)
-
-            plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
             plt.show()
