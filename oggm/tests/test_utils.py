@@ -17,7 +17,7 @@ from oggm import utils
 from oggm import cfg
 from oggm.tests import is_download
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github, init_hef
-
+from oggm.utils import shape_factor_adhikari
 _url_retrieve = None
 
 
@@ -217,6 +217,19 @@ class TestFuncs(unittest.TestCase):
         reg_names, subreg_names = utils.parse_rgi_meta(version='6')
         assert len(reg_names) == 20
         assert reg_names.loc[3].values[0] == 'Arctic Canada North'
+
+    def test_adhikari_shape_factors(self):
+        factors_rectangular = np.array([0.2, 0.313, 0.558, 0.790,
+                                        0.884, 0.929, 0.954, 0.990, 1.])
+        factors_parabolic = np.array([0.2, 0.251, 0.448, 0.653,
+                                      0.748, 0.803, 0.839, 0.917, 1.])
+        w = np.array([0.1, 0.5, 1, 2, 3, 4, 5, 10, 50])
+        h = 0.5 * np.ones(w.shape)
+        is_rect = h.copy()
+        np.testing.assert_equal(shape_factor_adhikari(w, h, is_rect),
+                                factors_rectangular)
+        np.testing.assert_equal(shape_factor_adhikari(w, h, is_rect*0.),
+                                factors_parabolic)
 
 
 class TestInitialize(unittest.TestCase):

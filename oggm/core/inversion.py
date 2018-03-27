@@ -23,6 +23,10 @@ Huss, M. and Farinotti, D.: Distributed ice thickness and volume of all
 Bahr  Pfeffer, W. T., Kaser, G., D. B.: Glacier volume estimation as an
     ill-posed boundary value problem, Cryosph. Discuss. Cryosph. Discuss.,
     6(6), 5405-5420, doi:10.5194/tcd-6-5405-2012, 2012.
+
+Adhikari, S., Marshall, J. S.: Parameterization of lateral drag in flowline
+    models of glacier dynamics, Journal of Glaciology, 58(212), 1119-1132.
+    doi:10.3189/2012JoG12J018, 2012.
 """
 # Built ins
 import logging
@@ -125,6 +129,40 @@ def _inversion_simple(a3, a0):
 
     return (-a0)**cfg.ONE_FIFTH
 
+def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
+    """
+    TODO: Documentation
+    Content of the original inner loop of the mass-conservation inversion.
+    Extracted to avoid code duplication
+    Parameters
+    ----------
+    gdir
+    a0s
+    a3
+    flux_a0
+    shape_factor
+    _inv_function
+
+    Returns
+    -------
+
+    """
+
+    a0s = a0s / (shape_factor ** 3)
+    if np.any(~np.isfinite(a0s)):
+        raise RuntimeError('({}) something went wrong with the '
+                           'inversion'.format(gdir.rgi_id))
+
+    # GO
+    out_thick = np.zeros(len(a0s))
+    for i, (a0, Q) in enumerate(zip(a0s, flux_a0)):
+        if Q > 0.:
+            out_thick[i] = _inv_function(a3, a0)
+        else:
+            out_thick[i] = 0.
+    assert np.all(np.isfinite(out_thick))
+    return out_thick
+
 
 def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
                                 filesuffix=''):
@@ -145,7 +183,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         during calibration.
     filesuffix : str
         add a suffix to the output file
-    
+
     Returns
     -------
     (vol, thick) in [m3, m]
@@ -161,6 +199,20 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
     fd = 2. / (cfg.N+2) * glen_a
     a3 = fs / fd
 
+    # Shape factor params
+    sf_func = None
+    use_sf = None
+    # Use .get to obatin default None for non-existing key
+    # necessary to pass some tests
+    # TODO: remove after tests are adapted
+    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion')
+    if use_sf == 'Adhikari' or use_sf == 'Nye':
+        sf_func = utils.shape_factor_adhikari
+    elif use_sf == 'Huss':
+        sf_func = utils.shape_factor_huss
+    sf_tol = 1e-2  # TODO: better as params in cfg?
+    max_sf_iter = 20
+
     # Clip the slope, in degrees
     clip_angle = cfg.PARAMS['min_slope']
 
@@ -174,29 +226,44 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
 
         # Parabolic bed rock
         w = cl['width']
+
         a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
 
-        if np.any(~np.isfinite(a0s)):
-            raise RuntimeError('({}) something went wrong with the '
-                               'inversion'.format(gdir.rgi_id))
+        sf = np.ones(slope.shape)  # Default shape factor is 1
+        # TODO: maybe take height update as criterion for iteration end instead
+        # of sf_diff?
+        if sf_func is not None:
 
-        # GO
-        out_thick = np.zeros(len(slope))
-        for i, (a0, Q) in enumerate(zip(a0s, cl['flux_a0'])):
-            if Q > 0.:
-                out_thick[i] = _inv_function(a3, a0)
-            else:
-                out_thick[i] = 0.
-        assert np.all(np.isfinite(out_thick))
+            # Start iteration for shape factor with guess of 1
+            i = 0
+            sf_diff = np.ones(slope.shape)
+
+            while i < max_sf_iter and \
+                    np.any(sf_diff > sf_tol):
+                out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
+                                           sf, _inv_function)
+
+                sf_diff[:] = sf[:]
+                sf = sf_func(w, out_thick, cl['is_rectangular'])
+                sf_diff = sf_diff - sf
+                i += 1
+            # TODO: Iteration at the moment for all grid points,
+            # even if some already converged. Change?
+
+            log.info('Shape factor {:s} used, took {:d} iterations for '
+                     'convergence.'.format(use_sf, i))
+
+        out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
+                                   sf, _inv_function)
 
         # volume
         fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
         volume = fac * out_thick * w * cl['dx']
-
         if write:
             cl['thick'] = out_thick
             cl['volume'] = volume
         out_volume += np.sum(volume)
+
     if write:
         gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
 
@@ -274,8 +341,8 @@ def optimize_inversion_params(gdirs):
             return utils.rmsd(tmp_ref, ref_data)
 
         opti = optimization.minimize(to_optimize, [1., 1.],
-                                    bounds=((0.01, 10), (0.01, 10)),
-                                    tol=tol)
+                                     bounds=((0.01, 10), (0.01, 10)),
+                                     tol=tol)
         # Check results and save.
         glen_a = cfg.A * opti['x'][0]
         fs = cfg.FS * opti['x'][1]
@@ -446,7 +513,7 @@ def _distribute_thickness_per_altitude(glacier_mask, topo, cls, fls, grid,
 
     # Along the lines
     dx = grid.dx
-    hs, ts, vs, xs, ys = [], [], [], [] ,[]
+    hs, ts, vs, xs, ys = [], [], [], [], []
     for cl, fl in zip(cls, fls):
         # TODO: here one should see if parabola is always the best choice
         hs = np.append(hs, fl.surface_h)
@@ -575,7 +642,6 @@ def distribute_thickness(gdir, how='', add_slope=True, smooth=True,
         inv_g = _distribute_thickness_per_interp
     else:
         raise ValueError('interpolation method not understood')
-
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')

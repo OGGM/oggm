@@ -274,10 +274,14 @@ def initialize(file=None):
     PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
     _k = 'optimize_inversion_params'
     PARAMS[_k] = cp.as_bool(_k)
+    PARAMS['use_shape_factor_for_inversion'] = \
+                cp['use_shape_factor_for_inversion']
 
     # Flowline model
     _k = 'use_optimized_inversion_params'
     PARAMS[_k] = cp.as_bool(_k)
+    PARAMS['use_shape_factor_for_fluxbasedmodel'] = \
+                cp['use_shape_factor_for_fluxbasedmodel']
 
     # Make sure we have a proper cache dir
     from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
@@ -295,7 +299,9 @@ def initialize(file=None):
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'allow_negative_mustar']
+           'rgi_version', 'allow_negative_mustar',
+           'use_shape_factor_for_inversion',
+           'use_shape_factor_for_fluxbasedmodel']
     for k in ltr:
         cp.pop(k, None)
 
