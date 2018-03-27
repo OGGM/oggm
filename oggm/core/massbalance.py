@@ -134,7 +134,15 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
 
 class LinearMassBalance(MassBalanceModel):
-    """Constant mass-balance as a linear function of altitude."""
+    """Constant mass-balance as a linear function of altitude.
+
+    Attributes
+    ----------
+    temp_bias : float, default 0
+        A "temperature bias" doesn't makes much sense in the linear MB
+        context, but we implemented a simple empirical rule:
+        + 1K -> ELA + 150 m
+    """
 
     def __init__(self, ela_h, grad=3., max_mb=None):
         """ Initialize.
@@ -154,6 +162,18 @@ class LinearMassBalance(MassBalanceModel):
         self.ela_h = ela_h
         self.grad = grad
         self.max_mb = max_mb
+        self._temp_bias = 0
+
+    @property
+    def temp_bias(self):
+        """Temperature bias to add to the original series."""
+        return self._temp_bias
+
+    @temp_bias.setter
+    def temp_bias(self, value):
+        """Temperature bias to change the ELA."""
+        self.ela_h = self.orig_ela_h + value * 150
+        self._temp_bias = value
 
     def get_monthly_mb(self, heights, year=None):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
@@ -454,6 +474,16 @@ class ConstantMassBalance(MassBalanceModel):
                 delattr(self, attr_name)
         self.mbmod.prcp_bias = value
 
+    @property
+    def bias(self):
+        """Residual bias to apply to the original series."""
+        return self.mbmod.bias
+
+    @bias.setter
+    def bias(self, value):
+        """Residual bias to apply to the original series."""
+        self.mbmod.bias = value
+
     @lazy_property
     def interp_yr(self):
         # annual MB
@@ -609,6 +639,16 @@ class RandomMassBalance(MassBalanceModel):
                 delattr(self, attr_name)
         self.mbmod.prcp_bias = value
 
+    @property
+    def bias(self):
+        """Residual bias to apply to the original series."""
+        return self.mbmod.bias
+
+    @bias.setter
+    def bias(self, value):
+        """Residual bias to apply to the original series."""
+        self.mbmod.bias = value
+
     def get_state_yr(self, year=None):
         """For a given year, get the random year associated to it."""
         year = int(year)
@@ -627,12 +667,37 @@ class RandomMassBalance(MassBalanceModel):
 
 
 class UncertainMassBalance(MassBalanceModel):
-    """"""
+    """Adding uncertainty to a mass balance model.
+
+    There are three variables for which you can add uncertainty:
+    - temperature (additive bias)
+    - precipitation (multiplicative factor)
+    - residual (a bias in units of MB)
+    """
 
     def __init__(self, basis_model,
-                 rdn_temp_bias_seed=None, rdn_temp_bias_sigma=1,
-                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.2,
-                 rdn_bias_seed=None, rdn_bias_sigma=350):
+                 rdn_temp_bias_seed=None, rdn_temp_bias_sigma=0.1,
+                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.1,
+                 rdn_bias_seed=None, rdn_bias_sigma=100):
+        """Initialize.
+
+        Parameters
+        ----------
+        basis_model : MassBalanceModel
+            the model to which you want to add the uncertainty to
+        rdn_temp_bias_seed : int
+            the seed of the random number generator
+        rdn_temp_bias_sigma : float
+            the standard deviation of the random temperature error
+        rdn_prcp_bias_seed : int
+            the seed of the random number generator
+        rdn_prcp_bias_sigma : float
+            the standard deviation of the random precipitation error
+        rdn_bias_seed : int
+            the seed of the random number generator
+        rdn_bias_sigma : float
+            the standard deviation of the random MB error
+        """
         super(UncertainMassBalance, self).__init__()
         self.mbmod = basis_model
         self.valid_bounds = self.mbmod.valid_bounds
@@ -645,6 +710,29 @@ class UncertainMassBalance(MassBalanceModel):
         self._state_temp = dict()
         self._state_prcp = dict()
         self._state_bias = dict()
+
+    @property
+    def temp_bias(self):
+        """Temperature bias to add to the original series."""
+        return self.mbmod.temp_bias
+
+    @temp_bias.setter
+    def temp_bias(self, value):
+        """Temperature bias to add to the original series."""
+        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
+        self.mbmod.temp_bias = value
+
+    @property
+    def prcp_bias(self):
+        """Precipitation factor to apply to the original series."""
+        return self.mbmod.prcp_bias
+
+    @prcp_bias.setter
+    def prcp_bias(self, value):
+        """Precipitation factor to apply to the original series."""
+        self.mbmod.prcp_bias = value
 
     def _get_state_temp(self, year):
         year = int(year)
@@ -665,14 +753,23 @@ class UncertainMassBalance(MassBalanceModel):
         return self._state_bias[year]
 
     def get_annual_mb(self, heights, year=None):
-        _t = self.mbmod.mbmod.temp_bias
-        _p = self.mbmod.mbmod.prcp_bias
-        _b = self.mbmod.mbmod.bias
-        self.mbmod.mbmod.temp_bias = self._get_state_temp(year) + _t
-        self.mbmod.mbmod.prcp_bias = self._get_state_prcp(year) + _p
-        self.mbmod.mbmod.bias = self._get_state_bias(year) + _b
-        out = self.mbmod.get_annual_mb(heights, year=year)
-        self.mbmod.mbmod.temp_bias = _t
-        self.mbmod.mbmod.prcp_bias = _p
-        self.mbmod.mbmod.bias = _b
+
+        # Keep the original biases and add a random error
+        _t = self.mbmod.temp_bias
+        _p = self.mbmod.prcp_bias
+        _b = self.mbmod.bias
+        self.mbmod.temp_bias = self._get_state_temp(year) + _t
+        self.mbmod.prcp_bias = self._get_state_prcp(year) + _p
+        self.mbmod.bias = self._get_state_bias(year) + _b
+        try:
+            out = self.mbmod.get_annual_mb(heights, year=year)
+        except:
+            self.mbmod.temp_bias = _t
+            self.mbmod.prcp_bias = _p
+            self.mbmod.bias = _b
+            raise
+        # Back to normal
+        self.mbmod.temp_bias = _t
+        self.mbmod.prcp_bias = _p
+        self.mbmod.bias = _b
         return out
