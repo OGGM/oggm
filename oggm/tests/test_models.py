@@ -329,6 +329,13 @@ class TestMassBalance(unittest.TestCase):
                                    atol=1e-2)
         self.assertTrue(mbdf['ANNUAL_BALANCE'].mean() > mbdf['BIASED_MB'].mean())
 
+        # Repeat
+        mb_mod = massbalance.PastMassBalance(gdir, repeat=True,
+                                             ys=1901, ye=1950)
+        yrs = np.arange(100) + 1901
+        mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(mb[50], mb[-50])
+
     def test_constant_mb_model(self):
 
         gdir = init_hef(border=DOM_BORDER)
@@ -429,7 +436,6 @@ class TestMassBalance(unittest.TestCase):
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.08)
 
-
     def test_random_mb(self):
 
         gdir = init_hef(border=DOM_BORDER)
@@ -496,6 +502,84 @@ class TestMassBalance(unittest.TestCase):
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         self.assertTrue(utils.rmsd(ref_mb, my_mb) < 0.1)
+
+    def test_uncertain_mb(self):
+
+        gdir = init_hef(border=DOM_BORDER)
+
+        ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        mb_mod = massbalance.UncertainMassBalance(ref_mod)
+
+        yrs = np.arange(100)
+        h, w = gdir.get_inversion_flowline_hw()
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
+        assert np.std(unc_mb) > 50
+
+        mb_mod = massbalance.UncertainMassBalance(ref_mod,
+                                                  rdn_temp_bias_sigma=0.1,
+                                                  rdn_prcp_bias_sigma=0,
+                                                  rdn_bias_sigma=0)
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(ref_mb, check_mb)
+        assert np.std(unc_mb) > 50
+
+        mb_mod = massbalance.UncertainMassBalance(ref_mod,
+                                                  rdn_temp_bias_sigma=0,
+                                                  rdn_prcp_bias_sigma=0.1,
+                                                  rdn_bias_sigma=0)
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(ref_mb, check_mb)
+        assert np.std(unc_mb) > 50
+
+        mb_mod = massbalance.UncertainMassBalance(ref_mod,
+                                                  rdn_temp_bias_sigma=0,
+                                                  rdn_prcp_bias_sigma=0,
+                                                  rdn_bias_sigma=100)
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(ref_mb, check_mb)
+        assert np.std(unc_mb) > 50
+
+        # Other MBs
+        ref_mod = massbalance.PastMassBalance(gdir)
+        mb_mod = massbalance.UncertainMassBalance(ref_mod)
+
+        yrs = np.arange(100) + 1901
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
+        assert np.std(unc_mb - ref_mb) > 50
+        assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
+
+        # Other MBs
+        ref_mod = massbalance.RandomMassBalance(gdir)
+        mb_mod = massbalance.UncertainMassBalance(ref_mod)
+
+        yrs = np.arange(100) + 1901
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
+        assert np.std(unc_mb - ref_mb) > 50
+        assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
     def test_mb_performance(self):
 

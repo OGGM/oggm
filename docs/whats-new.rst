@@ -51,6 +51,11 @@ Enhancements
   Adhikari) and `'Huss'` (Huss & Farinotti 2012). Thorough tests with
   applied shape factors are still missing.
   By `Philipp Gregor <https://github.com/phigre>`_.
+- Some amelioration to the mass-balance models (:pull:`434`). Added a
+  ``repeat`` kwarg to the ``PastMassBalance`` in order to loop over a
+  selected period. Added an ``UncertainMassBalance`` model which wraps
+  an existing model and adds random uncertainty to it.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Bug fixes
 ~~~~~~~~~
