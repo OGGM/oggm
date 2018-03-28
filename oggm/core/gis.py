@@ -16,7 +16,7 @@ References::
 # Built ins
 import os
 import logging
-from shutil import copyfile
+import json
 from functools import partial
 from distutils.version import LooseVersion
 # External libs
@@ -40,7 +40,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_topo_file, polygon_intersections
+from oggm.utils import tuple2int, get_topo_file, get_demo_file
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -303,6 +303,7 @@ def define_glacier_region(gdir, entity=None):
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
+                                         rgi_subregion=gdir.rgi_subregion,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
 
@@ -366,7 +367,13 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
                               x0y0=x0y0)
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
-    gdir.write_pickle(dem_source, 'dem_source')
+
+    # Write DEM source info
+    with open(get_demo_file('dem_sources.json'), 'r') as fr:
+        source_info = json.loads(fr.read())
+    source_txt = source_info.get(dem_source, dem_source)
+    with open(gdir.get_filepath('dem_source'), 'w') as fw:
+        fw.write(source_txt)
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
