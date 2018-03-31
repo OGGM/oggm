@@ -519,9 +519,10 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(url, expected)
             return 'yo'
 
-        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+        with FakeDownloadManager('_download_topo_file_from_cluster', down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                             rgi_region=19)
+                                             rgi_region='19',
+                                             rgi_subregion='19-11')
 
         assert of[0] == 'yo'
         assert source == 'RAMP'
@@ -529,11 +530,11 @@ class TestFakeDownloads(unittest.TestCase):
     def test_gimp(self):
 
         def down_check(url):
-            expected = 'gimpdem_90m.tif'
+            expected = 'gimpdem_90m_v01.1.tif'
             self.assertEqual(url, expected)
             return 'yo'
 
-        with FakeDownloadManager('_download_alternate_topo_file', down_check):
+        with FakeDownloadManager('_download_topo_file_from_cluster', down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                              rgi_region=5)
 
@@ -788,13 +789,6 @@ class TestDataFiles(unittest.TestCase):
         zone = 'bli'
         unit = 'S75E135'
         self.assertTrue(utils._download_aster_file(zone, unit) is None)
-
-    @is_download
-    def test_alternatedownload(self):
-
-        # this is a simple file
-        fp = utils._download_alternate_topo_file('iceland.tif')
-        self.assertTrue(os.path.exists(fp))
 
     @is_download
     def test_download_cru(self):

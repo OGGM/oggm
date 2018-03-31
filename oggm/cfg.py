@@ -143,8 +143,8 @@ _doc = 'A ``dict`` containing the downsteam line geometry as well as the bed' \
        'shape computed from a parabolic fit.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
-_doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
-BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
+_doc = 'A text file with the source of the topo file (GIMP, SRTM, ...).'
+BASENAMES['dem_source'] = ('dem_source.txt', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)

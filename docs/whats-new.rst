@@ -56,6 +56,11 @@ Enhancements
   selected period. Added an ``UncertainMassBalance`` model which wraps
   an existing model and adds random uncertainty to it.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The DEM sources are now clearly stated in each glacier directory,
+  along with the original data citation (:pull:`441`). We encourage
+  to always cite the original data providers.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 Bug fixes
 ~~~~~~~~~

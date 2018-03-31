@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'f8b7bab312c8830bfa56ed340ad763ecd6033655'
+SAMPLE_DATA_COMMIT = '3eaafed87099ae6b4cdd974f258557cc6165ac7a'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -709,22 +709,14 @@ def _download_aster_file_unlocked(zone, unit):
     return outpath
 
 
-def _download_alternate_topo_file(fname):
+def _download_topo_file_from_cluster(fname):
     with _get_download_lock():
-        return _download_alternate_topo_file_unlocked(fname)
+        return _download_topo_file_from_cluster_unlocked(fname)
 
 
-def _download_alternate_topo_file_unlocked(fname):
+def _download_topo_file_from_cluster_unlocked(fname):
     """Checks if the special topo data is in the directory and if not,
-    download it from AWS.
-
-    You need AWS cli and AWS credentials for this. Quoting Timo:
-
-        $ aws configure
-
-        Key ID und Secret you should have
-        Region is eu-west-1 and Output Format is json.
-
+    download it from the cluster.
     """
 
     # extract directory
@@ -732,8 +724,9 @@ def _download_alternate_topo_file_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    aws_path = 'topo/' + fname + '.zip'
-    dfile = _aws_file_download_unlocked(aws_path)
+    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url += fname + '.zip'
+    dfile = file_downloader(url)
 
     if not os.path.exists(outpath):
         logger.info('Extracting ' + fname + '.zip to ' + outpath + '...')
@@ -1821,7 +1814,8 @@ def _get_cru_file_unlocked(var=None):
     return ofile
 
 
-def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
+def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
+                  source=None):
     """
     Returns a list with path(s) to the DEM file(s) covering the desired extent.
 
@@ -1839,8 +1833,10 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         a (min_lon, max_lon) tuple delimiting the requested area longitudes
     lat_ex : tuple, required
         a (min_lat, max_lat) tuple delimiting the requested area latitudes
-    rgi_region : int, optional
+    rgi_region : str, optional
         the RGI region number (required for the GIMP DEM)
+    rgi_subregion : str, optional
+        the RGI subregion str (useful for RGI Reg 19)
     source : str or list of str, optional
         If you want to force the use of a certain DEM source. Available are:
           - 'USER' : file set in cfg.PATHS['dem_file']
@@ -1860,6 +1856,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
         for s in source:
             demf, source_str = get_topo_file(lon_ex, lat_ex,
                                              rgi_region=rgi_region,
+                                             rgi_subregion=rgi_subregion,
                                              source=s)
             if demf[0]:
                 return demf, source_str
@@ -1876,18 +1873,25 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, source=None):
     if source == 'GIMP' or (rgi_region is not None and int(rgi_region) == 5):
         source = 'GIMP' if source is None else source
         if source == 'GIMP':
-            _file = _download_alternate_topo_file('gimpdem_90m.tif')
+            _file = _download_topo_file_from_cluster('gimpdem_90m_v01.1.tif')
             return [_file], source
 
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
-        if np.max(lat_ex) > -60:
+        if rgi_subregion is None:
+            shc = gpd.read_file(get_demo_file('ramp_contour.shp')).iloc[0]
+            should_dem3 = not shc.geometry.contains(shpg.Point(lon_ex[0],
+                                                               lat_ex[0]))
+        else:
+            dem3_regs = ['19-01', '19-02', '19-03', '19-04', '19-05']
+            should_dem3 = rgi_subregion in dem3_regs
+        if should_dem3:
             # special case for some distant islands
             source = 'DEM3' if source is None else source
         else:
             source = 'RAMP' if source is None else source
         if source == 'RAMP':
-            _file = _download_alternate_topo_file('AntarcticDEM_wgs84.tif')
+            _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
             return [_file], source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
@@ -2660,8 +2664,8 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CENLON)
             self.cenlat = float(rgi_entity.CENLAT)
             self.rgi_region = '{:02d}'.format(int(rgi_entity.O1REGION))
-            self.rgi_subregion = self.rgi_region + '-' + \
-                                 '{:02d}'.format(int(rgi_entity.O2REGION))
+            self.rgi_subregion = (self.rgi_region + '-' +
+                                  '{:02d}'.format(int(rgi_entity.O2REGION)))
             name = rgi_entity.NAME
             rgi_datestr = rgi_entity.BGNDATE
             gtype = rgi_entity.GLACTYPE
