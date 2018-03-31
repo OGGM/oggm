@@ -48,6 +48,9 @@ log = logging.getLogger(__name__)
 # Needed later
 label_struct = np.ones((3, 3))
 
+with open(get_demo_file('dem_sources.json'), 'r') as fr:
+    DEM_SOURCE_INFO = json.loads(fr.read())
+
 
 def gaussian_blur(in_array, size):
     """Applies a Gaussian filter to a 2d array.
@@ -369,9 +372,7 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
 
     # Write DEM source info
-    with open(get_demo_file('dem_sources.json'), 'r') as fr:
-        source_info = json.loads(fr.read())
-    source_txt = source_info.get(dem_source, dem_source)
+    source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
     with open(gdir.get_filepath('dem_source'), 'w') as fw:
         fw.write(source_txt)
 

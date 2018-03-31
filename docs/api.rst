@@ -142,7 +142,7 @@ Interface
     MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
     MassBalanceModel.get_specific_mb
-    MassBalanceModel.temp_bias
+    MassBalanceModel.get_ela
 
 Models
 ------
@@ -155,3 +155,4 @@ Models
     PastMassBalance
     ConstantMassBalance
     RandomMassBalance
+    UncertainMassBalance

@@ -135,13 +135,6 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
 class LinearMassBalance(MassBalanceModel):
     """Constant mass-balance as a linear function of altitude.
-
-    Attributes
-    ----------
-    temp_bias : float, default 0
-        A "temperature bias" doesn't makes much sense in the linear MB
-        context, but we implemented a simple empirical rule:
-        + 1K -> ELA + 150 m
     """
 
     def __init__(self, ela_h, grad=3., max_mb=None):
@@ -155,6 +148,13 @@ class LinearMassBalance(MassBalanceModel):
             Mass-balance gradient (unit: [mm w.e. yr-1 m-1])
         max_mb: float
             Cap the mass balance to a certain value (unit: [mm w.e. yr-1])
+
+        Attributes
+        ----------
+        temp_bias : float, default 0
+            A "temperature bias" doesn't makes much sense in the linear MB
+            context, but we implemented a simple empirical rule:
+            + 1K -> ELA + 150 m
         """
         super(LinearMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
