@@ -1,6 +1,3 @@
-.. image:: _static/logo.png
-
-|
 
 An open source glacier model in Python
 --------------------------------------
