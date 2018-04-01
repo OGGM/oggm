@@ -67,6 +67,9 @@ Bug fixes
 
 - Remove dependency to deprecated matplotlib._cntr module (:issue:`418`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a bug in tidewater glaciers terminus position finding, where
+  in some rare cases the percentile threshold was too low (:pull:`444`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Internals
