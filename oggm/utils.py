@@ -863,9 +863,9 @@ def haversine(lon1, lat1, lon2, lat2):
     Examples:
     ---------
     >>> haversine(34, 42, 35, 42)
-    82633.464752871543
+    82633.46475287154
     >>> haversine(34, 42, [35, 36], [42, 42])
-    array([  82633.46475287,  165264.11172113])
+    array([ 82633.46475287, 165264.11172113])
     """
 
     # convert decimal degrees to radians
@@ -1600,7 +1600,7 @@ def get_glathida_file():
     return outf
 
 
-def get_rgi_dir(version=None):
+def get_rgi_dir(version=None, reset=False):
     """Returns a path to the RGI directory.
 
     If the RGI files are not present, download them.
@@ -1618,14 +1618,17 @@ def get_rgi_dir(version=None):
     """
 
     with _get_download_lock():
-        return _get_rgi_dir_unlocked(version=version)
+        return _get_rgi_dir_unlocked(version=version, reset=reset)
 
 
-def _get_rgi_dir_unlocked(version=None):
+def _get_rgi_dir_unlocked(version=None, reset=False):
 
     rgi_dir = cfg.PATHS['rgi_dir']
     if version is None:
         version = cfg.PARAMS['rgi_version']
+
+    if len(version) == 1:
+        version += '0'
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
@@ -1633,24 +1636,26 @@ def _get_rgi_dir_unlocked(version=None):
                          'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     rgi_dir = os.path.join(rgi_dir, 'RGIV' + version)
-    mkdir(rgi_dir)
+    mkdir(rgi_dir, reset=reset)
 
-    if version == '5':
+    if version == '50':
         dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
-    else:
+    elif version == '60':
         dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+    elif version == '61':
+        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/rgi_61.zip'
 
     test_file = os.path.join(rgi_dir,
-                             '000_rgi{}0_manifest.txt'.format(version))
+                             '000_rgi{}_manifest.txt'.format(version))
 
     if not os.path.exists(test_file):
         # if not there download it
-        ofile = file_downloader(dfile)
+        ofile = file_downloader(dfile, reset=reset)
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
         # Extract subdirs
-        pattern = '*_rgi{}0_*.zip'.format(version)
+        pattern = '*_rgi{}_*.zip'.format(version)
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
                 zfile = os.path.join(root, filename)
@@ -1663,7 +1668,7 @@ def _get_rgi_dir_unlocked(version=None):
     return rgi_dir
 
 
-def get_rgi_region_file(region, version=None):
+def get_rgi_region_file(region, version=None, reset=False):
     """Returns a path to a RGI region file.
 
     If the RGI files are not present, download them.
@@ -1680,7 +1685,7 @@ def get_rgi_region_file(region, version=None):
     path to the RGI shapefile
     """
 
-    rgi_dir = get_rgi_dir(version=version)
+    rgi_dir = get_rgi_dir(version=version, reset=reset)
     f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
@@ -1706,30 +1711,35 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     if version is None:
         version = cfg.PARAMS['rgi_version']
 
+    if len(version) == 1:
+        version += '0'
+
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
         raise ValueError('The RGI data directory has to be'
                          'specified explicitly.')
 
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
-    mkdir(rgi_dir, reset=reset)
+    mkdir(rgi_dir)
 
     dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/'
-    if version == '5':
-        dfile += 'RGI_V5_Intersects.zip'
-    elif version == '6':
-        dfile += 'RGI_V6_Intersects.zip'
+    if version == '50':
+        dfile += 'RGI_V50_Intersects.zip'
+    elif version == '60':
+        dfile += 'RGI_V60_Intersects.zip'
 
-    test_file = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects',
-                             'Intersects_OGGM_Manifest.txt')
+    odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
+    if reset and os.path.exists(odir):
+        shutil.rmtree(odir)
+    test_file = os.path.join(odir, 'Intersects_OGGM_Manifest.txt')
     if not os.path.exists(test_file):
         # if not there download it
         ofile = file_downloader(dfile, reset=reset)
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(rgi_dir)
+            zf.extractall(odir)
 
-    return os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
+    return odir
 
 
 def get_rgi_intersects_region_file(region, version=None):

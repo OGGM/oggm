@@ -802,7 +802,7 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['cru_dir'] = tmp
 
     @is_download
-    def test_download_rgi(self):
+    def test_download_rgi5(self):
 
         tmp = cfg.PATHS['rgi_dir']
         cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
@@ -821,6 +821,18 @@ class TestDataFiles(unittest.TestCase):
 
         of = utils.get_rgi_dir(version='6')
         of = os.path.join(of, '01_rgi60_Alaska', '01_rgi60_Alaska.shp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['rgi_dir'] = tmp
+
+    @is_download
+    def test_download_rgi61(self):
+
+        tmp = cfg.PATHS['rgi_dir']
+        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
+
+        of = utils.get_rgi_dir(version='61')
+        of = os.path.join(of, '01_rgi61_Alaska', '01_rgi61_Alaska.shp')
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['rgi_dir'] = tmp

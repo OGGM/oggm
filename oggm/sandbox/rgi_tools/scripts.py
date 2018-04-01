@@ -12,14 +12,14 @@ from oggm.utils import get_rgi_dir, mkdir
 from oggm.sandbox.rgi_tools.tools import (compute_intersects, prepare_divides,
                                           OUTDIR_INTERSECTS)
 
-rgi_version = '6'
+rgi_version = '61'
 
 
 def intersects_script():
     # Download RGI files
     cfg.initialize()
     rgi_dir = get_rgi_dir(version=rgi_version)
-    fp = '*_rgi' + rgi_version + '0_*.shp'
+    fp = '*_rgi' + rgi_version + '_*.shp'
     rgi_shps = list(glob(os.path.join(rgi_dir, "*", fp)))
     rgi_shps = [r for r in rgi_shps if 'Regions' not in r]
     with mp.Pool() as p:
@@ -72,4 +72,4 @@ def divides_script():
 
 
 if __name__ == "__main__":
-    merge_intersects()
+    intersects_script()
