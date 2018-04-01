@@ -648,8 +648,21 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
         ind = np.where((zoutline < plow) & (zoutline < (mini + deltah)))[0]
 
         # We take the middle of this area
-        ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
-
+        try:
+            ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+        except IndexError:
+            # Sometimes the default perc is not large enough
+            try:
+                # Repeat
+                perc *= 2
+                plow = np.percentile(zoutline, perc).astype(np.int64)
+                mini = np.min(zoutline)
+                ind = np.where((zoutline < plow) &
+                               (zoutline < (mini + deltah)))[0]
+                ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+            except IndexError:
+                # Last resort
+                ind_term = np.argmin(zoutline)
     else:
         # easy: just the minimum
         ind_term = np.argmin(zoutline)
