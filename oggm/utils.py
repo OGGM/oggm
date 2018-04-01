@@ -2320,10 +2320,13 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             fpath = gdir.get_filepath('gridded_data')
             with netCDF4.Dataset(fpath) as nc:
                 mask = nc.variables['glacier_mask'][:]
+                ext = nc.variables['glacier_ext'][:]
                 topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+            d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
+            d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
         except:
             pass
         try:

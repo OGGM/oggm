@@ -207,6 +207,36 @@ class TestGIS(unittest.TestCase):
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
 
+    def test_simple_glacier_masks(self):
+
+        # The GIS was double checked externally with IDL.
+        hef_file = get_demo_file('Hintereisferner.shp')
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.simple_glacier_masks(gdir)
+
+        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+            np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
+                                       rtol=1e-1)
+
+            # Check that HEF doesn't "badly" need a divide
+            mask = nc.variables['glacier_mask'][:]
+            ext = nc.variables['glacier_ext'][:]
+            dem = nc.variables['topo'][:]
+            np.testing.assert_allclose(np.max(dem[mask.astype(bool)]),
+                                       np.max(dem[ext.astype(bool)]),
+                                       atol=10)
+
+        df = utils.glacier_characteristics([gdir], path=False)
+        np.testing.assert_allclose(df['dem_max_elev_on_ext'],
+                                   df['dem_max_elev'],
+                                   atol=10)
+
+        assert np.all(df['dem_max_elev'] > df['dem_max_elev_on_ext'])
+
     def test_intersects(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
