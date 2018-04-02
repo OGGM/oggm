@@ -577,6 +577,12 @@ class TestGeometry(unittest.TestCase):
         np.testing.assert_allclose(dis * 0 + cfg.PARAMS['flowline_dx'], dis,
                                    rtol=0.01)
 
+        d = gdir.get_diagnostics()
+        assert d['perc_invalid_flowline'] > 0.1
+
+        df = utils.glacier_characteristics([gdir], path=False)
+        assert np.all(df['perc_invalid_flowline'] > 0.1)
+
     def test_geom_width(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')

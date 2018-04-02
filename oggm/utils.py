@@ -6,6 +6,7 @@ import glob
 import os
 import tempfile
 import gzip
+import json
 import shutil
 import zipfile
 import sys
@@ -2316,6 +2317,13 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             out_df.append(d)
             continue
         try:
+            # Diagnostics
+            diags = gdir.get_diagnostics()
+            for k, v in diags.items():
+                d[k] = v
+        except:
+            pass
+        try:
             # Masks related stuff
             fpath = gdir.get_filepath('gridded_data')
             with netCDF4.Dataset(fpath) as nc:
@@ -2874,6 +2882,39 @@ class GlacierDirectory(object):
         """
 
         return os.path.exists(self.get_filepath(filename))
+
+    def add_to_diagnostics(self, key, value):
+        """Write a key, value pair to the gdir's runtime diagnostics.
+
+        Parameters
+        ----------
+        key : str
+            dict entry key
+        value : str or number
+            dict entry value
+        """
+
+        d = self.get_diagnostics()
+        d[key] = value
+        with open(self.get_filepath('diagnostics'), 'w') as f:
+            json.dump(d, f)
+
+    def get_diagnostics(self):
+        """Read the gdir's runtime diagnostics.
+
+        Returns
+        -------
+        the diagnostics dict
+        """
+        # If not there, create an empty one
+        if not self.has_file('diagnostics'):
+            with open(self.get_filepath('diagnostics'), 'w') as f:
+                json.dump(dict(), f)
+
+        # Read and return
+        with open(self.get_filepath('diagnostics'), 'r') as f:
+            out = json.load(f)
+        return out
 
     def read_pickle(self, filename, use_compression=None, filesuffix=''):
         """Reads a pickle located in the directory.

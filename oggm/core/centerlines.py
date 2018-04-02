@@ -1551,7 +1551,8 @@ def initialize_flowlines(gdir):
 
     # Smooth window
     sw = cfg.PARAMS['flowline_height_smooth']
-
+    diag_n_bad_slopes = 0
+    diag_n_pix = 0
     for ic, cl in enumerate(cls):
         points = line_interpol(cl.line, dx)
 
@@ -1574,7 +1575,10 @@ def initialize_flowlines(gdir):
             # Correct only where glacier
             hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
             isfin = np.isfinite(hgts)
-            assert np.any(isfin)
+            if not np.any(isfin):
+                raise RuntimeError('This line has no positive slopes')
+            diag_n_bad_slopes += np.sum(~isfin)
+            diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
             if perc_bad > 0.8:
                 log.warning('({}) more than {:.0%} of the flowline is cropped '
@@ -1602,6 +1606,9 @@ def initialize_flowlines(gdir):
 
     # Write the data
     gdir.write_pickle(fls, 'inversion_flowlines')
+    if do_filter:
+        out = diag_n_bad_slopes/diag_n_pix
+        gdir.add_to_diagnostics('perc_invalid_flowline', out)
 
 
 @entity_task(log, writes=['inversion_flowlines'])
