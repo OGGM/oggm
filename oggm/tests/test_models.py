@@ -1756,6 +1756,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
+    @is_slow
     def test_inversion_noisy_sf_huss(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -1866,6 +1867,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
+    @is_slow
     def test_inversion_tributary_sf_huss(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']

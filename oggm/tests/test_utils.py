@@ -413,21 +413,19 @@ class TestFakeDownloads(unittest.TestCase):
     def test_rgi_intersects(self):
 
         # Make a fake RGI file
-        rgi_dir = os.path.join(self.dldir, 'rgi50')
+        rgi_dir = os.path.join(self.dldir, 'RGI_V50_Intersects')
         utils.mkdir(rgi_dir)
-        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects'),
+        make_fake_zipdir(os.path.join(rgi_dir),
                          fakefile='Intersects_OGGM_Manifest.txt')
-        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects',
-                                      '11_rgi50_CentralEurope'),
+        make_fake_zipdir(os.path.join(rgi_dir, '11_rgi50_CentralEurope'),
                          fakefile='intersects_11_rgi50_CentralEurope.shp')
-        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V5_Intersects',
-                                      '00_rgi50_AllRegs'),
+        make_fake_zipdir(os.path.join(rgi_dir, '00_rgi50_AllRegs'),
                          fakefile='intersects_rgi50_AllRegs.shp')
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
             expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/rgi/' +
-                        'RGI_V5_Intersects.zip')
+                        'RGI_V50_Intersects.zip')
             self.assertEqual(url, expected)
             return rgi_f
 
@@ -441,15 +439,15 @@ class TestFakeDownloads(unittest.TestCase):
                                            'Intersects_OGGM_Manifest.txt'))
 
         # Make a fake RGI file
-        rgi_dir = os.path.join(self.dldir, 'rgi60')
+        rgi_dir = os.path.join(self.dldir, 'RGI_V60_Intersects')
         utils.mkdir(rgi_dir)
-        make_fake_zipdir(os.path.join(rgi_dir, 'RGI_V6_Intersects'),
+        make_fake_zipdir(os.path.join(rgi_dir),
                          fakefile='Intersects_OGGM_Manifest.txt')
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
             expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/rgi/' +
-                        'RGI_V6_Intersects.zip')
+                        'RGI_V60_Intersects.zip')
             self.assertEqual(url, expected)
             return rgi_f
 
