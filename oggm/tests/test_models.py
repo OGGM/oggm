@@ -38,14 +38,21 @@ DOM_BORDER = 80
 class TestInitFlowline(unittest.TestCase):
 
     def setUp(self):
-        pass
+        gdir = init_hef(border=DOM_BORDER)
+        self.testdir = os.path.join(get_test_dir(), type(self).__name__)
+        utils.mkdir(self.testdir, reset=True)
+        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
 
     def tearDown(self):
-        pass
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
 
     def test_init_present_time_glacier(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -91,7 +98,7 @@ class TestInitFlowline(unittest.TestCase):
 
     def test_present_time_glacier_massbalance(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         mb_mod = massbalance.PastMassBalance(gdir)
@@ -231,17 +238,25 @@ class TestOtherGlacier(unittest.TestCase):
 
 
 class TestMassBalance(unittest.TestCase):
+
     def setUp(self):
-        pass
+        gdir = init_hef(border=DOM_BORDER)
+        self.testdir = os.path.join(get_test_dir(), type(self).__name__)
+        utils.mkdir(self.testdir, reset=True)
+        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
 
     def tearDown(self):
-        pass
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
 
     def test_past_mb_model(self):
 
         F = SEC_IN_YEAR * cfg.RHO
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -338,7 +353,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_constant_mb_model(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -438,7 +453,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_random_mb(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir)
@@ -505,7 +520,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_uncertain_mb(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
 
         ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
@@ -583,7 +598,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_mb_performance(self):
 
-        gdir = init_hef(border=DOM_BORDER)
+        gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -1009,11 +1024,11 @@ class TestModelFlowlines(unittest.TestCase):
 class TestIO(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = os.path.join(get_test_dir(), 'tmp_io')
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+        gdir = init_hef(border=DOM_BORDER)
+        self.test_dir = os.path.join(get_test_dir(), type(self).__name__)
+        utils.mkdir(self.test_dir, reset=True)
+        self.gdir = gdir.copy_to_basedir(self.test_dir, setup='all')
 
-        self.gdir = init_hef(border=DOM_BORDER)
         flowline.init_present_time_glacier(self.gdir)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
 
@@ -1160,23 +1175,15 @@ class TestIO(unittest.TestCase):
         new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
-        self.gdir.copy_to_basedir(new_dir, setup='all')
-        new_gdir = utils.GlacierDirectory(self.gdir.rgi_id, base_dir=new_dir)
+        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='all')
         flowline.init_present_time_glacier(new_gdir)
         shutil.rmtree(new_dir)
 
-        self.gdir.copy_to_basedir(new_dir, setup='run')
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-        new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
+        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='run')
         flowline.run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 
-        self.gdir.copy_to_basedir(new_dir, setup='inversion')
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-        new_gdir = utils.GlacierDirectory(entity, base_dir=new_dir)
-
+        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
         inversion.volume_inversion(new_gdir)
         inversion.filter_inversion_output(new_gdir)
@@ -1998,13 +2005,21 @@ class TestIdealisedInversion(unittest.TestCase):
 class TestHEF(unittest.TestCase):
 
     def setUp(self):
-        self.gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
+        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
+        self.testdir = os.path.join(get_test_dir(), type(self).__name__)
+        utils.mkdir(self.testdir, reset=True)
+        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
+
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
 
     def tearDown(self):
-        pass
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
 
     @is_slow
     def test_equilibrium(self):

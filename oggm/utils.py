@@ -2818,19 +2818,23 @@ class GlacierDirectory(object):
             supported are 'all' (copy the entire directory), 'inversion'
             (copy the necessary files for the inversion AND the run)
             and 'run' (copy the necessary files for a dynamical run).
+
+        Returns
+        -------
+        A new glacier directory from the copied folder
         """
 
         base_dir = os.path.abspath(base_dir)
         new_dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
                                self.rgi_id)
         if setup == 'run':
-            paths = ['model_flowlines', 'inversion_params',
+            paths = ['model_flowlines', 'inversion_params', 'outlines',
                      'local_mustar', 'climate_monthly', 'gridded_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,
                             ignore=include_patterns(*paths))
         elif setup == 'inversion':
-            paths = ['inversion_params', 'downstream_line',
+            paths = ['inversion_params', 'downstream_line', 'outlines',
                      'inversion_flowlines', 'glacier_grid',
                      'local_mustar', 'climate_monthly', 'gridded_data']
             paths = ('*' + p + '*' for p in paths)
@@ -2840,6 +2844,7 @@ class GlacierDirectory(object):
             shutil.copytree(self.dir, new_dir)
         else:
             raise ValueError('setup not understood: {}'.format(setup))
+        return GlacierDirectory(self.rgi_id, base_dir=base_dir)
 
     def get_filepath(self, filename, delete=False, filesuffix=''):
         """Absolute path to a specific file.

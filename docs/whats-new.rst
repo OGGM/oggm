@@ -74,6 +74,9 @@ Bug fixes
 - Fixed a bug in tidewater glaciers terminus position finding, where
   in some rare cases the percentile threshold was too low (:pull:`444`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a caching bug the test suite, where some tests used to fail when run
+  for a second time on a modified gdir.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Internals

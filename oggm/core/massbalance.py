@@ -296,8 +296,8 @@ class PastMassBalance(MassBalanceModel):
         if self.repeat:
             y = self.ys + (y - self.ys) % (self.ye - self.ys + 1)
         if y < self.ys or y > self.ye:
-            raise ValueError('year out of the valid time bounds: '
-                             '[{}, {}]'.format(self.ys, self.ye))
+            raise ValueError('year {} out of the valid time bounds: '
+                             '[{}, {}]'.format(y, self.ys, self.ye))
         pok = np.where((self.years == y) & (self.months == m))[0][0]
 
         # Read timeseries
@@ -325,8 +325,8 @@ class PastMassBalance(MassBalanceModel):
         if self.repeat:
             year = self.ys + (year - self.ys) % (self.ye - self.ys + 1)
         if year < self.ys or year > self.ye:
-            raise ValueError('year out of the valid time bounds: '
-                             '[{}, {}]'.format(self.ys, self.ye))
+            raise ValueError('year {} out of the valid time bounds: '
+                             '[{}, {}]'.format(year, self.ys, self.ye))
         pok = np.where(self.years == year)[0]
         if len(pok) < 1:
             raise ValueError('Year {} not in record'.format(int(year)))
