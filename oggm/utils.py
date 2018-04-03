@@ -3222,10 +3222,14 @@ def shape_factor_huss(widths, heights, is_rectangular):
     """
 
     # Ensure bool (for masking)
-    is_rectangular = is_rectangular.astype(bool)
+    is_rect = is_rectangular.astype(bool)
     shape_factors = np.ones(widths.shape)
-    shape_factors[~is_rectangular] = \
-        (widths / (2 * heights + widths))[~is_rectangular]
+
+    # TODO: could check for division by 0, but at the moment
+    # this is covered by interpolation and clip, resulting in a factor of 1
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        shape_factors[~is_rect] = (widths / (2 * heights + widths))[~is_rect]
     shape_factors[heights <= 0.] = 1.
 
     return shape_factors
