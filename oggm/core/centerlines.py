@@ -806,7 +806,11 @@ def compute_centerlines(gdir, heads=None):
     ext_yx = tuple(reversed(poly_pix.exterior.xy))
     zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
+    # For diagnostics
+    is_first_call = False
     if heads is None:
+        # This is the default for when no filter is yet applied
+        is_first_call = True
         heads = _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
                                        glacier_mask, topo, geom, poly_pix)
 
@@ -856,6 +860,10 @@ def compute_centerlines(gdir, heads=None):
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines')
+
+    if is_first_call:
+        # For diagnostics of filtered centerlines
+        gdir.add_to_diagnostics('n_orig_centerlines', len(cls))
 
     # Netcdf
     with netCDF4.Dataset(grids_file, 'a') as nc:
