@@ -5,6 +5,7 @@ This module is simply a shortcut to the core functions
 # Entity tasks
 from oggm.core.gis import define_glacier_region
 from oggm.core.gis import glacier_masks
+from oggm.core.gis import simple_glacier_masks
 from oggm.core.centerlines import compute_centerlines
 from oggm.core.centerlines import compute_downstream_line
 from oggm.core.centerlines import compute_downstream_bedshape

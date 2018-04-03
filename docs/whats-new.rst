@@ -60,6 +60,10 @@ Enhancements
   along with the original data citation (:pull:`441`). We encourage
   to always cite the original data providers.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added some diagnostic tools which make it easier to detect dubious glacier
+  outlines or DEM errors (:pull:`445`). This will be used to report to the
+  RGI authors.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
