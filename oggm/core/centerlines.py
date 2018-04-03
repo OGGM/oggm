@@ -1775,17 +1775,17 @@ def catchment_width_correction(gdir):
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
 
-        # Sometimes, the centerline does not reach as high as each pix on the
-        # glacier. (e.g. RGI40-11.00006)
-        catch_h = np.clip(catch_h, 0, np.max(fhgt))
-
         # Max and mins for the histogram
         maxh = np.max(fhgt)
+        minh = np.min(fhgt)
+
+        # Sometimes, the centerline does not reach as high as each pix on the
+        # glacier. (e.g. RGI40-11.00006)
+        catch_h = np.clip(catch_h, np.min(catch_h), maxh)
+        # Same for min
         if fl.flows_to is None:
-            minh = np.min(fhgt)
+            # We clip only for main flowline (this has reasons)
             catch_h = np.clip(catch_h, minh, np.max(catch_h))
-        else:
-            minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
         # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']
