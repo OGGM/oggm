@@ -1,10 +1,2 @@
 {% extends "!layout.html" %}
-  {% block footer %} {{ super() }}
-
-  <style>
-    /* Sidebar header (and topbar for mobile) */
-    .wy-side-nav-search, .wy-nav-top {
-      background: #7096b0;
-    }
-  </style>
-{% endblock %}
+{% set css_files = css_files + ["_static/style.css"] %}
