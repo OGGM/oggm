@@ -350,4 +350,6 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
                                    add_slope=False, smooth=False,
                                    add_nc_name=True)
 
+    flowline.init_present_time_glacier(gdir)
+
     return gdir
