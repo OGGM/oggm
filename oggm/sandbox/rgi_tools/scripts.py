@@ -28,7 +28,7 @@ def intersects_script():
 
 def merge_intersects():
     # Download RGI files
-    fp = 'intersects_*_rgi' + rgi_version + '0_*.shp'
+    fp = 'intersects_*_rgi' + rgi_version + '_*.shp'
     shps = list(glob(os.path.join(OUTDIR_INTERSECTS, "*", fp)))
     assert len(shps) == 19
     out = []
@@ -72,4 +72,4 @@ def divides_script():
 
 
 if __name__ == "__main__":
-    intersects_script()
+    merge_intersects()

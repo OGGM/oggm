@@ -47,7 +47,7 @@ _ = utils.get_cru_file(var='pre')
 rgi_dir = utils.get_rgi_dir(version=rgi_version)
 
 # Get the reference glacier ids (they are different for each RGI version)
-df, _ = utils.get_wgms_files(version=rgi_version)
+df, _ = utils.get_wgms_files()
 rids = df['RGI{}0_ID'.format(rgi_version)]
 
 # Make a new dataframe with those (this takes a while)

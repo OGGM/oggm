@@ -327,8 +327,8 @@ def _filter_heads(heads, heads_height, radius, polygon):
         elif inter_poly.type is 'Polygon':
             pass
         else:
-            extext ='Geometry collection not expected: {}'.format(
-                inter_poly.type)
+            extext = ('Geometry collection not expected: '
+                      '{}'.format(inter_poly.type))
             raise NotImplementedError(extext)
 
         # Find other points in radius and in polygon

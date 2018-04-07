@@ -290,7 +290,7 @@ def optimize_inversion_params(gdirs):
 
     # Get test glaciers (all glaciers with thickness data)
     fpath = utils.get_glathida_file()
-    col_name = 'RGI{}0_ID'.format(gdirs[0].rgi_version)
+    col_name = 'RGI{}_ID'.format(gdirs[0].rgi_version)
     try:
         gtd_df = pd.read_csv(fpath).sort_values(by=[col_name])
     except AttributeError:

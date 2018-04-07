@@ -1561,16 +1561,13 @@ def get_cru_cl_file():
         return fpath
 
 
-def get_wgms_files(version=None):
+def get_wgms_files():
     """Get the path to the default WGMS-RGI link file and the data dir.
 
     Returns
     -------
     (file, dir): paths to the files
     """
-
-    if version is None:
-        version = cfg.PARAMS['rgi_version']
 
     download_oggm_files()
     sdir = os.path.join(cfg.CACHE_DIR,
@@ -1692,6 +1689,35 @@ def get_rgi_region_file(region, version=None, reset=False):
     return f[0]
 
 
+def get_rgi_glacier_entities(rgi_ids):
+    """A convenience function to get a GeoDataframe for a list of glacier IDs.
+
+    Parameters
+    ----------
+    rgi_ids: list of str
+        the glaciers you want the outlines for
+
+    Returns
+    -------
+    a geodataframe with the list of glaciers
+    """
+
+    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    version = rgi_ids[0].split('-')[0][-2:]
+    selection = []
+    for reg in sorted(np.unique(regions)):
+        sh = gpd.read_file(get_rgi_region_file(reg, version=version))
+        selection.append(sh.loc[sh.RGIId.isin(rgi_ids)])
+
+    # Make a new dataframe of those
+    selection = pd.concat(selection)
+    selection.csr = sh.crs  # for geolocalisation
+    if len(selection) != len(rgi_ids):
+        raise RuntimeError('Could not find all RGI ids')
+
+    return selection
+
+
 def get_rgi_intersects_dir(version=None, reset=False):
     """Returns a path to the RGI directory containing the intersects.
 
@@ -1724,10 +1750,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     mkdir(rgi_dir)
 
     dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/'
-    if version == '50':
-        dfile += 'RGI_V50_Intersects.zip'
-    elif version == '60':
-        dfile += 'RGI_V60_Intersects.zip'
+    dfile += 'RGI_V{}_Intersects.zip'.format(version)
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
@@ -1743,7 +1766,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     return odir
 
 
-def get_rgi_intersects_region_file(region, version=None):
+def get_rgi_intersects_region_file(region, version=None, reset=False):
     """Returns a path to a RGI regional intersect file.
 
     If the RGI files are not present, download them. Setting region=00 gives
@@ -1761,7 +1784,7 @@ def get_rgi_intersects_region_file(region, version=None):
     path to the RGI shapefile
     """
 
-    rgi_dir = get_rgi_intersects_dir(version=version)
+    rgi_dir = get_rgi_intersects_dir(version=version, reset=reset)
     if region == '00':
         version = 'AllRegs'
         region = '*'
@@ -1948,9 +1971,8 @@ def get_ref_mb_glaciers(gdirs):
     """Get the list of glaciers we have valid data for."""
 
     # Get the links
-    v = gdirs[0].rgi_version
-    flink, _ = get_wgms_files(version=v)
-    dfids = flink['RGI{}0_ID'.format(v)].values
+    flink, _ = get_wgms_files()
+    dfids = flink['RGI{}0_ID'.format(gdirs[0].rgi_version[0])].values
 
     # We remove tidewater glaciers and glaciers with < 5 years
     ref_gdirs = []
@@ -2678,48 +2700,41 @@ class GlacierDirectory(object):
         self.extent_ll = [xx, yy]
 
         try:
-            # Assume RGI V4
-            self.rgi_id = rgi_entity.RGIID
-            self.glims_id = rgi_entity.GLIMSID
-            self.rgi_area_km2 = float(rgi_entity.AREA)
-            self.cenlon = float(rgi_entity.CENLON)
-            self.cenlat = float(rgi_entity.CENLAT)
-            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1REGION))
-            self.rgi_subregion = (self.rgi_region + '-' +
-                                  '{:02d}'.format(int(rgi_entity.O2REGION)))
-            name = rgi_entity.NAME
-            rgi_datestr = rgi_entity.BGNDATE
-            gtype = rgi_entity.GLACTYPE
+            # RGI V4?
+            _ = rgi_entity.RGIID
+            raise ValueError('RGI Version 4 is not supported anymore')
         except AttributeError:
-            # Should be V5
-            self.rgi_id = rgi_entity.RGIId
-            self.glims_id = rgi_entity.GLIMSId
-            self.rgi_area_km2 = float(rgi_entity.Area)
-            self.cenlon = float(rgi_entity.CenLon)
-            self.cenlat = float(rgi_entity.CenLat)
-            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
-            self.rgi_subregion = (self.rgi_region + '-' +
-                                  '{:02d}'.format(int(rgi_entity.O2Region)))
-            name = rgi_entity.Name
-            rgi_datestr = rgi_entity.BgnDate
+            pass
 
-            try:
-                gtype = rgi_entity.GlacType
-            except AttributeError:
-                # RGI V6
-                gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+        # Should be V5
+        self.rgi_id = rgi_entity.RGIId
+        self.glims_id = rgi_entity.GLIMSId
+        self.rgi_area_km2 = float(rgi_entity.Area)
+        self.cenlon = float(rgi_entity.CenLon)
+        self.cenlat = float(rgi_entity.CenLat)
+        self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
+        self.rgi_subregion = (self.rgi_region + '-' +
+                              '{:02d}'.format(int(rgi_entity.O2Region)))
+        name = rgi_entity.Name
+        rgi_datestr = rgi_entity.BgnDate
+
+        try:
+            gtype = rgi_entity.GlacType
+        except AttributeError:
+            # RGI V6
+            gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
 
         # rgi version can be useful
-        self.rgi_version = self.rgi_id.split('-')[0][-2]
-        if self.rgi_version not in ['4', '5', '6']:
-            raise RuntimeError('RGI Version not understood: '
+        self.rgi_version = self.rgi_id.split('-')[0][-2:]
+        if self.rgi_version not in ['50', '60', '61']:
+            raise RuntimeError('RGI Version not supported: '
                                '{}'.format(self.rgi_version))
 
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
         # region
-        reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version)
+        reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version[0])
         n = reg_names.loc[int(self.rgi_region)].values[0]
         self.rgi_region_name = self.rgi_region + ': ' + n
         n = subreg_names.loc[self.rgi_subregion].values[0]
@@ -3100,8 +3115,8 @@ class GlacierDirectory(object):
         """Get the reference mb data from WGMS (for some glaciers only!)."""
 
         if self._mbdf is None:
-            flink, mbdatadir = get_wgms_files(version=self.rgi_version)
-            c = 'RGI{}0_ID'.format(self.rgi_version)
+            flink, mbdatadir = get_wgms_files()
+            c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
             if len(wid) == 0:
                 raise RuntimeError('Not a reference glacier!')
