@@ -1206,7 +1206,8 @@ def distribute_t_stars(gdirs, ref_df=None, minimum_mustar=0.):
                     os.path.exists(cfg.PATHS['climate_file'])):
                 raise RuntimeError('If you are using a custom climate file '
                                    'you should run your own MB calibration.')
-            fn = 'oggm_ref_tstars_rgi{}_cru4.csv'.format(gdirs[0].rgi_version)
+            v = gdirs[0].rgi_version[0]  # major version relevant
+            fn = 'oggm_ref_tstars_rgi{}_cru4.csv'.format(v)
             fp = utils.get_demo_file(fn)
         ref_df = pd.read_csv(fp)
 

@@ -584,7 +584,7 @@ class TestDataFiles(unittest.TestCase):
 
     def test_download_demo_files(self):
 
-        f = utils.get_demo_file('Hintereisferner.shp')
+        f = utils.get_demo_file('Hintereisferner_RGI5.shp')
         self.assertTrue(os.path.exists(f))
 
         sh = salem.read_shapefile(f)

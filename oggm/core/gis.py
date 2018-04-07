@@ -422,7 +422,7 @@ def glacier_masks(gdir):
         raise RuntimeError('({}) min equal max in the DEM.'
                            .format(gdir.rgi_id))
 
-    # Proj
+    # Projection
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
         transf = dem_dr.transform
     else:

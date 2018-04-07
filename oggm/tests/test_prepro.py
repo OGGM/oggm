@@ -94,7 +94,7 @@ class TestGIS(unittest.TestCase):
 
     def test_define_region(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -102,8 +102,8 @@ class TestGIS(unittest.TestCase):
 
         tdf = gpd.GeoDataFrame.from_file(gdir.get_filepath('outlines'))
         myarea = tdf.geometry.area * 10**-6
-        np.testing.assert_allclose(myarea, np.float(tdf['AREA']), rtol=1e-2)
-        self.assertFalse(os.path.exists(gdir.get_filepath('intersects')))
+        np.testing.assert_allclose(myarea, np.float(tdf['Area']), rtol=1e-2)
+        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
 
         # From string
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
@@ -127,7 +127,7 @@ class TestGIS(unittest.TestCase):
         assert gdirs[-1].rgi_id == 'RGI50-11.00897_d03'
 
     def test_dx_methods(self):
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
@@ -165,10 +165,11 @@ class TestGIS(unittest.TestCase):
 
         expected = dedent("""\
         <oggm.GlacierDirectory>
-          RGI id: RGI40-11.00897
+          RGI id: RGI50-11.00897
           Region: 11: Central Europe
           Subregion: 11-01: Alps
-          Glacier type: Not assigned
+          Name: Hintereisferner
+          Glacier type: Glacier
           Terminus type: Land-terminating
           Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
@@ -176,7 +177,7 @@ class TestGIS(unittest.TestCase):
           Grid (dx, dy): (50.0, -50.0)
         """)
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -184,18 +185,18 @@ class TestGIS(unittest.TestCase):
 
     def test_glacierdir(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
 
         # this should simply run
-        mygdir = oggm.GlacierDirectory(entity.RGIID, base_dir=self.testdir)
+        mygdir = oggm.GlacierDirectory(entity.RGIId, base_dir=self.testdir)
 
     def test_glacier_masks(self):
 
         # The GIS was double checked externally with IDL.
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -210,7 +211,7 @@ class TestGIS(unittest.TestCase):
     def test_simple_glacier_masks(self):
 
         # The GIS was double checked externally with IDL.
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -329,7 +330,7 @@ class TestCenterlines(unittest.TestCase):
 
     def test_centerlines(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -351,7 +352,7 @@ class TestCenterlines(unittest.TestCase):
 
     def test_downstream(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -369,7 +370,7 @@ class TestCenterlines(unittest.TestCase):
 
     def test_downstream_bedshape(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         default_b = cfg.PARAMS['border']
@@ -437,13 +438,17 @@ class TestCenterlines(unittest.TestCase):
         kdf = gpd.read_file(kienholz_file)
 
         # add fake attribs
-        entity.RGIID = 'RGI40-00.00000'
-        entity.O1REGION = 0
-        entity.BGNDATE = 0
-        entity.NAME = 'Baltoro'
-        entity.GLACTYPE = '0000'
-        entity.O1REGION = '01'
-        entity.O2REGION = '01'
+        del entity['RGIID']
+        entity.RGIId = 'RGI50-00.00000'
+        entity['GLIMSId'] = entity['GLIMSID']
+        entity['Area'] = entity['AREA']
+        entity['CenLat'] = entity['CENLAT']
+        entity['CenLon'] = entity['CENLON']
+        entity.BgnDate = 0
+        entity.Name = 'Baltoro'
+        entity.GlacType = '0000'
+        entity.O1Region = '01'
+        entity.O2Region = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -527,7 +532,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_catchment_area(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -552,7 +557,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_flowlines(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -599,7 +604,7 @@ class TestGeometry(unittest.TestCase):
 
     def test_width(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -633,7 +638,7 @@ class TestGeometry(unittest.TestCase):
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
-        np.testing.assert_allclose(area * 10**-6, np.float(tdf['AREA']),
+        np.testing.assert_allclose(area * 10**-6, np.float(tdf['Area']),
                                    rtol=1e-4)
 
         # Check for area distrib
@@ -647,7 +652,7 @@ class TestGeometry(unittest.TestCase):
         # Check that utility function is doing what is expected
         hh, ww = gdir.get_inversion_flowline_hw()
         new_area = np.sum(ww * cl.dx * gdir.grid.dx)
-        np.testing.assert_allclose(new_area * 10**-6, np.float(tdf['AREA']))
+        np.testing.assert_allclose(new_area * 10**-6, np.float(tdf['Area']))
 
     def test_nodivides_correct_slope(self):
 
@@ -658,7 +663,7 @@ class TestGeometry(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 40
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
@@ -712,7 +717,7 @@ class TestClimate(unittest.TestCase):
 
     def test_distribute_climate(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -738,7 +743,7 @@ class TestClimate(unittest.TestCase):
 
     def test_distribute_climate_grad(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         cfg.PARAMS['temp_use_local_gradient'] = True
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
@@ -761,7 +766,7 @@ class TestClimate(unittest.TestCase):
 
     def test_distribute_climate_parallel(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -787,7 +792,7 @@ class TestClimate(unittest.TestCase):
 
     def test_distribute_climate_cru(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -827,7 +832,7 @@ class TestClimate(unittest.TestCase):
 
     def test_sh(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         # We have to make a non cropped custom file
@@ -898,7 +903,7 @@ class TestClimate(unittest.TestCase):
 
     def test_mb_climate(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -958,7 +963,7 @@ class TestClimate(unittest.TestCase):
 
     def test_yearly_mb_climate(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -1040,7 +1045,7 @@ class TestClimate(unittest.TestCase):
 
     def test_mu_candidates(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -1075,7 +1080,7 @@ class TestClimate(unittest.TestCase):
 
     def test_find_tstars(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -1143,7 +1148,7 @@ class TestClimate(unittest.TestCase):
 
     def test_find_tstars_stddev_perglacier_prcp_fac(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         cfg.PARAMS['prcp_scaling_factor'] = 'stddev_perglacier'
@@ -1221,7 +1226,7 @@ class TestClimate(unittest.TestCase):
 
     def test_find_tstars_stddev_prcp_fac(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         cfg.PARAMS['prcp_scaling_factor'] = 'stddev'
@@ -1266,7 +1271,7 @@ class TestClimate(unittest.TestCase):
 
     def test_local_mustar(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.9
@@ -1343,7 +1348,7 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        assert gdir.rgi_version == '5'
+        assert gdir.rgi_version == '50'
         gis.define_glacier_region(gdir, entity=entity)
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
@@ -1352,7 +1357,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        assert gdir.rgi_version == '6'
+        assert gdir.rgi_version == '60'
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
         cfg.PARAMS['run_mb_calibration'] = True
@@ -1641,7 +1646,7 @@ class TestInversion(unittest.TestCase):
     @is_slow
     def test_distribute(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1704,7 +1709,7 @@ class TestInversion(unittest.TestCase):
     @is_slow
     def test_invert_hef_nofs(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -1765,7 +1770,7 @@ class TestInversion(unittest.TestCase):
             _max = np.max(thick)
             if _max > maxs:
                 maxs = _max
-        np.testing.assert_allclose(242, maxs, atol=45)
+        np.testing.assert_allclose(242, maxs, atol=55)
 
         # check that its not tooo sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
@@ -1797,7 +1802,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        np.testing.assert_allclose(242, maxs, atol=31)
+        np.testing.assert_allclose(242, maxs, atol=41)
         cfg.PARAMS['filter_for_neg_flux'] = True
 
     def test_continue_on_error(self):
@@ -1805,11 +1810,11 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = True
         cfg.PATHS['working_dir'] = self.testdir
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
-        miniglac = shpg.Point(entity.CENLON, entity.CENLAT).buffer(0.0001)
+        miniglac = shpg.Point(entity.CenLon, entity.CenLat).buffer(0.0001)
         entity.geometry = miniglac
-        entity.RGIID = 'RGI50-11.fake'
+        entity.RGIId = 'RGI50-11.fake'
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -2033,7 +2038,7 @@ class TestGCMClimate(unittest.TestCase):
 
     def test_process_cesm(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdirs = []
@@ -2107,7 +2112,7 @@ class TestGCMClimate(unittest.TestCase):
         filename = 'cesm_data'
         filesuffix = '_cesm'
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -2269,7 +2274,7 @@ class TestCatching(unittest.TestCase):
 
         self.clean_dir()
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
 
         cfg.PARAMS['continue_on_error'] = True
@@ -2283,7 +2288,7 @@ class TestCatching(unittest.TestCase):
         workflow.execute_entity_task(run_random_climate,
                                      [(gdir, {'filesuffix':'_testme'})])
 
-        tfile = os.path.join(self.log_dir, 'RGI40-11.00897.ERROR')
+        tfile = os.path.join(self.log_dir, 'RGI50-11.00897.ERROR')
         assert os.path.exists(tfile)
         with open(tfile, 'r') as f:
             first_line = f.readline()
@@ -2294,7 +2299,7 @@ class TestCatching(unittest.TestCase):
 
     def test_task_status(self):
 
-        hef_file = get_demo_file('Hintereisferner.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
         cfg.PARAMS['continue_on_error'] = True
 
