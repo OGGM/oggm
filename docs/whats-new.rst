@@ -29,6 +29,8 @@ Breaking changes
   is now called `run_random_climate` for consistency with the other tasks
   See the PR linked above for more info.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- RGI version 4 isn't supported anymore (:issue:`142`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
