@@ -3,13 +3,13 @@
 |
 
 
-Extending `Marzeion et al., (2012)`_, the model accounts for glacier geometry 
-(including contributory branches) and includes an explicit ice dynamics module.
-It can simulate past and future mass-balance, volume and geometry of (almost)
-any glacier in the world in a fully automated workflow. We rely exclusively on
-publicly available data for calibration and validation.
+**OGGM is a modular open source model for glacier dynamics**
 
-.. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
+The model accounts for glacier geometry (including contributory branches) and
+includes an explicit ice dynamics module. It can simulate past and
+future mass-balance, volume and geometry of (almost) any glacier in the world
+in a fully automated and extensible workflow. We rely exclusively on publicly
+available data for calibration and validation.
 
 
 .. image:: docs/_static/ex_tasman.jpg
