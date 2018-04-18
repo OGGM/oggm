@@ -334,6 +334,8 @@ class TestWorkflow(unittest.TestCase):
     def test_random(self):
 
         # Fake Reset (all these tests are horribly coded)
+        if not os.path.exists(TEST_DIR):
+            os.makedirs(TEST_DIR)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('none', f)
         gdirs = up_to_inversion()
