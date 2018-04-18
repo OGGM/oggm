@@ -236,6 +236,8 @@ def get_test_dir():
 
     s = get_ident()
     out = os.path.join(cfg.PATHS['test_dir'], s)
+    if 'PYTEST_XDIST_WORKER' in os.environ:
+        out = os.path.join(out, os.environ.get('PYTEST_XDIST_WORKER'))
     mkdir(out)
 
     # If new ident, remove all other dirs so spare space
