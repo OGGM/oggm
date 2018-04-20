@@ -15,7 +15,7 @@ from numpy.testing import assert_array_equal, assert_allclose
 import oggm
 from oggm import utils
 from oggm import cfg
-from oggm.tests import is_download
+from oggm.tests import is_download, is_download_cred
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github, init_hef
 from oggm.utils import shape_factor_adhikari
 _url_retrieve = None
@@ -760,7 +760,7 @@ class TestDataFiles(unittest.TestCase):
         zone = '41_20'
         self.assertTrue(utils._download_srtm_file(zone) is None)
 
-    @is_download
+    @is_download_cred
     def test_asterdownload(self):
 
         # this zone does exist and file should be small enough for download
@@ -780,7 +780,7 @@ class TestDataFiles(unittest.TestCase):
         fp, z = utils.get_topo_file([-20, -20], [65, 65])
         self.assertTrue(os.path.exists(fp[0]))
 
-    @is_download
+    @is_download_cred
     def test_asterdownloadfails(self):
 
         # this zone does not exist

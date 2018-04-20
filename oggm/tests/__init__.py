@@ -47,6 +47,7 @@ RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
 RUN_BENCHMARK_TESTS = True
 RUN_PERFORMANCE_TESTS = False
+RUN_CREDENTIAL_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     # specific to travis to reduce global test time
     ON_TRAVIS = True
@@ -118,6 +119,8 @@ if os.environ.get('OGGM_SLOW_TESTS') is not None:
     RUN_SLOW_TESTS = True
 if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
     RUN_DOWNLOAD_TESTS = True
+if os.environ.get('OGGM_CREDENTIAL_TESTS') is not None:
+    RUN_CREDENTIAL_TESTS = True
 
 # quick n dirty method to see if internet is on
 try:
@@ -163,3 +166,9 @@ def is_performance_test(test):
     # Test decorator
     msg = "requires explicit environment for performance tests"
     return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
+
+
+def is_download_cred(test):
+    # Test decorator
+    msg = "requires explicit environment for download and credential tests (AWS)"
+    return test if RUN_CREDENTIAL_TESTS and RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
