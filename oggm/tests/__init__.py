@@ -46,7 +46,6 @@ RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
 RUN_BENCHMARK_TESTS = True
-RUN_PERFORMANCE_TESTS = False
 RUN_CREDENTIAL_TESTS = False
 if os.environ.get('TRAVIS') is not None:
     # specific to travis to reduce global test time
@@ -160,12 +159,6 @@ def is_download(test):
     # Test decorator
     msg = "requires explicit environment for download tests"
     return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
-
-
-def is_performance_test(test):
-    # Test decorator
-    msg = "requires explicit environment for performance tests"
-    return test if RUN_PERFORMANCE_TESTS else unittest.skip(msg)(test)
 
 
 def is_download_cred(test):
