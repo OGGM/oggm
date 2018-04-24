@@ -13,7 +13,7 @@ from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
-from oggm.tests import is_slow, is_performance_test, RUN_NUMERIC_TESTS
+from oggm.tests import is_slow, RUN_NUMERIC_TESTS
 from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
 
@@ -144,7 +144,6 @@ class TestIdealisedCases(unittest.TestCase):
         assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
 
     @is_slow
-    @is_performance_test
     def test_min_slope(self):
         """ Check what is the min slope a flowline model can produce
         """
@@ -229,7 +228,6 @@ class TestIdealisedCases(unittest.TestCase):
             plt.show()
 
     @is_slow
-    @is_performance_test
     def test_cliff(self):
         """ a test case for mass conservation in the flowline models
             the idea is to introduce a cliff in the sloping bed and see
@@ -242,13 +240,13 @@ class TestIdealisedCases(unittest.TestCase):
         lens = []
         surface_h = []
         volume = []
-        yrs = np.arange(1, 700, 2)
+        yrs = np.arange(1, 500, 2)
         for model in models:
             fls = dummy_constant_bed_cliff()
             mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
-                          fs=self.fs, fixed_dt= 2 *SEC_IN_DAY)
+                          fs=self.fs, fixed_dt=2*SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -260,7 +258,7 @@ class TestIdealisedCases(unittest.TestCase):
             volume.append(vol)
             surface_h.append(fls[-1].surface_h.copy())
 
-        if do_plot:  # pragma: no cover
+        if False:  # pragma: no cover
             plt.figure()
             plt.plot(yrs, lens[0], 'r')
             plt.plot(yrs, lens[1], 'b')
@@ -954,7 +952,6 @@ class TestSia2d(unittest.TestCase):
         ts = run_ds['ice_thickness'].mean(dim=['y', 'x'])
         assert_allclose(ts, ts.values[0], atol=1)
 
-    @pytest.mark.skip(reason='Currently not in OGGM')
     def test_bueler(self):
         # TODO: add formal test like Alex's
         # https://github.com/alexjarosch/sia-fluxlim

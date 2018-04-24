@@ -1,15 +1,10 @@
 # Python imports
 from os import path
-import shutil
-import zipfile
 import oggm
 
 # Module logger
 import logging
 log = logging.getLogger(__name__)
-
-# Libs
-import salem
 
 # Locals
 import oggm.cfg as cfg
@@ -48,14 +43,11 @@ utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
-# Download the RGI file for the run
-# We us a set of four glaciers here but this could be an entire RGI region,
-# or any glacier list you'd like to model
-dl = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/RGI_example_glaciers.zip'
-with zipfile.ZipFile(utils.file_downloader(dl)) as zf:
-    zf.extractall(WORKING_DIR)
-rgidf = salem.read_shapefile(path.join(WORKING_DIR, 'RGI_example_glaciers',
-                                       'RGI_example_glaciers.shp'))
+# Get the RGI glaciers for the run. We use a set of four glaciers here but
+# this could be an entire RGI region, or any glacier list you'd like to model
+rgi_list = ['RGI50-01.10299', 'RGI50-08.02637',
+            'RGI50-11.00897', 'RGI50-18.02342']
+rgidf = utils.get_rgi_glacier_entities(rgi_list)
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
