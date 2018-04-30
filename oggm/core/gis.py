@@ -94,6 +94,9 @@ def multi_to_poly(geometry, gdir=None):
     the corrected geometry
     """
 
+    # Log
+    rid = gdir.rgi_id + ': ' if gdir is not None else ''
+
     if 'Multi' in geometry.type:
         parts = np.array(geometry)
         for p in parts:
@@ -102,7 +105,7 @@ def multi_to_poly(geometry, gdir=None):
         parts = parts[np.argsort(areas)][::-1]
         areas = areas[np.argsort(areas)][::-1]
 
-        # First case (e.g. RGIV4):
+        # First case (was RGIV4):
         # let's assume that one poly is exterior and that
         # the other polygons are in fact interiors
         exterior = parts[0].exterior
@@ -118,7 +121,6 @@ def multi_to_poly(geometry, gdir=None):
         else:
             # This happens for bad geometries. We keep the largest
             geometry = parts[0]
-            rid = gdir.rgi_id + ': ' if gdir is not None else ''
             if np.any(areas[1:] > (areas[0] / 4)):
                 log.warning('Geometry {} lost quite a chunk.'.format(rid))
 
