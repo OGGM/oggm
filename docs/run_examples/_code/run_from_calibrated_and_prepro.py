@@ -6,9 +6,6 @@ import oggm
 import logging
 log = logging.getLogger(__name__)
 
-# Libs
-import salem
-
 # Locals
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
@@ -28,17 +25,11 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
-# Read RGI
-rgidf = salem.read_shapefile(path.join(WORKING_DIR, 'RGI_example_glaciers',
-                                       'RGI_example_glaciers.shp'))
-# Sort for more efficient parallel computing
-rgidf = rgidf.sort_values('Area', ascending=False)
+# Initialize from existing directories, no need for shapefiles
+gdirs = workflow.init_glacier_regions()
 
 log.info('Starting OGGM run')
-log.info('Number of glaciers: {}'.format(len(rgidf)))
-
-# Initialize from existing directories
-gdirs = workflow.init_glacier_regions(rgidf)
+log.info('Number of glaciers: {}'.format(len(gdirs)))
 
 # We can step directly to a new experiment!
 # Random climate representative for the recent climate (1985-2015)

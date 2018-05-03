@@ -1644,9 +1644,9 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/rgi_61.zip'
 
     test_file = os.path.join(rgi_dir,
-                             '000_rgi{}_manifest.txt'.format(version))
+                             '*_rgi*{}_manifest.txt'.format(version))
 
-    if not os.path.exists(test_file):
+    if len(glob.glob(test_file)) == 0:
         # if not there download it
         ofile = file_downloader(dfile, reset=reset)
         # Extract root
@@ -1663,6 +1663,9 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
                     zf.extractall(ex_root)
                 # delete the zipfile after success
                 os.remove(zfile)
+        if len(glob.glob(test_file)) == 0:
+            raise RuntimeError('Could not find a manifest file in the RGI '
+                               'directory: ' + rgi_dir)
     return rgi_dir
 
 
@@ -1689,13 +1692,15 @@ def get_rgi_region_file(region, version=None, reset=False):
     return f[0]
 
 
-def get_rgi_glacier_entities(rgi_ids):
+def get_rgi_glacier_entities(rgi_ids, version=None):
     """A convenience function to get a GeoDataframe for a list of glacier IDs.
 
     Parameters
     ----------
     rgi_ids: list of str
         the glaciers you want the outlines for
+    version: list of str
+        the rgi version
 
     Returns
     -------
@@ -1703,7 +1708,8 @@ def get_rgi_glacier_entities(rgi_ids):
     """
 
     regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
-    version = rgi_ids[0].split('-')[0][-2:]
+    if version is None:
+        version = rgi_ids[0].split('-')[0][-2:]
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_region_file(reg, version=version))
@@ -1711,7 +1717,7 @@ def get_rgi_glacier_entities(rgi_ids):
 
     # Make a new dataframe of those
     selection = pd.concat(selection)
-    selection.csr = sh.crs  # for geolocalisation
+    selection.crs = sh.crs  # for geolocalisation
     if len(selection) != len(rgi_ids):
         raise RuntimeError('Could not find all RGI ids')
 
@@ -1755,18 +1761,48 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
         shutil.rmtree(odir)
-    test_file = os.path.join(odir, 'Intersects_OGGM_Manifest.txt')
-    if not os.path.exists(test_file):
-        # if not there download it
-        ofile = file_downloader(dfile, reset=reset)
-        # Extract root
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(odir)
+
+    # A lot of code for backwards compat (sigh...)
+    if version in ['50', '60']:
+        test_file = os.path.join(odir, 'Intersects_OGGM_Manifest.txt')
+        if not os.path.exists(test_file):
+            # if not there download it
+            ofile = file_downloader(dfile, reset=reset)
+            # Extract root
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+            if not os.path.exists(test_file):
+                raise RuntimeError('Could not find a manifest file in the RGI '
+                                   'directory: ' + odir)
+    else:
+        test_file = os.path.join(odir,
+                                 '*ntersect*anifest.txt'.format(version))
+        if len(glob.glob(test_file)) == 0:
+            # if not there download it
+            ofile = file_downloader(dfile, reset=reset)
+            # Extract root
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+            # Extract subdirs
+            pattern = '*_rgi{}_*.zip'.format(version)
+            for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
+                for filename in fnmatch.filter(files, pattern):
+                    zfile = os.path.join(root, filename)
+                    with zipfile.ZipFile(zfile) as zf:
+                        ex_root = zfile.replace('.zip', '')
+                        mkdir(ex_root)
+                        zf.extractall(ex_root)
+                    # delete the zipfile after success
+                    os.remove(zfile)
+            if len(glob.glob(test_file)) == 0:
+                raise RuntimeError('Could not find a manifest file in the RGI '
+                                   'directory: ' + odir)
 
     return odir
 
 
-def get_rgi_intersects_region_file(region, version=None, reset=False):
+def get_rgi_intersects_region_file(region='00', version=None, rgi_ids=None,
+                                   reset=False):
     """Returns a path to a RGI regional intersect file.
 
     If the RGI files are not present, download them. Setting region=00 gives
@@ -1775,19 +1811,51 @@ def get_rgi_intersects_region_file(region, version=None, reset=False):
     Parameters
     ----------
     region: str
-        from '00' to '19'
+        from '00' to '19', with '00' being the global file. From RGI version
+        '61' onwards, '00' will require `rgi_ids` to be set for more clever
+        handling.
     version: str
-        '5', '6', defaults to None (linking to the one specified in cfg.params)
+        '5', '6', '61'... defaults the one specified in cfg.params
+    rgi_ids: list, optional
+        list of rgi_ids you want to look for intersections for
+    reset: bool
+        redownload the RGI file.
 
     Returns
     -------
-    path to the RGI shapefile
+    path to the RGI shapefile or shapefile itself (if rgi_id is set)
     """
 
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
+    if len(version) == 1:
+        version += '0'
+
     rgi_dir = get_rgi_intersects_dir(version=version, reset=reset)
+
+    if rgi_ids is not None:
+        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+        selection = []
+        for reg in sorted(np.unique(regions)):
+            sh = gpd.read_file(get_rgi_intersects_region_file(reg,
+                                                              version=version))
+            selection.append(sh.loc[sh.RGIId_1.isin(rgi_ids) |
+                                    sh.RGIId_2.isin(rgi_ids)])
+
+        # Make a new dataframe of those
+        selection = pd.concat(selection)
+        selection.crs = sh.crs  # for geolocalisation
+
+        return selection
+
+    # Else, regular workflow
     if region == '00':
-        version = 'AllRegs'
-        region = '*'
+        if version in ['60', '61']:
+            version = 'AllRegs'
+            region = '*'
+        else:
+            raise ValueError("From RGI version 61 onwards, please specify "
+                             "`rgi_ids` with `region=='00'`")
     f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
                                     '_rgi*' + version + '*.shp')))
     assert len(f) == 1

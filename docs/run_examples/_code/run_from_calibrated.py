@@ -34,20 +34,19 @@ cfg.PARAMS['border'] = 100
 # Set to True for operational runs
 cfg.PARAMS['continue_on_error'] = False
 
-# We use intersects
-# Here we use the global file but there are regional files too (faster)
-cfg.set_intersects_db(utils.get_rgi_intersects_region_file('00', version='5'))
-
 # Pre-download other files which will be needed later
 utils.get_cru_cl_file()
 utils.get_cru_file(var='tmp')
 utils.get_cru_file(var='pre')
 
-# Get the RGI glaciers for the run. We use a set of four glaciers here but
+# Get the RGI glaciers for the run. We use a set of three glaciers here but
 # this could be an entire RGI region, or any glacier list you'd like to model
-rgi_list = ['RGI50-01.10299', 'RGI50-08.02637',
-            'RGI50-11.00897', 'RGI50-18.02342']
+rgi_list = ['RGI60-01.10299', 'RGI60-11.00897', 'RGI60-18.02342']
 rgidf = utils.get_rgi_glacier_entities(rgi_list)
+
+# We use intersects
+db = utils.get_rgi_intersects_region_file(version='61', rgi_ids=rgi_list)
+cfg.set_intersects_db(db)
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)

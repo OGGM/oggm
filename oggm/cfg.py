@@ -435,7 +435,10 @@ def set_intersects_db(path=None):
     """
 
     if PARAMS['use_intersects'] and path is not None:
-        PARAMS['intersects_gdf'] = gpd.read_file(path)
+        if isinstance(path, str):
+            PARAMS['intersects_gdf'] = gpd.read_file(path)
+        else:
+            PARAMS['intersects_gdf'] = path
     else:
         PARAMS['intersects_gdf'] = gpd.GeoDataFrame()
 

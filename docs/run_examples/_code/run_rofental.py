@@ -1,6 +1,5 @@
 # Python imports
 import os
-import zipfile
 
 # Libs
 import geopandas as gpd
@@ -17,7 +16,7 @@ start = time.time()
 
 # Initialize OGGM and set up the default run parameters
 cfg.initialize()
-rgi_version = '6'
+rgi_version = '61'
 rgi_region = '11'  # Alps
 
 # Local working directory (where OGGM will write its output)
