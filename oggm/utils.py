@@ -1850,7 +1850,7 @@ def get_rgi_intersects_region_file(region='00', version=None, rgi_ids=None,
 
     # Else, regular workflow
     if region == '00':
-        if version in ['60', '61']:
+        if version in ['50', '60']:
             version = 'AllRegs'
             region = '*'
         else:
