@@ -110,6 +110,16 @@ class TestGIS(unittest.TestCase):
         # This is not guaranteed to be equal because of projection issues
         np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
 
+        # Change area
+        prev_area = gdir.rgi_area_km2
+        cfg.PARAMS['use_rgi_area'] = False
+        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     reset=True)
+        gis.define_glacier_region(gdir, entity=entity)
+        np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
+
+
     def test_divides_as_glaciers(self):
 
         hef_rgi = gpd.GeoDataFrame.from_file(get_demo_file('divides_alps.shp'))

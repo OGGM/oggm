@@ -2812,7 +2812,7 @@ class GlacierDirectory(object):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
         return salem.Grid.from_json(self.get_filepath('glacier_grid'))
 
-    @lazy_property
+    @property
     def rgi_area_m2(self):
         """The glacier's RGI area (m2)."""
         return self.rgi_area_km2 * 10**6

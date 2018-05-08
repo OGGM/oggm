@@ -300,6 +300,14 @@ def define_glacier_region(gdir, entity=None):
     # Delete the source before writing
     if 'DEM_SOURCE' in towrite:
         del towrite['DEM_SOURCE']
+
+    # Do ew want to use the RGI area or ours?
+    if not cfg.PARAMS['use_rgi_area']:
+        area = geometry.area * 1e-6
+        entity['Area'] = area
+        gdir.rgi_area_km2 = area
+
+    # Write
     towrite.to_file(gdir.get_filepath('outlines'))
 
     # Also transform the intersects if necessary
@@ -452,10 +460,11 @@ def glacier_masks(gdir):
     y0 = transf[5]  # UL corner
     dx = transf[0]
     dy = transf[4]  # Negative
-    assert dx == -dy
-    assert dx == gdir.grid.dx
-    assert y0 == gdir.grid.corner_grid.y0
-    assert x0 == gdir.grid.corner_grid.x0
+
+    if not (np.allclose(dx, -dy) or np.allclose(dx, gdir.grid.dx) or
+            np.allclose(y0, gdir.grid.corner_grid.y0, atol=1e-2) or
+            np.allclose(x0, gdir.grid.corner_grid.x0, atol=1e-2)):
+        raise RuntimeError('DEM file and Salem Grid do not match!')
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
