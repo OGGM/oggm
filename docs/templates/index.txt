@@ -80,6 +80,20 @@ Contributing
     add-module.rst
     contributing.rst
 
+Related packages
+^^^^^^^^^^^^^^^^
+
+* :doc:`rgitools`
+* :doc:`partitioning`
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+    :caption: Related packages
+
+    rgitools.rst
+    partitioning.rst
+
 
 Get in touch
 ------------

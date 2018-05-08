@@ -1,11 +1,8 @@
 # Python imports
 from os import path
-from glob import glob
 
 # Libs
 import numpy as np
-import pandas as pd
-import geopandas as gpd
 
 # Locals
 import oggm
@@ -17,7 +14,7 @@ import logging
 log = logging.getLogger(__name__)
 
 # RGI Version
-rgi_version = '6'
+rgi_version = '61'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
@@ -48,20 +45,14 @@ rgi_dir = utils.get_rgi_dir(version=rgi_version)
 
 # Get the reference glacier ids (they are different for each RGI version)
 df, _ = utils.get_wgms_files()
-rids = df['RGI{}0_ID'.format(rgi_version)]
+rids = df['RGI{}0_ID'.format(rgi_version[0])]
+
+# We can't do Antarctica
+rids = [rid for rid in rids if not '-19.' in rid]
 
 # Make a new dataframe with those (this takes a while)
 log.info('Reading the RGI shapefiles...')
-rgidf = []
-for reg in df['RGI_REG'].unique():
-    if reg == '19':
-        continue  # we have no climate data in Antarctica
-    fn = '*' + reg + '_rgi{}0_*.shp'.format(rgi_version)
-    fs = list(sorted(glob(path.join(rgi_dir, '*', fn))))[0]
-    sh = gpd.read_file(fs)
-    rgidf.append(sh.loc[sh.RGIId.isin(rids)])
-rgidf = pd.concat(rgidf)
-rgidf.crs = sh.crs  # for geolocalisation
+rgidf = utils.get_rgi_glacier_entities(rids, version=rgi_version)
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:

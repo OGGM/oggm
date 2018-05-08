@@ -13,7 +13,7 @@ from oggm.core.massbalance import PastMassBalance
 import matplotlib.pyplot as plt
 
 # RGI Version
-rgi_version = '6'
+rgi_version = '61'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()

@@ -5,26 +5,20 @@
 2. Complete run for a list of glaciers
 ======================================
 
-This example shows how to run the OGGM  model for a list of selected glaciers
-(here, four).
-For this example we download the list of glaciers from our server, but
-you can use any list of glaciers for this. See the
-`prepare_glacier_list.ipynb <https://github.com/OGGM/oggm/blob/master/docs/notebooks/prepare_glacier_list.ipynb>`_
-notebook in the ``oggm/docs/notebooks`` directory for an example on how to
-prepare such a file.
+This example shows how to run the OGGM  model for a list of selected glaciers.
 
 Note that the default in OGGM is to use a previously calibrated list of
 :math:`t^*` for the run, which means that we don't have to calibrate the
 mass balance model ourselves (thankfully, otherwise you would have to add
 all the calibration glaciers to your list too).
 
-Note that to be exact, this procedure can only be applied if the model
-parameters don't change between the calibration and the run.
+Note that in order to be correct, the automated calibration can only be used
+if the model parameters don't change between the calibration and the run.
 After testing, it appears that changing the 'border' parameter won't affect
 the results much (as expected), so it's ok to change this parameter.
 Some other parameters (e.g. topo smoothing, dx, precip factor, alternative
-climate data...) will probably need a re-calibration
-(see the OGGM calibration recipe for this).
+climate data...) will probably need a re-calibration step
+(see :ref:`run-calibration`).
 
 
 Script
@@ -38,17 +32,17 @@ example:
 If everything went well, you should see an output similar to::
 
 
-    2017-10-21 00:07:17: oggm.cfg: Parameter file: /home/mowglie/Documents/git/oggm-fork/oggm/params.cfg
-    2017-10-21 00:07:27: __main__: Starting OGGM run
-    2017-10-21 00:07:27: __main__: Number of glaciers: 4
-    2017-10-21 00:07:27: oggm.workflow: Multiprocessing: using all available processors (N=4)
-    2017-10-21 00:07:27: oggm.core.gis: (RGI50-01.10299) define_glacier_region
-    2017-10-21 00:07:27: oggm.core.gis: (RGI50-18.02342) define_glacier_region
+    2018-05-01 17:51:43: oggm.cfg: Parameter file: /home/mowglie/Documents/git/oggm-fork/oggm/params.cfg
+    2018-05-01 17:51:47: __main__: Starting OGGM run
+    2018-05-01 17:51:47: __main__: Number of glaciers: 3
+    2018-05-01 17:51:47: oggm.workflow: Multiprocessing: using all available processors (N=8)
+    2018-05-01 17:51:47: oggm.core.gis: (RGI60-11.00897) define_glacier_region
+    2018-05-01 17:51:47: oggm.core.gis: (RGI60-01.10299) define_glacier_region
     (...)
-    2017-10-21 00:09:30: oggm.core.flowline: (RGI50-01.10299) default time stepping was successful!
-    2017-10-21 00:09:39: oggm.core.flowline: (RGI50-18.02342) default time stepping was successful!
-    2017-10-21 00:09:39: __main__: Compiling output
-    2017-10-21 00:09:39: __main__: OGGM is done! Time needed: 0:02:22
+    2018-05-01 17:52:14: oggm.core.flowline: (RGI60-01.10299) default time stepping was successful!
+    2018-05-01 17:52:24: oggm.core.flowline: (RGI60-18.02342) default time stepping was successful!
+    2018-05-01 17:52:24: __main__: Compiling output
+    2018-05-01 17:52:25: __main__: OGGM is done! Time needed: 0:00:41
 
 .. note::
 
@@ -100,14 +94,13 @@ Here is an example of how to read the file:
 
 Output (reduced for clarity):
 
-==============  ===============  =========  ========  ==============   ==================  ==============  ==============  ===============  ========================  =================  =================
-rgi_id          name                cenlon    cenlat    rgi_area_km2   terminus_type         dem_max_elev    dem_min_elev    n_centerlines    longuest_centerline_km    inv_thickness_m    vas_thickness_m
-==============  ===============  =========  ========  ==============   ==================  ==============  ==============  ===============  ========================  =================  =================
-RGI50-18.02342  Tasman Glacier    170.238   -43.5653          95.216   Land-terminating              3662             715                7                  27.2195            186.38             187.713
-RGI50-01.10299  Coxe Glacier     -148.037    61.144           19.282   Marine-terminating            1840               6                8                  11.6243            137.153            103.136
-RGI50-11.00897  Hintereisferner    10.7584   46.8003           8.036   Land-terminating              3684            2447                3                   8.99975           107.642             74.2795
-RGI50-08.02637  Storglaciaeren     18.5604   67.9042           3.163   Land-terminating              1909            1176                2                   3.54495            63.2469            52.362
-==============  ===============  =========  ========  ==============   ==================  ==============  ==============  ===============  ========================  =================  =================
+==============  ===============  ==============  ==============  =================
+rgi_id          name               dem_max_elev    dem_min_elev    inv_thickness_m
+==============  ===============  ==============  ==============  =================
+RGI50-18.02342  Tasman Glacier             3662             715             186.32
+RGI50-01.10299  Coxe Glacier               1840               6             145.85
+RGI50-11.00897  Hintereisferner            3684            2447             107.65
+==============  ===============  ==============  ==============  =================
 
 
 The run outpout is stored in netCDF files, and it can therefore be read with

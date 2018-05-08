@@ -21,15 +21,15 @@ WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Initialize from existing directories
-# (note that we don't need the RGI file: this is going to be slow sometimes
-# but it works)
+# (note that we don't need the RGI file:
+# this can be slow sometimes but it works)
 gdirs = workflow.init_glacier_regions()
 
 # Plot: we will show the state of all four glaciers at the beginning and at
 # the end of the commitment simulation
-f, axs = plt.subplots(2, 4, figsize=(20, 8))
+f, axs = plt.subplots(2, 3, figsize=(14, 6))
 
-for i in range(4):
+for i in range(3):
     ax = axs[0, i]
     gdir = gdirs[i]
     # Use the model ouptut file to simulate the glacier evolution
@@ -42,5 +42,5 @@ for i in range(4):
     graphics.plot_modeloutput_map(gdirs[i], model=model, ax=ax,
                                   lonlat_contours_kwargs={'interval': 0})
 
-plt.subplots_adjust(wspace=0.4, hspace=0.08, top=0.98, bottom=0.02)
+plt.tight_layout()
 plt.show()
