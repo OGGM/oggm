@@ -259,6 +259,7 @@ def initialize(file=None):
     PARAMS['rgi_version'] = cp['rgi_version']
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
+    PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -303,7 +304,7 @@ def initialize(file=None):
            'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version', 'allow_negative_mustar',
-           'use_shape_factor_for_inversion',
+           'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel']
     for k in ltr:
         cp.pop(k, None)

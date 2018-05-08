@@ -66,6 +66,10 @@ Enhancements
   outlines or DEM errors (:pull:`445`). This will be used to report to the
   RGI authors.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added a new parameter (``PARAMS['use_rgi_area']``), which specifies whether
+  OGGM should use the reference area provided by RGI or the one computed
+  from the local map and reprojected outlines  (:pull:`458`, default: True).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 
 Bug fixes
