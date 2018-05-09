@@ -1,6 +1,6 @@
 
-An modular open source glacier model in Python
-----------------------------------------------
+A modular open source glacier model in Python
+---------------------------------------------
 
 The model accounts for glacier geometry (including contributory branches) and
 includes an explicit ice dynamics module. It can simulate past and
