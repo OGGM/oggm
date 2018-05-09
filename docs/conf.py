@@ -16,6 +16,7 @@ from __future__ import print_function
 import sys
 import os
 import shutil
+import datetime
 
 
 print("python version:", sys.version)
@@ -146,7 +147,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'OGGM'
-copyright = '2015-2016, OGGM Developers'
+copyright = '2015-{}, OGGM Developers'.format(datetime.datetime.now().year)
 author = 'OGGM Developers'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -234,7 +235,7 @@ html_logo = '_static/logo.png'
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+html_favicon = '_static/favicon.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
