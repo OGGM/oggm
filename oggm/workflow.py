@@ -120,6 +120,12 @@ def execute_entity_task(task, gdirs, **kwargs):
          the list of oggm.GlacierDirectory to process.
     """
 
+    # If not iterable it's ok
+    try:
+        len(gdirs)
+    except TypeError:
+        gdirs = [gdirs]
+
     if task.__dict__.get('global_task', False):
         return task(gdirs, **kwargs)
 
@@ -247,6 +253,12 @@ def gis_prepro_tasks(gdirs):
 
 def climate_tasks(gdirs):
     """Helper function: run all climate tasks."""
+
+    # If not iterable it's ok
+    try:
+        len(gdirs)
+    except TypeError:
+        gdirs = [gdirs]
 
     # I don't know where this logic is best placed...
     if (('climate_file' in cfg.PATHS) and

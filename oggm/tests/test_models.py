@@ -175,7 +175,7 @@ class TestOtherGlacier(unittest.TestCase):
         import geopandas as gpd
 
         hef_file = utils.get_demo_file('rgi_oetztal.shp')
-        rgidf = gpd.GeoDataFrame.from_file(hef_file)
+        rgidf = gpd.read_file(hef_file)
 
         # This is another glacier with divides
         entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719_d01'].iloc[0]
@@ -1363,7 +1363,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+        entity = gpd.read_file(hef_file).iloc[0]
 
         self.gdir = GlacierDirectory(entity, base_dir=self.testdir, reset=True)
         define_glacier_region(self.gdir, entity=entity)

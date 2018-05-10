@@ -204,7 +204,7 @@ class TestCoxeGlacier(unittest.TestCase):
         os.makedirs(self.testdir)
 
     def test_set_width(self):
-        entity = gpd.GeoDataFrame.from_file(self.rgi_file).iloc[0]
+        entity = gpd.read_file(self.rgi_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
