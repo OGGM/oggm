@@ -363,7 +363,7 @@ def test_coxe():
     cfg.PARAMS['use_multiple_flowlines'] = False
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
-    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
     gis.define_glacier_region(gdir, entity=entity)

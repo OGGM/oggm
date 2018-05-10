@@ -73,7 +73,7 @@ In this case we use a very small subset of the RGI, the outlines of the
 
 .. ipython:: python
 
-    entity = gpd.GeoDataFrame.from_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
+    entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     entity
 
 This information is enough to define HEF's :py:class:`GlacierDirectory`:

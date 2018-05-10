@@ -482,7 +482,7 @@ def glacier_masks(gdir):
 
     # Geometries
     outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.GeoDataFrame.from_file(outlines_file).geometry[0]
+    geometry = gpd.read_file(outlines_file).geometry[0]
 
     # Interpolate shape to a regular path
     glacier_poly_hr = _interp_polygon(geometry, gdir.grid.dx)
@@ -657,7 +657,7 @@ def simple_glacier_masks(gdir):
 
     # Geometries
     outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.GeoDataFrame.from_file(outlines_file).geometry[0]
+    geometry = gpd.read_file(outlines_file).geometry[0]
 
     # Transform geometry into grid coordinates
     # It has to be in pix center coordinates because of how skimage works

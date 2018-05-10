@@ -269,7 +269,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     cfg.PARAMS['use_optimized_inversion_params'] = True
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-    entity = gpd.GeoDataFrame.from_file(hef_file).iloc[0]
+    entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
     if not gdir.has_file('inversion_params'):
