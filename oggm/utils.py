@@ -2418,11 +2418,18 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             fpath = gdir.get_filepath('gridded_data')
             with netCDF4.Dataset(fpath) as nc:
                 mask = nc.variables['glacier_mask'][:]
-                ext = nc.variables['glacier_ext'][:]
                 topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+        except:
+            pass
+        try:
+            # Ext related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with netCDF4.Dataset(fpath) as nc:
+                ext = nc.variables['glacier_ext'][:]
+                topo = nc.variables['topo'][:]
             d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
             d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
         except:
@@ -2805,8 +2812,11 @@ class GlacierDirectory(object):
         reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version[0])
         n = reg_names.loc[int(self.rgi_region)].values[0]
         self.rgi_region_name = self.rgi_region + ': ' + n
-        n = subreg_names.loc[self.rgi_subregion].values[0]
-        self.rgi_subregion_name = self.rgi_subregion + ': ' + n
+        try:
+            n = subreg_names.loc[self.rgi_subregion].values[0]
+            self.rgi_subregion_name = self.rgi_subregion + ': ' + n
+        except KeyError:
+            self.rgi_subregion_name = self.rgi_subregion + ': NoName'
 
         # Read glacier attrs
         gtkeys = {'0': 'Glacier',
