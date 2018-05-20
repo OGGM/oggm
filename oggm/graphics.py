@@ -1,4 +1,5 @@
 """Useful plotting functions"""
+import os
 import functools
 import logging
 from collections import OrderedDict
@@ -14,6 +15,7 @@ import shapely.geometry as shpg
 from matplotlib import cm as colormap
 
 from oggm.core.flowline import FileModel
+from oggm import cfg, utils
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -83,6 +85,9 @@ def _plot_map(plotfunc):
         pass kwargs to salem.Map.set_lonlat_contours
     cbar_ax: ax, optional
         ax where to plot the colorbar
+    autosave : bool, optional
+        set to True to override to a default savefig filename (useful 
+        for multiprocessing)
     savefig : str, optional
         save the figure to a file instead of displaying it
     savefig_kwargs : dict, optional
@@ -95,7 +100,7 @@ def _plot_map(plotfunc):
     @functools.wraps(plotfunc)
     def newplotfunc(gdirs, ax=None, smap=None, add_colorbar=True, title=None,
                     title_comment=None, horizontal_colorbar=False,
-                    lonlat_contours_kwargs=None, cbar_ax=None,
+                    lonlat_contours_kwargs=None, cbar_ax=None, autosave=False,
                     add_scalebar=True, savefig=None, savefig_kwargs=None,
                     **kwargs):
 
@@ -155,6 +160,12 @@ def _plot_map(plotfunc):
 
         if dofig:
             plt.tight_layout()
+
+        if autosave:
+            savefig = os.path.join(cfg.PATHS['working_dir'], 'plots')
+            utils.mkdir(savefig)
+            savefig = os.path.join(savefig, plotfunc.__name__ + '_' +
+                                   gdirs[0].rgi_id + '.png')
 
         if savefig is not None:
             plt.savefig(savefig, savefig_kwargs=savefig_kwargs)
@@ -471,7 +482,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
 
 
 @_plot_map
-def plot_distributed_thickness(gdirs, ax=None, smap=None, how=None):
+def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     """Plots the result of the inversion out of a glacier directory.
 
     Method: 'alt' or 'interp'
@@ -487,10 +498,12 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, how=None):
 
     grids_file = gdir.get_filepath('gridded_data')
     with netCDF4.Dataset(grids_file) as nc:
-        vn = 'thickness'
-        if how is not None:
-            vn += '_' + how
-        thick = nc.variables[vn][:]
+        import warnings
+        with warnings.catch_warnings():
+            # https://github.com/Unidata/netcdf4-python/issues/766
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            vn = 'distributed_thickness' + varname_suffix
+            thick = nc.variables[vn][:]
 
     thick = np.where(mask, thick, np.NaN)
 

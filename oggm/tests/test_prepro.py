@@ -212,11 +212,23 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
+        gis.interpolation_masks(gdir)
 
         with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
-            np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
-                                       rtol=1e-1)
+            glacier_mask = nc.variables['glacier_mask'][:]
+            glacier_ext = nc.variables['glacier_ext'][:]
+            glacier_ext_erosion = nc.variables['glacier_ext_erosion'][:]
+            ice_divides = nc.variables['ice_divides'][:]
+
+        area = np.sum(glacier_mask * gdir.grid.dx**2)
+        np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
+                                   rtol=1e-1)
+        assert np.all(glacier_mask[glacier_ext == 1])
+        assert np.all(glacier_mask[glacier_ext_erosion == 1])
+        assert np.all(glacier_ext[ice_divides == 1])
+        assert np.all(glacier_ext_erosion[ice_divides == 1])
+        np.testing.assert_allclose(np.std(glacier_ext_erosion - glacier_ext),
+                                   0, atol=0.1)
 
     def test_simple_glacier_masks(self):
 
@@ -1653,7 +1665,6 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
 
-    @is_slow
     def test_distribute(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1702,19 +1713,20 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        inversion.distribute_thickness(gdir, how='per_altitude',
-                                       add_nc_name=True)
-        inversion.distribute_thickness(gdir, how='per_interpolation',
-                                       add_slope=False,
-                                       add_nc_name=True)
+        inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
+        inversion.distribute_thickness_per_altitude(gdir,
+                                                    varname_suffix='_alt')
 
         grids_file = gdir.get_filepath('gridded_data')
         with netCDF4.Dataset(grids_file) as nc:
-            t1 = nc.variables['thickness_per_altitude'][:]
-            t2 = nc.variables['thickness_per_interpolation'][:]
+            with warnings.catch_warnings():
+                # https://github.com/Unidata/netcdf4-python/issues/766
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                t1 = nc.variables['distributed_thickness_interp'][:]
+                t2 = nc.variables['distributed_thickness_alt'][:]
 
-        np.testing.assert_allclose(np.sum(t1), np.sum(t2))
-        np.testing.assert_allclose(np.max(t1), np.max(t2), atol=30)
+        np.testing.assert_allclose(np.nansum(t1), np.nansum(t2))
+        np.testing.assert_allclose(np.nanmax(t1), np.nanmax(t2), atol=100)
 
     @is_slow
     def test_invert_hef_nofs(self):

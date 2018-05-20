@@ -14,21 +14,25 @@ References::
         60(221), 537-552. http://doi.org/10.3189/2014JoG13J176
 """
 # Built ins
-import os
 import logging
 import json
+import warnings
 from functools import partial
 from distutils.version import LooseVersion
 # External libs
+import netCDF4
 import salem
 import pyproj
 import numpy as np
 import shapely.ops
+import pandas as pd
 import geopandas as gpd
 import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
+from scipy.ndimage import binary_erosion
+from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 import rasterio
 from rasterio.warp import reproject, Resampling
@@ -742,3 +746,98 @@ def simple_glacier_masks(gdir):
     nc.max_h_glacier = np.max(dem_on_g)
     nc.min_h_glacier = np.min(dem_on_g)
     nc.close()
+
+
+@entity_task(log, writes=['gridded_data'])
+def interpolation_masks(gdir):
+    """Computes the glacier exterior masks taking ice divides into account.
+
+    This is useful for distributed ice thickness. The masks are added to the
+    gridded data file. For convenience we also add a slope mask.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    # Variables
+    grids_file = gdir.get_filepath('gridded_data')
+    with netCDF4.Dataset(grids_file) as nc:
+        topo_smoothed = nc.variables['topo_smoothed'][:]
+        glacier_mask = nc.variables['glacier_mask'][:]
+
+    # Glacier exterior including nunataks
+    erode = binary_erosion(glacier_mask)
+    glacier_ext = glacier_mask ^ erode
+    glacier_ext = np.where(glacier_mask == 1, glacier_ext, 0)
+
+    # Intersects between glaciers
+    gdfi = gpd.GeoDataFrame(columns=['geometry'])
+    if gdir.has_file('intersects'):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+
+    # Ice divide mask
+    # Probably not the fastest way to do this, but it works
+    dist = np.array([])
+    jj, ii = np.where(glacier_ext)
+    for j, i in zip(jj, ii):
+        dist = np.append(dist, np.min(gdfi.distance(shpg.Point(i, j))))
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        pok = np.where(dist <= 1)
+    glacier_ext_intersect = glacier_ext * 0
+    glacier_ext_intersect[jj[pok], ii[pok]] = 1
+
+    # Distance from border mask - Scipy does the job
+    dx = gdir.grid.dx
+    dis_from_border = 1 + glacier_ext_intersect - glacier_ext
+    dis_from_border = distance_transform_edt(dis_from_border) * dx
+
+    # Slope
+    sy, sx = np.gradient(topo_smoothed, dx, dx)
+    slope = np.arctan(np.sqrt(sy**2 + sx**2))
+    slope = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4), np.pi/2.)
+    slope = 1 / slope**(cfg.N / (cfg.N+2))
+
+    with netCDF4.Dataset(grids_file, 'a') as nc:
+
+        vn = 'glacier_ext_erosion'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Glacier exterior with binary erosion method'
+        v[:] = glacier_ext
+
+        vn = 'ice_divides'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Glacier ice divides'
+        v[:] = glacier_ext_intersect
+
+        vn = 'slope_factor'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Slope factor as defined in Farinotti et al 2009'
+        v[:] = slope
+
+        vn = 'dis_from_border'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'm'
+        v.long_name = 'Distance from border'
+        v[:] = dis_from_border

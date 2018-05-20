@@ -247,7 +247,8 @@ def test_multiple_models():
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_distributed_thickness(gdir, ax=ax, how='per_altitude')
+    graphics.plot_distributed_thickness(gdir, ax=ax,
+                                        varname_suffix='_alt')
     fig.tight_layout()
     return fig
 
@@ -257,7 +258,8 @@ def test_thick_alt():
 def test_thick_interp():
     fig, ax = plt.subplots()
     gdir = init_hef()
-    graphics.plot_distributed_thickness(gdir, ax=ax, how='per_interpolation')
+    graphics.plot_distributed_thickness(gdir, ax=ax,
+                                        varname_suffix='_interp')
     fig.tight_layout()
     return fig
 

@@ -3150,10 +3150,9 @@ class GlacierDirectory(object):
             nc.author = 'OGGM'
             nc.author_info = 'Open Global Glacier Model'
 
-            timev = nc.createVariable('time','i4',('time',))
-            timev.setncatts({'units':time_unit})
-            timev[:] = netCDF4.date2num([t for t in time],
-                                        time_unit)
+            timev = nc.createVariable('time', 'i4', ('time',))
+            timev.setncatts({'units': time_unit})
+            timev[:] = netCDF4.date2num([t for t in time], time_unit)
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
             v.units = 'kg m-2'

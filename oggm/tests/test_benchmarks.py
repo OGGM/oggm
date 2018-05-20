@@ -6,6 +6,7 @@ import numpy as np
 import os
 import shutil
 import salem
+import xarray as xr
 import oggm
 
 # Locals
@@ -126,6 +127,88 @@ class TestSouthGlacier(unittest.TestCase):
             plt.xlabel('MB (mm w.e yr-1)')
             plt.ylabel('Altidude (m)')
             plt.legend()
+            plt.show()
+
+    def test_inversion(self):
+
+        # Download the RGI file for the run
+        # Make a new dataframe of those
+        rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf)
+
+        # Preprocessing tasks
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Climate tasks -- only data IO and tstar interpolation!
+        execute_entity_task(tasks.process_cru_data, gdirs)
+        tasks.distribute_t_stars(gdirs)
+        execute_entity_task(tasks.apparent_mb, gdirs)
+
+        # Inversion tasks
+        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        # We use the default parameters for this run
+        execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
+        execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
+                            varname_suffix='_alt')
+        execute_entity_task(tasks.distribute_thickness_interp, gdirs,
+                            varname_suffix='_int')
+
+        # Reference data
+        gdir = gdirs[0]
+        df = salem.read_shapefile(get_demo_file('IceThick_SouthGlacier.shp'))
+        coords = np.array([p.xy for p in df.geometry]).squeeze()
+        df['lon'] = coords[:, 0]
+        df['lat'] = coords[:, 1]
+        df = df[['lon', 'lat', 'thick']]
+        ii, jj = gdir.grid.transform(df['lon'], df['lat'], crs=salem.wgs84,
+                                     nearest=True)
+        df['i'] = ii
+        df['j'] = jj
+        df['ij'] = ['{:04d}_{:04d}'.format(i, j) for i, j in zip(ii, jj)]
+        df = df.groupby('ij').mean()
+
+        ds = xr.open_dataset(gdir.get_filepath('gridded_data'))
+
+        df['oggm_alt'] = ds.distributed_thickness_alt.isel_points(x=df['i'],
+                                                                  y=df['j'])
+        df['oggm_int'] = ds.distributed_thickness_int.isel_points(x=df['i'],
+                                                                  y=df['j'])
+
+        ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
+        ds['ref'].data[df['j'], df['i']] = df['thick']
+
+        rmsd_int = ((df.oggm_int - df.thick) ** 2).mean() ** .5
+        rmsd_alt = ((df.oggm_int - df.thick) ** 2).mean() ** .5
+        assert rmsd_int < 80
+        assert rmsd_alt < 80
+
+        dfm = df.mean()
+        np.testing.assert_allclose(dfm.thick, dfm.oggm_int, 50)
+        np.testing.assert_allclose(dfm.thick, dfm.oggm_alt, 50)
+
+        if do_plot:
+            import matplotlib.pyplot as plt
+            df.plot(kind='scatter', x='oggm_int', y='thick')
+            plt.axis('equal')
+            df.plot(kind='scatter', x='oggm_alt', y='thick')
+            plt.axis('equal')
+            f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 3))
+            ds.ref.plot(ax=ax1)
+            ds.distributed_thickness_int.plot(ax=ax2)
+            ds.distributed_thickness_alt.plot(ax=ax3)
+            plt.tight_layout()
             plt.show()
 
     def test_workflow(self):
