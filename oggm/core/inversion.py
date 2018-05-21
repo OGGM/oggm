@@ -36,7 +36,6 @@ import numpy as np
 import pandas as pd
 import netCDF4
 from scipy import optimize as optimization
-from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
@@ -509,7 +508,7 @@ def filter_inversion_output(gdir):
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_per_altitude(gdir, add_slope=True,
                                       smooth_radius=None,
-                                      dis_from_border_exp=0.5,
+                                      dis_from_border_exp=0.25,
                                       varname_suffix=''):
     """Compute a thickness map by redistributing mass along altitudinal bands.
 
@@ -621,6 +620,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         v.long_name = 'Distributed ice thickness'
         v[:] = thick
 
+    return thick
+
 
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
@@ -719,3 +720,5 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
         v.units = '-'
         v.long_name = 'Distributed ice thickness'
         v[:] = thick
+
+    return thick
