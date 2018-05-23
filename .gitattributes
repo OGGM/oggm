@@ -1,1 +1,2 @@
 oggm/tests/funcs.py ident
+oggm/_version.py export-subst

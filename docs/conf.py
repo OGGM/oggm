@@ -426,7 +426,7 @@ def write_index():
     origfile = os.path.join(here, 'templates/index.txt')
     filename = os.path.join(here, 'index.rst')
 
-    text = text_version if oggm.__isreleased__ else text_dev
+    text = text_version if '+' not in oggm.__version__ else text_dev
     with open(origfile) as f1:
         with open(filename, 'w') as f2:
             for line in f1:
