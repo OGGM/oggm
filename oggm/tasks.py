@@ -30,6 +30,7 @@ from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
+from oggm.utils import copyfiles
 
 # Global tasks
 from oggm.core.climate import process_histalp_nonparallel

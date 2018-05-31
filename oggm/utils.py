@@ -2922,14 +2922,16 @@ class GlacierDirectory(object):
                                self.rgi_id)
         if setup == 'run':
             paths = ['model_flowlines', 'inversion_params', 'outlines',
-                     'local_mustar', 'climate_monthly', 'gridded_data']
+                     'local_mustar', 'climate_monthly', 'gridded_data',
+                     'cesm_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,
                             ignore=include_patterns(*paths))
         elif setup == 'inversion':
             paths = ['inversion_params', 'downstream_line', 'outlines',
                      'inversion_flowlines', 'glacier_grid',
-                     'local_mustar', 'climate_monthly', 'gridded_data']
+                     'local_mustar', 'climate_monthly', 'gridded_data',
+                     'cesm_data']
             paths = ('*' + p + '*' for p in paths)
             shutil.copytree(self.dir, new_dir,
                             ignore=include_patterns(*paths))
@@ -3376,3 +3378,29 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape_factors[np.isnan(shape_factors)] = 1.
 
     return shape_factors
+
+
+@entity_task(logger)
+def copyfiles(gdir, basedir, setup='run', **kwargs):
+    """Copies the glacier directories and their content to a new location.
+
+    This utility function allows to select certain files only, thus
+    saving time at copy.
+
+    Parameters
+    ----------
+    basedir : str
+        path to the new base directory (should end with "per_glacier" most
+        of the times)
+    setup : str
+        set up you want the copied directory to be useful for. Currently
+        supported are 'all' (copy the entire directory), 'inversion'
+        (copy the necessary files for the inversion AND the run)
+        and 'run' (copy the necessary files for a dynamical run).
+
+    Returns
+    -------
+    New glacier directories from the copied folders
+    """
+
+    return gdir.copy_to_basedir(basedir, setup=setup, **kwargs)
