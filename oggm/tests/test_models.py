@@ -17,7 +17,7 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
-from oggm import utils, workflow
+from oggm import utils, workflow, tasks
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 
 # Tests
@@ -41,7 +41,8 @@ class TestInitFlowline(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         self.testdir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.testdir, reset=True)
-        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
+        self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
+                                          setup='all')
 
     def tearDown(self):
         self.rm_dir()
@@ -243,7 +244,8 @@ class TestMassBalance(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         self.testdir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.testdir, reset=True)
-        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
+        self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
+                                          setup='all')
 
     def tearDown(self):
         self.rm_dir()
@@ -1027,7 +1029,8 @@ class TestIO(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER)
         self.test_dir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.test_dir, reset=True)
-        self.gdir = gdir.copy_to_basedir(self.test_dir, setup='all')
+        self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.test_dir,
+                                          setup='all')
 
         flowline.init_present_time_glacier(self.gdir)
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
@@ -1175,15 +1178,18 @@ class TestIO(unittest.TestCase):
         new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
-        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='all')
+        new_gdir = tasks.copy_to_basedir(self.gdir, base_dir=new_dir,
+                                          setup='all')
         flowline.init_present_time_glacier(new_gdir)
         shutil.rmtree(new_dir)
 
-        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='run')
+        new_gdir = tasks.copy_to_basedir(self.gdir, base_dir=new_dir,
+                                          setup='run')
         flowline.run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 
-        new_gdir = self.gdir.copy_to_basedir(new_dir, setup='inversion')
+        new_gdir = tasks.copy_to_basedir(self.gdir, base_dir=new_dir,
+                                          setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
         inversion.volume_inversion(new_gdir)
         inversion.filter_inversion_output(new_gdir)
@@ -2008,7 +2014,8 @@ class TestHEF(unittest.TestCase):
         gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
         self.testdir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.testdir, reset=True)
-        self.gdir = gdir.copy_to_basedir(self.testdir, setup='all')
+        self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
+                                          setup='all')
 
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
