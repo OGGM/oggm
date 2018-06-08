@@ -31,6 +31,11 @@ Breaking changes
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - RGI version 4 isn't supported anymore (:issue:`142`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Rework of the 2d interpolation tasks for ice thickness in the context of
+  `ITMIX2 <http://oggm.org/2018/05/21/g2ti/>`_. The new interpolation
+  are better, but not backwards compatible. Aside of me I don't think
+  anybody was using them (:pull:`465`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
