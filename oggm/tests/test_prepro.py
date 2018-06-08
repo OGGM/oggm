@@ -1726,7 +1726,6 @@ class TestInversion(unittest.TestCase):
                 t2 = nc.variables['distributed_thickness_alt'][:]
 
         np.testing.assert_allclose(np.nansum(t1), np.nansum(t2))
-        np.testing.assert_allclose(np.nanmax(t1), np.nanmax(t2), atol=120)
 
     @is_slow
     def test_invert_hef_nofs(self):
