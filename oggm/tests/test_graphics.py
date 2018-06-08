@@ -243,7 +243,8 @@ def test_multiple_models():
 
 
 @is_graphic_test
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
+                               tolerance=TOLERANCE+5)
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()

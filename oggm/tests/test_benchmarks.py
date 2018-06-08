@@ -185,15 +185,15 @@ class TestSouthGlacier(unittest.TestCase):
         gdir = gdirs[0]
         df = self.get_ref_data(gdir)
 
-        ds = xr.open_dataset(gdir.get_filepath('gridded_data'))
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
 
-        df['oggm_alt'] = ds.distributed_thickness_alt.isel_points(x=df['i'],
-                                                                  y=df['j'])
-        df['oggm_int'] = ds.distributed_thickness_int.isel_points(x=df['i'],
-                                                                  y=df['j'])
+            df['oggm_alt'] = ds.distributed_thickness_alt.isel_points(x=df['i'],
+                                                                      y=df['j'])
+            df['oggm_int'] = ds.distributed_thickness_int.isel_points(x=df['i'],
+                                                                      y=df['j'])
 
-        ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
-        ds['ref'].data[df['j'], df['i']] = df['thick']
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
+            ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd_int = ((df.oggm_int - df.thick) ** 2).mean() ** .5
         rmsd_alt = ((df.oggm_int - df.thick) ** 2).mean() ** .5
@@ -270,11 +270,11 @@ class TestSouthGlacier(unittest.TestCase):
                             fs=0)
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
 
-        ds = xr.open_dataset(gdir.get_filepath('gridded_data'))
-        df['oggm'] = ds.distributed_thickness.isel_points(x=df['i'],
-                                                              y=df['j'])
-        ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
-        ds['ref'].data[df['j'], df['i']] = df['thick']
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            df['oggm'] = ds.distributed_thickness.isel_points(x=df['i'],
+                                                                  y=df['j'])
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
+            ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd = ((df.oggm - df.thick) ** 2).mean() ** .5
         assert rmsd < 50
