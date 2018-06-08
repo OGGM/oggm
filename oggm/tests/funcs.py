@@ -346,11 +346,8 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     # filter
     inversion.filter_inversion_output(gdir)
 
-    inversion.distribute_thickness(gdir, how='per_altitude',
-                                   add_nc_name=True)
-    inversion.distribute_thickness(gdir, how='per_interpolation',
-                                   add_slope=False, smooth=False,
-                                   add_nc_name=True)
+    inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
+    inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
 
     flowline.init_present_time_glacier(gdir)
 
