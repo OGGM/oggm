@@ -10,6 +10,10 @@ v1.X (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The utils.copy_to_basedir() function is changed to being an entity task. In
+  addition cesm_data files, when present, will from now on always be copied
+  when using this task (:issue:`467` & :pull:`468`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The method used to apply CRU and GCM anomalies to the climatology has
