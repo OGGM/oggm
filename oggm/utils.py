@@ -2848,7 +2848,7 @@ class GlacierDirectory(object):
                   }
         self.glacier_type = gtkeys[gtype[0]]
         self.terminus_type = ttkeys[gtype[1]]
-        self.status = stkeys[gstatus]
+        self.status = stkeys['{}'.format(gstatus)]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
         self.inversion_calving_rate = 0.

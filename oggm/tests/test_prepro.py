@@ -470,6 +470,7 @@ class TestCenterlines(unittest.TestCase):
         entity.BgnDate = 0
         entity.Name = 'Baltoro'
         entity.GlacType = '0000'
+        entity.Status = '0'
         entity.O1Region = '01'
         entity.O2Region = '01'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -2379,4 +2380,3 @@ class TestCatching(unittest.TestCase):
         assert df['compute_centerlines'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert not np.isfinite(df['not_a_task'])
-
