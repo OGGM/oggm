@@ -277,7 +277,7 @@ class TestSouthGlacier(unittest.TestCase):
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd = ((df.oggm - df.thick) ** 2).mean() ** .5
-        assert rmsd < 50
+        assert rmsd < 60
 
         dfm = df.mean()
         np.testing.assert_allclose(dfm.thick, dfm.oggm, 10)
