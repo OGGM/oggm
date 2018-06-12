@@ -2374,6 +2374,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         d['rgi_area_km2'] = gdir.rgi_area_km2
         d['glacier_type'] = gdir.glacier_type
         d['terminus_type'] = gdir.terminus_type
+        d['status'] = gdir.status
 
         # The rest is less certain. We put these in a try block and see
         # We're good with any error - we store the dict anyway below
@@ -2420,6 +2421,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 mask = nc.variables['glacier_mask'][:]
                 topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
         except:
@@ -2799,6 +2801,12 @@ class GlacierDirectory(object):
             # RGI V6
             gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
 
+        try:
+            gstatus = rgi_entity.RGIFlag[0]
+        except AttributeError:
+            # RGI V6
+            gstatus = rgi_entity.Status
+
         # rgi version can be useful
         self.rgi_version = self.rgi_id.split('-')[0][-2:]
         if self.rgi_version not in ['50', '60', '61']:
@@ -2833,8 +2841,14 @@ class GlacierDirectory(object):
                   '5': 'Shelf-terminating',
                   '9': 'Not assigned',
                   }
+        stkeys = {'0': 'Glacier or ice cap',
+                  '1': 'Glacier complex',
+                  '2': 'Nominal glacier',
+                  '9': 'Not assigned',
+                  }
         self.glacier_type = gtkeys[gtype[0]]
         self.terminus_type = ttkeys[gtype[1]]
+        self.status = stkeys['{}'.format(gstatus)]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
         self.inversion_calving_rate = 0.

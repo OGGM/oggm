@@ -155,7 +155,7 @@ author = 'OGGM Developers'
 # built documents.
 #
 # The short X.Y version.
-version = oggm.version.short_version
+version = oggm.__version__.split('+')[0]
 # The full version, including alpha/beta/rc tags.
 release = oggm.__version__
 
