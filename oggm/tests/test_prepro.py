@@ -119,6 +119,7 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
 
+        assert gdir.status == 'Glacier or ice cap'
 
     def test_divides_as_glaciers(self):
 
