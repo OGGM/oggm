@@ -36,6 +36,7 @@ from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 import rasterio
 from rasterio.warp import reproject, Resampling
+from rasterio.mask import mask as riomask
 try:
     # rasterio V > 1.0
     from rasterio.merge import merge as merge_tool
@@ -586,7 +587,7 @@ def glacier_masks(gdir):
 
 @entity_task(log, writes=['gridded_data'])
 def simple_glacier_masks(gdir):
-    """Compute glacier masks based on much simpler rules than the default.
+    """Compute glacier masks based on much simpler rules than OGGM's default.
 
     This is therefore more robust
 
@@ -635,7 +636,7 @@ def simple_glacier_masks(gdir):
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
         transf = dem_dr.transform
     else:
-        transf = dem_dr.affine
+        raise ImportError('This task needs rasterio >= 1.0 to work properly')
     x0 = transf[2]  # UL corner
     y0 = transf[5]  # UL corner
     dx = transf[0]
@@ -644,6 +645,8 @@ def simple_glacier_masks(gdir):
     assert dx == gdir.grid.dx
     assert y0 == gdir.grid.corner_grid.y0
     assert x0 == gdir.grid.corner_grid.x0
+
+    profile = dem_dr.profile
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
@@ -663,13 +666,6 @@ def simple_glacier_masks(gdir):
     outlines_file = gdir.get_filepath('outlines')
     geometry = gpd.read_file(outlines_file).geometry[0]
 
-    # Transform geometry into grid coordinates
-    # It has to be in pix center coordinates because of how skimage works
-    def proj(x, y):
-        grid = gdir.grid.center_grid
-        return grid.transform(x, y, crs=grid.proj)
-    geometry = shapely.ops.transform(proj, geometry)
-
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
@@ -677,40 +673,34 @@ def simple_glacier_masks(gdir):
     if not geometry.is_valid:
         raise RuntimeError('This glacier geometry is not valid.')
 
-    # Compute the glacier mask (currently: center pixels + touched)
-    nx, ny = gdir.grid.nx, gdir.grid.ny
-    glacier_mask = np.zeros((ny, nx), dtype=np.uint8)
-    glacier_ext = np.zeros((ny, nx), dtype=np.uint8)
-    x, y = geometry.exterior.xy
-    x, y = np.array(x), np.array(y)
-    glacier_mask[skdraw.polygon(y, x)] = 1
-    glacier_mask[skdraw.polygon_perimeter(y, x)] = 1
-    glacier_ext[skdraw.polygon_perimeter(y, x)] = 1
-    for gint in geometry.interiors:
-        x, y = gint.xy
-        x, y = np.array(x), np.array(y)
-        glacier_mask[skdraw.polygon(y, x)] = 0
-        glacier_mask[skdraw.polygon_perimeter(y, x)] = 0
+    # Compute the glacier mask using rasterio
+    # Small detour as mask only accepts DataReader objects
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(dem.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
+        masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
+                                filled=False)
+    glacier_mask = ~masked_dem[0, ...].mask
 
-    # Because of the 0 values at nunataks boundaries, some "Ice Islands"
-    # can happen within nunataks (e.g.: RGI40-11.00062)
-    # See if we can filter them out easily
-    regions, nregions = label(glacier_mask, structure=label_struct)
-    if nregions > 1:
-        log.debug('(%s) we had to cut an island in the mask', gdir.rgi_id)
-        # Check the size of those
-        region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
-        am = np.argmax(region_sizes)
-        # Check not a strange glacier
-        sr = region_sizes.pop(am)
-        for ss in region_sizes:
-            assert (ss / sr) < 0.1
-        glacier_mask[:] = 0
-        glacier_mask[np.where(regions == (am+1))] = 1
+    # Smame without nunataks
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(dem.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
+        poly = shpg.mapping(shpg.Polygon(geometry.exterior))
+        masked_dem, _ = riomask(dem_data, [poly],
+                                filled=False)
+    glacier_mask_nonuna = ~masked_dem[0, ...].mask
+
+    # Glacier exterior excluding nunataks
+    erode = binary_erosion(glacier_mask_nonuna)
+    glacier_ext = glacier_mask_nonuna ^ erode
+    glacier_ext = np.where(glacier_mask_nonuna, glacier_ext, 0)
 
     # Last sanity check based on the masked dem
-    tmp_max = np.max(dem[np.where(glacier_mask == 1)])
-    tmp_min = np.min(dem[np.where(glacier_mask == 1)])
+    tmp_max = np.max(dem[glacier_mask])
+    tmp_min = np.min(dem[glacier_mask])
     if tmp_max < (tmp_min + 1):
         raise RuntimeError('({}) min equal max in the masked DEM.'
                            .format(gdir.rgi_id))
