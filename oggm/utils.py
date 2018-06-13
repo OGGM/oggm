@@ -2851,6 +2851,7 @@ class GlacierDirectory(object):
         self.status = stkeys['{}'.format(gstatus)]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
                                                    'Lake-terminating']
+        self.is_nominal = self.status == 'Nominal glacier'
         self.inversion_calving_rate = 0.
         self.is_icecap = self.glacier_type == 'Ice cap'
 
