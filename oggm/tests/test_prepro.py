@@ -9,6 +9,8 @@ warnings.filterwarnings("once", category=DeprecationWarning)
 import unittest
 import os
 import shutil
+from distutils.version import LooseVersion
+import pytest
 
 import shapely.geometry as shpg
 import numpy as np
@@ -17,6 +19,7 @@ import geopandas as gpd
 import netCDF4
 import salem
 import xarray as xr
+import rasterio
 
 # Local imports
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
@@ -231,6 +234,9 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(np.std(glacier_ext_erosion - glacier_ext),
                                    0, atol=0.1)
 
+    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
+                         LooseVersion('1.0')),
+                        reason='requires rasterio >= 1.0')
     def test_simple_glacier_masks(self):
 
         # The GIS was double checked externally with IDL.
@@ -261,6 +267,9 @@ class TestGIS(unittest.TestCase):
 
         assert np.all(df['dem_max_elev'] > df['dem_max_elev_on_ext'])
 
+    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
+                         LooseVersion('1.0')),
+                        reason='requires rasterio >= 1.0')
     def test_glacier_masks_other_glacier(self):
 
         # This glacier geometry is simplified by OGGM

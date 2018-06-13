@@ -636,7 +636,7 @@ def simple_glacier_masks(gdir):
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
         transf = dem_dr.transform
     else:
-        transf = dem_dr.affine
+        raise ImportError('This task needs rasterio >= 1.0 to work properly')
     x0 = transf[2]  # UL corner
     y0 = transf[5]  # UL corner
     dx = transf[0]
