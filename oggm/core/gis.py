@@ -45,7 +45,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_topo_file, get_demo_file
+from oggm.utils import tuple2int, get_topo_file, get_demo_file, nicenumber
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -585,11 +585,12 @@ def glacier_masks(gdir):
     gdir.write_pickle(geometries, 'geometries')
 
 
-@entity_task(log, writes=['gridded_data'])
+@entity_task(log, writes=['gridded_data', 'hypsometry'])
 def simple_glacier_masks(gdir):
     """Compute glacier masks based on much simpler rules than OGGM's default.
 
-    This is therefore more robust
+    This is therefore more robust: we use this function to compute glacier
+    hypsometries.
 
     Parameters
     ----------
@@ -704,6 +705,48 @@ def simple_glacier_masks(gdir):
     if tmp_max < (tmp_min + 1):
         raise RuntimeError('({}) min equal max in the masked DEM.'
                            .format(gdir.rgi_id))
+
+    # hypsometry
+    bsize = 50.
+    dem_on_ice = dem[glacier_mask]
+    bins = np.arange(0., nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
+
+    h, _ = np.histogram(dem_on_ice, bins)
+    h = h / np.sum(h) * 1000  # in permil
+
+    # We want to convert the bins to ints but preserve their sum to 1000
+    # Start with everything rounded down, then round up the numbers with the
+    # highest fractional parts until the desired sum is reached.
+    hi = np.floor(h).astype(np.int)
+    hup = np.ceil(h).astype(np.int)
+    aso = np.argsort(hup - h)
+    for i in aso:
+        hi[i] = hup[i]
+        if np.sum(hi) == 1000:
+            break
+
+    # slope
+    sy, sx = np.gradient(dem, dx)
+    aspect = np.arctan2(np.mean(-sx[glacier_mask]), np.mean(sy[glacier_mask]))
+    aspect = np.rad2deg(aspect)
+    if aspect < 0:
+        aspect += 360
+    slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
+    avg_slope = np.rad2deg(np.mean(slope[glacier_mask]))
+
+    # write
+    df = pd.DataFrame()
+    df['RGIId'] = [gdir.rgi_id]
+    df['GLIMSId'] = [gdir.glims_id]
+    df['Zmin'] = [dem_on_ice.min()]
+    df['Zmax'] = [dem_on_ice.max()]
+    df['Zmed'] = [np.median(dem_on_ice)]
+    df['Area'] = [gdir.rgi_area_km2]
+    df['Slope'] = [avg_slope]
+    df['Aspect'] = [aspect]
+    for b, bs in zip(hi, (bins[1:] + bins[:-1])/2):
+        df['{}'.format(np.round(bs).astype(int))] = [b]
+    df.to_csv(gdir.get_filepath('hypsometry'), index=False)
 
     # write out the grids in the netcdf file
     nc = gdir.create_gridded_ncdf_file('gridded_data')

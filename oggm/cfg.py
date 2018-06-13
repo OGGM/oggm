@@ -149,6 +149,9 @@ BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 _doc = 'A text file with the source of the topo file (GIMP, SRTM, ...).'
 BASENAMES['dem_source'] = ('dem_source.txt', _doc)
 
+_doc = 'A hypsometry file as provided by RGI (useful for diagnostics).'
+BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
+
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
