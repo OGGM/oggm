@@ -267,6 +267,23 @@ class TestGIS(unittest.TestCase):
 
         assert np.all(df['dem_max_elev'] > df['dem_max_elev_on_ext'])
 
+        dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
+
+        np.testing.assert_allclose(dfh['Slope'], entity.Slope, atol=0.5)
+        np.testing.assert_allclose(dfh['Aspect'], entity.Aspect, atol=5)
+        np.testing.assert_allclose(dfh['Zmed'], entity.Zmed, atol=20)
+        np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
+        np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
+
+        bins = dfh.columns[50:]
+        dfr = pd.read_csv(get_demo_file('Hintereisferner_V5_hypso.csv'))
+
+        dfh.index = ['oggm']
+        dft = dfh[bins].T
+        dft['ref'] = dfr[bins].T
+        assert np.allclose(dft.sum(), 1000)
+        assert utils.rmsd(dft['ref'], dft['oggm']) < 5
+
     @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
                          LooseVersion('1.0')),
                         reason='requires rasterio >= 1.0')
@@ -292,6 +309,13 @@ class TestGIS(unittest.TestCase):
                                        rtol=1e-1)
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'simple_masks.nc'))
+
+        dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
+        np.testing.assert_allclose(dfh['Slope'], entity.Slope, atol=1)
+        np.testing.assert_allclose(dfh['Aspect'], entity.Aspect, atol=10)
+        np.testing.assert_allclose(dfh['Zmed'], entity.Zmed, atol=20)
+        np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
+        np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
 
     def test_intersects(self):
 

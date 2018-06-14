@@ -79,6 +79,12 @@ Enhancements
   OGGM should use the reference area provided by RGI or the one computed
   from the local map and reprojected outlines  (:pull:`458`, default: True).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- A new ``simple_glacier_masks`` tasks allows to compute glacier rasters in
+  a more robust way than the default OGGM method (:pull:`476`). This is useful
+  for simpler workflows or to compute global statistics for external tools
+  like `rgitools <http://rgitools.readthedocs.io/en/latest/>`_. This task
+  also computes hypsometry files much like RGI does.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
