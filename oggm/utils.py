@@ -2510,8 +2510,6 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
-            print(os.path.join(cfg.PATHS['working_dir'],
-                       'glacier_characteristics'+filesuffix+'.csv'))
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
                        'glacier_characteristics'+filesuffix+'.csv'))
         else:
