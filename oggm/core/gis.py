@@ -709,7 +709,8 @@ def simple_glacier_masks(gdir):
     # hypsometry
     bsize = 50.
     dem_on_ice = dem[glacier_mask]
-    bins = np.arange(0., nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
+    bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
+                     nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
 
     h, _ = np.histogram(dem_on_ice, bins)
     h = h / np.sum(h) * 1000  # in permil
