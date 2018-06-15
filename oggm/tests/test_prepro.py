@@ -275,13 +275,19 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
         np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
 
-        bins = dfh.columns[50:]
+        bins = []
+        for c in dfh.columns:
+            try:
+                int(c)
+                bins.append(c)
+            except ValueError:
+                pass
         dfr = pd.read_csv(get_demo_file('Hintereisferner_V5_hypso.csv'))
 
         dfh.index = ['oggm']
         dft = dfh[bins].T
         dft['ref'] = dfr[bins].T
-        assert np.allclose(dft.sum(), 1000)
+        assert dft.sum()[0] == 1000
         assert utils.rmsd(dft['ref'], dft['oggm']) < 5
 
     @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
@@ -666,7 +672,9 @@ class TestGeometry(unittest.TestCase):
         assert d['perc_invalid_flowline'] > 0.1
 
         df = utils.glacier_characteristics([gdir], path=False)
+        assert np.all(df['dem_source'] == 'USER')
         assert np.all(df['perc_invalid_flowline'] > 0.1)
+        assert np.all(df['dem_perc_area_above_max_elev_on_ext'] < 0.1)
 
     def test_geom_width(self):
 

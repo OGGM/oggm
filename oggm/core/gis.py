@@ -406,6 +406,7 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
 
     # Write DEM source info
+    gdir.add_to_diagnostics('dem_source', dem_source)
     source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
     with open(gdir.get_filepath('dem_source'), 'w') as fw:
         fw.write(source_txt)
@@ -709,7 +710,8 @@ def simple_glacier_masks(gdir):
     # hypsometry
     bsize = 50.
     dem_on_ice = dem[glacier_mask]
-    bins = np.arange(0., nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
+    bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
+                     nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
 
     h, _ = np.histogram(dem_on_ice, bins)
     h = h / np.sum(h) * 1000  # in permil
