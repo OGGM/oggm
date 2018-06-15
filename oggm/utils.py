@@ -1980,9 +1980,11 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
-        shc = gpd.read_file(get_demo_file('ramp_contour.shp')).iloc[0]
-        should_dem3 = not shc.geometry.contains(shpg.Point(lon_ex[0],
-                                                           lat_ex[0]))
+        if rgi_subregion is None:
+            raise ValueError('Must specify subregion for Antarctica')
+        else:
+            dem3_regs = ['19-01', '19-02', '19-03', '19-04', '19-05']
+            should_dem3 = rgi_subregion in dem3_regs
         if should_dem3:
             # special case for some distant islands
             source = 'DEM3' if source is None else source
@@ -2508,6 +2510,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
+            print(os.path.join(cfg.PATHS['working_dir'],
+                       'glacier_characteristics'+filesuffix+'.csv'))
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
                        'glacier_characteristics'+filesuffix+'.csv'))
         else:

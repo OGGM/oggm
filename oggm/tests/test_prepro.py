@@ -672,6 +672,7 @@ class TestGeometry(unittest.TestCase):
         assert d['perc_invalid_flowline'] > 0.1
 
         df = utils.glacier_characteristics([gdir], path=False)
+        assert np.all(df['dem_source'] == 'USER')
         assert np.all(df['perc_invalid_flowline'] > 0.1)
         assert np.all(df['dem_perc_area_above_max_elev_on_ext'] < 0.1)
 

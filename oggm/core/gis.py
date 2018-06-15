@@ -406,6 +406,7 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
 
     # Write DEM source info
+    gdir.add_to_diagnostics('dem_source', dem_source)
     source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
     with open(gdir.get_filepath('dem_source'), 'w') as fw:
         fw.write(source_txt)
