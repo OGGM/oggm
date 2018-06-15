@@ -1980,13 +1980,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
-        if rgi_subregion is None:
-            shc = gpd.read_file(get_demo_file('ramp_contour.shp')).iloc[0]
-            should_dem3 = not shc.geometry.contains(shpg.Point(lon_ex[0],
-                                                               lat_ex[0]))
-        else:
-            dem3_regs = ['19-01', '19-02', '19-03', '19-04', '19-05']
-            should_dem3 = rgi_subregion in dem3_regs
+        shc = gpd.read_file(get_demo_file('ramp_contour.shp')).iloc[0]
+        should_dem3 = not shc.geometry.contains(shpg.Point(lon_ex[0],
+                                                           lat_ex[0]))
         if should_dem3:
             # special case for some distant islands
             source = 'DEM3' if source is None else source
@@ -2422,8 +2418,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
             d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
-            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
         except:
             pass
         try:
@@ -2431,9 +2427,12 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             fpath = gdir.get_filepath('gridded_data')
             with netCDF4.Dataset(fpath) as nc:
                 ext = nc.variables['glacier_ext'][:]
+                mask = nc.variables['glacier_mask'][:]
                 topo = nc.variables['topo'][:]
             d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
             d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
+            a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
+            d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
         except:
             pass
         try:
