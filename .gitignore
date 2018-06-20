@@ -1,6 +1,9 @@
 *.py[cod]
 __pycache__
 
+# asv stuff
+.asv/
+
 # PyCharm stuffs
 .idea/
 
