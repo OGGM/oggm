@@ -67,6 +67,7 @@ req_packages = ['numpy',
                 'xarray',
                 'progressbar2',
                 'boto3',
+                'requests',
                 'salem>0.2.1']
 
 
