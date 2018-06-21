@@ -23,8 +23,6 @@ import fnmatch
 import platform
 import struct
 import importlib
-from urllib.request import urlretrieve
-from urllib.error import HTTPError, ContentTooShortError
 from urllib.parse import urlparse
 
 # External libs
@@ -51,6 +49,7 @@ try:
 except ImportError:
     from rasterio.tools.merge import merge as merge_tool
 import multiprocessing as mp
+import requests
 
 try:
     ModuleNotFoundError
@@ -128,6 +127,15 @@ class NoInternetException(Exception):
     pass
 
 
+class HttpDownloadError(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+class HttpContentTooShortError(Exception):
+    pass
+
+
 def _call_dl_func(dl_func, cache_path):
     """Helper so the actual call to downloads cann be overridden
     """
@@ -182,7 +190,38 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     return cache_path
 
 
-def _urlretrieve(url, cache_obj_name=None, reset=False, *args, **kwargs):
+def _requests_urlretrieve(url, path, reporthook):
+    """Implements the required features of urlretrieve on top of requests
+    """
+
+    chunk_size = 128 * 1024
+    chunk_count = 0
+
+    with requests.get(url, stream=True) as r:
+        if r.status_code != 200:
+            raise HttpDownloadError(r.status_code)
+        r.raise_for_status()
+
+        size = r.headers.get('content-length') or 0
+        size = int(size)
+
+        if reporthook:
+            reporthook(chunk_count, chunk_size, size)
+
+        with open(path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                if not chunk:
+                    continue
+                f.write(chunk)
+                chunk_count += 1
+                if reporthook:
+                    reporthook(chunk_count, chunk_size, size)
+
+        if chunk_count * chunk_size < size:
+            raise HttpContentTooShortError()
+
+
+def _urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
@@ -195,7 +234,7 @@ def _urlretrieve(url, cache_obj_name=None, reset=False, *args, **kwargs):
 
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
-        urlretrieve(url, cache_path, *args, **kwargs)
+        _requests_urlretrieve(url, cache_path, reporthook)
         return cache_path
 
     return _cached_download_helper(cache_obj_name, _dlf, reset)
@@ -281,7 +320,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
                                                reset=reset)
             # if no error, exit
             break
-        except HTTPError as err:
+        except HttpDownloadError as err:
             # This works well for py3
             if err.code == 404:
                 # Ok so this *should* be an ocean tile
@@ -294,7 +333,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
                 continue
             else:
                 raise
-        except ContentTooShortError:
+        except HttpContentTooShortError:
             logger.info("Downloading %s failed with ContentTooShortError"
                         " error %s, retrying in 10 seconds... %s/%s" %
                         (www_path, err.code, retry_counter, retry_max))
