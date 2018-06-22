@@ -15,6 +15,7 @@ import datetime
 import logging
 import pickle
 import warnings
+from distutils.version import LooseVersion
 from collections import OrderedDict
 from functools import partial, wraps
 from time import gmtime, strftime
@@ -56,6 +57,10 @@ try:
     ModuleNotFoundError
 except NameError:
     ModuleNotFoundError = ImportError
+
+if LooseVersion(netCDF4.__version__) >= LooseVersion('1.4'):
+    raise ImportError('OGGM needs netcdf4 version < 1.4 to work properly ('
+                      'https://github.com/Unidata/netcdf4-python/issues/809)')
 
 # Locals
 from oggm import __version__

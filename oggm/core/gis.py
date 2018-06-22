@@ -47,6 +47,10 @@ from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.utils import tuple2int, get_topo_file, get_demo_file, nicenumber
 
+if LooseVersion(netCDF4.__version__) >= LooseVersion('1.4'):
+    raise ImportError('OGGM needs netcdf4 version < 1.4 to work properly ('
+                      'https://github.com/Unidata/netcdf4-python/issues/809)')
+
 # Module logger
 log = logging.getLogger(__name__)
 
