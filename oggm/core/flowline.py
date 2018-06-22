@@ -594,7 +594,8 @@ class FlowlineModel(object):
             if np.any(~np.isfinite(fl.thick)):
                 raise FloatingPointError('NaN in numerical solution.')
 
-    def run_until_and_store(self, y1, run_path=None, diag_path=None):
+    def run_until_and_store(self, y1, run_path=None, diag_path=None,
+                            store_monthly_step=False):
         """Runs the model and returns intermediate steps in xarray datasets.
 
         The function returns two datasets:
@@ -612,8 +613,12 @@ class FlowlineModel(object):
         """
 
         # time
-        monthly_time = utils.monthly_timeseries(self.yr, y1)
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+
+        if store_monthly_step:
+            monthly_time = utils.monthly_timeseries(self.yr, y1)
+        else:
+            monthly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
         yrs, months = utils.floatyear_to_date(monthly_time)
         cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
 
@@ -1495,7 +1500,7 @@ def init_present_time_glacier(gdir):
 
 def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                      ys=None, ye=None, zero_initial_glacier=False,
-                     init_model_fls=None,
+                     init_model_fls=None, store_monthly_step=False,
                      **kwargs):
     """Trial-error-and-retry algorithm to run the flowline model.
 
@@ -1551,7 +1556,8 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                                **kwargs)
         try:
             model.run_until_and_store(ye, run_path=run_path,
-                                      diag_path=diag_path)
+                                      diag_path=diag_path,
+                                      store_monthly_step=store_monthly_step)
         except (RuntimeError, FloatingPointError):
             if step == 'ultra-conservative':
                 raise
@@ -1565,6 +1571,7 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
+                       store_monthly_step=False,
                        climate_filename='climate_monthly',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
@@ -1591,6 +1598,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         be usefull if you want to have the same climate years for all of them
     temperature_bias : float
         add a bias to the temperature timeseries
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
         'cesm_data'
@@ -1617,6 +1627,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
                             mb_model=mb, ys=0, ye=nyears,
+                            store_monthly_step=store_monthly_step,
                             init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
@@ -1625,6 +1636,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          bias=None, temperature_bias=None,
+                         store_monthly_step=False,
                          output_filesuffix='',
                          climate_filename='climate_monthly',
                          climate_input_filesuffix='',
@@ -1649,6 +1661,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         to zero
     temperature_bias : float
         add a bias to the temperature timeseries
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
         'cesm_data'
@@ -1674,6 +1689,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
                             mb_model=mb, ys=0, ye=nyears,
+                            store_monthly_step=store_monthly_step,
                             init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
@@ -1681,6 +1697,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None,
+                          store_monthly_step=False,
                           climate_filename='climate_monthly',
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
@@ -1692,8 +1709,11 @@ def run_from_climate_data(gdir, ys=None, ye=None,
     ----------
     ys : int
         start year of the model run (default: from the config file)
-    y1 : int
+    ye : int
         end year of the model run (default: from the config file)
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
         'cesm_data'
@@ -1735,6 +1755,7 @@ def run_from_climate_data(gdir, ys=None, ye=None,
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
                             mb_model=mb, ys=ys, ye=ye,
+                            store_monthly_step=store_monthly_step,
                             init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
