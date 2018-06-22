@@ -1091,7 +1091,7 @@ class TestIO(unittest.TestCase):
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, use_monthly_step=True)
+        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
         ds = ds[0]
 
         fls = dummy_constant_bed()
@@ -1138,7 +1138,7 @@ class TestIO(unittest.TestCase):
                                         glen_a=self.glen_a)
         model.run_until_and_store(500, run_path=run_path,
                                   diag_path=diag_path,
-                                  use_monthly_step=True)
+                                  store_monthly_step=True)
 
         ds_ = xr.open_dataset(diag_path)
         # the identical (i.e. attrs + names) doesn't work because of date

@@ -130,7 +130,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         def to_minimize(x):
             o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * cfg.RHO
             return o
-        return optimization.brentq(to_minimize, *self.valid_bounds, xtol=1)
+        return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
 
 class LinearMassBalance(MassBalanceModel):
