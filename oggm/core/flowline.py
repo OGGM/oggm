@@ -717,9 +717,10 @@ class FlowlineModel(object):
         return run_ds, diag_ds
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
-        """
-        Runs the model until an equilibrium state is reached.
-        Be carefully : This only works for CONSTANT/LINEAR climate data.
+        """ Runs the model until an equilibrium state is reached.
+        
+        Be careful: This only works for CONSTANT (not time-dependant) 
+        mass-balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
         """
