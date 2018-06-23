@@ -68,7 +68,7 @@ req_packages = ['numpy',
                 'progressbar2',
                 'boto3',
                 'requests',
-                'salem>0.2.1']
+                'salem']
 
 
 setup(
