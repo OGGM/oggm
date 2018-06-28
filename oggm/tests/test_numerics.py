@@ -16,6 +16,7 @@ from oggm.core.massbalance import LinearMassBalance
 from oggm.tests import is_slow, RUN_NUMERIC_TESTS
 from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
+from oggm.core.sia2d import Upstream2D
 
 # Tests
 from oggm.tests.funcs import *
@@ -887,7 +888,6 @@ class TestSia2d(unittest.TestCase):
         # Make a 2D bed out of the 1D
         bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3))
 
-        from oggm.core.sia2d import Upstream2D
         sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
                              glen_a=cfg.A, ice_thick_filter=None)
 
@@ -951,6 +951,40 @@ class TestSia2d(unittest.TestCase):
         run_ds = sdmodel.run_until_and_store(sdmodel.yr+50)
         ts = run_ds['ice_thickness'].mean(dim=['y', 'x'])
         assert_allclose(ts, ts.values[0], atol=1)
+
+        # Other direction
+        bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3)).T
+
+        sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
+                             glen_a=cfg.A, ice_thick_filter=None)
+
+        length = yrs * 0.
+        vol = yrs * 0.
+        area = yrs * 0
+        for i, y in enumerate(yrs):
+            sdmodel.run_until(y)
+            surf_1d = sdmodel.ice_thick[1, :]
+            length[i] = np.sum(surf_1d > 0) * sdmodel.dx
+            vol[i] = sdmodel.volume_km3 / 3
+            area[i] = sdmodel.area_km2 / 3
+
+        lens.append(length)
+        volume.append(vol)
+        areas.append(area)
+        surface_h.append(sdmodel.surface_h[:, 1])
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=3e-3)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 2e-3)
+        self.assertTrue(utils.rmsd(areas[0], areas[1]) < 2e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 1.0)
+
+        # Equilibrium
+        sdmodel.run_until_equilibrium()
+        assert_allclose(sdmodel.volume_km3 / 3, flmodel.volume_km3, atol=2e-3)
+        assert_allclose(sdmodel.area_km2 / 3, flmodel.area_km2, atol=2e-3)
 
     def test_bueler(self):
         # TODO: add formal test like Alex's
