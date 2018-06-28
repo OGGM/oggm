@@ -40,6 +40,12 @@ Breaking changes
   are better, but not backwards compatible. Aside of me I don't think
   anybody was using them (:pull:`465`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Diagnostic variables (length, area, volume, ELA) are now stored at annual
+  steps instead of montly steps (:pull:`488`). The old behavior can still be
+  used with the ``store_monthly_step`` kwarg. Most users should not notice
+  this change because the regionaly compiled files were stored yearly
+  anyways.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
