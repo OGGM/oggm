@@ -1091,7 +1091,7 @@ class TestIO(unittest.TestCase):
         fls = dummy_constant_bed()
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500)
+        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
         ds = ds[0]
 
         fls = dummy_constant_bed()
@@ -1118,6 +1118,95 @@ class TestIO(unittest.TestCase):
                 l_ref.append(model.length_m)
                 if int(yr) == 500:
                     secfortest = model.fls[0].section
+
+        np.testing.assert_allclose(ds.ts_section.isel(time=-1),
+                                   secfortest)
+
+        np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
+        np.testing.assert_allclose(ds_diag.area_m2, a_diag)
+        np.testing.assert_allclose(ds_diag.length_m, l_diag)
+        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
+
+        fls = dummy_constant_bed()
+        run_path = os.path.join(self.test_dir, 'ts_ideal.nc')
+        diag_path = os.path.join(self.test_dir, 'ts_diag.nc')
+        if os.path.exists(run_path):
+            os.remove(run_path)
+        if os.path.exists(diag_path):
+            os.remove(diag_path)
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        model.run_until_and_store(500, run_path=run_path,
+                                  diag_path=diag_path,
+                                  store_monthly_step=True)
+
+        ds_ = xr.open_dataset(diag_path)
+        # the identical (i.e. attrs + names) doesn't work because of date
+        del ds_diag.attrs['creation_date']
+        del ds_.attrs['creation_date']
+        xr.testing.assert_identical(ds_diag, ds_)
+
+        fmodel = flowline.FileModel(run_path)
+        assert fmodel.last_yr == 500
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this is sloooooow so we test a little bit only
+                fmodel.run_until(yr)
+                np.testing.assert_allclose(model.fls[0].section,
+                                           fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                           fmodel.fls[0].widths_m)
+
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                                        glen_a=self.glen_a)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                   fmodel.fls[0].section)
+
+    @is_slow
+    def test_run_annual_step(self):
+        mb = LinearMassBalance(2600.)
+
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+        ds, ds_diag = model.run_until_and_store(500)
+        ds = ds[0]
+
+        fls = dummy_constant_bed()
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
+
+        years = np.arange(0, 501)
+        vol_ref = []
+        a_ref = []
+        l_ref = []
+        vol_diag = []
+        a_diag = []
+        l_diag = []
+        ela_diag = []
+        for yr in years:
+            model.run_until(yr)
+            vol_diag.append(model.volume_m3)
+            a_diag.append(model.area_m2)
+            l_diag.append(model.length_m)
+            ela_diag.append(model.mb_model.get_ela(year=yr))
+            vol_ref.append(model.volume_m3)
+            a_ref.append(model.area_m2)
+            l_ref.append(model.length_m)
+            if int(yr) == 500:
+                secfortest = model.fls[0].section
 
         np.testing.assert_allclose(ds.ts_section.isel(time=-1),
                                    secfortest)
@@ -2306,7 +2395,6 @@ class TestHEF(unittest.TestCase):
         assert (ds1.volume.isel(rgi_id=0, time=-1) <
                 0.7*ds3.volume.isel(rgi_id=0, time=-1))
 
-
     @is_slow
     def test_elevation_feedback(self):
 
@@ -2318,7 +2406,8 @@ class TestHEF(unittest.TestCase):
         for feedback in feedbacks:
             tasks.append((flowline.run_random_climate,
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
-                               output_filesuffix=feedback)))
+                               output_filesuffix=feedback,
+                               store_monthly_step=True)))
         workflow.execute_parallel_tasks(self.gdir, tasks)
 
         out = []

@@ -343,6 +343,7 @@ class TestWorkflow(unittest.TestCase):
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
                                      nyears=200, seed=0,
+                                     store_monthly_step=True,
                                      output_filesuffix='_test')
 
         for gd in gdirs:
@@ -371,7 +372,7 @@ class TestWorkflow(unittest.TestCase):
             assert_allclose(df.RUN, df.DIAG)
 
         # Test output
-        ds = utils.compile_run_output(gdirs, filesuffix='_test', monthly=True)
+        ds = utils.compile_run_output(gdirs, filesuffix='_test')
         assert_allclose(ds_diag.volume_m3, ds.volume.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.area_m2, ds.area.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.length_m, ds.length.sel(rgi_id=gd.rgi_id))

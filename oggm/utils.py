@@ -2095,7 +2095,7 @@ def get_ref_mb_glaciers(gdirs):
     return ref_gdirs
 
 
-def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
+def compile_run_output(gdirs, path=True, filesuffix=''):
     """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
@@ -2104,8 +2104,6 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
         the list of GlacierDir to process.
     path : str
         where to store (default is on the working dir).
-    monthly : bool
-        whether to store monthly values (default is yearly)
     filesuffix : str
         the filesuffix of the run
     """
@@ -2135,17 +2133,6 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
         months = ds_diag.hydro_month.values
         cyrs = ds_diag.calendar_year.values
         cmonths = ds_diag.calendar_month.values
-
-        # Monthly or not
-        if monthly:
-            pkeep = np.ones(len(time), dtype=np.bool)
-        else:
-            pkeep = np.where(months == 1)
-        time = time[pkeep]
-        yrs = yrs[pkeep]
-        months = months[pkeep]
-        cyrs = cyrs[pkeep]
-        cmonths = cmonths[pkeep]
 
         # Prepare output
         ds = xr.Dataset()
@@ -2180,10 +2167,10 @@ def compile_run_output(gdirs, path=True, monthly=False, filesuffix=''):
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                vol[:, i] = ds_diag.volume_m3.values[pkeep]
-                area[:, i] = ds_diag.area_m2.values[pkeep]
-                length[:, i] = ds_diag.length_m.values[pkeep]
-                ela[:, i] = ds_diag.ela_m.values[pkeep]
+                vol[:, i] = ds_diag.volume_m3.values
+                area[:, i] = ds_diag.area_m2.values
+                length[:, i] = ds_diag.length_m.values
+                ela[:, i] = ds_diag.ela_m.values
         except:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
