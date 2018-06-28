@@ -1,5 +1,3 @@
-# Write the benchmarking functions here.
-# See "Writing benchmarks" in the asv docs for more information.
 import os
 import shutil
 import numpy as np

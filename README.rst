@@ -69,13 +69,13 @@ About
         :target: https://ci.appveyor.com/project/fmaussion/oggm
         :alt: Windows-conda build status
 
-    .. image:: https://cluster.klima.uni-bremen.de/~github/status.svg
-        :target: https://cluster.klima.uni-bremen.de/~github/status/latest.html
-        :alt: Klima-cluster status
-
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://oggm.readthedocs.org/en/latest/?badge=latest
         :alt: Documentation status
+
+    .. image:: http://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
+        :target: https://cluster.klima.uni-bremen.de/~github/asv/
+        :alt: Benchmark status
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg
