@@ -13,7 +13,7 @@ class OggmVirtualenv(Virtualenv):
         # pip>=10 is broken for some of our dependencies
         self.run_executable("pip", ["install", "-v", "--upgrade", "pip<10", "setuptools"])
 
-        env_key = "OGGM_ASV_WHEEL_DIR_" + self._python
+        env_key = "OGGM_ASV_WHEEL_DIR_" + self._python.replace(".", "_")
         if env_key not in os.environ:
              env_key = "OGGM_ASV_WHEEL_DIR"
 
