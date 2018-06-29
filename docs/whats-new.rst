@@ -43,8 +43,8 @@ Breaking changes
 - Diagnostic variables (length, area, volume, ELA) are now stored at annual
   steps instead of montly steps (:pull:`488`). The old behavior can still be
   used with the ``store_monthly_step`` kwarg. Most users should not notice
-  this change because the regionaly compiled files were stored yearly
-  anyways.
+  this change because the regionally compiled files were stored at yearly
+  steps anyways.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
@@ -103,6 +103,10 @@ Bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Fixed a caching bug in the test suite, where some tests used to fail when run
   for a second time on a modified gdir (:pull:`448`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a problem with netCDF4 versions > 1.3 which returns masked arrays
+  per default. We now prevent netCDF4 to return masked arrays altogether
+  (:issue:`482`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 

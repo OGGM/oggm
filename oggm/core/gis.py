@@ -20,7 +20,6 @@ import warnings
 from functools import partial
 from distutils.version import LooseVersion
 # External libs
-import netCDF4
 import salem
 import pyproj
 import numpy as np
@@ -45,11 +44,9 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_topo_file, get_demo_file, nicenumber
+from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
+                        nicenumber, ncDataset)
 
-if LooseVersion(netCDF4.__version__) >= LooseVersion('1.4'):
-    raise ImportError('OGGM needs netcdf4 version < 1.4 to work properly ('
-                      'https://github.com/Unidata/netcdf4-python/issues/809)')
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -802,7 +799,7 @@ def interpolation_masks(gdir):
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file) as nc:
+    with ncDataset(grids_file) as nc:
         topo_smoothed = nc.variables['topo_smoothed'][:]
         glacier_mask = nc.variables['glacier_mask'][:]
 
@@ -843,7 +840,7 @@ def interpolation_masks(gdir):
     slope = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4), np.pi/2.)
     slope = 1 / slope**(cfg.N / (cfg.N+2))
 
-    with netCDF4.Dataset(grids_file, 'a') as nc:
+    with ncDataset(grids_file, 'a') as nc:
 
         vn = 'glacier_ext_erosion'
         if vn in nc.variables:

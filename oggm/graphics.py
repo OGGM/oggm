@@ -8,7 +8,6 @@ import itertools
 import geopandas as gpd
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
-import netCDF4
 import numpy as np
 import salem
 import shapely.geometry as shpg
@@ -218,7 +217,7 @@ def plot_domain(gdirs, ax=None, smap=None):
 
     # Files
     gdir = gdirs[0]
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
     try:
@@ -260,7 +259,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         filename = 'inversion_flowlines'
 
     gdir = gdirs[0]
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
     cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
@@ -316,7 +315,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     if len(gdirs) > 1:
         raise NotImplementedError('Cannot plot a list of gdirs (yet)')
 
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
         mask = nc.variables['glacier_mask'][:] * np.NaN
 
@@ -359,7 +358,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
     """
 
     gdir = gdirs[0]
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
     # Dirty optim
     try:
@@ -429,7 +428,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
     """Plots the result of the inversion out of a glacier directory."""
 
     gdir = gdirs[0]
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
     # Dirty optim
@@ -492,12 +491,12 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     if len(gdirs) > 1:
         raise NotImplementedError('Cannot plot a list of gdirs (yet)')
 
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
         mask = nc.variables['glacier_mask'][:]
 
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         import warnings
         with warnings.catch_warnings():
             # https://github.com/Unidata/netcdf4-python/issues/766
@@ -535,7 +534,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
     """Plots the result of the model output."""
 
     gdir = gdirs[0]
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
     # Dirty optim

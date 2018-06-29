@@ -15,7 +15,6 @@ import datetime
 import logging
 import pickle
 import warnings
-from distutils.version import LooseVersion
 from collections import OrderedDict
 from functools import partial, wraps
 from time import gmtime, strftime
@@ -56,10 +55,6 @@ try:
     ModuleNotFoundError
 except NameError:
     ModuleNotFoundError = ImportError
-
-if LooseVersion(netCDF4.__version__) >= LooseVersion('1.4'):
-    raise ImportError('OGGM needs netcdf4 version < 1.4 to work properly ('
-                      'https://github.com/Unidata/netcdf4-python/issues/809)')
 
 # Locals
 from oggm import __version__
@@ -1312,6 +1307,13 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     return out
 
 
+class ncDataset(netCDF4.Dataset):
+    """Wrapper around netCDF4 setting auto_mask to False"""
+    def __init__(self, *args, **kwargs):
+        super(ncDataset, self).__init__(*args, **kwargs)
+        self.set_auto_mask(False)
+
+
 @MEMORY.cache
 def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
                         use_grad):
@@ -1321,7 +1323,7 @@ def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
     """
 
     # read the file and data
-    with netCDF4.Dataset(ncpath, mode='r') as nc:
+    with ncDataset(ncpath, mode='r') as nc:
         temp = nc.variables['temp']
         prcp = nc.variables['prcp']
         hgt = nc.variables['hgt']
@@ -2446,7 +2448,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         try:
             # Masks related stuff
             fpath = gdir.get_filepath('gridded_data')
-            with netCDF4.Dataset(fpath) as nc:
+            with ncDataset(fpath) as nc:
                 mask = nc.variables['glacier_mask'][:]
                 topo = nc.variables['topo'][:]
             d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
@@ -2458,7 +2460,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
         try:
             # Ext related stuff
             fpath = gdir.get_filepath('gridded_data')
-            with netCDF4.Dataset(fpath) as nc:
+            with ncDataset(fpath) as nc:
                 ext = nc.variables['glacier_ext'][:]
                 mask = nc.variables['glacier_mask'][:]
                 topo = nc.variables['topo'][:]
@@ -3087,7 +3089,7 @@ class GlacierDirectory(object):
         if os.path.exists(fpath):
             os.remove(fpath)
 
-        nc = netCDF4.Dataset(fpath, 'w', format='NETCDF4')
+        nc = ncDataset(fpath, 'w', format='NETCDF4')
 
         xd = nc.createDimension('x', self.grid.nx)
         yd = nc.createDimension('y', self.grid.ny)
@@ -3141,7 +3143,7 @@ class GlacierDirectory(object):
         if os.path.exists(fpath):
             os.remove(fpath)
 
-        with netCDF4.Dataset(fpath, 'w', format='NETCDF4') as nc:
+        with ncDataset(fpath, 'w', format='NETCDF4') as nc:
             nc.ref_hgt = ref_pix_hgt
             nc.ref_pix_lon = ref_pix_lon
             nc.ref_pix_lat = ref_pix_lat
