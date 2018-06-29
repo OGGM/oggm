@@ -128,8 +128,7 @@ class TestInitFlowline(unittest.TestCase):
         self.assertTrue(np.abs(utils.md(tot_mb, refmb)) < 50)
 
         # Gradient
-        dfg = pd.read_csv(utils.get_demo_file('mbgrads_RGI40-11.00897.csv'),
-                          index_col='ALTITUDE').mean(axis=1)
+        dfg = gdir.get_ref_mb_profile().mean()
 
         # Take the altitudes below 3100 and fit a line
         dfg = dfg[dfg.index < 3100]

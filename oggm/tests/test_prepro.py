@@ -1412,8 +1412,9 @@ class TestClimate(unittest.TestCase):
             p = np.mean(p[:, selind], axis=1)
             mb_on_h = np.append(mb_on_h, p - mu_ref * t)
             h = np.append(h, fl.surface_h)
-        dfg = pd.read_csv(get_demo_file('mbgrads_RGI40-11.00897.csv'),
-                          index_col='ALTITUDE').mean(axis=1)
+
+        dfg = gdir.get_ref_mb_profile().mean()
+
         # Take the altitudes below 3100 and fit a line
         dfg = dfg[dfg.index < 3100]
         pok = np.where(h < 3100)

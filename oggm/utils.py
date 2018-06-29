@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '0250b2e350b4b0d688faef346ef78dd3b683cba5'
+SAMPLE_DATA_COMMIT = '222347d9a29e72edd6a1ff40950dd3b187d46f3d'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -2913,6 +2913,7 @@ class GlacierDirectory(object):
 
         # Optimization
         self._mbdf = None
+        self._mbprofdf = None
 
     def __repr__(self):
 
@@ -3194,7 +3195,10 @@ class GlacierDirectory(object):
         return h, w * self.grid.dx
 
     def get_ref_mb_data(self):
-        """Get the reference mb data from WGMS (for some glaciers only!)."""
+        """Get the reference mb data from WGMS (for some glaciers only!).
+
+        Raises an Error if it isn't a reference glacier at all.
+        """
 
         if self._mbdf is None:
             flink, mbdatadir = get_wgms_files()
@@ -3222,6 +3226,44 @@ class GlacierDirectory(object):
             # Some files are just empty
             out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
+
+    def get_ref_mb_profile(self):
+        """Get the reference mb profile data from WGMS (if available!).
+
+        Returns None if this glacier has no profile and an Error if it isn't
+        a reference glacier at all.
+        """
+
+        if self._mbprofdf is None:
+            flink, mbdatadir = get_wgms_files()
+            c = 'RGI{}0_ID'.format(self.rgi_version[0])
+            wid = flink.loc[flink[c] == self.rgi_id]
+            if len(wid) == 0:
+                raise RuntimeError('Not a reference glacier!')
+            wid = wid.WGMS_ID.values[0]
+
+            # file
+            mbdatadir = os.path.join(os.path.dirname(mbdatadir), 'mb_profiles')
+            reff = os.path.join(mbdatadir,
+                                'profile_WGMS-{:05d}.csv'.format(wid))
+            if not os.path.exists(reff):
+                return None
+            # list of years
+            self._mbprofdf = pd.read_csv(reff, index_col=0)
+
+        # logic for period
+        if not self.has_file('climate_info'):
+            raise RuntimeError('Please process some climate data before call')
+        ci = self.read_pickle('climate_info')
+        y0 = ci['hydro_yr_0']
+        y1 = ci['hydro_yr_1']
+        if len(self._mbprofdf) > 1:
+            out = self._mbprofdf.loc[y0:y1]
+        else:
+            # Some files are just empty
+            out = self._mbprofdf
+        out.columns = [float(c) for c in out.columns]
+        return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
     def get_ref_length_data(self):
         """Get the glacier lenght data from P. Leclercq's data base.

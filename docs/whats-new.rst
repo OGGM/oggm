@@ -91,6 +91,10 @@ Enhancements
   like `rgitools <http://rgitools.readthedocs.io/en/latest/>`_. This task
   also computes hypsometry files much like RGI does.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Reference glaciers now have mass-balance profiles attached to them, if
+  available. You can get the profiles with ``gdir.get_ref_mb_profile()``
+  (:pull:`493`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
