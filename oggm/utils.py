@@ -3193,7 +3193,10 @@ class GlacierDirectory(object):
         return h, w * self.grid.dx
 
     def get_ref_mb_data(self):
-        """Get the reference mb data from WGMS (for some glaciers only!)."""
+        """Get the reference mb data from WGMS (for some glaciers only!).
+
+        Raises an Error if it isn't a reference glacier at all.
+        """
 
         if self._mbdf is None:
             flink, mbdatadir = get_wgms_files()
@@ -3223,7 +3226,11 @@ class GlacierDirectory(object):
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
     def get_ref_mb_profile(self):
-        """Get the reference mb profile data from WGMS (if available!)."""
+        """Get the reference mb profile data from WGMS (if available!).
+
+        Returns None if this glacier has no profile and an Error if it isn't
+        a reference glacier at all.
+        """
 
         if self._mbprofdf is None:
             flink, mbdatadir = get_wgms_files()
@@ -3254,7 +3261,7 @@ class GlacierDirectory(object):
             # Some files are just empty
             out = self._mbprofdf
         out.columns = [float(c) for c in out.columns]
-        return out.dropna(axis=1, how='all')
+        return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
     def get_ref_length_data(self):
         """Get the glacier lenght data from P. Leclercq's data base.
