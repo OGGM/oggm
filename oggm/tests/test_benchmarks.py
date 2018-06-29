@@ -1,6 +1,5 @@
 # Python imports
 import unittest
-import netCDF4
 import geopandas as gpd
 import numpy as np
 import os
@@ -382,7 +381,7 @@ class TestCoxeGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # Test that area and area-altitude elev is fine
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             mask = nc.variables['glacier_mask'][:]
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]

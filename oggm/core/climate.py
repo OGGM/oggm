@@ -6,10 +6,10 @@ import datetime
 import warnings
 # External libs
 import numpy as np
+import netCDF4
 import pandas as pd
 import xarray as xr
 from scipy import stats
-import netCDF4
 import salem
 from scipy import optimize as optimization
 # Locals
@@ -41,7 +41,7 @@ def process_histalp_nonparallel(gdirs, fpath=None):
     log.info('process_histalp_nonparallel')
 
     # read the file and data entirely (faster than many I/O)
-    with netCDF4.Dataset(fpath, mode='r') as nc:
+    with utils.ncDataset(fpath, mode='r') as nc:
         lon = nc.variables['lon'][:]
         lat = nc.variables['lat'][:]
 
@@ -540,7 +540,7 @@ def mb_climate_on_height(gdir, heights, prcp_fac,
     temp_melt = cfg.PARAMS['temp_melt']
 
     # Read file
-    with netCDF4.Dataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
+    with utils.ncDataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)

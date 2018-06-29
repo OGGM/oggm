@@ -16,7 +16,6 @@ import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import netCDF4
 import salem
 import xarray as xr
 import rasterio
@@ -218,7 +217,7 @@ class TestGIS(unittest.TestCase):
         gis.glacier_masks(gdir)
         gis.interpolation_masks(gdir)
 
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             glacier_mask = nc.variables['glacier_mask'][:]
             glacier_ext = nc.variables['glacier_ext'][:]
             glacier_ext_erosion = nc.variables['glacier_ext_erosion'][:]
@@ -247,7 +246,7 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.simple_glacier_masks(gdir)
 
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
@@ -309,7 +308,7 @@ class TestGIS(unittest.TestCase):
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'default_masks.nc'))
         gis.simple_glacier_masks(gdir)
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
@@ -491,7 +490,7 @@ class TestCenterlines(unittest.TestCase):
             from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
             points = line_interpol(l, 0.5)
-            with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
                 topo = nc.variables['topo_smoothed'][:]
                 x = nc.variables['x'][:]
                 y = nc.variables['y'][:]
@@ -630,7 +629,7 @@ class TestGeometry(unittest.TestCase):
         cis = gdir.read_pickle('catchment_indices')
 
         # The catchment area must be as big as expected
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             mask = nc.variables['glacier_mask'][:]
 
         mymask_a = mask * 0
@@ -714,10 +713,10 @@ class TestGeometry(unittest.TestCase):
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             otherarea += np.sum(nc.variables['glacier_mask'][:])
 
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             mask = nc.variables['glacier_mask'][:]
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
@@ -819,12 +818,12 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['hydro_yr_0'], 1802)
         self.assertEqual(ci['hydro_yr_1'], 2003)
 
-        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+        with utils.ncDataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
@@ -846,7 +845,7 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['hydro_yr_0'], 1802)
         self.assertEqual(ci['hydro_yr_1'], 2003)
 
-        with netCDF4.Dataset(gdir.get_filepath('climate_monthly')) as nc_r:
+        with utils.ncDataset(gdir.get_filepath('climate_monthly')) as nc_r:
             grad = nc_r.variables['grad'][:]
             assert np.std(grad) > 0.0001
 
@@ -868,12 +867,12 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['hydro_yr_0'], 1802)
         self.assertEqual(ci['hydro_yr_1'], 2003)
 
-        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        with netCDF4.Dataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+        with utils.ncDataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
@@ -1000,7 +999,7 @@ class TestClimate(unittest.TestCase):
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
 
-        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
@@ -1060,7 +1059,7 @@ class TestClimate(unittest.TestCase):
         gdirs.append(gdir)
         climate.process_histalp_nonparallel(gdirs)
 
-        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
@@ -1158,7 +1157,7 @@ class TestClimate(unittest.TestCase):
 
         # Check that the moovin average of temp is negatively correlated
         # with the mus
-        with netCDF4.Dataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
+        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_t = nc_r.variables['temp'][:, 1, 1]
         ref_t = np.mean(ref_t.reshape((len(df), 12)), 1)
         ma = np.convolve(ref_t, np.ones(31) / float(31), 'same')
@@ -1784,7 +1783,7 @@ class TestInversion(unittest.TestCase):
                                                     varname_suffix='_alt')
 
         grids_file = gdir.get_filepath('gridded_data')
-        with netCDF4.Dataset(grids_file) as nc:
+        with utils.ncDataset(grids_file) as nc:
             with warnings.catch_warnings():
                 # https://github.com/Unidata/netcdf4-python/issues/766
                 warnings.filterwarnings("ignore", category=RuntimeWarning)

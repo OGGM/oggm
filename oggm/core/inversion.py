@@ -34,7 +34,6 @@ import os
 # External libs
 import numpy as np
 import pandas as pd
-import netCDF4
 from scipy import optimize as optimization
 from scipy.interpolate import griddata
 # Locals
@@ -533,13 +532,13 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
         from oggm.core.gis import interpolation_masks
         interpolation_masks(gdir)
 
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         topo_smoothed = nc.variables['topo_smoothed'][:]
         glacier_mask = nc.variables['glacier_mask'][:]
         dis_from_border = nc.variables['dis_from_border'][:]
@@ -610,7 +609,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
 
     # write
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file, 'a') as nc:
+    with utils.ncDataset(grids_file, 'a') as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -647,13 +646,13 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
         from oggm.core.gis import interpolation_masks
         interpolation_masks(gdir)
 
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:]
         glacier_ext = nc.variables['glacier_ext_erosion'][:]
         ice_divides = nc.variables['ice_divides'][:]
@@ -711,7 +710,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
 
     # write
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file, 'a') as nc:
+    with utils.ncDataset(grids_file, 'a') as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]

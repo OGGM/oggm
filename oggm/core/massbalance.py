@@ -10,7 +10,7 @@ from scipy import optimize as optimization
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
-                        date_to_floatyear, monthly_timeseries)
+                        date_to_floatyear, monthly_timeseries, ncDataset)
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
@@ -261,7 +261,7 @@ class PastMassBalance(MassBalanceModel):
 
         # Read file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
-        with netCDF4.Dataset(fpath, mode='r') as nc:
+        with ncDataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
             time = netCDF4.num2date(time[:], time.units)
@@ -440,7 +440,7 @@ class ConstantMassBalance(MassBalanceModel):
             zminmax = np.round([np.min(h)-50, np.max(h)+2000])
         except FileNotFoundError:
             # in case we don't have them
-            with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+            with ncDataset(gdir.get_filepath('gridded_data')) as nc:
                 zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
         self.hbins = np.arange(*zminmax, step=10)
         self.valid_bounds = self.hbins[[0, -1]]

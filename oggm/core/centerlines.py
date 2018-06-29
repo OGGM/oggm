@@ -23,7 +23,6 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 import salem
-import netCDF4
 import shapely.ops
 import geopandas as gpd
 import scipy.signal
@@ -794,7 +793,7 @@ def compute_centerlines(gdir, heads=None):
     # open
     geom = gdir.read_pickle('geometries')
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         # Variables
         glacier_mask = nc.variables['glacier_mask'][:]
         glacier_ext = nc.variables['glacier_ext'][:]
@@ -866,7 +865,7 @@ def compute_centerlines(gdir, heads=None):
         gdir.add_to_diagnostics('n_orig_centerlines', len(cls))
 
     # Netcdf
-    with netCDF4.Dataset(grids_file, 'a') as nc:
+    with utils.ncDataset(grids_file, 'a') as nc:
         if 'cost_grid' in nc.variables:
             # Overwrite
             nc.variables['cost_grid'][:] = costgrid
@@ -898,7 +897,7 @@ def compute_downstream_line(gdir):
     if gdir.is_tidewater:
         return
 
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
         glacier_ext = nc.variables['glacier_ext'][:]
 
@@ -1125,7 +1124,7 @@ def compute_downstream_bedshape(gdir):
     cl = Centerline(cl, dx=tpl.dx)
        
     # Topography
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
         x = nc.variables['x'][:]
         y = nc.variables['y'][:]
@@ -1391,7 +1390,7 @@ def catchment_area(gdir):
     geoms = gdir.read_pickle('geometries')
     glacier_pix = geoms['polygon_pix']
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         costgrid = nc.variables['cost_grid'][:]
         mask = nc.variables['glacier_mask'][:]
 
@@ -1547,7 +1546,7 @@ def initialize_flowlines(gdir):
 
     # Topo for heights
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo_smoothed'][:]
 
     # Bilinear interpolation
@@ -1638,7 +1637,7 @@ def catchment_width_geom(gdir):
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         mask_ext = nc.variables['glacier_ext'][:]
         mask_glacier = nc.variables['glacier_mask'][:]
@@ -1750,7 +1749,7 @@ def catchment_width_correction(gdir):
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         ext = nc.variables['glacier_ext'][:]
     topo[np.where(ext==1)] = np.NaN
