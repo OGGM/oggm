@@ -22,64 +22,6 @@ from oggm import entity_task, global_task
 log = logging.getLogger(__name__)
 
 
-@global_task
-def process_histalp_nonparallel(gdirs, fpath=None):
-    """This is the way OGGM used to do it (deprecated).
-
-    It requires an input file with a specific format, and uses lazy
-    optimisation (computing time dependant gradients can be slow)
-    """
-
-    # Did the user specify a specific climate data file?
-    if fpath is None:
-        if 'climate_file' in cfg.PATHS:
-            fpath = cfg.PATHS['climate_file']
-
-    if not os.path.exists(fpath):
-        raise IOError('Custom climate file not found')
-
-    log.info('process_histalp_nonparallel')
-
-    # read the file and data entirely (faster than many I/O)
-    with utils.ncDataset(fpath, mode='r') as nc:
-        lon = nc.variables['lon'][:]
-        lat = nc.variables['lat'][:]
-
-        # Time
-        time = nc.variables['time']
-        time = netCDF4.num2date(time[:], time.units)
-        ny, r = divmod(len(time), 12)
-        if r != 0:
-            raise ValueError('Climate data should be N full years exclusively')
-        y0, y1 = time[0].year, time[-1].year
-
-        # Units
-        assert nc.variables['hgt'].units == 'm'
-        assert nc.variables['temp'].units == 'degC'
-        assert nc.variables['prcp'].units == 'kg m-2'
-
-    # Gradient defaults
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    def_grad = cfg.PARAMS['temp_default_gradient']
-    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-
-    for gdir in gdirs:
-        ilon = np.argmin(np.abs(lon - gdir.cenlon))
-        ilat = np.argmin(np.abs(lat - gdir.cenlat))
-        ref_pix_lon = lon[ilon]
-        ref_pix_lat = lat[ilat]
-        iprcp, itemp, igrad, ihgt = utils.joblib_read_climate(fpath, ilon,
-                                                              ilat, def_grad,
-                                                              g_minmax,
-                                                              use_grad)
-        gdir.write_monthly_climate_file(time, iprcp, itemp, igrad, ihgt,
-                                        ref_pix_lon, ref_pix_lat)
-        # metadata
-        out = {'climate_source': fpath,
-               'hydro_yr_0': y0+1, 'hydro_yr_1': y1}
-        gdir.write_pickle(out, 'climate_info')
-
-
 @entity_task(log, writes=['climate_monthly'])
 def process_custom_climate_data(gdir):
     """Processes and writes the climate data from a user-defined climate file.

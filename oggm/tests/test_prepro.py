@@ -807,12 +807,9 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
-
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_pickle('climate_info')
         self.assertEqual(ci['hydro_yr_0'], 1802)
@@ -834,12 +831,9 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['temp_use_local_gradient'] = True
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
-
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_pickle('climate_info')
         self.assertEqual(ci['hydro_yr_0'], 1802)
@@ -856,11 +850,8 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
-
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_pickle('climate_info')
@@ -891,7 +882,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
 
-        climate.process_histalp_nonparallel([gdirs[0]])
+        climate.process_custom_climate_data(gdirs[0])
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
@@ -993,11 +984,9 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -1053,11 +1042,9 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -1135,7 +1122,6 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -1144,8 +1130,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
 
         se = gdir.read_pickle('mu_candidates')[2.5]
@@ -1170,7 +1155,6 @@ class TestClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -1179,8 +1163,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
@@ -1224,8 +1207,8 @@ class TestClimate(unittest.TestCase):
             self.assertEqual(rmd, _rmd)
 
         # test distribute
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
+        climate.compute_ref_t_stars([gdir])
+        climate.distribute_t_stars([gdir])
         cfg.PARAMS['tstar_search_window'] = [0, 0]
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1240,7 +1223,6 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 'stddev_perglacier'
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -1249,8 +1231,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
@@ -1300,8 +1281,8 @@ class TestClimate(unittest.TestCase):
             self.assertTrue(t_s >= 1902)
 
         # test distribute
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
+        climate.compute_ref_t_stars([gdir])
+        climate.distribute_t_stars([gdir])
         cfg.PARAMS['tstar_search_window'] = [0, 0]
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1318,7 +1299,6 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 'stddev'
 
-        gdirs = []
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
@@ -1327,28 +1307,27 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        gdirs.append(gdir)
-        climate.process_histalp_nonparallel(gdirs)
+        climate.process_custom_climate_data(gdir)
 
         # test distribute
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
+        climate.compute_ref_t_stars([gdir])
+        climate.distribute_t_stars([gdir])
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
         bias_std, prcp_fac = res['std_bias'], res['prcp_fac']
 
         # check that other prcp_factors are less good
         cfg.PARAMS['prcp_scaling_factor'] = prcp_fac + 0.3
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
+        climate.compute_ref_t_stars([gdir])
+        climate.distribute_t_stars([gdir])
         res = climate.t_star_from_refmb(gdir, mbdf)
         bias_std_after, prcp_fac_after = res['std_bias'], res['prcp_fac']
         self.assertLessEqual(np.abs(np.mean(bias_std)), np.abs(np.mean(bias_std_after)))
         self.assertEqual(prcp_fac + 0.3, prcp_fac_after)
 
         cfg.PARAMS['prcp_scaling_factor'] = prcp_fac - 0.3
-        climate.compute_ref_t_stars(gdirs)
-        climate.distribute_t_stars(gdirs)
+        climate.compute_ref_t_stars([gdir])
+        climate.distribute_t_stars([gdir])
         res = climate.t_star_from_refmb(gdir, mbdf)
         bias_std_after, prcp_fac_after = res['std_bias'], res['prcp_fac']
         self.assertLessEqual(np.abs(np.mean(bias_std)), np.abs(np.mean(bias_std_after)))
@@ -1371,7 +1350,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
@@ -1550,7 +1529,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
@@ -1744,7 +1723,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
@@ -1807,7 +1786,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf['ANNUAL_BALANCE'])
@@ -1866,7 +1845,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
@@ -2128,11 +2107,8 @@ class TestGCMClimate(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdirs = []
-
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        gdirs.append(gdir)
         climate.process_cru_data(gdir)
 
         ci = gdir.read_pickle('climate_info')
