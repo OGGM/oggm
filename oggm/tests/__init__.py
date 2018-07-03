@@ -38,7 +38,7 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
 # defaults everywhere else than travis
 ON_AWS = False
 ON_TRAVIS = False
-RUN_SLOW_TESTS = True
+RUN_SLOW_TESTS = False
 RUN_DOWNLOAD_TESTS = False
 RUN_PREPRO_TESTS = True
 RUN_NUMERIC_TESTS = True
