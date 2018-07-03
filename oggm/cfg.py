@@ -100,9 +100,6 @@ G = 9.81  # gravity
 N = 3.  # Glen's law's exponent
 A = 2.4e-24  # Glen's default creep's parameter
 FS = 5.7e-20  # Default sliding parameter from Oerlemans - OUTDATED
-TWO_THIRDS = 2./3.
-FOUR_THIRDS = 4./3.
-ONE_FIFTH = 1./5.
 
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:

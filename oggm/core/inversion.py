@@ -125,7 +125,7 @@ def _inversion_poly(a3, a0):
 def _inversion_simple(a3, a0):
     """Solve for degree 5 polynom with coefs a5=1, a3=0., a0."""
 
-    return (-a0)**cfg.ONE_FIFTH
+    return (-a0)**(1./5.)
 
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     """
@@ -255,7 +255,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
                                    sf, _inv_function)
 
         # volume
-        fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
+        fac = np.where(cl['is_rectangular'], 1, 2./3.)
         volume = fac * out_thick * w * cl['dx']
         if write:
             cl['thick'] = out_thick
@@ -478,7 +478,7 @@ def filter_inversion_output(gdir):
 
         w = cl['width']
         out_thick = cl['thick']
-        fac = np.where(cl['is_rectangular'], 1, cfg.TWO_THIRDS)
+        fac = np.where(cl['is_rectangular'], 1, 2./3.)
 
         # Last thicknesses can be noisy sometimes: interpolate
         out_thick[-4:] = np.NaN
