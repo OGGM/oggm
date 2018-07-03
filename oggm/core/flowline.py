@@ -23,7 +23,7 @@ import oggm.core.massbalance as mbmods
 from oggm.core.centerlines import Centerline, line_order
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_HOUR
 from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
 
 # Module logger
@@ -149,11 +149,11 @@ class ParabolicBedFlowline(Flowline):
 
     @property
     def section(self):
-        return TWO_THIRDS * self.widths_m * self.thick
+        return 2./3. * self.widths_m * self.thick
 
     @section.setter
     def section(self, val):
-        self.thick = (0.75 * val * np.sqrt(self.bed_shape))**TWO_THIRDS
+        self.thick = (0.75 * val * np.sqrt(self.bed_shape))**(2./3.)
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
@@ -338,7 +338,7 @@ class MixedBedFlowline(Flowline):
 
     @property
     def section(self):
-        out = TWO_THIRDS * self.widths_m * self.thick
+        out = 2./3. * self.widths_m * self.thick
         if self._do_trapeze:
             out[self._ptrap] = ((self.widths_m[self._ptrap] +
                                  self._w0_m[self._ptrap]) / 2 *
@@ -347,7 +347,7 @@ class MixedBedFlowline(Flowline):
 
     @section.setter
     def section(self, val):
-        out = (0.75 * val * self._sqrt_bed)**TWO_THIRDS
+        out = (0.75 * val * self._sqrt_bed)**(2./3.)
         if self._do_trapeze:
             b = 2 * self._w0_m[self._ptrap]
             a = 2 * self._lambdas[self._ptrap]

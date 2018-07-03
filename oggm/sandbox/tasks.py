@@ -19,10 +19,6 @@ from oggm import entity_task
 import oggm.core.massbalance as mbmods
 from oggm.core.flowline import robust_model_run
 
-# Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, TWO_THIRDS, SEC_IN_HOUR
-from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
-
 # Module logger
 log = logging.getLogger(__name__)
 
