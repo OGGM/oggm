@@ -47,7 +47,6 @@ Standard SciPy track:
     - matplotlib
     - pandas
     - xarray
-    - joblib
 
 Configuration file parsing tool:
     - configobj

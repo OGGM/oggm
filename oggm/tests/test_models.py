@@ -189,7 +189,7 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_histalp_nonparallel([gdir])
+        climate.process_custom_climate_data(gdir)
         climate.local_mustar(gdir, tstar=1930, bias=0, prcp_fac=2.5)
         climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)

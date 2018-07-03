@@ -85,11 +85,6 @@ try:
 except ImportError:
     print("no netCDF4")
 try:
-    import joblib
-    print("joblib: %s, %s" % (joblib.__version__, joblib.__file__))
-except ImportError:
-    print("no joblib")
-try:
     import skimage
     print("skimage: %s, %s" % (skimage.__version__, skimage.__file__))
 except ImportError:

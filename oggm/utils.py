@@ -33,7 +33,6 @@ from salem import lazy_property, read_shapefile
 import numpy as np
 import netCDF4
 from scipy import stats
-from joblib import Memory
 from shapely.ops import transform as shp_trafo
 from salem import wgs84
 import xarray as xr
@@ -93,9 +92,6 @@ DEM3REG = {
     # 'GL-South': [-52., -40., 59., 64.],
     # 'GL-East': [-42., -17., 64., 76.]
 }
-
-# Joblib
-MEMORY = Memory(cachedir=cfg.CACHE_DIR, verbose=0)
 
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
@@ -1312,39 +1308,6 @@ class ncDataset(netCDF4.Dataset):
     def __init__(self, *args, **kwargs):
         super(ncDataset, self).__init__(*args, **kwargs)
         self.set_auto_mask(False)
-
-
-@MEMORY.cache
-def joblib_read_climate(ncpath, ilon, ilat, default_grad, minmax_grad,
-                        use_grad):
-    """Prevent to re-compute a timeserie if it was done before.
-
-    TODO: dirty solution, should be replaced by proper input.
-    """
-
-    # read the file and data
-    with ncDataset(ncpath, mode='r') as nc:
-        temp = nc.variables['temp']
-        prcp = nc.variables['prcp']
-        hgt = nc.variables['hgt']
-        igrad = np.zeros(len(nc.dimensions['time'])) + default_grad
-        ttemp = temp[:, ilat-1:ilat+2, ilon-1:ilon+2]
-        itemp = ttemp[:, 1, 1]
-        thgt = hgt[ilat-1:ilat+2, ilon-1:ilon+2]
-        ihgt = thgt[1, 1]
-        thgt = thgt.flatten()
-        iprcp = prcp[:, ilat, ilon]
-
-    # Now the gradient
-    if use_grad:
-        for t, loct in enumerate(ttemp):
-            slope, _, _, p_val, _ = stats.linregress(thgt,
-                                                     loct.flatten())
-            igrad[t] = slope if (p_val < 0.01) else default_grad
-        # dont exagerate too much
-        igrad = np.clip(igrad, minmax_grad[0], minmax_grad[1])
-
-    return iprcp, itemp, igrad, ihgt
 
 
 def pipe_log(gdir, task_func_name, err=None):

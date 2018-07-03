@@ -35,7 +35,6 @@ from oggm.core.flowline import run_constant_climate
 from oggm.utils import copy_to_basedir
 
 # Global tasks
-from oggm.core.climate import process_histalp_nonparallel
 from oggm.core.climate import compute_ref_t_stars
 from oggm.core.climate import distribute_t_stars
 from oggm.core.climate import crossval_t_stars

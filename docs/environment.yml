@@ -10,7 +10,6 @@ dependencies:
   - pandas=0.22.0
   - geopandas=0.3.0
   - Pillow=5.0.0
-  - joblib=0.11
   - netCDF4=1.3.1
   - scikit-image=0.13.1
   - configobj

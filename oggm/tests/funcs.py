@@ -289,7 +289,7 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     centerlines.catchment_intersections(gdir)
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
-    climate.process_histalp_nonparallel([gdir])
+    climate.process_custom_climate_data(gdir)
     climate.mu_candidates(gdir)
     mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
     res = climate.t_star_from_refmb(gdir, mbdf)
