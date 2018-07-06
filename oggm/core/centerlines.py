@@ -58,16 +58,7 @@ class Centerline(object):
     """
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None):
-        """ Instanciate.
-
-        Parameters
-        ----------
-        line: Shapely LineString
-
-        Properties
-        ----------
-        #TODO: document properties
-        """
+        """ Instantiate."""
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
