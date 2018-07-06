@@ -76,13 +76,13 @@ fdf['Mass balance'] = mbx
 
 # For the distributed thickness
 tasks.volume_inversion(gdir, glen_a=cfg.A*3, fs=0)
-tasks.distribute_thickness(gdir, how='per_interpolation')
+tasks.distribute_thickness_per_altitude(gdir)
 
 
 # plot functions
 def example_plot_temp_ts():
     d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
-    temp = d.temp.resample(freq='12MS', dim='time', how=np.mean).to_series()
+    temp = d.temp.resample(time='12MS').mean('time').to_series()
     del temp.index.name
     ax = temp.plot(figsize=(8, 4), label='Annual temp')
     temp.rolling(31, center=True, min_periods=15).mean().plot(label='31-yr avg')
