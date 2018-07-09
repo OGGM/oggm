@@ -31,6 +31,7 @@ The following imports are necessary for all of the examples:
 
     import geopandas as gpd
     import oggm
+    import os
     from oggm import cfg, tasks, graphics
     from oggm.utils import get_demo_file
 
