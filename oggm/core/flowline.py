@@ -1576,7 +1576,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        zero_initial_glacier=False,
-                       without_replacement=False,
+                       unique_samples=False,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
@@ -1615,7 +1615,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         present_time_glacier file from the glacier directory)
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
-    without_replacement: bool
+    unique_samples: bool
         if true, chosen random mass-balance years will only be available once
         per random climate period-length
         if false, every model year will be chosen from the random climate
@@ -1628,7 +1628,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                                   bias=bias, seed=seed,
                                   filename=climate_filename,
                                   input_filesuffix=climate_input_filesuffix,
-                                  without_replacement=without_replacement)
+                                  unique_samples=unique_samples)
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
