@@ -581,6 +581,20 @@ class TestMassBalance(unittest.TestCase):
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.02)
         np.testing.assert_allclose(r_mbh, r_mbh2, atol=0.02)
 
+        # test uniqueness
+        # size
+        self.assertTrue(len(list(mb_mod._state_yr.values())) ==
+                        np.unique(list(mb_mod._state_yr.values())).size)
+        # size2
+        self.assertTrue(len(list(mb_mod2._state_yr.values())) ==
+                        np.unique(list(mb_mod2._state_yr.values())).size)
+        # state years 1 vs 2
+        self.assertTrue(np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                               np.unique(list(mb_mod2._state_yr.values()))))
+        # state years 1 vs reference model
+        self.assertTrue(np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                               ref_mod.years))
+
         # test ela vs specific mb
         elats = mb_mod.get_ela(yrs[:200])
         assert np.corrcoef(mbts[:200], elats)[0, 1] < -0.95
