@@ -557,7 +557,8 @@ class RandomMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
                  y0=None, halfsize=15, seed=None, filename='climate_monthly',
-                 input_filesuffix='', all_years=False):
+                 input_filesuffix='', all_years=False,
+                 unique_samples=False):
         """Initialize.
 
         Parameters
@@ -590,6 +591,11 @@ class RandomMassBalance(MassBalanceModel):
         all_years : bool
             if True, overwrites ``y0`` and ``halfsize`` to use all available
             years.
+        unique_samples: bool
+            if true, chosen random mass-balance years will only be available
+            once per random climate period-length
+            if false, every model year will be chosen from the random climate
+            period with the same probability
         """
 
         super(RandomMassBalance, self).__init__()
@@ -612,6 +618,11 @@ class RandomMassBalance(MassBalanceModel):
         # RandomState
         self.rng = np.random.RandomState(seed)
         self._state_yr = dict()
+
+        # Sampling without replacement
+        self.unique_samples = unique_samples
+        if self.unique_samples:
+            self.sampling_years = self.years
 
     @property
     def temp_bias(self):
@@ -653,7 +664,22 @@ class RandomMassBalance(MassBalanceModel):
         """For a given year, get the random year associated to it."""
         year = int(year)
         if year not in self._state_yr:
-            self._state_yr[year] = self.rng.randint(*self.yr_range)
+            if self.unique_samples:
+                # --- Sampling without replacement ---
+                if self.sampling_years.size == 0:
+                    # refill sample pool when all years were picked once
+                    self.sampling_years = self.years
+                # choose one year which was not used in the current period
+                _sample = self.rng.choice(self.sampling_years)
+                # write chosen year to dictionary
+                self._state_yr[year] = _sample
+                # update sample pool: remove the chosen year from it
+                self.sampling_years = np.delete(
+                    self.sampling_years,
+                    np.where(self.sampling_years == _sample))
+            else:
+                # --- Sampling with replacement ---
+                self._state_yr[year] = self.rng.randint(*self.yr_range)
         return self._state_yr[year]
 
     def get_monthly_mb(self, heights, year=None):

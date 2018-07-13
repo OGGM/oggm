@@ -500,7 +500,7 @@ class TestMassBalance(unittest.TestCase):
                                                seed=10)
         mb_ts = []
         mb_ts2 = []
-        yrs = np.arange(1973, 2003, 1)
+        yrs = np.arange(1973, 2004, 1)
         for yr in yrs:
             mb_ts.append(np.average(mb_ref.get_annual_mb(h, yr) * SEC_IN_YEAR, weights=w))
             mb_ts2.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR, weights=w))
@@ -518,6 +518,89 @@ class TestMassBalance(unittest.TestCase):
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         self.assertTrue(utils.rmsd(ref_mb, my_mb) < 0.1)
+
+    def test_random_mb_unique(self):
+
+        gdir = self.gdir
+        flowline.init_present_time_glacier(gdir)
+
+        ref_mod = massbalance.ConstantMassBalance(gdir,
+                                                  halfsize=15)
+        mb_mod = massbalance.RandomMassBalance(gdir, seed=10,
+                                               unique_samples=True,
+                                               halfsize=15)
+        mb_mod2 = massbalance.RandomMassBalance(gdir, seed=20,
+                                                unique_samples=True,
+                                                halfsize=15)
+        mb_mod3 = massbalance.RandomMassBalance(gdir, seed=20,
+                                                unique_samples=True,
+                                                halfsize=15)
+
+        h, w = gdir.get_inversion_flowline_hw()
+
+        ref_mbh = ref_mod.get_annual_mb(h, None) * SEC_IN_YEAR
+
+        # the same year should be equal
+        r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
+        r_mbh2 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
+        np.testing.assert_allclose(r_mbh1, r_mbh2)
+
+        # test 31 years (2*halfsize +1)
+        ny = 31
+        yrs = np.arange(ny)
+        mbts = yrs * 0.
+        r_mbh = 0.
+        r_mbh2 = 0.
+        r_mbh3 = 0.
+        mb_mod3.temp_bias = -0.5
+        annual_previous = -999.
+        for i, yr in enumerate(yrs):
+            # specific mass balance
+            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
+
+            # annual mass balance
+            annual = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
+
+            # annual mass balance must be different than the previous one
+            assert not np.all(np.allclose(annual, annual_previous))
+
+            # sum over all years should be equal to ref_mbh
+            r_mbh += annual
+            r_mbh2 += mb_mod2.get_annual_mb(h, yr) * SEC_IN_YEAR
+
+            # mass balance with temperature bias
+            r_mbh3 += mb_mod3.get_annual_mb(h, yr) * SEC_IN_YEAR
+
+            annual_previous = annual
+
+        r_mbh /= ny
+        r_mbh2 /= ny
+        r_mbh3 /= ny
+
+        # test sums
+        np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.02)
+        np.testing.assert_allclose(r_mbh, r_mbh2, atol=0.02)
+
+        # test uniqueness
+        # size
+        self.assertTrue(len(list(mb_mod._state_yr.values())) ==
+                        np.unique(list(mb_mod._state_yr.values())).size)
+        # size2
+        self.assertTrue(len(list(mb_mod2._state_yr.values())) ==
+                        np.unique(list(mb_mod2._state_yr.values())).size)
+        # state years 1 vs 2
+        self.assertTrue(np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                               np.unique(list(mb_mod2._state_yr.values()))))
+        # state years 1 vs reference model
+        self.assertTrue(np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                               ref_mod.years))
+
+        # test ela vs specific mb
+        elats = mb_mod.get_ela(yrs[:200])
+        assert np.corrcoef(mbts[:200], elats)[0, 1] < -0.95
+
+        # test mass balance with temperature bias
+        self.assertTrue(np.mean(r_mbh) < np.mean(r_mbh3))
 
     def test_uncertain_mb(self):
 
