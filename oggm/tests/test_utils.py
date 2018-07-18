@@ -484,7 +484,8 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='srtm_39_03.tif')
 
         def down_check(url, cache_name=None, reset=False):
-            expected = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_39_03.zip'
+            expected = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/' + \
+              'SRTM_Data_GeoTiff/srtm_39_03.zip'
             self.assertEqual(url, expected)
             return tf
 
