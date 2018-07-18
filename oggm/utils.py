@@ -600,7 +600,8 @@ def _download_srtm_file_unlocked(zone):
         return outpath
 
     # Did we download it yet?
-    wwwfile = 'http://droppr.org/srtm/v4.1/6_5x5_TIFs/srtm_' + zone + '.zip'
+    wwwfile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/' +\
+        'SRTM_Data_GeoTiff/srtm_' + zone + '.zip'
     dest_file = file_downloader(wwwfile)
 
     # None means we tried hard but we couldn't find it
@@ -2292,7 +2293,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
 def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
                      append=True):
     """Gathers the log output for the selected task(s)
-    
+
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
@@ -2335,11 +2336,11 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                             inversion_only=False):
     """Gathers as many statistics as possible about a list of glacier
     directories.
-    
+
     It can be used to do result diagnostics and other stuffs. If the data
     necessary for a statistic is not available (e.g.: flowlines length) it
     will simply be ignored.
-    
+
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
