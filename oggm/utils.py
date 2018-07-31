@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '222347d9a29e72edd6a1ff40950dd3b187d46f3d'
+SAMPLE_DATA_COMMIT = '43f9fdfb5c8d9a157f61e1257eae4c106d344c9b'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')

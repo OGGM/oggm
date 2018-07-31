@@ -444,7 +444,7 @@ class TestMassBalance(unittest.TestCase):
         t, tm, p, ps = cmb_mod.get_climate([elah])
         mb = ps - cmb_mod.mbmod.mu_star * tm
         # not perfect because of time/months/zinterp issues
-        np.testing.assert_allclose(mb, 0, atol=0.1)
+        np.testing.assert_allclose(mb, 0, atol=0.12)
 
     def test_random_mb(self):
 
