@@ -268,25 +268,6 @@ class TestWorkflow(unittest.TestCase):
         file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
         df = pd.read_csv(file, index_col=0)
 
-        # after crossval we need to rerun
-        tasks.compute_ref_t_stars(gdirs)
-        tasks.distribute_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
-
-        # Test if quicker crossval is also OK
-        tasks.quick_crossval_t_stars(gdirs)
-        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
-        dfq = pd.read_csv(file, index_col=0)
-
-        # after crossval we need to rerun
-        tasks.compute_ref_t_stars(gdirs)
-        tasks.distribute_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
-        assert np.all(np.abs(df.cv_bias) < 50)
-        assert np.all(np.abs(dfq.cv_bias) < 50)
-        # The biases aren't entirely equivalent and its ok
-        np.testing.assert_allclose(df.cv_prcp_fac, dfq.cv_prcp_fac)
-
         # see if the process didn't brake anything
         mustars = []
         for gdir in gdirs:

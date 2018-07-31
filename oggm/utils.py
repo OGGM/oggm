@@ -913,8 +913,7 @@ def haversine(lon1, lat1, lon2, lat2):
     dlat = lat2 - lat1
     a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
     c = 2 * np.arcsin(np.sqrt(a))
-    r = 6371000 # Radius of earth in meters
-    return c * r
+    return c * 6371000  # Radius of earth in meters
 
 
 def interp_nans(array, default=None):
@@ -2210,6 +2209,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
             except AttributeError:
                 y0 = ds_clim.temp.time.values[0].strftime('%Y')
                 y1 = ds_clim.temp.time.values[-1].strftime('%Y')
+            has_grad = 'gradient' in ds_clim.variables
 
     # We know the file is structured like this
     ctime = pd.period_range('{}-10'.format(y0), '{}-9'.format(y1), freq='M')
@@ -2244,7 +2244,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     shape = (len(time), len(rgi_ids))
     temp = np.zeros(shape) * np.NaN
     prcp = np.zeros(shape) * np.NaN
-    grad = np.zeros(shape) * np.NaN
+    if has_grad:
+        grad = np.zeros(shape) * np.NaN
     ref_hgt = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lon = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lat = np.zeros(len(rgi_ids)) * np.NaN
@@ -2258,7 +2259,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
                 with xr.open_dataset(ppath) as ds_clim:
                     prcp[:, i] = ds_clim.prcp.values
                     temp[:, i] = ds_clim.temp.values
-                    grad[:, i] = ds_clim.grad
+                    if has_grad:
+                        grad[:, i] = ds_clim.gradient
                     ref_hgt[i] = ds_clim.ref_hgt
                     ref_pix_lon[i] = ds_clim.ref_pix_lon
                     ref_pix_lat[i] = ds_clim.ref_pix_lat
@@ -2271,9 +2273,10 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds['prcp'] = (('time', 'rgi_id'), prcp)
     ds['prcp'].attrs['units'] = 'kg m-2'
     ds['prcp'].attrs['description'] = 'total monthly precipitation amount'
-    ds['grad'] = (('time', 'rgi_id'), grad)
-    ds['grad'].attrs['units'] = 'degC m-1'
-    ds['grad'].attrs['description'] = 'temperature gradient'
+    if has_grad:
+        ds['grad'] = (('time', 'rgi_id'), grad)
+        ds['grad'].attrs['units'] = 'degC m-1'
+        ds['grad'].attrs['description'] = 'temperature gradient'
     ds['ref_hgt'] = ('rgi_id', ref_hgt)
     ds['ref_hgt'].attrs['units'] = 'm'
     ds['ref_hgt'].attrs['description'] = 'reference height'
@@ -2467,7 +2470,6 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             # MB calib
             df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
             d['t_star'] = df['t_star']
-            d['prcp_fac'] = df['prcp_fac']
             d['mu_star'] = df['mu_star']
             d['mb_bias'] = df['bias']
         except:
@@ -3093,20 +3095,38 @@ class GlacierDirectory(object):
 
         return nc
 
-    def write_monthly_climate_file(self, time, prcp, temp, grad, ref_pix_hgt,
-                                   ref_pix_lon, ref_pix_lat,
+    def write_monthly_climate_file(self, time, prcp, temp,
+                                   ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
+                                   gradient=None,
                                    time_unit='days since 1801-01-01 00:00:00',
                                    file_name='climate_monthly',
                                    filesuffix=''):
-        """Creates a netCDF4 file with climate data.
+        """Creates a netCDF4 file with climate data timeseries.
 
-        See :py:func:`~oggm.tasks.process_cru_data`.
+        Parameters
+        ----------
+        time
+        prcp
+        temp
+        ref_pix_hgt
+        ref_pix_lon
+        ref_pix_lat
+        gradient
+        time_unit
+        file_name
+        filesuffix
+
+        Returns
+        -------
+
         """
 
         # overwrite as default
         fpath = self.get_filepath(file_name, filesuffix=filesuffix)
         if os.path.exists(fpath):
             os.remove(fpath)
+
+        zlib = cfg.PARAMS['compress_climate_netcdf']
 
         with ncDataset(fpath, 'w', format='NETCDF4') as nc:
             nc.ref_hgt = ref_pix_hgt
@@ -3124,20 +3144,21 @@ class GlacierDirectory(object):
             timev.setncatts({'units': time_unit})
             timev[:] = netCDF4.date2num([t for t in time], time_unit)
 
-            v = nc.createVariable('prcp', 'f4', ('time',), zlib=True)
+            v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
             v.units = 'kg m-2'
             v.long_name = 'total monthly precipitation amount'
             v[:] = prcp
 
-            v = nc.createVariable('temp', 'f4', ('time',), zlib=True)
+            v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
             v.units = 'degC'
             v.long_name = '2m temperature at height ref_hgt'
             v[:] = temp
 
-            v = nc.createVariable('grad', 'f4', ('time',), zlib=True)
-            v.units = 'degC m-1'
-            v.long_name = 'temperature gradient'
-            v[:] = grad
+            if gradient is not None:
+                v = nc.createVariable('gradient', 'f4', ('time',), zlib=zlib)
+                v.units = 'degC m-1'
+                v.long_name = 'temperature gradient from local regression'
+                v[:] = gradient
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
@@ -3182,8 +3203,8 @@ class GlacierDirectory(object):
         if not self.has_file('climate_info'):
             raise RuntimeError('Please process some climate data before call')
         ci = self.read_pickle('climate_info')
-        y0 = ci['hydro_yr_0']
-        y1 = ci['hydro_yr_1']
+        y0 = ci['baseline_hydro_yr_0']
+        y1 = ci['baseline_hydro_yr_1']
         if len(self._mbdf) > 1:
             out = self._mbdf.loc[y0:y1]
         else:
@@ -3219,8 +3240,8 @@ class GlacierDirectory(object):
         if not self.has_file('climate_info'):
             raise RuntimeError('Please process some climate data before call')
         ci = self.read_pickle('climate_info')
-        y0 = ci['hydro_yr_0']
-        y1 = ci['hydro_yr_1']
+        y0 = ci['baseline_hydro_yr_0']
+        y1 = ci['baseline_hydro_yr_1']
         if len(self._mbprofdf) > 1:
             out = self._mbprofdf.loc[y0:y1]
         else:

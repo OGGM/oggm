@@ -278,14 +278,13 @@ class TestWorkflowTools(unittest.TestCase):
         df = utils.glacier_characteristics([gdir], path=False)
         assert len(df) == 1
         assert np.all(~df.isnull())
-        assert len(df.columns) >= 36
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
-                                   2811, atol=5)
+                                   2853, atol=5)
         np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
-                                   2811, atol=50)
+                                   2811, atol=5)
 
 
 def touch(path):

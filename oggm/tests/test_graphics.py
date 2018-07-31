@@ -33,8 +33,7 @@ if not RUN_GRAPHIC_TESTS:
 # ----------------------------------------------------------
 # Lets go
 
-# TODO: temporary tolerance
-TOLERANCE=10
+TOLERANCE = 5
 
 
 @requires_internet
@@ -244,7 +243,7 @@ def test_multiple_models():
 
 @is_graphic_test
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE+5)
+                               tolerance=TOLERANCE)
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -352,7 +351,7 @@ def test_ice_cap():
 
 @is_graphic_test
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE+5)
+                               tolerance=TOLERANCE)
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')

@@ -190,7 +190,7 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.local_mustar(gdir, tstar=1930, bias=0, prcp_fac=2.5)
+        climate.local_mustar(gdir, tstar=1930, bias=0)
         climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
         v, ainv = inversion.mass_conservation_inversion(gdir)
@@ -263,14 +263,13 @@ class TestMassBalance(unittest.TestCase):
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
         mu_star = df['mu_star'][0]
         bias = df['bias'][0]
-        prcp_fac = df['prcp_fac'][0]
 
         # Climate period
         yrp = [1851, 2000]
 
         # Flowlines height
         h, w = gdir.get_inversion_flowline_hw()
-        _, t, p = climate.mb_yearly_climate_on_height(gdir, h, prcp_fac,
+        _, t, p = climate.mb_yearly_climate_on_height(gdir, h,
                                                       year_range=yrp)
 
         mb_mod = massbalance.PastMassBalance(gdir, bias=0)
@@ -358,12 +357,7 @@ class TestMassBalance(unittest.TestCase):
         flowline.init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star = df['mu_star'][0]
         bias = df['bias'][0]
-        prcp_fac = df['prcp_fac'][0]
-
-        h = np.array([])
-        w = np.array([])
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -450,7 +444,7 @@ class TestMassBalance(unittest.TestCase):
         t, tm, p, ps = cmb_mod.get_climate([elah])
         mb = ps - cmb_mod.mbmod.mu_star * tm
         # not perfect because of time/months/zinterp issues
-        np.testing.assert_allclose(mb, 0, atol=0.08)
+        np.testing.assert_allclose(mb, 0, atol=0.1)
 
     def test_random_mb(self):
 
@@ -2226,7 +2220,7 @@ class TestHEF(unittest.TestCase):
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.08)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
@@ -2322,14 +2316,16 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-
     @is_slow
     def test_random_sh(self):
 
         flowline.init_present_time_glacier(self.gdir)
 
         self.gdir.hemisphere = 'sh'
+        cfg.PARAMS['run_mb_calibration'] = True
         climate.process_cru_data(self.gdir)
+        climate.compute_ref_t_stars([self.gdir])
+        climate.distribute_t_stars([self.gdir])
 
         flowline.run_random_climate(self.gdir, nyears=20, seed=4,
                                     bias=0, output_filesuffix='_rdn')
@@ -2403,14 +2399,11 @@ class TestHEF(unittest.TestCase):
                 np.testing.assert_allclose(shist.prcp.mean(),
                                            scesm.prcp.mean(),
                                            rtol=1e-3)
-                np.testing.assert_allclose(shist.grad.mean(),
-                                           scesm.grad.mean())
                 # And also the anual cycle
                 scru = shist.groupby('time.month').mean()
                 scesm = scesm.groupby(scesm.month).mean()
                 np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
                 np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-                np.testing.assert_allclose(scru.grad, scesm.grad)
 
         # Mass balance models
         mb_cru = massbalance.PastMassBalance(self.gdir)
