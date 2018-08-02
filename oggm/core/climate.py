@@ -968,6 +968,7 @@ def compute_ref_t_stars(gdirs):
 
     # Write out
     df['tstar'] = df['tstar'].astype(int)
+    df['n_mb_years'] = df['n_mb_years'].astype(int)
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
 
@@ -1073,79 +1074,6 @@ def crossval_t_stars(gdirs):
         # let's make sure we don't brake things
         with utils.DisableLogger():
             distribute_t_stars([gdir], ref_df=full_ref_df)
-
-    # Reproduce Ben's figure
-    for i, rid in enumerate(full_ref_df.index):
-        # the glacier to look at
-        gdir = full_ref_df.loc[full_ref_df.index == rid]
-        # the reference glaciers
-        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
-
-        # Compute the distance
-        distances = utils.haversine(gdir.lon.values[0], gdir.lat.values[0],
-                                    tmp_ref_df.lon, tmp_ref_df.lat)
-
-        # Take the 10 closests
-        aso = np.argsort(distances)[0:9]
-        amin = tmp_ref_df.iloc[aso]
-        distances = distances[aso] ** 2
-        interp = np.average(amin.mustar, weights=1. / distances)
-        full_ref_df.loc[rid, 'interp_mustar'] = interp
-
-    # write
-    file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
-    full_ref_df.to_csv(file)
-
-
-@global_task
-def quick_crossval_t_stars(gdirs):
-    """Cross-validate the interpolation of tstar to each individual glacier.
-
-    This version does NOT recompute the precipitation scaling factor at each
-    round (this quite OK to do so)
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
-    """
-
-    log.info('Cross-validate the t* and mu* determination')
-
-    rgdirs = utils.get_ref_mb_glaciers(gdirs)
-
-    # This might be redundant but we redo the calc here
-    with utils.DisableLogger():
-        compute_ref_t_stars(rgdirs)
-    full_ref_df = pd.read_csv(os.path.join(cfg.PATHS['working_dir'],
-                                           'ref_tstars.csv'), index_col=0)
-    with utils.DisableLogger():
-        distribute_t_stars(rgdirs)
-
-    n = len(full_ref_df)
-    for i, rid in enumerate(full_ref_df.index):
-
-        # log.info('Cross-validation iteration {} of {}'.format(i+1, n))
-
-        # the glacier to look at
-        gdir = [g for g in rgdirs if g.rgi_id == rid][0]
-
-        # the reference glaciers
-        tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
-
-        # before the cross-val we can get the info about "real" mustar
-        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-        full_ref_df.loc[rid, 'mustar'] = rdf['mu_star'].values[0]
-
-        # redo the computations
-        with utils.DisableLogger():
-            distribute_t_stars([gdir], ref_df=tmp_ref_df)
-
-        # store
-        rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-        full_ref_df.loc[rid, 'cv_tstar'] = int(rdf['t_star'].values[0])
-        full_ref_df.loc[rid, 'cv_mustar'] = rdf['mu_star'].values[0]
-        full_ref_df.loc[rid, 'cv_prcp_fac'] = rdf['prcp_fac'].values[0]
-        full_ref_df.loc[rid, 'cv_bias'] = rdf['bias'].values[0]
 
     # Reproduce Ben's figure
     for i, rid in enumerate(full_ref_df.index):

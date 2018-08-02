@@ -1216,11 +1216,11 @@ class TestIO(unittest.TestCase):
                                   diag_path=diag_path,
                                   store_monthly_step=True)
 
-        ds_ = xr.open_dataset(diag_path)
-        # the identical (i.e. attrs + names) doesn't work because of date
-        del ds_diag.attrs['creation_date']
-        del ds_.attrs['creation_date']
-        xr.testing.assert_identical(ds_diag, ds_)
+        with xr.open_dataset(diag_path) as ds_:
+            # the identical (i.e. attrs + names) doesn't work because of date
+            del ds_diag.attrs['creation_date']
+            del ds_.attrs['creation_date']
+            xr.testing.assert_identical(ds_diag, ds_)
 
         fmodel = flowline.FileModel(run_path)
         assert fmodel.last_yr == 500
@@ -1304,11 +1304,11 @@ class TestIO(unittest.TestCase):
         model.run_until_and_store(500, run_path=run_path,
                                   diag_path=diag_path)
 
-        ds_ = xr.open_dataset(diag_path)
-        # the identical (i.e. attrs + names) doesn't work because of date
-        del ds_diag.attrs['creation_date']
-        del ds_.attrs['creation_date']
-        xr.testing.assert_identical(ds_diag, ds_)
+        with xr.open_dataset(diag_path) as ds_:
+            # the identical (i.e. attrs + names) doesn't work because of date
+            del ds_diag.attrs['creation_date']
+            del ds_.attrs['creation_date']
+            xr.testing.assert_identical(ds_diag, ds_)
 
         fmodel = flowline.FileModel(run_path)
         assert fmodel.last_yr == 500
@@ -2469,6 +2469,7 @@ class TestHEF(unittest.TestCase):
                                        filesuffix='_afterspinup')
         assert (ds1.volume.isel(rgi_id=0, time=-1) <
                 0.7*ds3.volume.isel(rgi_id=0, time=-1))
+        ds3.close()
 
     @is_slow
     def test_elevation_feedback(self):

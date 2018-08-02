@@ -38,8 +38,7 @@ for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
     # Mass-balance model with cross-validated parameters instead
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.cv_mustar,
-                             bias=t_cvdf.cv_bias,
-                             prcp_fac=t_cvdf.cv_prcp_fac)
+                             bias=t_cvdf.cv_bias)
     # Mass-blaance timeseries, observed and simulated
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
@@ -58,8 +57,7 @@ for gd in gdirs:
                                                std_ref)
     cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.interp_mustar,
-                             bias=t_cvdf.cv_bias,
-                             prcp_fac=t_cvdf.cv_prcp_fac)
+                             bias=t_cvdf.cv_bias)
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = (refmb.OGGM.mean() -
                                              refmb.ANNUAL_BALANCE.mean())

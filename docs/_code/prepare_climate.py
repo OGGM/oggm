@@ -18,8 +18,6 @@ from oggm import graphics
 cfg.initialize()
 cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-pcp_fac = 2.5
-cfg.PARAMS['prcp_scaling_factor'] = pcp_fac
 
 base_dir = os.path.join(oggm.gettempdir(), 'Climate')
 entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
@@ -39,16 +37,15 @@ tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
 res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
-local_mustar(gdir, tstar=res['t_star'][-1], bias=res['bias'][-1],
-             prcp_fac=res['prcp_fac'], reset=True)
+local_mustar(gdir, tstar=res['t_star'], bias=res['bias'], reset=True)
 apparent_mb(gdir, reset=True)
 
 # For flux plot
 tasks.prepare_for_inversion(gdir, add_debug_var=True)
 
 # For plots
-mu_yr_clim = gdir.read_pickle('mu_candidates')[pcp_fac]
-years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, pcp_fac)
+mu_yr_clim = gdir.read_pickle('climate_info')['mu_candidates']
+years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir)
 
 # which years to look at
 selind = np.searchsorted(years, mbdf.index)
@@ -108,8 +105,8 @@ def example_plot_bias_ts():
     ax.set_title(r'$\mu$ candidates HEF');
     plt.ylabel(r'bias (mm yr$^{-1}$)')
     yl = plt.gca().get_ylim()
-    for ts in res['t_star']:
-        plt.plot((ts, ts), (yl[0], 0), linestyle=':', color='grey')
+    plt.plot((res['t_star'], res['t_star']), (yl[0], 0),
+             linestyle=':', color='grey')
     plt.ylim(yl)
     plt.tight_layout()
     plt.show()

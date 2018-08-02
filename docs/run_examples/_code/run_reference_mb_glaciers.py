@@ -32,6 +32,9 @@ cfg.PARAMS['run_mb_calibration'] = True
 # No need for intersects since this has an effect on the inversion only
 cfg.PARAMS['use_intersects'] = False
 
+# This isn't necessary either - we don't do inversion
+cfg.PARAMS['filter_for_neg_flux'] = False
+
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
@@ -53,10 +56,13 @@ rids = [rid for rid in rids if not '-19.' in rid]
 # Make a new dataframe with those (this takes a while)
 log.info('Reading the RGI shapefiles...')
 rgidf = utils.get_rgi_glacier_entities(rids, version=rgi_version)
+log.info('For RGIV{} we have {} candidate reference glaciers.'.format(
+    rgi_version, len(rgidf)))
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:
 gdirs = workflow.init_glacier_regions(rgidf)
+
 # We need to know which period we have data for
 log.info('Process the climate data...')
 execute_entity_task(tasks.process_cru_data, gdirs, print_log=False)
@@ -92,16 +98,9 @@ for task in task_list:
 execute_entity_task(tasks.process_cru_data, gdirs)
 tasks.compute_ref_t_stars(gdirs)
 tasks.distribute_t_stars(gdirs)
-execute_entity_task(tasks.apparent_mb, gdirs)
-# Recompute after the first round - this is being picky but this is
-# Because geometries may change after apparent_mb's filtering
-tasks.compute_ref_t_stars(gdirs)
-tasks.distribute_t_stars(gdirs)
-execute_entity_task(tasks.apparent_mb, gdirs)
 
 # Model validation
-tasks.quick_crossval_t_stars(gdirs)  # for later
-tasks.distribute_t_stars(gdirs)  # To restore after cross-val
+tasks.crossval_t_stars(gdirs)  # for later
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
