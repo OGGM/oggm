@@ -1222,33 +1222,33 @@ class TestIO(unittest.TestCase):
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        fmodel = flowline.FileModel(run_path)
-        assert fmodel.last_yr == 500
-        fls = dummy_constant_bed()
-        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                        glen_a=self.glen_a)
-        for yr in years:
-            model.run_until(yr)
-            if yr in [100, 300, 500]:
-                # this is sloooooow so we test a little bit only
-                fmodel.run_until(yr)
-                np.testing.assert_allclose(model.fls[0].section,
-                                           fmodel.fls[0].section)
-                np.testing.assert_allclose(model.fls[0].widths_m,
-                                           fmodel.fls[0].widths_m)
+        with flowline.FileModel(run_path) as fmodel:
+            assert fmodel.last_yr == 500
+            fls = dummy_constant_bed()
+            model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                            glen_a=self.glen_a)
+            for yr in years:
+                model.run_until(yr)
+                if yr in [100, 300, 500]:
+                    # this is sloooooow so we test a little bit only
+                    fmodel.run_until(yr)
+                    np.testing.assert_allclose(model.fls[0].section,
+                                               fmodel.fls[0].section)
+                    np.testing.assert_allclose(model.fls[0].widths_m,
+                                               fmodel.fls[0].widths_m)
 
-        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
-        # Can we start a run from the middle?
-        fmodel.run_until(300)
-        model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                        glen_a=self.glen_a)
-        model.run_until(500)
-        fmodel.run_until(500)
-        np.testing.assert_allclose(model.fls[0].section,
-                                   fmodel.fls[0].section)
+            # Can we start a run from the middle?
+            fmodel.run_until(300)
+            model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                                            glen_a=self.glen_a)
+            model.run_until(500)
+            fmodel.run_until(500)
+            np.testing.assert_allclose(model.fls[0].section,
+                                       fmodel.fls[0].section)
 
     @is_slow
     def test_run_annual_step(self):
@@ -1310,33 +1310,33 @@ class TestIO(unittest.TestCase):
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        fmodel = flowline.FileModel(run_path)
-        assert fmodel.last_yr == 500
-        fls = dummy_constant_bed()
-        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                        glen_a=self.glen_a)
-        for yr in years:
-            model.run_until(yr)
-            if yr in [100, 300, 500]:
-                # this is sloooooow so we test a little bit only
-                fmodel.run_until(yr)
-                np.testing.assert_allclose(model.fls[0].section,
-                                           fmodel.fls[0].section)
-                np.testing.assert_allclose(model.fls[0].widths_m,
-                                           fmodel.fls[0].widths_m)
+        with flowline.FileModel(run_path) as fmodel:
+            assert fmodel.last_yr == 500
+            fls = dummy_constant_bed()
+            model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                            glen_a=self.glen_a)
+            for yr in years:
+                model.run_until(yr)
+                if yr in [100, 300, 500]:
+                    # this is sloooooow so we test a little bit only
+                    fmodel.run_until(yr)
+                    np.testing.assert_allclose(model.fls[0].section,
+                                               fmodel.fls[0].section)
+                    np.testing.assert_allclose(model.fls[0].widths_m,
+                                               fmodel.fls[0].widths_m)
 
-        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
-        # Can we start a run from the middle?
-        fmodel.run_until(300)
-        model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                        glen_a=self.glen_a)
-        model.run_until(500)
-        fmodel.run_until(500)
-        np.testing.assert_allclose(model.fls[0].section,
-                                   fmodel.fls[0].section)
+            # Can we start a run from the middle?
+            fmodel.run_until(300)
+            model = flowline.FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                                            glen_a=self.glen_a)
+            model.run_until(500)
+            fmodel.run_until(500)
+            np.testing.assert_allclose(model.fls[0].section,
+                                       fmodel.fls[0].section)
 
     def test_gdir_copy(self):
 
