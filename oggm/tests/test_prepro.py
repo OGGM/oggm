@@ -26,14 +26,10 @@ from oggm.core import (gis, inversion, climate, centerlines, flowline,
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm import workflow
 
-# do we event want to run the tests?
-if not RUN_PREPRO_TESTS:
-    raise unittest.SkipTest('Skipping all prepro tests.')
-
+pytestmark = pytest.mark.test_env("prepro")
 _url_retrieve = None
 
 

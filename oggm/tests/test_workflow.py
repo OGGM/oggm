@@ -20,7 +20,6 @@ from oggm import graphics
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import RUN_WORKFLOW_TESTS
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
                               patch_url_retrieve_github)
@@ -28,11 +27,8 @@ from oggm.core import flowline, massbalance
 from oggm import tasks
 from oggm import utils
 
-# do we event want to run the tests?
-if not RUN_WORKFLOW_TESTS:
-    raise unittest.SkipTest('Skipping all workflow tests.')
-
 # Globals
+pytestmark = pytest.mark.test_env("workflow")
 TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
 

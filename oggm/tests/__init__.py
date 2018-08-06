@@ -33,60 +33,6 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
     else:
         BASELINE_DIR = os.path.join(BASELINE_DIR, 'freetype_old')
 
-
-# Some control on which tests to run (useful to avoid too long tests)
-# defaults everywhere else than travis
-RUN_PREPRO_TESTS = True
-RUN_NUMERIC_TESTS = True
-RUN_MODEL_TESTS = True
-RUN_WORKFLOW_TESTS = True
-RUN_GRAPHIC_TESTS = True
-RUN_BENCHMARK_TESTS = True
-if os.environ.get('TRAVIS') is not None:
-    env = os.environ.get('OGGM_TEST_ENV')
-    if env == 'prepro':
-        RUN_PREPRO_TESTS = True
-        RUN_NUMERIC_TESTS = False
-        RUN_MODEL_TESTS = False
-        RUN_WORKFLOW_TESTS = False
-        RUN_GRAPHIC_TESTS = False
-        RUN_BENCHMARK_TESTS = False
-    if env == 'numerics':
-        RUN_PREPRO_TESTS = False
-        RUN_NUMERIC_TESTS = True
-        RUN_MODEL_TESTS = False
-        RUN_WORKFLOW_TESTS = False
-        RUN_GRAPHIC_TESTS = False
-        RUN_BENCHMARK_TESTS = False
-    if env == 'models':
-        RUN_PREPRO_TESTS = False
-        RUN_NUMERIC_TESTS = False
-        RUN_MODEL_TESTS = True
-        RUN_WORKFLOW_TESTS = False
-        RUN_GRAPHIC_TESTS = False
-        RUN_BENCHMARK_TESTS = False
-    if env == 'workflow':
-        RUN_PREPRO_TESTS = False
-        RUN_NUMERIC_TESTS = False
-        RUN_MODEL_TESTS = False
-        RUN_WORKFLOW_TESTS = True
-        RUN_GRAPHIC_TESTS = False
-        RUN_BENCHMARK_TESTS = False
-    if env == 'graphics':
-        RUN_PREPRO_TESTS = False
-        RUN_NUMERIC_TESTS = False
-        RUN_MODEL_TESTS = False
-        RUN_WORKFLOW_TESTS = False
-        RUN_GRAPHIC_TESTS = True
-        RUN_BENCHMARK_TESTS = False
-    if env == 'benchmark':
-        RUN_PREPRO_TESTS = False
-        RUN_NUMERIC_TESTS = False
-        RUN_MODEL_TESTS = False
-        RUN_WORKFLOW_TESTS = False
-        RUN_GRAPHIC_TESTS = False
-        RUN_BENCHMARK_TESTS = True
-
 # quick n dirty method to see if internet is on
 try:
     _ = urlopen('http://www.google.com', timeout=1)

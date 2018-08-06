@@ -6,6 +6,7 @@ import os
 import shutil
 import salem
 import xarray as xr
+import pytest
 import oggm
 from scipy import optimize as optimization
 
@@ -14,15 +15,11 @@ import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
 from oggm.tests.funcs import get_test_dir
-from oggm.tests import RUN_BENCHMARK_TESTS
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
-# do we event want to run the tests?
-if not RUN_BENCHMARK_TESTS:
-    raise unittest.SkipTest('Skipping all benchmark tests.')
-
+pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
 
 

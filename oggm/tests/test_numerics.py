@@ -13,7 +13,6 @@ from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
-from oggm.tests import RUN_NUMERIC_TESTS
 from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
@@ -24,10 +23,7 @@ from oggm.tests.funcs import *
 # after oggm.test
 import matplotlib.pyplot as plt
 
-# do we event want to run the tests?
-if not RUN_NUMERIC_TESTS:
-    raise unittest.SkipTest('Skipping all numerics tests.')
-
+pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
 
 

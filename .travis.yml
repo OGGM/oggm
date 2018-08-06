@@ -22,6 +22,7 @@ matrix:
     - env: OGGM_TEST_ENV=numerics MPL=
     - env: OGGM_TEST_ENV=models MPL=
     - env: OGGM_TEST_ENV=benchmark MPL=
+    - env: OGGM_TEST_ENV=utils MPL=
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
     - env: OGGM_TEST_ENV=graphics MPL=--mpl
@@ -37,7 +38,7 @@ install:
     pip3 install coveralls
     cd /root/oggm
     pip3 install -e .
-    pytest oggm $MPL --cov-config .coveragerc --cov=oggm --cov-report term-missing
+    pytest oggm $MPL --cov-config .coveragerc --cov=oggm --cov-report term-missing --run-test-env $OGGM_TEST_ENV
     coverage combine
     coveralls || true
     exit 0
