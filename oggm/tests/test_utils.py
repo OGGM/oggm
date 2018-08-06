@@ -21,6 +21,9 @@ from oggm.utils import shape_factor_adhikari
 _url_retrieve = None
 
 
+pytestmark = pytest.mark.test_env("utils")
+
+
 def setup_module(module):
     module._url_retrieve = utils._urlretrieve
     utils._urlretrieve = patch_url_retrieve_github

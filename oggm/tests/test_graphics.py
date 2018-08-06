@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 
 # Local imports
 import oggm.utils
-from oggm.tests import RUN_GRAPHIC_TESTS
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
@@ -24,11 +23,9 @@ import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import utils, workflow
 
-# do we event want to run the tests?
-if not RUN_GRAPHIC_TESTS:
-    raise unittest.SkipTest('Skipping all graphic tests.')
-
 # Globals
+
+pytestmark = pytest.mark.test_env("graphics")
 
 # ----------------------------------------------------------
 # Lets go

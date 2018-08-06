@@ -12,11 +12,11 @@ import copy
 import time
 import pandas as pd
 from numpy.testing import assert_allclose
+import pytest
 
 # Local imports
 from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
-from oggm.tests import RUN_MODEL_TESTS
 import xarray as xr
 from oggm import utils, workflow, tasks
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
@@ -27,10 +27,7 @@ from oggm.tests.funcs import *
 # after oggm.test
 import matplotlib.pyplot as plt
 
-# do we event want to run the tests?
-if not RUN_MODEL_TESTS:
-    raise unittest.SkipTest('Skipping all model tests.')
-
+pytestmark = pytest.mark.test_env("models")
 do_plot = False
 
 DOM_BORDER = 80
