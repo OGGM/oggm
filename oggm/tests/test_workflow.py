@@ -20,8 +20,8 @@ from oggm import graphics
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
-from oggm.tests import is_slow, RUN_WORKFLOW_TESTS
-from oggm.tests import is_graphic_test, BASELINE_DIR
+from oggm.tests import RUN_WORKFLOW_TESTS
+from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
                               patch_url_retrieve_github)
 from oggm.core import flowline, massbalance
@@ -191,7 +191,7 @@ def random_for_plot():
 
 class TestWorkflow(unittest.TestCase):
 
-    @is_slow
+    @pytest.mark.slow
     def test_init_present_time_glacier(self):
 
         gdirs = up_to_inversion()
@@ -248,7 +248,7 @@ class TestWorkflow(unittest.TestCase):
         assert np.all(dfc.t_star > 1900)
         assert np.all(dfc.tstar_aar.mean() > 0.5)
 
-    @is_slow
+    @pytest.mark.slow
     def test_crossval(self):
 
         gdirs = up_to_distrib()
@@ -315,7 +315,7 @@ class TestWorkflow(unittest.TestCase):
             mm = mbdf.mean()
             np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
 
-    @is_slow
+    @pytest.mark.slow
     def test_shapefile_output(self):
 
         # Just to increase coveralls, hehe
@@ -330,7 +330,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertEqual(len(shp), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
 
-    @is_slow
+    @pytest.mark.slow
     def test_random(self):
 
         # Fake Reset (all these tests are horribly coded)
@@ -382,7 +382,7 @@ class TestWorkflow(unittest.TestCase):
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)
 
-    @is_slow
+    @pytest.mark.slow
     def test_random_mb_seed(self):
         gdirs = up_to_inversion()
         seed = None
@@ -401,8 +401,8 @@ class TestWorkflow(unittest.TestCase):
         self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)
 
 
-@is_slow
-@is_graphic_test
+@pytest.mark.slow
+@pytest.mark.graphic
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
 def test_plot_region_inversion():
 
@@ -424,8 +424,8 @@ def test_plot_region_inversion():
     return fig
 
 
-@is_slow
-@is_graphic_test
+@pytest.mark.slow
+@pytest.mark.graphic
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
 def test_plot_region_model():
 

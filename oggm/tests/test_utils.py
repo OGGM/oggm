@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 import gzip
+import pytest
 
 import salem
 import numpy as np
@@ -15,7 +16,6 @@ from numpy.testing import assert_array_equal, assert_allclose
 import oggm
 from oggm import utils
 from oggm import cfg
-from oggm.tests import is_download, is_download_cred
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github, init_hef
 from oggm.utils import shape_factor_adhikari
 _url_retrieve = None
@@ -744,7 +744,7 @@ class TestDataFiles(unittest.TestCase):
         assert os.path.exists(f2)
         assert os.path.exists(f3)
 
-    @is_download
+    @pytest.mark.download
     def test_srtmdownload(self):
 
         # this zone does exist and file should be small enough for download
@@ -754,14 +754,14 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_srtm_file(zone)
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
+    @pytest.mark.download
     def test_srtmdownloadfails(self):
 
         # this zone does not exist
         zone = '41_20'
         self.assertTrue(utils._download_srtm_file(zone) is None)
 
-    @is_download_cred
+    @pytest.mark.creds
     def test_asterdownload(self):
 
         # this zone does exist and file should be small enough for download
@@ -770,18 +770,18 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_aster_file(zone, unit)
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
+    @pytest.mark.download
     def test_gimp(self):
         fp, z = utils.get_topo_file([], [], rgi_region=5)
         self.assertTrue(os.path.exists(fp[0]))
         self.assertEqual(z, 'GIMP')
 
-    @is_download
+    @pytest.mark.download
     def test_iceland(self):
         fp, z = utils.get_topo_file([-20, -20], [65, 65])
         self.assertTrue(os.path.exists(fp[0]))
 
-    @is_download_cred
+    @pytest.mark.creds
     def test_asterdownloadfails(self):
 
         # this zone does not exist
@@ -789,7 +789,7 @@ class TestDataFiles(unittest.TestCase):
         unit = 'S75E135'
         self.assertTrue(utils._download_aster_file(zone, unit) is None)
 
-    @is_download
+    @pytest.mark.download
     def test_download_cru(self):
 
         tmp = cfg.PATHS['cru_dir']
@@ -800,7 +800,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['cru_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_rgi5(self):
 
         tmp = cfg.PATHS['rgi_dir']
@@ -812,7 +812,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_rgi6(self):
 
         tmp = cfg.PATHS['rgi_dir']
@@ -824,7 +824,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_rgi61(self):
 
         tmp = cfg.PATHS['rgi_dir']
@@ -836,7 +836,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_rgi60_intersects(self):
 
         tmp = cfg.PATHS['rgi_dir']
@@ -849,7 +849,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_rgi61_intersects(self):
 
         tmp = cfg.PATHS['rgi_dir']
@@ -862,7 +862,7 @@ class TestDataFiles(unittest.TestCase):
 
         cfg.PATHS['rgi_dir'] = tmp
 
-    @is_download
+    @pytest.mark.download
     def test_download_dem3_viewpano(self):
 
         # this zone does exist and file should be small enough for download
@@ -873,7 +873,7 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
 
-    @is_download
+    @pytest.mark.download
     def test_download_dem3_viewpano_fails(self):
 
         # this zone does not exist
@@ -881,7 +881,7 @@ class TestDataFiles(unittest.TestCase):
         fp = utils._download_dem3_viewpano(zone)
         self.assertTrue(fp is None)
 
-    @is_download
+    @pytest.mark.download
     def test_auto_topo(self):
         # Test for combine
         fdem, src = utils.get_topo_file([6, 14], [41, 41])
