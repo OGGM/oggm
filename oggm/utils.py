@@ -2673,6 +2673,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     entity.O1Region = '00'
     entity.O2Region = '0'
     gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset)
+    gpd.GeoDataFrame([entity]).to_file(gdir.get_filepath('outlines'))
 
     # Idealized flowline
     coords = np.arange(0, len(surface_h)-0.5, 1)
