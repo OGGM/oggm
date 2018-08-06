@@ -250,24 +250,7 @@ def define_glacier_region(gdir, entity=None):
         the glacier geometry to process
     """
 
-    # choose a spatial resolution with respect to the glacier area
-    dxmethod = cfg.PARAMS['grid_dx_method']
-    area = gdir.rgi_area_km2
-    if dxmethod == 'linear':
-        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
-    elif dxmethod == 'square':
-        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
-    elif dxmethod == 'fixed':
-        dx = np.rint(cfg.PARAMS['fixed_dx'])
-    else:
-        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
-    # Additional trick for varying dx
-    if dxmethod in ['linear', 'square']:
-        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
-
-    log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
-
-    # Make a local glacier map
+    # 1. Make a local glacier map
     proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
@@ -280,21 +263,7 @@ def define_glacier_region(gdir, entity=None):
     geometry = multi_to_poly(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
-    # Corners, incl. a buffer of N pix
-    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
-    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
-    uly = np.max(yy) + cfg.PARAMS['border'] * dx
-    lry = np.min(yy) - cfg.PARAMS['border'] * dx
-    # n pixels
-    nx = np.int((lrx - ulx) / dx)
-    ny = np.int((uly - lry) / dx)
-
-    # Back to lon, lat for DEM download/preparation
-    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
-                          dxdy=(dx, -dx), pixel_ref='corner')
-    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
-
-    # save transformed geometry to disk
+    # 2. save transformed geometry to disk
     entity = entity.copy()
     entity['geometry'] = geometry
     # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
@@ -307,16 +276,19 @@ def define_glacier_region(gdir, entity=None):
     if 'DEM_SOURCE' in towrite:
         del towrite['DEM_SOURCE']
 
-    # Do ew want to use the RGI area or ours?
+    # 3. define glacier area to use
+    area = entity['Area']
+
+    # Do we want to use the RGI area or ours?
     if not cfg.PARAMS['use_rgi_area']:
         area = geometry.area * 1e-6
         entity['Area'] = area
-        gdir.rgi_area_km2 = area
+        towrite['Area'] = area
 
-    # Write
+    # 4. Write shapefile
     towrite.to_file(gdir.get_filepath('outlines'))
 
-    # Also transform the intersects if necessary
+    # 5. Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
     if len(gdf) > 0:
         gdf = gdf.loc[((gdf.RGIId_1 == gdir.rgi_id) |
@@ -336,6 +308,36 @@ def define_glacier_region(gdir, entity=None):
                                'your are doing, set '
                                "cfg.PARAMS['use_intersects'] = False to "
                                "suppress this error.")
+
+    # 6. choose a spatial resolution with respect to the glacier area
+    dxmethod = cfg.PARAMS['grid_dx_method']
+    if dxmethod == 'linear':
+        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
+    elif dxmethod == 'square':
+        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
+    elif dxmethod == 'fixed':
+        dx = np.rint(cfg.PARAMS['fixed_dx'])
+    else:
+        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
+    # Additional trick for varying dx
+    if dxmethod in ['linear', 'square']:
+        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
+
+    log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
+
+    # Corners, incl. a buffer of N pix
+    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
+    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
+    uly = np.max(yy) + cfg.PARAMS['border'] * dx
+    lry = np.min(yy) - cfg.PARAMS['border'] * dx
+    # n pixels
+    nx = np.int((lrx - ulx) / dx)
+    ny = np.int((uly - lry) / dx)
+
+    # Back to lon, lat for DEM download/preparation
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
+                          dxdy=(dx, -dx), pixel_ref='corner')
+    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None

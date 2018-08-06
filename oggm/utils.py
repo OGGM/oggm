@@ -2784,7 +2784,6 @@ class GlacierDirectory(object):
         # Should be V5
         self.rgi_id = rgi_entity.RGIId
         self.glims_id = rgi_entity.GLIMSId
-        self.rgi_area_km2 = float(rgi_entity.Area)
         self.cenlon = float(rgi_entity.CenLon)
         self.cenlat = float(rgi_entity.CenLat)
         self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
@@ -2903,6 +2902,12 @@ class GlacierDirectory(object):
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
         return salem.Grid.from_json(self.get_filepath('glacier_grid'))
+
+    @lazy_property
+    def rgi_area_km2(self):
+        """The glacier's RGI area (km2)."""
+        _area = gpd.read_file(self.get_filepath('outlines'))['Area'].values[0]
+        return _area.round(decimals=3)
 
     @property
     def rgi_area_m2(self):
