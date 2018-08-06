@@ -2907,7 +2907,7 @@ class GlacierDirectory(object):
     def rgi_area_km2(self):
         """The glacier's RGI area (km2)."""
         _area = gpd.read_file(self.get_filepath('outlines'))['Area'].values[0]
-        return _area.round(decimals=3)
+        return float(_area.round(decimals=3))
 
     @property
     def rgi_area_m2(self):
