@@ -26,7 +26,7 @@ from oggm.core import (gis, inversion, climate, centerlines, flowline,
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests import is_slow, RUN_PREPRO_TESTS
+from oggm.tests import RUN_PREPRO_TESTS
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm import workflow
 
@@ -508,7 +508,7 @@ class TestCenterlines(unittest.TestCase):
 
         cfg.PARAMS['border'] = default_b
 
-    @is_slow
+    @pytest.mark.slow
     def test_baltoro_centerlines(self):
 
         cfg.PARAMS['border'] = 2
@@ -1772,7 +1772,7 @@ class TestInversion(unittest.TestCase):
 
         np.testing.assert_allclose(np.nansum(t1), np.nansum(t2))
 
-    @is_slow
+    @pytest.mark.slow
     def test_invert_hef_nofs(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')

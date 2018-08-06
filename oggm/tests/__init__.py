@@ -36,90 +36,56 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
 
 # Some control on which tests to run (useful to avoid too long tests)
 # defaults everywhere else than travis
-ON_AWS = False
-ON_TRAVIS = False
-RUN_SLOW_TESTS = False
-RUN_DOWNLOAD_TESTS = False
 RUN_PREPRO_TESTS = True
 RUN_NUMERIC_TESTS = True
 RUN_MODEL_TESTS = True
 RUN_WORKFLOW_TESTS = True
 RUN_GRAPHIC_TESTS = True
 RUN_BENCHMARK_TESTS = True
-RUN_CREDENTIAL_TESTS = False
 if os.environ.get('TRAVIS') is not None:
-    # specific to travis to reduce global test time
-    ON_TRAVIS = True
-    RUN_DOWNLOAD_TESTS = False
-    matplotlib.use('Agg')
-
-    if sys.version_info < (3, 5):
-        # Minimal tests
-        RUN_SLOW_TESTS = False
+    env = os.environ.get('OGGM_TEST_ENV')
+    if env == 'prepro':
         RUN_PREPRO_TESTS = True
+        RUN_NUMERIC_TESTS = False
+        RUN_MODEL_TESTS = False
+        RUN_WORKFLOW_TESTS = False
+        RUN_GRAPHIC_TESTS = False
+        RUN_BENCHMARK_TESTS = False
+    if env == 'numerics':
+        RUN_PREPRO_TESTS = False
         RUN_NUMERIC_TESTS = True
+        RUN_MODEL_TESTS = False
+        RUN_WORKFLOW_TESTS = False
+        RUN_GRAPHIC_TESTS = False
+        RUN_BENCHMARK_TESTS = False
+    if env == 'models':
+        RUN_PREPRO_TESTS = False
+        RUN_NUMERIC_TESTS = False
         RUN_MODEL_TESTS = True
+        RUN_WORKFLOW_TESTS = False
+        RUN_GRAPHIC_TESTS = False
+        RUN_BENCHMARK_TESTS = False
+    if env == 'workflow':
+        RUN_PREPRO_TESTS = False
+        RUN_NUMERIC_TESTS = False
+        RUN_MODEL_TESTS = False
         RUN_WORKFLOW_TESTS = True
+        RUN_GRAPHIC_TESTS = False
+        RUN_BENCHMARK_TESTS = False
+    if env == 'graphics':
+        RUN_PREPRO_TESTS = False
+        RUN_NUMERIC_TESTS = False
+        RUN_MODEL_TESTS = False
+        RUN_WORKFLOW_TESTS = False
         RUN_GRAPHIC_TESTS = True
-    else:
-        # distribute the tests
-        RUN_SLOW_TESTS = True
-        env = os.environ.get('OGGM_TEST_ENV')
-        if env == 'prepro':
-            RUN_PREPRO_TESTS = True
-            RUN_NUMERIC_TESTS = False
-            RUN_MODEL_TESTS = False
-            RUN_WORKFLOW_TESTS = False
-            RUN_GRAPHIC_TESTS = False
-            RUN_BENCHMARK_TESTS = False
-        if env == 'numerics':
-            RUN_PREPRO_TESTS = False
-            RUN_NUMERIC_TESTS = True
-            RUN_MODEL_TESTS = False
-            RUN_WORKFLOW_TESTS = False
-            RUN_GRAPHIC_TESTS = False
-            RUN_BENCHMARK_TESTS = False
-        if env == 'models':
-            RUN_PREPRO_TESTS = False
-            RUN_NUMERIC_TESTS = False
-            RUN_MODEL_TESTS = True
-            RUN_WORKFLOW_TESTS = False
-            RUN_GRAPHIC_TESTS = False
-            RUN_BENCHMARK_TESTS = False
-        if env == 'workflow':
-            RUN_PREPRO_TESTS = False
-            RUN_NUMERIC_TESTS = False
-            RUN_MODEL_TESTS = False
-            RUN_WORKFLOW_TESTS = True
-            RUN_GRAPHIC_TESTS = False
-            RUN_BENCHMARK_TESTS = False
-        if env == 'graphics':
-            RUN_PREPRO_TESTS = False
-            RUN_NUMERIC_TESTS = False
-            RUN_MODEL_TESTS = False
-            RUN_WORKFLOW_TESTS = False
-            RUN_GRAPHIC_TESTS = True
-            RUN_BENCHMARK_TESTS = False
-        if env == 'benchmark':
-            RUN_PREPRO_TESTS = False
-            RUN_NUMERIC_TESTS = False
-            RUN_MODEL_TESTS = False
-            RUN_WORKFLOW_TESTS = False
-            RUN_GRAPHIC_TESTS = False
-            RUN_BENCHMARK_TESTS = True
-elif 'ip-' in socket.gethostname():
-    # we are on AWS (hacky way)
-    ON_AWS = True
-    RUN_SLOW_TESTS = True
-    matplotlib.use('Agg')
-
-# give user some control
-if os.environ.get('OGGM_SLOW_TESTS') is not None:
-    RUN_SLOW_TESTS = True
-if os.environ.get('OGGM_DOWNLOAD_TESTS') is not None:
-    RUN_DOWNLOAD_TESTS = True
-if os.environ.get('OGGM_CREDENTIAL_TESTS') is not None:
-    RUN_CREDENTIAL_TESTS = True
+        RUN_BENCHMARK_TESTS = False
+    if env == 'benchmark':
+        RUN_PREPRO_TESTS = False
+        RUN_NUMERIC_TESTS = False
+        RUN_MODEL_TESTS = False
+        RUN_WORKFLOW_TESTS = False
+        RUN_GRAPHIC_TESTS = False
+        RUN_BENCHMARK_TESTS = True
 
 # quick n dirty method to see if internet is on
 try:
@@ -128,40 +94,3 @@ try:
 except:
     HAS_INTERNET = False
 
-
-def requires_internet(test):
-    # Test decorator
-    msg = 'requires internet'
-    return test if HAS_INTERNET else unittest.skip(msg)(test)
-
-
-def is_graphic_test(test):
-    # Decorator
-
-    @functools.wraps(test)
-    def new_test(*args, **kwargs):
-        try:
-            return test(*args, **kwargs)
-        finally:
-            plt.close()
-
-    msg = 'requires mpl V1.5+ and matplotlib.testing.decorators'
-    return new_test if HAS_MPL_FOR_TESTS else unittest.skip(msg)(test)
-
-
-def is_slow(test):
-    # Test decorator
-    msg = "requires explicit environment for slow tests"
-    return test if RUN_SLOW_TESTS else unittest.skip(msg)(test)
-
-
-def is_download(test):
-    # Test decorator
-    msg = "requires explicit environment for download tests"
-    return test if RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
-
-
-def is_download_cred(test):
-    # Test decorator
-    msg = "requires explicit environment for download and credential tests (AWS)"
-    return test if RUN_CREDENTIAL_TESTS and RUN_DOWNLOAD_TESTS else unittest.skip(msg)(test)
