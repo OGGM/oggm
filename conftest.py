@@ -1,14 +1,15 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import pytest
 import logging
 import getpass
-import matplotlib
 import matplotlib.pyplot as plt
 from functools import wraps
 from oggm import cfg, utils
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 
 
-matplotlib.use('Agg')
 logger = logging.getLogger(__name__)
 
 
