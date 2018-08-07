@@ -7,15 +7,16 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 import unittest
+import pytest
 import copy
 import time
 import pandas as pd
 from numpy.testing import assert_allclose
+import pytest
 
 # Local imports
 from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
-from oggm.tests import is_slow, RUN_MODEL_TESTS
 import xarray as xr
 from oggm import utils, workflow, tasks
 from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
@@ -26,10 +27,7 @@ from oggm.tests.funcs import *
 # after oggm.test
 import matplotlib.pyplot as plt
 
-# do we event want to run the tests?
-if not RUN_MODEL_TESTS:
-    raise unittest.SkipTest('Skipping all model tests.')
-
+pytestmark = pytest.mark.test_env("models")
 do_plot = False
 
 DOM_BORDER = 80
@@ -1160,7 +1158,7 @@ class TestIO(unittest.TestCase):
                                         glen_a=self.glen_a)
         model.run_until(100)
 
-    @is_slow
+    @pytest.mark.slow
     def test_run(self):
         mb = LinearMassBalance(2600.)
 
@@ -1250,7 +1248,7 @@ class TestIO(unittest.TestCase):
             np.testing.assert_allclose(model.fls[0].section,
                                        fmodel.fls[0].section)
 
-    @is_slow
+    @pytest.mark.slow
     def test_run_annual_step(self):
         mb = LinearMassBalance(2600.)
 
@@ -1434,7 +1432,7 @@ class TestBackwardsIdealized(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @is_slow
+    @pytest.mark.slow
     def test_iterative_back(self):
 
         # This test could be deleted
@@ -1501,7 +1499,7 @@ class TestBackwardsIdealized(unittest.TestCase):
                                    self.glacier[-1].area_m2,
                                    rtol=rtol)
 
-    @is_slow
+    @pytest.mark.slow
     def test_fails(self):
 
         # This test could be deleted
@@ -1729,7 +1727,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_mixed(self):
 
         fls = dummy_mixed_bed(deflambdas=0, map_dx=self.gdir.grid.dx,
@@ -1761,7 +1759,7 @@ class TestIdealisedInversion(unittest.TestCase):
         if do_plot:  # pragma: no cover
             self.simple_plot(model)
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_cliff(self):
 
         fls = dummy_constant_bed_cliff(map_dx=self.gdir.grid.dx,
@@ -1791,7 +1789,7 @@ class TestIdealisedInversion(unittest.TestCase):
         if do_plot:  # pragma: no cover
             self.simple_plot(model)
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_cliff_sf_adhikari(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -1830,7 +1828,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_cliff_sf_huss(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -1934,7 +1932,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_noisy_sf_huss(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -2045,7 +2043,7 @@ class TestIdealisedInversion(unittest.TestCase):
         cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
         cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
 
-    @is_slow
+    @pytest.mark.slow
     def test_inversion_tributary_sf_huss(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -2193,7 +2191,7 @@ class TestHEF(unittest.TestCase):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
 
-    @is_slow
+    @pytest.mark.slow
     def test_equilibrium(self):
 
         flowline.init_present_time_glacier(self.gdir)
@@ -2224,7 +2222,7 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
-    @is_slow
+    @pytest.mark.slow
     def test_commitment(self):
 
         flowline.init_present_time_glacier(self.gdir)
@@ -2284,7 +2282,7 @@ class TestHEF(unittest.TestCase):
             plt.legend(loc='best')
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
@@ -2316,7 +2314,7 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_random_sh(self):
 
         flowline.init_present_time_glacier(self.gdir)
@@ -2357,7 +2355,7 @@ class TestHEF(unittest.TestCase):
 
         self.gdir.hemisphere = 'nh'
 
-    @is_slow
+    @pytest.mark.slow
     def test_cesm(self):
 
         gdir = self.gdir
@@ -2471,7 +2469,7 @@ class TestHEF(unittest.TestCase):
                 0.7*ds3.volume.isel(rgi_id=0, time=-1))
         ds3.close()
 
-    @is_slow
+    @pytest.mark.slow
     def test_elevation_feedback(self):
 
         flowline.init_present_time_glacier(self.gdir)

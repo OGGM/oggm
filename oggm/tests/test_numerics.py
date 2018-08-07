@@ -13,7 +13,6 @@ from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
-from oggm.tests import is_slow, RUN_NUMERIC_TESTS
 from oggm import utils
 from oggm.cfg import N, SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
@@ -24,10 +23,7 @@ from oggm.tests.funcs import *
 # after oggm.test
 import matplotlib.pyplot as plt
 
-# do we event want to run the tests?
-if not RUN_NUMERIC_TESTS:
-    raise unittest.SkipTest('Skipping all numerics tests.')
-
+pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
 
 
@@ -43,7 +39,7 @@ class TestIdealisedCases(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @is_slow
+    @pytest.mark.slow
     def test_constant_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -111,7 +107,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <1.0)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2] ) <1.0)
 
-    @is_slow
+    @pytest.mark.slow
     def test_mass_conservation(self):
 
         mb = LinearMassBalance(2600.)
@@ -144,7 +140,7 @@ class TestIdealisedCases(unittest.TestCase):
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
         assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
 
-    @is_slow
+    @pytest.mark.slow
     def test_min_slope(self):
         """ Check what is the min slope a flowline model can produce
         """
@@ -228,7 +224,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_cliff(self):
         """ a test case for mass conservation in the flowline models
             the idea is to introduce a cliff in the sloping bed and see
@@ -314,7 +310,7 @@ class TestIdealisedCases(unittest.TestCase):
             self.assertTrue(utils.rmsd(surface_h[1], surface_h[2] ) <1.0)
 
 
-    @is_slow
+    @pytest.mark.slow
     def test_equilibrium(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -376,7 +372,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
-    @is_slow
+    @pytest.mark.slow
     def test_timestepping(self):
 
         steps = ['ambitious',
@@ -409,7 +405,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[3][-1], atol=1e-2)
 
-    @is_slow
+    @pytest.mark.slow
     def test_bumpy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -475,7 +471,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) <5)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <5)
 
-    @is_slow
+    @pytest.mark.slow
     def test_noisy_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
@@ -542,7 +538,7 @@ class TestIdealisedCases(unittest.TestCase):
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) <10)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <10)
 
-    @is_slow
+    @pytest.mark.slow
     def test_varying_width(self):
         """This test is for a flowline glacier of variying width, i.e with an
          accumulation area twice as wide as the tongue."""
@@ -612,7 +608,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
                                    atol=5)
 
-    @is_slow
+    @pytest.mark.slow
     def test_tributary(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -662,7 +658,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(surface_h[1], 'b')
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_trapezoidal_bed(self):
 
         tb = dummy_trapezoidal_bed()[0]
@@ -730,7 +726,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_parabolic_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -779,7 +775,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.plot(widths[1], 'b')
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_mixed_bed(self):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel]
@@ -832,7 +828,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.legend()
             plt.show()
 
-    @is_slow
+    @pytest.mark.slow
     def test_boundaries(self):
 
         fls = dummy_constant_bed()
@@ -853,7 +849,7 @@ class TestSia2d(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @is_slow
+    @pytest.mark.slow
     def test_constant_bed(self):
 
         map_dx = 100.

@@ -76,18 +76,23 @@ class _pickle_copier(object):
         self.call_func = func
         self.out_kwargs = kwargs
 
-    def __call__(self, gdir):
+    def __call__(self, arg):
+        if self.call_func:
+            gdir = arg
+            call_func = self.call_func
+        else:
+            call_func, gdir = arg
         try:
             if isinstance(gdir, collections.Sequence):
                 gdir, gdir_kwargs = gdir
                 gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-                return self.call_func(gdir, **gdir_kwargs)
+                return call_func(gdir, **gdir_kwargs)
             else:
-                return self.call_func(gdir, **self.out_kwargs)
+                return call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
                 err_msg = '({0}) exception occured while processing task ' \
-                          '{1}: {2}'.format(gdir.rgi_id, self.call_func.__name__, str(e))
+                          '{1}: {2}'.format(gdir.rgi_id, call_func.__name__, str(e))
                 raise RuntimeError(err_msg) from e
             except AttributeError:
                 pass
@@ -161,35 +166,23 @@ def execute_parallel_tasks(gdir, tasks):
          will be passed to the task function as ``**kwargs``.
     """
 
-    if _have_ogmpi:
-        if ogmpi.OGGM_MPI_COMM is not None:
-            raise NotImplementedError('execute_parallel_tasks does not work'
-                                      'with MPI yet')
+    pc = _pickle_copier(None, {})
 
     _tasks = []
     for task in tasks:
         kwargs = {}
-        if len(task) == 2:
-            # The tuple option
-            kwargs = task[1]
-            task = task[0]
-        _tasks.append(partial(task, gdir, **kwargs))
+        if isinstance(task, collections.Sequence):
+            task, kwargs = task
+        _tasks.append((task, (gdir, kwargs)))
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            ogmpi.mpi_master_spin_tasks(pc, _tasks)
+            return
 
     if cfg.PARAMS['use_multiprocessing']:
-        # TODO: the use of mp.Process here is bad
-        mpp = cfg.PARAMS['mp_processes']
-        mpp = mp.cpu_count() if mpp == -1 else mpp
-        while _tasks:
-            t_tasks = []
-            for i in range(min((mpp, len(_tasks)))):
-                t_tasks.append(_tasks.pop(0))
-            proc = []
-            for task in t_tasks:
-                p = mp.Process(target=task)
-                p.start()
-                proc.append(p)
-            for p in proc:
-                p.join()
+        mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
+        mppool.map(pc, _tasks, chunksize=1)
     else:
         for task in _tasks:
             task()

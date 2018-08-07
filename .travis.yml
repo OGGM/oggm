@@ -22,6 +22,7 @@ matrix:
     - env: OGGM_TEST_ENV=numerics MPL=
     - env: OGGM_TEST_ENV=models MPL=
     - env: OGGM_TEST_ENV=benchmark MPL=
+    - env: OGGM_TEST_ENV=utils MPL=
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
     - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
     - env: OGGM_TEST_ENV=graphics MPL=--mpl
@@ -29,22 +30,9 @@ matrix:
 before_install:
   - docker pull oggm/untested_base:latest
 install:
-  - |
-    cat <<EOF >test.sh
-    set -x
-    set -e
-    pip3 install --upgrade git+https://github.com/fmaussion/salem.git
-    pip3 install coveralls
-    cd /root/oggm
-    pip3 install -e .
-    pytest oggm $MPL --cov-config .coveragerc --cov=oggm --cov-report term-missing
-    coverage combine
-    coveralls || true
-    exit 0
-    EOF
   - mkdir -p $HOME/dl_cache
   - export OGGM_DOWNLOAD_CACHE=/dl_cache
-  - docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:latest /bin/bash /root/oggm/test.sh
+  - docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:latest /bin/bash /root/oggm/ci/travis_script.sh
   - docker cp $PWD oggm_travis:/root/oggm
 script:
   - export OGGM_DOWNLOAD_CACHE=/dl_cache
