@@ -24,9 +24,6 @@ install:
   - "SET PATH=%PYTHON%\\Scripts;%PYTHON%;%PATH%"
   - "SET GDAL_DATA=%PYTHON%\\Library\\share\\gdal"
 
-  # Tell appveyor to run the slow tests
-  - "SET OGGM_SLOW_TESTS=true"
-
   - "conda install --yes --quiet -c conda-forge python=%PYTHON_VERSION%"
   - "conda update --yes --quiet -c conda-forge --all"
 
