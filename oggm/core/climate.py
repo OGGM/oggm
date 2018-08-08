@@ -427,7 +427,7 @@ def process_cru_data(gdir):
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
     # metadata
-    out = {'baseline_climate_source': 'CRU data',
+    out = {'baseline_climate_source': 'CRU',
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')

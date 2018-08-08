@@ -183,10 +183,10 @@ class TestSouthGlacier(unittest.TestCase):
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
 
-            df['oggm_alt'] = ds.distributed_thickness_alt.isel_points(x=df['i'],
-                                                                      y=df['j'])
-            df['oggm_int'] = ds.distributed_thickness_int.isel_points(x=df['i'],
-                                                                      y=df['j'])
+            df['oggm_alt'] = ds.distributed_thickness_alt.isel(x=('z', df['i']),
+                                                               y=('z', df['j']))
+            df['oggm_int'] = ds.distributed_thickness_int.isel(x=('z', df['i']),
+                                                               y=('z', df['j']))
 
             ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
             ds['ref'].data[df['j'], df['i']] = df['thick']
@@ -253,8 +253,8 @@ class TestSouthGlacier(unittest.TestCase):
                                 fs=cfg.FS * x[1])
             execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
             with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-                thick = ds.distributed_thickness.isel_points(x=df['i'],
-                                                             y=df['j'])
+                thick = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                      y=('z', df['j']))
             return (np.abs(thick - df.thick)).mean()
 
         opti = optimization.minimize(to_optimize, [1., 1.],
@@ -267,8 +267,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            df['oggm'] = ds.distributed_thickness.isel_points(x=df['i'],
-                                                                  y=df['j'])
+            df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                       y=('z', df['j']))
             ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
