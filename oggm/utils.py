@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '1387cef677066fc6497ab5c3d34cf65667aaa50f'
+SAMPLE_DATA_COMMIT = 'dc32856a3a436cc733717edf463b0af5ef849182'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -2909,8 +2909,12 @@ class GlacierDirectory(object):
     @lazy_property
     def rgi_area_km2(self):
         """The glacier's RGI area (km2)."""
-        _area = gpd.read_file(self.get_filepath('outlines'))['Area']
-        return np.round(float(_area), decimals=3)
+        try:
+            _area = gpd.read_file(self.get_filepath('outlines'))['Area']
+            return np.round(float(_area), decimals=3)
+        except OSError:
+            raise RuntimeError('Please run `define_glacier_region` before '
+                               'using this property.')
 
     @property
     def rgi_area_m2(self):
