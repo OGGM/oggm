@@ -265,16 +265,17 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['border'] = border
     cfg.PARAMS['use_optimized_inversion_params'] = True
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
-    gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+    gdir = oggm.GlacierDirectory(entity, reset=reset)
     if not gdir.has_file('inversion_params'):
         reset = True
-        gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=reset)
+        gdir = oggm.GlacierDirectory(entity, reset=reset)
 
     if not reset:
         return gdir
