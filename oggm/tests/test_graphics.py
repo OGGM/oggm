@@ -30,8 +30,7 @@ pytestmark = pytest.mark.test_env("graphics")
 # ----------------------------------------------------------
 # Lets go
 
-# TODO: temporary tolerance
-TOLERANCE=10
+TOLERANCE = 5
 
 
 @pytest.mark.internet
@@ -241,7 +240,7 @@ def test_multiple_models():
 
 @pytest.mark.graphic
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE+5)
+                               tolerance=TOLERANCE)
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -349,7 +348,7 @@ def test_ice_cap():
 
 @pytest.mark.graphic
 @pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE+5)
+                               tolerance=TOLERANCE)
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')

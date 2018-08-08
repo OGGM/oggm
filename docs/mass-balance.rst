@@ -181,12 +181,14 @@ with the expected mass-balance and compute the model bias:
     example_plot_bias_ts()  # the code for these examples is posted below
 
 The bias is positive when :math:`\mu` is too low, and negative when :math:`\mu`
-is too high. The vertical dashed lines mark the times where the bias is
-closest to zero. They all correspond to approximately the same :math:`\mu` (but
-not exactly, as precipitation and temperature both influence :math:`\mu`).
+is too high. Here, the bias crosses the zero line twice. Both dates correspond
+to approximately the same :math:`\mu` (but not exactly, as precipitation and
+temperature both influence :math:`\mu`).
 These dates at which the :math:`\mu` candidates
-are close to the real :math:`\mu` are called :math:`t^*` (the associated sensitivities
-:math:`\mu (t^*)` are called :math:`\mu^*`).
+are close to the real :math:`\mu` are called :math:`t^*`
+(the associated sensitivities :math:`\mu (t^*)` are called :math:`\mu^*`).
+For the next step, one :math:`t^*` is sufficient: we pick the one which
+corresponds to the smallest absolute bias.
 
 At the glaciers where observations are available, this detour via the :math:`\mu`
 candidates is not necessary to find the correct :math:`\mu^*`. Indeed, the goal
@@ -264,7 +266,7 @@ Here are some more details:
   OGGM compute the mass-balance for you is to use the
   :py:class:`core.massbalance.PastMassBalance`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
-  algorithm (see :py:func:`tasks.distribute_t_stars`)
+  algorithm (see :py:func:`tasks.local_mustar`)
 - if more than one :math:`t^*` is found for some reference glaciers, than the
   glaciers with only one :math:`t^*` will determine the most likely :math:`t^*`
   for the other glaciers (see :py:func:`tasks.compute_ref_t_stars`)

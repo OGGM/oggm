@@ -46,6 +46,13 @@ Breaking changes
   this change because the regionally compiled files were stored at yearly
   steps anyways.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The list of reference t* dates is now generated differently: instead of
+  the complex (and sort of useless) neirest beighbor algorithm we are now
+  referring back to the original method of Marzeion et al. (2012). This comes
+  together with other breaking changes, altogether likely to change the
+  results of the mass-balance model for some glaciers. For more details see
+  the PR: :pull:`509`
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~

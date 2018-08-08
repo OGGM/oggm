@@ -11,6 +11,7 @@ from collections import OrderedDict
 from distutils.util import strtobool
 
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
@@ -163,24 +164,15 @@ _doc = 'A "better" version of the Centerlines, now on a regular spacing ' \
        'They are now "1.5D" i.e., with a width.'
 BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 
-_doc = 'The monthly climate timeseries for this glacier, stored in a netCDF ' \
-       'file.'
+_doc = 'The monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
-_doc = 'Some information (dictionary) about the climate data for this ' \
-       'glacier, avoiding many useless accesses to the netCDF file.'
+_doc = ('Some information (dictionary) about the climate data and the mass '
+        'balance parameters for this glacier.')
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
-_doc = 'The monthly GCM climate timeseries for this glacier, ' \
-       'stored in a netCDF file.'
+_doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
-
-_doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
-       'factor. This is useful for testing mostly.'
-BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)
-
-_doc = 'A pandas.Series with the (year, mu) data.'
-BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
 
 _doc = 'A csv with three values: the local scalars mu*, t*, bias'
 BASENAMES['local_mustar'] = ('local_mustar.csv', _doc)
@@ -260,6 +252,7 @@ def initialize(file=None):
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
+    PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
 
     # Climate
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -268,10 +261,6 @@ def initialize(file=None):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    _factor = cp['prcp_scaling_factor']
-    if _factor not in ['stddev', 'stddev_perglacier']:
-        _factor = cp.as_float('prcp_scaling_factor')
-    PARAMS['prcp_scaling_factor'] = _factor
     PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
@@ -288,12 +277,12 @@ def initialize(file=None):
                 cp['use_shape_factor_for_fluxbasedmodel']
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file',
-           'grid_dx_method', 'run_mb_calibration',
+           'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
@@ -301,7 +290,7 @@ def initialize(file=None):
            'optimize_inversion_params', 'use_multiple_flowlines',
            'optimize_thick', 'mpi_recv_buf_size', 'hydro_month_nh',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
-           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
+           'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version', 'allow_negative_mustar',
            'use_shape_factor_for_inversion', 'use_rgi_area',
@@ -313,9 +302,15 @@ def initialize(file=None):
     for k in cp:
         PARAMS[k] = cp.as_float(k)
 
+    # Read-in the reference t* data - maybe it will be used, maybe not
+    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4']
+    for fn in fns:
+        PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+
     # Empty defaults
     set_intersects_db()
     IS_INITIALIZED = True
+
     # Pre extract cru cl to avoid problems by multiproc
     from oggm.utils import get_cru_cl_file
     get_cru_cl_file()

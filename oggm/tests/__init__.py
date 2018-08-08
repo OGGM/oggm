@@ -39,4 +39,3 @@ try:
     HAS_INTERNET = True
 except:
     HAS_INTERNET = False
-

@@ -262,12 +262,12 @@ def climate_tasks(gdirs):
         _process_task = tasks.process_cru_data
     execute_entity_task(_process_task, gdirs)
 
-    # Then, global tasks
+    # Then, calibration?
     if cfg.PARAMS['run_mb_calibration']:
         tasks.compute_ref_t_stars(gdirs)
-    tasks.distribute_t_stars(gdirs)
 
-    # And the apparent mass-balance
+    # Mustar and the apparent mass-balance
+    execute_entity_task(tasks.local_mustar, gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
 
 

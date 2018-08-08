@@ -1751,11 +1751,11 @@ def run_from_climate_data(gdir, ys=None, ye=None,
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
-        fmod = FileModel(fp)
-        if init_model_yr is None:
-            init_model_yr = fmod.last_yr
-        fmod.run_until(init_model_yr)
-        init_model_fls = fmod.fls
+        with FileModel(fp) as fmod:
+            if init_model_yr is None:
+                init_model_yr = fmod.last_yr
+            fmod.run_until(init_model_yr)
+            init_model_fls = fmod.fls
 
     mb = mbmods.PastMassBalance(gdir, filename=climate_filename,
                                 input_filesuffix=climate_input_filesuffix)

@@ -188,7 +188,7 @@ class LinearMassBalance(MassBalanceModel):
 class PastMassBalance(MassBalanceModel):
     """Mass balance during the climate data period."""
 
-    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
+    def __init__(self, gdir, mu_star=None, bias=None,
                  filename='climate_monthly', input_filesuffix='',
                  repeat=False, ys=None, ye=None):
         """Initialize.
@@ -205,9 +205,6 @@ class PastMassBalance(MassBalanceModel):
             you want to use (the default is to use the calibrated value)
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
-        prcp_fac : float, optional
-            set to the alternative value of the precipitation factor
-            you want to use (the default is to use the calibrated value)
         filename : str, optional
             set to a different BASENAME if you want to use alternative climate
             data.
@@ -243,9 +240,7 @@ class PastMassBalance(MassBalanceModel):
                 bias = df['bias'][0]
             else:
                 bias = 0.
-        if prcp_fac is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar'))
-            prcp_fac = df['prcp_fac'][0]
+
         self.mu_star = mu_star
         self.bias = bias
 
@@ -253,6 +248,8 @@ class PastMassBalance(MassBalanceModel):
         self.t_solid = cfg.PARAMS['temp_all_solid']
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
+        prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+        default_grad = cfg.PARAMS['temp_default_gradient']
 
         # Public attrs
         self.temp_bias = 0.
@@ -276,7 +273,15 @@ class PastMassBalance(MassBalanceModel):
             # Read timeseries
             self.temp = nc.variables['temp'][:]
             self.prcp = nc.variables['prcp'][:] * prcp_fac
-            self.grad = nc.variables['grad'][:]
+            if 'gradient' in nc.variables:
+                grad = nc.variables['gradient'][:]
+                # Security for stuff that can happen with local gradients
+                g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+                grad = np.where(~np.isfinite(grad), default_grad, grad)
+                grad = np.clip(grad, g_minmax[0], g_minmax[1])
+            else:
+                grad = self.prcp * 0 + default_grad
+            self.grad = grad
             self.ref_hgt = nc.ref_hgt
             self.ys = self.years[0] if ys is None else ys
             self.ye = self.years[-1] if ye is None else ye
@@ -390,7 +395,7 @@ class ConstantMassBalance(MassBalanceModel):
     This is useful for equilibrium experiments.
     """
 
-    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
+    def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, filename='climate_monthly', 
                  input_filesuffix=''):
         """Initialize
@@ -404,9 +409,6 @@ class ConstantMassBalance(MassBalanceModel):
             (the default is to use the calibrated value)
         bias : float, optional
             set to the alternative value of the annual bias [mm we yr-1]
-            you want to use (the default is to use the calibrated value)
-        prcp_fac : float, optional
-            set to the alternative value of the precipitation factor
             you want to use (the default is to use the calibrated value)
         y0 : int, optional, default: tstar
             the year at the center of the period of interest. The default
@@ -422,7 +424,7 @@ class ConstantMassBalance(MassBalanceModel):
 
         super(ConstantMassBalance, self).__init__()
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
-                                     prcp_fac=prcp_fac, filename=filename, 
+                                     filename=filename,
                                      input_filesuffix=input_filesuffix)
 
         if y0 is None:
@@ -555,7 +557,7 @@ class RandomMassBalance(MassBalanceModel):
     approaches based on gaussian assumptions.
     """
 
-    def __init__(self, gdir, mu_star=None, bias=None, prcp_fac=None,
+    def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, seed=None, filename='climate_monthly',
                  input_filesuffix='', all_years=False,
                  unique_samples=False):
@@ -573,9 +575,6 @@ class RandomMassBalance(MassBalanceModel):
             you want to use (the default is to use the calibrated value)
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
-        prcp_fac : float, optional
-            set to the alternative value of the precipitation factor
-            you want to use (the default is to use the calibrated value)
         y0 : int, optional, default: tstar
             the year at the center of the period of interest. The default
             is to use tstar as center.
@@ -601,7 +600,7 @@ class RandomMassBalance(MassBalanceModel):
         super(RandomMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
-                                     prcp_fac=prcp_fac, filename=filename,
+                                     filename=filename,
                                      input_filesuffix=input_filesuffix)
 
         # Climate period

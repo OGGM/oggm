@@ -57,7 +57,7 @@ log.info('Number of glaciers: {}'.format(len(rgidf)))
 # Go - initialize working directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
-# Preprocessing tasks
+# Preprocessing and climate tasks
 task_list = [
     tasks.glacier_masks,
     tasks.compute_centerlines,
@@ -68,14 +68,12 @@ task_list = [
     tasks.catchment_intersections,
     tasks.catchment_width_geom,
     tasks.catchment_width_correction,
+    tasks.process_cru_data,
+    tasks.local_mustar,
+    tasks.apparent_mb,
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)
-
-# Climate tasks -- only data IO and tstar interpolation!
-execute_entity_task(tasks.process_cru_data, gdirs)
-tasks.distribute_t_stars(gdirs)
-execute_entity_task(tasks.apparent_mb, gdirs)
 
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)

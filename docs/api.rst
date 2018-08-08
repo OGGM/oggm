@@ -73,7 +73,6 @@ glaciers in the current run). They are not parallelizable.
     :nosignatures:
 
     tasks.compute_ref_t_stars
-    tasks.distribute_t_stars
     tasks.crossval_t_stars
     tasks.optimize_inversion_params
 

@@ -96,14 +96,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -159,14 +157,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -183,10 +179,10 @@ class TestSouthGlacier(unittest.TestCase):
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
 
-            df['oggm_alt'] = ds.distributed_thickness_alt.isel_points(x=df['i'],
-                                                                      y=df['j'])
-            df['oggm_int'] = ds.distributed_thickness_int.isel_points(x=df['i'],
-                                                                      y=df['j'])
+            df['oggm_alt'] = ds.distributed_thickness_alt.isel(x=('z', df['i']),
+                                                               y=('z', df['j']))
+            df['oggm_int'] = ds.distributed_thickness_int.isel(x=('z', df['i']),
+                                                               y=('z', df['j']))
 
             ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
             ds['ref'].data[df['j'], df['i']] = df['thick']
@@ -231,14 +227,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Reference data
         gdir = gdirs[0]
@@ -253,8 +247,8 @@ class TestSouthGlacier(unittest.TestCase):
                                 fs=cfg.FS * x[1])
             execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
             with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-                thick = ds.distributed_thickness.isel_points(x=df['i'],
-                                                             y=df['j'])
+                thick = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                      y=('z', df['j']))
             return (np.abs(thick - df.thick)).mean()
 
         opti = optimization.minimize(to_optimize, [1., 1.],
@@ -267,8 +261,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            df['oggm'] = ds.distributed_thickness.isel_points(x=df['i'],
-                                                                  y=df['j'])
+            df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                       y=('z', df['j']))
             ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
@@ -307,14 +301,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
