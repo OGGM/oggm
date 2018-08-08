@@ -266,7 +266,7 @@ Here are some more details:
   OGGM compute the mass-balance for you is to use the
   :py:class:`core.massbalance.PastMassBalance`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
-  algorithm (see :py:func:`tasks.distribute_t_stars`)
+  algorithm (see :py:func:`tasks.local_mustar`)
 - if more than one :math:`t^*` is found for some reference glaciers, than the
   glaciers with only one :math:`t^*` will determine the most likely :math:`t^*`
   for the other glaciers (see :py:func:`tasks.compute_ref_t_stars`)

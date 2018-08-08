@@ -11,6 +11,7 @@ from collections import OrderedDict
 from distutils.util import strtobool
 
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
@@ -276,7 +277,7 @@ def initialize(file=None):
                 cp['use_shape_factor_for_fluxbasedmodel']
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
 
     # Delete non-floats
@@ -301,9 +302,15 @@ def initialize(file=None):
     for k in cp:
         PARAMS[k] = cp.as_float(k)
 
+    # Read-in the reference t* data - maybe it will be used, maybe not
+    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4']
+    for fn in fns:
+        PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+
     # Empty defaults
     set_intersects_db()
     IS_INITIALIZED = True
+
     # Pre extract cru cl to avoid problems by multiproc
     from oggm.utils import get_cru_cl_file
     get_cru_cl_file()

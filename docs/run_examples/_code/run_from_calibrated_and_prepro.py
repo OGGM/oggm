@@ -33,7 +33,7 @@ log.info('Number of glaciers: {}'.format(len(gdirs)))
 
 # We can step directly to a new experiment!
 # Random climate representative for the recent climate (1985-2015)
-# This is a kinf of "commitment" run
+# This is a kind of "commitment" run
 execute_entity_task(tasks.run_random_climate, gdirs,
                     nyears=200, y0=2000, seed=1,
                     output_filesuffix='_commitment')

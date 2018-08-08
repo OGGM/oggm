@@ -15,14 +15,15 @@ f, axs = plt.subplots(2, 3, figsize=(9, 4), sharex=True)
 
 for i, rid in enumerate(ds1.rgi_id):
     ax = axs[0, i]
-    v1_km3.sel(rgi_id=rid).plot(ax=ax, label='t*')
-    v2_km3.sel(rgi_id=rid).plot(ax=ax, label='Commitment')
+    v1_km3.sel(rgi_id=rid).to_series().plot(ax=ax, label='t*')
+    v2_km3.sel(rgi_id=rid).to_series().plot(ax=ax, label='Commitment')
     if i == 0:
         ax.set_ylabel('Volume [km3]')
         ax.legend(loc='best')
     else:
         ax.set_ylabel('')
     ax.set_xlabel('')
+    ax.set_title(rid.values)
 
     ax = axs[1, i]
 

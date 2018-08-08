@@ -423,11 +423,13 @@ def process_cru_data(gdir):
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
                                     gradient=ts_grad)
+
+    source = nc_ts_tmp._nc.title[:10]
     ncclim._nc.close()
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
     # metadata
-    out = {'baseline_climate_source': 'CRU',
+    out = {'baseline_climate_source': source,
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
@@ -753,24 +755,63 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar'])
-def local_mustar(gdir, tstar=None, bias=None, minimum_mustar=0.):
+def local_mustar(gdir, *, ref_df=None,
+                 tstar=None, bias=None, minimum_mustar=0.):
     """Compute the local mustar from interpolated tstars.
+
+    If tstar and bias are mot provided they will be interpolated from the
+    reference file.
 
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
-    tstar: int
+    ref_df : pd.Dataframe, optional
+        replace the default calibration list with your own.
+    tstar: int, optional
         the year where the glacier should be equilibrium
-    bias: int
+    bias: float, optional
         the associated reference bias
-    minimum_mustar: float
+    minimum_mustar: float, optional
         if mustar goes below this threshold, clip it to that value.
         If you want this to happen with `minimum_mustar=0.` you will have
         to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
-    assert bias is not None
-    assert tstar is not None
+    if tstar is None or bias is None:
+        # Do our own interpolation
+        if ref_df is None:
+            if not cfg.PARAMS['run_mb_calibration']:
+                # Make some checks and use the default one
+                source = gdir.read_pickle('climate_info')
+                source = source['baseline_climate_source']
+                ok_source = ['CRU TS4.01', 'CRU TS3.23']
+                if not np.any(s in source.upper() for s in ok_source):
+                    raise RuntimeError('If you are using a custom climate '
+                                       'file you should run your own MB '
+                                       'calibration.')
+                v = gdir.rgi_version[0]  # major version relevant
+                ref_df = cfg.PARAMS['ref_tstars_rgi{}_cru4'.format(v)]
+            else:
+                # Use the the local calibration
+                fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+                ref_df = pd.read_csv(fp)
+
+        # Compute the distance to each glacier
+        distances = utils.haversine(gdir.cenlon, gdir.cenlat,
+                                    ref_df.lon, ref_df.lat)
+
+        # Take the 10 closest
+        aso = np.argsort(distances)[0:9]
+        amin = ref_df.iloc[aso]
+        distances = distances[aso]**2
+
+        # If really close no need to divide, else weighted average
+        if distances.iloc[0] <= 0.1:
+            tstar = amin.tstar.iloc[0]
+            bias = amin.bias.iloc[0]
+        else:
+            tstar = int(np.average(amin.tstar, weights=1./distances))
+            bias = np.average(amin.bias, weights=1./distances)
 
     # Climate period
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -990,6 +1031,10 @@ def distribute_t_stars(gdirs, ref_df=None, minimum_mustar=0.):
         to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
+    warnings.warn('The global task `distribute_t_stars` is deprecated. Use '
+                  'a direct call to the entity task `local_mustar` instead.',
+                  DeprecationWarning)
+
     log.info('Distribute t* and mu*')
 
     if ref_df is None:
@@ -1063,7 +1108,7 @@ def crossval_t_stars(gdirs):
 
         # redo the computations
         with utils.DisableLogger():
-            distribute_t_stars([gdir], ref_df=tmp_ref_df)
+            local_mustar(gdir, ref_df=tmp_ref_df)
 
         # store
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -1073,7 +1118,7 @@ def crossval_t_stars(gdirs):
 
         # let's make sure we don't brake things
         with utils.DisableLogger():
-            distribute_t_stars([gdir], ref_df=full_ref_df)
+            local_mustar(gdir, ref_df=full_ref_df)
 
     # Reproduce Ben's figure
     for i, rid in enumerate(full_ref_df.index):

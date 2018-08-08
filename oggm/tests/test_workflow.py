@@ -161,7 +161,7 @@ def up_to_distrib(reset=False):
             warnings.simplefilter("ignore")
             workflow.execute_entity_task(tasks.process_cru_data, gdirs)
         tasks.compute_ref_t_stars(gdirs)
-        tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.local_mustar, gdirs)
         workflow.execute_entity_task(tasks.apparent_mb, gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('cru', f)
@@ -251,7 +251,7 @@ class TestWorkflow(unittest.TestCase):
 
         # in case we ran crossval we need to rerun
         tasks.compute_ref_t_stars(gdirs)
-        tasks.distribute_t_stars(gdirs)
+        workflow.execute_entity_task(tasks.local_mustar, gdirs)
         workflow.execute_entity_task(tasks.apparent_mb, gdirs)
 
         # before crossval

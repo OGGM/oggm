@@ -1199,7 +1199,7 @@ class TestClimate(unittest.TestCase):
 
         # test distribute
         climate.compute_ref_t_stars([gdir])
-        climate.distribute_t_stars([gdir])
+        climate.local_mustar(gdir)
         cfg.PARAMS['tstar_search_window'] = [0, 0]
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))

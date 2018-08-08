@@ -2323,7 +2323,7 @@ class TestHEF(unittest.TestCase):
         cfg.PARAMS['run_mb_calibration'] = True
         climate.process_cru_data(self.gdir)
         climate.compute_ref_t_stars([self.gdir])
-        climate.distribute_t_stars([self.gdir])
+        climate.local_mustar(self.gdir)
 
         flowline.run_random_climate(self.gdir, nyears=20, seed=4,
                                     bias=0, output_filesuffix='_rdn')

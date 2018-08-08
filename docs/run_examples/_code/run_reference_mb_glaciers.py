@@ -97,7 +97,7 @@ for task in task_list:
 # Climate tasks
 execute_entity_task(tasks.process_cru_data, gdirs)
 tasks.compute_ref_t_stars(gdirs)
-tasks.distribute_t_stars(gdirs)
+execute_entity_task(tasks.local_mustar, gdirs)
 
 # Model validation
 tasks.crossval_t_stars(gdirs)  # for later

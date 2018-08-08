@@ -96,14 +96,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -159,14 +157,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -231,14 +227,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Reference data
         gdir = gdirs[0]
@@ -307,14 +301,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)

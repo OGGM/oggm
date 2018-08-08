@@ -39,7 +39,7 @@ for gd in gdirs:
     # Mass-balance model with cross-validated parameters instead
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.cv_mustar,
                              bias=t_cvdf.cv_bias)
-    # Mass-blaance timeseries, observed and simulated
+    # Mass-balance timeseries, observed and simulated
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
                                            year=refmb.index)

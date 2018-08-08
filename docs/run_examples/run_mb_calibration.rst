@@ -32,9 +32,9 @@ file. Let's replicate Figure 3 in  `Marzeion et al., (2012)`_ :
 
 This should generate an output similar to::
 
-    Median bias: 16.72
-    Mean bias: 16.45
-    RMS: 514.98
+    Median bias: 18.78
+    Mean bias: 15.34
+    RMS: 518.82
     Sigma bias: 0.87
 
 
