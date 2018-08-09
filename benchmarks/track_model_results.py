@@ -50,9 +50,8 @@ class hef_prepro:
         tasks.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
-        tasks.local_mustar(gdir, tstar=res['t_star'][-1],
-                           bias=res['bias'][-1],
-                           prcp_fac=res['prcp_fac'])
+        tasks.local_mustar(gdir, tstar=res['t_star'],
+                           bias=res['bias'])
         tasks.apparent_mb(gdir)
 
         tasks.prepare_for_inversion(gdir)
