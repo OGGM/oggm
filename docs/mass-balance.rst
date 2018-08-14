@@ -55,21 +55,34 @@ monthly precipitation climatology is 0 we fall back to the standard anomalies.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
+HISTALP
+~~~~~~~
 
-User-provided dataset
-~~~~~~~~~~~~~~~~~~~~~
+If `PARAMS['baseline_climate']` is set to 'HISTALP', OGGM will automatically
+download and unpack the data from the `HISTALP`_ website.
 
-You can provide any other dataset to OGGM by setting the ``climate_file``
-parameter in ``params.cfg``. See the HISTALP data file in the `sample-data`_
-folder for an example.
+.. _HISTALP: http://www.zamg.ac.at/histalp/
 
-.. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
-
+The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
+However, the data is considered spurious before 1850. Therefore, we
+recommend to use data from 1850 onwards. This can be done by setting
+``cfg.PARAMS['baseline_y0'] = 1850``.
 
 .. ipython:: python
 
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
+
+
+
+User-provided dataset
+~~~~~~~~~~~~~~~~~~~~~
+
+You can provide any other dataset to OGGM by setting the ``climate_file``
+parameter in ``params.cfg``. See the `HISTALP_oetztal.nc` data file
+in the `sample-data`_ folder for an example format.
+
+.. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
 
 
 GCM data
@@ -102,7 +115,7 @@ The default config parameters are:
 .. ipython:: python
 
     cfg.PARAMS['temp_use_local_gradient']  # use the regression method?
-    cfg.PARAMS['temp_default_gradient']  # constant gradiant
+    cfg.PARAMS['temp_default_gradient']  # constant gradient
 
 
 Temperature index model
@@ -181,9 +194,9 @@ with the expected mass-balance and compute the model bias:
     example_plot_bias_ts()  # the code for these examples is posted below
 
 The bias is positive when :math:`\mu` is too low, and negative when :math:`\mu`
-is too high. Here, the bias crosses the zero line twice. Both dates correspond
-to approximately the same :math:`\mu` (but not exactly, as precipitation and
-temperature both influence :math:`\mu`).
+is too high. Here, the bias crosses the zero line twice. All dates
+correspond to approximately the same :math:`\mu` (but not exactly,
+as precipitation and temperature both have an influence on it).
 These dates at which the :math:`\mu` candidates
 are close to the real :math:`\mu` are called :math:`t^*`
 (the associated sensitivities :math:`\mu (t^*)` are called :math:`\mu^*`).

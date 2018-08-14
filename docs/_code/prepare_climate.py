@@ -31,8 +31,11 @@ tasks.compute_downstream_line(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
-cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-tasks.process_custom_climate_data(gdir)
+data_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
+cfg.PATHS['cru_dir'] = os.path.dirname(data_dir)
+cfg.PARAMS['baseline_climate'] = 'HISTALP'
+cfg.PARAMS['baseline_y0'] = 1850
+tasks.process_histalp_data(gdir)
 tasks.mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()

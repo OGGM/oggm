@@ -249,13 +249,13 @@ def initialize(file=None):
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
     PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
-    PARAMS['baseline_y0'] = cp.as_int('baseline_y0')
-    PARAMS['baseline_y1'] = cp.as_int('baseline_y1')
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
+    PARAMS['baseline_y0'] = cp.as_int('baseline_y0')
+    PARAMS['baseline_y1'] = cp.as_int('baseline_y1')
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')

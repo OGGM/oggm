@@ -254,13 +254,10 @@ def climate_tasks(gdirs):
         gdirs = [gdirs]
 
     # Which climate should we use?
-    if (('climate_file' in cfg.PATHS) and
-            os.path.exists(cfg.PATHS['climate_file'])):
-        raise ValueError('climate_tasks wont run on custom files any more. '
-                         'Do it manually if you need to.')
-
     if cfg.PARAMS['baseline_climate'] == 'CRU':
         _process_task = tasks.process_cru_data
+    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
+        _process_task = tasks.process_custom_climate_data
     elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
         _process_task = tasks.process_histalp_data
     else:
