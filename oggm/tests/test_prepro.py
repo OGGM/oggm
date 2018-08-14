@@ -784,6 +784,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['run_mb_calibration'] = True
+        cfg.PARAMS['baseline_climate'] = ''
 
     def tearDown(self):
         self.rm_dir()
@@ -903,6 +904,46 @@ class TestClimate(unittest.TestCase):
                 # precip
                 totest = nc_c.prcp - nc_h.prcp
                 self.assertTrue(totest.mean() < 100)
+
+    def test_distribute_climate_histalp_new(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_custom_climate_data(gdirs[0])
+        cru_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        climate.process_histalp_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+                nc_ci = nc_c.isel(time=slice(0, 2424))
+                np.testing.assert_allclose(nc_h['temp'], nc_ci['temp'])
+                # for precip the data changed in between versions
+                np.testing.assert_allclose(nc_h['prcp'].mean(),
+                                           nc_ci['prcp'].mean(),
+                                           atol=1)
+                np.testing.assert_allclose(nc_h.ref_pix_dis,
+                                           nc_ci.ref_pix_dis)
 
     def test_sh(self):
 
@@ -1311,7 +1352,9 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
+        cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
+
 
     def tearDown(self):
         self.rm_dir()
@@ -1369,6 +1412,7 @@ class TestInversion(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):

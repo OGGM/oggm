@@ -6,6 +6,7 @@ import glob
 import os
 import tempfile
 import gzip
+import bz2
 import json
 import shutil
 import zipfile
@@ -66,10 +67,12 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'dc32856a3a436cc733717edf463b0af5ef849182'
+SAMPLE_DATA_COMMIT = 'f96dd63a42ddc773c0e6ec525d244f4e72c0d0d0'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
+
+HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 _RGI_METADATA = dict()
 
@@ -1919,6 +1922,63 @@ def _get_cru_file_unlocked(var=None):
         dlfile = file_downloader(cru_url)
         ofile = os.path.join(cru_dir, cru_filename)
         with gzip.GzipFile(dlfile) as zf:
+            with open(ofile, 'wb') as outfile:
+                for line in zf:
+                    outfile.write(line)
+    return ofile
+
+
+def get_histalp_file(var=None):
+    """Returns a path to the desired HISTALP file.
+
+    If the file is not present, download it.
+
+    Parameters
+    ----------
+    var: 'tmp' or 'pre'
+
+    Returns
+    -------
+    path to the CRU file
+    """
+    with _get_download_lock():
+        return _get_histalp_file_unlocked(var)
+
+
+def _get_histalp_file_unlocked(var=None):
+
+    cru_dir = cfg.PATHS['cru_dir']
+
+    # Be sure the user gave a sensible path to the climate dir
+    if not cru_dir:
+        raise ValueError('The CRU data directory has to be'
+                         'specified explicitly.')
+    cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
+    mkdir(cru_dir)
+
+    # Be sure input makes sense
+    if var not in ['tmp', 'pre']:
+        raise ValueError('HISTALP variable {} does not exist!'.format(var))
+
+    # File to look for
+    if var == 'tmp':
+        bname = 'HISTALP_temperature_1780-2014.nc'
+    else:
+        bname = 'HISTALP_precipitation_all_abs_1801-2014.nc'
+
+    search = glob.glob(os.path.join(cru_dir, bname))
+    if len(search) == 1:
+        ofile = search[0]
+    elif len(search) > 1:
+        raise RuntimeError('You seem to have more than one matching file in '
+                           'your CRU directory: {}. Help me by deleting the '
+                           'one you dont want to use anymore.'.format(cru_dir))
+    else:
+        # if not there download it
+        h_url = HISTALP_SERVER + bname + '.bz2'
+        dlfile = file_downloader(h_url)
+        ofile = os.path.join(cru_dir, bname)
+        with bz2.BZ2File(dlfile) as zf:
             with open(ofile, 'wb') as outfile:
                 for line in zf:
                     outfile.write(line)
