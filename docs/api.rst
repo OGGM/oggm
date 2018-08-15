@@ -46,6 +46,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.catchment_width_geom
     tasks.catchment_width_correction
     tasks.process_cru_data
+    tasks.process_histalp_data
     tasks.process_custom_climate_data
     tasks.process_cesm_data
     tasks.local_mustar

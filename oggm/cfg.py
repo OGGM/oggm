@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import glob
+import json
 from collections import OrderedDict
 from distutils.util import strtobool
 
@@ -249,12 +250,15 @@ def initialize(file=None):
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
     PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
-    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
-    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
 
     # Climate
+    PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
+    PARAMS['baseline_y0'] = cp.as_int('baseline_y0')
+    PARAMS['baseline_y1'] = cp.as_int('baseline_y1')
+    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
+    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
@@ -283,7 +287,7 @@ def initialize(file=None):
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing',
+           'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_optimized_inversion_params', 'invert_with_sliding',
@@ -294,7 +298,7 @@ def initialize(file=None):
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version', 'allow_negative_mustar',
            'use_shape_factor_for_inversion', 'use_rgi_area',
-           'use_shape_factor_for_fluxbasedmodel']
+           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
     for k in ltr:
         cp.pop(k, None)
 
@@ -303,9 +307,14 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Read-in the reference t* data - maybe it will be used, maybe not
-    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4']
+    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
+           'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
     for fn in fns:
         PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+        fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
+        with open(fpath, 'r') as fp:
+            mbpar = json.load(fp)
+        PARAMS[fn+'_calib_params'] = mbpar
 
     # Empty defaults
     set_intersects_db()

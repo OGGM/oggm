@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 import gzip
+import bz2
 import pytest
 
 import salem
@@ -479,6 +480,24 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert os.path.exists(tf)
 
+    def test_histalp(self):
+
+        # Create fake histalp file
+        cf = os.path.join(self.dldir, 'HISTALP_temperature_1780-2014.nc.bz2')
+        with bz2.open(cf, 'wb') as gz:
+            gz.write(b'dummy')
+
+        def down_check(url, cache_name=None, reset=False):
+            expected = ('http://www.zamg.ac.at/histalp/download/grid5m/'
+                        'HISTALP_temperature_1780-2014.nc.bz2')
+            self.assertEqual(url, expected)
+            return cf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            tf = utils.get_histalp_file('tmp')
+
+        assert os.path.exists(tf)
+
     def test_srtm(self):
 
         # Make a fake topo file
@@ -798,6 +817,19 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_extract')
 
         of = utils.get_cru_file('tmp')
+        self.assertTrue(os.path.exists(of))
+
+        cfg.PATHS['cru_dir'] = tmp
+
+    @pytest.mark.download
+    def test_download_histalp(self):
+
+        tmp = cfg.PATHS['cru_dir']
+        cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_extract')
+
+        of = utils.get_histalp_file('tmp')
+        self.assertTrue(os.path.exists(of))
+        of = utils.get_histalp_file('pre')
         self.assertTrue(os.path.exists(of))
 
         cfg.PATHS['cru_dir'] = tmp

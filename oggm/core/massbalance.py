@@ -190,7 +190,7 @@ class PastMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  filename='climate_monthly', input_filesuffix='',
-                 repeat=False, ys=None, ye=None):
+                 repeat=False, ys=None, ye=None, check_calib_params=True):
         """Initialize.
 
         Parameters
@@ -219,6 +219,11 @@ class PastMassBalance(MassBalanceModel):
         ye : int
             The end of the climate period where the MB model is valid
             (default: the period with available data)
+        check_calib_params : bool
+            OGGM will try hard not to use wrongly calibrated mu* by checking
+            the parameters used during calibration and the ones you are
+            using at run time. If they don't match, it will raise an error.
+            Set to False to suppress this check.
 
         Attributes
         ----------
@@ -250,6 +255,16 @@ class PastMassBalance(MassBalanceModel):
         self.t_melt = cfg.PARAMS['temp_melt']
         prcp_fac = cfg.PARAMS['prcp_scaling_factor']
         default_grad = cfg.PARAMS['temp_default_gradient']
+
+        # Check the climate related params to the GlacierDir to make sure
+        if check_calib_params:
+            mb_calib = gdir.read_pickle('climate_info')['mb_calib_params']
+            for k, v in mb_calib.items():
+                if v != cfg.PARAMS[k]:
+                    raise RuntimeError('You seem to use different mass-'
+                                       'balance parameters than used for the '
+                                       'calibration. Set `check_calib_params` '
+                                       'to false to suppress this error.')
 
         # Public attrs
         self.temp_bias = 0.

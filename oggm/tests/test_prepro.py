@@ -784,6 +784,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['run_mb_calibration'] = True
+        cfg.PARAMS['baseline_climate'] = ''
 
     def tearDown(self):
         self.rm_dir()
@@ -883,6 +884,7 @@ class TestClimate(unittest.TestCase):
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['baseline_climate'] = 'CRU'
         climate.process_cru_data(gdirs[1])
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -903,6 +905,50 @@ class TestClimate(unittest.TestCase):
                 # precip
                 totest = nc_c.prcp - nc_h.prcp
                 self.assertTrue(totest.mean() < 100)
+
+    def test_distribute_climate_histalp_new(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_custom_climate_data(gdirs[0])
+        cru_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['baseline_climate'] = 'HISTALP'
+        cfg.PARAMS['baseline_y0'] = 1850
+        cfg.PARAMS['baseline_y1'] = 2003
+        climate.process_histalp_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1851)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+                nc_hi = nc_h.isel(time=slice(49*12, 2424))
+                np.testing.assert_allclose(nc_hi['temp'], nc_c['temp'])
+                # for precip the data changed in between versions, we
+                # can't test for absolute equality
+                np.testing.assert_allclose(nc_hi['prcp'].mean(),
+                                           nc_c['prcp'].mean(),
+                                           atol=1)
+                np.testing.assert_allclose(nc_hi.ref_pix_dis,
+                                           nc_c.ref_pix_dis)
 
     def test_sh(self):
 
@@ -930,7 +976,6 @@ class TestClimate(unittest.TestCase):
         gdir.hemisphere = 'sh'
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
-
         climate.process_custom_climate_data(gdirs[0])
         ci = gdirs[0].read_pickle('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1803)
@@ -940,6 +985,7 @@ class TestClimate(unittest.TestCase):
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['baseline_climate'] = 'CRU'
         climate.process_cru_data(gdirs[1])
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -1276,6 +1322,7 @@ class TestClimate(unittest.TestCase):
         cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
         cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['baseline_climate'] = 'CRU'
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1311,7 +1358,9 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('HISTALP_oetztal.nc')
+        cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
+
 
     def tearDown(self):
         self.rm_dir()
@@ -1369,6 +1418,7 @@ class TestInversion(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -1890,6 +1940,8 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
+        # Trick
+        gdir.write_pickle({'source': 'HISTALP'}, 'climate_info')
         climate.local_mustar(gdir, tstar=1975, bias=0.)
         climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)

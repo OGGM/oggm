@@ -6,6 +6,7 @@ import glob
 import os
 import tempfile
 import gzip
+import bz2
 import json
 import shutil
 import zipfile
@@ -66,10 +67,12 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'dc32856a3a436cc733717edf463b0af5ef849182'
+SAMPLE_DATA_COMMIT = 'a0bc38e2f5fde2452f50d62824bdb8c21859f8a4'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
+
+HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 _RGI_METADATA = dict()
 
@@ -1925,6 +1928,63 @@ def _get_cru_file_unlocked(var=None):
     return ofile
 
 
+def get_histalp_file(var=None):
+    """Returns a path to the desired HISTALP file.
+
+    If the file is not present, download it.
+
+    Parameters
+    ----------
+    var: 'tmp' or 'pre'
+
+    Returns
+    -------
+    path to the CRU file
+    """
+    with _get_download_lock():
+        return _get_histalp_file_unlocked(var)
+
+
+def _get_histalp_file_unlocked(var=None):
+
+    cru_dir = cfg.PATHS['cru_dir']
+
+    # Be sure the user gave a sensible path to the climate dir
+    if not cru_dir:
+        raise ValueError('The CRU data directory has to be'
+                         'specified explicitly.')
+    cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
+    mkdir(cru_dir)
+
+    # Be sure input makes sense
+    if var not in ['tmp', 'pre']:
+        raise ValueError('HISTALP variable {} does not exist!'.format(var))
+
+    # File to look for
+    if var == 'tmp':
+        bname = 'HISTALP_temperature_1780-2014.nc'
+    else:
+        bname = 'HISTALP_precipitation_all_abs_1801-2014.nc'
+
+    search = glob.glob(os.path.join(cru_dir, bname))
+    if len(search) == 1:
+        ofile = search[0]
+    elif len(search) > 1:
+        raise RuntimeError('You seem to have more than one matching file in '
+                           'your CRU directory: {}. Help me by deleting the '
+                           'one you dont want to use anymore.'.format(cru_dir))
+    else:
+        # if not there download it
+        h_url = HISTALP_SERVER + bname + '.bz2'
+        dlfile = file_downloader(h_url)
+        ofile = os.path.join(cru_dir, bname)
+        with bz2.BZ2File(dlfile) as zf:
+            with open(ofile, 'wb') as outfile:
+                for line in zf:
+                    outfile.write(line)
+    return ofile
+
+
 def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
                   source=None):
     """
@@ -2054,9 +2114,12 @@ def get_ref_mb_glaciers(gdirs):
     for g in gdirs:
         if g.rgi_id not in dfids or g.is_tidewater:
             continue
-        mbdf = g.get_ref_mb_data()
-        if len(mbdf) >= 5:
-            ref_gdirs.append(g)
+        try:
+            mbdf = g.get_ref_mb_data()
+            if len(mbdf) >= 5:
+                ref_gdirs.append(g)
+        except RuntimeError:
+            pass
     return ref_gdirs
 
 
@@ -3447,7 +3510,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'local_mustar', 'climate_monthly', 'gridded_data',
-                 'cesm_data']
+                 'cesm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
@@ -3455,7 +3518,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid',
                  'local_mustar', 'climate_monthly', 'gridded_data',
-                 'cesm_data']
+                 'cesm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))

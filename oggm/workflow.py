@@ -253,13 +253,16 @@ def climate_tasks(gdirs):
     except TypeError:
         gdirs = [gdirs]
 
-    # I don't know where this logic is best placed...
-    if (('climate_file' in cfg.PATHS) and
-            os.path.exists(cfg.PATHS['climate_file'])):
-        _process_task = tasks.process_custom_climate_data
-    else:
-        # OK, so use the default CRU "high-resolution" method
+    # Which climate should we use?
+    if cfg.PARAMS['baseline_climate'] == 'CRU':
         _process_task = tasks.process_cru_data
+    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
+        _process_task = tasks.process_custom_climate_data
+    elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
+        _process_task = tasks.process_histalp_data
+    else:
+        raise ValueError('baseline_climate parameter not understood')
+
     execute_entity_task(_process_task, gdirs)
 
     # Then, calibration?

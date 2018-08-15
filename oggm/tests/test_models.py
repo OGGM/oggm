@@ -187,6 +187,7 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
+        cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
         climate.local_mustar(gdir, tstar=1930, bias=0)
         climate.apparent_mb(gdir)
@@ -2320,6 +2321,7 @@ class TestHEF(unittest.TestCase):
         flowline.init_present_time_glacier(self.gdir)
 
         self.gdir.hemisphere = 'sh'
+        cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['run_mb_calibration'] = True
         climate.process_cru_data(self.gdir)
         climate.compute_ref_t_stars([self.gdir])
