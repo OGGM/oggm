@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import glob
+import json
 from collections import OrderedDict
 from distutils.util import strtobool
 
@@ -306,9 +307,14 @@ def initialize(file=None):
         PARAMS[k] = cp.as_float(k)
 
     # Read-in the reference t* data - maybe it will be used, maybe not
-    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4']
+    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
+           'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
     for fn in fns:
         PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+        fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
+        with open(fpath, 'r') as fp:
+            mbpar = json.load(fp)
+        PARAMS[fn+'_calib_params'] = mbpar
 
     # Empty defaults
     set_intersects_db()

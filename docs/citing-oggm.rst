@@ -63,12 +63,12 @@ The OGGM logos are free to use!
 **full logo**:
 `pdf <_static/logos/oggm.pdf>`_,
 `large (2004x856) <_static/logos/oggm_l.png>`_,
-`large with alpha channel <_static/logos/oggm_l_alpha.png>`_,
+`large (2004x856) with alpha channel <_static/logos/oggm_l_alpha.png>`_,
 `small (502x214) <_static/logos/oggm_s.png>`_,
-`small with alpha channel <_static/logos/oggm_s_alpha.png>`_
+`small (502x214) with alpha channel <_static/logos/oggm_s_alpha.png>`_
 
 .. image:: _static/logos/oggm_icon.png
 
 **icon logo**:
 `small (135x157) <_static/logos/oggm_icon.png>`_,
-`small with alpha channel <_static/logos/oggm_icon_alpha.png>`_
+`small (135x157) with alpha channel <_static/logos/oggm_icon_alpha.png>`_

@@ -891,20 +891,35 @@ def local_mustar(gdir, *, ref_df=None,
         to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
+    # Relevant mb params
+    params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
+              'temp_melt', 'prcp_scaling_factor']
+
     if tstar is None or bias is None:
         # Do our own interpolation
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # Make some checks and use the default one
-                source = gdir.read_pickle('climate_info')
-                source = source['baseline_climate_source']
-                ok_source = ['CRU TS4.01', 'CRU TS3.23']
+                climate_info = gdir.read_pickle('climate_info')
+                source = climate_info['baseline_climate_source']
+                ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
                     raise RuntimeError('If you are using a custom climate '
                                        'file you should run your own MB '
                                        'calibration.')
                 v = gdir.rgi_version[0]  # major version relevant
-                ref_df = cfg.PARAMS['ref_tstars_rgi{}_cru4'.format(v)]
+
+                # Check that the params are fine
+                str_s = 'cru4' if 'CRU' in source else 'histalp'
+                vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
+                for k in params:
+                    if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
+                        raise ValueError('The reference t* you are trying '
+                                         'to use was calibrated with '
+                                         'difference MB parameters. You '
+                                         'might have to run the calibration '
+                                         'manually.')
+                ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
             else:
                 # Use the the local calibration
                 fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
@@ -953,8 +968,6 @@ def local_mustar(gdir, *, ref_df=None,
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around with out calibration
     out = gdir.read_pickle('climate_info')
-    params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
-              'temp_melt', 'prcp_scaling_factor']
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
     gdir.write_pickle(out, 'climate_info')
 

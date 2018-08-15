@@ -1940,6 +1940,8 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
+        # Trick
+        gdir.write_pickle({'source': 'HISTALP'}, 'climate_info')
         climate.local_mustar(gdir, tstar=1975, bias=0.)
         climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)

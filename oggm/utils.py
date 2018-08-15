@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'f96dd63a42ddc773c0e6ec525d244f4e72c0d0d0'
+SAMPLE_DATA_COMMIT = '28479b3b45bfbf907e9a79a077addee7b12ec92d'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -3510,7 +3510,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'local_mustar', 'climate_monthly', 'gridded_data',
-                 'cesm_data']
+                 'cesm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
@@ -3518,7 +3518,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid',
                  'local_mustar', 'climate_monthly', 'gridded_data',
-                 'cesm_data']
+                 'cesm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
