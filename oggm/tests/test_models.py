@@ -1358,7 +1358,6 @@ class TestIO(unittest.TestCase):
         inversion.volume_inversion(new_gdir)
         inversion.filter_inversion_output(new_gdir)
         flowline.init_present_time_glacier(new_gdir)
-        cfg.PARAMS['use_optimized_inversion_params'] = False
         flowline.run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
 
@@ -2175,7 +2174,7 @@ class TestIdealisedInversion(unittest.TestCase):
 class TestHEF(unittest.TestCase):
 
     def setUp(self):
-        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
+        gdir = init_hef(border=DOM_BORDER)
         self.testdir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.testdir, reset=True)
         self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
@@ -2287,14 +2286,17 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.run_random_climate(self.gdir, nyears=100, seed=4,
+        flowline.run_random_climate(self.gdir, nyears=100, seed=6,
+                                    fs=self.fs, glen_a=self.glen_a,
                                     bias=0, output_filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=100,
+                                      fs=self.fs, glen_a=self.glen_a,
                                       bias=0, output_filesuffix='_ct')
 
         paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
                  self.gdir.get_filepath('model_run', filesuffix='_ct'),
                  ]
+
         for path in paths:
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
@@ -2304,7 +2306,7 @@ class TestHEF(unittest.TestCase):
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
+                if True:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                     vol.plot(ax=ax1)
                     ax1.set_title('Volume')

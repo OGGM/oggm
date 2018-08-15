@@ -247,15 +247,10 @@ def get_test_dir():
     return out
 
 
-def init_hef(reset=False, border=40, invert_with_sliding=True,
-             invert_with_rectangular=True):
+def init_hef(reset=False, border=40):
 
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
-    if not invert_with_sliding:
-        testdir += '_withoutslide'
-    if not invert_with_rectangular:
-        testdir += '_withoutrectangular'
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -268,7 +263,6 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     cfg.PARAMS['baseline_climate'] = ''
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['border'] = border
-    cfg.PARAMS['use_optimized_inversion_params'] = True
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
@@ -298,50 +292,32 @@ def init_hef(reset=False, border=40, invert_with_sliding=True,
     climate.local_mustar(gdir, tstar=res['t_star'], bias=res['bias'])
     climate.apparent_mb(gdir)
 
-    inversion.prepare_for_inversion(gdir, add_debug_var=True,
-                                    invert_with_rectangular=invert_with_rectangular)
+    inversion.prepare_for_inversion(gdir, add_debug_var=True)
+
     ref_v = 0.573 * 1e9
 
-    if invert_with_sliding:
-        def to_optimize(x):
-            # For backwards compat
-            _fd = 1.9e-24 * x[0]
-            glen_a = (cfg.N+2) * _fd / 2.
-            fs = 5.7e-20 * x[1]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                         glen_a=glen_a)
-            return (v - ref_v)**2
-
-        out = optimization.minimize(to_optimize, [1, 1],
-                                    bounds=((0.01, 10), (0.01, 10)),
-                                    tol=1e-4)['x']
-        _fd = 1.9e-24 * out[0]
+    def to_optimize(x):
+        # For backwards compat
+        _fd = 1.9e-24 * x[0]
         glen_a = (cfg.N+2) * _fd / 2.
-        fs = 5.7e-20 * out[1]
+        fs = 5.7e-20 * x[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                     glen_a=glen_a,
-                                                     write=True)
-    else:
-        def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=0.,
-                                                         glen_a=glen_a)
-            return (v - ref_v)**2
+                                                     glen_a=glen_a)
+        return (v - ref_v)**2
 
-        out = optimization.minimize(to_optimize, [1],
-                                    bounds=((0.01, 10),),
-                                    tol=1e-4)['x']
-        glen_a = cfg.A * out[0]
-        fs = 0.
-        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                     glen_a=glen_a,
-                                                     write=True)
+    out = optimization.minimize(to_optimize, [1, 1],
+                                bounds=((0.01, 10), (0.01, 10)),
+                                tol=1e-4)['x']
+    _fd = 1.9e-24 * out[0]
+    glen_a = (cfg.N+2) * _fd / 2.
+    fs = 5.7e-20 * out[1]
+    v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                                 glen_a=glen_a,
+                                                 write=True)
+
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]
-    try:
-        d['factor_fs'] = out[1]
-    except IndexError:
-        d['factor_fs'] = 0.
+    d['factor_fs'] = out[1]
     gdir.write_pickle(d, 'inversion_params')
 
     # filter

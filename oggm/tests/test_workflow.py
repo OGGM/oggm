@@ -82,8 +82,6 @@ def up_to_climate(reset=False):
 
     # Params
     cfg.PARAMS['border'] = 70
-    cfg.PARAMS['optimize_inversion_params'] = True
-    cfg.PARAMS['use_optimized_inversion_params'] = True
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
     cfg.PARAMS['run_mb_calibration'] = True
 
@@ -189,52 +187,9 @@ def random_for_plot():
 class TestWorkflow(unittest.TestCase):
 
     @pytest.mark.slow
-    def test_init_present_time_glacier(self):
+    def test_some_characs(self):
 
         gdirs = up_to_inversion()
-
-        # Inversion Results
-        cfg.PARAMS['invert_with_sliding'] = True
-        cfg.PARAMS['optimize_thick'] = True
-        workflow.inversion_tasks(gdirs)
-
-        fpath = os.path.join(cfg.PATHS['working_dir'],
-                             'inversion_optim_results.csv')
-        df = pd.read_csv(fpath, index_col=0)
-        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
-        assert r1 < 0.1
-
-        cfg.PARAMS['invert_with_sliding'] = False
-        cfg.PARAMS['optimize_thick'] = False
-        workflow.inversion_tasks(gdirs)
-
-        fpath = os.path.join(cfg.PATHS['working_dir'],
-                             'inversion_optim_results.csv')
-        df = pd.read_csv(fpath, index_col=0)
-        r1 = rmsd(df['ref_volume_km3'], df['oggm_volume_km3'])
-        assert r1 < 0.12
-
-        # Init glacier
-        d = gdirs[0].read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-        for gdir in gdirs:
-            flowline.init_present_time_glacier(gdir)
-            mb_mod = massbalance.ConstantMassBalance(gdir)
-            fls = gdir.read_pickle('model_flowlines')
-            model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                                            fs=fs, glen_a=glen_a)
-            _vol = model.volume_km3
-            _area = model.area_km2
-            if gdir.rgi_id in df.index:
-                gldf = df.loc[gdir.rgi_id]
-                assert_allclose(gldf['oggm_volume_km3'], _vol, rtol=0.05)
-                assert_allclose(gldf['ref_area_km2'], _area, rtol=0.05)
-                maxo = max([fl.order for fl in model.fls])
-                for fl in model.fls:
-                    if len(model.fls) > 1:
-                        if fl.order == (maxo-1):
-                            self.assertTrue(fl.flows_to is fls[-1])
 
         # Test the glacier charac
         dfc = utils.glacier_characteristics(gdirs)
@@ -404,7 +359,7 @@ def test_plot_region_inversion():
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
+@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=5)
 def test_plot_region_model():
 
     gdirs = random_for_plot()

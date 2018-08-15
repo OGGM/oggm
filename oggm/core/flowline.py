@@ -1523,16 +1523,8 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
      Possibly a method based on mass-conservation checks would be more robust.
      """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
+    kwargs.setdefault('fs', cfg.PARAMS['flowline_fs'])
+    kwargs.setdefault('glen_a', cfg.PARAMS['flowline_glen_a'])
 
     run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
                                  delete=True)

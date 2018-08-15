@@ -243,7 +243,6 @@ def initialize(file=None):
     PARAMS['use_compression'] = cp.as_bool('use_compression')
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
-    PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
     PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
@@ -268,17 +267,12 @@ def initialize(file=None):
     PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
-    PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
-    _k = 'optimize_inversion_params'
-    PARAMS[_k] = cp.as_bool(_k)
-    PARAMS['use_shape_factor_for_inversion'] = \
-                cp['use_shape_factor_for_inversion']
+    k = 'use_shape_factor_for_inversion'
+    PARAMS[k] = cp[k]
 
     # Flowline model
-    _k = 'use_optimized_inversion_params'
-    PARAMS[_k] = cp.as_bool(_k)
-    PARAMS['use_shape_factor_for_fluxbasedmodel'] = \
-                cp['use_shape_factor_for_fluxbasedmodel']
+    k = 'use_shape_factor_for_fluxbasedmodel'
+    PARAMS[k] = cp[k]
 
     # Make sure we have a proper cache dir
     from oggm.utils import download_oggm_files, get_demo_file
@@ -290,9 +284,8 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_optimized_inversion_params', 'invert_with_sliding',
-           'optimize_inversion_params', 'use_multiple_flowlines',
-           'optimize_thick', 'mpi_recv_buf_size', 'hydro_month_nh',
+           'use_multiple_flowlines',
+           'mpi_recv_buf_size', 'hydro_month_nh',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',

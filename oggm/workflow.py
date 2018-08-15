@@ -280,10 +280,6 @@ def inversion_tasks(gdirs):
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
-    # Global task
-    if cfg.PARAMS['optimize_inversion_params']:
-        tasks.optimize_inversion_params(gdirs)
-
     # Inversion for all glaciers
     execute_entity_task(tasks.volume_inversion, gdirs)
 

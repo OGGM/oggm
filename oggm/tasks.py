@@ -39,4 +39,3 @@ from oggm.utils import copy_to_basedir
 from oggm.core.climate import compute_ref_t_stars
 from oggm.core.climate import distribute_t_stars
 from oggm.core.climate import crossval_t_stars
-from oggm.core.inversion import optimize_inversion_params
