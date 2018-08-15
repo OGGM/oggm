@@ -102,6 +102,13 @@ Enhancements
   available. You can get the profiles with ``gdir.get_ref_mb_profile()``
   (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- New ``process_histalp_data`` taks to run OGGM with HISTALP data
+  automatically. The task comes with a list of predefined t* like CRU and
+  with different default parameters
+  (see `blog <https://oggm.org/2018/08/10/histalp-parameters/>`_). The PR
+  also adds some safety checks at the calibration and computation of the
+  mass-balance to make sure there is no misused parameters (:pull:`493`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
