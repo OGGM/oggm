@@ -15,13 +15,23 @@ import matplotlib.pyplot as plt
 # RGI Version
 rgi_version = '61'
 
+# CRU or HISTALP?
+baseline = 'CRU'
+
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
 
+if baseline == 'HISTALP':
+    # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -1.75
+
 # Local paths (where to find the OGGM run output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_RGIV{}_OGGM{}'.format(rgi_version,
-                                                           oggm.__version__))
+                        'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline,
+                                                              rgi_version,
+                                                              oggm.__version__)
+                        )
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Read the rgi file

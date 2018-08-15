@@ -950,6 +950,14 @@ def local_mustar(gdir, *, ref_df=None,
     # For the calving param it might be useful to clip the mu
     mustar = np.clip(mustar, minimum_mustar, np.max(mustar))
 
+    # Add the climate related params to the GlacierDir to make sure
+    # other tools cannot fool around with out calibration
+    out = gdir.read_pickle('climate_info')
+    params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
+              'temp_melt', 'prcp_scaling_factor']
+    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
+    gdir.write_pickle(out, 'climate_info')
+
     # Scalars in a small dataframe for later
     df = pd.DataFrame()
     df['rgi_id'] = [gdir.rgi_id]

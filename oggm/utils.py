@@ -2114,9 +2114,12 @@ def get_ref_mb_glaciers(gdirs):
     for g in gdirs:
         if g.rgi_id not in dfids or g.is_tidewater:
             continue
-        mbdf = g.get_ref_mb_data()
-        if len(mbdf) >= 5:
-            ref_gdirs.append(g)
+        try:
+            mbdf = g.get_ref_mb_data()
+            if len(mbdf) >= 5:
+                ref_gdirs.append(g)
+        except RuntimeError:
+            pass
     return ref_gdirs
 
 
