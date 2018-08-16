@@ -1355,7 +1355,7 @@ class TestIO(unittest.TestCase):
         new_gdir = tasks.copy_to_basedir(self.gdir, base_dir=new_dir,
                                           setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
-        inversion.volume_inversion(new_gdir)
+        inversion.mass_conservation_inversion(new_gdir)
         inversion.filter_inversion_output(new_gdir)
         flowline.init_present_time_glacier(new_gdir)
         flowline.run_constant_climate(new_gdir, nyears=10, bias=0)

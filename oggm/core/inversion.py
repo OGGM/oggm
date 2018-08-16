@@ -30,15 +30,13 @@ Adhikari, S., Marshall, J. S.: Parameterization of lateral drag in flowline
 """
 # Built ins
 import logging
-import os
+import warnings
 # External libs
 import numpy as np
-import pandas as pd
-from scipy import optimize as optimization
 from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
-from oggm import entity_task, global_task
+from oggm import entity_task
 from oggm.core.gis import gaussian_blur
 
 # Module logger
@@ -163,6 +161,7 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     return out_thick
 
 
+@entity_task(log, writes=['inversion_output'])
 def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                 filesuffix=''):
     """ Compute the glacier thickness along the flowlines
@@ -207,7 +206,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
     # Shape factor params
     sf_func = None
-    use_sf = None
     # Use .get to obatin default None for non-existing key
     # necessary to pass some tests
     # TODO: remove after tests are adapted
@@ -244,8 +242,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
             i = 0
             sf_diff = np.ones(slope.shape)
 
-            while i < max_sf_iter and \
-                    np.any(sf_diff > sf_tol):
+            while i < max_sf_iter and np.any(sf_diff > sf_tol):
                 out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
                                            sf, _inv_function)
 
@@ -294,6 +291,10 @@ def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
     filesuffix : str
         add a suffix to the output file
     """
+
+    warnings.warn('The task `volume_inversion` is deprecated. Use '
+                  'a direct call to `mass_conservation_inversion` instead.',
+                  DeprecationWarning)
 
     if fs is not None and glen_a is None:
         raise ValueError('Cannot set fs without glen_a.')

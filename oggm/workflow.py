@@ -281,7 +281,7 @@ def inversion_tasks(gdirs):
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
     # Inversion for all glaciers
-    execute_entity_task(tasks.volume_inversion, gdirs)
+    execute_entity_task(tasks.mass_conservation_inversion, gdirs)
 
     # Filter
     execute_entity_task(tasks.filter_inversion_output, gdirs)

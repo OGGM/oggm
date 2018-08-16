@@ -86,7 +86,7 @@ execute_entity_task(tasks.process_cesm_data, gdirs)
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)
 # We use the default parameters for this run
-execute_entity_task(tasks.volume_inversion, gdirs)
+execute_entity_task(tasks.mass_conservation_inversion, gdirs)
 execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 # Final preparation for the run

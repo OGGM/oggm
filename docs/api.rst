@@ -54,7 +54,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.apparent_mb_from_linear_mb
     tasks.mu_candidates
     tasks.prepare_for_inversion
-    tasks.volume_inversion
+    tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp

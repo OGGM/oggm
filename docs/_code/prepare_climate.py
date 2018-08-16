@@ -75,7 +75,7 @@ fdf['Flux'] = cl['flux']
 fdf['Mass balance'] = mbx
 
 # For the distributed thickness
-tasks.volume_inversion(gdir, glen_a=cfg.PARAMS['inversion_glen_a']*3, fs=0)
+tasks.mass_conservation_inversion(gdir, glen_a=2.4e-24 * 3, fs=0)
 tasks.distribute_thickness_per_altitude(gdir)
 
 

@@ -1804,7 +1804,7 @@ class TestInversion(unittest.TestCase):
         climate.local_mustar(gdir, tstar=1970, bias=0, prcp_fac=2.)
         climate.apparent_mb(gdir)
         inversion.prepare_for_inversion(gdir)
-        inversion.volume_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
 
         rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
                             'RGI50-11.fake')
