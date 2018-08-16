@@ -53,6 +53,15 @@ Breaking changes
   results of the mass-balance model for some glaciers. For more details see
   the PR: :pull:`509`
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ice dynamics parameters (Glen A, N, ice density) are now "real"
+  parameters accessible via ``cfg.PARAMS`` (:pull:`520`, :issue:`511` and
+  :issue:`27`). Previously, they were also accessible via a module attribute
+  in ``cfg``, which was more confusing than helping. Deprecated and removed
+  a couple of other things on the go, such as the dangerous `
+  ``optimize_inversion_params`` task (this cannot be optimized yet) and the
+  useless ``volume_inversion`` wrapper (now called
+  ``mass_conservation_inversion``)
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~

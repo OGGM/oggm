@@ -126,6 +126,7 @@ def _inversion_simple(a3, a0):
 
     return (-a0)**(1./5.)
 
+
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     """
     TODO: Documentation
@@ -181,10 +182,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         during calibration.
     filesuffix : str
         add a suffix to the output file
-
-    Returns
-    -------
-    (vol, thick) in [m3, m]
     """
 
     # Defaults
