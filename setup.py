@@ -43,7 +43,7 @@ calibration and validation.
 Links
 -----
 - Project website: http://oggm.org
-- HTML documentation: http://oggm.readthedocs.io
+- HTML documentation: http://docs.oggm.org
 - Source code: http://github.com/oggm/oggm
 """
 

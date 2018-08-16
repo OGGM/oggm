@@ -403,15 +403,15 @@ intersphinx_mapping = {
 text_version = ('**This is the model documentation for users and developers '
                 'as of version {}**. '
                 'For the documentation of the latest (cutting-edge) repository '
-                'version, visit `oggm.readthedocs.io/en/latest '
-                '<http://oggm.readthedocs.io/en/latest/>`_.'
+                'version, visit `docs.oggm.org/en/latest '
+                '<http://docs.oggm.org/en/latest/>`_.'
                 ''.format(oggm.__version__))
 
 text_dev = ('**This is the model documentation for users and developers of '
             'the latest (cutting-edge) repository version**. For the '
             'documentation of the latest stable release, visit '
-            '`oggm.readthedocs.io/en/stable '
-            '<http://oggm.readthedocs.io/en/stable/>`_.')
+            '`docs.oggm.org/en/stable '
+            '<http://docs.oggm.org/en/stable/>`_.')
 
 
 def write_index():
