@@ -24,7 +24,7 @@ class hef_prepro:
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 120
+        cfg.PARAMS['baseline_climate'] = 'CUSTOM'
 
     def setup_cache(self):
 

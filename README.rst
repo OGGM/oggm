@@ -18,7 +18,7 @@ available data for calibration and validation.
 Installation, documentation
 ---------------------------
 
-The documentation is hosted on ReadTheDocs: http://oggm.readthedocs.io
+The documentation is hosted on ReadTheDocs: http://docs.oggm.org
 
 
 Get in touch
@@ -72,7 +72,7 @@ About
         :alt: Windows-conda build status
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
-        :target: http://oggm.readthedocs.org/en/latest/?badge=latest
+        :target: http://docs.oggm.org/en/latest/
         :alt: Documentation status
 
     .. image:: http://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
@@ -86,6 +86,6 @@ About
 
 :Authors:
 
-    See `whats-new`_ for a list of all contributors.
+    See the `version history`_ for a list of all contributors.
 
-    .. _whats-new: http://oggm.readthedocs.org/en/latest/whats-new.html
+    .. _version history: http://docs.oggm.org/en/latest/whats-new.html
