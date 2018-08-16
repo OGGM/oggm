@@ -837,10 +837,11 @@ def interpolation_masks(gdir):
     dis_from_border = distance_transform_edt(dis_from_border) * dx
 
     # Slope
+    glen_n = cfg.PARAMS['glen_n']
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
     slope = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4), np.pi/2.)
-    slope = 1 / slope**(cfg.N / (cfg.N+2))
+    slope = 1 / slope**(glen_n / (glen_n+2))
 
     with ncDataset(grids_file, 'a') as nc:
 

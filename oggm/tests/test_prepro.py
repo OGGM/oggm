@@ -1480,11 +1480,12 @@ class TestInversion(unittest.TestCase):
 
         ref_v = 0.573 * 1e9
 
+        glen_a = 2.4e-24
+        fs = 5.7e-20
+
         def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            fs = cfg.FS * x[1]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                         glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs * x[1],
+                                                         glen_a=glen_a * x[0])
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1495,8 +1496,8 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] > 0.1)
         self.assertTrue(out[0] < 1.1)
         self.assertTrue(out[1] < 1.1)
-        glen_a = cfg.A * out[0]
-        fs = cfg.FS * out[1]
+        glen_a = glen_a * out[0]
+        fs = fs * out[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
                                                      write=True)
@@ -1574,11 +1575,11 @@ class TestInversion(unittest.TestCase):
 
         ref_v = 0.573 * 1e9
 
+        glen_a = 2.4e-24
+        fs = 5.7e-20
         def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            fs = cfg.FS * x[1]
-            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                         glen_a=glen_a)
+            v, _ = inversion.mass_conservation_inversion(gdir, fs=fs * x[1],
+                                                         glen_a=glen_a * x[0])
             return (v - ref_v)**2
 
         import scipy.optimize as optimization
@@ -1589,8 +1590,8 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[1] > 0.1)
         self.assertTrue(out[0] < 1.1)
         self.assertTrue(out[1] < 1.1)
-        glen_a = cfg.A * out[0]
-        fs = cfg.FS * out[1]
+        glen_a = glen_a * out[0]
+        fs = fs * out[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
                                                      write=True)
@@ -1654,8 +1655,8 @@ class TestInversion(unittest.TestCase):
 
         ref_v = 0.573 * 1e9
         def to_optimize(x):
-            glen_a = cfg.A * x[0]
-            fs = cfg.FS * x[1]
+            glen_a = cfg.PARAMS['inversion_glen_a']* x[0]
+            fs = cfg.PARAMS['inversion_fs'] * x[1]
             v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                          glen_a=glen_a)
             return (v - ref_v)**2
@@ -1663,8 +1664,8 @@ class TestInversion(unittest.TestCase):
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
                                     tol=1e-1)['x']
-        glen_a = cfg.A * out[0]
-        fs = cfg.FS * out[1]
+        glen_a = cfg.PARAMS['inversion_glen_a']* out[0]
+        fs = cfg.PARAMS['inversion_fs'] * out[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
                                                      write=True)
@@ -1717,7 +1718,7 @@ class TestInversion(unittest.TestCase):
         ref_v = 0.573 * 1e9
 
         def to_optimize(x):
-            glen_a = cfg.A * x[0]
+            glen_a = cfg.PARAMS['inversion_glen_a']* x[0]
             fs = 0.
             v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                          glen_a=glen_a)
@@ -1731,7 +1732,7 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[0] > 0.1)
         self.assertTrue(out[0] < 10)
 
-        glen_a = cfg.A * out[0]
+        glen_a = cfg.PARAMS['inversion_glen_a']* out[0]
         fs = 0.
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
@@ -1873,7 +1874,7 @@ class TestGrindelInvert(unittest.TestCase):
     def test_ideal_glacier(self):
 
         # we are making a
-        glen_a = cfg.A * 1
+        glen_a = cfg.PARAMS['inversion_glen_a']* 1
         from oggm.core import flowline
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
@@ -1894,10 +1895,11 @@ class TestGrindelInvert(unittest.TestCase):
             # Heights
             hgt = fl.surface_h
             # Flux
-            mb = mbmod.get_annual_mb(hgt) * cfg.SEC_IN_YEAR * cfg.RHO
+            rho = cfg.PARAMS['ice_density']
+            mb = mbmod.get_annual_mb(hgt) * cfg.SEC_IN_YEAR * rho
             fl.flux = np.zeros(len(fl.surface_h))
             fl.set_apparent_mb(mb)
-            flux = fl.flux * (map_dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
+            flux = fl.flux * (map_dx**2) / cfg.SEC_IN_YEAR / rho
             pok = np.nonzero(widths > 10.)
             widths = widths[pok]
             hgt = hgt[pok]
@@ -1929,7 +1931,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         from oggm.core import flowline, massbalance
 
-        glen_a = cfg.A*2
+        glen_a = cfg.PARAMS['inversion_glen_a'] * 2
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
         gis.glacier_masks(gdir)
@@ -2187,7 +2189,7 @@ class TestIdealizedGdir(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
-        v1, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+        v1, _ = inversion.mass_conservation_inversion(gdir)
         tt1 = gdir.read_pickle('inversion_input')[0]
         gdir1 = gdir
 
@@ -2200,7 +2202,7 @@ class TestIdealizedGdir(unittest.TestCase):
                                     base_dir=self.testdir)
         climate.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
-        v2, _ = inversion.mass_conservation_inversion(gdir, fs=0, glen_a=cfg.A)
+        v2, _ = inversion.mass_conservation_inversion(gdir)
 
         tt2 = gdir.read_pickle('inversion_input')[0]
         np.testing.assert_allclose(tt1['width'], tt2['width'])
@@ -2217,7 +2219,6 @@ class TestCatching(unittest.TestCase):
 
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
-
 
         # Init
         cfg.initialize()

@@ -296,10 +296,12 @@ def init_hef(reset=False, border=40):
 
     ref_v = 0.573 * 1e9
 
+    glen_n = cfg.PARAMS['glen_n']
+
     def to_optimize(x):
         # For backwards compat
         _fd = 1.9e-24 * x[0]
-        glen_a = (cfg.N+2) * _fd / 2.
+        glen_a = (glen_n+2) * _fd / 2.
         fs = 5.7e-20 * x[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a)
@@ -309,7 +311,7 @@ def init_hef(reset=False, border=40):
                                 bounds=((0.01, 10), (0.01, 10)),
                                 tol=1e-4)['x']
     _fd = 1.9e-24 * out[0]
-    glen_a = (cfg.N+2) * _fd / 2.
+    glen_a = (glen_n+2) * _fd / 2.
     fs = 5.7e-20 * out[1]
     v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                  glen_a=glen_a,

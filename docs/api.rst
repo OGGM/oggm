@@ -112,7 +112,7 @@ The computed mass-balance is in units of [m ice s-1] ("meters of ice per
 second"), unless otherwise specified (e.g. for the utility function
 ``get_specific_mb``).
 The conversion from the climatic mass-balance ([kg m-2 s-1] ) therefore assumes
-an ice density given by ``cfg.RHO`` (currently: 900 kg m-3).
+an ice density given by ``cfg.PARAMS['ice_density']`` (currently: 900 kg m-3).
 
 Time
 ----

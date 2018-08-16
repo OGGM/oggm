@@ -19,7 +19,7 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks
-from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 
 # Tests
 from oggm.tests.funcs import *
@@ -117,7 +117,7 @@ class TestInitFlowline(unittest.TestCase):
         grads = hgts * 0
         for yr, mb in mbdf.iterrows():
             refmb.append(mb['ANNUAL_BALANCE'])
-            mbh = mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR * cfg.RHO
+            mbh = mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             grads += mbh
             tot_mb.append(np.average(mbh, weights=widths))
         grads /= len(tot_mb)
@@ -254,7 +254,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_past_mb_model(self):
 
-        F = SEC_IN_YEAR * cfg.RHO
+        F = SEC_IN_YEAR * cfg.PARAMS['ice_density']
 
         gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
@@ -297,7 +297,7 @@ class TestMassBalance(unittest.TestCase):
             my_mb_on_h = ref_mb_on_h*0.
             for m in np.arange(12):
                 yrm = utils.date_to_floatyear(yr, m + 1)
-                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTH*cfg.RHO
+                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTH*cfg.PARAMS['ice_density']
                 my_mb_on_h += tmp
 
             np.testing.assert_allclose(ref_mb_on_h,
@@ -310,7 +310,7 @@ class TestMassBalance(unittest.TestCase):
         mbdf.loc[yr, 'MY_MB'] = np.NaN
         mb_mod = massbalance.PastMassBalance(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
@@ -322,7 +322,7 @@ class TestMassBalance(unittest.TestCase):
 
         mb_mod = massbalance.PastMassBalance(gdir, bias=0)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean() + bias,
@@ -331,10 +331,10 @@ class TestMassBalance(unittest.TestCase):
 
         mb_mod = massbalance.PastMassBalance(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 1
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'BIASED_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 0
 
@@ -361,17 +361,17 @@ class TestMassBalance(unittest.TestCase):
         h, w = gdir.get_inversion_flowline_hw()
 
         cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0., otmb, atol=0.2)
 
         cmb_mod = massbalance.ConstantMassBalance(gdir)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0, otmb + bias, atol=0.2)
 
         mb_mod = massbalance.ConstantMassBalance(gdir, y0=2003 - 15)
-        nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         ntmb = np.average(nmbh, weights=w)
 
         self.assertTrue(ntmb < otmb)
@@ -383,12 +383,12 @@ class TestMassBalance(unittest.TestCase):
             plt.show()
 
         cmb_mod.temp_bias = 1
-        biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         biasotmb = np.average(biasombh, weights=w)
         self.assertTrue(biasotmb < (otmb - 500))
 
         cmb_mod.temp_bias = 0
-        nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         nobiasotmb = np.average(nobiasombh, weights=w)
         np.testing.assert_allclose(0, nobiasotmb + bias, atol=0.2)
 
@@ -398,10 +398,10 @@ class TestMassBalance(unittest.TestCase):
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.PARAMS['ice_density']
             monthly_1[m] = np.average(tmp, weights=w)
             cmb_mod.temp_bias = 1
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.PARAMS['ice_density']
             monthly_2[m] = np.average(tmp, weights=w)
 
         # check that the winter months are close but summer months no
@@ -1416,6 +1416,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         self.fs = 5.7e-20
         # Backwards
+        N = 3
         _fd = 1.9e-24
         self.glen_a = (N+2) * _fd / 2.
 

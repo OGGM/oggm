@@ -14,7 +14,7 @@ from numpy.testing import assert_allclose
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
 from oggm import utils
-from oggm.cfg import N, SEC_IN_DAY
+from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
 
 # Tests
@@ -30,8 +30,10 @@ do_plot = False
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
+        N = 3
+        cfg.initialize()
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
-        self.aglen_old = ( N +2) * 1.9e-24 / 2. # outdated value
+        self.aglen_old = (N +2) * 1.9e-24 / 2. # outdated value
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
         self.fs = 0             # set slidin
         self.fs_old = 5.7e-20  # outdated value
@@ -844,7 +846,7 @@ class TestIdealisedCases(unittest.TestCase):
 class TestSia2d(unittest.TestCase):
 
     def setUp(self):
-        pass
+        cfg.initialize()
 
     def tearDown(self):
         pass
@@ -864,8 +866,7 @@ class TestSia2d(unittest.TestCase):
                                  widths=1.)
         mb = LinearMassBalance(2600.)
 
-        flmodel = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                          glen_a=cfg.A)
+        flmodel = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.)
 
         length = yrs * 0.
         vol = yrs * 0.
@@ -885,7 +886,7 @@ class TestSia2d(unittest.TestCase):
         bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3))
 
         sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
-                             glen_a=cfg.A, ice_thick_filter=None)
+                             ice_thick_filter=None)
 
         length = yrs * 0.
         vol = yrs * 0.
@@ -952,7 +953,7 @@ class TestSia2d(unittest.TestCase):
         bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3)).T
 
         sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
-                             glen_a=cfg.A, ice_thick_filter=None)
+                             ice_thick_filter=None)
 
         length = yrs * 0.
         vol = yrs * 0.

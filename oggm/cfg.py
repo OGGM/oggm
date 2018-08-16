@@ -97,11 +97,7 @@ SEC_IN_HOUR = 3600
 SEC_IN_MONTH = 2628000
 DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
-RHO = 900.  # ice density
 G = 9.81  # gravity
-N = 3.  # Glen's law's exponent
-A = 2.4e-24  # Glen's default creep's parameter
-FS = 5.7e-20  # Default sliding parameter from Oerlemans - OUTDATED
 
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:

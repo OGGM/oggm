@@ -141,8 +141,8 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     this is outdated and doesn't really work.
     """
 
-    fs = cfg.PARAMS['flowline_fs']
-    glen_a = cfg.PARAMS['flowline_glen_a']
+    fs = cfg.PARAMS['fs']
+    glen_a = cfg.PARAMS['glen_a']
 
     if y0 is None:
         y0 = cfg.PARAMS['y0']

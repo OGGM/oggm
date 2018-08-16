@@ -77,7 +77,8 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
-        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
+        rho = cfg.PARAMS['ice_density']
+        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
         # Clip flux to 0
         if np.any(flux < -0.1):
@@ -162,7 +163,7 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     return out_thick
 
 
-def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
+def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                 filesuffix=''):
     """ Compute the glacier thickness along the flowlines
 
@@ -187,6 +188,12 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
     (vol, thick) in [m3, m]
     """
 
+    # Defaults
+    if glen_a is None:
+        glen_a = cfg.PARAMS['inversion_glen_a']
+    if fs is None:
+        fs = cfg.PARAMS['inversion_fs']
+
     # Check input
     if fs == 0.:
         _inv_function = _inversion_simple
@@ -194,8 +201,9 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         _inv_function = _inversion_poly
 
     # Ice flow params
-    fd = 2. / (cfg.N+2) * glen_a
+    fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     a3 = fs / fd
+    rho = cfg.PARAMS['ice_density']
 
     # Shape factor params
     sf_func = None
@@ -225,7 +233,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         # Parabolic bed rock
         w = cl['width']
 
-        a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
+        a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
 
         sf = np.ones(slope.shape)  # Default shape factor is 1
         # TODO: maybe take height update as criterion for iteration end instead
