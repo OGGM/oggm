@@ -55,7 +55,7 @@ class hef_prepro:
         tasks.apparent_mb(gdir)
 
         tasks.prepare_for_inversion(gdir)
-        tasks.volume_inversion(gdir)
+        tasks.mass_conservation_inversion(gdir)
 
         return gdir
 
@@ -193,7 +193,7 @@ class full_workflow:
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         # We use the default parameters for this run
-        execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         # Final preparation for the run

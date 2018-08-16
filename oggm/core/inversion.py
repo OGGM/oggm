@@ -30,15 +30,13 @@ Adhikari, S., Marshall, J. S.: Parameterization of lateral drag in flowline
 """
 # Built ins
 import logging
-import os
+import warnings
 # External libs
 import numpy as np
-import pandas as pd
-from scipy import optimize as optimization
 from scipy.interpolate import griddata
 # Locals
 from oggm import utils, cfg
-from oggm import entity_task, global_task
+from oggm import entity_task
 from oggm.core.gis import gaussian_blur
 
 # Module logger
@@ -77,7 +75,8 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
-        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / cfg.RHO
+        rho = cfg.PARAMS['ice_density']
+        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
         # Clip flux to 0
         if np.any(flux < -0.1):
@@ -127,6 +126,7 @@ def _inversion_simple(a3, a0):
 
     return (-a0)**(1./5.)
 
+
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     """
     TODO: Documentation
@@ -162,7 +162,8 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
     return out_thick
 
 
-def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
+@entity_task(log, writes=['inversion_output'])
+def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                 filesuffix=''):
     """ Compute the glacier thickness along the flowlines
 
@@ -181,11 +182,13 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         during calibration.
     filesuffix : str
         add a suffix to the output file
-
-    Returns
-    -------
-    (vol, thick) in [m3, m]
     """
+
+    # Defaults
+    if glen_a is None:
+        glen_a = cfg.PARAMS['inversion_glen_a']
+    if fs is None:
+        fs = cfg.PARAMS['inversion_fs']
 
     # Check input
     if fs == 0.:
@@ -194,12 +197,12 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         _inv_function = _inversion_poly
 
     # Ice flow params
-    fd = 2. / (cfg.N+2) * glen_a
+    fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     a3 = fs / fd
+    rho = cfg.PARAMS['ice_density']
 
     # Shape factor params
     sf_func = None
-    use_sf = None
     # Use .get to obatin default None for non-existing key
     # necessary to pass some tests
     # TODO: remove after tests are adapted
@@ -225,7 +228,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
         # Parabolic bed rock
         w = cl['width']
 
-        a0s = - cl['flux_a0'] / ((cfg.RHO*cfg.G*slope)**3*fd)
+        a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
 
         sf = np.ones(slope.shape)  # Default shape factor is 1
         # TODO: maybe take height update as criterion for iteration end instead
@@ -236,8 +239,7 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
             i = 0
             sf_diff = np.ones(slope.shape)
 
-            while i < max_sf_iter and \
-                    np.any(sf_diff > sf_tol):
+            while i < max_sf_iter and np.any(sf_diff > sf_tol):
                 out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
                                            sf, _inv_function)
 
@@ -268,159 +270,6 @@ def mass_conservation_inversion(gdir, glen_a=cfg.A, fs=0., write=True,
     return out_volume, gdir.rgi_area_km2 * 1e6
 
 
-@global_task
-def optimize_inversion_params(gdirs):
-    """Optimizes fs and fd based on GlaThiDa thicknesses.
-
-    We use the glacier averaged thicknesses provided by GlaThiDa and correct
-    them for differences in area with RGI, using a glacier specific volume-area
-    scaling formula.
-
-    Parameters
-    ----------
-    gdirs: list of oggm.GlacierDirectory objects
-    """
-
-    # Do we even need to do this?
-    if not cfg.PARAMS['optimize_inversion_params']:
-        raise RuntimeError('User did not want to optimize the '
-                           'inversion params')
-
-    # Get test glaciers (all glaciers with thickness data)
-    fpath = utils.get_glathida_file()
-    col_name = 'RGI{}_ID'.format(gdirs[0].rgi_version)
-    try:
-        gtd_df = pd.read_csv(fpath).sort_values(by=[col_name])
-    except AttributeError:
-        gtd_df = pd.read_csv(fpath).sort(columns=[col_name])
-
-    dfids = gtd_df[col_name].values
-
-    ref_gdirs = [gdir for gdir in gdirs if gdir.rgi_id in dfids]
-    if len(ref_gdirs) == 0:
-        raise RuntimeError('No reference GlaThiDa glaciers. Maybe something '
-                           'went wrong with the link list?')
-    ref_rgiids = [gdir.rgi_id for gdir in ref_gdirs]
-    gtd_df = gtd_df.set_index(col_name).loc[ref_rgiids]
-
-    # Account for area differences between glathida and rgi
-    gtd_df['RGI_AREA'] = [gdir.rgi_area_km2 for gdir in ref_gdirs]
-    ref_area_km2 = gtd_df.RGI_AREA.values
-    ref_area_m2 = ref_area_km2 * 1e6
-    gtd_df['VOLUME'] = gtd_df.MEAN_THICKNESS * gtd_df.GTD_AREA * 1e-3
-    ref_cs = gtd_df.VOLUME.values / (gtd_df.GTD_AREA.values**1.375)
-    ref_volume_km3 = ref_cs * ref_area_km2**1.375
-    ref_thickness_m = ref_volume_km3 / ref_area_km2 * 1000.
-
-    # Minimize volume or thick RMSD?
-    optim_t = cfg.PARAMS['optimize_thick']
-    if optim_t:
-        ref_data = ref_thickness_m
-        tol = 0.1
-    else:
-        ref_data = ref_volume_km3
-        tol = 1.e-4
-
-    if cfg.PARAMS['invert_with_sliding']:
-        # Optimize with both params
-        log.info('Compute the inversion parameters.')
-
-        def to_optimize(x):
-            tmp_ref = np.zeros(len(ref_gdirs))
-            glen_a = cfg.A * x[0]
-            fs = cfg.FS * x[1]
-            for i, gdir in enumerate(ref_gdirs):
-                v, a = mass_conservation_inversion(gdir, glen_a=glen_a,
-                                                   fs=fs, write=False)
-                if optim_t:
-                    tmp_ref[i] = v / a
-                else:
-                    tmp_ref[i] = v * 1e-9
-            return utils.rmsd(tmp_ref, ref_data)
-
-        opti = optimization.minimize(to_optimize, [1., 1.],
-                                     bounds=((0.01, 10), (0.01, 10)),
-                                     tol=tol)
-        # Check results and save.
-        glen_a = cfg.A * opti['x'][0]
-        fs = cfg.FS * opti['x'][1]
-    else:
-        # Optimize without sliding
-        log.info('Compute the inversion parameter.')
-
-        def to_optimize(x):
-            tmp_ref = np.zeros(len(ref_gdirs))
-            glen_a = cfg.A * x[0]
-            for i, gdir in enumerate(ref_gdirs):
-                v, a = mass_conservation_inversion(gdir, glen_a=glen_a,
-                                                   fs=0., write=False)
-                if optim_t:
-                    tmp_ref[i] = v / a
-                else:
-                    tmp_ref[i] = v * 1e-9
-            return utils.rmsd(tmp_ref, ref_data)
-        opti = optimization.minimize(to_optimize, [1.],
-                                     bounds=((0.01, 10),),
-                                     tol=tol)
-        # Check results and save.
-        glen_a = cfg.A * opti['x'][0]
-        fs = 0.
-
-    # This is for the stats
-    oggm_volume_m3 = np.zeros(len(ref_gdirs))
-    rgi_area_m2 = np.zeros(len(ref_gdirs))
-    for i, gdir in enumerate(ref_gdirs):
-        v, a = mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs,
-                                           write=False)
-        oggm_volume_m3[i] = v
-        rgi_area_m2[i] = a
-    assert np.allclose(rgi_area_m2 * 1e-6, ref_area_km2)
-
-    # This is for each glacier
-    out = dict()
-    out['glen_a'] = glen_a
-    out['fs'] = fs
-    out['factor_glen_a'] = opti['x'][0]
-    try:
-        out['factor_fs'] = opti['x'][1]
-    except IndexError:
-        out['factor_fs'] = 0.
-    for gdir in gdirs:
-        gdir.write_pickle(out, 'inversion_params')
-
-    # This is for the working dir
-    # Simple stats
-    out['vol_rmsd'] = utils.rmsd(oggm_volume_m3 * 1e-9, ref_volume_km3)
-    out['thick_rmsd'] = utils.rmsd(oggm_volume_m3 / ref_area_m2,
-                                   ref_thickness_m)
-
-    log.info('Optimized glen_a and fs with a factor {factor_glen_a:.2f} and '
-             '{factor_fs:.2f} for a thick RMSD of '
-             '{thick_rmsd:.1f} m and a volume RMSD of '
-             '{vol_rmsd:.3f} km3'.format(**out))
-
-    df = pd.DataFrame(out, index=[0])
-    fpath = os.path.join(cfg.PATHS['working_dir'],
-                         'inversion_optim_params.csv')
-    df.to_csv(fpath)
-
-    # All results
-    df = dict()
-    df['ref_area_km2'] = ref_area_km2
-    df['ref_volume_km3'] = ref_volume_km3
-    df['oggm_volume_km3'] = oggm_volume_m3 * 1e-9
-    df['vas_volume_km3'] = 0.034*(df['ref_area_km2']**1.375)
-
-    rgi_id = [gdir.rgi_id for gdir in ref_gdirs]
-    df = pd.DataFrame(df, index=rgi_id)
-    fpath = os.path.join(cfg.PATHS['working_dir'],
-                         'inversion_optim_results.csv')
-    df.to_csv(fpath)
-
-    # return value for tests
-    return out
-
-
 @entity_task(log, writes=['inversion_output'])
 def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
     """Computes the inversion the glacier.
@@ -440,14 +289,12 @@ def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
         add a suffix to the output file
     """
 
+    warnings.warn('The task `volume_inversion` is deprecated. Use '
+                  'a direct call to `mass_conservation_inversion` instead.',
+                  DeprecationWarning)
+
     if fs is not None and glen_a is None:
         raise ValueError('Cannot set fs without glen_a.')
-
-    if glen_a is None and cfg.PARAMS['optimize_inversion_params']:
-        # use the optimized ones
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
 
     if glen_a is None:
         glen_a = cfg.PARAMS['inversion_glen_a']

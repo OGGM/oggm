@@ -19,7 +19,7 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks
-from oggm.cfg import N, SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 
 # Tests
 from oggm.tests.funcs import *
@@ -117,7 +117,7 @@ class TestInitFlowline(unittest.TestCase):
         grads = hgts * 0
         for yr, mb in mbdf.iterrows():
             refmb.append(mb['ANNUAL_BALANCE'])
-            mbh = mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR * cfg.RHO
+            mbh = mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             grads += mbh
             tot_mb.append(np.average(mbh, weights=widths))
         grads /= len(tot_mb)
@@ -254,7 +254,7 @@ class TestMassBalance(unittest.TestCase):
 
     def test_past_mb_model(self):
 
-        F = SEC_IN_YEAR * cfg.RHO
+        F = SEC_IN_YEAR * cfg.PARAMS['ice_density']
 
         gdir = self.gdir
         flowline.init_present_time_glacier(gdir)
@@ -297,7 +297,7 @@ class TestMassBalance(unittest.TestCase):
             my_mb_on_h = ref_mb_on_h*0.
             for m in np.arange(12):
                 yrm = utils.date_to_floatyear(yr, m + 1)
-                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTH*cfg.RHO
+                tmp =  mb_mod.get_monthly_mb(h, yrm)*SEC_IN_MONTH*cfg.PARAMS['ice_density']
                 my_mb_on_h += tmp
 
             np.testing.assert_allclose(ref_mb_on_h,
@@ -310,7 +310,7 @@ class TestMassBalance(unittest.TestCase):
         mbdf.loc[yr, 'MY_MB'] = np.NaN
         mb_mod = massbalance.PastMassBalance(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
@@ -322,7 +322,7 @@ class TestMassBalance(unittest.TestCase):
 
         mb_mod = massbalance.PastMassBalance(gdir, bias=0)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean() + bias,
@@ -331,10 +331,10 @@ class TestMassBalance(unittest.TestCase):
 
         mb_mod = massbalance.PastMassBalance(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 1
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.RHO
+            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             mbdf.loc[yr, 'BIASED_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 0
 
@@ -361,17 +361,17 @@ class TestMassBalance(unittest.TestCase):
         h, w = gdir.get_inversion_flowline_hw()
 
         cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0., otmb, atol=0.2)
 
         cmb_mod = massbalance.ConstantMassBalance(gdir)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0, otmb + bias, atol=0.2)
 
         mb_mod = massbalance.ConstantMassBalance(gdir, y0=2003 - 15)
-        nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         ntmb = np.average(nmbh, weights=w)
 
         self.assertTrue(ntmb < otmb)
@@ -383,12 +383,12 @@ class TestMassBalance(unittest.TestCase):
             plt.show()
 
         cmb_mod.temp_bias = 1
-        biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         biasotmb = np.average(biasombh, weights=w)
         self.assertTrue(biasotmb < (otmb - 500))
 
         cmb_mod.temp_bias = 0
-        nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.RHO
+        nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * cfg.PARAMS['ice_density']
         nobiasotmb = np.average(nobiasombh, weights=w)
         np.testing.assert_allclose(0, nobiasotmb + bias, atol=0.2)
 
@@ -398,10 +398,10 @@ class TestMassBalance(unittest.TestCase):
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.PARAMS['ice_density']
             monthly_1[m] = np.average(tmp, weights=w)
             cmb_mod.temp_bias = 1
-            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.RHO
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * cfg.PARAMS['ice_density']
             monthly_2[m] = np.average(tmp, weights=w)
 
         # check that the winter months are close but summer months no
@@ -1355,10 +1355,9 @@ class TestIO(unittest.TestCase):
         new_gdir = tasks.copy_to_basedir(self.gdir, base_dir=new_dir,
                                           setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
-        inversion.volume_inversion(new_gdir)
+        inversion.mass_conservation_inversion(new_gdir)
         inversion.filter_inversion_output(new_gdir)
         flowline.init_present_time_glacier(new_gdir)
-        cfg.PARAMS['use_optimized_inversion_params'] = False
         flowline.run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
 
@@ -1417,6 +1416,7 @@ class TestBackwardsIdealized(unittest.TestCase):
 
         self.fs = 5.7e-20
         # Backwards
+        N = 3
         _fd = 1.9e-24
         self.glen_a = (N+2) * _fd / 2.
 
@@ -2175,7 +2175,7 @@ class TestIdealisedInversion(unittest.TestCase):
 class TestHEF(unittest.TestCase):
 
     def setUp(self):
-        gdir = init_hef(border=DOM_BORDER, invert_with_rectangular=False)
+        gdir = init_hef(border=DOM_BORDER)
         self.testdir = os.path.join(get_test_dir(), type(self).__name__)
         utils.mkdir(self.testdir, reset=True)
         self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
@@ -2287,14 +2287,17 @@ class TestHEF(unittest.TestCase):
     def test_random(self):
 
         flowline.init_present_time_glacier(self.gdir)
-        flowline.run_random_climate(self.gdir, nyears=100, seed=4,
+        flowline.run_random_climate(self.gdir, nyears=100, seed=6,
+                                    fs=self.fs, glen_a=self.glen_a,
                                     bias=0, output_filesuffix='_rdn')
         flowline.run_constant_climate(self.gdir, nyears=100,
+                                      fs=self.fs, glen_a=self.glen_a,
                                       bias=0, output_filesuffix='_ct')
 
         paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
                  self.gdir.get_filepath('model_run', filesuffix='_ct'),
                  ]
+
         for path in paths:
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
@@ -2304,7 +2307,7 @@ class TestHEF(unittest.TestCase):
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
+                if True:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                     vol.plot(ax=ax1)
                     ax1.set_title('Volume')

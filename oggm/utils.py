@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'a0bc38e2f5fde2452f50d62824bdb8c21859f8a4'
+SAMPLE_DATA_COMMIT = '235fc0998d11cf66747c04c2f89205d5a90dc76d'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1620,7 +1620,7 @@ def get_rgi_dir(version=None, reset=False):
     region: str
         from '01' to '19'
     version: str
-        '5', '6', defaults to None (linking to the one specified in cfg.params)
+        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
 
     Returns
     -------
@@ -1691,7 +1691,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     region: str
         from '01' to '19'
     version: str
-        '5', '6', defaults to None (linking to the one specified in cfg.params)
+        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
 
     Returns
     -------
@@ -1827,7 +1827,7 @@ def get_rgi_intersects_region_file(region='00', version=None, rgi_ids=None,
         '61' onwards, '00' will require `rgi_ids` to be set for more clever
         handling.
     version: str
-        '5', '6', '61'... defaults the one specified in cfg.params
+        '5', '6', '61'... defaults the one specified in cfg.PARAMS
     rgi_ids: list, optional
         list of rgi_ids you want to look for intersections for
     reset: bool
@@ -2541,7 +2541,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             # Climate and MB at t*
             h, w = gdir.get_inversion_flowline_hw()
             mbmod = ConstantMassBalance(gdir, bias=0)
-            mbh = mbmod.get_annual_mb(h, w) * SEC_IN_YEAR * cfg.RHO
+            mbh = (mbmod.get_annual_mb(h, w) * SEC_IN_YEAR *
+                   cfg.PARAMS['ice_density'])
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
             d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)

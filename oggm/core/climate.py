@@ -865,7 +865,8 @@ def calving_mb(gdir):
 
     # Ok. Just take the caving rate from cfg and change its units
     # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
-    return gdir.inversion_calving_rate * 1e9 * cfg.RHO / gdir.rgi_area_m2
+    rho = cfg.PARAMS['ice_density']
+    return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
 @entity_task(log, writes=['local_mustar'])
@@ -1037,7 +1038,8 @@ def apparent_mb(gdir):
         return apparent_mb(gdir, reset=True)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
+    rho = cfg.PARAMS['ice_density']
+    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
         log.warning('(%s) flux should be zero, but is: '
@@ -1087,12 +1089,13 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
         fl.flux = np.zeros(len(fl.surface_h))
 
     # Flowlines in order to be sure
+    rho = cfg.PARAMS['ice_density']
     for fl in fls:
-        mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * cfg.RHO
+        mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / cfg.RHO * gdir.grid.dx**2
+    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
         log.warning('(%s) flux should be zero, but is: '

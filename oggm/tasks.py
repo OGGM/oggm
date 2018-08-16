@@ -25,6 +25,7 @@ from oggm.core.climate import local_mustar
 from oggm.core.climate import apparent_mb
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.inversion import prepare_for_inversion
+from oggm.core.inversion import mass_conservation_inversion
 from oggm.core.inversion import volume_inversion
 from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import distribute_thickness_per_altitude
@@ -39,4 +40,3 @@ from oggm.utils import copy_to_basedir
 from oggm.core.climate import compute_ref_t_stars
 from oggm.core.climate import distribute_t_stars
 from oggm.core.climate import crossval_t_stars
-from oggm.core.inversion import optimize_inversion_params

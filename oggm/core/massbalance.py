@@ -28,6 +28,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
     def __init__(self):
         """ Initialize."""
         self.valid_bounds = None
+        self.rho = cfg.PARAMS['ice_density']
 
     def get_monthly_mb(self, heights, year=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
@@ -97,7 +98,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                    for yr in year]
             return np.asarray(out)
 
-        mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * cfg.RHO
+        mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * self.rho
         return np.average(mbs, weights=widths)
 
     def get_ela(self, year=None):
@@ -128,7 +129,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             return np.NaN
 
         def to_minimize(x):
-            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * cfg.RHO
+            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * self.rho
             return o
         return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
@@ -179,7 +180,7 @@ class LinearMassBalance(MassBalanceModel):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
         if self.max_mb is not None:
             mb = mb.clip(None, self.max_mb)
-        return mb / SEC_IN_YEAR / cfg.RHO
+        return mb / SEC_IN_YEAR / self.rho
 
     def get_annual_mb(self, heights, year=None):
         return self.get_monthly_mb(heights, year=year)
@@ -394,14 +395,14 @@ class PastMassBalance(MassBalanceModel):
         _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
         mb_month = prcpsol - self.mu_star * tmelt
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
-        return mb_month / SEC_IN_MONTH / cfg.RHO
+        return mb_month / SEC_IN_MONTH / self.rho
 
     def get_annual_mb(self, heights, year=None):
 
         _, temp2dformelt, _, prcpsol = self._get_2d_annual_climate(heights,
                                                                    year)
         mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
-        return (mb_annual - self.bias) / SEC_IN_YEAR / cfg.RHO
+        return (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
 
 
 class ConstantMassBalance(MassBalanceModel):

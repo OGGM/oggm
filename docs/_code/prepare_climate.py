@@ -69,13 +69,13 @@ res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 # For the mass flux
 cl = gdir.read_pickle('inversion_input')[-1]
 mbmod = ConstantMassBalance(gdir)
-mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.RHO
+mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
 fdf['Flux'] = cl['flux']
 fdf['Mass balance'] = mbx
 
 # For the distributed thickness
-tasks.volume_inversion(gdir, glen_a=cfg.A*3, fs=0)
+tasks.mass_conservation_inversion(gdir, glen_a=2.4e-24 * 3, fs=0)
 tasks.distribute_thickness_per_altitude(gdir)
 
 

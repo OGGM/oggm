@@ -141,13 +141,8 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     this is outdated and doesn't really work.
     """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
+    fs = cfg.PARAMS['fs']
+    glen_a = cfg.PARAMS['glen_a']
 
     if y0 is None:
         y0 = cfg.PARAMS['y0']
@@ -184,7 +179,7 @@ def test_find_t0(self):
     import matplotlib.pyplot as plt
     do_plot = True
 
-    gdir = init_hef(border=80, invert_with_sliding=False)
+    gdir = init_hef(border=80)
 
     flowline.init_present_time_glacier(gdir)
     glacier = gdir.read_pickle('model_flowlines')

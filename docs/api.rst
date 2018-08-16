@@ -54,7 +54,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.apparent_mb_from_linear_mb
     tasks.mu_candidates
     tasks.prepare_for_inversion
-    tasks.volume_inversion
+    tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
@@ -75,7 +75,6 @@ glaciers in the current run). They are not parallelizable.
 
     tasks.compute_ref_t_stars
     tasks.crossval_t_stars
-    tasks.optimize_inversion_params
 
 Classes
 =======
@@ -113,7 +112,7 @@ The computed mass-balance is in units of [m ice s-1] ("meters of ice per
 second"), unless otherwise specified (e.g. for the utility function
 ``get_specific_mb``).
 The conversion from the climatic mass-balance ([kg m-2 s-1] ) therefore assumes
-an ice density given by ``cfg.RHO`` (currently: 900 kg m-3).
+an ice density given by ``cfg.PARAMS['ice_density']`` (currently: 900 kg m-3).
 
 Time
 ----

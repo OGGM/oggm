@@ -24,7 +24,7 @@ from oggm.core.centerlines import Centerline, line_order
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_HOUR
-from oggm.cfg import RHO, G, N, GAUSSIAN_KERNEL
+from oggm.cfg import G, GAUSSIAN_KERNEL
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -376,7 +376,7 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., inplace=True, is_tidewater=False,
+                 fs=None, inplace=True, is_tidewater=False,
                  mb_elev_feedback='annual', check_for_boundaries=True):
         """Create a new flowline model from the flowlines and a MB model.
 
@@ -432,14 +432,18 @@ class FlowlineModel(object):
 
         # Defaults
         if glen_a is None:
-            glen_a = cfg.A
+            glen_a = cfg.PARAMS['glen_a']
+        if fs is None:
+            fs = cfg.PARAMS['fs']
         self.glen_a = glen_a
         self.fs = fs
+        self.glen_n = cfg.PARAMS['glen_n']
+        self.rho = cfg.PARAMS['ice_density']
 
         self.check_for_boundaries = check_for_boundaries and not is_tidewater
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
-        self._fd = 2. / (N+2) * self.glen_a
+        self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
 
         self.y0 = None
         self.t = None
@@ -891,7 +895,8 @@ class FluxBasedModel(FlowlineModel):
 
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a
-            rhogh = (RHO*G*slope_stag)**N
+            N = self.glen_n
+            rhogh = (self.rho*G*slope_stag)**N
             u_stag = (thick_stag**(N+1)) * self._fd * rhogh * sf_stag**N + \
                      (thick_stag**(N-1)) * self.fs * rhogh
 
@@ -1059,7 +1064,8 @@ class KarthausModel(FlowlineModel):
         SurfaceGradient[0] = 0
 
         # Diffusivity
-        Diffusivity = width * (RHO*G)**3 * thick**3 * SurfaceGradient**2
+        N = self.glen_n
+        Diffusivity = width * (self.rho*G)**3 * thick**3 * SurfaceGradient**2
         Diffusivity *= 2/(N+2) * self.glen_a * thick**2 + self.fs
 
         # on stagger
@@ -1157,7 +1163,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
             # get the bed
             B = fl.bed_h
             # define Glen's law here
-            Gamma = 2.*self.glen_a*(RHO*G)**N / (N+2.) # this is the correct Gamma !!
+            N = self.glen_n
+            Gamma = 2.*self.glen_a*(self.rho*G)**N / (N+2.) # this is the correct Gamma !!
             #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
             # time stepping
             c_stab = 0.165
@@ -1526,16 +1533,8 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
      Possibly a method based on mass-conservation checks would be more robust.
      """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
+    kwargs.setdefault('fs', cfg.PARAMS['fs'])
+    kwargs.setdefault('glen_a', cfg.PARAMS['glen_a'])
 
     run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
                                  delete=True)

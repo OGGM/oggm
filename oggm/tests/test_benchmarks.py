@@ -112,10 +112,11 @@ class TestSouthGlacier(unittest.TestCase):
         mbref = mbref[np.isfinite(mbref)] * 1000
 
         # compute the bias to make it 0 SMB on the 2D DEM
+        rho = cfg.PARAMS['ice_density']
         mbmod = ConstantMassBalance(gdirs[0], bias=0)
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
         mbmod = ConstantMassBalance(gdirs[0], bias=np.average(mymb))
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
         np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
 
         # Same for ref
@@ -167,7 +168,7 @@ class TestSouthGlacier(unittest.TestCase):
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         # We use the default parameters for this run
-        execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
                             varname_suffix='_alt')
         execute_entity_task(tasks.distribute_thickness_interp, gdirs,
@@ -241,10 +242,12 @@ class TestSouthGlacier(unittest.TestCase):
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
+        glen_a = cfg.PARAMS['inversion_glen_a']
+        fs = cfg.PARAMS['inversion_fs']
         def to_optimize(x):
-            execute_entity_task(tasks.volume_inversion, gdirs,
-                                glen_a=cfg.A*x[0],
-                                fs=cfg.FS * x[1])
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                                glen_a=glen_a * x[0],
+                                fs=fs * x[1])
             execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
             with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
                 thick = ds.distributed_thickness.isel(x=('z', df['i']),
@@ -255,8 +258,8 @@ class TestSouthGlacier(unittest.TestCase):
                                      bounds=((0.01, 10), (0.01, 10)),
                                      tol=0.1)
         # Check results and save.
-        execute_entity_task(tasks.volume_inversion, gdirs,
-                            glen_a=cfg.A*opti['x'][0],
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                            glen_a=glen_a*opti['x'][0],
                             fs=0)
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
 
@@ -311,7 +314,7 @@ class TestSouthGlacier(unittest.TestCase):
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         # We use the default parameters for this run
-        execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         df = utils.glacier_characteristics(gdirs)
