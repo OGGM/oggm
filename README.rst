@@ -75,7 +75,7 @@ About
         :target: http://docs.oggm.org/en/latest/
         :alt: Documentation status
 
-    .. image:: http://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
+    .. image:: https://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
         :target: https://cluster.klima.uni-bremen.de/~github/asv/
         :alt: Benchmark status
 
