@@ -7,6 +7,7 @@ logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                     level=logging.DEBUG)  # noqa: E402
 
 import unittest
+from functools import partial
 import pytest
 import copy
 import numpy as np
@@ -17,7 +18,6 @@ from oggm.core.massbalance import LinearMassBalance
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
-from oggm.core import flowline
 
 # Tests
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
@@ -29,6 +29,13 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
 
 # after oggm.test
 import matplotlib.pyplot as plt
+
+from oggm.core.flowline import (KarthausModel, FluxBasedModel,
+                                MUSCLSuperBeeModel, MassConservationChecker)
+
+FluxBasedModel = partial(FluxBasedModel, inplace=True)
+KarthausModel = partial(KarthausModel, inplace=True)
+MUSCLSuperBeeModel = partial(MUSCLSuperBeeModel, inplace=True)
 
 pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
@@ -51,8 +58,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_constant_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
 
         lens = []
         surface_h = []
@@ -122,29 +128,29 @@ class TestIdealisedCases(unittest.TestCase):
         mb = LinearMassBalance(2600.)
 
         fls = dummy_constant_bed()
-        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
-                                                 glen_a=self.glen_a)
+        model = MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
         model.run_until(200)
         assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
 
         fls = dummy_noisy_bed()
-        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
-                                                 glen_a=self.glen_a)
+        model = MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
         model.run_until(200)
         assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
 
         fls = dummy_width_bed_tributary()
-        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
-                                                 glen_a=self.glen_a)
+        model = MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a)
         model.run_until(200)
         assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
 
         # Calving!
         fls = dummy_constant_bed(hmax=1000., hmin=0., nx=100)
         mb = LinearMassBalance(450.)
-        model = flowline.MassConservationChecker(fls, mb_model=mb, y0=0.,
-                                                 glen_a=self.glen_a,
-                                                 is_tidewater=True)
+        model = MassConservationChecker(fls, mb_model=mb, y0=0.,
+                                        glen_a=self.glen_a,
+                                        is_tidewater=True)
         model.run_until(500)
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
         assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
@@ -154,8 +160,7 @@ class TestIdealisedCases(unittest.TestCase):
         """ Check what is the min slope a flowline model can produce
         """
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
         kwargs = [{'fixed_dt': 3*SEC_IN_DAY}, {}, {}]
         lens = []
         surface_h = []
@@ -240,8 +245,7 @@ class TestIdealisedCases(unittest.TestCase):
             what the models do when the cliff height is changed
         """
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
 
         lens = []
         surface_h = []
@@ -321,7 +325,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_equilibrium(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [KarthausModel, FluxBasedModel]
 
         vols = []
         for model in models:
@@ -348,8 +352,7 @@ class TestIdealisedCases(unittest.TestCase):
 
     def test_adaptive_ts(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
         steps = [31 * SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
@@ -395,9 +398,9 @@ class TestIdealisedCases(unittest.TestCase):
             fls = dummy_constant_bed()
             mb = LinearMassBalance(2600.)
 
-            model = flowline.FluxBasedModel(fls, mb_model=mb,
-                                            glen_a=self.glen_a,
-                                            time_stepping=step)
+            model = FluxBasedModel(fls, mb_model=mb,
+                                   glen_a=self.glen_a,
+                                   time_stepping=step)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -416,8 +419,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_bumpy_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
         steps = [15 * SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
@@ -482,8 +484,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_noisy_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
         steps = [15 * SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
@@ -554,8 +555,7 @@ class TestIdealisedCases(unittest.TestCase):
         # TODO: @alexjarosch here we should have a look at MUSCLSuperBeeModel
         # set do_plot = True to see the plots
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel,
-                  flowline.MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
         steps = [15 * SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
@@ -619,7 +619,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_tributary(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [KarthausModel, FluxBasedModel]
         steps = [15 * SEC_IN_DAY, None]
         flss = [dummy_width_bed(), dummy_width_bed_tributary()]
         lens = []
@@ -688,7 +688,7 @@ class TestIdealisedCases(unittest.TestCase):
         akm = (tb._w0_m + tb._lambdas * h) * len(sec) * 100
         np.testing.assert_almost_equal(tb.area_m2, akm)
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [KarthausModel, FluxBasedModel]
         flss = [dummy_constant_bed(), dummy_trapezoidal_bed()]
 
         lens = []
@@ -737,7 +737,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_parabolic_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [KarthausModel, FluxBasedModel]
         flss = [dummy_constant_bed(), dummy_parabolic_bed()]
 
         lens = []
@@ -786,7 +786,7 @@ class TestIdealisedCases(unittest.TestCase):
     @pytest.mark.slow
     def test_mixed_bed(self):
 
-        models = [flowline.KarthausModel, flowline.FluxBasedModel]
+        models = [KarthausModel, FluxBasedModel]
         flss = [dummy_constant_bed(), dummy_mixed_bed()]
 
         lens = []
@@ -841,9 +841,9 @@ class TestIdealisedCases(unittest.TestCase):
 
         fls = dummy_constant_bed()
         mb = LinearMassBalance(2000.)
-        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                        glen_a=self.glen_a,
-                                        fs=self.fs)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=self.glen_a,
+                               fs=self.fs)
         with pytest.raises(RuntimeError) as excinfo:
             model.run_until(300)
         assert 'exceeds domain boundaries' in str(excinfo.value)
@@ -872,7 +872,7 @@ class TestSia2d(unittest.TestCase):
                                  widths=1.)
         mb = LinearMassBalance(2600.)
 
-        flmodel = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.)
+        flmodel = FluxBasedModel(fls, mb_model=mb, y0=0.)
 
         length = yrs * 0.
         vol = yrs * 0.

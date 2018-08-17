@@ -387,6 +387,7 @@ def test_coxe():
                                            grad=p['grad'])
     mb_mod.temp_bias = -0.3
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0,
+                                    inplace=True,
                                     is_tidewater=True)
 
     # run

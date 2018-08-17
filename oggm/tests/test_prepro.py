@@ -839,7 +839,7 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
         with xr.open_dataset(gdir.get_filepath('climate_monthly')) as ds:
-            grad = ds['gradient']
+            grad = ds['gradient'].data
             assert np.std(grad) > 0.0001
 
         cfg.PARAMS['temp_use_local_gradient'] = False
@@ -1889,7 +1889,8 @@ class TestGrindelInvert(unittest.TestCase):
 
         fls = self._parabolic_bed()
         mbmod = massbalance.LinearMassBalance(2800.)
-        model = flowline.FluxBasedModel(fls, mb_model=mbmod, glen_a=glen_a)
+        model = flowline.FluxBasedModel(fls, mb_model=mbmod, glen_a=glen_a,
+                                        inplace=True)
         model.run_until_equilibrium()
 
         # from dummy bed
@@ -1957,6 +1958,7 @@ class TestGrindelInvert(unittest.TestCase):
         mb_mod = massbalance.ConstantMassBalance(gdir)
         fls = gdir.read_pickle('model_flowlines')
         model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                        inplace=True,
                                         fs=0, glen_a=glen_a)
 
         ref_vol = model.volume_m3
