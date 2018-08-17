@@ -2080,7 +2080,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         source = 'DEM3' if source is None else source
         if source == 'DEM3':
             # use corrected viewpanoramas.org DEM
-            zones = dem3_viewpano_zone(lon_ex,lat_ex)
+            zones = dem3_viewpano_zone(lon_ex, lat_ex)
             sources = []
             for z in zones:
                 sources.append(_download_dem3_viewpano(z))
