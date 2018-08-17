@@ -131,8 +131,8 @@ class TestSouthGlacier(unittest.TestCase):
 
         if do_plot:
             import matplotlib.pyplot as plt
-            plt.scatter(mbref, demref, s=5, label='Obs (2007-2012), shifted to '
-                                                   'Avg(SMB) = 0')
+            plt.scatter(mbref, demref, s=5,
+                        label='Obs (2007-2012), shifted to Avg(SMB) = 0')
             plt.scatter(mymb, demref, s=5, label='OGGM MB at t*')
             plt.scatter(myfit, demref, s=5, label='Polyfit', c='C3')
             plt.xlabel('MB (mm w.e yr-1)')
@@ -180,10 +180,10 @@ class TestSouthGlacier(unittest.TestCase):
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
 
-            df['oggm_alt'] = ds.distributed_thickness_alt.isel(x=('z', df['i']),
-                                                               y=('z', df['j']))
-            df['oggm_int'] = ds.distributed_thickness_int.isel(x=('z', df['i']),
-                                                               y=('z', df['j']))
+            v = ds.distributed_thickness_alt
+            df['oggm_alt'] = v.isel(x=('z', df['i']), y=('z', df['j']))
+            v = ds.distributed_thickness_int
+            df['oggm_int'] = v.isel(x=('z', df['i']), y=('z', df['j']))
 
             ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
             ds['ref'].data[df['j'], df['i']] = df['thick']
@@ -244,6 +244,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         glen_a = cfg.PARAMS['inversion_glen_a']
         fs = cfg.PARAMS['inversion_fs']
+
         def to_optimize(x):
             execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                                 glen_a=glen_a * x[0],

@@ -1,9 +1,4 @@
-import unittest
 import warnings
-
-warnings.filterwarnings("once", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=UserWarning,
-                        message=r'.*guessing baseline image.*')
 
 import pytest
 import shutil
@@ -23,8 +18,12 @@ import oggm.cfg as cfg
 from oggm.utils import get_demo_file
 from oggm import utils, workflow
 
-# Globals
+# Warnings
+warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning,
+                        message=r'.*guessing baseline image.*')
 
+# Globals
 pytestmark = pytest.mark.test_env("graphics")
 
 # ----------------------------------------------------------

@@ -1,8 +1,8 @@
 """This script reads all the RGI files and computes intersects out of them."""
 # flake8: noqa
+import oggm
 import multiprocessing as mp
 import os
-import oggm
 import numpy as np
 import pandas as pd
 import geopandas as gpd

@@ -1,5 +1,6 @@
 import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
+
 import unittest
 import os
 import shutil
@@ -310,6 +311,7 @@ def make_fake_zipdir(dir_path, fakefile=None):
 class FakeDownloadManager():
     """We mess around with oggm internals, so the last we can do is to try
     to keep things clean after the tests."""
+
     def __init__(self, func_name, new_func):
         self.func_name = func_name
         self.new_func = new_func
@@ -354,6 +356,7 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_github_no_internet(self):
         self.reset_dir()
+
         def fake_down(dl_func, cache_path):
             # This should never be called, if it still is assert
             assert False
@@ -505,8 +508,8 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='srtm_39_03.tif')
 
         def down_check(url, cache_name=None, reset=False):
-            expected = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/' + \
-              'SRTM_Data_GeoTiff/srtm_39_03.zip'
+            expected = ('http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/'
+                        'SRTM_Data_GeoTiff/srtm_39_03.zip')
             self.assertEqual(url, expected)
             return tf
 
@@ -539,7 +542,8 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(url, expected)
             return 'yo'
 
-        with FakeDownloadManager('_download_topo_file_from_cluster', down_check):
+        with FakeDownloadManager('_download_topo_file_from_cluster',
+                                 down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                              rgi_region='19',
                                              rgi_subregion='19-11')
@@ -554,7 +558,8 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(url, expected)
             return 'yo'
 
-        with FakeDownloadManager('_download_topo_file_from_cluster', down_check):
+        with FakeDownloadManager('_download_topo_file_from_cluster',
+                                 down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                              rgi_region=5)
 
@@ -646,15 +651,15 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('S73E137', z[0])
         self.assertEqual('S75E135', u[0])
 
-        z, u= utils.aster_zone(lon_ex=[-95.5, -95.5],
-                               lat_ex=[30.5, 30.5])
+        z, u = utils.aster_zone(lon_ex=[-95.5, -95.5],
+                                lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 1)
         self.assertTrue(len(u) == 1)
         self.assertEqual('N30W096', z[0])
         self.assertEqual('N30W100', u[0])
 
-        z, u= utils.aster_zone(lon_ex=[-96.5, -95.5],
-                               lat_ex=[30.5, 30.5])
+        z, u = utils.aster_zone(lon_ex=[-96.5, -95.5],
+                                lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 2)
         self.assertTrue(len(u) == 2)
         self.assertEqual('N30W096', z[1])
@@ -681,7 +686,7 @@ class TestDataFiles(unittest.TestCase):
                     # 'GL-West': [-68., -42., 64., 76.],
                     # 'GL-South': [-52., -40., 59., 64.],
                     # 'GL-East': [-42., -17., 64., 76.]
-        }
+                    }
         # special names
         for key in test_loc:
             z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]],
@@ -755,12 +760,12 @@ class TestDataFiles(unittest.TestCase):
         time.sleep(0.1)
         open(f3, 'a').close()
 
-        l = cfg.get_lru_handler(self.dldir, maxsize=3, ending='.txt')
+        cfg.get_lru_handler(self.dldir, maxsize=3, ending='.txt')
         assert os.path.exists(f1)
         assert os.path.exists(f2)
         assert os.path.exists(f3)
 
-        l = cfg.get_lru_handler(self.dldir, maxsize=2, ending='.txt')
+        cfg.get_lru_handler(self.dldir, maxsize=2, ending='.txt')
         assert not os.path.exists(f1)
         assert os.path.exists(f2)
         assert os.path.exists(f3)
@@ -940,8 +945,8 @@ class TestSkyIsFalling(unittest.TestCase):
         import pyproj
         import matplotlib.pyplot as plt
 
-        wgs84 = pyproj.Proj(proj='latlong', datum='WGS84')
-        fig = plt.figure()
+        pyproj.Proj(proj='latlong', datum='WGS84')
+        plt.figure()
         plt.close()
 
         srs = ('+units=m +proj=lcc +lat_1=29.0 +lat_2=29.0 '

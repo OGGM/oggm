@@ -1,24 +1,31 @@
 import warnings
-
-warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import logging
 logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.DEBUG)  # noqa: E402
 
 import unittest
 import pytest
 import copy
+import numpy as np
 from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
-from oggm import utils
+from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
+from oggm.core import flowline
 
 # Tests
-from oggm.tests.funcs import *
+from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
+                              dummy_constant_bed_cliff,
+                              dummy_mixed_bed, dummy_constant_bed_obstacle,
+                              dummy_noisy_bed, dummy_parabolic_bed,
+                              dummy_trapezoidal_bed, dummy_width_bed,
+                              dummy_width_bed_tributary)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -33,7 +40,7 @@ class TestIdealisedCases(unittest.TestCase):
         N = 3
         cfg.initialize()
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
-        self.aglen_old = (N +2) * 1.9e-24 / 2. # outdated value
+        self.aglen_old = (N + 2) * 1.9e-24 / 2.  # outdated value
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
         self.fs = 0             # set slidin
         self.fs_old = 5.7e-20  # outdated value
@@ -56,7 +63,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
-                          fs=self.fs, fixed_dt= 10 *SEC_IN_DAY)
+                          fs=self.fs, fixed_dt=10 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -76,7 +83,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -85,7 +92,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -95,19 +102,19 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=3e-3)
         np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=3e-3)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[2] ) <50.)
-        self.assertTrue(utils.rmsd(lens[1], lens[2] ) <50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[2] ) <2e-3)
-        self.assertTrue(utils.rmsd(volume[1], volume[2] ) <2e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <1.0)
-        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2] ) <1.0)
+        self.assertTrue(utils.rmsd(lens[0], lens[2]) < 50.)
+        self.assertTrue(utils.rmsd(lens[1], lens[2]) < 50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 2e-3)
+        self.assertTrue(utils.rmsd(volume[1], volume[2]) < 2e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 1.0)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 1.0)
 
     @pytest.mark.slow
     def test_mass_conservation(self):
@@ -149,7 +156,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
                   flowline.MUSCLSuperBeeModel]
-        kwargs = [{'fixed_dt':3*SEC_IN_DAY}, {}, {}]
+        kwargs = [{'fixed_dt': 3*SEC_IN_DAY}, {}, {}]
         lens = []
         surface_h = []
         volume = []
@@ -184,8 +191,8 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
         np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=5e-3)
 
-        self.assertTrue(utils.rmsd(volume[0], volume[2] ) <1e-2)
-        self.assertTrue(utils.rmsd(volume[1], volume[2] ) <1e-2)
+        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-2)
+        self.assertTrue(utils.rmsd(volume[1], volume[2]) < 1e-2)
 
         if do_plot:  # pragma: no cover
             plt.figure()
@@ -195,7 +202,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -204,7 +211,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, min_slope[0], 'r')
@@ -213,7 +220,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare min slope')
             plt.xlabel('years')
             plt.ylabel('[degrees]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'], loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -223,7 +230,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
     @pytest.mark.slow
@@ -265,7 +272,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -274,7 +281,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -284,7 +291,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         # OK, so basically, Alex's tests below show that the other models
@@ -304,13 +311,12 @@ class TestIdealisedCases(unittest.TestCase):
             np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
             np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
 
-            self.assertTrue(utils.rmsd(lens[0], lens[2] ) <50.)
-            self.assertTrue(utils.rmsd(lens[1], lens[2] ) <50.)
-            self.assertTrue(utils.rmsd(volume[0], volume[2] ) <1e-3)
-            self.assertTrue(utils.rmsd(volume[1], volume[2] ) <1e-3)
-            self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <1.0)
-            self.assertTrue(utils.rmsd(surface_h[1], surface_h[2] ) <1.0)
-
+            self.assertTrue(utils.rmsd(lens[0], lens[2]) < 50.)
+            self.assertTrue(utils.rmsd(lens[1], lens[2]) < 50.)
+            self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-3)
+            self.assertTrue(utils.rmsd(volume[1], volume[2]) < 1e-3)
+            self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 1.0)
+            self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 1.0)
 
     @pytest.mark.slow
     def test_equilibrium(self):
@@ -344,7 +350,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         models = [flowline.KarthausModel, flowline.FluxBasedModel,
                   flowline.MUSCLSuperBeeModel]
-        steps = [ 31 *SEC_IN_DAY, None, None]
+        steps = [31 * SEC_IN_DAY, None, None]
         lens = []
         surface_h = []
         volume = []
@@ -369,8 +375,8 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1] ) <50.)
-        self.assertTrue(utils.rmsd(volume[2], volume[1] ) <1e-3)
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
         self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
         self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
 
@@ -441,7 +447,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -450,7 +456,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -460,18 +466,18 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1] ) <50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1] ) <1e-2)
-        self.assertTrue(utils.rmsd(volume[0], volume[2] ) <1e-2)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) <5)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <5)
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 1e-2)
+        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-2)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
 
     @pytest.mark.slow
     def test_noisy_bed(self):
@@ -508,7 +514,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -517,7 +523,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -527,18 +533,18 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1] ) <100.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1] ) <1e-1)
-        self.assertTrue(utils.rmsd(volume[0], volume[2] ) <1e-1)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1] ) <10)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2] ) <10)
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 100.)
+        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 1e-1)
+        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-1)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 10)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 10)
 
     @pytest.mark.slow
     def test_varying_width(self):
@@ -579,7 +585,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0], 'r')
@@ -588,7 +594,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=2)
+            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -598,7 +604,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed' ,'Karthaus' ,'Flux' ,'MUSCL-SuperBee'] ,loc=3)
+            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
@@ -665,19 +671,19 @@ class TestIdealisedCases(unittest.TestCase):
 
         tb = dummy_trapezoidal_bed()[0]
         np.testing.assert_almost_equal(tb._w0_m, tb.widths_m)
-        np.testing.assert_almost_equal(tb.section, tb. widths_m *0)
+        np.testing.assert_almost_equal(tb.section, tb. widths_m * 0)
         np.testing.assert_almost_equal(tb.area_km2, 0)
 
         tb.section = tb.section
         np.testing.assert_almost_equal(tb._w0_m, tb.widths_m)
-        np.testing.assert_almost_equal(tb.section, tb. widths_m *0)
+        np.testing.assert_almost_equal(tb.section, tb. widths_m * 0)
         np.testing.assert_almost_equal(tb.area_km2, 0)
 
         h = 50.
         sec = (2 * tb._w0_m + tb._lambdas * h) * h / 2
         tb.section = sec
         np.testing.assert_almost_equal(sec, tb.section)
-        np.testing.assert_almost_equal( sec * 0 +h, tb.thick)
+        np.testing.assert_almost_equal(sec * 0 + h, tb.thick)
         np.testing.assert_almost_equal(tb._w0_m + tb._lambdas * h, tb.widths_m)
         akm = (tb._w0_m + tb._lambdas * h) * len(sec) * 100
         np.testing.assert_almost_equal(tb.area_m2, akm)
