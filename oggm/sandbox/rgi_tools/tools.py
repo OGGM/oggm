@@ -1,4 +1,5 @@
 """This script reads all the RGI files and computes intersects out of them."""
+# flake8: noqa
 import os
 import time
 from glob import glob

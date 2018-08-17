@@ -518,9 +518,9 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_dem3(self):
 
-        # GEt the path to the file before we mess around
-
+        # Get the path to the file before we mess around
         tf = utils.get_demo_file('T10.zip')
+
         def down_check(url, cache_name=None, reset=False):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)

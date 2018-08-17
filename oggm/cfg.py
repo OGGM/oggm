@@ -53,7 +53,7 @@ class DocumentedDict(dict):
         try:
             self._set_key(key, value[0], docstr=value[1])
             CONFIG_MODIFIED = True
-        except:
+        except BaseException:
             raise ValueError('DocumentedDict accepts only tuple of len 2')
 
     def info_str(self, key):
@@ -381,6 +381,7 @@ def oggm_static_paths():
     if not os.path.exists(PATHS['dl_cache_dir']):
         if not PARAMS['dl_cache_readonly']:
             os.makedirs(PATHS['dl_cache_dir'])
+
 
 # Always call this one!
 oggm_static_paths()

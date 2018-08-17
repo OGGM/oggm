@@ -3,16 +3,17 @@ from mpi4py import MPI
 from oggm import cfg
 import atexit
 import argparse
-import sys, os
-import time
+import sys
 
 OGGM_MPI_SIZE = 0
 OGGM_MPI_COMM = None
 OGGM_MPI_ROOT = 0
 
+
 def _imprint(s):
     print(s)
     sys.stdout.flush()
+
 
 def _shutdown_slaves():
     global OGGM_MPI_COMM
@@ -26,12 +27,15 @@ def _shutdown_slaves():
         OGGM_MPI_COMM.gather(sendobj=None, root=OGGM_MPI_ROOT)
     OGGM_MPI_COMM = None
 
+
 def _init_oggm_mpi():
     global OGGM_MPI_COMM, OGGM_MPI_SIZE
 
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--mpi-help', action='help', help='Prints this help text')
-    parser.add_argument('--mpi', action='store_true', help='Run OGGM in mpi mode')
+    parser.add_argument('--mpi-help', action='help',
+                        help='Prints this help text')
+    parser.add_argument('--mpi', action='store_true',
+                        help='Run OGGM in mpi mode')
     args, unkn = parser.parse_known_args()
 
     if not args.mpi:
@@ -39,10 +43,11 @@ def _init_oggm_mpi():
 
     OGGM_MPI_COMM = MPI.COMM_WORLD
     OGGM_MPI_SIZE = OGGM_MPI_COMM.Get_size() - 1
-    rank          = OGGM_MPI_COMM.Get_rank()
+    rank = OGGM_MPI_COMM.Get_rank()
 
     if OGGM_MPI_SIZE <= 0:
-        _imprint("Error: MPI world size is too small, at least one worker process is required.")
+        _imprint("Error: MPI world size is too small, at least one worker "
+                 "process is required.")
         sys.exit(1)
 
     if rank != OGGM_MPI_ROOT:
@@ -50,7 +55,8 @@ def _init_oggm_mpi():
         sys.exit(0)
 
     if OGGM_MPI_SIZE < 2:
-        _imprint("Warning: MPI world size is small, this is pointless and has no benefit.")
+        _imprint("Warning: MPI world size is small, this is pointless and "
+                 "has no benefit.")
 
     atexit.register(_shutdown_slaves)
 
@@ -60,7 +66,8 @@ def _init_oggm_mpi():
 def mpi_master_spin_tasks(task, gdirs):
     comm = OGGM_MPI_COMM
     cfg_store = cfg.pack_config()
-    msg_list = [gdir for gdir in gdirs if gdir is not None] + ([None] * OGGM_MPI_SIZE)
+    msg_list = ([gdir for gdir in gdirs if gdir is not None] +
+                [None] * OGGM_MPI_SIZE)
 
     _imprint("Starting MPI task distribution...")
 
@@ -84,15 +91,17 @@ def _mpi_slave_bcast(comm):
         cfg.unpack_config(cfg_store)
     return task_func
 
+
 def _mpi_slave_sendrecv(comm):
     try:
         bufsize = int(cfg.PARAMS['mpi_recv_buf_size'])
-    except:
+    except BaseException:
         bufsize = None
 
     sreq = comm.isend(1, dest=OGGM_MPI_ROOT)
     rreq = comm.irecv(source=OGGM_MPI_ROOT, buf=bufsize)
     return sreq, rreq
+
 
 def _mpi_slave():
     comm = OGGM_MPI_COMM

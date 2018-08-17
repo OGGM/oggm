@@ -1,20 +1,11 @@
 import logging
-import warnings
-import copy
-from collections import OrderedDict
-from time import gmtime, strftime
 
 # External libs
 import numpy as np
 import pandas as pd
 from scipy import optimize as optimization
-import shapely.geometry as shpg
-import xarray as xr
 
 # Locals
-from oggm import __version__
-import oggm.cfg as cfg
-from oggm import utils
 from oggm import entity_task
 import oggm.core.massbalance as mbmods
 from oggm.core.flowline import robust_model_run

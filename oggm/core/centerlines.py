@@ -370,6 +370,7 @@ def _filter_lines(lines, heads, k, r):
     oheads = []
     ilines = copy.copy(lines)
 
+    lastline = None
     while len(ilines) > 0:  # loop as long as we haven't filtered all lines
         if len(olines) > 0:  # enter this after the first step only
 
@@ -408,16 +409,16 @@ def _filter_lines(lines, heads, k, r):
         lengths = np.array([])
         for l in ilines:
             lengths = np.append(lengths, l.length)
-        l = ilines[np.argmax(lengths)]
+        ll = ilines[np.argmax(lengths)]
 
-        ilines.remove(l)
+        ilines.remove(ll)
         if len(olines) > 0:
             # the cutted line's last point is not guaranteed
             # to on straight coordinates. Remove it
-            olines.append(shpg.LineString(np.asarray(l.xy)[:, 0:-1].T))
+            olines.append(shpg.LineString(np.asarray(ll.xy)[:, 0:-1].T))
         else:
-            olines.append(l)
-        lastline = l
+            olines.append(ll)
+        lastline = ll
 
     # add the corresponding head to each line
     for l in olines:
@@ -702,7 +703,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
     # get radius of the buffer according to Kienholz eq. (1)
     radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
     radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
-    radius /= gdir.grid.dx # in raster coordinates
+    radius /= gdir.grid.dx  # in raster coordinates
     # Plus our criteria, quite useful to remove short lines:
     radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
     log.debug('(%s) radius in raster coordinates: %.2f',
@@ -874,9 +875,9 @@ def compute_downstream_line(gdir):
 
     The idea is simple: starting from the glacier tail, compute all the routes
     to all local minimas found at the domain edge. The cheapest is "The One".
-    
+
     The rest of the job (merging centerlines + downstream into
-    one single glacier is realized by 
+    one single glacier is realized by
     :py:func:`~oggm.tasks.init_present_time_glacier`).
 
     Parameters
@@ -1113,7 +1114,7 @@ def compute_downstream_bedshape(gdir):
     tpl = gdir.read_pickle('inversion_flowlines')[-1]
     cl = gdir.read_pickle('downstream_line')['downstream_line']
     cl = Centerline(cl, dx=tpl.dx)
-       
+
     # Topography
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
@@ -1280,7 +1281,7 @@ def _filter_small_slopes(hgt, dx, min_slope=0):
             i0 = objs[0].start-i
             if i0 < 0:
                 break
-            ngap =  obj.stop - i0 - 1
+            ngap = obj.stop - i0 - 1
             nhgt = hgt[[i0, obj.stop]]
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
             if i0 <= 0 or current_slope[0] >= min_slope:
@@ -1436,7 +1437,8 @@ def catchment_area(gdir):
         not_computed = np.where(computed == 0)
         if len(not_computed[0]) == 0:  # All points computed !!
             break
-        headcoords = np.array([not_computed[0][0], not_computed[1][0]]).astype(np.int64)
+        headcoords = np.array([not_computed[0][0], not_computed[1][0]],
+                              dtype=np.int64)
         indices, _ = route_through_array(costgrid, headcoords, endcoords)
         inds = np.array(indices).T
         computed[inds[0], inds[1]] = 1
@@ -1591,9 +1593,10 @@ def initialize_flowlines(gdir):
             assert len(hgts) >= 5
             new_line = shpg.LineString(points[sp:])
 
-        l = Centerline(new_line, dx=dx, surface_h=hgts, orig_head=cl.orig_head)
-        l.order = cl.order
-        fls.append(l)
+        sl = Centerline(new_line, dx=dx, surface_h=hgts,
+                        orig_head=cl.orig_head)
+        sl.order = cl.order
+        fls.append(sl)
 
     # All objects are initialized, now we can link them.
     for cl, fl in zip(cls, fls):
@@ -1743,7 +1746,7 @@ def catchment_width_correction(gdir):
     with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         ext = nc.variables['glacier_ext'][:]
-    topo[np.where(ext==1)] = np.NaN
+    topo[np.where(ext == 1)] = np.NaN
 
     # Param
     nmin = int(cfg.PARAMS['min_n_per_bin'])
@@ -1809,8 +1812,8 @@ def catchment_width_correction(gdir):
                     bintopoarea = len(np.where(topo_digi == bi)[0])
                     wherewiths = np.where(fl_digi == bi)
                     binflarea = np.sum(new_widths[wherewiths]) * fl.dx
-                    new_widths[wherewiths] = (bintopoarea / binflarea) * \
-                                             new_widths[wherewiths]
+                    new_widths[wherewiths] = (bintopoarea / binflarea *
+                                              new_widths[wherewiths])
                 break
             bsize += 5
 

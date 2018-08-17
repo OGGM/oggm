@@ -4,7 +4,6 @@ import logging
 import os
 from shutil import rmtree
 import collections
-from functools import partial
 # External libs
 import multiprocessing as mp
 
@@ -91,8 +90,9 @@ class _pickle_copier(object):
                 return call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
-                err_msg = '({0}) exception occured while processing task ' \
-                          '{1}: {2}'.format(gdir.rgi_id, call_func.__name__, str(e))
+                err_msg = ('({0}) exception occured while processing task '
+                           '{1}: {2}'.format(gdir.rgi_id, call_func.__name__,
+                                             str(e)))
                 raise RuntimeError(err_msg) from e
             except AttributeError:
                 pass

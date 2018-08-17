@@ -412,7 +412,7 @@ class ConstantMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, filename='climate_monthly', 
+                 y0=None, halfsize=15, filename='climate_monthly',
                  input_filesuffix=''):
         """Initialize
 
@@ -804,7 +804,7 @@ class UncertainMassBalance(MassBalanceModel):
         self.mbmod.bias = self._get_state_bias(year) + _b
         try:
             out = self.mbmod.get_annual_mb(heights, year=year)
-        except:
+        except BaseException:
             self.mbmod.temp_bias = _t
             self.mbmod.prcp_bias = _p
             self.mbmod.bias = _b
