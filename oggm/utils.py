@@ -2818,7 +2818,7 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity : a `GeoSeries`_ or str
+        rgi_entity : a ``geopandas.GeoSeries`` or str
             glacier entity read from the shapefile (or a valid RGI ID if the
             directory exists)
         base_dir : str
@@ -2826,8 +2826,6 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
-
-        .. _GeoSeries: http://geopandas.org/data_structures.html#geoseries
         """
 
         if base_dir is None:

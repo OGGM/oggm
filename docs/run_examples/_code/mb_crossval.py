@@ -79,7 +79,7 @@ cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3', label='')
 ax1.vlines(cvdf['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
-                                       label='5% and 95%\npercentiles')
+           label='5% and 95%\npercentiles')
 ax1.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
          horizontalalignment='left',
          verticalalignment='top',

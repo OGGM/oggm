@@ -1,10 +1,7 @@
 # Python imports
 from os import path
-import oggm
-
-# Module logger
+import time
 import logging
-log = logging.getLogger(__name__)
 
 # Libs
 import salem
@@ -16,8 +13,10 @@ from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
 from oggm.utils import get_demo_file
 
+# Module logger
+log = logging.getLogger(__name__)
+
 # For timing the run
-import time
 start = time.time()
 
 # Initialize OGGM and set up the default run parameters
@@ -78,9 +77,12 @@ for task in task_list:
     execute_entity_task(task, gdirs)
 
 # Additional climate file (CESM)
-cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'
+                                           '.selection.nc')
+cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
+                                            '.selection.nc')
+cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
+                                            '.selection.nc')
 execute_entity_task(tasks.process_cesm_data, gdirs)
 
 # Inversion tasks

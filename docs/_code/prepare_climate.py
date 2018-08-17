@@ -13,7 +13,6 @@ from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                local_mustar, apparent_mb)
 from oggm.core.massbalance import (ConstantMassBalance)
 from oggm.utils import get_demo_file
-from oggm import graphics
 
 cfg.initialize()
 cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
@@ -69,7 +68,8 @@ res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
 # For the mass flux
 cl = gdir.read_pickle('inversion_input')[-1]
 mbmod = ConstantMassBalance(gdir)
-mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+mbx = (mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR *
+       cfg.PARAMS['ice_density'])
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
 fdf['Flux'] = cl['flux']
 fdf['Mass balance'] = mbx
@@ -84,8 +84,9 @@ def example_plot_temp_ts():
     d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
     temp = d.temp.resample(time='12MS').mean('time').to_series()
     del temp.index.name
-    ax = temp.plot(figsize=(8, 4), label='Annual temp')
-    temp.rolling(31, center=True, min_periods=15).mean().plot(label='31-yr avg')
+    temp.plot(figsize=(8, 4), label='Annual temp')
+    tsm = temp.rolling(31, center=True, min_periods=15).mean()
+    tsm.plot(label='31-yr avg')
     plt.legend(loc='best')
     plt.title('HISTALP annual temperature, Hintereisferner')
     plt.ylabel(r'degC')
@@ -94,8 +95,9 @@ def example_plot_temp_ts():
 
 
 def example_plot_mu_ts():
-    ax = mu_yr_clim.plot(figsize=(8, 4), label=r'$\mu (t)$');
-    plt.legend(loc='best'); plt.title(r'$\mu$ candidates Hintereisferner');
+    mu_yr_clim.plot(figsize=(8, 4), label=r'$\mu (t)$')
+    plt.legend(loc='best')
+    plt.title(r'$\mu$ candidates Hintereisferner')
     plt.ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
     plt.tight_layout()
     plt.show()
@@ -104,8 +106,8 @@ def example_plot_mu_ts():
 def example_plot_bias_ts():
     ax = pdf.plot(figsize=(8, 4), secondary_y='bias')
     plt.hlines(0, 1800, 2015, linestyles='-')
-    ax.set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)');
-    ax.set_title(r'$\mu$ candidates HEF');
+    ax.set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
+    ax.set_title(r'$\mu$ candidates HEF')
     plt.ylabel(r'bias (mm yr$^{-1}$)')
     yl = plt.gca().get_ylim()
     plt.plot((res['t_star'], res['t_star']), (yl[0], 0),

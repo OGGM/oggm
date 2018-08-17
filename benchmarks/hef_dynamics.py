@@ -1,7 +1,6 @@
 import os
 import shutil
 import numpy as np
-import oggm
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils, tasks
 from oggm.core import massbalance, flowline
@@ -29,7 +28,7 @@ def setup():
 def time_hef_run_until():
 
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
-    fls =gdir.read_pickle('model_flowlines')
+    fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
     model.run_until(200)
 
@@ -37,7 +36,7 @@ def time_hef_run_until():
 def time_hef_run_until_in_steps():
 
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
-    fls =gdir.read_pickle('model_flowlines')
+    fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
     for yr in np.linspace(0, 200, 400):
         model.run_until(yr)
@@ -46,7 +45,7 @@ def time_hef_run_until_in_steps():
 def time_hef_run_until_and_store():
 
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
-    fls =gdir.read_pickle('model_flowlines')
+    fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
     model.run_until_and_store(200)
 
@@ -54,11 +53,10 @@ def time_hef_run_until_and_store():
 def time_hef_run_until_and_store_with_nc():
 
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
-    fls =gdir.read_pickle('model_flowlines')
+    fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
     model.run_until_and_store(200, run_path=os.path.join(testdir, 'run.nc'),
                               diag_path=os.path.join(testdir, 'diag.nc'))
-
 
 
 time_hef_run_until.setup = setup

@@ -1,18 +1,17 @@
 # Python imports
 from os import path
-import oggm
-
-# Module logger
+import time
 import logging
-log = logging.getLogger(__name__)
 
 # Locals
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
 
+# Module logger
+log = logging.getLogger(__name__)
+
 # For timing the run
-import time
 start = time.time()
 
 # Initialize OGGM and set up the run parameters

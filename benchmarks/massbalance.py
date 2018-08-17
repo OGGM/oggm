@@ -1,7 +1,6 @@
 import os
 import shutil
 import numpy as np
-import oggm
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils, tasks
 from oggm.core import massbalance
@@ -29,21 +28,21 @@ def time_PastMassBalance():
 
     mb_mod = massbalance.PastMassBalance(gdir, bias=0)
     for yr in years:
-        _ = mb_mod.get_annual_mb(heights, year=yr)
+        mb_mod.get_annual_mb(heights, year=yr)
 
 
 def time_ConstantMassBalance():
 
     mb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
     for yr in years:
-        _ = mb_mod.get_annual_mb(heights, year=yr)
+        mb_mod.get_annual_mb(heights, year=yr)
 
 
 def time_RandomMassBalance():
 
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0)
     for yr in years:
-        _ = mb_mod.get_annual_mb(heights, year=yr)
+        mb_mod.get_annual_mb(heights, year=yr)
 
 
 def time_get_ela():
