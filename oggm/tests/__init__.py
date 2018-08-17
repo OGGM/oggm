@@ -1,15 +1,9 @@
 import logging
 import os
-import socket
-import sys
-import unittest
-import functools
 from distutils.version import LooseVersion
 
 import matplotlib.ft2font
-import matplotlib.pyplot as plt
-import osgeo.gdal
-from urllib.request import urlopen
+from urllib.request import urlopen, URLError
 
 from oggm import cfg
 from oggm.utils import SAMPLE_DATA_COMMIT
@@ -37,5 +31,5 @@ if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
 try:
     _ = urlopen('http://www.google.com', timeout=1)
     HAS_INTERNET = True
-except:
+except URLError:
     HAS_INTERNET = False

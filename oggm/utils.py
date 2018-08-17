@@ -65,7 +65,8 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 logger = logging.getLogger(__name__)
 
 # Github repository and commit hash/branch name/tag name on that repository
-# The given commit will be downloaded from github and used as source for all sample data
+# The given commit will be downloaded from github and used as source for
+# all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 SAMPLE_DATA_COMMIT = '235fc0998d11cf66747c04c2f89205d5a90dc76d'
 
@@ -107,9 +108,9 @@ lock = mp.Lock()
 # Table 1 from Adhikari (2012) and corresponding interpolation functions
 _ADHIKARI_TABLE_ZETAS = np.array([0.5, 1, 2, 3, 4, 5, 10])
 _ADHIKARI_TABLE_RECTANGULAR = np.array([0.313, 0.558, 0.790, 0.884,
-                                0.929, 0.954, 0.990])
+                                        0.929, 0.954, 0.990])
 _ADHIKARI_TABLE_PARABOLIC = np.array([0.251, 0.448, 0.653, 0.748,
-                              0.803, 0.839, 0.917])
+                                      0.803, 0.839, 0.917])
 ADHIKARI_FACTORS_RECTANGULAR = interp1d(_ADHIKARI_TABLE_ZETAS,
                                         _ADHIKARI_TABLE_RECTANGULAR,
                                         fill_value='extrapolate')
@@ -181,7 +182,7 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     try:
         cache_path = _call_dl_func(dl_func, cache_path)
-    except:
+    except BaseException:
         if os.path.exists(cache_path):
             os.remove(cache_path)
         raise
@@ -245,6 +246,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
     try:
         from progressbar import DataTransferBar, UnknownLength
         pbar = [None]
+
         def _upd(count, size, total):
             if pbar[0] is None:
                 pbar[0] = DataTransferBar()
@@ -259,7 +261,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
                            reporthook=_upd)
         try:
             pbar[0].finish()
-        except:
+        except BaseException:
             pass
         return res
     except (ImportError, ModuleNotFoundError):
@@ -332,7 +334,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
                 continue
             else:
                 raise
-        except HttpContentTooShortError:
+        except HttpContentTooShortError as err:
             logger.info("Downloading %s failed with ContentTooShortError"
                         " error %s, retrying in 10 seconds... %s/%s" %
                         (www_path, err.code, retry_counter, retry_max))
@@ -408,7 +410,7 @@ def get_sys_info():
             ("machine", "%s" % (machine)),
             ("processor", "%s" % (processor)),
         ])
-    except:
+    except BaseException:
         pass
 
     return blob
@@ -451,7 +453,7 @@ def show_versions(logger=None):
                 mod = importlib.import_module(modname)
             ver = ver_f(mod)
             deps_blob.append((modname, ver))
-        except:
+        except BaseException:
             deps_blob.append((modname, None))
 
     _print("  System info:")
@@ -474,7 +476,7 @@ def parse_rgi_meta(version=None):
         return _RGI_METADATA[version]
 
     # Parse RGI metadata
-    _ = get_demo_file('rgi_regions.csv')
+    get_demo_file('rgi_regions.csv')
     _d = os.path.join(cfg.CACHE_DIR,
                       'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
                       'rgi_meta')
@@ -519,6 +521,7 @@ class LRUFileCache():
 
     The files which are no longer used are deleted from the disk.
     """
+
     def __init__(self, l0=None, maxsize=100):
         """Instanciate.
 
@@ -667,7 +670,7 @@ def _download_dem3_viewpano_unlocked(zone):
     # BUT: There are southern hemisphere files that download properly. However,
     # the unzipped folder has the file name of
     # the northern hemisphere file. Some checks if correct file exists:
-    if len(zone)==4 and zone.startswith('S'):
+    if len(zone) == 4 and zone.startswith('S'):
         zonedir = os.path.join(tmpdir, zone[1:])
     else:
         zonedir = os.path.join(tmpdir, zone)
@@ -785,7 +788,7 @@ def _get_centerline_lonlat(gdir):
     cls = gdir.read_pickle('centerlines')
     olist = []
     for j, cl in enumerate(cls[::-1]):
-        mm = 1 if j==0 else 0
+        mm = 1 if j == 0 else 0
         gs = gpd.GeoSeries()
         gs['RGIID'] = gdir.rgi_id
         gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
@@ -914,7 +917,7 @@ def haversine(lon1, lat1, lon2, lat2):
     # haversine formula
     dlon = lon2 - lon1
     dlat = lat2 - lat1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
     c = 2 * np.arcsin(np.sqrt(a))
     return c * 6371000  # Radius of earth in meters
 
@@ -1002,7 +1005,7 @@ def line_interpol(line, dx):
     """
 
     # First point is easy
-    points = [line.interpolate(dx/2.)]
+    points = [line.interpolate(dx / 2.)]
 
     # Continue as long as line is not finished
     while True:
@@ -1025,8 +1028,8 @@ def line_interpol(line, dx):
             pbs = opbs
         else:
             if pbs.type != 'MultiPoint':
-                raise RuntimeError('line_interpol: we expect a MultiPoint'
-                                    'but got a {}.'.format(pbs.type))
+                raise RuntimeError('line_interpol: we expect a MultiPoint '
+                                   'but got a {}.'.format(pbs.type))
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
@@ -1038,19 +1041,20 @@ def line_interpol(line, dx):
 
     return points
 
+
 def md(ref, data, axis=None):
     """Mean Deviation."""
-    return np.mean(np.asarray(data)-ref, axis=axis)
+    return np.mean(np.asarray(data) - ref, axis=axis)
 
 
 def mad(ref, data, axis=None):
     """Mean Absolute Deviation."""
-    return np.mean(np.abs(np.asarray(data)-ref), axis=axis)
+    return np.mean(np.abs(np.asarray(data) - ref), axis=axis)
 
 
 def rmsd(ref, data, axis=None):
     """Root Mean Square Deviation."""
-    return np.sqrt(np.mean((np.asarray(ref)-data)**2, axis=axis))
+    return np.sqrt(np.mean((np.asarray(ref) - data)**2, axis=axis))
 
 
 def rel_err(ref, data):
@@ -1082,7 +1086,7 @@ def nicenumber(number, binsize, lower=False):
     if lower:
         return e * binsize
     else:
-        return (e+1) * binsize
+        return (e + 1) * binsize
 
 
 def signchange(ts):
@@ -1219,7 +1223,8 @@ def date_to_floatyear(y, m):
         the month
     """
 
-    return np.asanyarray(y) + (np.asanyarray(m)-1) * SEC_IN_MONTH / SEC_IN_YEAR
+    return (np.asanyarray(y) + (np.asanyarray(m) - 1) *
+            SEC_IN_MONTH / SEC_IN_YEAR)
 
 
 def hydrodate_to_calendardate(y, m, start_month=10):
@@ -1293,12 +1298,12 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """
 
     if y1 is not None:
-        years = np.arange(np.floor(y0), np.floor(y1)+1)
+        years = np.arange(np.floor(y0), np.floor(y1) + 1)
     elif ny is not None:
-        years = np.arange(np.floor(y0), np.floor(y0)+ny)
+        years = np.arange(np.floor(y0), np.floor(y0) + ny)
     else:
         raise ValueError("Need at least two positional arguments.")
-    months = np.tile(np.arange(12)+1, len(years))
+    months = np.tile(np.arange(12) + 1, len(years))
     years = years.repeat(12)
     out = date_to_floatyear(years, months)
     if not include_last_year:
@@ -1308,6 +1313,7 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
 
 class ncDataset(netCDF4.Dataset):
     """Wrapper around netCDF4 setting auto_mask to False"""
+
     def __init__(self, *args, **kwargs):
         super(ncDataset, self).__init__(*args, **kwargs)
         self.set_auto_mask(False)
@@ -1360,7 +1366,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
 
     if path is True:
         path = os.path.join(cfg.PATHS['working_dir'],
-                            'glacier_centerlines'+filesuffix+'.shp')
+                            'glacier_centerlines' + filesuffix + '.shp')
 
     olist = []
     for gdir in gdirs:
@@ -1480,10 +1486,10 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
     # TODO: Fabien, find out what Johannes wanted with this +3
     # +3 is just for the number to become still a bit larger
     # int() to avoid Deprec warning
-    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dy)+3))
+    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) / srtm_dy) + 3))
     mi, ma = np.min(lat_ex), np.max(lat_ex)
     # int() to avoid Deprec warning
-    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi)/srtm_dx)+3))
+    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) / srtm_dx) + 3))
 
     zones = []
     for lon in lon_ex:
@@ -1562,7 +1568,9 @@ def get_cru_cl_file():
 
     download_oggm_files()
 
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'cru')
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                        'cru')
     fpath = os.path.join(sdir, 'cru_cl2.nc')
     if os.path.exists(fpath):
         return fpath
@@ -1604,7 +1612,9 @@ def get_glathida_file():
 
     # Roll our own
     download_oggm_files()
-    sdir = os.path.join(cfg.CACHE_DIR, 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT, 'glathida')
+    sdir = os.path.join(cfg.CACHE_DIR,
+                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
+                        'glathida')
     outf = os.path.join(sdir, 'rgi_glathida_links.csv')
     assert os.path.exists(outf)
     return outf
@@ -2148,9 +2158,9 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
             ppath = gdirs[i].get_filepath('model_diagnostics',
                                           filesuffix=filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                _ = ds_diag.time.values
+                ds_diag.time.values
             break
-        except:
+        except BaseException:
             i += 1
 
     # OK found it, open it and prepare the output
@@ -2199,7 +2209,7 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
                 area[:, i] = ds_diag.area_m2.values
                 length[:, i] = ds_diag.length_m.values
                 ela[:, i] = ds_diag.ela_m.values
-        except:
+        except BaseException:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
             length[:, i] = np.NaN
@@ -2257,9 +2267,9 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
                 # Long time series are currently a pain pandas
                 warnings.filterwarnings("ignore", message='Unable to decode')
                 with xr.open_dataset(ppath) as ds_clim:
-                    _ = ds_clim.time.values
+                    ds_clim.time.values
             break
-        except:
+        except BaseException:
             i += 1
 
     with warnings.catch_warnings():
@@ -2327,7 +2337,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
                     ref_hgt[i] = ds_clim.ref_hgt
                     ref_pix_lon[i] = ds_clim.ref_pix_lon
                     ref_pix_lat[i] = ds_clim.ref_pix_lat
-        except:
+        except BaseException:
             pass
 
     ds['temp'] = (('time', 'rgi_id'), temp)
@@ -2390,7 +2400,7 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
     if path:
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
-                                'task_log'+filesuffix+'.csv')
+                                'task_log' + filesuffix + '.csv')
         if os.path.exists(path) and append:
             odf = pd.read_csv(path, index_col=0)
             out = odf.join(out, rsuffix='_n')
@@ -2449,9 +2459,9 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['inv_volume_km3'] = np.nansum(vol) * 1e-9
                 area = gdir.rgi_area_km2
                 d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-                d['vas_volume_km3'] = 0.034*(area**1.375)
+                d['vas_volume_km3'] = 0.034 * (area**1.375)
                 d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
-        except:
+        except BaseException:
             pass
         try:
             # Calving
@@ -2463,7 +2473,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 all_width = c['t_width']
             d['calving_flux'] = all_calving_data
             d['calving_front_width'] = all_width
-        except:
+        except BaseException:
             pass
         if inversion_only:
             out_df.append(d)
@@ -2473,7 +2483,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             diags = gdir.get_diagnostics()
             for k, v in diags.items():
                 d[k] = v
-        except:
+        except BaseException:
             pass
         try:
             # Masks related stuff
@@ -2485,7 +2495,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
             d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
             d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-        except:
+        except BaseException:
             pass
         try:
             # Ext related stuff
@@ -2498,7 +2508,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
             a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
             d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
-        except:
+        except BaseException:
             pass
         try:
             # Centerlines
@@ -2508,7 +2518,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 longuest = np.max([longuest, cl.dis_on_line[-1]])
             d['n_centerlines'] = len(cls)
             d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
-        except:
+        except BaseException:
             pass
         try:
             # Flowline related stuff
@@ -2527,7 +2537,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             d['flowline_min_elev'] = np.min(h)
             d['flowline_avg_width'] = np.mean(widths)
             d['flowline_avg_slope'] = np.mean(slope)
-        except:
+        except BaseException:
             pass
         try:
             # MB calib
@@ -2535,7 +2545,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             d['t_star'] = df['t_star']
             d['mu_star'] = df['mu_star']
             d['mb_bias'] = df['bias']
-        except:
+        except BaseException:
             pass
         try:
             # Climate and MB at t*
@@ -2550,7 +2560,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 # Try to get the slope
                 mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
                 d['tstar_mb_grad'] = mb_slope
-            except:
+            except BaseException:
                 # we don't mind if something goes wrong
                 d['tstar_mb_grad'] = np.NaN
             d['tstar_ela_h'] = mbmod.get_ela()
@@ -2565,7 +2575,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['tstar_avg_' + n + '_max_elev'] = v[2]
                 d['tstar_avg_' + n + '_min_elev'] = v[3]
             d['tstar_avg_prcp'] = p[0]
-        except:
+        except BaseException:
             pass
 
         out_df.append(d)
@@ -2574,7 +2584,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                       'glacier_characteristics'+filesuffix+'.csv'))
+                                    ('glacier_characteristics' +
+                                     filesuffix + '.csv')))
         else:
             out.to_csv(path)
     return out
@@ -2582,8 +2593,10 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
 
 class DisableLogger():
     """Context manager to temporarily disable all loggers."""
+
     def __enter__(self):
         logging.disable(logging.ERROR)
+
     def __exit__(self, a, b, c):
         logging.disable(logging.NOTSET)
 
@@ -2607,8 +2620,8 @@ class entity_task(object):
         self.log = log
         self.writes = writes
 
-        cnt =  ['    Returns']
-        cnt += ['    -------']
+        cnt = ['    Notes']
+        cnt += ['    -----']
         cnt += ['    Files writen to the glacier directory:']
 
         for k in sorted(writes):
@@ -2742,7 +2755,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     gpd.GeoDataFrame([entity]).to_file(gdir.get_filepath('outlines'))
 
     # Idealized flowline
-    coords = np.arange(0, len(surface_h)-0.5, 1)
+    coords = np.arange(0, len(surface_h) - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
     fl = Centerline(line, dx=flowline_dx, surface_h=surface_h)
     fl.widths = widths_m / map_dx
@@ -2805,7 +2818,7 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        rgi_entity : a `GeoSeries <http://geopandas.org/data_structures.html#geoseries>`_ or str
+        rgi_entity : a ``geopandas.GeoSeries`` or str
             glacier entity read from the shapefile (or a valid RGI ID if the
             directory exists)
         base_dir : str
@@ -2813,7 +2826,6 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
-
         """
 
         if base_dir is None:
@@ -2843,7 +2855,7 @@ class GlacierDirectory(object):
 
         try:
             # RGI V4?
-            _ = rgi_entity.RGIID
+            rgi_entity.RGIID
             raise ValueError('RGI Version 4 is not supported anymore')
         except AttributeError:
             pass
@@ -2926,7 +2938,7 @@ class GlacierDirectory(object):
         try:
             rgi_date = pd.to_datetime(rgi_datestr[0:4],
                                       errors='raise', format='%Y')
-        except:
+        except BaseException:
             rgi_date = None
         self.rgi_date = rgi_date
 
@@ -2951,7 +2963,7 @@ class GlacierDirectory(object):
         summary += ['  RGI id: ' + self.rgi_id]
         summary += ['  Region: ' + self.rgi_region_name]
         summary += ['  Subregion: ' + self.rgi_subregion_name]
-        if self.name :
+        if self.name:
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
         summary += ['  Terminus type: ' + str(self.terminus_type)]
@@ -3132,8 +3144,8 @@ class GlacierDirectory(object):
 
         nc = ncDataset(fpath, 'w', format='NETCDF4')
 
-        xd = nc.createDimension('x', self.grid.nx)
-        yd = nc.createDimension('y', self.grid.ny)
+        nc.createDimension('x', self.grid.nx)
+        nc.createDimension('y', self.grid.ny)
 
         nc.author = 'OGGM'
         nc.author_info = 'Open Global Glacier Model'
@@ -3209,7 +3221,7 @@ class GlacierDirectory(object):
             nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
                                        ref_pix_lon, ref_pix_lat)
 
-            dtime = nc.createDimension('time', None)
+            nc.createDimension('time', None)
 
             nc.author = 'OGGM'
             nc.author_info = 'Open Global Glacier Model'
@@ -3472,9 +3484,9 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
 
     # TODO: higher order interpolation? (e.g. via InterpolatedUnivariateSpline)
     shape_factors[is_rectangular] = ADHIKARI_FACTORS_RECTANGULAR(
-                                        zetas[is_rectangular])
+        zetas[is_rectangular])
     shape_factors[~is_rectangular] = ADHIKARI_FACTORS_PARABOLIC(
-                                        zetas[~is_rectangular])
+        zetas[~is_rectangular])
 
     np.clip(shape_factors, 0.2, 1., out=shape_factors)
     # Set NaN values resulting from zero height to a shape factor of 1

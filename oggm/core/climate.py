@@ -164,8 +164,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # take the closest
     # TODO: consider GCM interpolation?
     temp = tempds.TREFHT.sel(lat=lat, lon=lon, method='nearest')
-    precp = precpcds.PRECC.sel(lat=lat, lon=lon, method='nearest') + \
-            preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest')
+    precp = (precpcds.PRECC.sel(lat=lat, lon=lon, method='nearest') +
+             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest'))
 
     # from normal years to hydrological years
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
@@ -1072,6 +1072,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
 
     # Now find the ELA till the integrated mb is zero
     from oggm.core.massbalance import LinearMassBalance
+
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h[0], grad=mb_gradient)
         smb = mbmod.get_specific_mb(h, w)

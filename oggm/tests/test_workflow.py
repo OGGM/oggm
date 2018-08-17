@@ -1,6 +1,5 @@
 import warnings
-
-warnings.filterwarnings("once", category=DeprecationWarning)
+warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import os
 import shutil
@@ -19,7 +18,7 @@ from oggm import graphics
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file, rmsd, write_centerlines_to_shape
+from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import BASELINE_DIR
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
                               patch_url_retrieve_github)
@@ -78,7 +77,7 @@ def up_to_climate(reset=False):
     rgidf = gpd.read_file(rgi_file)
 
     # Be sure data is downloaded
-    cl = utils.get_cru_cl_file()
+    utils.get_cru_cl_file()
 
     # Params
     cfg.PARAMS['border'] = 70
@@ -234,7 +233,7 @@ class TestWorkflow(unittest.TestCase):
             h, w = gdir.get_inversion_flowline_hw()
             cfg.PARAMS['use_bias_for_run'] = False
             mbmod = PastMassBalance(gdir)
-            mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
+            mbdf = gdir.get_ref_mb_data().ANNUAL_BALANCE.to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()
@@ -242,7 +241,7 @@ class TestWorkflow(unittest.TestCase):
                                        mm['mine'] - mm['ref'], atol=1e-3)
             cfg.PARAMS['use_bias_for_run'] = True
             mbmod = PastMassBalance(gdir)
-            mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE'].to_frame(name='ref')
+            mbdf = gdir.get_ref_mb_data().ANNUAL_BALANCE.to_frame(name='ref')
             for yr in mbdf.index:
                 mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
             mm = mbdf.mean()

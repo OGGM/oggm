@@ -1,9 +1,9 @@
 from scipy import stats
-import oggm
+import numpy as np
 from oggm import cfg
 from oggm.core import massbalance, flowline
 from oggm.core.sia2d import Upstream2D
-from oggm.tests.funcs import *
+from oggm.tests.funcs import dummy_constant_bed
 
 
 def gkern(kernlen=21, nsig=3):

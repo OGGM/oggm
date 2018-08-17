@@ -1,9 +1,10 @@
 """ OGGM package.
 
-Copyright: OGGM developers, 2014-2017
+Copyright: OGGM developers, 2014-2018
 
 License: GPLv3+
 """
+# flake8: noqa
 import logging
 
 from ._version import get_versions

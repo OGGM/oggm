@@ -9,6 +9,7 @@ import numpy as np
 import oggm
 from oggm import cfg, utils, tasks, workflow
 from oggm.workflow import execute_entity_task
+from oggm.core.massbalance import ConstantMassBalance, PastMassBalance
 
 # Module logger
 import logging
@@ -62,7 +63,7 @@ df, _ = utils.get_wgms_files()
 rids = df['RGI{}0_ID'.format(rgi_version[0])]
 
 # We can't do Antarctica
-rids = [rid for rid in rids if not '-19.' in rid]
+rids = [rid for rid in rids if not ('-19.' in rid)]
 
 # For HISTALP only RGI reg 11
 if baseline == 'HISTALP':
@@ -131,7 +132,6 @@ tasks.crossval_t_stars(gdirs)  # for later
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
-from oggm.core.massbalance import (ConstantMassBalance, PastMassBalance)
 for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
 

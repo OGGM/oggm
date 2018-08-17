@@ -1,17 +1,6 @@
 """ Handling of the local glacier map and masks. Defines the first tasks
 to be realized by any OGGM pre-processing workflow.
 
-References::
-
-    Kienholz, C., Rich, J. L., Arendt, a. a., and Hock, R. (2014).
-        A new method for deriving glacier centerlines applied to glaciers in
-        Alaska and northwest Canada. The Cryosphere, 8(2), 503-519.
-        doi:10.5194/tc-8-503-2014
-
-    Pfeffer, W. T., Arendt, A. a., Bliss, A., Bolch, T., Cogley, J. G.,
-        Gardner, A. S., ... Sharp, M. J. (2014). The Randolph Glacier Inventory:
-        a globally complete inventory of glaciers. Journal of Glaciology,
-        60(221), 537-552. http://doi.org/10.3189/2014JoG13J176
 """
 # Built ins
 import logging
@@ -185,8 +174,8 @@ def _polygon_to_pix(polygon):
     a shapely.geometry.Polygon class instance.
     """
 
-    project = lambda x, y: (np.rint(x).astype(np.int64),
-                            np.rint(y).astype(np.int64))
+    def project(x, y):
+        return np.rint(x).astype(np.int64), np.rint(y).astype(np.int64)
 
     poly_pix = shapely.ops.transform(project, polygon)
 
@@ -560,8 +549,8 @@ def glacier_masks(gdir):
 
     v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
-    v.long_name = ('DEM topography smoothed' 
-                   ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
+    v.long_name = ('DEM topography smoothed '
+                   'with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
     v[:] = smoothed_dem
 
     v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
@@ -763,8 +752,8 @@ def simple_glacier_masks(gdir):
 
     v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
-    v.long_name = ('DEM topography smoothed' 
-                   ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
+    v.long_name = ('DEM topography smoothed '
+                   'with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
     v[:] = smoothed_dem
 
     v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)

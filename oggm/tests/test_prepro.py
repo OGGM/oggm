@@ -1,10 +1,8 @@
-from os import path
 import warnings
+warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import oggm
 import oggm.utils
-
-warnings.filterwarnings("once", category=DeprecationWarning)
 
 import unittest
 import os
@@ -48,13 +46,14 @@ def read_svgcoords(svg_file):
     from xml.dom import minidom
     doc = minidom.parse(svg_file)
     coords = [path.getAttribute('d') for path
-                    in doc.getElementsByTagName('path')]
+              in doc.getElementsByTagName('path')]
     doc.unlink()
     _, _, coords = coords[0].partition('C')
     x = []
     y = []
     for c in coords.split(' '):
-        if c == '': continue
+        if c == '':
+            continue
         c = c.split(',')
         x.append(np.float(c[0]))
         y.append(np.float(c[1]))
@@ -200,7 +199,7 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
 
         # this should simply run
-        mygdir = oggm.GlacierDirectory(entity.RGIId, base_dir=self.testdir)
+        oggm.GlacierDirectory(entity.RGIId, base_dir=self.testdir)
 
     def test_glacier_masks(self):
 
@@ -367,11 +366,12 @@ class TestCenterlines(unittest.TestCase):
 
         _heads, _ = centerlines._filter_heads(heads, heads_height, radius,
                                               polygon)
-        _headsi, _ = centerlines._filter_heads(heads[::-1], heads_height[
-                                                            ::-1], radius, polygon)
+        _headsi, _ = centerlines._filter_heads(heads[::-1],
+                                               heads_height[::-1],
+                                               radius, polygon)
 
         self.assertEqual(_heads, _headsi[::-1])
-        self.assertEqual(_heads, [heads[h] for h in [2,5,6,7]])
+        self.assertEqual(_heads, [heads[h] for h in [2, 5, 6, 7]])
 
     def test_mask_to_polygon(self):
         from oggm.core.centerlines import _mask_to_polygon
@@ -481,11 +481,11 @@ class TestCenterlines(unittest.TestCase):
             i0 = int(i0)
             cur = c.line.coords[i0]
             n1, n2 = c.normals[i0]
-            l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
-                                 shpg.Point(cur + wi / 2. * n2)])
+            line = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                                    shpg.Point(cur + wi / 2. * n2)])
             from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
-            points = line_interpol(l, 0.5)
+            points = line_interpol(line, 0.5)
             with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
                 topo = nc.variables['topo_smoothed'][:]
                 x = nc.variables['x'][:]
@@ -562,8 +562,9 @@ class TestCenterlines(unittest.TestCase):
             kgm = transform(proj, kgm)
 
             # Rounded nearest pix
-            project = lambda x, y: (np.rint(x).astype(np.int64),
-                            np.rint(y).astype(np.int64))
+            def project(x, y):
+                return (np.rint(x).astype(np.int64),
+                        np.rint(y).astype(np.int64))
 
             kgm = transform(project, kgm)
 
@@ -817,7 +818,8 @@ class TestClimate(unittest.TestCase):
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        with utils.ncDataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+        f = os.path.join(gdir.dir, 'climate_monthly.nc')
+        with utils.ncDataset(f) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
@@ -860,7 +862,8 @@ class TestClimate(unittest.TestCase):
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        with utils.ncDataset(os.path.join(gdir.dir, 'climate_monthly.nc')) as nc_r:
+        f = os.path.join(gdir.dir, 'climate_monthly.nc')
+        with utils.ncDataset(f) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
@@ -895,11 +898,13 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
-            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
+        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        with xr.open_dataset(f1) as nc_h:
+            with xr.open_dataset(f2) as nc_c:
                 # put on the same altitude
                 # (using default gradient because better)
-                temp_cor = nc_c.temp -0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
+                temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
                 totest = temp_cor - nc_h.temp
                 self.assertTrue(totest.mean() < 0.5)
                 # precip
@@ -938,8 +943,10 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        with xr.open_dataset(os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
-            with xr.open_dataset(os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
+        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        with xr.open_dataset(f1) as nc_h:
+            with xr.open_dataset(f2) as nc_c:
                 nc_hi = nc_h.isel(time=slice(49*12, 2424))
                 np.testing.assert_allclose(nc_hi['temp'], nc_c['temp'])
                 # for precip the data changed in between versions, we
@@ -1361,7 +1368,6 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
-
     def tearDown(self):
         self.rm_dir()
 
@@ -1466,7 +1472,7 @@ class TestInversion(unittest.TestCase):
         for cl in cls:
             # Clip slope to avoid negative and small slopes
             slope = cl['slope_angle']
-            nm = np.where(slope <  np.deg2rad(2.))
+            nm = np.where(slope < np.deg2rad(2.))
             nabove += len(nm[0])
             npoints += len(slope)
             _max = np.max(slope)
@@ -1561,7 +1567,7 @@ class TestInversion(unittest.TestCase):
         for cl in cls:
             # Clip slope to avoid negative and small slopes
             slope = cl['slope_angle']
-            nm = np.where(slope <  np.deg2rad(2.))
+            nm = np.where(slope < np.deg2rad(2.))
             nabove += len(nm[0])
             npoints += len(slope)
             _max = np.max(slope)
@@ -1577,6 +1583,7 @@ class TestInversion(unittest.TestCase):
 
         glen_a = 2.4e-24
         fs = 5.7e-20
+
         def to_optimize(x):
             v, _ = inversion.mass_conservation_inversion(gdir, fs=fs * x[1],
                                                          glen_a=glen_a * x[0])
@@ -1654,8 +1661,9 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
 
         ref_v = 0.573 * 1e9
+
         def to_optimize(x):
-            glen_a = cfg.PARAMS['inversion_glen_a']* x[0]
+            glen_a = cfg.PARAMS['inversion_glen_a'] * x[0]
             fs = cfg.PARAMS['inversion_fs'] * x[1]
             v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                          glen_a=glen_a)
@@ -1664,7 +1672,7 @@ class TestInversion(unittest.TestCase):
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
                                     tol=1e-1)['x']
-        glen_a = cfg.PARAMS['inversion_glen_a']* out[0]
+        glen_a = cfg.PARAMS['inversion_glen_a'] * out[0]
         fs = cfg.PARAMS['inversion_fs'] * out[1]
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
@@ -1718,7 +1726,7 @@ class TestInversion(unittest.TestCase):
         ref_v = 0.573 * 1e9
 
         def to_optimize(x):
-            glen_a = cfg.PARAMS['inversion_glen_a']* x[0]
+            glen_a = cfg.PARAMS['inversion_glen_a'] * x[0]
             fs = 0.
             v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                          glen_a=glen_a)
@@ -1732,7 +1740,7 @@ class TestInversion(unittest.TestCase):
         self.assertTrue(out[0] > 0.1)
         self.assertTrue(out[0] < 10)
 
-        glen_a = cfg.PARAMS['inversion_glen_a']* out[0]
+        glen_a = cfg.PARAMS['inversion_glen_a'] * out[0]
         fs = 0.
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
@@ -1874,7 +1882,7 @@ class TestGrindelInvert(unittest.TestCase):
     def test_ideal_glacier(self):
 
         # we are making a
-        glen_a = cfg.PARAMS['inversion_glen_a']* 1
+        glen_a = cfg.PARAMS['inversion_glen_a'] * 1
         from oggm.core import flowline
 
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
@@ -1917,10 +1925,6 @@ class TestGrindelInvert(unittest.TestCase):
         # Write out
         gdir.write_pickle(towrite, 'inversion_input')
         v, a = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
-        v_km3 = v * 1e-9
-        a_km2 = np.sum(widths * dx) * 1e-6
-        v_vas = 0.034*(a_km2**1.375)
-
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
         cl = gdir.read_pickle('inversion_output')[0]
@@ -2110,9 +2114,10 @@ class TestGCMClimate(unittest.TestCase):
             warnings.filterwarnings("ignore", message='Unable to decode')
 
             # CRU
-            f1 = path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
+            f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
             f2 = gdir.get_filepath(filename='climate_monthly')
-            with xr.open_dataset(f1) as clim_cru1, xr.open_dataset(f2) as clim_cru2:
+            with xr.open_dataset(f1) as clim_cru1, \
+                    xr.open_dataset(f2) as clim_cru2:
                 np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
                                            clim_cru2.prcp)
                 np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
@@ -2131,9 +2136,11 @@ class TestGCMClimate(unittest.TestCase):
                                            [1, 12])
 
             # CESM
-            f1 = path.join(cfg.PATHS['working_dir'], 'climate_input_cesm.nc')
+            f1 = os.path.join(cfg.PATHS['working_dir'],
+                              'climate_input_cesm.nc')
             f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
-            with xr.open_dataset(f1) as clim_cesm1, xr.open_dataset(f2) as clim_cesm2:
+            with xr.open_dataset(f1) as clim_cesm1, \
+                    xr.open_dataset(f2) as clim_cesm2:
                 np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
                                            clim_cesm2.prcp)
                 np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
@@ -2255,7 +2262,7 @@ class TestCatching(unittest.TestCase):
         # This will "run" but log an error
         from oggm.tasks import run_random_climate
         workflow.execute_entity_task(run_random_climate,
-                                     [(gdir, {'filesuffix':'_testme'})])
+                                     [(gdir, {'filesuffix': '_testme'})])
 
         tfile = os.path.join(self.log_dir, 'RGI50-11.00897.ERROR')
         assert os.path.exists(tfile)
@@ -2283,7 +2290,8 @@ class TestCatching(unittest.TestCase):
 
         centerlines.compute_downstream_bedshape(gdir)
 
-        s = gdir.get_task_status(centerlines.compute_downstream_bedshape.__name__)
+        s = gdir.get_task_status(
+            centerlines.compute_downstream_bedshape.__name__)
         assert 'FileNotFoundError' in s
 
         # Try overwrite

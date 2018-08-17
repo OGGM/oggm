@@ -6,7 +6,6 @@ import geopandas as gpd
 import shapely.geometry as shpg
 
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import utils, workflow
 

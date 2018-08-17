@@ -24,7 +24,7 @@ def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
     surface_h = np.linspace(hmax, hmin, nx)
     bed_h = surface_h
     widths = surface_h * 0. + widths
-    coords = np.arange(0, nx- 0.5, 1)
+    coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
     return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
                                             bed_h, widths)]
@@ -205,7 +205,7 @@ def dummy_width_bed_tributary(map_dx=100.):
     coords = np.arange(0, 19.1, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0. + 1]).T)
     fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx, surface_h[0:20],
-                                         bed_h[0:20], widths[0:20])
+                                           bed_h[0:20], widths[0:20])
     fl_1.set_flows_to(fl_0)
     return [fl_1, fl_0]
 
@@ -221,7 +221,7 @@ def patch_url_retrieve_github(url, *args, **kwargs):
 def use_multiprocessing():
     try:
         return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "True"))
-    except:
+    except BaseException:
         return True
 
 

@@ -331,9 +331,9 @@ class MixedBedFlowline(Flowline):
         """Compute the widths out of H and shape"""
         out = np.sqrt(4*self.thick/self.bed_shape)
         if self._do_trapeze:
-            out[self._ptrap] = self._w0_m[self._ptrap] + \
-                               self._lambdas[self._ptrap] * \
-                               self.thick[self._ptrap]
+            out[self._ptrap] = (self._w0_m[self._ptrap] +
+                                self._lambdas[self._ptrap] *
+                                self.thick[self._ptrap])
         return out
 
     @property
@@ -452,7 +452,7 @@ class FlowlineModel(object):
         if not inplace:
             flowlines = copy.deepcopy(flowlines)
         try:
-            _ = len(flowlines)
+            len(flowlines)
         except TypeError:
             flowlines = [flowlines]
         self.fls = None
@@ -594,7 +594,7 @@ class FlowlineModel(object):
         # Check for domain bounds
         if self.check_for_boundaries:
             if self.fls[-1].thick[-1] > 10:
-                    raise RuntimeError('Glacier exceeds domain boundaries.')
+                raise RuntimeError('Glacier exceeds domain boundaries.')
 
         # Check for NaNs
         for fl in self.fls:
@@ -730,8 +730,8 @@ class FlowlineModel(object):
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """ Runs the model until an equilibrium state is reached.
-        
-        Be careful: This only works for CONSTANT (not time-dependant) 
+
+        Be careful: This only works for CONSTANT (not time-dependant)
         mass-balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
@@ -947,8 +947,8 @@ class FluxBasedModel(FlowlineModel):
             mb = dt * mb * widths
 
             # Update section with flowing and mass balance
-            new_section = fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt + \
-                          aflx*dt + mb
+            new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt +
+                           aflx*dt + mb)
 
             # Keep positive values only and store
             fl.section = new_section.clip(0)
@@ -956,8 +956,8 @@ class FluxBasedModel(FlowlineModel):
             # Add the last flux to the tributary
             # this is ok because the lines are sorted in order
             if trib[0] is not None:
-                aflxs[trib[0]][trib[1]:trib[2]] += flx_stag[-1].clip(0) * \
-                                                   trib[3]
+                aflxs[trib[0]][trib[1]:trib[2]] += (flx_stag[-1].clip(0) *
+                                                    trib[3])
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
                 # TODO: not sure if this is the way to go yet,
@@ -973,7 +973,6 @@ class MassConservationChecker(FluxBasedModel):
     """This checks if the FluzBasedmodel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
-
         """ Instanciate.
 
         Parameters
@@ -1015,7 +1014,6 @@ class KarthausModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fixed_dt=None, min_dt=SEC_IN_DAY,
                  max_dt=31*SEC_IN_DAY, inplace=True):
-
         """ Instanciate.
 
         Parameters
@@ -1075,16 +1073,17 @@ class KarthausModel(FlowlineModel):
         DiffusivityStaggered[1:] = (Diffusivity[:fl.nx-1] + Diffusivity[1:])/2.
         DiffusivityStaggered[0] = Diffusivity[0]
 
-        SurfaceGradientStaggered[1:] = (SurfaceHeight[1:]-SurfaceHeight[:fl.nx-1])/dx
+        SurfaceGradientStaggered[1:] = (SurfaceHeight[1:] -
+                                        SurfaceHeight[:fl.nx-1])/dx
         SurfaceGradientStaggered[0] = 0
 
         GradxDiff = SurfaceGradientStaggered * DiffusivityStaggered
 
         # Yo
         NewIceThickness = np.zeros(fl.nx)
-        NewIceThickness[:fl.nx-1] = thick[:fl.nx-1] + (dt/width[0:fl.nx-1]) * \
-                                    (GradxDiff[1:]-GradxDiff[:fl.nx-1])/dx + \
-                                    dt * MassBalance[:fl.nx-1]
+        NewIceThickness[:fl.nx-1] = (thick[:fl.nx-1] + (dt/width[0:fl.nx-1]) *
+                                     (GradxDiff[1:]-GradxDiff[:fl.nx-1])/dx +
+                                     dt * MassBalance[:fl.nx-1])
 
         NewIceThickness[-1] = thick[fl.nx-2]
 
@@ -1099,10 +1098,10 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
        The equation references in the comments refer to the paper for clarity
     """
+
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=True):
-
         """ Instanciate.
 
         Parameters
@@ -1114,7 +1113,8 @@ class MUSCLSuperBeeModel(FlowlineModel):
         """
 
         if len(flowlines) > 1:
-            raise ValueError('MUSCL SuperBee model does not work with tributaries.')
+            raise ValueError('MUSCL SuperBee model does not work with '
+                             'tributaries.')
 
         super(MUSCLSuperBeeModel, self).__init__(flowlines, mb_model=mb_model,
                                                  y0=y0, glen_a=glen_a, fs=fs,
@@ -1125,16 +1125,15 @@ class MUSCLSuperBeeModel(FlowlineModel):
             max_dt = fixed_dt
         self.min_dt = min_dt
         self.max_dt = max_dt
-    
-        
+
     def phi(self, r):
         """ a definition of the limiting scheme to use"""
         # minmod limiter Eq. 28
         # val_phi = numpy.maximum(0,numpy.minimum(1,r))
-        
+
         # superbee limiter Eq. 29
-        val_phi = np.maximum(0,np.minimum(2*r,1),np.minimum(r,2))
-        
+        val_phi = np.maximum(0, np.minimum(2*r, 1), np.minimum(r, 2))
+
         return val_phi
 
     def step(self, dt):
@@ -1143,18 +1142,16 @@ class MUSCLSuperBeeModel(FlowlineModel):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-            # This is to guarantee a precise arrival on a specific date if asked
+            # Guarantee a precise arrival on a specific date if asked
             min_dt = dt if dt < self.min_dt else self.min_dt
             dt = np.clip(dt, min_dt, self.max_dt)
 
             fl = self.fls[0]
             dx = fl.dx_meter
-            width = fl.widths_m
 
-            """ Switch to the notation from the MUSCL_1D example
-                This is useful to ensure that the MUSCL-SuperBee code
-                is working as it has been benchmarked many time"""
-
+            # Switch to the notation from the MUSCL_1D example
+            # This is useful to ensure that the MUSCL-SuperBee code
+            # is working as it has been benchmarked many times
 
             # mass balance
             m_dot = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
@@ -1164,47 +1161,61 @@ class MUSCLSuperBeeModel(FlowlineModel):
             B = fl.bed_h
             # define Glen's law here
             N = self.glen_n
-            Gamma = 2.*self.glen_a*(self.rho*G)**N / (N+2.) # this is the correct Gamma !!
-            #Gamma = self.fd*(RHO*G)**N # this is the Gamma to be in sync with Karthaus and Flux
+            # this is the correct Gamma !!
+            Gamma = 2.*self.glen_a*(self.rho*G)**N / (N+2.)
             # time stepping
             c_stab = 0.165
 
-            # define the finite difference indices required for the MUSCL-SuperBee scheme
-            k = np.arange(0,fl.nx)
-            kp = np.hstack([np.arange(1,fl.nx),fl.nx-1])
-            kpp = np.hstack([np.arange(2,fl.nx),fl.nx-1,fl.nx-1])
-            km = np.hstack([0,np.arange(0,fl.nx-1)])
-            kmm = np.hstack([0,0,np.arange(0,fl.nx-2)])
+            # define the finite difference indices
+            k = np.arange(0, fl.nx)
+            kp = np.hstack([np.arange(1, fl.nx), fl.nx-1])
+            kpp = np.hstack([np.arange(2, fl.nx), fl.nx-1, fl.nx-1])
+            km = np.hstack([0, np.arange(0, fl.nx-1)])
+            kmm = np.hstack([0, 0, np.arange(0, fl.nx-2)])
 
-            # I'm gonna introduce another level of adaptive time stepping here, which is probably not
-            # necessary. However I keep it to be consistent with my benchmarked and tested code.
-            # If the OGGM time stepping is correctly working, this loop should never run more than once
+            # I'm gonna introduce another level of adaptive time stepping here,
+            # which is probably not necessary. However I keep it to be
+            # consistent with my benchmarked and tested code.
+            # If the OGGM time stepping is correctly working, this loop
+            # should never run more than once
+            # Fabi: actually no, it is your job to choose the right time step
+            # but you can let OGGM decide whether a new time step is needed
+            # or not -> to be meliorated one day
             stab_t = 0.
             while stab_t < dt:
                 H = S - B
 
                 # MUSCL scheme up. "up" denotes here the k+1/2 flux boundary
-                r_up_m = (H[k]-H[km])/(H[kp]-H[k])                           # Eq. 27
-                H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])          # Eq. 23
-                r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])                         # Eq. 27, now k+1 is used instead of k
-                H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])       # Eq. 24
+                r_up_m = (H[k]-H[km])/(H[kp]-H[k])  # Eq. 27
+                H_up_m = H[k] + 0.5 * self.phi(r_up_m)*(H[kp]-H[k])  # Eq. 23
+                # Eq. 27, k+1 is used instead of k
+                r_up_p = (H[kp]-H[k])/(H[kpp]-H[kp])
+                # Eq. 24
+                H_up_p = H[kp] - 0.5 * self.phi(r_up_p)*(H[kpp]-H[kp])
 
                 # surface slope gradient
                 s_grad_up = ((S[kp]-S[k])**2. / dx**2.)**((N-1.)/2.)
-                D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up                  # like Eq. 30, now using Eq. 23 instead of Eq. 24
-                D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up                  # Eq. 30
+                # like Eq. 30, now using Eq. 23 instead of Eq. 24
+                D_up_m = Gamma * H_up_m**(N+2.) * s_grad_up
+                D_up_p = Gamma * H_up_p**(N+2.) * s_grad_up  # Eq. 30
 
-                D_up_min = np.minimum(D_up_m,D_up_p);                        # Eq. 31
-                D_up_max = np.maximum(D_up_m,D_up_p);                        # Eq. 32
+                # Eq. 31
+                D_up_min = np.minimum(D_up_m, D_up_p)
+                # Eq. 32
+                D_up_max = np.maximum(D_up_m, D_up_p)
                 D_up = np.zeros(fl.nx)
 
                 # Eq. 33
-                D_up[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)] = D_up_min[np.logical_and(S[kp]<=S[k],H_up_m<=H_up_p)]
-                D_up[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)] = D_up_max[np.logical_and(S[kp]<=S[k],H_up_m>H_up_p)]
-                D_up[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)] = D_up_max[np.logical_and(S[kp]>S[k],H_up_m<=H_up_p)]
-                D_up[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)] = D_up_min[np.logical_and(S[kp]>S[k],H_up_m>H_up_p)]
+                cond = (S[kp] <= S[k]) & (H_up_m <= H_up_p)
+                D_up[cond] = D_up_min[cond]
+                cond = (S[kp] <= S[k]) & (H_up_m > H_up_p)
+                D_up[cond] = D_up_max[cond]
+                cond = (S[kp] > S[k]) & (H_up_m <= H_up_p)
+                D_up[cond] = D_up_max[cond]
+                cond = (S[kp] > S[k]) & (H_up_m > H_up_p)
+                D_up[cond] = D_up_min[cond]
 
-                # MUSCL scheme down. "down" denotes here the k-1/2 flux boundary
+                # MUSCL scheme down. "down" denotes the k-1/2 flux boundary
                 r_dn_m = (H[km]-H[kmm])/(H[k]-H[km])
                 H_dn_m = H[km] + 0.5 * self.phi(r_dn_m)*(H[k]-H[km])
                 r_dn_p = (H[k]-H[km])/(H[kp]-H[k])
@@ -1215,38 +1226,36 @@ class MUSCLSuperBeeModel(FlowlineModel):
                 D_dn_m = Gamma * H_dn_m**(N+2.) * s_grad_dn
                 D_dn_p = Gamma * H_dn_p**(N+2.) * s_grad_dn
 
-                D_dn_min = np.minimum(D_dn_m,D_dn_p);
-                D_dn_max = np.maximum(D_dn_m,D_dn_p);
+                D_dn_min = np.minimum(D_dn_m, D_dn_p)
+                D_dn_max = np.maximum(D_dn_m, D_dn_p)
                 D_dn = np.zeros(fl.nx)
 
-                D_dn[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)] = D_dn_min[np.logical_and(S[k]<=S[km],H_dn_m<=H_dn_p)]
-                D_dn[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)] = D_dn_max[np.logical_and(S[k]<=S[km],H_dn_m>H_dn_p)]
-                D_dn[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)] = D_dn_max[np.logical_and(S[k]>S[km],H_dn_m<=H_dn_p)]
-                D_dn[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)] = D_dn_min[np.logical_and(S[k]>S[km],H_dn_m>H_dn_p)]
+                cond = (S[k] <= S[km]) & (H_dn_m <= H_dn_p)
+                D_dn[cond] = D_dn_min[cond]
+                cond = (S[k] <= S[km]) & (H_dn_m > H_dn_p)
+                D_dn[cond] = D_dn_max[cond]
+                cond = (S[k] > S[km]) & (H_dn_m <= H_dn_p)
+                D_dn[cond] = D_dn_max[cond]
+                cond = (S[k] > S[km]) & (H_dn_m > H_dn_p)
+                D_dn[cond] = D_dn_min[cond]
 
-                dt_stab = c_stab * dx**2. / max(max(abs(D_up)),max(abs(D_dn)))      # Eq. 37
-                dt_use = min(dt_stab,dt-stab_t)
+                # Eq. 37
+                dt_stab = c_stab * dx**2. / max(max(abs(D_up)), max(abs(D_dn)))
+                dt_use = min(dt_stab, dt-stab_t)
                 stab_t = stab_t + dt_use
 
-                # check if the extra time stepping is needed [to be removed one day]
-                #if dt_stab < dt:
-                #    print "MUSCL extra time stepping dt: %f dt_stab: %f" % (dt, dt_stab)
-                #else:
-                #    print "MUSCL Scheme fine with time stepping as is"
+                # explicit time stepping scheme, Eq. 36
+                div_q = (D_up * (S[kp] - S[k])/dx - D_dn *
+                         (S[k] - S[km])/dx)/dx
+                # Eq. 35
+                S = S[k] + (m_dot + div_q)*dt_use
 
-                #explicit time stepping scheme
-                div_q = (D_up * (S[kp] - S[k])/dx - D_dn * (S[k] - S[km])/dx)/dx    # Eq. 36
-                S = S[k] + (m_dot + div_q)*dt_use                                   # Eq. 35
+                # Eq. 7
+                S = np.maximum(S, B)
 
-                S = np.maximum(S,B)                                                 # Eq. 7
-        
         # Done with the loop, prepare output
-        NewIceThickness = S-B
-        
-        fl.thick = NewIceThickness
-        # fl.section = NewIceThickness * width
-        #fl.section = NewIceThickness
-        
+        fl.thick = S-B
+
         # Next step
         self.t += dt
 
@@ -1318,8 +1327,8 @@ class FileModel(object):
 
         if month is not None:
             for fl, ds in zip(self.fls, self.dss):
-                sel = ds.ts_section.isel(time=(ds.year==year) &
-                                              (ds.month==month))
+                sel = ds.ts_section.isel(time=(ds.year == year) &
+                                              (ds.month == month))
                 fl.section = sel.values
         else:
             for fl, ds in zip(self.fls, self.dss):

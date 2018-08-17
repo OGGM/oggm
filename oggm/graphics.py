@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 def _tolist(gdirs):
     """Ensures that we have a list"""
     try:
-        _ = (e for e in gdirs)
+        (e for e in gdirs)
     except TypeError:
         gdirs = [gdirs]
     return gdirs
@@ -60,7 +60,7 @@ def _plot_map(plotfunc):
     Decorator for common salem.Map plotting logic
     """
     commondoc = """
-    
+
     Parameters
     ----------
     gdirs : [] or GlacierDirectory, required
@@ -85,7 +85,7 @@ def _plot_map(plotfunc):
     cbar_ax: ax, optional
         ax where to plot the colorbar
     autosave : bool, optional
-        set to True to override to a default savefig filename (useful 
+        set to True to override to a default savefig filename (useful
         for multiprocessing)
     savefig : str, optional
         save the figure to a file instead of displaying it
@@ -236,7 +236,7 @@ def plot_domain(gdirs, ax=None, smap=None):
         # Plot boundaries
         poly_pix = geom['polygon_pix']
         smap.set_geometry(poly_pix, crs=crs, fc='white',
-                              alpha=0.3, zorder=2, linewidth=.2)
+                          alpha=0.3, zorder=2, linewidth=.2)
         for l in poly_pix.interiors:
             smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
@@ -327,7 +327,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     # Plot boundaries
     poly_pix = geom['polygon_pix']
     smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
-                         linewidth=.2)
+                      linewidth=.2)
     for l in poly_pix.interiors:
         smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
@@ -336,7 +336,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     color = gencolor(len(cls) + 1, cmap=lines_cmap)
     for l, c in zip(cls, color):
         smap.set_geometry(l.line, crs=crs, color=c,
-                             linewidth=2.5, zorder=50)
+                          linewidth=2.5, zorder=50)
 
     # catchment areas
     cis = gdir.read_pickle('catchment_indices')
@@ -460,9 +460,9 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
                               linewidth=1.2, zorder=50)
             toplot_th = np.append(toplot_th, c['thick'])
             for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
-                l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
-                                     shpg.Point(cur + wi / 2. * n2)])
-                toplot_lines.append(l)
+                line = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                                        shpg.Point(cur + wi / 2. * n2)])
+                toplot_lines.append(line)
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
@@ -543,7 +543,6 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
     except ValueError:
         pass
 
-
     toplot_th = np.array([])
     toplot_lines = []
     toplot_crs = []
@@ -575,9 +574,9 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
             widths = l.widths.copy()
             widths = np.where(l.thick > 0, widths, 0.)
             for wi, cur, (n1, n2) in zip(widths, l.line.coords, l.normals):
-                l = shpg.LineString([shpg.Point(cur + wi/2. * n1),
-                                     shpg.Point(cur + wi/2. * n2)])
-                toplot_lines.append(l)
+                line = shpg.LineString([shpg.Point(cur + wi/2. * n1),
+                                        shpg.Point(cur + wi/2. * n2)])
+                toplot_lines.append(line)
                 toplot_crs.append(crs)
 
     cm = plt.cm.get_cmap('YlOrRd')
@@ -608,7 +607,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     bed = np.array([])
     for cls in model.fls:
         a = cls.widths_m * cls.dx_meter * 1e-6
-        a = np.where(cls.thick>0, a, 0)
+        a = np.where(cls.thick > 0, a, 0)
         area = np.concatenate((area, a))
         height = np.concatenate((height, cls.surface_h))
         bed = np.concatenate((bed, cls.bed_h))

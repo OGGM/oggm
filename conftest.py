@@ -1,12 +1,12 @@
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # noqa: E402
 
 import pytest
 import logging
 import getpass
 import matplotlib.pyplot as plt
 from functools import wraps
-from oggm import cfg, utils
+from oggm import utils
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 
 
@@ -19,16 +19,22 @@ def pytest_configure(config):
             from ilock import ILock
             utils.lock = ILock("oggm_xdist_download_lock_" + getpass.getuser())
             logger.info("ilock locking setup successfully for xdist tests")
-        except:
-            logger.warning("could not setup ilock locking for distributed tests")
+        except BaseException:
+            logger.warning("could not setup ilock locking for distributed "
+                           "tests")
 
 
 def pytest_addoption(parser):
-    parser.addoption("--run-slow", action="store_true", default=False, help="Run slow tests")
-    parser.addoption("--run-download", action="store_true", default=False, help="Run download tests")
-    parser.addoption("--run-creds", action="store_true", default=False, help="Run download tests requiring credentians")
-    parser.addoption("--run-test-env", metavar="ENVNAME", default="", help="Run only specified test env")
-    parser.addoption("--no-run-internet", action="store_true", default=False, help="Don't run any tests accessing the internet")
+    parser.addoption("--run-slow", action="store_true", default=False,
+                     help="Run slow tests")
+    parser.addoption("--run-download", action="store_true", default=False,
+                     help="Run download tests")
+    parser.addoption("--run-creds", action="store_true", default=False,
+                     help="Run download tests requiring credentians")
+    parser.addoption("--run-test-env", metavar="ENVNAME", default="",
+                     help="Run only specified test env")
+    parser.addoption("--no-run-internet", action="store_true", default=False,
+                     help="Don't run any tests accessing the internet")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -39,11 +45,16 @@ def pytest_collection_modifyitems(config, items):
     run_test_env = config.getoption("--run-test-env")
 
     slow_marker = pytest.mark.skip(reason="need --run-slow option to run")
-    download_marker = pytest.mark.skip(reason="need --run-download option to run, internet access is required")
-    cred_marker = pytest.mark.skip(reason="need --run-creds option to run, internet access is required")
+    download_marker = pytest.mark.skip(reason="need --run-download option to "
+                                              "run, internet access is "
+                                              "required")
+    cred_marker = pytest.mark.skip(reason="need --run-creds option to run, "
+                                          "internet access is required")
     internet_marker = pytest.mark.skip(reason="internet access is required")
-    test_env_marker = pytest.mark.skip(reason="only test_env=%s tests are run" % run_test_env)
-    graphic_marker = pytest.mark.skip(reason="requires mpl V1.5+ and matplotlib.testing.decorators")
+    test_env_marker = pytest.mark.skip(reason="only test_env=%s tests are run"
+                                              % run_test_env)
+    graphic_marker = pytest.mark.skip(reason="requires mpl V1.5+ and "
+                                             "pytest-mpl")
 
     for item in items:
         if skip_slow and "slow" in item.keywords:

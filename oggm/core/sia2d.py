@@ -288,7 +288,7 @@ class Upstream2D(Model2D):
         self.k = np.arange(0, self.ny)
         self.kp = np.hstack([np.arange(1, self.ny), self.ny - 1])
         self.km = np.hstack([0, np.arange(0, self.ny - 1)])
-        self.l = np.arange(0, self.nx)
+        self.l = np.arange(0, self.nx)  # flake8: noqa E741
         self.lp = np.hstack([np.arange(1, self.nx), self.nx - 1])
         self.lm = np.hstack([0, np.arange(0, self.nx - 1)])
         self.H_upstream_up = np.zeros((self.ny, self.nx))

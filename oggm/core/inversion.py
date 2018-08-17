@@ -168,7 +168,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
-    
+
     Parameters
     ----------
     gdir : oggm.GlacierDirectory
