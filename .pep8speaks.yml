@@ -1,10 +1,10 @@
-message:  # Customize the comment made by the bot
-    opened:  # Messages when a new PR is submitted
-        header: "Hello @{name}! Thank you for submitting this pull-request!"
-                # The keyword {name} is converted into the author's username
-        footer: "Do you know about the [Hitchhiker's guide to code style](https://goo.gl/hqbW4r)?"
-                # The messages can be written as they would over GitHub
-    updated:  # Messages when new commits are added to the PR
-        header: "Hello @{name}! Thanks for updating the PR!"
-        footer: ""  # Why to comment the link to the style guide everytime? :)
-    no_errors: "Cheers! There are no PEP8 issues in this pull-request. :beers: "
+scanner:
+    diff_only: True  # If True, errors caused by only the patch are shown
+
+pycodestyle:
+    max-line-length: 79
+    ignore:  # Errors and warnings to ignore
+        - E402  # module level import not at top of file
+        - E731  # do not assign a lambda expression, use a def
+        - E741  # do not use variables named 'l', 'O', or 'I'
+        - W503  # line break before binary operator
