@@ -72,6 +72,8 @@ Other libraries:
 
 Optional:
     - progressbar2 (displays the download progress)
+    - bottleneck (speeds up xarray operations)
+    - dask (works nicely with xarray)
 
 
 Install with conda (all platforms)
@@ -326,7 +328,7 @@ Fiona also builds upon GDAL, so let's compile it the same way::
 
 Install further stuffs::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless dask bottleneck
 
 And the salem library::
 

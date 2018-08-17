@@ -376,7 +376,7 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=None, inplace=True, is_tidewater=False,
+                 fs=None, inplace=False, is_tidewater=False,
                  mb_elev_feedback='annual', check_for_boundaries=True):
         """Create a new flowline model from the flowlines and a MB model.
 
@@ -394,8 +394,8 @@ class FlowlineModel(object):
             sliding parameter
         inplace : bool
             whether or not to make a copy of the flowline objects for the run
-            setting to True (the default) implies that your objects will
-            be modified at run time by the model
+            setting to True implies that your objects will be modified at run
+            time by the model (can help to spare memory)
         is_tidewater : bool
             this changes how the last grid points of the domain are handled
         mb_elev_feedback : str, default: 'annual'
@@ -449,23 +449,25 @@ class FlowlineModel(object):
         self.t = None
         self.reset_y0(y0)
 
-        if not inplace:
-            flowlines = copy.deepcopy(flowlines)
-        try:
-            len(flowlines)
-        except TypeError:
-            flowlines = [flowlines]
         self.fls = None
         self._trib = None
-        self.reset_flowlines(flowlines)
+        self.reset_flowlines(flowlines, inplace=inplace)
 
     def reset_y0(self, y0):
         """Reset the initial model time"""
         self.y0 = y0
         self.t = 0
 
-    def reset_flowlines(self, flowlines):
+    def reset_flowlines(self, flowlines, inplace=False):
         """Reset the initial model flowlines"""
+
+        if not inplace:
+            flowlines = copy.deepcopy(flowlines)
+
+        try:
+            len(flowlines)
+        except TypeError:
+            flowlines = [flowlines]
 
         self.fls = flowlines
 
@@ -758,7 +760,7 @@ class FluxBasedModel(FlowlineModel):
     """The actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., inplace=True, fixed_dt=None, cfl_number=0.05,
+                 fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
                  time_stepping='user',
                  **kwargs):
@@ -1013,7 +1015,7 @@ class KarthausModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fixed_dt=None, min_dt=SEC_IN_DAY,
-                 max_dt=31*SEC_IN_DAY, inplace=True):
+                 max_dt=31*SEC_IN_DAY, inplace=False):
         """ Instanciate.
 
         Parameters
@@ -1101,7 +1103,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=None,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
-                 inplace=True):
+                 inplace=False):
         """ Instanciate.
 
         Parameters
@@ -1557,11 +1559,12 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         if init_model_fls is None:
             fls = gdir.read_pickle('model_flowlines')
         else:
-            fls = init_model_fls
+            fls = copy.deepcopy(init_model_fls)
         if zero_initial_glacier:
             for fl in fls:
                 fl.thick = fl.thick * 0.
         model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
+                               inplace=True,
                                time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
