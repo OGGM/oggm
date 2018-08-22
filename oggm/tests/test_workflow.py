@@ -19,7 +19,7 @@ from oggm import graphics
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
-from oggm.tests import BASELINE_DIR
+from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
                               patch_url_retrieve_github)
 from oggm.core import flowline, massbalance
@@ -335,7 +335,7 @@ class TestWorkflow(unittest.TestCase):
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=25)
+@mpl_image_compare(remove_text=True)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -358,7 +358,7 @@ def test_plot_region_inversion():
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=5)
+@mpl_image_compare(remove_text=True)
 def test_plot_region_model():
 
     gdirs = random_for_plot()

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # Local imports
 import oggm.utils
-from oggm.tests import BASELINE_DIR
+from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
@@ -29,12 +29,10 @@ pytestmark = pytest.mark.test_env("graphics")
 # ----------------------------------------------------------
 # Lets go
 
-TOLERANCE = 5
-
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_googlemap():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -45,7 +43,7 @@ def test_googlemap():
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_domain():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -55,7 +53,7 @@ def test_domain():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_centerlines():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -65,7 +63,7 @@ def test_centerlines():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_flowlines():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -75,7 +73,7 @@ def test_flowlines():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_downstream():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -86,7 +84,7 @@ def test_downstream():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_width():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -96,7 +94,7 @@ def test_width():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_width_corrected():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -108,7 +106,7 @@ def test_width_corrected():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_inversion():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -118,7 +116,7 @@ def test_inversion():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_multiple_inversion():
 
     # test directory
@@ -153,7 +151,7 @@ def test_multiple_inversion():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_modelsection():
 
     gdir = init_hef()
@@ -168,7 +166,7 @@ def test_modelsection():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_modelsection_withtrib():
 
     gdir = init_hef()
@@ -182,7 +180,7 @@ def test_modelsection_withtrib():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_modeloutput_map():
 
     gdir = init_hef()
@@ -197,7 +195,7 @@ def test_modeloutput_map():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_multiple_models():
 
     # test directory
@@ -238,8 +236,7 @@ def test_multiple_models():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -250,7 +247,7 @@ def test_thick_alt():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_thick_interp():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -261,7 +258,7 @@ def test_thick_interp():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_catch_areas():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -271,7 +268,7 @@ def test_catch_areas():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_chhota_shigri():
 
     testdir = os.path.join(get_test_dir(), 'tmp_chhota')
@@ -312,7 +309,7 @@ def test_chhota_shigri():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_ice_cap():
 
     testdir = os.path.join(get_test_dir(), 'tmp_icecap')
@@ -345,8 +342,7 @@ def test_ice_cap():
 
 
 @pytest.mark.graphic
-@pytest.mark.mpl_image_compare(baseline_dir=BASELINE_DIR,
-                               tolerance=TOLERANCE)
+@mpl_image_compare()
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')

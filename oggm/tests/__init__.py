@@ -2,6 +2,7 @@ import logging
 import os
 from distutils.version import LooseVersion
 
+import pytest
 import matplotlib.ft2font
 from urllib.request import urlopen, URLError
 
@@ -33,3 +34,9 @@ try:
     HAS_INTERNET = True
 except URLError:
     HAS_INTERNET = False
+
+
+def mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=5, **kwargs):
+    return pytest.mark.mpl_image_compare(baseline_dir=baseline_dir,
+                                         tolerance=tolerance,
+                                         **kwargs)
