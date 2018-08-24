@@ -32,12 +32,11 @@ install:
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
   # install dependencies
-  - "conda install --yes --quiet -c conda-forge gdal libgdal geopandas matplotlib Pillow joblib netCDF4 scikit-image configobj pytest pytest-mpl pyproj numpy rasterio krb5 xarray boto3"
-  - "pip install motionless"
+  - "conda install --yes --quiet -c conda-forge -c oggm gdal libgdal geopandas matplotlib Pillow joblib motionless netCDF4 scikit-image configobj pytest pytest-mpl pyproj numpy rasterio krb5 xarray boto3"
   - "pip install git+https://github.com/fmaussion/salem.git"
   - "pip install -e ."
 
 build: false
 
 test_script:
-  - "pytest --mpl --run-slow ."
+  - "pytest --mpl-oggm --run-slow ."
