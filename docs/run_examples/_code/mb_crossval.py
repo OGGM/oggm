@@ -13,15 +13,25 @@ from oggm.core.massbalance import PastMassBalance
 import matplotlib.pyplot as plt
 
 # RGI Version
-rgi_version = '6'
+rgi_version = '61'
+
+# CRU or HISTALP?
+baseline = 'CRU'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
 
+if baseline == 'HISTALP':
+    # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -1.75
+
 # Local paths (where to find the OGGM run output)
 WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_RGIV{}_OGGM{}'.format(rgi_version,
-                                                           oggm.__version__))
+                        'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline,
+                                                              rgi_version,
+                                                              oggm.__version__)
+                        )
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Read the rgi file
@@ -38,9 +48,8 @@ for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
     # Mass-balance model with cross-validated parameters instead
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.cv_mustar,
-                             bias=t_cvdf.cv_bias,
-                             prcp_fac=t_cvdf.cv_prcp_fac)
-    # Mass-blaance timeseries, observed and simulated
+                             bias=t_cvdf.cv_bias)
+    # Mass-balance timeseries, observed and simulated
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
                                            year=refmb.index)
@@ -58,8 +67,7 @@ for gd in gdirs:
                                                std_ref)
     cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.interp_mustar,
-                             bias=t_cvdf.cv_bias,
-                             prcp_fac=t_cvdf.cv_prcp_fac)
+                             bias=t_cvdf.cv_bias)
     refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
     cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = (refmb.OGGM.mean() -
                                              refmb.ANNUAL_BALANCE.mean())
@@ -71,7 +79,7 @@ cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3', label='')
 ax1.vlines(cvdf['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
 ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
-                                       label='5% and 95%\npercentiles')
+           label='5% and 95%\npercentiles')
 ax1.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
          horizontalalignment='left',
          verticalalignment='top',

@@ -1,20 +1,15 @@
 """ OGGM package.
 
-Copyright: OGGM developers, 2014-2017
+Copyright: OGGM developers, 2014-2018
 
 License: GPLv3+
 """
+# flake8: noqa
 import logging
 
-try:
-    from .version import version as __version__
-    from .version import isreleased as __isreleased__
-except ImportError:
-    raise ImportError('oggm is not properly installed. If you are running '
-                      'from the source directory, please instead create a '
-                      'new virtual environment (using conda or virtualenv) '
-                      'and  then install it in-place by running: '
-                      'pip install -e .')
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
 
 # Spammers
 logging.getLogger("Fiona").setLevel(logging.CRITICAL)

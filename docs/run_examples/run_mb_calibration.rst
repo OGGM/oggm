@@ -30,7 +30,13 @@ file. Let's replicate Figure 3 in  `Marzeion et al., (2012)`_ :
 
 .. literalinclude:: _code/mb_crossval.py
 
-This should generate a figure similar to:
+This should generate an output similar to::
+
+    Median bias: 18.78
+    Mean bias: 15.34
+    RMS: 518.82
+    Sigma bias: 0.87
+
 
 .. figure:: ../_static/mb_crossval.png
     :width: 100%

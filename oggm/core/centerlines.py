@@ -23,7 +23,6 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 import salem
-import netCDF4
 import shapely.ops
 import geopandas as gpd
 import scipy.signal
@@ -59,16 +58,7 @@ class Centerline(object):
     """
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None):
-        """ Instanciate.
-
-        Parameters
-        ----------
-        line: Shapely LineString
-
-        Properties
-        ----------
-        #TODO: document properties
-        """
+        """ Instantiate."""
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
@@ -327,8 +317,8 @@ def _filter_heads(heads, heads_height, radius, polygon):
         elif inter_poly.type is 'Polygon':
             pass
         else:
-            extext ='Geometry collection not expected: {}'.format(
-                inter_poly.type)
+            extext = ('Geometry collection not expected: '
+                      '{}'.format(inter_poly.type))
             raise NotImplementedError(extext)
 
         # Find other points in radius and in polygon
@@ -380,6 +370,7 @@ def _filter_lines(lines, heads, k, r):
     oheads = []
     ilines = copy.copy(lines)
 
+    lastline = None
     while len(ilines) > 0:  # loop as long as we haven't filtered all lines
         if len(olines) > 0:  # enter this after the first step only
 
@@ -418,16 +409,16 @@ def _filter_lines(lines, heads, k, r):
         lengths = np.array([])
         for l in ilines:
             lengths = np.append(lengths, l.length)
-        l = ilines[np.argmax(lengths)]
+        ll = ilines[np.argmax(lengths)]
 
-        ilines.remove(l)
+        ilines.remove(ll)
         if len(olines) > 0:
             # the cutted line's last point is not guaranteed
             # to on straight coordinates. Remove it
-            olines.append(shpg.LineString(np.asarray(l.xy)[:, 0:-1].T))
+            olines.append(shpg.LineString(np.asarray(ll.xy)[:, 0:-1].T))
         else:
-            olines.append(l)
-        lastline = l
+            olines.append(ll)
+        lastline = ll
 
     # add the corresponding head to each line
     for l in olines:
@@ -648,8 +639,21 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
         ind = np.where((zoutline < plow) & (zoutline < (mini + deltah)))[0]
 
         # We take the middle of this area
-        ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
-
+        try:
+            ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+        except IndexError:
+            # Sometimes the default perc is not large enough
+            try:
+                # Repeat
+                perc *= 2
+                plow = np.percentile(zoutline, perc).astype(np.int64)
+                mini = np.min(zoutline)
+                ind = np.where((zoutline < plow) &
+                               (zoutline < (mini + deltah)))[0]
+                ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+            except IndexError:
+                # Last resort
+                ind_term = np.argmin(zoutline)
     else:
         # easy: just the minimum
         ind_term = np.argmin(zoutline)
@@ -699,7 +703,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
     # get radius of the buffer according to Kienholz eq. (1)
     radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
     radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
-    radius /= gdir.grid.dx # in raster coordinates
+    radius /= gdir.grid.dx  # in raster coordinates
     # Plus our criteria, quite useful to remove short lines:
     radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
     log.debug('(%s) radius in raster coordinates: %.2f',
@@ -781,7 +785,7 @@ def compute_centerlines(gdir, heads=None):
     # open
     geom = gdir.read_pickle('geometries')
     grids_file = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(grids_file) as nc:
+    with utils.ncDataset(grids_file) as nc:
         # Variables
         glacier_mask = nc.variables['glacier_mask'][:]
         glacier_ext = nc.variables['glacier_ext'][:]
@@ -793,7 +797,11 @@ def compute_centerlines(gdir, heads=None):
     ext_yx = tuple(reversed(poly_pix.exterior.xy))
     zoutline = topo[y[:-1], x[:-1]]  # last point is first point
 
+    # For diagnostics
+    is_first_call = False
     if heads is None:
+        # This is the default for when no filter is yet applied
+        is_first_call = True
         heads = _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
                                        glacier_mask, topo, geom, poly_pix)
 
@@ -844,8 +852,12 @@ def compute_centerlines(gdir, heads=None):
     # Write the data
     gdir.write_pickle(cls, 'centerlines')
 
+    if is_first_call:
+        # For diagnostics of filtered centerlines
+        gdir.add_to_diagnostics('n_orig_centerlines', len(cls))
+
     # Netcdf
-    with netCDF4.Dataset(grids_file, 'a') as nc:
+    with utils.ncDataset(grids_file, 'a') as nc:
         if 'cost_grid' in nc.variables:
             # Overwrite
             nc.variables['cost_grid'][:] = costgrid
@@ -863,9 +875,9 @@ def compute_downstream_line(gdir):
 
     The idea is simple: starting from the glacier tail, compute all the routes
     to all local minimas found at the domain edge. The cheapest is "The One".
-    
+
     The rest of the job (merging centerlines + downstream into
-    one single glacier is realized by 
+    one single glacier is realized by
     :py:func:`~oggm.tasks.init_present_time_glacier`).
 
     Parameters
@@ -877,7 +889,7 @@ def compute_downstream_line(gdir):
     if gdir.is_tidewater:
         return
 
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
         glacier_ext = nc.variables['glacier_ext'][:]
 
@@ -1102,9 +1114,9 @@ def compute_downstream_bedshape(gdir):
     tpl = gdir.read_pickle('inversion_flowlines')[-1]
     cl = gdir.read_pickle('downstream_line')['downstream_line']
     cl = Centerline(cl, dx=tpl.dx)
-       
+
     # Topography
-    with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
         x = nc.variables['x'][:]
         y = nc.variables['y'][:]
@@ -1269,7 +1281,7 @@ def _filter_small_slopes(hgt, dx, min_slope=0):
             i0 = objs[0].start-i
             if i0 < 0:
                 break
-            ngap =  obj.stop - i0 - 1
+            ngap = obj.stop - i0 - 1
             nhgt = hgt[[i0, obj.stop]]
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
             if i0 <= 0 or current_slope[0] >= min_slope:
@@ -1370,7 +1382,7 @@ def catchment_area(gdir):
     geoms = gdir.read_pickle('geometries')
     glacier_pix = geoms['polygon_pix']
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         costgrid = nc.variables['cost_grid'][:]
         mask = nc.variables['glacier_mask'][:]
 
@@ -1425,7 +1437,8 @@ def catchment_area(gdir):
         not_computed = np.where(computed == 0)
         if len(not_computed[0]) == 0:  # All points computed !!
             break
-        headcoords = np.array([not_computed[0][0], not_computed[1][0]]).astype(np.int64)
+        headcoords = np.array([not_computed[0][0], not_computed[1][0]],
+                              dtype=np.int64)
         indices, _ = route_through_array(costgrid, headcoords, endcoords)
         inds = np.array(indices).T
         computed[inds[0], inds[1]] = 1
@@ -1526,7 +1539,7 @@ def initialize_flowlines(gdir):
 
     # Topo for heights
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo_smoothed'][:]
 
     # Bilinear interpolation
@@ -1538,7 +1551,8 @@ def initialize_flowlines(gdir):
 
     # Smooth window
     sw = cfg.PARAMS['flowline_height_smooth']
-
+    diag_n_bad_slopes = 0
+    diag_n_pix = 0
     for ic, cl in enumerate(cls):
         points = line_interpol(cl.line, dx)
 
@@ -1561,7 +1575,10 @@ def initialize_flowlines(gdir):
             # Correct only where glacier
             hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
             isfin = np.isfinite(hgts)
-            assert np.any(isfin)
+            if not np.any(isfin):
+                raise RuntimeError('This line has no positive slopes')
+            diag_n_bad_slopes += np.sum(~isfin)
+            diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
             if perc_bad > 0.8:
                 log.warning('({}) more than {:.0%} of the flowline is cropped '
@@ -1576,9 +1593,10 @@ def initialize_flowlines(gdir):
             assert len(hgts) >= 5
             new_line = shpg.LineString(points[sp:])
 
-        l = Centerline(new_line, dx=dx, surface_h=hgts, orig_head=cl.orig_head)
-        l.order = cl.order
-        fls.append(l)
+        sl = Centerline(new_line, dx=dx, surface_h=hgts,
+                        orig_head=cl.orig_head)
+        sl.order = cl.order
+        fls.append(sl)
 
     # All objects are initialized, now we can link them.
     for cl, fl in zip(cls, fls):
@@ -1589,6 +1607,9 @@ def initialize_flowlines(gdir):
 
     # Write the data
     gdir.write_pickle(fls, 'inversion_flowlines')
+    if do_filter:
+        out = diag_n_bad_slopes/diag_n_pix
+        gdir.add_to_diagnostics('perc_invalid_flowline', out)
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -1610,7 +1631,7 @@ def catchment_width_geom(gdir):
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         mask_ext = nc.variables['glacier_ext'][:]
         mask_glacier = nc.variables['glacier_mask'][:]
@@ -1722,10 +1743,10 @@ def catchment_width_correction(gdir):
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
     fpath = gdir.get_filepath('gridded_data')
-    with netCDF4.Dataset(fpath) as nc:
+    with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         ext = nc.variables['glacier_ext'][:]
-    topo[np.where(ext==1)] = np.NaN
+    topo[np.where(ext == 1)] = np.NaN
 
     # Param
     nmin = int(cfg.PARAMS['min_n_per_bin'])
@@ -1747,17 +1768,17 @@ def catchment_width_correction(gdir):
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
 
-        # Sometimes, the centerline does not reach as high as each pix on the
-        # glacier. (e.g. RGI40-11.00006)
-        catch_h = np.clip(catch_h, 0, np.max(fhgt))
-
         # Max and mins for the histogram
         maxh = np.max(fhgt)
+        minh = np.min(fhgt)
+
+        # Sometimes, the centerline does not reach as high as each pix on the
+        # glacier. (e.g. RGI40-11.00006)
+        catch_h = np.clip(catch_h, np.min(catch_h), maxh)
+        # Same for min
         if fl.flows_to is None:
-            minh = np.min(fhgt)
+            # We clip only for main flowline (this has reasons)
             catch_h = np.clip(catch_h, minh, np.max(catch_h))
-        else:
-            minh = np.min(fhgt)  # Min just for flowline (this has reasons)
 
         # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']
@@ -1791,8 +1812,8 @@ def catchment_width_correction(gdir):
                     bintopoarea = len(np.where(topo_digi == bi)[0])
                     wherewiths = np.where(fl_digi == bi)
                     binflarea = np.sum(new_widths[wherewiths]) * fl.dx
-                    new_widths[wherewiths] = (bintopoarea / binflarea) * \
-                                             new_widths[wherewiths]
+                    new_widths[wherewiths] = (bintopoarea / binflarea *
+                                              new_widths[wherewiths])
                 break
             bsize += 5
 

@@ -46,6 +46,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.catchment_width_geom
     tasks.catchment_width_correction
     tasks.process_cru_data
+    tasks.process_histalp_data
     tasks.process_custom_climate_data
     tasks.process_cesm_data
     tasks.local_mustar
@@ -53,8 +54,10 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.apparent_mb_from_linear_mb
     tasks.mu_candidates
     tasks.prepare_for_inversion
-    tasks.volume_inversion
-    tasks.distribute_thickness
+    tasks.mass_conservation_inversion
+    tasks.filter_inversion_output
+    tasks.distribute_thickness_per_altitude
+    tasks.distribute_thickness_interp
     tasks.init_present_time_glacier
     tasks.run_random_climate
     tasks.run_constant_climate
@@ -71,9 +74,7 @@ glaciers in the current run). They are not parallelizable.
     :nosignatures:
 
     tasks.compute_ref_t_stars
-    tasks.distribute_t_stars
     tasks.crossval_t_stars
-    tasks.optimize_inversion_params
 
 Classes
 =======
@@ -111,7 +112,7 @@ The computed mass-balance is in units of [m ice s-1] ("meters of ice per
 second"), unless otherwise specified (e.g. for the utility function
 ``get_specific_mb``).
 The conversion from the climatic mass-balance ([kg m-2 s-1] ) therefore assumes
-an ice density given by ``cfg.RHO`` (currently: 900 kg m-3).
+an ice density given by ``cfg.PARAMS['ice_density']`` (currently: 900 kg m-3).
 
 Time
 ----
@@ -142,7 +143,7 @@ Interface
     MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
     MassBalanceModel.get_specific_mb
-    MassBalanceModel.temp_bias
+    MassBalanceModel.get_ela
 
 Models
 ------
@@ -155,3 +156,4 @@ Models
     PastMassBalance
     ConstantMassBalance
     RandomMassBalance
+    UncertainMassBalance

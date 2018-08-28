@@ -1,6 +1,9 @@
 *.py[cod]
 __pycache__
 
+# asv stuff
+.asv/
+
 # PyCharm stuffs
 .idea/
 
@@ -26,7 +29,6 @@ eggs
 baseline/
 *.lock
 oggm/tests/tmp_*
-*.html
 docs/glacierdir.rst
 docs/index.rst
 docs/_build

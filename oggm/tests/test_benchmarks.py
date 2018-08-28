@@ -1,27 +1,25 @@
 # Python imports
 import unittest
-import netCDF4
 import geopandas as gpd
 import numpy as np
 import os
 import shutil
 import salem
+import xarray as xr
+import pytest
 import oggm
+from scipy import optimize as optimization
 
 # Locals
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
 from oggm.tests.funcs import get_test_dir
-from oggm.tests import RUN_BENCHMARK_TESTS
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
-# do we event want to run the tests?
-if not RUN_BENCHMARK_TESTS:
-    raise unittest.SkipTest('Skipping all benchmark tests.')
-
+pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
 
 
@@ -63,6 +61,21 @@ class TestSouthGlacier(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
+    def get_ref_data(self, gdir):
+
+        # Reference data
+        df = salem.read_shapefile(get_demo_file('IceThick_SouthGlacier.shp'))
+        coords = np.array([p.xy for p in df.geometry]).squeeze()
+        df['lon'] = coords[:, 0]
+        df['lat'] = coords[:, 1]
+        df = df[['lon', 'lat', 'thick']]
+        ii, jj = gdir.grid.transform(df['lon'], df['lat'], crs=salem.wgs84,
+                                     nearest=True)
+        df['i'] = ii
+        df['j'] = jj
+        df['ij'] = ['{:04d}_{:04d}'.format(i, j) for i, j in zip(ii, jj)]
+        return df.groupby('ij').mean()
+
     def test_mb(self):
 
         # This is a function to produce the MB function needed by Anna
@@ -83,14 +96,12 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
-
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -101,10 +112,11 @@ class TestSouthGlacier(unittest.TestCase):
         mbref = mbref[np.isfinite(mbref)] * 1000
 
         # compute the bias to make it 0 SMB on the 2D DEM
+        rho = cfg.PARAMS['ice_density']
         mbmod = ConstantMassBalance(gdirs[0], bias=0)
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
         mbmod = ConstantMassBalance(gdirs[0], bias=np.average(mymb))
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * cfg.RHO
+        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
         np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
 
         # Same for ref
@@ -119,13 +131,158 @@ class TestSouthGlacier(unittest.TestCase):
 
         if do_plot:
             import matplotlib.pyplot as plt
-            plt.scatter(mbref, demref, s=5, label='Obs (2007-2012), shifted to '
-                                                   'Avg(SMB) = 0')
+            plt.scatter(mbref, demref, s=5,
+                        label='Obs (2007-2012), shifted to Avg(SMB) = 0')
             plt.scatter(mymb, demref, s=5, label='OGGM MB at t*')
             plt.scatter(myfit, demref, s=5, label='Polyfit', c='C3')
             plt.xlabel('MB (mm w.e yr-1)')
             plt.ylabel('Altidude (m)')
             plt.legend()
+            plt.show()
+
+    def test_inversion(self):
+
+        # Download the RGI file for the run
+        # Make a new dataframe of those
+        rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf)
+
+        # Preprocessing tasks
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Inversion tasks
+        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        # We use the default parameters for this run
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
+                            varname_suffix='_alt')
+        execute_entity_task(tasks.distribute_thickness_interp, gdirs,
+                            varname_suffix='_int')
+
+        # Reference data
+        gdir = gdirs[0]
+        df = self.get_ref_data(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+
+            v = ds.distributed_thickness_alt
+            df['oggm_alt'] = v.isel(x=('z', df['i']), y=('z', df['j']))
+            v = ds.distributed_thickness_int
+            df['oggm_int'] = v.isel(x=('z', df['i']), y=('z', df['j']))
+
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
+            ds['ref'].data[df['j'], df['i']] = df['thick']
+
+        rmsd_int = ((df.oggm_int - df.thick) ** 2).mean() ** .5
+        rmsd_alt = ((df.oggm_int - df.thick) ** 2).mean() ** .5
+        assert rmsd_int < 80
+        assert rmsd_alt < 80
+
+        dfm = df.mean()
+        np.testing.assert_allclose(dfm.thick, dfm.oggm_int, 50)
+        np.testing.assert_allclose(dfm.thick, dfm.oggm_alt, 50)
+
+        if do_plot:
+            import matplotlib.pyplot as plt
+            df.plot(kind='scatter', x='oggm_int', y='thick')
+            plt.axis('equal')
+            df.plot(kind='scatter', x='oggm_alt', y='thick')
+            plt.axis('equal')
+            f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 3))
+            ds.ref.plot(ax=ax1)
+            ds.distributed_thickness_int.plot(ax=ax2)
+            ds.distributed_thickness_alt.plot(ax=ax3)
+            plt.tight_layout()
+            plt.show()
+
+    def test_optimize_inversion(self):
+
+        # Download the RGI file for the run
+        # Make a new dataframe of those
+        rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf)
+
+        # Preprocessing tasks
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Reference data
+        gdir = gdirs[0]
+        df = self.get_ref_data(gdir)
+
+        # Inversion tasks
+        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+
+        glen_a = cfg.PARAMS['inversion_glen_a']
+        fs = cfg.PARAMS['inversion_fs']
+
+        def to_optimize(x):
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                                glen_a=glen_a * x[0],
+                                fs=fs * x[1])
+            execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
+            with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+                thick = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                      y=('z', df['j']))
+            return (np.abs(thick - df.thick)).mean()
+
+        opti = optimization.minimize(to_optimize, [1., 1.],
+                                     bounds=((0.01, 10), (0.01, 10)),
+                                     tol=0.1)
+        # Check results and save.
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                            glen_a=glen_a*opti['x'][0],
+                            fs=0)
+        execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
+                                                       y=('z', df['j']))
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
+            ds['ref'].data[df['j'], df['i']] = df['thick']
+
+        rmsd = ((df.oggm - df.thick) ** 2).mean() ** .5
+        assert rmsd < 60
+
+        dfm = df.mean()
+        np.testing.assert_allclose(dfm.thick, dfm.oggm, 10)
+        if do_plot:
+            import matplotlib.pyplot as plt
+            df.plot(kind='scatter', x='oggm', y='thick')
+            plt.axis('equal')
+            f, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 3))
+            ds.ref.plot(ax=ax1)
+            ds.distributed_thickness.plot(ax=ax2)
+            plt.tight_layout()
             plt.show()
 
     def test_workflow(self):
@@ -148,19 +305,17 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_mustar,
+            tasks.apparent_mb,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
 
-        # Climate tasks -- only data IO and tstar interpolation!
-        execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.distribute_t_stars(gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
-
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         # We use the default parameters for this run
-        execute_entity_task(tasks.volume_inversion, gdirs, glen_a=cfg.A, fs=0)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         df = utils.glacier_characteristics(gdirs)
@@ -204,7 +359,7 @@ class TestCoxeGlacier(unittest.TestCase):
         os.makedirs(self.testdir)
 
     def test_set_width(self):
-        entity = gpd.GeoDataFrame.from_file(self.rgi_file).iloc[0]
+        entity = gpd.read_file(self.rgi_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -219,7 +374,7 @@ class TestCoxeGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # Test that area and area-altitude elev is fine
-        with netCDF4.Dataset(gdir.get_filepath('gridded_data')) as nc:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             mask = nc.variables['glacier_mask'][:]
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]

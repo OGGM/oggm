@@ -1,13 +1,11 @@
 # Builtins
 import logging
 import copy
-from collections import OrderedDict
 
 # External libs
 import numpy as np
 
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
@@ -92,7 +90,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
         grow_model.run_until_equilibrium(rate=equi_rate)
         log.info(logtxt + ', ite: %d. Grew to equilibrium for %d years, '
                           'new area: %.3f km2', c, grow_model.yr,
-                           grow_model.area_km2)
+                 grow_model.area_km2)
 
         # Shrink
         new_fls = copy.deepcopy(grow_model.fls)
@@ -141,13 +139,8 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
     this is outdated and doesn't really work.
     """
 
-    if cfg.PARAMS['use_optimized_inversion_params']:
-        d = gdir.read_pickle('inversion_params')
-        fs = d['fs']
-        glen_a = d['glen_a']
-    else:
-        fs = cfg.PARAMS['flowline_fs']
-        glen_a = cfg.PARAMS['flowline_glen_a']
+    fs = cfg.PARAMS['fs']
+    glen_a = cfg.PARAMS['glen_a']
 
     if y0 is None:
         y0 = cfg.PARAMS['y0']
@@ -165,13 +158,9 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                                  init_bias=init_bias,
                                                  ref_area=ref_area)
 
-    # Some parameters for posterity (we used to store this):
-    params = OrderedDict(rtol=rtol, init_bias=init_bias, ref_area=ref_area,
-                         ite=ite, mb_bias=bias)
-
     path = gdir.get_filepath('model_run', delete=True)
     if write_steps:
-        _ = past_model.run_until_and_store(y1, path=path)
+        past_model.run_until_and_store(y1, path=path)
     else:
         past_model.to_netcdf(path)
 
@@ -184,7 +173,7 @@ def test_find_t0(self):
     import matplotlib.pyplot as plt
     do_plot = True
 
-    gdir = init_hef(border=80, invert_with_sliding=False)
+    gdir = init_hef(border=80)
 
     flowline.init_present_time_glacier(gdir)
     glacier = gdir.read_pickle('model_flowlines')
@@ -222,7 +211,7 @@ def test_find_t0(self):
         df.plot()
         plt.ylabel('Glacier length (relative to 2003)')
         plt.show()
-        fig = plt.figure()
+        plt.figure()
         lab = 'ref (vol={:.2f}km3)'.format(vol_ref)
         plt.plot(glacier[-1].surface_h, 'k', label=lab)
         lab = 'oggm start (vol={:.2f}km3)'.format(vol_start)

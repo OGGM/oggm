@@ -4,7 +4,6 @@ import logging
 import os
 from shutil import rmtree
 import collections
-from functools import partial
 # External libs
 import multiprocessing as mp
 
@@ -76,18 +75,24 @@ class _pickle_copier(object):
         self.call_func = func
         self.out_kwargs = kwargs
 
-    def __call__(self, gdir):
+    def __call__(self, arg):
+        if self.call_func:
+            gdir = arg
+            call_func = self.call_func
+        else:
+            call_func, gdir = arg
         try:
             if isinstance(gdir, collections.Sequence):
                 gdir, gdir_kwargs = gdir
                 gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-                return self.call_func(gdir, **gdir_kwargs)
+                return call_func(gdir, **gdir_kwargs)
             else:
-                return self.call_func(gdir, **self.out_kwargs)
+                return call_func(gdir, **self.out_kwargs)
         except Exception as e:
             try:
-                err_msg = '({0}) exception occured while processing task ' \
-                          '{1}: {2}'.format(gdir.rgi_id, self.call_func.__name__, str(e))
+                err_msg = ('({0}) exception occured while processing task '
+                           '{1}: {2}'.format(gdir.rgi_id, call_func.__name__,
+                                             str(e)))
                 raise RuntimeError(err_msg) from e
             except AttributeError:
                 pass
@@ -119,6 +124,12 @@ def execute_entity_task(task, gdirs, **kwargs):
     gdirs : list
          the list of oggm.GlacierDirectory to process.
     """
+
+    # If not iterable it's ok
+    try:
+        len(gdirs)
+    except TypeError:
+        gdirs = [gdirs]
 
     if task.__dict__.get('global_task', False):
         return task(gdirs, **kwargs)
@@ -155,28 +166,23 @@ def execute_parallel_tasks(gdir, tasks):
          will be passed to the task function as ``**kwargs``.
     """
 
-    if _have_ogmpi:
-        if ogmpi.OGGM_MPI_COMM is not None:
-            raise NotImplementedError('execute_parallel_tasks does not work'
-                                      'with MPI yet')
+    pc = _pickle_copier(None, {})
 
     _tasks = []
     for task in tasks:
         kwargs = {}
-        if len(task) == 2:
-            # The tuple option
-            kwargs = task[1]
-            task = task[0]
-        _tasks.append(partial(task, gdir, **kwargs))
+        if isinstance(task, collections.Sequence):
+            task, kwargs = task
+        _tasks.append((task, (gdir, kwargs)))
+
+    if _have_ogmpi:
+        if ogmpi.OGGM_MPI_COMM is not None:
+            ogmpi.mpi_master_spin_tasks(pc, _tasks)
+            return
 
     if cfg.PARAMS['use_multiprocessing']:
-        proc = []
-        for task in _tasks:
-            p = mp.Process(target=task)
-            p.start()
-            proc.append(p)
-        for p in proc:
-            p.join()
+        mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
+        mppool.map(pc, _tasks, chunksize=1)
     else:
         for task in _tasks:
             task()
@@ -241,21 +247,30 @@ def gis_prepro_tasks(gdirs):
 def climate_tasks(gdirs):
     """Helper function: run all climate tasks."""
 
-    # I don't know where this logic is best placed...
-    if (('climate_file' in cfg.PATHS) and
-            os.path.exists(cfg.PATHS['climate_file'])):
-        _process_task = tasks.process_custom_climate_data
-    else:
-        # OK, so use the default CRU "high-resolution" method
+    # If not iterable it's ok
+    try:
+        len(gdirs)
+    except TypeError:
+        gdirs = [gdirs]
+
+    # Which climate should we use?
+    if cfg.PARAMS['baseline_climate'] == 'CRU':
         _process_task = tasks.process_cru_data
+    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
+        _process_task = tasks.process_custom_climate_data
+    elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
+        _process_task = tasks.process_histalp_data
+    else:
+        raise ValueError('baseline_climate parameter not understood')
+
     execute_entity_task(_process_task, gdirs)
 
-    # Then, global tasks
+    # Then, calibration?
     if cfg.PARAMS['run_mb_calibration']:
         tasks.compute_ref_t_stars(gdirs)
-    tasks.distribute_t_stars(gdirs)
 
-    # And the apparent mass-balance
+    # Mustar and the apparent mass-balance
+    execute_entity_task(tasks.local_mustar, gdirs)
     execute_entity_task(tasks.apparent_mb, gdirs)
 
 
@@ -265,12 +280,8 @@ def inversion_tasks(gdirs):
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
-    # Global task
-    if cfg.PARAMS['optimize_inversion_params']:
-        tasks.optimize_inversion_params(gdirs)
-
     # Inversion for all glaciers
-    execute_entity_task(tasks.volume_inversion, gdirs)
+    execute_entity_task(tasks.mass_conservation_inversion, gdirs)
 
     # Filter
     execute_entity_task(tasks.filter_inversion_output, gdirs)

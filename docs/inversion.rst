@@ -104,29 +104,3 @@ step in OGGM is currently very simple, but provides nice looking maps:
     tasks.catchment_area(gdir)
     @savefig plot_distributed_thickness.png width=80%
     graphics.plot_distributed_thickness(gdir)
-
-
-References
-----------
-
-.. [Cuffey_Paterson_2010] Cuffey, K., and W. S. B. Paterson (2010).
-    The Physics of Glaciers, Butterworth‐Heinemann, Oxford, U.K.
-
-.. [Farinotti_etal_2009] Farinotti, D., Huss, M., Bauder, A., Funk, M., &
-    Truffer, M. (2009). A method to estimate the ice volume and
-    ice-thickness distribution of alpine glaciers. Journal of Glaciology, 55
-    (191), 422–430.
-
-.. [Golledge_Levy_2011] Golledge, N. R., and Levy, R. H. (2011).
-    Geometry and dynamics of an East Antarctic Ice Sheet outlet glacier, under
-    past and present climates. Journal of Geophysical Research:
-    Earth Surface, 116(3), 1–13.
-
-.. [Jarosch_etal_2013] Jarosch, a. H., Schoof, C. G., & Anslow, F. S. (2013).
-    Restoring mass conservation to shallow ice flow models over complex
-    terrain. Cryosphere, 7(1), 229–240. http://doi.org/10.5194/tc-7-229-2013
-
-.. [Oerlemans_1997] Oerlemans, J. (1997).
-    A flowline model for Nigardsbreen, Norway:
-    projection of future glacier length based on dynamic calibration with the
-    historic record. Journal of Glaciology, 24, 382–389.

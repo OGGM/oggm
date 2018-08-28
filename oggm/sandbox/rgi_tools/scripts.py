@@ -1,7 +1,8 @@
 """This script reads all the RGI files and computes intersects out of them."""
+# flake8: noqa
+import oggm
 import multiprocessing as mp
 import os
-import oggm
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -12,14 +13,14 @@ from oggm.utils import get_rgi_dir, mkdir
 from oggm.sandbox.rgi_tools.tools import (compute_intersects, prepare_divides,
                                           OUTDIR_INTERSECTS)
 
-rgi_version = '6'
+rgi_version = '61'
 
 
 def intersects_script():
     # Download RGI files
     cfg.initialize()
     rgi_dir = get_rgi_dir(version=rgi_version)
-    fp = '*_rgi' + rgi_version + '0_*.shp'
+    fp = '*_rgi' + rgi_version + '_*.shp'
     rgi_shps = list(glob(os.path.join(rgi_dir, "*", fp)))
     rgi_shps = [r for r in rgi_shps if 'Regions' not in r]
     with mp.Pool() as p:
@@ -28,7 +29,7 @@ def intersects_script():
 
 def merge_intersects():
     # Download RGI files
-    fp = 'intersects_*_rgi' + rgi_version + '0_*.shp'
+    fp = 'intersects_*_rgi' + rgi_version + '_*.shp'
     shps = list(glob(os.path.join(OUTDIR_INTERSECTS, "*", fp)))
     assert len(shps) == 19
     out = []
@@ -42,19 +43,20 @@ def merge_intersects():
     odir = '00_rgi' + rgi_version + '0_AllRegs'
     odir = os.path.join(OUTDIR_INTERSECTS, odir)
     mkdir(odir)
-    ofile = os.path.join(odir, 'intersects_rgi' + rgi_version + '0_AllRegs.shp')
+    ofile = os.path.join(odir, 'intersects_rgi' +
+                         rgi_version + '0_AllRegs.shp')
     inter.to_file(ofile)
 
 
 def intersects_ondivides_script():
     # Download RGI files
     cfg.initialize()
-    rgi_dir = '' # get_rgi_corrected_dir()
+    rgi_dir = ''  # get_rgi_corrected_dir()
     rgi_shps = list(glob(os.path.join(rgi_dir, "*", '*_rgi50_*.shp')))
     rgi_shps = sorted([r for r in rgi_shps if 'Regions' not in r])
     rgi_shps = np.array(rgi_shps)[[3, 16]]
     with mp.Pool() as p:
-       p.map(compute_intersects, rgi_shps, chunksize=1)
+        p.map(compute_intersects, rgi_shps, chunksize=1)
 
 
 def divides_script():

@@ -10,6 +10,10 @@ v1.X (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The utils.copy_to_basedir() function is changed to being an entity task. In
+  addition cesm_data files, when present, will from now on always be copied
+  when using this task (:issue:`467` & :pull:`468`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The method used to apply CRU and GCM anomalies to the climatology has
@@ -29,6 +33,35 @@ Breaking changes
   is now called `run_random_climate` for consistency with the other tasks
   See the PR linked above for more info.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- RGI version 4 isn't supported anymore (:issue:`142`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Rework of the 2d interpolation tasks for ice thickness in the context of
+  `ITMIX2 <http://oggm.org/2018/05/21/g2ti/>`_. The new interpolation
+  are better, but not backwards compatible. Aside of me I don't think
+  anybody was using them (:pull:`465`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Diagnostic variables (length, area, volume, ELA) are now stored at annual
+  steps instead of montly steps (:pull:`488`). The old behavior can still be
+  used with the ``store_monthly_step`` kwarg. Most users should not notice
+  this change because the regionally compiled files were stored at yearly
+  steps anyways.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The list of reference t* dates is now generated differently: instead of
+  the complex (and sort of useless) neirest beighbor algorithm we are now
+  referring back to the original method of Marzeion et al. (2012). This comes
+  together with other breaking changes, altogether likely to change the
+  results of the mass-balance model for some glaciers. For more details see
+  the PR: :pull:`509`
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ice dynamics parameters (Glen A, N, ice density) are now "real"
+  parameters accessible via ``cfg.PARAMS`` (:pull:`520`, :issue:`511` and
+  :issue:`27`). Previously, they were also accessible via a module attribute
+  in ``cfg``, which was more confusing than helping. Deprecated and removed
+  a couple of other things on the go, such as the dangerous `
+  ``optimize_inversion_params`` task (this cannot be optimized yet) and the
+  useless ``volume_inversion`` wrapper (now called
+  ``mass_conservation_inversion``)
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -44,12 +77,63 @@ Enhancements
   by a factor 2 (:pull:`415`), by avoiding useless repetitions of indexing
   operations. The results shouldn't change at all.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added optional shape factors for mass-conservation inversion and
+  FluxBasedModel to account for lateral drag dependent on the bed shape
+  (:pull:`429`). Accepted settings for shape factors are `None`,
+  `'Adhikari'` (Adhikari & Marshall 2012), `'Nye'` (Nye, 1965; equivalent to
+  Adhikari) and `'Huss'` (Huss & Farinotti 2012). Thorough tests with
+  applied shape factors are still missing.
+  By `Philipp Gregor <https://github.com/phigre>`_.
+- Some amelioration to the mass-balance models (:pull:`434`). Added a
+  ``repeat`` kwarg to the ``PastMassBalance`` in order to loop over a
+  selected period. Added an ``UncertainMassBalance`` model which wraps
+  an existing model and adds random uncertainty to it.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The DEM sources are now clearly stated in each glacier directory,
+  along with the original data citation (:pull:`441`). We encourage
+  to always cite the original data providers.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added some diagnostic tools which make it easier to detect dubious glacier
+  outlines or DEM errors (:pull:`445`). This will be used to report to the
+  RGI authors.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added a new parameter (``PARAMS['use_rgi_area']``), which specifies whether
+  OGGM should use the reference area provided by RGI or the one computed
+  from the local map and reprojected outlines  (:pull:`458`, default: True).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- A new ``simple_glacier_masks`` tasks allows to compute glacier rasters in
+  a more robust way than the default OGGM method (:pull:`476`). This is useful
+  for simpler workflows or to compute global statistics for external tools
+  like `rgitools <http://rgitools.readthedocs.io/en/latest/>`_. This task
+  also computes hypsometry files much like RGI does.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Reference glaciers now have mass-balance profiles attached to them, if
+  available. You can get the profiles with ``gdir.get_ref_mb_profile()``
+  (:pull:`493`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- New ``process_histalp_data`` taks to run OGGM with HISTALP data
+  automatically. The task comes with a list of predefined t* like CRU and
+  with different default parameters
+  (see `blog <https://oggm.org/2018/08/10/histalp-parameters/>`_). The PR
+  also adds some safety checks at the calibration and computation of the
+  mass-balance to make sure there is no misused parameters (:pull:`493`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
 ~~~~~~~~~
 
 - Remove dependency to deprecated matplotlib._cntr module (:issue:`418`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a bug in tidewater glaciers terminus position finding, where
+  in some rare cases the percentile threshold was too low (:pull:`444`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a caching bug in the test suite, where some tests used to fail when run
+  for a second time on a modified gdir (:pull:`448`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a problem with netCDF4 versions > 1.3 which returns masked arrays
+  per default. We now prevent netCDF4 to return masked arrays altogether
+  (:issue:`482`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 

@@ -6,6 +6,8 @@
 #-Last modified:  Thu Jul 09, 2015  13:10
 #@author Felix Oesterle
 #-----------------------------------------------------------
+# pragma: no cover
+# flake8: noqa
 from __future__ import with_statement, print_function
 from fabric.api import *
 import boto.ec2

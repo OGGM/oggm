@@ -1,23 +1,18 @@
-.. image:: _static/logo.png
 
-|
+A modular open source glacier model in Python
+---------------------------------------------
 
-An open source glacier model in Python
---------------------------------------
-
-Extending `Marzeion et al., (2012)`_, the model accounts for glacier geometry
-(including contributory branches) and includes an explicit ice dynamics module.
-It can simulate past and future mass-balance, volume and geometry of (almost)
-any glacier in the world in a fully automated workflow. We rely exclusively on
-publicly available data for calibration and validation.
+The model accounts for glacier geometry (including contributory branches) and
+includes an explicit ice dynamics module. It can simulate past and
+future mass-balance, volume and geometry of (almost) any glacier in the world
+in a fully automated and extensible workflow. We rely exclusively on publicly
+available data for calibration and validation.
 
 [version-specific-text]
 
 
 **For more information about the OGGM project and for the latest news, visit**
 `oggm.org <http://oggm.org>`_.
-
-.. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 
 Index
@@ -73,6 +68,7 @@ Contributing
 ^^^^^^^^^^^^
 
 * :doc:`citing-oggm`
+* :doc:`add-module`
 * :doc:`contributing`
 
 .. toctree::
@@ -81,6 +77,7 @@ Contributing
     :caption: Contributing
 
     citing-oggm.rst
+    add-module.rst
     contributing.rst
 
 
@@ -90,12 +87,14 @@ Get in touch
 - View the source code `on GitHub`_.
 - Report bugs or share your ideas on the `issue tracker`_.
 - Improve the model by submitting a `pull request`_.
+- Follow us on `Twitter`_.
 - Or you can always send us an `e-mail`_ the good old way.
 
 .. _e-mail: info@oggm.org
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
+.. _Twitter: https://twitter.com/OGGM1
 
 
 License and citation
@@ -203,8 +202,12 @@ About
         :alt: Windows-conda build status
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
-        :target: http://oggm.readthedocs.org/en/latest/?badge=latest
+        :target: http://docs.oggm.org/en/latest
         :alt: Documentation status
+
+    .. image:: https://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
+        :target: https://cluster.klima.uni-bremen.de/~github/asv/
+        :alt: Benchmark status
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg
@@ -213,6 +216,6 @@ About
 
 :Authors:
 
-    See `whats-new`_ for a list of all contributors.
+    See the `version history`_ for a list of all contributors.
 
-    .. _whats-new: http://oggm.readthedocs.org/en/latest/whats-new.html
+    .. _version history: http://docs.oggm.org/en/latest/whats-new.html

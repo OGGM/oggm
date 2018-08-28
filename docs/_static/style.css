@@ -1,0 +1,13 @@
+@import url("theme.css");
+
+.wy-side-nav-search {
+  background-color: #9cb7c9;
+}
+
+.wy-side-nav-search>div.version {
+  display: none;
+}
+
+.wy-nav-top {
+  background-color: #9cb7c9;
+}

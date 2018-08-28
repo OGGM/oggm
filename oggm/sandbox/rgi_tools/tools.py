@@ -1,4 +1,5 @@
 """This script reads all the RGI files and computes intersects out of them."""
+# flake8: noqa
 import os
 import time
 from glob import glob
@@ -10,12 +11,12 @@ import shapely.geometry as shpg
 from salem import wgs84
 from shapely.ops import linemerge
 
-from oggm.core.gis import _check_geometry
+from oggm.core.gis import multi_to_poly
 from oggm.utils import haversine, mkdir, get_wgms_files
 
 INDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/results_global_partitioning/altitude_filter/'
 
-OUTDIR_INTERSECTS = '/home/mowglie/tmp/RGI_V6_Intersects/'
+OUTDIR_INTERSECTS = '/home/mowglie/tmp/RGI_V61_Intersects/'
 OUTDIR_DIVIDES = '/home/mowglie/disk/Data/OGGM_DATA/RGI_V5_Modified/'
 
 
@@ -38,7 +39,7 @@ def compute_intersects(rgi_shp):
     keep = []
     for g in gdf.geometry:
         try:
-            g = _check_geometry(g)
+            g = multi_to_poly(g)
             ngeos.append(g)
             keep.append(True)
         except:
@@ -166,7 +167,7 @@ def prepare_divides(rgi_f):
                 geo_is_ok.append(False)
                 continue
             try:
-                new_geo.append(_check_geometry(g))
+                new_geo.append(multi_to_poly(g))
                 geo_is_ok.append(True)
             except:
                 geo_is_ok.append(False)

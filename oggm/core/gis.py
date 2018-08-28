@@ -1,22 +1,11 @@
 """ Handling of the local glacier map and masks. Defines the first tasks
 to be realized by any OGGM pre-processing workflow.
 
-References::
-
-    Kienholz, C., Rich, J. L., Arendt, a. a., and Hock, R. (2014).
-        A new method for deriving glacier centerlines applied to glaciers in
-        Alaska and northwest Canada. The Cryosphere, 8(2), 503-519.
-        doi:10.5194/tc-8-503-2014
-
-    Pfeffer, W. T., Arendt, A. a., Bliss, A., Bolch, T., Cogley, J. G.,
-        Gardner, A. S., ... Sharp, M. J. (2014). The Randolph Glacier Inventory:
-        a globally complete inventory of glaciers. Journal of Glaciology,
-        60(221), 537-552. http://doi.org/10.3189/2014JoG13J176
 """
 # Built ins
-import os
 import logging
-from shutil import copyfile
+import json
+import warnings
 from functools import partial
 from distutils.version import LooseVersion
 # External libs
@@ -24,14 +13,18 @@ import salem
 import pyproj
 import numpy as np
 import shapely.ops
+import pandas as pd
 import geopandas as gpd
 import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
+from scipy.ndimage import binary_erosion
+from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
 import rasterio
 from rasterio.warp import reproject, Resampling
+from rasterio.mask import mask as riomask
 try:
     # rasterio V > 1.0
     from rasterio.merge import merge as merge_tool
@@ -40,13 +33,18 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.utils import tuple2int, get_topo_file, polygon_intersections
+from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
+                        nicenumber, ncDataset)
+
 
 # Module logger
 log = logging.getLogger(__name__)
 
 # Needed later
 label_struct = np.ones((3, 3))
+
+with open(get_demo_file('dem_sources.json'), 'r') as fr:
+    DEM_SOURCE_INFO = json.loads(fr.read())
 
 
 def gaussian_blur(in_array, size):
@@ -76,32 +74,53 @@ def gaussian_blur(in_array, size):
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
 
 
-def _check_geometry(geometry, gdir=None):
-    """RGI polygons are not always clean: try to make these better.
+def multi_to_poly(geometry, gdir=None):
+    """Sometimes an RGI geometry is a multipolygon: this should not happen.
 
-    In particular, MultiPolygons should be converted to Polygons
+    Parameters
+    ----------
+    geometry : shpg.Polygon or shpg.MultiPolygon
+        the geometry to check
+    gdir : GlacierDirectory, optional
+        for logging
+
+    Returns
+    -------
+    the corrected geometry
     """
 
+    # Log
+    rid = gdir.rgi_id + ': ' if gdir is not None else ''
+
     if 'Multi' in geometry.type:
-        parts = list(geometry)
+        parts = np.array(geometry)
         for p in parts:
             assert p.type == 'Polygon'
+        areas = np.array([p.area for p in parts])
+        parts = parts[np.argsort(areas)][::-1]
+        areas = areas[np.argsort(areas)][::-1]
+
+        # First case (was RGIV4):
+        # let's assume that one poly is exterior and that
+        # the other polygons are in fact interiors
         exterior = parts[0].exterior
-        # let's assume that all other polygons are in fact interiors
         interiors = []
+        was_interior = 0
         for p in parts[1:]:
             if parts[0].contains(p):
                 interiors.append(p.exterior)
-            else:
-                # This should not happen. Check that we have a small geom here
-                rid = gdir.rgi_id + ': ' if gdir is not None else ''
-                msg = ('{}problem while correcting geometry. Area '
-                       'was: {} but it should be smaller.'.format(rid, p.area))
-                if p.area > 1e-4:
-                    log.warning(msg)
-        geometry = shpg.Polygon(exterior, interiors)
+                was_interior += 1
+        if was_interior > 0:
+            # We are done here, good
+            geometry = shpg.Polygon(exterior, interiors)
+        else:
+            # This happens for bad geometries. We keep the largest
+            geometry = parts[0]
+            if np.any(areas[1:] > (areas[0] / 4)):
+                log.warning('Geometry {} lost quite a chunk.'.format(rid))
 
-    assert 'Polygon' in geometry.type
+    if geometry.type != 'Polygon':
+        raise RuntimeError('Geometry {} is not a Polygon.'.format(rid))
     return geometry
 
 
@@ -155,8 +174,8 @@ def _polygon_to_pix(polygon):
     a shapely.geometry.Polygon class instance.
     """
 
-    project = lambda x, y: (np.rint(x).astype(np.int64),
-                            np.rint(y).astype(np.int64))
+    def project(x, y):
+        return np.rint(x).astype(np.int64), np.rint(y).astype(np.int64)
 
     poly_pix = shapely.ops.transform(project, polygon)
 
@@ -186,10 +205,10 @@ def _polygon_to_pix(polygon):
                     if tmp.is_valid:
                         break
                 if b == 0.99:
-                    raise RuntimeError('This glacier geometry is crazy.')
+                    raise RuntimeError('This glacier geometry is not valid.')
 
     if not tmp.is_valid:
-        raise RuntimeError('This glacier geometry is crazy.')
+        raise RuntimeError('This glacier geometry is not valid.')
 
     return tmp
 
@@ -220,24 +239,7 @@ def define_glacier_region(gdir, entity=None):
         the glacier geometry to process
     """
 
-    # choose a spatial resolution with respect to the glacier area
-    dxmethod = cfg.PARAMS['grid_dx_method']
-    area = gdir.rgi_area_km2
-    if dxmethod == 'linear':
-        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
-    elif dxmethod == 'square':
-        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
-    elif dxmethod == 'fixed':
-        dx = np.rint(cfg.PARAMS['fixed_dx'])
-    else:
-        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
-    # Additional trick for varying dx
-    if dxmethod in ['linear', 'square']:
-        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
-
-    log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
-
-    # Make a local glacier map
+    # 1. Make a local glacier map
     proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
@@ -247,24 +249,10 @@ def define_glacier_region(gdir, entity=None):
     project = partial(pyproj.transform, proj_in, proj_out)
     # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
-    geometry = _check_geometry(geometry, gdir=gdir)
+    geometry = multi_to_poly(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
-    # Corners, incl. a buffer of N pix
-    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
-    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
-    uly = np.max(yy) + cfg.PARAMS['border'] * dx
-    lry = np.min(yy) - cfg.PARAMS['border'] * dx
-    # n pixels
-    nx = np.int((lrx - ulx) / dx)
-    ny = np.int((uly - lry) / dx)
-
-    # Back to lon, lat for DEM download/preparation
-    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
-                          dxdy=(dx, -dx), pixel_ref='corner')
-    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
-
-    # save transformed geometry to disk
+    # 2. save transformed geometry to disk
     entity = entity.copy()
     entity['geometry'] = geometry
     # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
@@ -276,9 +264,20 @@ def define_glacier_region(gdir, entity=None):
     # Delete the source before writing
     if 'DEM_SOURCE' in towrite:
         del towrite['DEM_SOURCE']
+
+    # 3. define glacier area to use
+    area = entity['Area']
+
+    # Do we want to use the RGI area or ours?
+    if not cfg.PARAMS['use_rgi_area']:
+        area = geometry.area * 1e-6
+        entity['Area'] = area
+        towrite['Area'] = area
+
+    # 4. Write shapefile
     towrite.to_file(gdir.get_filepath('outlines'))
 
-    # Also transform the intersects if necessary
+    # 5. Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
     if len(gdf) > 0:
         gdf = gdf.loc[((gdf.RGIId_1 == gdir.rgi_id) |
@@ -299,10 +298,41 @@ def define_glacier_region(gdir, entity=None):
                                "cfg.PARAMS['use_intersects'] = False to "
                                "suppress this error.")
 
+    # 6. choose a spatial resolution with respect to the glacier area
+    dxmethod = cfg.PARAMS['grid_dx_method']
+    if dxmethod == 'linear':
+        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
+    elif dxmethod == 'square':
+        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
+    elif dxmethod == 'fixed':
+        dx = np.rint(cfg.PARAMS['fixed_dx'])
+    else:
+        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
+    # Additional trick for varying dx
+    if dxmethod in ['linear', 'square']:
+        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
+
+    log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
+
+    # Corners, incl. a buffer of N pix
+    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
+    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
+    uly = np.max(yy) + cfg.PARAMS['border'] * dx
+    lry = np.min(yy) - cfg.PARAMS['border'] * dx
+    # n pixels
+    nx = np.int((lrx - ulx) / dx)
+    ny = np.int((uly - lry) / dx)
+
+    # Back to lon, lat for DEM download/preparation
+    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
+                          dxdy=(dx, -dx), pixel_ref='corner')
+    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
+
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
+                                         rgi_subregion=gdir.rgi_subregion,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
 
@@ -366,7 +396,12 @@ def define_glacier_region(gdir, entity=None):
     glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
                               x0y0=x0y0)
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
-    gdir.write_pickle(dem_source, 'dem_source')
+
+    # Write DEM source info
+    gdir.add_to_diagnostics('dem_source', dem_source)
+    source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
+    with open(gdir.get_filepath('dem_source'), 'w') as fw:
+        fw.write(source_txt)
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
@@ -414,7 +449,7 @@ def glacier_masks(gdir):
         raise RuntimeError('({}) min equal max in the DEM.'
                            .format(gdir.rgi_id))
 
-    # Proj
+    # Projection
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
         transf = dem_dr.transform
     else:
@@ -423,10 +458,11 @@ def glacier_masks(gdir):
     y0 = transf[5]  # UL corner
     dx = transf[0]
     dy = transf[4]  # Negative
-    assert dx == -dy
-    assert dx == gdir.grid.dx
-    assert y0 == gdir.grid.corner_grid.y0
-    assert x0 == gdir.grid.corner_grid.x0
+
+    if not (np.allclose(dx, -dy) or np.allclose(dx, gdir.grid.dx) or
+            np.allclose(y0, gdir.grid.corner_grid.y0, atol=1e-2) or
+            np.allclose(x0, gdir.grid.corner_grid.x0, atol=1e-2)):
+        raise RuntimeError('DEM file and Salem Grid do not match!')
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
@@ -444,7 +480,7 @@ def glacier_masks(gdir):
 
     # Geometries
     outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.GeoDataFrame.from_file(outlines_file).geometry[0]
+    geometry = gpd.read_file(outlines_file).geometry[0]
 
     # Interpolate shape to a regular path
     glacier_poly_hr = _interp_polygon(geometry, gdir.grid.dx)
@@ -461,7 +497,7 @@ def glacier_masks(gdir):
     # fix-invalid-polygon-python-shapely
     glacier_poly_hr = glacier_poly_hr.buffer(0)
     if not glacier_poly_hr.is_valid:
-        raise RuntimeError('This glacier geometry is crazy.')
+        raise RuntimeError('This glacier geometry is not valid.')
 
     # Rounded nearest pix
     glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
@@ -513,8 +549,8 @@ def glacier_masks(gdir):
 
     v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
     v.units = 'm'
-    v.long_name = ('DEM topography smoothed' 
-                   ' with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
+    v.long_name = ('DEM topography smoothed '
+                   'with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
     v[:] = smoothed_dem
 
     v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
@@ -540,3 +576,296 @@ def glacier_masks(gdir):
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
     gdir.write_pickle(geometries, 'geometries')
+
+
+@entity_task(log, writes=['gridded_data', 'hypsometry'])
+def simple_glacier_masks(gdir):
+    """Compute glacier masks based on much simpler rules than OGGM's default.
+
+    This is therefore more robust: we use this function to compute glacier
+    hypsometries.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    # open srtm tif-file:
+    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+    dem = dem_dr.read(1).astype(rasterio.float32)
+
+    # Grid
+    nx = dem_dr.width
+    ny = dem_dr.height
+    assert nx == gdir.grid.nx
+    assert ny == gdir.grid.ny
+
+    # Correct the DEM (ASTER...)
+    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    min_z = -999.
+    isfinite = np.isfinite(dem)
+    if (np.min(dem) <= min_z) or np.any(~isfinite):
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero((dem <= min_z) | (~isfinite))
+        pok = np.nonzero((dem > min_z) | isfinite)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+
+    isfinite = np.isfinite(dem)
+    if not np.all(isfinite):
+        # see how many percent of the dem
+        if np.sum(~isfinite) > (0.2 * nx * ny):
+            raise RuntimeError('({}) too many NaNs in DEM'.format(gdir.rgi_id))
+        log.warning('({}) DEM needed zeros somewhere.'.format(gdir.rgi_id))
+        dem[isfinite] = 0
+
+    if np.min(dem) == np.max(dem):
+        raise RuntimeError('({}) min equal max in the DEM.'
+                           .format(gdir.rgi_id))
+
+    # Proj
+    if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        transf = dem_dr.transform
+    else:
+        raise ImportError('This task needs rasterio >= 1.0 to work properly')
+    x0 = transf[2]  # UL corner
+    y0 = transf[5]  # UL corner
+    dx = transf[0]
+    dy = transf[4]  # Negative
+    assert dx == -dy
+    assert dx == gdir.grid.dx
+    assert y0 == gdir.grid.corner_grid.y0
+    assert x0 == gdir.grid.corner_grid.x0
+
+    profile = dem_dr.profile
+    dem_dr.close()
+
+    # Clip topography to 0 m a.s.l.
+    dem = dem.clip(0)
+
+    # Smooth DEM?
+    if cfg.PARAMS['smooth_window'] > 0.:
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
+        smoothed_dem = gaussian_blur(dem, np.int(gsize))
+    else:
+        smoothed_dem = dem.copy()
+
+    if not np.all(np.isfinite(smoothed_dem)):
+        raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
+
+    # Geometries
+    outlines_file = gdir.get_filepath('outlines')
+    geometry = gpd.read_file(outlines_file).geometry[0]
+
+    # simple trick to correct invalid polys:
+    # http://stackoverflow.com/questions/20833344/
+    # fix-invalid-polygon-python-shapely
+    geometry = geometry.buffer(0)
+    if not geometry.is_valid:
+        raise RuntimeError('This glacier geometry is not valid.')
+
+    # Compute the glacier mask using rasterio
+    # Small detour as mask only accepts DataReader objects
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(dem.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
+        masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
+                                filled=False)
+    glacier_mask = ~masked_dem[0, ...].mask
+
+    # Smame without nunataks
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(dem.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
+        poly = shpg.mapping(shpg.Polygon(geometry.exterior))
+        masked_dem, _ = riomask(dem_data, [poly],
+                                filled=False)
+    glacier_mask_nonuna = ~masked_dem[0, ...].mask
+
+    # Glacier exterior excluding nunataks
+    erode = binary_erosion(glacier_mask_nonuna)
+    glacier_ext = glacier_mask_nonuna ^ erode
+    glacier_ext = np.where(glacier_mask_nonuna, glacier_ext, 0)
+
+    # Last sanity check based on the masked dem
+    tmp_max = np.max(dem[glacier_mask])
+    tmp_min = np.min(dem[glacier_mask])
+    if tmp_max < (tmp_min + 1):
+        raise RuntimeError('({}) min equal max in the masked DEM.'
+                           .format(gdir.rgi_id))
+
+    # hypsometry
+    bsize = 50.
+    dem_on_ice = dem[glacier_mask]
+    bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
+                     nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
+
+    h, _ = np.histogram(dem_on_ice, bins)
+    h = h / np.sum(h) * 1000  # in permil
+
+    # We want to convert the bins to ints but preserve their sum to 1000
+    # Start with everything rounded down, then round up the numbers with the
+    # highest fractional parts until the desired sum is reached.
+    hi = np.floor(h).astype(np.int)
+    hup = np.ceil(h).astype(np.int)
+    aso = np.argsort(hup - h)
+    for i in aso:
+        hi[i] = hup[i]
+        if np.sum(hi) == 1000:
+            break
+
+    # slope
+    sy, sx = np.gradient(dem, dx)
+    aspect = np.arctan2(np.mean(-sx[glacier_mask]), np.mean(sy[glacier_mask]))
+    aspect = np.rad2deg(aspect)
+    if aspect < 0:
+        aspect += 360
+    slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
+    avg_slope = np.rad2deg(np.mean(slope[glacier_mask]))
+
+    # write
+    df = pd.DataFrame()
+    df['RGIId'] = [gdir.rgi_id]
+    df['GLIMSId'] = [gdir.glims_id]
+    df['Zmin'] = [dem_on_ice.min()]
+    df['Zmax'] = [dem_on_ice.max()]
+    df['Zmed'] = [np.median(dem_on_ice)]
+    df['Area'] = [gdir.rgi_area_km2]
+    df['Slope'] = [avg_slope]
+    df['Aspect'] = [aspect]
+    for b, bs in zip(hi, (bins[1:] + bins[:-1])/2):
+        df['{}'.format(np.round(bs).astype(int))] = [b]
+    df.to_csv(gdir.get_filepath('hypsometry'), index=False)
+
+    # write out the grids in the netcdf file
+    nc = gdir.create_gridded_ncdf_file('gridded_data')
+
+    v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
+    v.units = 'm'
+    v.long_name = 'DEM topography'
+    v[:] = dem
+
+    v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x', ), zlib=True)
+    v.units = 'm'
+    v.long_name = ('DEM topography smoothed '
+                   'with radius: {:.1} m'.format(cfg.PARAMS['smooth_window']))
+    v[:] = smoothed_dem
+
+    v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier mask'
+    v[:] = glacier_mask
+
+    v = nc.createVariable('glacier_ext', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier external boundaries'
+    v[:] = glacier_ext
+
+    # add some meta stats and close
+    nc.max_h_dem = np.max(dem)
+    nc.min_h_dem = np.min(dem)
+    dem_on_g = dem[np.where(glacier_mask)]
+    nc.max_h_glacier = np.max(dem_on_g)
+    nc.min_h_glacier = np.min(dem_on_g)
+    nc.close()
+
+
+@entity_task(log, writes=['gridded_data'])
+def interpolation_masks(gdir):
+    """Computes the glacier exterior masks taking ice divides into account.
+
+    This is useful for distributed ice thickness. The masks are added to the
+    gridded data file. For convenience we also add a slope mask.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    # Variables
+    grids_file = gdir.get_filepath('gridded_data')
+    with ncDataset(grids_file) as nc:
+        topo_smoothed = nc.variables['topo_smoothed'][:]
+        glacier_mask = nc.variables['glacier_mask'][:]
+
+    # Glacier exterior including nunataks
+    erode = binary_erosion(glacier_mask)
+    glacier_ext = glacier_mask ^ erode
+    glacier_ext = np.where(glacier_mask == 1, glacier_ext, 0)
+
+    # Intersects between glaciers
+    gdfi = gpd.GeoDataFrame(columns=['geometry'])
+    if gdir.has_file('intersects'):
+        # read and transform to grid
+        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        gdfi = pd.concat([gdfi, gdf[['geometry']]])
+
+    # Ice divide mask
+    # Probably not the fastest way to do this, but it works
+    dist = np.array([])
+    jj, ii = np.where(glacier_ext)
+    for j, i in zip(jj, ii):
+        dist = np.append(dist, np.min(gdfi.distance(shpg.Point(i, j))))
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        pok = np.where(dist <= 1)
+    glacier_ext_intersect = glacier_ext * 0
+    glacier_ext_intersect[jj[pok], ii[pok]] = 1
+
+    # Distance from border mask - Scipy does the job
+    dx = gdir.grid.dx
+    dis_from_border = 1 + glacier_ext_intersect - glacier_ext
+    dis_from_border = distance_transform_edt(dis_from_border) * dx
+
+    # Slope
+    glen_n = cfg.PARAMS['glen_n']
+    sy, sx = np.gradient(topo_smoothed, dx, dx)
+    slope = np.arctan(np.sqrt(sy**2 + sx**2))
+    slope = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4), np.pi/2.)
+    slope = 1 / slope**(glen_n / (glen_n+2))
+
+    with ncDataset(grids_file, 'a') as nc:
+
+        vn = 'glacier_ext_erosion'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Glacier exterior with binary erosion method'
+        v[:] = glacier_ext
+
+        vn = 'ice_divides'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Glacier ice divides'
+        v[:] = glacier_ext_intersect
+
+        vn = 'slope_factor'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Slope factor as defined in Farinotti et al 2009'
+        v[:] = slope
+
+        vn = 'dis_from_border'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'm'
+        v.long_name = 'Distance from border'
+        v[:] = dis_from_border

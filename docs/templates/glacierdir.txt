@@ -43,10 +43,10 @@ as input:
 .. ipython:: python
 
     base_dir = os.path.join(oggm.gettempdir(), 'OGGM_docs', 'GlacierDir')
-    entity = gpd.GeoDataFrame.from_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
+    entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
     gdir.dir
-    gdir.rgi_id, gdir.rgi_area_km2
+    gdir.rgi_id
 
 Note that this directory has just been created and is empty. The
 :py:func:`tasks.define_glacier_region` will fill it with the first data files:

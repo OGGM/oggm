@@ -14,6 +14,11 @@ Glacier flowlines
         code = compile(f.read(), fpath, 'exec')
         exec(code)
 
+.. ipython:: python
+   :suppress:
+
+    from oggm import graphics
+
 Centerlines
 -----------
 

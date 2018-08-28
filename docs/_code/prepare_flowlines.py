@@ -1,7 +1,7 @@
 import os
 import geopandas as gpd
 import oggm
-from oggm import cfg, tasks, graphics
+from oggm import cfg, tasks
 from oggm.utils import get_demo_file
 
 cfg.initialize()

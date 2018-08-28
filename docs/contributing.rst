@@ -102,8 +102,8 @@ Contributing to the code base
 Code standards
 --------------
 
-OGGM uses the `PEP8 <http://www.python.org/dev/peps/pep-0008/>`_ standard, as
-far as possible. There are several tools to ensure you abide by this standard,
+OGGM uses the `PEP8 <http://www.python.org/dev/peps/pep-0008/>`_ standard.
+There are several tools to ensure you abide by this standard,
 and some IDE (for example PyCharm) will warn you if you don't follow PEP8.
 
 Test-driven development/code writing

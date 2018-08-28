@@ -7,10 +7,12 @@ import os
 import shutil
 import sys
 import glob
+import json
 from collections import OrderedDict
 from distutils.util import strtobool
 
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
@@ -51,7 +53,7 @@ class DocumentedDict(dict):
         try:
             self._set_key(key, value[0], docstr=value[1])
             CONFIG_MODIFIED = True
-        except:
+        except BaseException:
             raise ValueError('DocumentedDict accepts only tuple of len 2')
 
     def info_str(self, key):
@@ -95,14 +97,7 @@ SEC_IN_HOUR = 3600
 SEC_IN_MONTH = 2628000
 DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
-RHO = 900.  # ice density
 G = 9.81  # gravity
-N = 3.  # Glen's law's exponent
-A = 2.4e-24  # Glen's default creep's parameter
-FS = 5.7e-20  # Default sliding parameter from Oerlemans - OUTDATED
-TWO_THIRDS = 2./3.
-FOUR_THIRDS = 4./3.
-ONE_FIFTH = 1./5.
 
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:
@@ -127,6 +122,9 @@ BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
+_doc = 'A dictionary containing runtime diagnostics useful for debugging.'
+BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
+
 _doc = 'A netcdf file containing several gridded data variables such as ' \
        'topography, the glacier masks and more (see the netCDF file metadata).'
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
@@ -143,8 +141,11 @@ _doc = 'A ``dict`` containing the downsteam line geometry as well as the bed' \
        'shape computed from a parabolic fit.'
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
-_doc = 'A string with the source of the topo file (ASTER, SRTM, ...).'
-BASENAMES['dem_source'] = ('dem_source.pkl', _doc)
+_doc = 'A text file with the source of the topo file (GIMP, SRTM, ...).'
+BASENAMES['dem_source'] = ('dem_source.txt', _doc)
+
+_doc = 'A hypsometry file as provided by RGI (useful for diagnostics).'
+BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
@@ -160,24 +161,15 @@ _doc = 'A "better" version of the Centerlines, now on a regular spacing ' \
        'They are now "1.5D" i.e., with a width.'
 BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 
-_doc = 'The monthly climate timeseries for this glacier, stored in a netCDF ' \
-       'file.'
+_doc = 'The monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
-_doc = 'Some information (dictionary) about the climate data for this ' \
-       'glacier, avoiding many useless accesses to the netCDF file.'
+_doc = ('Some information (dictionary) about the climate data and the mass '
+        'balance parameters for this glacier.')
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
-_doc = 'The monthly GCM climate timeseries for this glacier, ' \
-       'stored in a netCDF file.'
+_doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
-
-_doc = 'A Dataframe containing the bias scores as a function of the prcp ' \
-       'factor. This is useful for testing mostly.'
-BASENAMES['prcp_fac_optim'] = ('prcp_fac_optim.pkl', _doc)
-
-_doc = 'A pandas.Series with the (year, mu) data.'
-BASENAMES['mu_candidates'] = ('mu_candidates.pkl', _doc)
 
 _doc = 'A csv with three values: the local scalars mu*, t*, bias'
 BASENAMES['local_mustar'] = ('local_mustar.csv', _doc)
@@ -247,55 +239,55 @@ def initialize(file=None):
     PARAMS['use_compression'] = cp.as_bool('use_compression')
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
-    PARAMS['optimize_thick'] = cp.as_bool('optimize_thick')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
     PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
     PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
-    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
-    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
+    PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
+    PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
 
     # Climate
+    PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
+    PARAMS['baseline_y0'] = cp.as_int('baseline_y0')
+    PARAMS['baseline_y1'] = cp.as_int('baseline_y1')
+    PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
+    PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    _factor = cp['prcp_scaling_factor']
-    if _factor not in ['stddev', 'stddev_perglacier']:
-        _factor = cp.as_float('prcp_scaling_factor')
-    PARAMS['prcp_scaling_factor'] = _factor
     PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
-    PARAMS['invert_with_sliding'] = cp.as_bool('invert_with_sliding')
-    _k = 'optimize_inversion_params'
-    PARAMS[_k] = cp.as_bool(_k)
+    k = 'use_shape_factor_for_inversion'
+    PARAMS[k] = cp[k]
 
     # Flowline model
-    _k = 'use_optimized_inversion_params'
-    PARAMS[_k] = cp.as_bool(_k)
+    k = 'use_shape_factor_for_fluxbasedmodel'
+    PARAMS[k] = cp[k]
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files, SAMPLE_DATA_COMMIT
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file',
-           'grid_dx_method', 'run_mb_calibration',
-           'mp_processes', 'use_multiprocessing',
+           'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
+           'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_optimized_inversion_params', 'invert_with_sliding',
-           'optimize_inversion_params', 'use_multiple_flowlines',
-           'optimize_thick', 'mpi_recv_buf_size', 'hydro_month_nh',
+           'use_multiple_flowlines',
+           'mpi_recv_buf_size', 'hydro_month_nh',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
-           'prcp_scaling_factor', 'use_intersects', 'filter_min_slope',
+           'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'allow_negative_mustar']
+           'rgi_version', 'allow_negative_mustar',
+           'use_shape_factor_for_inversion', 'use_rgi_area',
+           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
     for k in ltr:
         cp.pop(k, None)
 
@@ -303,9 +295,20 @@ def initialize(file=None):
     for k in cp:
         PARAMS[k] = cp.as_float(k)
 
+    # Read-in the reference t* data - maybe it will be used, maybe not
+    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
+           'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
+    for fn in fns:
+        PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+        fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
+        with open(fpath, 'r') as fp:
+            mbpar = json.load(fp)
+        PARAMS[fn+'_calib_params'] = mbpar
+
     # Empty defaults
     set_intersects_db()
     IS_INITIALIZED = True
+
     # Pre extract cru cl to avoid problems by multiproc
     from oggm.utils import get_cru_cl_file
     get_cru_cl_file()
@@ -379,6 +382,7 @@ def oggm_static_paths():
         if not PARAMS['dl_cache_readonly']:
             os.makedirs(PATHS['dl_cache_dir'])
 
+
 # Always call this one!
 oggm_static_paths()
 
@@ -426,7 +430,10 @@ def set_intersects_db(path=None):
     """
 
     if PARAMS['use_intersects'] and path is not None:
-        PARAMS['intersects_gdf'] = gpd.read_file(path)
+        if isinstance(path, str):
+            PARAMS['intersects_gdf'] = gpd.read_file(path)
+        else:
+            PARAMS['intersects_gdf'] = path
     else:
         PARAMS['intersects_gdf'] = gpd.GeoDataFrame()
 
