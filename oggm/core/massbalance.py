@@ -464,7 +464,10 @@ class ConstantMassBalance(MassBalanceModel):
         self.valid_bounds = self.hbins[[0, -1]]
         self.y0 = y0
         self.halfsize = halfsize
-        self.years = np.arange(y0-halfsize, y0+halfsize+1)
+        if halfsize == 0:
+            self.years=[y0]
+        else:
+            self.years = np.arange(y0-halfsize, y0+halfsize+1)
 
     @property
     def temp_bias(self):
