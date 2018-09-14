@@ -110,14 +110,17 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['cesm_data'])
-def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
+def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
     """ TODO: Write docstring"""
     filesuffix = filesuffix
-    PI_path = "/home/david/Desktop/CCSM4_midHolocene_data/pi.nc"
+    PI_path = Pi_path
 
+    
     if not (('climate_file' in cfg.PATHS) and  os.path.exists(cfg.PATHS['climate_file'])):
         raise IOError('Custom climate file not found')
-
+    if PI_path is None:
+        raise ValueError('Need to set Pi_path in process_ccsm_data function')
+    
     #open dataset for precp use
     fpath = cfg.PATHS['climate_file']
     xr_ccsm = xr.open_dataset(fpath, decode_times=False)
@@ -129,7 +132,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     # selecting location
     lon = gdir.cenlon
     lat = gdir.cenlat
-
+    
     #Setting the longitude to a 0-360 grid [I think...] "CESM files are in 0-360"
     if lon <= 0:
         lon += 360
@@ -140,7 +143,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     temp = xr_ccsm_ts.TS.sel(lat=lat, lon=lon, method='nearest')
     precp_pi = xr_pi.PRECC.sel(lat=lat, lon=lon, method='nearest') + xr_pi.PRECL.sel(lat=lat, lon=lon, method='nearest')
     temp_pi = xr_pi.TS.sel(lat=lat, lon=lon, method='nearest')
-
+    
     #convert temp from K to C
     temp = temp - 273.15
     temp_pi = temp_pi - 273.15
@@ -163,7 +166,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     #calculate place in array to concat from (2 for ccsm data)
     conc_start = sm-2
     conc_end = sm-14
-
+    
     temp_hydro = xr.concat([temp[conc_start:],temp[:conc_end]],dim="time")
     precp_hydro = xr.concat([precp[conc_start:],precp[:conc_end]],dim="time")
     temp_hydro['time'] = time
@@ -179,7 +182,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     temp['year'] = ('time', time.year)
     ny, r = divmod(len(temp.time), 12)
     assert r == 0
-            
+  
     #Convert m s-1 to mm mth-1 (for precp)
     ndays = np.tile(cfg.DAYS_IN_MONTH, y1-y0)
     precp = precp * ndays * (60 * 60 * 24 * 1000)
@@ -200,6 +203,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     loc_pre = dscru.prcp.groupby('time.month').mean()
     ts_pre = precp.groupby(precp.month) + loc_pre
 
+    
     #load dates into save format
     fpath = cfg.PATHS['climate_file']
     dsindex = salem.GeoNetcdf(fpath, monthbegin=True)
@@ -208,16 +212,17 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     #weird recursive way to getting the dates in the correct format to save 
     #only nessisary for 1 year of data, in order to rearrange the months and 
     #get the correct year.
-    time_array = [datetime(temp.time.year[i], temp.time.month[i],1) for i in range(12)]
+    
+    time_array = [datetime.datetime(temp.time.year[i], temp.time.month[i],1) for i in range(12)]
     time_nums = netCDF4.date2num(time_array, time1.units, calendar='noleap')
     time2 = netCDF4.num2date(time_nums[:], time1.units, calendar='noleap')
-            
+        
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
             
     #"back to -180 - 180"
     loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
-            
+    
     #write to netcdf
     gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values, 
                                     float(dscru.ref_hgt), loc_lon, 
@@ -230,7 +235,7 @@ def process_ccsm_data(gdir, filesuffix='', Pi_path=None):
     xr_ccsm.close()
     xr_ccsm_ts.close()
     xr_pi.close()
-    ds_cru.close()
+    ds_cru.close() 
     
     print("Hello Worlds")
     

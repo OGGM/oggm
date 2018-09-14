@@ -21,6 +21,7 @@ from oggm.core.climate import mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_histalp_data
 from oggm.core.climate import process_custom_climate_data
+from oggm.core.climate import process_ccsm_data
 from oggm.core.climate import process_cesm_data
 from oggm.core.climate import local_mustar
 from oggm.core.climate import apparent_mb
