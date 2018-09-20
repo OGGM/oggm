@@ -117,6 +117,8 @@ example the plotting functions:
 
     @savefig plot_domain.png width=80%
     graphics.plot_domain(gdir)
+    import matplotlib
+    matplotlib.pyplot.show()
 
 What next?
 ----------
