@@ -208,10 +208,10 @@ Requirements
 There are some extra requirements to build the docs: you will need to
 have ``sphinx``, ``numpydoc`` and ``ipython`` installed.
 
-If you have a conda environment named ``oggm-env``, you can install the extra
+If you have a conda environment named ``oggm_env``, you can install the extra
 requirements with::
 
-      conda install -n oggm-env sphinx ipython numpydoc
+      conda install -n oggm_env sphinx ipython numpydoc
 
 
 Building the documentation
