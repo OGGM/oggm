@@ -30,6 +30,7 @@ The following imports are necessary for all of the examples:
 .. ipython:: python
 
     import geopandas as gpd
+    import matplotlib.pyplot as plt
     import oggm
     import os
     from oggm import cfg, tasks, graphics
@@ -117,8 +118,7 @@ example the plotting functions:
 
     @savefig plot_domain.png width=80%
     graphics.plot_domain(gdir)
-    import matplotlib
-    matplotlib.pyplot.show()
+    plt.show()  # optional in interactive plotting mode
 
 What next?
 ----------
