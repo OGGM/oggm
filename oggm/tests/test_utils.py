@@ -24,6 +24,7 @@ _url_retrieve = None
 
 
 pytestmark = pytest.mark.test_env("utils")
+_url_retrieve = None
 
 
 def setup_module(module):

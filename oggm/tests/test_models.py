@@ -27,7 +27,7 @@ from oggm.core import climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
-from oggm.tests.funcs import init_hef, get_test_dir
+from oggm.tests.funcs import init_hef, get_test_dir, patch_url_retrieve_github
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed,
@@ -46,6 +46,16 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel,
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve_github
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
 
 
 pytestmark = pytest.mark.test_env("models")
@@ -2341,14 +2351,17 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-    @pytest.mark.slow
+    # @pytest.mark.slow
     def test_random_sh(self):
 
         init_present_time_glacier(self.gdir)
 
         self.gdir.hemisphere = 'sh'
+        cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['run_mb_calibration'] = True
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         climate.process_cru_data(self.gdir)
         climate.compute_ref_t_stars([self.gdir])
         climate.local_mustar(self.gdir)

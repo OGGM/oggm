@@ -390,6 +390,11 @@ def process_cru_data(gdir):
     (provided with OGGM) and writes everything to a NetCDF file.
     """
 
+    if cfg.PATHS.get('climate_file', None):
+        warnings.warn("You seem to have set a custom climate file for this "
+                      "run, but are using the default CRU climate "
+                      "file instead.")
+
     if cfg.PARAMS['baseline_climate'] != 'CRU':
         raise ValueError("cfg.PARAMS['baseline_climate'] should be set to CRU")
 
@@ -586,6 +591,11 @@ def process_histalp_data(gdir):
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
     """
+
+    if cfg.PATHS.get('climate_file', None):
+        warnings.warn("You seem to have set a custom climate file for this "
+                      "run, but are using the default HISTALP climate file "
+                      "instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'HISTALP':
         raise ValueError("cfg.PARAMS['baseline_climate'] should be set to "

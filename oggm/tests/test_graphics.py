@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import init_hef, get_test_dir
+from oggm.tests.funcs import init_hef, get_test_dir, patch_url_retrieve_github
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -25,6 +25,16 @@ warnings.filterwarnings("ignore", category=UserWarning,
 
 # Globals
 pytestmark = pytest.mark.test_env("graphics")
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve_github
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
 
 # ----------------------------------------------------------
 # Lets go
