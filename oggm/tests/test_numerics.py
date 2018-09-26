@@ -25,7 +25,8 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_mixed_bed, dummy_constant_bed_obstacle,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
-                              dummy_width_bed_tributary)
+                              dummy_width_bed_tributary,
+                              patch_url_retrieve_github)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -39,6 +40,16 @@ MUSCLSuperBeeModel = partial(MUSCLSuperBeeModel, inplace=True)
 
 pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve_github
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
 
 
 class TestIdealisedCases(unittest.TestCase):
