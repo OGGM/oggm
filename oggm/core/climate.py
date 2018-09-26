@@ -261,9 +261,9 @@ def process_cru_data(gdir):
     """
 
     if cfg.PATHS.get('climate_file', None):
-        raise warnings.warn("You seem to have set a custom climate file for "
-                            "this run, but are using the default CRU climate "
-                            "file.")
+        warnings.warn("You seem to have set a custom climate file for this "
+                      "run, but are using the default CRU climate "
+                      "file instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'CRU':
         raise ValueError("cfg.PARAMS['baseline_climate'] should be set to CRU")
@@ -463,9 +463,9 @@ def process_histalp_data(gdir):
     """
 
     if cfg.PATHS.get('climate_file', None):
-        raise warnings.warn("You seem to have set a custom climate file for "
-                            "this run, but are using the default HISTALP "
-                            "climate file.")
+        warnings.warn("You seem to have set a custom climate file for this "
+                      "run, but are using the default HISTALP climate file "
+                      "instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'HISTALP':
         raise ValueError("cfg.PARAMS['baseline_climate'] should be set to "
