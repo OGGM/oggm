@@ -1145,11 +1145,12 @@ def apparent_mb(gdir):
         mus.append(fl.mu_star)
         weights.append(np.sum(fl.widths))
     df['mu_star_flowline_avg'] = np.average(mus, weights=weights)
-    df['mu_star_allsame'] = np.all(np.array(mus) == mus[0])
-    if df['mu_star_allsame']:
-        if not np.testing.assert_almost_equal(df['mu_star_flowline_avg'],
-                                              df['mu_star_glacierwide'],
-                                              atol=1e-3):
+    all_same = np.all(np.array(mus) == mus[0])
+    df['mu_star_allsame'] = all_same
+    if all_same:
+        if not np.allclose(df['mu_star_flowline_avg'],
+                           df['mu_star_glacierwide'],
+                           atol=1e-3):
             raise RuntimeError('Unexpected difference between glacier wide '
                                'mu* and the flowlines mu*.')
     # TODO: temporary attr - for tests to pass
