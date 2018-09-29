@@ -881,11 +881,14 @@ def calving_mb(gdir):
 
 @entity_task(log, writes=['local_mustar'])
 def local_mustar(gdir, *, ref_df=None,
-                 tstar=None, bias=None, minimum_mustar=0.):
-    """Compute the local mustar from interpolated tstars.
+                 tstar=None, bias=None):
+    """Compute the local t* and associated glacier-wide mu*.
 
-    If tstar and bias are mot provided they will be interpolated from the
-    reference file.
+    If ``tstar`` and ``bias`` are mot provided, they will be interpolated from
+    the reference t* list.
+
+    Note: the glacier wide mu* might be different from the flowlines' mu* in
+    some cases (see ``apparent_mb`` task).
 
     Parameters
     ----------
@@ -896,10 +899,6 @@ def local_mustar(gdir, *, ref_df=None,
         the year where the glacier should be equilibrium
     bias: float, optional
         the associated reference bias
-    minimum_mustar: float, optional
-        if mustar goes below this threshold, clip it to that value.
-        If you want this to happen with `minimum_mustar=0.` you will have
-        to set `cfg.PARAMS['allow_negative_mustar']=True` first.
     """
 
     # Relevant mb params
@@ -953,9 +952,16 @@ def local_mustar(gdir, *, ref_df=None,
             tstar = int(np.average(amin.tstar, weights=1./distances))
             bias = np.average(amin.bias, weights=1./distances)
 
+    # Add the climate related params to the GlacierDir to make sure
+    # other tools cannot fool around without re-calibration
+    out = gdir.read_pickle('climate_info')
+    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
+    gdir.write_pickle(out, 'climate_info')
+
+    # We compute the overall mu* here but this is mostly for testing
     # Climate period
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
-    yr = [tstar-mu_hp, tstar+mu_hp]
+    yr = [tstar - mu_hp, tstar + mu_hp]
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
@@ -970,70 +976,139 @@ def local_mustar(gdir, *, ref_df=None,
     mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
     if not np.isfinite(mustar):
         raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
-    if not cfg.PARAMS['allow_negative_mustar']:
-        if mustar < 0:
-            raise RuntimeError('{} has a negative mu'.format(gdir.rgi_id))
-    # For the calving param it might be useful to clip the mu
-    mustar = np.clip(mustar, minimum_mustar, np.max(mustar))
 
-    # Add the climate related params to the GlacierDir to make sure
-    # other tools cannot fool around with out calibration
-    out = gdir.read_pickle('climate_info')
-    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
-    gdir.write_pickle(out, 'climate_info')
+    # Clip the mu
+    if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
+        raise RuntimeError('mu* out of specified bounds.')
 
     # Scalars in a small dataframe for later
     df = pd.DataFrame()
     df['rgi_id'] = [gdir.rgi_id]
     df['t_star'] = [tstar]
-    df['mu_star'] = [mustar]
     df['bias'] = [bias]
+    df['mu_star_glacierwide'] = [mustar]
     df.to_csv(gdir.get_filepath('local_mustar'), index=False)
 
 
-@entity_task(log, writes=['inversion_flowlines'])
-def apparent_mb(gdir):
-    """Compute the apparent mb from the calibrated mustar.
+def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
 
-    Parameters
-    ----------
-    """
+    # Get the corresponding mu
+    mus = np.array([])
+    for fl in fls:
+        mu = fl.mu_star if fl.mu_star_is_valid else x
+        mus = np.append(mus, np.ones(fl.nx) * mu)
 
-    # Calibrated data
-    df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
-    tstar = df['t_star']
-    mu_star = df['mu_star']
-    bias = df['bias']
+    # TODO: possible optimisation here
+    out = np.average(prcp - mus[:, np.newaxis] * temp, axis=0, weights=widths)
+    return np.mean(out - cmb)
 
-    # Climate period
-    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
-    yr = [tstar-mu_hp, tstar+mu_hp]
 
-    # Do we have a calving glacier?
-    cmb = calving_mb(gdir)
+def recursive_apparent_mb(gdir, fls, yr_range, first_call=True):
 
-    # For each flowline compute the apparent MB
-    fls = gdir.read_pickle('inversion_flowlines')
+    # Do we have a calving glacier? This is only for the first call!
+    # The calving mass-balance is distributed over the valid tributaries of the
+    # main line, i.e. bad tributaries are not considered for calving
+    cmb = calving_mb(gdir) if first_call else 0.
+
+    # Get the corresponding mu
+    heights = np.array([])
+    widths = np.array([])
+    for fl in fls:
+        heights = np.append(heights, fl.surface_h)
+        widths = np.append(widths, fl.widths)
+
+    _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
+                                                year_range=yr_range,
+                                                flatten=False)
+    try:
+        mu_star = optimization.brentq(_mu_star_per_minimization,
+                                      cfg.PARAMS['min_mu_star'],
+                                      cfg.PARAMS['max_mu_star'],
+                                      args=(fls, cmb, temp, prcp, widths),
+                                      xtol=1e-3)
+    except ValueError:
+        # TODO: add "f(a) and f(b) must have different signs" check
+        raise RuntimeError('{} has mu which exceeds the specified min and max '
+                           'boundaries.'.format(gdir.rgi_id))
+
+    if not np.isfinite(mu_star):
+        raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
 
     # Reset flux
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
 
-    # Flowlines in order to be sure
+    # Flowlines in order to be sure - start with first guess mu*
     for fl in fls:
         y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
-                                              year_range=yr,
+                                              year_range=yr_range,
                                               flatten=False)
-        fl.set_apparent_mb(np.mean(p, axis=1) - mu_star*np.mean(t, axis=1))
+        mu = fl.mu_star if fl.mu_star_is_valid else mu_star
+        fl.set_apparent_mb(np.mean(p, axis=1) - mu*np.mean(t, axis=1),
+                           mu_star=mu)
 
     # Sometimes, low lying tributaries have a non-physically consistent
-    # Mass-balance. We should remove these, and start all over again until
-    # all tributaries are consistent
-    do_filter = [fl.flux_needed_correction for fl in fls]
+    # Mass-balance. These tributaries wouldn't exist with a single
+    # glacier-wide mu*, and therefore need a specific calibration.
+    # All other mus may be affected
+    if cfg.PARAMS['correct_for_neg_flux']:
+        while np.any([fl.flux_needs_correction for fl in fls]):
+
+            # We start with the highest Strahler number that needs correction
+            not_ok = np.array([fl.flux_needs_correction for fl in fls])
+            fl = np.array(fls)[not_ok][-1]
+
+            # And we take all its tributaries
+            inflows = centerlines.line_inflows(fl)
+
+            # We find a new mu for these in a recursive call
+            # TODO: this is where a flux kwarg can passed to tributaries
+            recursive_apparent_mb(gdir, inflows, yr_range, first_call=False)
+
+            # At this stage we should be ok
+            assert np.all([~ fl.flux_needs_correction for fl in inflows])
+            for fl in inflows:
+                fl.mu_star_is_valid = True
+    else:
+        # If user want it, accept the mus as they are
+        for fl in fls:
+            fl.mu_star_is_valid = True
+
+
+@entity_task(log, writes=['inversion_flowlines'])
+def apparent_mb(gdir):
+    """Compute the flowlines' mu* and the associated apparent mass-balance.
+
+    Parameters
+    ----------
+    """
+
+    # Interpolated data
+    df = pd.read_csv(gdir.get_filepath('local_mustar'))
+    tstar = df['t_star'].iloc[0]
+    bias = df['bias'].iloc[0]
+
+    # For each flowline compute the apparent MB
+    fls = gdir.read_pickle('inversion_flowlines')
+    # If someone calls the task a second time we need to reset this
+    for fl in fls:
+        fl.mu_star_is_valid = False
+
+    # Climate period
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+    yr_range = [tstar - mu_hp, tstar + mu_hp]
+
+    # Let's go
+    recursive_apparent_mb(gdir, fls, yr_range)
+
+    # If the user wants to filter the bad ones we remove them and start all
+    # over again until all tributaries are physically consistent with one mu
+    do_filter = [fl.flux_needs_correction for fl in fls]
     if cfg.PARAMS['filter_for_neg_flux'] and np.any(do_filter):
         assert not do_filter[-1]  # This should not happen
         # Keep only the good lines
-        heads = [fl.orig_head for fl in fls if not fl.flux_needed_correction]
+        # TODO: this should use centerline.line_inflows for more efficiency!
+        heads = [fl.orig_head for fl in fls if not fl.flux_needs_correction]
         centerlines.compute_centerlines(gdir, heads=heads, reset=True)
         centerlines.initialize_flowlines(gdir, reset=True)
         if gdir.has_file('downstream_line'):
@@ -1051,6 +1126,7 @@ def apparent_mb(gdir):
     rho = cfg.PARAMS['ice_density']
     aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
+    cmb = calving_mb(gdir)
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
         log.warning('(%s) flux should be zero, but is: '
                     '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
@@ -1060,6 +1136,25 @@ def apparent_mb(gdir):
                .format(gdir.rgi_id, aflux))
         raise RuntimeError(msg)
     gdir.write_pickle(fls, 'inversion_flowlines')
+
+    # Store diagnostics
+    mus = []
+    weights = []
+    for i, fl in enumerate(fls):
+        df['mustar_flowline_{:03d}'.format(i+1)] = fl.mu_star
+        mus.append(fl.mu_star)
+        weights.append(np.sum(fl.widths))
+    df['mu_star_flowline_avg'] = np.average(mus, weights=weights)
+    df['mu_star_allsame'] = np.all(np.array(mus) == mus[0])
+    if df['mu_star_allsame']:
+        if not np.testing.assert_almost_equal(df['mu_star_flowline_avg'],
+                                              df['mu_star_glacierwide'],
+                                              atol=1e-3):
+            raise RuntimeError('Unexpected difference between glacier wide '
+                               'mu* and the flowlines mu*.')
+    # TODO: temporary attr - for tests to pass
+    df['mu_star'] = df['mu_star_glacierwide']
+    df.to_csv(gdir.get_filepath('local_mustar'), index=False)
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])

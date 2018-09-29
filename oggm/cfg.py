@@ -171,7 +171,7 @@ BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
 
-_doc = 'A csv with three values: the local scalars mu*, t*, bias'
+_doc = "A csv containing the glacier's t*, bias, and the flowlines' mu*"
 BASENAMES['local_mustar'] = ('local_mustar.csv', _doc)
 
 _doc = 'List of dicts containing the data needed for the inversion.'
@@ -260,7 +260,6 @@ def initialize(file=None):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -285,7 +284,7 @@ def initialize(file=None):
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'allow_negative_mustar',
+           'rgi_version',
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
     for k in ltr:

@@ -430,6 +430,8 @@ class TestCenterlines(unittest.TestCase):
 
         self.assertEqual(len(cls), 3)
 
+        self.assertEqual(set(cls), set(centerlines.line_inflows(cls[-1])))
+
     def test_downstream(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -537,10 +539,21 @@ class TestCenterlines(unittest.TestCase):
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         cls = gdir.read_pickle('centerlines')
+
+        sub = centerlines.line_inflows(cls[-1])
+        self.assertEqual(set(cls), set(sub))
+        assert sub[-1] is cls[-1]
+
+        sub = centerlines.line_inflows(cls[-2])
+        assert set(sub).issubset(set(cls))
+        np.testing.assert_equal(np.unique(sorted([cl.order for cl in sub])),
+                                np.arange(cls[-2].order+1))
+        assert sub[-1] is cls[-2]
+
+        # Mask
         for cl in cls:
             x, y = tuple2int(cl.line.xy)
             my_mask[y, x] = 1
-
         # Transform
         kien_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         from shapely.ops import transform
@@ -1283,19 +1296,23 @@ class TestClimate(unittest.TestCase):
         climate.local_mustar(gdir, tstar=t_star, bias=bias)
         climate.apparent_mb(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
         mu_ref = gdir.read_pickle('climate_info')['mu_candidates'].loc[t_star]
-        np.testing.assert_allclose(mu_ref, df['mu_star'][0], atol=1e-3)
 
         # Check for apparent mb to be zeros
         fls = gdir.read_pickle('inversion_flowlines')
         tmb = 0.
         for fl in fls:
             self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
+            np.testing.assert_allclose(mu_ref, fl.mu_star, atol=1e-3)
             tmb += np.sum(fl.apparent_mb * fl.widths)
-            assert not fl.flux_needed_correction
+            assert not fl.flux_needs_correction
         np.testing.assert_allclose(tmb, 0., atol=0.01)
         np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        assert df['mu_star_allsame']
+        np.testing.assert_allclose(mu_ref, df['mu_star_flowline_avg'], atol=1e-3)
+        np.testing.assert_allclose(mu_ref, df['mu_star_glacierwide'], atol=1e-3)
 
         # ------ Look for gradient
         # which years to look at
@@ -1383,7 +1400,7 @@ class TestFilterNegFlux(unittest.TestCase):
         entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
         entity = entity.loc[entity.RGIId == 'RGI50-11.00666'].iloc[0]
 
-        cfg.PARAMS['filter_for_neg_flux'] = False
+        cfg.PARAMS['correct_for_neg_flux'] = False
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
@@ -1398,14 +1415,43 @@ class TestFilterNegFlux(unittest.TestCase):
         climate.apparent_mb(gdir)
 
         fls1 = gdir.read_pickle('inversion_flowlines')
-        assert np.any([fl.flux_needed_correction for fl in fls1])
+        assert np.any([fl.flux_needs_correction for fl in fls1])
 
         cfg.PARAMS['filter_for_neg_flux'] = True
         climate.apparent_mb(gdir)
 
         fls = gdir.read_pickle('inversion_flowlines')
         assert len(fls) < len(fls1)
-        assert not np.any([fl.flux_needed_correction for fl in fls])
+        assert not np.any([fl.flux_needs_correction for fl in fls])
+
+    def test_correct(self):
+
+        entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
+        entity = entity.loc[entity.RGIId == 'RGI50-11.00666'].iloc[0]
+
+        cfg.PARAMS['correct_for_neg_flux'] = False
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.local_mustar(gdir, tstar=1931, bias=0)
+        climate.apparent_mb(gdir)
+
+        fls1 = gdir.read_pickle('inversion_flowlines')
+        assert np.any([fl.flux_needs_correction for fl in fls1])
+
+        cfg.PARAMS['correct_for_neg_flux'] = True
+        climate.apparent_mb(gdir)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        assert len(fls) == len(fls1)
+        assert not np.any([fl.flux_needs_correction for fl in fls])
 
 
 class TestInversion(unittest.TestCase):
