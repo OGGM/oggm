@@ -411,24 +411,8 @@ class FlowlineModel(object):
         self.is_tidewater = is_tidewater
 
         # Mass balance
-        self.mb_model = mb_model
         self.mb_elev_feedback = mb_elev_feedback
-        _mb_call = None
-        if mb_model:
-            if mb_elev_feedback == 'always':
-                _mb_call = mb_model.get_monthly_mb
-            elif mb_elev_feedback == 'monthly':
-                _mb_call = mb_model.get_monthly_mb
-            elif mb_elev_feedback == 'annual':
-                _mb_call = mb_model.get_annual_mb
-            elif mb_elev_feedback == 'never':
-                _mb_call = mb_model.get_annual_mb
-            else:
-                raise ValueError('mb_elev_feedback not understood')
-        self._mb_call = _mb_call
-        self._mb_current_date = None
-        self._mb_current_out = dict()
-        self._mb_current_heights = dict()
+        self.mb_model = mb_model
 
         # Defaults
         if glen_a is None:
@@ -452,6 +436,27 @@ class FlowlineModel(object):
         self.fls = None
         self._trib = None
         self.reset_flowlines(flowlines, inplace=inplace)
+
+    @property
+    def mb_model(self):
+        return self._mb_model
+
+    @mb_model.setter
+    def mb_model(self, value):
+        # We need a setter because the MB func is stored as an attr too
+        _mb_call = None
+        if value:
+            if self.mb_elev_feedback in ['always', 'monthly']:
+                _mb_call = value.get_monthly_mb
+            elif self.mb_elev_feedback in ['annual', 'never']:
+                _mb_call = value.get_annual_mb
+            else:
+                raise ValueError('mb_elev_feedback not understood')
+        self._mb_model = value
+        self._mb_call = _mb_call
+        self._mb_current_date = None
+        self._mb_current_out = dict()
+        self._mb_current_heights = dict()
 
     def reset_y0(self, y0):
         """Reset the initial model time"""
