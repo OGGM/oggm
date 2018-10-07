@@ -1,6 +1,3 @@
-import matplotlib
-matplotlib.use('Agg')  # noqa: E402
-
 import pytest
 import logging
 import getpass
