@@ -1440,11 +1440,21 @@ class TestFilterNegFlux(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
+
+        # Artificially make some arms even lower to have multiple branches
+        fls = gdir.read_pickle('inversion_flowlines')
+        assert fls[2].flows_to is fls[3]
+        assert fls[1].flows_to is fls[-1]
+        fls[1].surface_h -= 1000
+        fls[2].surface_h -= 1000
+        fls[3].surface_h -= 1000
+        gdir.write_pickle(fls, 'inversion_flowlines')
+
         climate.local_mustar(gdir, tstar=1931, bias=0)
         climate.apparent_mb(gdir)
 
         fls1 = gdir.read_pickle('inversion_flowlines')
-        assert np.any([fl.flux_needs_correction for fl in fls1])
+        assert np.sum([fl.flux_needs_correction for fl in fls1]) == 3
 
         cfg.PARAMS['correct_for_neg_flux'] = True
         climate.apparent_mb(gdir)
@@ -1452,6 +1462,8 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
         assert len(fls) == len(fls1)
         assert not np.any([fl.flux_needs_correction for fl in fls])
+        mus = np.array([fl.mu_star for fl in fls])
+        assert np.max(mus[[1, 2, 3]]) < (np.max(mus[[0, -1]]) / 2)
 
 
 class TestInversion(unittest.TestCase):
