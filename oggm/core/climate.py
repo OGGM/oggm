@@ -1025,7 +1025,7 @@ def recursive_apparent_mb(gdir, fls, yr_range, first_call=True):
                                       cfg.PARAMS['min_mu_star'],
                                       cfg.PARAMS['max_mu_star'],
                                       args=(fls, cmb, temp, prcp, widths),
-                                      xtol=1e-3)
+                                      xtol=1e-5)
     except ValueError:
         # TODO: add "f(a) and f(b) must have different signs" check
         raise RuntimeError('{} has mu which exceeds the specified min and max '
@@ -1052,7 +1052,7 @@ def recursive_apparent_mb(gdir, fls, yr_range, first_call=True):
     # glacier-wide mu*, and therefore need a specific calibration.
     # All other mus may be affected
     if cfg.PARAMS['correct_for_neg_flux']:
-        while np.any([fl.flux_needs_correction for fl in fls]):
+        if np.any([fl.flux_needs_correction for fl in fls]):
 
             # We start with the highest Strahler number that needs correction
             not_ok = np.array([fl.flux_needs_correction for fl in fls])
@@ -1069,10 +1069,13 @@ def recursive_apparent_mb(gdir, fls, yr_range, first_call=True):
             assert np.all([~ fl.flux_needs_correction for fl in inflows])
             for fl in inflows:
                 fl.mu_star_is_valid = True
-    else:
-        # If user want it, accept the mus as they are
-        for fl in fls:
-            fl.mu_star_is_valid = True
+
+            # After the above are OK we have to recalibrate all below
+            recursive_apparent_mb(gdir, fls, yr_range, first_call=first_call)
+
+    # At this stage we are good
+    for fl in fls:
+        fl.mu_star_is_valid = True
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -1145,7 +1148,7 @@ def apparent_mb(gdir):
         mus.append(fl.mu_star)
         weights.append(np.sum(fl.widths))
     df['mu_star_flowline_avg'] = np.average(mus, weights=weights)
-    all_same = np.all(np.array(mus) == mus[0])
+    all_same = np.allclose(mus, mus[0], atol=1e-3)
     df['mu_star_allsame'] = all_same
     if all_same:
         if not np.allclose(df['mu_star_flowline_avg'],
@@ -1153,8 +1156,7 @@ def apparent_mb(gdir):
                            atol=1e-3):
             raise RuntimeError('Unexpected difference between glacier wide '
                                'mu* and the flowlines mu*.')
-    # TODO: temporary attr - for tests to pass
-    df['mu_star'] = df['mu_star_glacierwide']
+    # Write
     df.to_csv(gdir.get_filepath('local_mustar'), index=False)
 
 
@@ -1347,6 +1349,7 @@ def crossval_t_stars(gdirs):
         # the reference glaciers
         tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
 
+        # TODO: cross-val needs to be adapted to new flowline mu scheme
         # before the cross-val we can get the info about "real" mustar
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
         full_ref_df.loc[rid, 'mustar'] = rdf['mu_star'].values[0]

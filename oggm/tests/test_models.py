@@ -293,7 +293,7 @@ class TestMassBalance(unittest.TestCase):
         init_present_time_glacier(gdir)
 
         df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star = df['mu_star'][0]
+        mu_star = df['mu_star_glacierwide'][0]
         bias = df['bias'][0]
 
         # Climate period
@@ -382,6 +382,78 @@ class TestMassBalance(unittest.TestCase):
         yrs = np.arange(100) + 1901
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
         assert_allclose(mb[50], mb[-50])
+
+        # Go for glacier wide now
+        fls = gdir.read_pickle('inversion_flowlines')
+        mb_gw_mod = massbalance.GlacierMassBalance(gdir, fls=fls, repeat=True,
+                                                   ys=1901, ye=1950)
+        mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
+        assert_allclose(mb, mb_gw)
+
+    def test_glacierwide_mb_model(self):
+
+        gdir = self.gdir
+        init_present_time_glacier(gdir)
+
+        fls = gdir.read_pickle('model_flowlines')
+        h = np.array([])
+        w = np.array([])
+        for fl in fls:
+            w = np.append(w, fl.widths)
+            h = np.append(h, fl.surface_h)
+
+        yrs = np.arange(100) + 1901
+
+        classes = [massbalance.PastMassBalance,
+                   massbalance.ConstantMassBalance,
+                   massbalance.RandomMassBalance]
+
+        kwargs = {}
+        for cl in classes:
+
+            if cl is massbalance.RandomMassBalance:
+                kwargs = {'seed': 0}
+
+            mb = cl(gdir, **kwargs)
+            mb_gw = massbalance.GlacierMassBalance(gdir, mb_model_class=cl,
+                                                   **kwargs)
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs),
+                            mb_gw.get_specific_mb(year=yrs))
+
+            assert_allclose(mb.get_ela(year=yrs),
+                            mb_gw.get_ela(year=yrs))
+
+            mb.bias = 100
+            mb_gw.bias = 100
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
+
+            mb.temp_bias = 100
+            mb_gw.temp_bias = 100
+
+            assert mb.temp_bias == mb_gw.temp_bias
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
+
+            mb.prcp_bias = 100
+            mb_gw.prcp_bias = 100
+
+            assert mb.prcp_bias == mb_gw.prcp_bias
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
 
     def test_constant_mb_model(self):
 
@@ -2264,6 +2336,39 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
     @pytest.mark.slow
+    def test_equilibrium_glacier_wide(self):
+
+        init_present_time_glacier(self.gdir)
+
+        cl = massbalance.ConstantMassBalance
+        mb_mod = massbalance.GlacierMassBalance(self.gdir,
+                                                mb_model_class=cl)
+
+        fls = self.gdir.read_pickle('model_flowlines')
+        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                               fs=self.fs,
+                               glen_a=self.glen_a,
+                               min_dt=SEC_IN_DAY/2.,
+                               mb_elev_feedback='never')
+
+        ref_vol = model.volume_km3
+        ref_area = model.area_km2
+        ref_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
+
+        model.run_until_equilibrium(rate=1e-4)
+        self.assertFalse(model.dt_warning)
+        assert model.yr > 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
+        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+
+    @pytest.mark.slow
     def test_commitment(self):
 
         init_present_time_glacier(self.gdir)
@@ -2340,7 +2445,7 @@ class TestHEF(unittest.TestCase):
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if True:
+                if do_plot:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                     vol.plot(ax=ax1)
                     ax1.set_title('Volume')
@@ -2351,7 +2456,7 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-    # @pytest.mark.slow
+    @pytest.mark.slow
     def test_random_sh(self):
 
         init_present_time_glacier(self.gdir)

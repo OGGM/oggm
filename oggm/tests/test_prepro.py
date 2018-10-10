@@ -1445,9 +1445,9 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
         assert fls[2].flows_to is fls[3]
         assert fls[1].flows_to is fls[-1]
-        fls[1].surface_h -= 1000
-        fls[2].surface_h -= 1000
-        fls[3].surface_h -= 1000
+        fls[1].surface_h -= 500
+        fls[2].surface_h -= 500
+        fls[3].surface_h -= 500
         gdir.write_pickle(fls, 'inversion_flowlines')
 
         climate.local_mustar(gdir, tstar=1931, bias=0)
@@ -1462,8 +1462,29 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
         assert len(fls) == len(fls1)
         assert not np.any([fl.flux_needs_correction for fl in fls])
+        assert np.all([fl.mu_star_is_valid for fl in fls])
         mus = np.array([fl.mu_star for fl in fls])
         assert np.max(mus[[1, 2, 3]]) < (np.max(mus[[0, -1]]) / 2)
+
+        df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        mu_star_gw = df['mu_star_glacierwide'][0]
+
+        assert np.max(mus[[1, 2, 3]]) < mu_star_gw
+        assert np.min(mus[[0, -1]]) > mu_star_gw
+
+        bias = df['bias'][0]
+        np.testing.assert_allclose(bias, 0)
+
+        from oggm.core.massbalance import (GlacierMassBalance,
+                                           ConstantMassBalance)
+        mb_mod = GlacierMassBalance(gdir, fls=fls, bias=0,
+                                    mb_model_class=ConstantMassBalance)
+
+        for mb, fl in zip(mb_mod[1:4], fls[1:4]):
+            mbs = mb.get_specific_mb(fl.surface_h, fl.widths)
+            np.testing.assert_allclose(mbs, 0, atol=1e-1)
+
+        np.testing.assert_allclose(mb_mod.get_specific_mb(), 0, atol=1e-1)
 
 
 class TestInversion(unittest.TestCase):

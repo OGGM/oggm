@@ -30,7 +30,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.valid_bounds = None
         self.rho = cfg.PARAMS['ice_density']
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
 
         Units: [m s-1], or meters of ice per second
@@ -44,6 +44,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             the atitudes at which the mass-balance will be computed
         year: float, optional
             the time (in the "hydrological floating year" convention)
+        fl_id: float, optional
+            the index of the flowline in the fls array (might be ignored
+            by some MB models)
 
         Returns
         -------
@@ -51,7 +54,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_annual_mb(self, heights, year=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None):
         """Like `self.get_monthly_mb()`, but for annual MB.
 
         For some simpler mass-balance models ``get_monthly_mb()` and
@@ -68,6 +71,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             the atitudes at which the mass-balance will be computed
         year: float, optional
             the time (in the "floating year" convention)
+        fl_id: float, optional
+            the index of the flowline in the fls array (might be ignored
+            by some MB models)
 
         Returns
         -------
@@ -176,13 +182,13 @@ class LinearMassBalance(MassBalanceModel):
         self.ela_h = self.orig_ela_h + value * 150
         self._temp_bias = value
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
         if self.max_mb is not None:
             mb = mb.clip(None, self.max_mb)
         return mb / SEC_IN_YEAR / self.rho
 
-    def get_annual_mb(self, heights, year=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None):
         return self.get_monthly_mb(heights, year=year)
 
 
@@ -200,7 +206,7 @@ class PastMassBalance(MassBalanceModel):
             the glacier directory
         mu_star : float, optional
             set to the alternative value of mustar you want to use
-            (the default is to use the calibrated value)
+            (the default is to use the calibrated value).
         bias : float, optional
             set to the alternative value of the calibration bias [mm we yr-1]
             you want to use (the default is to use the calibrated value)
@@ -239,7 +245,7 @@ class PastMassBalance(MassBalanceModel):
         self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
             df = pd.read_csv(gdir.get_filepath('local_mustar'))
-            mu_star = df['mu_star'][0]
+            mu_star = df['mu_star_glacierwide'][0]
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
                 df = pd.read_csv(gdir.get_filepath('local_mustar'))
@@ -390,14 +396,14 @@ class PastMassBalance(MassBalanceModel):
         return (t.mean(axis=1), tfmelt.sum(axis=1),
                 prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
 
         _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
         mb_month = prcpsol - self.mu_star * tmelt
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
         return mb_month / SEC_IN_MONTH / self.rho
 
-    def get_annual_mb(self, heights, year=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None):
 
         _, temp2dformelt, _, prcpsol = self._get_2d_annual_climate(heights,
                                                                    year)
@@ -554,11 +560,11 @@ class ConstantMassBalance(MassBalanceModel):
                 np.mean(prcp, axis=0) * 12,
                 np.mean(prcpsol, axis=0) * 12)
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
         yr, m = floatyear_to_date(year)
         return self.interp_m[m-1](heights)
 
-    def get_annual_mb(self, heights, year=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None):
         return self.interp_yr(heights)
 
 
@@ -697,14 +703,118 @@ class RandomMassBalance(MassBalanceModel):
                 self._state_yr[year] = self.rng.randint(*self.yr_range)
         return self._state_yr[year]
 
-    def get_monthly_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
         ryr, m = floatyear_to_date(year)
         ryr = date_to_floatyear(self.get_state_yr(ryr), m)
         return self.mbmod.get_monthly_mb(heights, year=ryr)
 
-    def get_annual_mb(self, heights, year=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(heights, year=ryr)
+
+
+class GlacierMassBalance(MassBalanceModel):
+    """Convenience class to handle mass-balance at the glacier level instead
+    of flowline level.
+
+    Useful for real-case studies, where each flowline might have a different
+    mu*. This model simply wraps a list of mass-balance models, one for each
+    flowline.
+    """
+
+    def __init__(self, gdir, fls=None, mb_model_class=PastMassBalance,
+                 **kwargs):
+
+        # Read in the flowlines for the mus
+        if fls is None:
+            fls = gdir.read_pickle('model_flowlines')
+        self.fls = fls
+
+        mu_star = kwargs.pop('mu_star', None)
+        if mu_star is not None:
+            for fl in self.fls:
+                fl.mu_star = mu_star
+
+        self.mb_models = [mb_model_class(gdir, mu_star=fl.mu_star, **kwargs)
+                          for fl in self.fls]
+
+    @property
+    def temp_bias(self):
+        """Temperature bias to add to the original series."""
+        return self.mb_models[0].temp_bias
+
+    @temp_bias.setter
+    def temp_bias(self, value):
+        """Temperature bias to add to the original series."""
+        for mbmod in self.mb_models:
+            mbmod.temp_bias = value
+
+    @property
+    def prcp_bias(self):
+        """Precipitation factor to apply to the original series."""
+        return self.mb_models[0].prcp_bias
+
+    @prcp_bias.setter
+    def prcp_bias(self, value):
+        """Precipitation factor to apply to the original series."""
+        for mbmod in self.mb_models:
+            mbmod.prcp_bias = value
+
+    @property
+    def bias(self):
+        """Residual bias to apply to the original series."""
+        return self.mb_models[0].bias
+
+    @bias.setter
+    def bias(self, value):
+        """Residual bias to apply to the original series."""
+        for mbmod in self.mb_models:
+            mbmod.bias = value
+
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
+
+        if fl_id is None:
+            raise ValueError('`fl_id` is required for GlacierMassBalance!')
+
+        return self.mb_models[fl_id].get_monthly_mb(heights, year=year)
+
+    def get_annual_mb(self, heights, year=None, fl_id=None):
+
+        if fl_id is None:
+            raise ValueError('`fl_id` is required for GlacierMassBalance!')
+
+        return self.mb_models[fl_id].get_annual_mb(heights, year=year)
+
+    def get_specific_mb(self, fls=None, year=None):
+
+        if fls is None:
+            fls = self.fls
+
+        if len(np.atleast_1d(year)) > 1:
+            out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
+            return np.asarray(out)
+
+        mbs = []
+        widths = []
+        for fl, mb_mod in zip(self.fls, self.mb_models):
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year)
+            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+            widths = np.append(widths, fl.widths)
+
+        return np.average(mbs, weights=widths)
+
+    def get_ela(self, year=None):
+
+        if len(np.atleast_1d(year)) > 1:
+            return np.asarray([self.get_ela(year=yr) for yr in year])
+
+        elas = []
+        areas = []
+        for fl, mb_mod in zip(self.fls, self.mb_models):
+            elas = np.append(elas, mb_mod.get_ela(year=year))
+            areas = np.append(areas, np.sum(fl.widths))
+
+        return np.average(elas, weights=areas)
 
 
 class UncertainMassBalance(MassBalanceModel):
@@ -793,7 +903,10 @@ class UncertainMassBalance(MassBalanceModel):
             self._state_bias[year] = self.rng_bias.randn() * self._bias_sigma
         return self._state_bias[year]
 
-    def get_annual_mb(self, heights, year=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None):
+        raise NotImplementedError()
+
+    def get_annual_mb(self, heights, year=None, fl_id=None):
 
         # Keep the original biases and add a random error
         _t = self.mbmod.temp_bias

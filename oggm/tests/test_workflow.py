@@ -213,7 +213,7 @@ class TestWorkflow(unittest.TestCase):
         refmustars = []
         for gdir in gdirs:
             tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-            refmustars.append(tdf['mu_star'].values[0])
+            refmustars.append(tdf['mu_star_glacierwide'].values[0])
 
         tasks.crossval_t_stars(gdirs)
         file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
@@ -223,7 +223,7 @@ class TestWorkflow(unittest.TestCase):
         mustars = []
         for gdir in gdirs:
             tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-            mustars.append(tdf['mu_star'].values[0])
+            mustars.append(tdf['mu_star_glacierwide'].values[0])
         np.testing.assert_allclose(refmustars, mustars)
 
         # make some mb tests

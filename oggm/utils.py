@@ -2543,7 +2543,9 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             # MB calib
             df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
             d['t_star'] = df['t_star']
-            d['mu_star'] = df['mu_star']
+            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
+            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
+            d['mu_star_allsame'] = df['mu_star_allsame']
             d['mb_bias'] = df['bias']
         except BaseException:
             pass

@@ -529,9 +529,9 @@ class FlowlineModel(object):
         Optimized so that no mb model call is necessary at each step.
         """
 
-        # Do we have to optimise?
+        # Do we even have to optimise?
         if self.mb_elev_feedback == 'always':
-            return self._mb_call(heights, year)
+            return self._mb_call(heights, year, fl_id=fl_id)
 
         # Ok, user asked for it
         if fl_id is None:
@@ -553,12 +553,14 @@ class FlowlineModel(object):
         if self._mb_current_date == date:
             if fl_id not in self._mb_current_out:
                 # We need to reset just this tributary
-                self._mb_current_out[fl_id] = self._mb_call(heights, year)
+                self._mb_current_out[fl_id] = self._mb_call(heights, year,
+                                                            fl_id=fl_id)
         else:
             # We need to reset all
             self._mb_current_date = date
             self._mb_current_out = dict()
-            self._mb_current_out[fl_id] = self._mb_call(heights, year)
+            self._mb_current_out[fl_id] = self._mb_call(heights, year,
+                                                        fl_id=fl_id)
 
         return self._mb_current_out[fl_id]
 
@@ -941,14 +943,14 @@ class FluxBasedModel(FlowlineModel):
         dt = np.clip(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
-        for fl, flx_stag, aflx, trib in zip(self.fls, flxs, aflxs,
-                                            self._trib):
+        for i, (fl, flx_stag, aflx, trib) in enumerate(zip(self.fls, flxs,
+                                                           aflxs, self._trib)):
 
             dx = fl.dx_meter
 
             # Mass balance
             widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=id(fl))
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=i)
             # Allow parabolic beds to grow
             widths = np.where((mb > 0.) & (widths == 0), 10., widths)
             mb = dt * mb * widths
@@ -1503,6 +1505,9 @@ def init_present_time_glacier(gdir):
                                is_trapezoid=np.isfinite(lambdas),
                                lambdas=lambdas,
                                widths_m=widths_m)
+
+        # Update attrs
+        nfl.mu_star = cl.mu_star
 
         if cl.flows_to:
             flows_to_ids.append(cls.index(cl.flows_to))

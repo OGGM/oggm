@@ -1535,8 +1535,6 @@ def initialize_flowlines(gdir):
 
     # variables
     cls = gdir.read_pickle('centerlines')
-    poly = gdir.read_pickle('geometries')
-    poly = poly['polygon_pix'].buffer(0.5)  # a small buffer around to be sure
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']

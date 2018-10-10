@@ -86,7 +86,8 @@ class hef_prepro:
     def track_mustar(self, gdir):
         self.cfg_init()
         df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
-        return df['mu_star']
+        assert df['mu_star_allsame']
+        return df['mu_star_glacierwide']
 
     def track_bias(self, gdir):
         self.cfg_init()
