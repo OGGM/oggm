@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import pytest
 import logging
 import getpass

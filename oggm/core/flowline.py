@@ -19,7 +19,10 @@ from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
-import oggm.core.massbalance as mbmods
+from oggm.core.massbalance import (MultipleFlowlineMassBalance,
+                                   ConstantMassBalance,
+                                   PastMassBalance,
+                                   RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 
 # Constants
@@ -1648,11 +1651,13 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb = mbmods.RandomMassBalance(gdir, y0=y0, halfsize=halfsize,
-                                  bias=bias, seed=seed,
-                                  filename=climate_filename,
-                                  input_filesuffix=climate_input_filesuffix,
-                                  unique_samples=unique_samples)
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
+                                     y0=y0, halfsize=halfsize,
+                                     bias=bias, seed=seed,
+                                     filename=climate_filename,
+                                     input_filesuffix=climate_input_filesuffix,
+                                     unique_samples=unique_samples)
+
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
@@ -1712,9 +1717,11 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb = mbmods.ConstantMassBalance(gdir, y0=y0, halfsize=halfsize,
-                                    bias=bias, filename=climate_filename,
-                                    input_filesuffix=climate_input_filesuffix)
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
+                                     y0=y0, halfsize=halfsize,
+                                     bias=bias, filename=climate_filename,
+                                     input_filesuffix=climate_input_filesuffix)
+
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
@@ -1781,8 +1788,9 @@ def run_from_climate_data(gdir, ys=None, ye=None,
             fmod.run_until(init_model_yr)
             init_model_fls = fmod.fls
 
-    mb = mbmods.PastMassBalance(gdir, filename=climate_filename,
-                                input_filesuffix=climate_input_filesuffix)
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                     filename=climate_filename,
+                                     input_filesuffix=climate_input_filesuffix)
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
                             mb_model=mb, ys=ys, ye=ye,

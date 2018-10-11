@@ -385,8 +385,9 @@ class TestMassBalance(unittest.TestCase):
 
         # Go for glacier wide now
         fls = gdir.read_pickle('inversion_flowlines')
-        mb_gw_mod = massbalance.GlacierMassBalance(gdir, fls=fls, repeat=True,
-                                                   ys=1901, ye=1950)
+        mb_gw_mod = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
+                                                            repeat=True,
+                                                            ys=1901, ye=1950)
         mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
         assert_allclose(mb, mb_gw)
 
@@ -416,8 +417,9 @@ class TestMassBalance(unittest.TestCase):
                 kwargs = {}
 
             mb = cl(gdir, **kwargs)
-            mb_gw = massbalance.GlacierMassBalance(gdir, mb_model_class=cl,
-                                                   **kwargs)
+            mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
+                                                            mb_model_class=cl,
+                                                            **kwargs)
 
             assert_allclose(mb.get_specific_mb(h, w, year=yrs),
                             mb_gw.get_specific_mb(year=yrs))
@@ -456,10 +458,10 @@ class TestMassBalance(unittest.TestCase):
             assert_allclose(mb.get_ela(year=yrs[:10]),
                             mb_gw.get_ela(year=yrs[:10]))
 
-
         cl = massbalance.PastMassBalance
         mb = cl(gdir)
-        mb_gw = massbalance.GlacierMassBalance(gdir, mb_model_class=cl)
+        mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
+                                                        mb_model_class=cl)
         mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
                                               rdn_prcp_bias_seed=2,
                                               rdn_temp_bias_seed=3)
@@ -2360,8 +2362,8 @@ class TestHEF(unittest.TestCase):
         init_present_time_glacier(self.gdir)
 
         cl = massbalance.ConstantMassBalance
-        mb_mod = massbalance.GlacierMassBalance(self.gdir,
-                                                mb_model_class=cl)
+        mb_mod = massbalance.MultipleFlowlineMassBalance(self.gdir,
+                                                         mb_model_class=cl)
 
         fls = self.gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
