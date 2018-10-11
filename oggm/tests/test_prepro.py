@@ -1486,6 +1486,63 @@ class TestFilterNegFlux(unittest.TestCase):
 
         np.testing.assert_allclose(mb_mod.get_specific_mb(), 0, atol=1e-1)
 
+    def test_and_compare_two_methods(self):
+
+        entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
+        entity = entity.loc[entity.RGIId == 'RGI50-11.00666'].iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+
+        # Artificially make some arms even lower to have multiple branches
+        fls = gdir.read_pickle('inversion_flowlines')
+        assert fls[2].flows_to is fls[3]
+        assert fls[1].flows_to is fls[-1]
+        fls[1].surface_h -= 500
+        fls[2].surface_h -= 500
+        fls[3].surface_h -= 500
+        gdir.write_pickle(fls, 'inversion_flowlines')
+
+        climate.local_mustar(gdir, tstar=1931, bias=0)
+        climate.apparent_mb(gdir)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+
+        # These are the params:
+        # pd.read_csv(gdir.get_filepath('local_mustar'))
+        # rgi_id                RGI50-11.00666
+        # t_star                          1931
+        # bias                               0
+        # mu_star_glacierwide          133.235
+        # mustar_flowline_001          165.673
+        # mustar_flowline_002           46.728
+        # mustar_flowline_003           63.759
+        # mustar_flowline_004          66.3795
+        # mustar_flowline_005          165.673
+        # mu_star_flowline_avg         146.924
+        # mu_star_allsame                False
+
+        from oggm.core.massbalance import (MultipleFlowlineMassBalance,
+                                           PastMassBalance)
+
+        mb_mod_1 = PastMassBalance(gdir, check_calib_params=False)
+        mb_mod_2 = MultipleFlowlineMassBalance(gdir, fls=fls)
+
+        years = np.arange(1951, 2000)
+        mbs1 = mb_mod_1.get_specific_mb(fls=fls, year=years)
+        mbs2 = mb_mod_2.get_specific_mb(fls=fls, year=years)
+
+        # The two are NOT equivalent because of non-linear effects,
+        # but they are close:
+        assert utils.rmsd(mbs1, mbs2) < 50
+
 
 class TestInversion(unittest.TestCase):
 

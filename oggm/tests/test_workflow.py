@@ -22,7 +22,7 @@ from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
                               patch_url_retrieve_github)
-from oggm.core import flowline, massbalance
+from oggm.core import flowline
 from oggm import tasks
 from oggm import utils
 
@@ -200,54 +200,6 @@ class TestWorkflow(unittest.TestCase):
         assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @pytest.mark.slow
-    def test_crossval(self):
-
-        gdirs = up_to_distrib()
-
-        # in case we ran crossval we need to rerun
-        tasks.compute_ref_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.local_mustar, gdirs)
-        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
-
-        # before crossval
-        refmustars = []
-        for gdir in gdirs:
-            tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-            refmustars.append(tdf['mu_star_glacierwide'].values[0])
-
-        tasks.crossval_t_stars(gdirs)
-        file = os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
-        df = pd.read_csv(file, index_col=0)
-
-        # see if the process didn't brake anything
-        mustars = []
-        for gdir in gdirs:
-            tdf = pd.read_csv(gdir.get_filepath('local_mustar'))
-            mustars.append(tdf['mu_star_glacierwide'].values[0])
-        np.testing.assert_allclose(refmustars, mustars)
-
-        # make some mb tests
-        from oggm.core.massbalance import PastMassBalance
-        for rid in df.index:
-            gdir = [g for g in gdirs if g.rgi_id == rid][0]
-            h, w = gdir.get_inversion_flowline_hw()
-            cfg.PARAMS['use_bias_for_run'] = False
-            mbmod = PastMassBalance(gdir)
-            mbdf = gdir.get_ref_mb_data().ANNUAL_BALANCE.to_frame(name='ref')
-            for yr in mbdf.index:
-                mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
-            mm = mbdf.mean()
-            np.testing.assert_allclose(df.loc[rid].bias,
-                                       mm['mine'] - mm['ref'], atol=1e-3)
-            cfg.PARAMS['use_bias_for_run'] = True
-            mbmod = PastMassBalance(gdir)
-            mbdf = gdir.get_ref_mb_data().ANNUAL_BALANCE.to_frame(name='ref')
-            for yr in mbdf.index:
-                mbdf.loc[yr, 'mine'] = mbmod.get_specific_mb(h, w, year=yr)
-            mm = mbdf.mean()
-            np.testing.assert_allclose(mm['mine'], mm['ref'], atol=1e-3)
-
-    @pytest.mark.slow
     def test_shapefile_output(self):
 
         # Just to increase coveralls, hehe
@@ -313,24 +265,6 @@ class TestWorkflow(unittest.TestCase):
         df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)
-
-    @pytest.mark.slow
-    def test_random_mb_seed(self):
-        gdirs = up_to_inversion()
-        seed = None
-        years = np.arange(1800, 2201)
-        odf = pd.DataFrame(index=years)
-        for gd in gdirs[:6]:
-            mb = massbalance.RandomMassBalance(gd, y0=1970, seed=seed)
-            h, w = gd.get_inversion_flowline_hw()
-            odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
-        self.assertLessEqual(odf.corr().mean().mean(), 0.5)
-        seed = 1
-        for gd in gdirs[:6]:
-            mb = massbalance.RandomMassBalance(gd, y0=1970, seed=seed)
-            h, w = gd.get_inversion_flowline_hw()
-            odf[gd.rgi_id] = mb.get_specific_mb(h, w, year=years)
-        self.assertGreaterEqual(odf.corr().mean().mean(), 0.9)
 
 
 @pytest.mark.slow

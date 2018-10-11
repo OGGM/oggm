@@ -417,7 +417,7 @@ class TestMassBalance(unittest.TestCase):
                 kwargs = {}
 
             mb = cl(gdir, **kwargs)
-            mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
+            mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
                                                             mb_model_class=cl,
                                                             **kwargs)
 
