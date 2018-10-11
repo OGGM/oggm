@@ -51,7 +51,7 @@ for gd in gdirs:
                              bias=t_cvdf.cv_bias)
     # Mass-balance timeseries, observed and simulated
     refmb = gd.get_ref_mb_data().copy()
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths,
+    refmb['OGGM'] = mb_mod.get_specific_mb(heights=heights, widths=widths,
                                            year=refmb.index)
     # Compare their standard deviation
     std_ref = refmb.ANNUAL_BALANCE.std()
@@ -68,7 +68,8 @@ for gd in gdirs:
     cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
     mb_mod = PastMassBalance(gd, mu_star=t_cvdf.interp_mustar,
                              bias=t_cvdf.cv_bias)
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
+    refmb['OGGM'] = mb_mod.get_specific_mb(heights=heights, widths=widths,
+                                           year=refmb.index)
     cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = (refmb.OGGM.mean() -
                                              refmb.ANNUAL_BALANCE.mean())
 

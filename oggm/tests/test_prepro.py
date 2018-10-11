@@ -1480,7 +1480,7 @@ class TestFilterNegFlux(unittest.TestCase):
         mb_mod = GlacierMassBalance(gdir, fls=fls, bias=0,
                                     mb_model_class=ConstantMassBalance)
 
-        for mb, fl in zip(mb_mod[1:4], fls[1:4]):
+        for mb, fl in zip(mb_mod.mb_models[1:4], fls[1:4]):
             mbs = mb.get_specific_mb(fl.surface_h, fl.widths)
             np.testing.assert_allclose(mbs, 0, atol=1e-1)
 

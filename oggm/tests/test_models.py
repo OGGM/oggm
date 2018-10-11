@@ -408,11 +408,12 @@ class TestMassBalance(unittest.TestCase):
                    massbalance.ConstantMassBalance,
                    massbalance.RandomMassBalance]
 
-        kwargs = {}
         for cl in classes:
 
             if cl is massbalance.RandomMassBalance:
                 kwargs = {'seed': 0}
+            else:
+                kwargs = {}
 
             mb = cl(gdir, **kwargs)
             mb_gw = massbalance.GlacierMassBalance(gdir, mb_model_class=cl,
@@ -454,6 +455,24 @@ class TestMassBalance(unittest.TestCase):
 
             assert_allclose(mb.get_ela(year=yrs[:10]),
                             mb_gw.get_ela(year=yrs[:10]))
+
+
+        cl = massbalance.PastMassBalance
+        mb = cl(gdir)
+        mb_gw = massbalance.GlacierMassBalance(gdir, mb_model_class=cl)
+        mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
+                                              rdn_prcp_bias_seed=2,
+                                              rdn_temp_bias_seed=3)
+        mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
+                                                 rdn_prcp_bias_seed=2,
+                                                 rdn_temp_bias_seed=3)
+
+        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
+                        mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
+
+        # ELA won't pass because of API incompatibility
+        # assert_allclose(mb.get_ela(year=yrs[:30]),
+        #                 mb_gw.get_ela(year=yrs[:30]))
 
     def test_constant_mb_model(self):
 
@@ -581,7 +600,7 @@ class TestMassBalance(unittest.TestCase):
         r_mbh = 0.
         mbts = yrs * 0.
         for i, yr in enumerate(yrs):
-            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
+            mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
@@ -661,7 +680,7 @@ class TestMassBalance(unittest.TestCase):
         annual_previous = -999.
         for i, yr in enumerate(yrs):
             # specific mass balance
-            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
+            mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
 
             # annual mass balance
             annual = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR

@@ -136,12 +136,13 @@ for gd in gdirs:
     heights, widths = gd.get_inversion_flowline_hw()
 
     mb_mod = ConstantMassBalance(gd, bias=0)  # bias=0 because of calib!
-    mb = mb_mod.get_specific_mb(heights, widths)
+    mb = mb_mod.get_specific_mb(heights=heights, widths=widths)
     np.testing.assert_allclose(mb, 0, atol=10)  # numerical errors
 
     mb_mod = PastMassBalance(gd)  # Here we need the computed bias
     refmb = gd.get_ref_mb_data().copy()
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
+    refmb['OGGM'] = mb_mod.get_specific_mb(heights=heights, widths=widths,
+                                           year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
                                atol=10)
 

@@ -98,28 +98,32 @@ class hef_prepro:
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1970)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1970)
         return np.mean(mb_ts)
 
     def track_mb_1980_sigma(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1970)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1970)
         return np.std(mb_ts)
 
     def track_mb_1870_avg(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1860)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1860)
         return np.mean(mb_ts)
 
     def track_mb_1870_sigma(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1860)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1860)
         return np.std(mb_ts)
 
     def track_inversion_volume(self, gdir):

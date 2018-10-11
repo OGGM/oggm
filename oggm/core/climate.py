@@ -1183,7 +1183,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
 
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h[0], grad=mb_gradient)
-        smb = mbmod.get_specific_mb(h, w)
+        smb = mbmod.get_specific_mb(heights=h, widths=w)
         return (smb - cmb)**2
 
     ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))

@@ -10,7 +10,8 @@ from scipy import optimize as optimization
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
-                        date_to_floatyear, monthly_timeseries, ncDataset)
+                        date_to_floatyear, monthly_timeseries, ncDataset,
+                        tolist)
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
@@ -81,7 +82,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_specific_mb(self, heights, widths, year=None):
+    def get_specific_mb(self, heights=None, widths=None, fls=None,
+                        year=None):
         """Specific mb for this year and a specific glacier geometry.
 
          Units: [mm w.e. yr-1], or millimeter water equivalent per year
@@ -89,9 +91,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the atitudes at which the mass-balance will be computed
+            the atitudes at which the mass-balance will be computed.
+            Overridden by ``fls`` if provided
         widths: ndarray
-            the widths of the flowline (necessary for the weighted average)
+            the widths of the flowline (necessary for the weighted average).
+            Overridden by ``fls`` if provided
+        fls: list of flowline instances
+            Another way to get heights and widths - overrides them if
+            provided.
         year: float, optional
             the time (in the "hydrological floating year" convention)
 
@@ -99,13 +106,24 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         -------
         the specific mass-balance (units: mm w.e. yr-1)
         """
+
         if len(np.atleast_1d(year)) > 1:
-            out = [self.get_specific_mb(heights, widths, year=yr)
+            out = [self.get_specific_mb(heights=heights, widths=widths,
+                                        fls=fls, year=yr)
                    for yr in year]
             return np.asarray(out)
 
-        mbs = self.get_annual_mb(heights, year=year) * SEC_IN_YEAR * self.rho
-        return np.average(mbs, weights=widths)
+        if fls is not None:
+            mbs = []
+            widths = []
+            for i, fl in enumerate(fls):
+                widths = np.append(widths, fl.widths)
+                mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
+                                                        year=year, fl_id=i))
+        else:
+            mbs = self.get_annual_mb(heights, year=year)
+
+        return np.average(mbs, weights=widths) * SEC_IN_YEAR * self.rho
 
     def get_ela(self, year=None):
         """Compute the equilibrium line altitude for this year
@@ -205,7 +223,7 @@ class PastMassBalance(MassBalanceModel):
         gdir : GlacierDirectory
             the glacier directory
         mu_star : float, optional
-            set to the alternative value of mustar you want to use
+            set to the alternative value of mu* you want to use
             (the default is to use the calibrated value).
         bias : float, optional
             set to the alternative value of the calibration bias [mm we yr-1]
@@ -427,7 +445,7 @@ class ConstantMassBalance(MassBalanceModel):
         gdir : GlacierDirectory
             the glacier directory
         mu_star : float, optional
-            set to the alternative value of mustar you want to use
+            set to the alternative value of mu* you want to use
             (the default is to use the calibrated value)
         bias : float, optional
             set to the alternative value of the annual bias [mm we yr-1]
@@ -590,7 +608,7 @@ class RandomMassBalance(MassBalanceModel):
         gdir : GlacierDirectory
             the glacier directory
         mu_star : float, optional
-            set to the alternative value of mustar you want to use
+            set to the alternative value of mu* you want to use
             (the default is to use the calibrated value)
         bias : float, optional
             set to the alternative value of the calibration bias [mm we yr-1]
@@ -714,29 +732,58 @@ class RandomMassBalance(MassBalanceModel):
 
 
 class GlacierMassBalance(MassBalanceModel):
-    """Convenience class to handle mass-balance at the glacier level instead
-    of flowline level.
+    """Handle mass-balance at the glacier level instead of flowline level.
 
-    Useful for real-case studies, where each flowline might have a different
-    mu*. This model simply wraps a list of mass-balance models, one for each
-    flowline.
+    Convenience class doing not much more than wraping a list of mass-balance
+    models, one for each flowline.
+
+    This is useful for real-case studies, where each flowline might have a
+    different mu*.
+
+    Attributes
+    ----------
+    fls : list
+        list of flowline objects
+    mb_models : list
+        list of mass-balance objects
     """
 
-    def __init__(self, gdir, fls=None, mb_model_class=PastMassBalance,
-                 **kwargs):
+    def __init__(self, gdir, fls=None, mu_star=None,
+                 mb_model_class=PastMassBalance, **kwargs):
+        """Initialize.
 
-        # Read in the flowlines for the mus
+        Parameters
+        ----------
+        gdir : GlacierDirectory
+            the glacier directory
+        mu_star : float or list of floats, optional
+            set to the alternative value of mu* you want to use
+            (the default is to use the calibrated value). Give a list of values
+            for flowline-specific mu*
+        fls : list, optional
+            list of flowline objects to use (defaults to 'model_flowlines')
+        mb_model_class : class, optional
+            the mass-balance model to use (e.g. PastMassBalance,
+            ConstantMassBalance...)
+        kwargs : kwargs to pass to mb_model_class
+        """
+
+        # Read in the flowlines
         if fls is None:
             fls = gdir.read_pickle('model_flowlines')
         self.fls = fls
 
-        mu_star = kwargs.pop('mu_star', None)
+        # User mu*?
         if mu_star is not None:
-            for fl in self.fls:
-                fl.mu_star = mu_star
+            mu_star = tolist(mu_star, length=len(fls))
+            for fl, mu in zip(self.fls, mu_star):
+                fl.mu_star = mu
 
+        # Initialise the mb models
         self.mb_models = [mb_model_class(gdir, mu_star=fl.mu_star, **kwargs)
                           for fl in self.fls]
+
+        self.valid_bounds = self.mb_models[-1].valid_bounds
 
     @property
     def temp_bias(self):
@@ -785,7 +832,12 @@ class GlacierMassBalance(MassBalanceModel):
 
         return self.mb_models[fl_id].get_annual_mb(heights, year=year)
 
-    def get_specific_mb(self, fls=None, year=None):
+    def get_specific_mb(self, heights=None, widths=None, fls=None,
+                        year=None):
+
+        if heights is not None or widths is not None:
+            raise ValueError('`heights` and `heights` kwargs do not work with '
+                             'GlacierMassBalance!')
 
         if fls is None:
             fls = self.fls
@@ -804,6 +856,9 @@ class GlacierMassBalance(MassBalanceModel):
         return np.average(mbs, weights=widths)
 
     def get_ela(self, year=None):
+
+        # ELA here is not without ambiguity.
+        # We compute a mean weighted by area.
 
         if len(np.atleast_1d(year)) > 1:
             return np.asarray([self.get_ela(year=yr) for yr in year])
@@ -916,7 +971,7 @@ class UncertainMassBalance(MassBalanceModel):
         self.mbmod.prcp_bias = self._get_state_prcp(year) + _p
         self.mbmod.bias = self._get_state_bias(year) + _b
         try:
-            out = self.mbmod.get_annual_mb(heights, year=year)
+            out = self.mbmod.get_annual_mb(heights, year=year, fl_id=fl_id)
         except BaseException:
             self.mbmod.temp_bias = _t
             self.mbmod.prcp_bias = _p

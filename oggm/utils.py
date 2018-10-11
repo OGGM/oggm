@@ -885,6 +885,29 @@ def query_yes_no(question, default="yes"):  # pragma: no cover
                              "(or 'y' or 'n').\n")
 
 
+def tolist(arg, length=None):
+    """Makes sure that arg is a list."""
+
+    try:
+        (e for e in arg)
+    except TypeError:
+        arg = [arg]
+
+    arg = list(arg)
+
+    if length is not None:
+
+        if len(arg) == 1:
+            arg *= length
+        elif len(arg) == length:
+            pass
+        else:
+            raise ValueError('Cannot broadcast len {} '.format(len(arg)) +
+                             'to desired length: {}.'.format(length))
+
+    return arg
+
+
 def haversine(lon1, lat1, lon2, lat2):
     """Great circle distance between two (or more) points on Earth
 

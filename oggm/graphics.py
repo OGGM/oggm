@@ -20,15 +20,6 @@ from oggm import cfg, utils
 log = logging.getLogger(__name__)
 
 
-def _tolist(gdirs):
-    """Ensures that we have a list"""
-    try:
-        (e for e in gdirs)
-    except TypeError:
-        gdirs = [gdirs]
-    return gdirs
-
-
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     """Remove extreme colors from a colormap."""
     new_cmap = colors.LinearSegmentedColormap.from_list(
@@ -110,7 +101,7 @@ def _plot_map(plotfunc):
             dofig = True
 
         # Cast to list
-        gdirs = _tolist(gdirs)
+        gdirs = utils.tolist(gdirs)
 
         if smap is None:
             mp = salem.Map(gdirs[0].grid, countries=False,
@@ -182,7 +173,7 @@ def plot_googlemap(gdirs, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    gdirs = _tolist(gdirs)
+    gdirs = utils.tolist(gdirs)
 
     xx, yy = [], []
     for gdir in gdirs:
@@ -560,7 +551,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
             model.run_until(modelyr)
             models.append(model)
     else:
-        models = _tolist(model)
+        models = utils.tolist(model)
     for gdir, model in zip(gdirs, models):
         geom = gdir.read_pickle('geometries')
         poly_pix = geom['polygon_pix']
