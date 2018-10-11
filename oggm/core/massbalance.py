@@ -883,7 +883,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             (the default is to use the calibrated value). Give a list of values
             for flowline-specific mu*
         fls : list, optional
-            list of flowline objects to use (defaults to 'model_flowlines')
+            list of flowline objects to use (defaults to 'model_flowlines',
+            and if not available, to 'inversion_flowlines')
         mb_model_class : class, optional
             the mass-balance model to use (e.g. PastMassBalance,
             ConstantMassBalance...)
@@ -892,7 +893,15 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if fls is None:
-            fls = gdir.read_pickle('model_flowlines')
+            for fn in ['model_flowlines', 'inversion_flowlines']:
+                try:
+                    fls = gdir.read_pickle(fn)
+                except FileNotFoundError:
+                    pass
+            if fls is None:
+                raise RuntimeError('Need a valid `model_flowlines` or '
+                                   '`inversion_flowlines` to continue!')
+
         self.fls = fls
 
         # User mu*?

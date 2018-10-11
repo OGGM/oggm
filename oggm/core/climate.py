@@ -1317,9 +1317,7 @@ def distribute_t_stars(gdirs, ref_df=None, minimum_mustar=0.):
             bias = np.average(amin.bias, weights=1./distances)
 
         # Go
-        local_mustar(gdir, tstar=tstar, bias=bias,
-                     minimum_mustar=minimum_mustar,
-                     reset=True)
+        local_mustar(gdir, tstar=tstar, bias=bias, reset=True)
 
 
 @global_task
@@ -1349,7 +1347,6 @@ def crossval_t_stars(gdirs):
         # the reference glaciers
         tmp_ref_df = full_ref_df.loc[full_ref_df.index != rid]
 
-        # TODO: cross-val needs to be adapted to new flowline mu scheme
         # before the cross-val we can get the info about "real" mustar
         rdf = pd.read_csv(gdir.get_filepath('local_mustar'))
         full_ref_df.loc[rid, 'mustar'] = rdf['mu_star'].values[0]
