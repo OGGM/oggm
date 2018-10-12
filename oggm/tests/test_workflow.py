@@ -6,7 +6,6 @@ import shutil
 import unittest
 import pickle
 import pytest
-import pandas as pd
 import geopandas as gpd
 import numpy as np
 import xarray as xr
@@ -159,8 +158,8 @@ def up_to_distrib(reset=False):
             warnings.simplefilter("ignore")
             workflow.execute_entity_task(tasks.process_cru_data, gdirs)
         tasks.compute_ref_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.local_mustar, gdirs)
-        workflow.execute_entity_task(tasks.apparent_mb, gdirs)
+        workflow.execute_entity_task(tasks.local_t_star, gdirs)
+        workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('cru', f)
 

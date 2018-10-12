@@ -221,8 +221,8 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
-        climate.local_mustar(gdir, tstar=1930, bias=0)
-        climate.apparent_mb(gdir)
+        climate.local_t_star(gdir, tstar=1930, bias=0)
+        climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
         v, ainv = inversion.mass_conservation_inversion(gdir)
         init_present_time_glacier(gdir)
@@ -2490,7 +2490,7 @@ class TestHEF(unittest.TestCase):
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         climate.process_cru_data(self.gdir)
         climate.compute_ref_t_stars([self.gdir])
-        climate.local_mustar(self.gdir)
+        climate.local_t_star(self.gdir)
 
         run_random_climate(self.gdir, nyears=20, seed=4,
                            bias=0, output_filesuffix='_rdn')

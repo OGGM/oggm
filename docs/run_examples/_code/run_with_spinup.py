@@ -70,8 +70,8 @@ task_list = [
     tasks.catchment_width_geom,
     tasks.catchment_width_correction,
     tasks.process_cru_data,
-    tasks.local_mustar,
-    tasks.apparent_mb,
+    tasks.local_t_star,
+    tasks.mu_star_calibration,
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)

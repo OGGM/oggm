@@ -50,9 +50,9 @@ class hef_prepro:
         tasks.mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
-        tasks.local_mustar(gdir, tstar=res['t_star'],
+        tasks.local_t_star(gdir, tstar=res['t_star'],
                            bias=res['bias'])
-        tasks.apparent_mb(gdir)
+        tasks.mu_star_calibration(gdir)
 
         tasks.prepare_for_inversion(gdir)
         tasks.mass_conservation_inversion(gdir)
@@ -192,8 +192,8 @@ class full_workflow:
 
         # Climate tasks -- only data IO and tstar interpolation!
         execute_entity_task(tasks.process_cru_data, gdirs)
-        execute_entity_task(tasks.local_mustar, gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)

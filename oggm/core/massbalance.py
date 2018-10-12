@@ -972,7 +972,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                         year=None):
 
         if heights is not None or widths is not None:
-            raise ValueError('`heights` and `heights` kwargs do not work with '
+            raise ValueError('`heights` and `widths` kwargs do not work with '
                              'MultipleFlowlineMassBalance!')
 
         if fls is None:

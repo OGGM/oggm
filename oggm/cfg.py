@@ -255,6 +255,8 @@ def initialize(file=None):
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
+    PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
+
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
@@ -279,7 +281,7 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines',
+           'use_multiple_flowlines', 'tstar_search_glacierwide',
            'mpi_recv_buf_size', 'hydro_month_nh',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope',

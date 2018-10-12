@@ -37,6 +37,9 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # We are running the calibration ourselves
 cfg.PARAMS['run_mb_calibration'] = True
 
+# We are running the calibration ourselves
+cfg.PARAMS['tstar_search_glacierwide'] = False
+
 # We are using which baseline data?
 cfg.PARAMS['baseline_climate'] = baseline
 
@@ -121,8 +124,8 @@ for task in task_list:
 
 # Climate tasks
 tasks.compute_ref_t_stars(gdirs)
-execute_entity_task(tasks.local_mustar, gdirs)
-execute_entity_task(tasks.apparent_mb, gdirs)
+execute_entity_task(tasks.local_t_star, gdirs)
+execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
 mb_calib = gdirs[0].read_pickle('climate_info')['mb_calib_params']
