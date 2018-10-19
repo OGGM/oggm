@@ -140,14 +140,14 @@ for gd in gdirs:
                                          mb_model_class=ConstantMassBalance,
                                          bias=0)  # bias=0 because of calib!
     mb = mb_mod.get_specific_mb()
-    np.testing.assert_allclose(mb, 0, atol=10)  # atol for numerical errors
+    np.testing.assert_allclose(mb, 0, atol=5)  # atol for numerical errors
 
     mb_mod = MultipleFlowlineMassBalance(gd, mb_model_class=PastMassBalance)
 
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
-                               atol=10)  # atol for numerical errors
+                               atol=5)  # atol for numerical errors
 
 # Log
 log.info('Calibration is done!')

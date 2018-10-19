@@ -28,7 +28,6 @@ import geopandas as gpd
 import scipy.signal
 import shapely.geometry as shpg
 from skimage import measure
-from scipy import optimize as optimization
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt

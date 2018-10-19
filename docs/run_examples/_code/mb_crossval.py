@@ -8,8 +8,8 @@ import geopandas as gpd
 
 # Locals
 import oggm
-from oggm import cfg, workflow
-from oggm.core.massbalance import PastMassBalance
+from oggm import cfg, workflow, tasks
+from oggm.core.massbalance import PastMassBalance, MultipleFlowlineMassBalance
 import matplotlib.pyplot as plt
 
 # RGI Version
@@ -41,18 +41,24 @@ rgidf = gpd.read_file(path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Cross-validation
-file = path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv')
-cvdf = pd.read_csv(file, index_col=0)
-for gd in gdirs:
-    t_cvdf = cvdf.loc[gd.rgi_id]
-    heights, widths = gd.get_inversion_flowline_hw()
+file = path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+ref_df = pd.read_csv(file, index_col=0)
+for i, gdir in enumerate(gdirs):
+
+    print('Cross-validation iteration {} of {}'.format(i + 1, len(ref_df)))
+
+    # Now recalibrate the model blindly
+    tmp_ref_df = ref_df.loc[ref_df.index != gdir.rgi_id]
+    tasks.local_t_star(gdir, ref_df=tmp_ref_df)
+    tasks.mu_star_calibration(gdir)
+
     # Mass-balance model with cross-validated parameters instead
-    mb_mod = PastMassBalance(gd, mu_star=t_cvdf.cv_mustar,
-                             bias=t_cvdf.cv_bias)
+    mb_mod = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance)
+
     # Mass-balance timeseries, observed and simulated
-    refmb = gd.get_ref_mb_data().copy()
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights=heights, widths=widths,
-                                           year=refmb.index)
+    refmb = gdir.get_ref_mb_data().copy()
+    refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
+
     # Compare their standard deviation
     std_ref = refmb.ANNUAL_BALANCE.std()
     rcor = np.corrcoef(refmb.OGGM, refmb.ANNUAL_BALANCE)[0, 1]
@@ -60,49 +66,41 @@ for gd in gdirs:
         # I think that such a thing happens with some geodetic values
         std_ref = refmb.OGGM.std()
         rcor = 1
+
     # Store the scores
-    cvdf.loc[gd.rgi_id, 'CV_MB_BIAS'] = (refmb.OGGM.mean() -
-                                         refmb.ANNUAL_BALANCE.mean())
-    cvdf.loc[gd.rgi_id, 'CV_MB_SIGMA_BIAS'] = (refmb.OGGM.std() /
-                                               std_ref)
-    cvdf.loc[gd.rgi_id, 'CV_MB_COR'] = rcor
-    mb_mod = PastMassBalance(gd, mu_star=t_cvdf.interp_mustar,
-                             bias=t_cvdf.cv_bias)
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights=heights, widths=widths,
-                                           year=refmb.index)
-    cvdf.loc[gd.rgi_id, 'INTERP_MB_BIAS'] = (refmb.OGGM.mean() -
+    ref_df.loc[gdir.rgi_id, 'CV_MB_BIAS'] = (refmb.OGGM.mean() -
                                              refmb.ANNUAL_BALANCE.mean())
+    ref_df.loc[gdir.rgi_id, 'CV_MB_SIGMA_BIAS'] = (refmb.OGGM.std() / std_ref)
+    ref_df.loc[gdir.rgi_id, 'CV_MB_COR'] = rcor
+
+# Write out
+ref_df.to_csv(path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv'))
 
 # Marzeion et al Figure 3
-f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
+f, ax = plt.subplots(1, 1)
 bins = np.arange(20) * 400 - 3800
-cvdf['CV_MB_BIAS'].plot(ax=ax1, kind='hist', bins=bins, color='C3', label='')
-ax1.vlines(cvdf['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
-ax1.vlines(cvdf['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
-ax1.vlines(cvdf['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
-           label='5% and 95%\npercentiles')
-ax1.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
-         horizontalalignment='left',
-         verticalalignment='top',
-         transform=ax1.transAxes)
+ref_df['CV_MB_BIAS'].plot(ax=ax, kind='hist', bins=bins, color='C3', label='')
+ax.vlines(ref_df['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
+ax.vlines(ref_df['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
+ax.vlines(ref_df['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
+          label='5% and 95%\npercentiles')
+ax.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
+        horizontalalignment='left',
+        verticalalignment='top',
+        transform=ax.transAxes)
 
-ax1.set_ylim(0, 120)
-ax1.set_ylabel('N Glaciers')
-ax1.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
-ax1.legend(loc='best')
-cvdf['INTERP_MB_BIAS'].plot(ax=ax2, kind='hist', bins=bins, color='C0')
-ax2.vlines(cvdf['INTERP_MB_BIAS'].mean(), 0, 120, linestyles='--')
-ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile(), 0, 120)
-ax2.vlines(cvdf['INTERP_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey')
-ax2.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
+ax.set_ylim(0, 120)
+ax.set_ylabel('N Glaciers')
+ax.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
+ax.legend(loc='best')
 plt.tight_layout()
-fn = path.join(WORKING_DIR, 'mb_crossval_rgi{}.pdf'.format(rgi_version))
-plt.savefig(fn)
+fn = path.join(WORKING_DIR, 'mb_crossval_rgi{}.png'.format(rgi_version))
+plt.savefig(fn, dpi=150)
 
-scores = 'Median bias: {:.2f}\n'.format(cvdf['CV_MB_BIAS'].median())
-scores += 'Mean bias: {:.2f}\n'.format(cvdf['CV_MB_BIAS'].mean())
-scores += 'RMS: {:.2f}\n'.format(np.sqrt(np.mean(cvdf['CV_MB_BIAS']**2)))
-scores += 'Sigma bias: {:.2f}\n'.format(np.mean(cvdf['CV_MB_SIGMA_BIAS']))
+scores = 'Median bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].median())
+scores += 'Mean bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].mean())
+scores += 'RMS: {:.2f}\n'.format(np.sqrt(np.mean(ref_df['CV_MB_BIAS']**2)))
+scores += 'Sigma bias: {:.2f}\n'.format(np.mean(ref_df['CV_MB_SIGMA_BIAS']))
 
 # Output
 print(scores)

@@ -32,6 +32,7 @@ def setup_module(module):
 def teardown_module(module):
     utils._urlretrieve = module._url_retrieve
 
+
 class TestSouthGlacier(unittest.TestCase):
 
     # Test case optained from ITMIX

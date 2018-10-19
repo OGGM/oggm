@@ -986,8 +986,8 @@ def local_t_star(gdir, *, ref_df=None,
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
-                    msg = 'If you are using a custom climate file you should ' \
-                          'run your own MB calibration.'
+                    msg = ('If you are using a custom climate file you should '
+                           'run your own MB calibration.')
                     raise MassBalanceCalibrationError(msg)
                 v = gdir.rgi_version[0]  # major version relevant
 

@@ -357,7 +357,6 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['rgi_dir'])
         utils.mkdir(cfg.PATHS['cru_dir'])
 
-
     def test_github_no_internet(self):
         self.reset_dir()
         cache_dir = cfg.CACHE_DIR
