@@ -270,21 +270,11 @@ Virtual environment
 
 Install::
 
-    $ sudo pip install virtualenvwrapper
+    $ sudo apt-get install virtualenvwrapper
 
-Create the directory where the virtual environments will be created::
+Reload your profile::
 
-    $ mkdir ~/.pyvirtualenvs
-
-Add these three lines to the files: ~/.profile and ~/.bashrc::
-
-    # Virtual environment options
-    export WORKON_HOME=$HOME/.pyvirtualenvs
-    source /usr/local/bin/virtualenvwrapper_lazy.sh
-
-Reset your profile::
-
-    $ . ~/.profile
+    $ source /etc/profile
 
 Make a new environment with **python 3**::
 
