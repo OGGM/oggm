@@ -968,6 +968,35 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return self.flowline_mb_models[fl_id].get_annual_mb(heights,
                                                             year=year)
 
+    def get_annual_mb_on_flowlines(self, fls=None, year=None):
+        """Get the MB on all points of the glacier at once.
+
+        Parameters
+        ----------
+        fls: list, optional
+            the list of flowlines to get the mass-balance from. Defaults
+            to self.fls
+        year: float, optional
+            the time (in the "floating year" convention)
+        Returns
+        -------
+        Tuple of (heights, widths, mass_balance) 1D arrays
+        """
+
+        if fls is None:
+            fls = self.fls
+
+        heights = []
+        widths = []
+        mbs = []
+        for i, fl in enumerate(fls):
+            h = fl.surface_h
+            heights = np.append(heights, h)
+            widths = np.append(widths, fl.widths)
+            mbs = np.append(mbs, self.get_annual_mb(h, year=year, fl_id=i))
+
+        return heights, widths, mbs
+
     def get_specific_mb(self, heights=None, widths=None, fls=None,
                         year=None):
 

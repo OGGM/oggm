@@ -47,7 +47,7 @@ class hef_prepro:
         tasks.catchment_width_geom(gdir)
         tasks.catchment_width_correction(gdir)
         tasks.process_custom_climate_data(gdir)
-        tasks.mu_candidates(gdir)
+        tasks.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf)
         tasks.local_t_star(gdir, tstar=res['t_star'],

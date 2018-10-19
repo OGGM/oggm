@@ -427,6 +427,11 @@ class TestMassBalance(unittest.TestCase):
             assert_allclose(mb.get_ela(year=yrs),
                             mb_gw.get_ela(year=yrs))
 
+            _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
+            mbs_h = mb.get_annual_mb(_h, year=1950)
+
+            assert_allclose(mbs_h, mbs_gw)
+
             mb.bias = 100
             mb_gw.bias = 100
 

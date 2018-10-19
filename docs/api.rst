@@ -49,10 +49,10 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_histalp_data
     tasks.process_custom_climate_data
     tasks.process_cesm_data
-    tasks.local_mustar
+    tasks.local_t_star
     tasks.mu_star_calibration
     tasks.apparent_mb_from_linear_mb
-    tasks.mu_candidates
+    tasks.glacier_mu_candidates
     tasks.prepare_for_inversion
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
@@ -67,14 +67,14 @@ Global tasks
 ============
 
 Global tasks are tasks which are run on a set of glaciers (most often: all
-glaciers in the current run). They are not parallelizable.
+glaciers in the current run). They are not parallelizable at the user level
+but might use multiprocessing internally.
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
     tasks.compute_ref_t_stars
-    tasks.crossval_t_stars
 
 Classes
 =======

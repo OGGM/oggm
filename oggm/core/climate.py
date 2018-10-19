@@ -388,7 +388,7 @@ def process_cru_data(gdir):
                     found_it = True
         if not found_it:
             msg = '({}) there is no climate data'.format(gdir.rgi_id)
-            raise RuntimeError(msg)
+            raise MassBalanceCalibrationError(msg)
     elif np.any(~np.isfinite(ts_tmp)):
         # maybe the side is nan, but we can do nearest
         ts_tmp = ncclim.grid.map_gridded_data(ts_tmp.values, nc_ts_tmp.grid,
@@ -614,12 +614,14 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
             try:
                 p0 = p0[0]
             except IndexError:
-                raise RuntimeError('time_range[0] not found in file')
+                raise MassBalanceCalibrationError('time_range[0] not found in '
+                                                  'file')
             p1 = np.where(time == time_range[1])[0]
             try:
                 p1 = p1[0]
             except IndexError:
-                raise RuntimeError('time_range[1] not found in file')
+                raise MassBalanceCalibrationError('time_range[1] not found in '
+                                                  'file')
         else:
             p0 = 0
             p1 = len(time)-1
@@ -984,9 +986,9 @@ def local_t_star(gdir, *, ref_df=None,
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
-                    raise RuntimeError('If you are using a custom climate '
-                                       'file you should run your own MB '
-                                       'calibration.')
+                    msg = 'If you are using a custom climate file you should ' \
+                          'run your own MB calibration.'
+                    raise MassBalanceCalibrationError(msg)
                 v = gdir.rgi_version[0]  # major version relevant
 
                 # Check that the params are fine
@@ -1045,11 +1047,12 @@ def local_t_star(gdir, *, ref_df=None,
     # mustar is taking calving into account (units of specific MB)
     mustar = (np.mean(prcp_yr) - cmb) / np.mean(temp_yr)
     if not np.isfinite(mustar):
-        raise RuntimeError('{} has a non finite mu'.format(gdir.rgi_id))
+        raise MassBalanceCalibrationError('{} has a non finite '
+                                          'mu'.format(gdir.rgi_id))
 
     # Clip the mu
     if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
-        raise RuntimeError('mu* out of specified bounds.')
+        raise MassBalanceCalibrationError('mu* out of specified bounds.')
 
     # Scalars in a small dataframe for later
     df = pd.DataFrame()
@@ -1211,7 +1214,7 @@ def mu_star_calibration(gdir):
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                .format(gdir.rgi_id, aflux))
-        raise RuntimeError(msg)
+        raise MassBalanceCalibrationError(msg)
     gdir.write_pickle(fls, 'inversion_flowlines')
 
     # Store diagnostics
@@ -1228,8 +1231,9 @@ def mu_star_calibration(gdir):
         if not np.allclose(df['mu_star_flowline_avg'],
                            df['mu_star_glacierwide'],
                            atol=1e-3):
-            raise RuntimeError('Unexpected difference between glacier wide '
-                               'mu* and the flowlines mu*.')
+            raise MassBalanceCalibrationError('Unexpected difference between '
+                                              'glacier wide mu* and the '
+                                              'flowlines mu*.')
     # Write
     df.to_csv(gdir.get_filepath('local_mustar'), index=False)
 
@@ -1287,7 +1291,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                .format(gdir.rgi_id, aflux))
-        raise RuntimeError(msg)
+        raise MassBalanceCalibrationError(msg)
     gdir.write_pickle(fls, 'inversion_flowlines')
     gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
                       'linear_mb_params')

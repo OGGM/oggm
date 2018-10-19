@@ -37,9 +37,6 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 # We are running the calibration ourselves
 cfg.PARAMS['run_mb_calibration'] = True
 
-# We are running the calibration ourselves
-cfg.PARAMS['tstar_search_glacierwide'] = False
-
 # We are using which baseline data?
 cfg.PARAMS['baseline_climate'] = baseline
 

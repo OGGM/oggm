@@ -35,10 +35,10 @@ cfg.PATHS['cru_dir'] = os.path.dirname(data_dir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
 cfg.PARAMS['baseline_y0'] = 1850
 tasks.process_histalp_data(gdir)
-tasks.mu_candidates(gdir)
+tasks.glacier_mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
-res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+res = t_star_from_refmb(gdir, mbdf=mbdf.ANNUAL_BALANCE)
 local_t_star(gdir, tstar=res['t_star'], bias=res['bias'], reset=True)
 mu_star_calibration(gdir, reset=True)
 
@@ -46,7 +46,7 @@ mu_star_calibration(gdir, reset=True)
 tasks.prepare_for_inversion(gdir, add_debug_var=True)
 
 # For plots
-mu_yr_clim = gdir.read_pickle('climate_info')['mu_candidates']
+mu_yr_clim = gdir.read_pickle('climate_info')['mu_candidates_glacierwide']
 years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir)
 
 # which years to look at
@@ -63,7 +63,7 @@ diff = mb_per_mu - ref_mb
 pdf = pd.DataFrame()
 pdf[r'$\mu (t)$'] = mu_yr_clim
 pdf['bias'] = diff
-res = t_star_from_refmb(gdir, mbdf.ANNUAL_BALANCE)
+res = t_star_from_refmb(gdir, mbdf=mbdf.ANNUAL_BALANCE)
 
 # For the mass flux
 cl = gdir.read_pickle('inversion_input')[-1]

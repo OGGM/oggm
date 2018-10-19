@@ -2451,7 +2451,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     inversion_only: bool
         if one wants to summarize the inversion output only (including calving)
     """
-    from oggm.core.massbalance import ConstantMassBalance
+    from oggm.core.massbalance import (ConstantMassBalance,
+                                       MultipleFlowlineMassBalance)
 
     out_df = []
     for gdir in gdirs:
@@ -2472,6 +2473,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
 
         # The rest is less certain. We put these in a try block and see
         # We're good with any error - we store the dict anyway below
+        # TODO: should be done with more preselected errors
         try:
             # Inversion
             if gdir.has_file('inversion_output'):
@@ -2574,10 +2576,11 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             pass
         try:
             # Climate and MB at t*
-            h, w = gdir.get_inversion_flowline_hw()
-            mbmod = ConstantMassBalance(gdir, bias=0)
-            mbh = (mbmod.get_annual_mb(h, w) * SEC_IN_YEAR *
-                   cfg.PARAMS['ice_density'])
+            mbcl = ConstantMassBalance
+            mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                                bias=0)
+            h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+            mbh = mbh * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
             d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
@@ -2590,10 +2593,11 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['tstar_mb_grad'] = np.NaN
             d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
-            t, _, p, ps = mbmod.get_climate([d['tstar_ela_h'],
-                                             d['flowline_mean_elev'],
-                                             d['flowline_max_elev'],
-                                             d['flowline_min_elev']])
+            t, _, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                [d['tstar_ela_h'],
+                 d['flowline_mean_elev'],
+                 d['flowline_max_elev'],
+                 d['flowline_min_elev']])
             for n, v in zip(['temp', 'prcpsol'], [t, ps]):
                 d['tstar_avg_' + n + '_ela_h'] = v[0]
                 d['tstar_avg_' + n + '_mean_elev'] = v[1]
@@ -2663,7 +2667,7 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, reset=None, print_log=True, **kwargs):
+        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']

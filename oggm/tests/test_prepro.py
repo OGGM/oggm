@@ -1325,7 +1325,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(res['bias'], res_new['bias'], atol=20)
         np.testing.assert_allclose(mb, mb_new, rtol=2e-1, atol=20)
 
-    def test_local_mustar(self):
+    def test_local_t_star(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
