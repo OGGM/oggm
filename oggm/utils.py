@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'e6e01e9b9a25ddf8938aa63726ef2be38449533c'
+SAMPLE_DATA_COMMIT = '999ebbf0a48d8892058b3e2323bd975eed8a56b5'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -883,6 +883,29 @@ def query_yes_no(question, default="yes"):  # pragma: no cover
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+
+def tolist(arg, length=None):
+    """Makes sure that arg is a list."""
+
+    try:
+        (e for e in arg)
+    except TypeError:
+        arg = [arg]
+
+    arg = list(arg)
+
+    if length is not None:
+
+        if len(arg) == 1:
+            arg *= length
+        elif len(arg) == length:
+            pass
+        else:
+            raise ValueError('Cannot broadcast len {} '.format(len(arg)) +
+                             'to desired length: {}.'.format(length))
+
+    return arg
 
 
 def haversine(lon1, lat1, lon2, lat2):
@@ -2428,7 +2451,8 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
     inversion_only: bool
         if one wants to summarize the inversion output only (including calving)
     """
-    from oggm.core.massbalance import ConstantMassBalance
+    from oggm.core.massbalance import (ConstantMassBalance,
+                                       MultipleFlowlineMassBalance)
 
     out_df = []
     for gdir in gdirs:
@@ -2449,6 +2473,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
 
         # The rest is less certain. We put these in a try block and see
         # We're good with any error - we store the dict anyway below
+        # TODO: should be done with more preselected errors
         try:
             # Inversion
             if gdir.has_file('inversion_output'):
@@ -2543,16 +2568,19 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             # MB calib
             df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
             d['t_star'] = df['t_star']
-            d['mu_star'] = df['mu_star']
+            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
+            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
+            d['mu_star_allsame'] = df['mu_star_allsame']
             d['mb_bias'] = df['bias']
         except BaseException:
             pass
         try:
             # Climate and MB at t*
-            h, w = gdir.get_inversion_flowline_hw()
-            mbmod = ConstantMassBalance(gdir, bias=0)
-            mbh = (mbmod.get_annual_mb(h, w) * SEC_IN_YEAR *
-                   cfg.PARAMS['ice_density'])
+            mbcl = ConstantMassBalance
+            mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                                bias=0)
+            h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+            mbh = mbh * SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
             d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
@@ -2565,10 +2593,11 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
                 d['tstar_mb_grad'] = np.NaN
             d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
-            t, _, p, ps = mbmod.get_climate([d['tstar_ela_h'],
-                                             d['flowline_mean_elev'],
-                                             d['flowline_max_elev'],
-                                             d['flowline_min_elev']])
+            t, _, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                [d['tstar_ela_h'],
+                 d['flowline_mean_elev'],
+                 d['flowline_max_elev'],
+                 d['flowline_min_elev']])
             for n, v in zip(['temp', 'prcpsol'], [t, ps]):
                 d['tstar_avg_' + n + '_ela_h'] = v[0]
                 d['tstar_avg_' + n + '_mean_elev'] = v[1]
@@ -2638,7 +2667,7 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, reset=None, print_log=True, **kwargs):
+        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']

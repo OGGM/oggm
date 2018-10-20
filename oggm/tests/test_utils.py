@@ -331,13 +331,16 @@ class TestFakeDownloads(unittest.TestCase):
     def setUp(self):
         self.dldir = os.path.join(get_test_dir(), 'tmp_download')
         utils.mkdir(self.dldir)
+
+        # Get the path to the file before we mess around
+        self.dem3_testfile = utils.get_demo_file('T10.zip')
+
         cfg.initialize()
         cfg.PATHS['dl_cache_dir'] = os.path.join(self.dldir, 'dl_cache')
         cfg.PATHS['working_dir'] = os.path.join(self.dldir, 'wd')
         cfg.PATHS['tmp_dir'] = os.path.join(self.dldir, 'extract')
         cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_test')
         cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_test')
-        cfg.CACHE_DIR = os.path.join(self.dldir, 'cache_dir')
         self.reset_dir()
 
     def tearDown(self):
@@ -353,22 +356,26 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
         utils.mkdir(cfg.PATHS['cru_dir'])
-        utils.mkdir(cfg.CACHE_DIR)
 
     def test_github_no_internet(self):
         self.reset_dir()
+        cache_dir = cfg.CACHE_DIR
+        try:
+            cfg.CACHE_DIR = os.path.join(self.dldir, 'cache')
 
-        def fake_down(dl_func, cache_path):
-            # This should never be called, if it still is assert
-            assert False
-        with FakeDownloadManager('_call_dl_func', fake_down):
-            with self.assertRaises(utils.NoInternetException):
-                tmp = cfg.PARAMS['has_internet']
-                cfg.PARAMS['has_internet'] = False
-                try:
-                    utils.download_oggm_files()
-                finally:
-                    cfg.PARAMS['has_internet'] = tmp
+            def fake_down(dl_func, cache_path):
+                # This should never be called, if it still is assert
+                assert False
+            with FakeDownloadManager('_call_dl_func', fake_down):
+                with self.assertRaises(utils.NoInternetException):
+                    tmp = cfg.PARAMS['has_internet']
+                    cfg.PARAMS['has_internet'] = False
+                    try:
+                        utils.download_oggm_files()
+                    finally:
+                        cfg.PARAMS['has_internet'] = tmp
+        finally:
+            cfg.CACHE_DIR = cache_dir
 
     def test_rgi(self):
 
@@ -522,13 +529,10 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_dem3(self):
 
-        # Get the path to the file before we mess around
-        tf = utils.get_demo_file('T10.zip')
-
         def down_check(url, cache_name=None, reset=False):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)
-            return tf
+            return self.dem3_testfile
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])

@@ -279,7 +279,7 @@ Here are some more details:
   OGGM compute the mass-balance for you is to use the
   :py:class:`core.massbalance.PastMassBalance`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
-  algorithm (see :py:func:`tasks.local_mustar`)
+  algorithm (see :py:func:`tasks.local_t_star`)
 - if more than one :math:`t^*` is found for some reference glaciers, than the
   glaciers with only one :math:`t^*` will determine the most likely :math:`t^*`
   for the other glaciers (see :py:func:`tasks.compute_ref_t_stars`)
@@ -287,10 +287,8 @@ Here are some more details:
   an influence on the results, but it is small since any change will automatically
   be compensated by :math:`\mu^*`. We are currently quantifying these effects
   more precisely.
-- the cross-validation procedure is done systematically
-  (:py:func:`tasks.crossval_t_stars`). Currently, this cross-validation is done
-  with fixed geometry (it will be extended to a full validation
-  with the dynamical model at a later stage).
+- the cross-validation procedure is shown in FIXME. Please also visit the
+  webiste FIXME
 
 Code used to generate these examples:
 
