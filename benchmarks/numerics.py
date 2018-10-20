@@ -5,6 +5,8 @@ from oggm.core import massbalance, flowline
 from oggm.core.sia2d import Upstream2D
 from oggm.tests.funcs import dummy_constant_bed
 
+cfg.initialize()
+
 
 def gkern(kernlen=21, nsig=3):
     """Returns a 2D Gaussian kernel array."""

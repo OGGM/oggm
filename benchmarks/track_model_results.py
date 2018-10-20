@@ -49,7 +49,7 @@ class hef_prepro:
         tasks.process_custom_climate_data(gdir)
         tasks.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        res = climate.t_star_from_refmb(gdir, mbdf)
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
         tasks.local_t_star(gdir, tstar=res['t_star'],
                            bias=res['bias'])
         tasks.mu_star_calibration(gdir)
