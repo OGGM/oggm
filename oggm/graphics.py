@@ -20,15 +20,6 @@ from oggm import cfg, utils
 log = logging.getLogger(__name__)
 
 
-def _tolist(gdirs):
-    """Ensures that we have a list"""
-    try:
-        (e for e in gdirs)
-    except TypeError:
-        gdirs = [gdirs]
-    return gdirs
-
-
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     """Remove extreme colors from a colormap."""
     new_cmap = colors.LinearSegmentedColormap.from_list(
@@ -110,7 +101,7 @@ def _plot_map(plotfunc):
             dofig = True
 
         # Cast to list
-        gdirs = _tolist(gdirs)
+        gdirs = utils.tolist(gdirs)
 
         if smap is None:
             mp = salem.Map(gdirs[0].grid, countries=False,
@@ -182,7 +173,7 @@ def plot_googlemap(gdirs, ax=None):
         ax = fig.add_subplot(111)
         dofig = True
 
-    gdirs = _tolist(gdirs)
+    gdirs = utils.tolist(gdirs)
 
     xx, yy = [], []
     for gdir in gdirs:
@@ -247,7 +238,8 @@ def plot_domain(gdirs, ax=None, smap=None):
 
 @_plot_map
 def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
-                     add_downstream=False, lines_cmap='Set1'):
+                     add_downstream=False, lines_cmap='Set1',
+                     add_line_index=False):
     """Plots the centerlines of a glacier directory."""
 
     if add_downstream and not use_flowlines:
@@ -284,8 +276,9 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
+        nl = len(cls)
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
-        for l, c in zip(cls, color):
+        for i, (l, c) in enumerate(zip(cls, color)):
             if add_downstream and not gdir.is_tidewater and l is cls[0]:
                 line = gdir.read_pickle('downstream_line')['full_line']
             else:
@@ -293,8 +286,11 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
             smap.set_geometry(line, crs=crs, color=c,
                               linewidth=2.5, zorder=50)
+
+            text = '{}'.format(nl - i - 1) if add_line_index else None
             smap.set_geometry(l.head, crs=gdir.grid, marker='o',
-                              markersize=60, alpha=0.8, color=c, zorder=99)
+                              markersize=60, alpha=0.8, color=c, zorder=99,
+                              text=text)
 
             for j in l.inflow_points:
                 smap.set_geometry(j, crs=crs, marker='o',
@@ -555,7 +551,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
             model.run_until(modelyr)
             models.append(model)
     else:
-        models = _tolist(model)
+        models = utils.tolist(model)
     for gdir, model in zip(gdirs, models):
         geom = gdir.read_pickle('geometries')
         poly_pix = geom['polygon_pix']

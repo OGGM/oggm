@@ -32,6 +32,7 @@ def setup_module(module):
 def teardown_module(module):
     utils._urlretrieve = module._url_retrieve
 
+
 class TestSouthGlacier(unittest.TestCase):
 
     # Test case optained from ITMIX
@@ -106,8 +107,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -168,8 +169,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -238,8 +239,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -315,8 +316,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
