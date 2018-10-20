@@ -11,7 +11,7 @@ if __name__ == '__main__':
     import track_model_results
 
     for func in dir(hef_dynamics):
-        if not 'time_' in func:
+        if 'time_' not in func:
             continue
         print('% -- run -- hef_dynamics.{}'.format(func))
         func = getattr(hef_dynamics, func)
@@ -20,7 +20,7 @@ if __name__ == '__main__':
         hef_dynamics.teardown()
 
     for func in dir(massbalance):
-        if not 'time_' in func:
+        if 'time_' not in func:
             continue
         print('% -- run -- massbalance.{}'.format(func))
         func = getattr(massbalance, func)
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         massbalance.teardown()
 
     for func in dir(numerics):
-        if not 'time_' in func:
+        if 'time_' not in func:
             continue
         print('% -- run -- numerics.{}'.format(func))
         func = getattr(numerics, func)
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     c = track_model_results.hef_prepro()
     gdir = c.setup_cache()
     for func in dir(c):
-        if not 'track_' in func:
+        if 'track_' not in func:
             continue
         func = getattr(c, func)
         print('% -- run -- hef_prepro.{} -- out: {}'.format(func.__name__,
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     c = track_model_results.full_workflow()
     gdir = c.setup_cache()
     for func in dir(c):
-        if not 'track_' in func:
+        if 'track_' not in func:
             continue
         func = getattr(c, func)
         print('% -- run -- full_workflow.{} -- out: {}'.format(func.__name__,
