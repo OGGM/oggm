@@ -9,7 +9,8 @@ import numpy as np
 import oggm
 from oggm import cfg, utils, tasks, workflow
 from oggm.workflow import execute_entity_task
-from oggm.core.massbalance import ConstantMassBalance, PastMassBalance
+from oggm.core.massbalance import (ConstantMassBalance, PastMassBalance,
+                                   MultipleFlowlineMassBalance)
 
 # Module logger
 import logging
@@ -72,8 +73,8 @@ if baseline == 'HISTALP':
 # Make a new dataframe with those (this takes a while)
 log.info('Reading the RGI shapefiles...')
 rgidf = utils.get_rgi_glacier_entities(rids, version=rgi_version)
-log.info('For RGIV{} we have {} candidate reference glaciers.'.format(
-    rgi_version, len(rgidf)))
+log.info('For RGIV{} we have {} candidate reference '
+         'glaciers.'.format(rgi_version, len(rgidf)))
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:
@@ -120,30 +121,33 @@ for task in task_list:
 
 # Climate tasks
 tasks.compute_ref_t_stars(gdirs)
-execute_entity_task(tasks.local_mustar, gdirs)
+execute_entity_task(tasks.local_t_star, gdirs)
+execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
 mb_calib = gdirs[0].read_pickle('climate_info')['mb_calib_params']
 with open(path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 
-# Model validation
-tasks.crossval_t_stars(gdirs)  # for later
+# And also some statistics
+utils.glacier_characteristics(gdirs)
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
 for gd in gdirs:
-    heights, widths = gd.get_inversion_flowline_hw()
 
-    mb_mod = ConstantMassBalance(gd, bias=0)  # bias=0 because of calib!
-    mb = mb_mod.get_specific_mb(heights, widths)
-    np.testing.assert_allclose(mb, 0, atol=10)  # numerical errors
+    mb_mod = MultipleFlowlineMassBalance(gd,
+                                         mb_model_class=ConstantMassBalance,
+                                         bias=0)  # bias=0 because of calib!
+    mb = mb_mod.get_specific_mb()
+    np.testing.assert_allclose(mb, 0, atol=5)  # atol for numerical errors
 
-    mb_mod = PastMassBalance(gd)  # Here we need the computed bias
+    mb_mod = MultipleFlowlineMassBalance(gd, mb_model_class=PastMassBalance)
+
     refmb = gd.get_ref_mb_data().copy()
-    refmb['OGGM'] = mb_mod.get_specific_mb(heights, widths, year=refmb.index)
+    refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
-                               atol=10)
+                               atol=5)  # atol for numerical errors
 
 # Log
 log.info('Calibration is done!')

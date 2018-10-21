@@ -171,7 +171,7 @@ BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
 
-_doc = 'A csv with three values: the local scalars mu*, t*, bias'
+_doc = "A csv containing the glacier's t*, bias, and the flowlines' mu*"
 BASENAMES['local_mustar'] = ('local_mustar.csv', _doc)
 
 _doc = 'List of dicts containing the data needed for the inversion.'
@@ -255,12 +255,13 @@ def initialize(file=None):
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
+    PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
+
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
-    PARAMS['allow_negative_mustar'] = cp.as_bool('allow_negative_mustar')
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -280,12 +281,12 @@ def initialize(file=None):
            'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines',
+           'use_multiple_flowlines', 'tstar_search_glacierwide',
            'mpi_recv_buf_size', 'hydro_month_nh',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'allow_negative_mustar',
+           'rgi_version',
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
     for k in ltr:

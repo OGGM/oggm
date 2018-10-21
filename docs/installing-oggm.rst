@@ -270,21 +270,11 @@ Virtual environment
 
 Install::
 
-    $ sudo pip install virtualenvwrapper
+    $ sudo apt-get install virtualenvwrapper
 
-Create the directory where the virtual environments will be created::
+Reload your profile::
 
-    $ mkdir ~/.pyvirtualenvs
-
-Add these three lines to the files: ~/.profile and ~/.bashrc::
-
-    # Virtual environment options
-    export WORKON_HOME=$HOME/.pyvirtualenvs
-    source /usr/local/bin/virtualenvwrapper_lazy.sh
-
-Reset your profile::
-
-    $ . ~/.profile
+    $ source /etc/profile
 
 Make a new environment with **python 3**::
 
@@ -311,18 +301,18 @@ Install one by one the easy stuff::
 For **GDAL**, it's not as straight forward. First, check which version of
 GDAL is installed::
 
-    $ dpkg -s libgdal-dev  | grep '^Version:'
+    $ gdal-config --version
 
-The major and minor package version (e.g. ``1.10``, ``1.11``, ...) should match
+The package version (e.g. ``2.2.0``, ``2.3.1``, ...) should match
 that of the python package you want to install. For example, if the linux
-GDAL version is ``1.11.3``, install the latest corresponding python version
-(in this case, ``1.11.2``)::
+GDAL version is ``2.2.0``, install the latest corresponding python version.
+The following line works on any system and automatically gets the right version::
 
-    $ pip install gdal==1.11.2 --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+    $ pip install gdal=="$(gdal-config --version)" --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
 Fiona also builds upon GDAL, so let's compile it the same way::
 
-    $ pip install fiona --install-option="build_ext" --install-option="--include-dirs=/usr/include/gdal"
+    $ pip install fiona --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
 (Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html )
 

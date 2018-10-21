@@ -14,13 +14,23 @@ from scipy import optimize as optimization
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils._urlretrieve
+    utils._urlretrieve = patch_url_retrieve_github
+
+
+def teardown_module(module):
+    utils._urlretrieve = module._url_retrieve
 
 
 class TestSouthGlacier(unittest.TestCase):
@@ -97,8 +107,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -159,8 +169,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -229,8 +239,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -306,8 +316,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
