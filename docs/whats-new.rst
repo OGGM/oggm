@@ -54,7 +54,7 @@ Breaking changes
   steps anyways.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The list of reference t* dates is now generated differently: instead of
-  the complex (and sort of useless) neirest beighbor algorithm we are now
+  the complex (and sort of useless) nearest neighbor algorithm we are now
   referring back to the original method of Marzeion et al. (2012). This comes
   together with other breaking changes, altogether likely to change the
   results of the mass-balance model for some glaciers. For more details see
@@ -75,6 +75,9 @@ Breaking changes
   had some wider reaching consequences in the code base and in the
   mass-balance models in particular: :pull:`539`. This will also allow to
   merge neighboring glaciers in the future.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The "human readable" mu* information is now stored in a JSON dict instead
+  of a csv: :pull:`568`.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
