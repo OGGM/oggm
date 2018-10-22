@@ -952,8 +952,7 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['local_mustar'])
-def local_t_star(gdir, *, ref_df=None,
-                 tstar=None, bias=None):
+def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
     If ``tstar`` and ``bias`` are not provided, they will be interpolated from
@@ -1054,13 +1053,13 @@ def local_t_star(gdir, *, ref_df=None,
     if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
         raise MassBalanceCalibrationError('mu* out of specified bounds.')
 
-    # Scalars in a small dataframe for later
-    df = pd.DataFrame()
-    df['rgi_id'] = [gdir.rgi_id]
-    df['t_star'] = [tstar]
-    df['bias'] = [bias]
-    df['mu_star_glacierwide'] = [mustar]
-    df.to_csv(gdir.get_filepath('local_mustar'), index=False)
+    # Scalars in a small dict for later
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = int(tstar)
+    df['bias'] = bias
+    df['mu_star_glacierwide'] = mustar
+    gdir.write_json(df, 'local_mustar')
 
 
 def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
@@ -1168,9 +1167,9 @@ def mu_star_calibration(gdir):
     """
 
     # Interpolated data
-    df = pd.read_csv(gdir.get_filepath('local_mustar'))
-    t_star = df['t_star'].iloc[0]
-    bias = df['bias'].iloc[0]
+    df = gdir.read_json('local_mustar')
+    t_star = df['t_star']
+    bias = df['bias']
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
@@ -1220,10 +1219,10 @@ def mu_star_calibration(gdir):
     # Store diagnostics
     mus = []
     weights = []
-    for i, fl in enumerate(fls):
-        df['mustar_flowline_{:03d}'.format(i+1)] = fl.mu_star
+    for fl in fls:
         mus.append(fl.mu_star)
         weights.append(np.sum(fl.widths))
+    df['mu_star_per_flowline'] = mus
     df['mu_star_flowline_avg'] = np.average(mus, weights=weights)
     all_same = np.allclose(mus, mus[0], atol=1e-3)
     df['mu_star_allsame'] = all_same
@@ -1235,7 +1234,7 @@ def mu_star_calibration(gdir):
                                               'glacier wide mu* and the '
                                               'flowlines mu*.')
     # Write
-    df.to_csv(gdir.get_filepath('local_mustar'), index=False)
+    gdir.write_json(df, 'local_mustar')
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])

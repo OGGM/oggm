@@ -292,9 +292,9 @@ class TestMassBalance(unittest.TestCase):
         gdir = self.gdir
         init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star = df['mu_star_glacierwide'][0]
-        bias = df['bias'][0]
+        df = gdir.read_json('local_mustar')
+        mu_star = df['mu_star_glacierwide']
+        bias = df['bias']
 
         # Climate period
         yrp = [1851, 2000]
@@ -488,8 +488,8 @@ class TestMassBalance(unittest.TestCase):
         gdir = self.gdir
         init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        bias = df['bias'][0]
+        df = gdir.read_json('local_mustar')
+        bias = df['bias']
 
         h, w = gdir.get_inversion_flowline_hw()
 

@@ -1272,7 +1272,7 @@ class TestClimate(unittest.TestCase):
         climate.local_t_star(gdir)
         cfg.PARAMS['tstar_search_window'] = [0, 0]
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        df = gdir.read_json('local_mustar')
         np.testing.assert_allclose(df['t_star'], t_star)
         np.testing.assert_allclose(df['bias'], bias)
 
@@ -1363,7 +1363,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(tmb, 0., atol=0.01)
         np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        df = gdir.read_json('local_mustar')
         assert df['mu_star_allsame']
         np.testing.assert_allclose(mu_ref, df['mu_star_flowline_avg'],
                                    atol=1e-3)
@@ -1522,13 +1522,13 @@ class TestFilterNegFlux(unittest.TestCase):
         mus = np.array([fl.mu_star for fl in fls])
         assert np.max(mus[[1, 2, 3]]) < (np.max(mus[[0, -1]]) / 2)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star_gw = df['mu_star_glacierwide'][0]
+        df = gdir.read_json('local_mustar')
+        mu_star_gw = df['mu_star_glacierwide']
 
         assert np.max(mus[[1, 2, 3]]) < mu_star_gw
         assert np.min(mus[[0, -1]]) > mu_star_gw
 
-        bias = df['bias'][0]
+        bias = df['bias']
         np.testing.assert_allclose(bias, 0)
 
         from oggm.core.massbalance import (MultipleFlowlineMassBalance,
@@ -1573,7 +1573,6 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
 
         # These are the params:
-        # pd.read_csv(gdir.get_filepath('local_mustar'))
         # rgi_id                RGI50-11.00666
         # t_star                          1931
         # bias                               0
