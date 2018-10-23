@@ -90,6 +90,11 @@ try:
 except ImportError:
     print("no skimage")
 
+# Remove some warnings
+import warnings
+from fiona.errors import FionaDeprecationWarning
+warnings.filterwarnings('ignore', category=FionaDeprecationWarning)
+
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm  # noqa: E402
 import oggm.utils  # noqa: E402
