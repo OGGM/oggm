@@ -79,6 +79,9 @@ Breaking changes
 - The "human readable" mu* information is now stored in a JSON dict instead
   of a csv: :pull:`568`.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The global task `glacier_characteristics` has been renamed to
+  `compile_glacier_statistics` (:pull:`571`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Enhancements

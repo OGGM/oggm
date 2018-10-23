@@ -254,7 +254,7 @@ class TestGIS(unittest.TestCase):
                                        np.max(dem[ext.astype(bool)]),
                                        atol=10)
 
-        df = utils.glacier_characteristics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         np.testing.assert_allclose(df['dem_max_elev_on_ext'],
                                    df['dem_max_elev'],
                                    atol=10)
@@ -680,7 +680,7 @@ class TestGeometry(unittest.TestCase):
         d = gdir.get_diagnostics()
         assert d['perc_invalid_flowline'] > 0.1
 
-        df = utils.glacier_characteristics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         assert np.all(df['dem_source'] == 'USER')
         assert np.all(df['perc_invalid_flowline'] > 0.1)
         assert np.all(df['dem_perc_area_above_max_elev_on_ext'] < 0.1)
@@ -2011,7 +2011,7 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
-        dfc = utils.glacier_characteristics([gdir], path=False)
+        dfc = utils.compile_glacier_statistics([gdir], path=False)
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
         self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 

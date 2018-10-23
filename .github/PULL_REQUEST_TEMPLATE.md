@@ -1,3 +1,15 @@
- - [ ] Closes #xxxx (remove if there is no corresponding issue)
- - [ ] Tests added/passed
- - [ ] Fully documented, including `whats-new.rst` for all changes (remove if this change is small enough to be undocumented)
+<!--
+Thank you for your pull request!
+
+
+Below are a few things we ask you kindly to self-check before (or during)
+the process!
+ 
+Remove checks that are not relevant.
+-->
+
+Closes https://github.com/OGGM/oggm/issues/###
+
+- [ ] Tests added/passed
+- [ ] Fully documented
+- [ ] Entry in `whats-new.rst` 
