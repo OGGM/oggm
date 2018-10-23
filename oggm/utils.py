@@ -2566,7 +2566,7 @@ def glacier_characteristics(gdirs, filesuffix='', path=True,
             pass
         try:
             # MB calib
-            df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+            df = gdir.read_json('local_mustar')
             d['t_star'] = df['t_star']
             d['mu_star_glacierwide'] = df['mu_star_glacierwide']
             d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
@@ -3127,8 +3127,7 @@ class GlacierDirectory(object):
 
         return out
 
-    def write_pickle(self, var, filename, use_compression=None,
-                     filesuffix=''):
+    def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -3149,6 +3148,42 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=-1)
+
+    def read_json(self, filename, filesuffix=''):
+        """Reads a JSON file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+
+        Returns
+        -------
+        A dictionary read from the JSON file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'r') as f:
+            out = json.load(f)
+        return out
+
+    def write_json(self, var, filename, filesuffix=''):
+        """ Writes a variable to a pickle on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to JSON (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            json.dump(var, f)
 
     def create_gridded_ncdf_file(self, fname):
         """Makes a gridded netcdf file template.
