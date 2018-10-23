@@ -436,6 +436,8 @@ def glacier_masks(gdir):
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
         dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
         log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+        gdir.add_to_diagnostics('dem_needed_interpolation', True)
+        gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx*ny))
 
     isfinite = np.isfinite(dem)
     if not np.all(isfinite):

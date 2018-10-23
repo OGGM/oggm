@@ -58,7 +58,7 @@ workflow.inversion_tasks(gdirs)
 
 # Compile output
 print('Compiling output')
-utils.glacier_characteristics(gdirs)
+utils.compile_glacier_statistics(gdirs)
 utils.write_centerlines_to_shape(gdirs)
 
 # Log
