@@ -254,7 +254,7 @@ class TestGIS(unittest.TestCase):
                                        np.max(dem[ext.astype(bool)]),
                                        atol=10)
 
-        df = utils.glacier_characteristics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         np.testing.assert_allclose(df['dem_max_elev_on_ext'],
                                    df['dem_max_elev'],
                                    atol=10)
@@ -680,7 +680,7 @@ class TestGeometry(unittest.TestCase):
         d = gdir.get_diagnostics()
         assert d['perc_invalid_flowline'] > 0.1
 
-        df = utils.glacier_characteristics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         assert np.all(df['dem_source'] == 'USER')
         assert np.all(df['perc_invalid_flowline'] > 0.1)
         assert np.all(df['dem_perc_area_above_max_elev_on_ext'] < 0.1)
@@ -1272,7 +1272,7 @@ class TestClimate(unittest.TestCase):
         climate.local_t_star(gdir)
         cfg.PARAMS['tstar_search_window'] = [0, 0]
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
+        df = gdir.read_json('local_mustar')
         np.testing.assert_allclose(df['t_star'], t_star)
         np.testing.assert_allclose(df['bias'], bias)
 
@@ -1363,7 +1363,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(tmb, 0., atol=0.01)
         np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        df = gdir.read_json('local_mustar')
         assert df['mu_star_allsame']
         np.testing.assert_allclose(mu_ref, df['mu_star_flowline_avg'],
                                    atol=1e-3)
@@ -1522,13 +1522,13 @@ class TestFilterNegFlux(unittest.TestCase):
         mus = np.array([fl.mu_star for fl in fls])
         assert np.max(mus[[1, 2, 3]]) < (np.max(mus[[0, -1]]) / 2)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star_gw = df['mu_star_glacierwide'][0]
+        df = gdir.read_json('local_mustar')
+        mu_star_gw = df['mu_star_glacierwide']
 
         assert np.max(mus[[1, 2, 3]]) < mu_star_gw
         assert np.min(mus[[0, -1]]) > mu_star_gw
 
-        bias = df['bias'][0]
+        bias = df['bias']
         np.testing.assert_allclose(bias, 0)
 
         from oggm.core.massbalance import (MultipleFlowlineMassBalance,
@@ -1573,7 +1573,10 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
 
         # These are the params:
+<<<<<<< HEAD
         # pd.read_csv(gdir.get_filepath('local_mustar'))
+=======
+>>>>>>> upstream/master
         # rgi_id                RGI50-11.00666
         # t_star                          1931
         # bias                               0
@@ -2012,7 +2015,7 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
-        dfc = utils.glacier_characteristics([gdir], path=False)
+        dfc = utils.compile_glacier_statistics([gdir], path=False)
         self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
         self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 

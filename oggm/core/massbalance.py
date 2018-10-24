@@ -262,10 +262,10 @@ class PastMassBalance(MassBalanceModel):
         super(PastMassBalance, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         if mu_star is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar'))
-            mu_star = df['mu_star_glacierwide'][0]
+            df = gdir.read_json('local_mustar')
+            mu_star = df['mu_star_glacierwide']
             if check_calib_params:
-                if not df['mu_star_allsame'][0]:
+                if not df['mu_star_allsame']:
                     raise RuntimeError('You seem to use the glacier-wide mu* '
                                        'to compute the mass-balance although '
                                        'this glacier has different mu* for '
@@ -275,8 +275,8 @@ class PastMassBalance(MassBalanceModel):
 
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
-                df = pd.read_csv(gdir.get_filepath('local_mustar'))
-                bias = df['bias'][0]
+                df = gdir.read_json('local_mustar')
+                bias = df['bias']
             else:
                 bias = 0.
 
@@ -478,8 +478,8 @@ class ConstantMassBalance(MassBalanceModel):
                                      input_filesuffix=input_filesuffix)
 
         if y0 is None:
-            df = pd.read_csv(gdir.get_filepath('local_mustar'))
-            y0 = df['t_star'][0]
+            df = gdir.read_json('local_mustar')
+            y0 = df['t_star']
 
         # This is a quick'n dirty optimisation
         try:
@@ -661,8 +661,8 @@ class RandomMassBalance(MassBalanceModel):
             self.years = self.mbmod.years
         else:
             if y0 is None:
-                df = pd.read_csv(gdir.get_filepath('local_mustar'))
-                y0 = df['t_star'][0]
+                df = gdir.read_json('local_mustar')
+                y0 = df['t_star']
             self.years = np.arange(y0-halfsize, y0+halfsize+1)
         self.yr_range = (self.years[0], self.years[-1]+1)
         self.ny = len(self.years)

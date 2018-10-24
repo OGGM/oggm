@@ -281,7 +281,8 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.glacier_characteristics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir], path=False,
+                                              add_climate_period=1985)
         assert len(df) == 1
         assert np.all(~df.isnull())
         df = df.iloc[0]
@@ -291,6 +292,8 @@ class TestWorkflowTools(unittest.TestCase):
                                    2853, atol=5)
         np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
                                    2811, atol=5)
+        np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
+                                   2811, atol=200)
 
 
 def touch(path):

@@ -85,13 +85,13 @@ class hef_prepro:
 
     def track_mustar(self, gdir):
         self.cfg_init()
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        df = gdir.read_json('local_mustar')
         assert df['mu_star_allsame']
         return df['mu_star_glacierwide']
 
     def track_bias(self, gdir):
         self.cfg_init()
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        df = gdir.read_json('local_mustar')
         return df['bias']
 
     def track_mb_1980_avg(self, gdir):
@@ -216,7 +216,7 @@ class full_workflow:
                             output_filesuffix='_pd')
 
         # Compile output
-        utils.glacier_characteristics(gdirs)
+        utils.compile_glacier_statistics(gdirs)
         utils.compile_run_output(gdirs, filesuffix='_tstar')
         utils.compile_run_output(gdirs, filesuffix='_pd')
         utils.compile_climate_input(gdirs)

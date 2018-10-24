@@ -75,6 +75,10 @@ but might use multiprocessing internally.
     :nosignatures:
 
     tasks.compute_ref_t_stars
+    tasks.compile_glacier_statistics
+    tasks.compile_run_output
+    tasks.compile_climate_input
+    tasks.compile_task_log
 
 Classes
 =======

@@ -328,7 +328,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
-        df = utils.glacier_characteristics(gdirs)
+        df = utils.compile_glacier_statistics(gdirs)
         assert df.inv_thickness_m[0] < 100
 
         if do_plot:
