@@ -130,7 +130,11 @@ with open(path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 
 # And also some statistics
+<<<<<<< HEAD
+utils.glacier_characteristics(gdirs)
+=======
 utils.compile_glacier_statistics(gdirs)
+>>>>>>> upstream/master
 
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0

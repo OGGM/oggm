@@ -1573,6 +1573,10 @@ class TestFilterNegFlux(unittest.TestCase):
         fls = gdir.read_pickle('inversion_flowlines')
 
         # These are the params:
+<<<<<<< HEAD
+        # pd.read_csv(gdir.get_filepath('local_mustar'))
+=======
+>>>>>>> upstream/master
         # rgi_id                RGI50-11.00666
         # t_star                          1931
         # bias                               0
@@ -2274,6 +2278,45 @@ class TestGCMClimate(unittest.TestCase):
                 # N more than 30%? (silly test)
                 np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
 
+                
+    def test_process_equil_ccsm_data(self):
+
+        #get test glacier geometry - might as well use OGGM default
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+    
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2016)
+
+        # Only need one file - temp, and preicp are shipped as one netCDF
+        f = get_demo_file('ccsm.demo.selection.nc') # Not a real file - make selection?
+        cfg.PATHS['climate_file'] = f
+        climate.process_ccsm_data(gdir)
+
+        with warmings.catch_warnings():
+            # "Long time series are currently a pain in pandas
+            warmings.filterwarnings("ignore", message='Unable to decode time axis')
+            fh = gdir.get_filepath('climate_monthly')
+            fcesm = gdir.get_filepath('cesm_data') # Figure out how to get ccsm_data an acceptable file
+            with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
+                tv.cesm.time.values
+                time = pd.period_range(tv[0].strftime('%Y-%m-%d'), tv[-1].strftime('%Y-%m-%d'), freq='M')
+                cesm['time'] = time
+                cesm.coords['year'] = ('time', time.year)
+                cesm.coords['month'] = ('time', time.month)
+
+                # Basic Checks
+                scru = cru.sel(time=slice('1961', '1990')) # CRU anomaly
+            
+                #TODO: Think about more appropriate tests...            
+    
+    
     def test_compile_climate_input(self):
 
         filename = 'cesm_data'

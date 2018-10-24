@@ -21,6 +21,7 @@ from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_histalp_data
 from oggm.core.climate import process_custom_climate_data
+from oggm.core.climate import process_equil_ccsm_data
 from oggm.core.climate import process_cesm_data
 from oggm.core.climate import local_t_star
 from oggm.core.climate import mu_star_calibration
@@ -36,7 +37,6 @@ from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
 from oggm.utils import copy_to_basedir
-from oggm.core.flowline import run_from_ccsm_data
 
 # Global tasks
 from oggm.core.climate import compute_ref_t_stars
@@ -44,3 +44,4 @@ from oggm.utils import compile_glacier_statistics
 from oggm.utils import compile_run_output
 from oggm.utils import compile_climate_input
 from oggm.utils import compile_task_log
+

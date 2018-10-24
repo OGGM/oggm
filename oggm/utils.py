@@ -2593,6 +2593,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
                 d['tstar_mb_grad'] = np.NaN
             d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
+
             t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
                 [d['tstar_ela_h'],
                  d['flowline_mean_elev'],

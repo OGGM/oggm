@@ -110,7 +110,149 @@ def process_custom_climate_data(gdir):
     gdir.write_pickle(out, 'climate_info')
 
 
-@entity_task(log, writes=['cesm_data'])
+@entity_task(log, writes=['gcm_data'])
+def process_equil_ccsm_data(gdir, pi_path=None, filesuffix=''):
+    """ Processes and writes climate data for individual input 
+    glacier from CCSM3 climate simulations, interpolates the data
+    according to the layout designated in process_cesm_data, and
+    writes to a NETCDF file. 
+    
+    Takes path to Pre-Industrial Will take one year of data for 
+    equillibrium control file in order to calculate anomalies. 
+    simulations and re-order it into the proper hydro year format
+    for OGGM. 
+    
+    TODO: add option for this to process more than one year of 
+    data for transient simulations.
+    """
+    filesuffix = filesuffix
+    pi_path = pi_path
+
+    
+    if not (('climate_file' in cfg.PATHS) and  os.path.exists(cfg.PATHS['climate_file'])):
+        raise IOError('Custom climate file not found')
+    if pi_path is None:
+        raise ValueError('Need to set pi_path in process_equil_ccsm_data function')
+    
+    #open dataset for precp use
+    fpath = cfg.PATHS['climate_file']
+    xr_ccsm = xr.open_dataset(fpath, decode_times=False)
+    #open dataset for tmp use
+    xr_ccsm_ts = xr.open_dataset(fpath)
+    #repeating for pi
+    xr_pi = xr.open_dataset(pi_path, decode_times=False)
+    
+    # selecting location
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+    
+    #Setting the longitude to a 0-360 grid [I think...] "CESM files are in 0-360"
+    if lon <= 0:
+        lon += 360
+
+    #"take the closest"
+    #"TODO: consider GCM interpolation?"
+    precp = xr_ccsm.PRECC.sel(lat=lat, lon=lon, method='nearest') + xr_ccsm.PRECL.sel(lat=lat, lon=lon, method='nearest')
+    temp = xr_ccsm_ts.TS.sel(lat=lat, lon=lon, method='nearest')
+    precp_pi = xr_pi.PRECC.sel(lat=lat, lon=lon, method='nearest') + xr_pi.PRECL.sel(lat=lat, lon=lon, method='nearest')
+    temp_pi = xr_pi.TS.sel(lat=lat, lon=lon, method='nearest')
+    
+    #convert temp from K to C
+    temp = temp - 273.15
+    temp_pi = temp_pi - 273.15
+
+    #Take anomaly for CCSM data (with preindustrial control)
+    for i in range(12):
+        temp.values[i] = temp.values[i] - temp_pi.values[i]
+    for i in range(12):
+        precp.values[i] = precp.values[i] - precp_pi.values[i]
+            
+    #from normal years to hydrological years
+    sm = cfg.PARAMS['hydro_month_'+gdir.hemisphere]
+    em = sm - 1 if (sm > 1) else 12
+    y0 = int(pd.to_datetime(str(temp.time.values[0])).strftime('%Y'))
+    y1 = int(pd.to_datetime(str(temp.time.values[-1])).strftime('%Y'))
+    #time string for temp/precip (hydro years)
+    time = pd.period_range('{}-{:02d}'.format(y0, sm),'{}-{:02d}'.format(y1, em), freq='M')
+            
+    #reorder single year of equil data & add correct time
+    #calculate place in array to concat from (2 for ccsm data)
+    conc_start = sm-2
+    conc_end = sm-14
+    
+    temp_hydro = xr.concat([temp[conc_start:],temp[:conc_end]],dim="time")
+    precp_hydro = xr.concat([precp[conc_start:],precp[:conc_end]],dim="time")
+    temp_hydro['time'] = time
+    precp_hydro['time'] = time
+
+    temp = temp_hydro
+    precp = precp_hydro
+
+    # Workaround for https://github.com/pydata/xarray/issues/1565
+    temp['month'] = ('time', time.month)
+    precp['month'] = ('time', time.month)
+    temp['year'] = ('time', time.year)
+    temp['year'] = ('time', time.year)
+    ny, r = divmod(len(temp.time), 12)
+    assert r == 0
+  
+    #Convert m s-1 to mm mth-1 (for precp)
+    ndays = np.tile(cfg.DAYS_IN_MONTH, y1-y0)
+    precp = precp * ndays * (60 * 60 * 24 * 1000)
+            
+    #"Get CRU to apply the anomaly to"
+    fpath = gdir.get_filepath('climate_monthly')
+    ds_cru = xr.open_dataset(fpath)
+
+    #"Add the climate anomaly to CRU clim"
+    dscru = ds_cru.sel(time=slice('1961', '1990'))
+            
+    # temp
+    loc_temp = dscru.temp.groupby('time.month').mean()
+    #Oct-Sept format preserved
+    ts_tmp = temp.groupby(temp.month) + loc_temp
+
+    #for prcp
+    loc_pre = dscru.prcp.groupby('time.month').mean()
+    ts_pre = precp.groupby(precp.month) + loc_pre
+
+    
+    #load dates into save format
+    fpath = cfg.PATHS['climate_file']
+    dsindex = salem.GeoNetcdf(fpath, monthbegin=True)
+    time1 = dsindex.variables['time']
+            
+    #weird recursive way to getting the dates in the correct format to save 
+    #only nessisary for 1 year of data, in order to rearrange the months and 
+    #get the correct year.
+    
+    time_array = [datetime.datetime(temp.time.year[i], temp.time.month[i],1) for i in range(12)]
+    time_nums = netCDF4.date2num(time_array, time1.units, calendar='noleap')
+    time2 = netCDF4.num2date(time_nums[:], time1.units, calendar='noleap')
+        
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+            
+    #"back to -180 - 180"
+    loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
+    
+    #write to netcdf
+    gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values, 
+                                    float(dscru.ref_hgt), loc_lon, 
+                                    precp.lat.values, 
+                                    time_unit=time1.units, 
+                                    file_name='gcm_data', 
+                                    filesuffix=filesuffix)
+
+    #dsindex._nc.close()
+    xr_ccsm.close()
+    xr_ccsm_ts.close()
+    xr_pi.close()
+    ds_cru.close() 
+    
+    print("Hello Worlds")
+    
+@entity_task(log, writes=['gcm_data'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None):
     """Processes and writes the climate data for this glacier.
@@ -243,7 +385,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                                     float(dscru.ref_hgt),
                                     loc_lon, precp.lat.values,
                                     time_unit=time1.units,
-                                    file_name='cesm_data',
+                                    file_name='gcm_data',
                                     filesuffix=filesuffix)
 
     dsindex._nc.close()
@@ -830,7 +972,6 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
 
     if glacierwide is None:
         glacierwide = cfg.PARAMS['tstar_search_glacierwide']
-
     # Be sure we have no marine terminating glacier
     assert gdir.terminus_type == 'Land-terminating'
 
@@ -1053,6 +1194,15 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
         raise MassBalanceCalibrationError('mu* out of specified bounds.')
 
+<<<<<<< HEAD
+    # Scalars in a small dataframe for later
+    df = pd.DataFrame()
+    df['rgi_id'] = [gdir.rgi_id]
+    df['t_star'] = [tstar]
+    df['bias'] = [bias]
+    df['mu_star_glacierwide'] = [mustar]
+    df.to_csv(gdir.get_filepath('local_mustar'), index=False)
+=======
     # Scalars in a small dict for later
     df = dict()
     df['rgi_id'] = gdir.rgi_id
@@ -1060,6 +1210,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     df['bias'] = bias
     df['mu_star_glacierwide'] = mustar
     gdir.write_json(df, 'local_mustar')
+>>>>>>> upstream/master
 
 
 def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
@@ -1167,9 +1318,15 @@ def mu_star_calibration(gdir):
     """
 
     # Interpolated data
+<<<<<<< HEAD
+    df = pd.read_csv(gdir.get_filepath('local_mustar'))
+    t_star = df['t_star'].iloc[0]
+    bias = df['bias'].iloc[0]
+=======
     df = gdir.read_json('local_mustar')
     t_star = df['t_star']
     bias = df['bias']
+>>>>>>> upstream/master
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
@@ -1219,10 +1376,17 @@ def mu_star_calibration(gdir):
     # Store diagnostics
     mus = []
     weights = []
+<<<<<<< HEAD
+    for i, fl in enumerate(fls):
+        df['mustar_flowline_{:03d}'.format(i+1)] = fl.mu_star
+        mus.append(fl.mu_star)
+        weights.append(np.sum(fl.widths))
+=======
     for fl in fls:
         mus.append(fl.mu_star)
         weights.append(np.sum(fl.widths))
     df['mu_star_per_flowline'] = mus
+>>>>>>> upstream/master
     df['mu_star_flowline_avg'] = np.average(mus, weights=weights)
     all_same = np.allclose(mus, mus[0], atol=1e-3)
     df['mu_star_allsame'] = all_same
@@ -1234,7 +1398,11 @@ def mu_star_calibration(gdir):
                                               'glacier wide mu* and the '
                                               'flowlines mu*.')
     # Write
+<<<<<<< HEAD
+    df.to_csv(gdir.get_filepath('local_mustar'), index=False)
+=======
     gdir.write_json(df, 'local_mustar')
+>>>>>>> upstream/master
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])

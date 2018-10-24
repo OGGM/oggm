@@ -76,6 +76,7 @@ Breaking changes
   mass-balance models in particular: :pull:`539`. This will also allow to
   merge neighboring glaciers in the future.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 - The "human readable" mu* information is now stored in a JSON dict instead
   of a csv: :pull:`568`.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
@@ -192,7 +193,7 @@ New contributors to the project:
   development of the calving parametrization
 - **Julia Eis** (PhD student, University of Bremen), developed the glacier
   partitioning algorithm
-- **Schmitty Smith** (PhD student,  Northand College, Wisconsin US), added
+- **Schmitty Smith** (Undergraduate student,  Northand College, Wisconsin US), added
   optional parameters to the mass-balance models
 
 
