@@ -22,12 +22,6 @@ with the conda_ package manager:
 with experience with `pip`_ can follow the specific instructions
 `Install with virtualenv (linux/debian)`_.
 
-.. warning::
-
-   If you are using a **Linux Mint** distribution you may want to test if you are
-   affected by the pyproj bug `described here <https://github.com/conda-forge/pyproj-feedstock/issues/10>`_
-
-
 .. _tested: https://travis-ci.org/OGGM/oggm
 .. _windows: https://ci.appveyor.com/project/fmaussion/oggm
 .. _version: https://wiki.python.org/moin/Python2orPython3
@@ -73,7 +67,6 @@ Other libraries:
 Optional:
     - progressbar2 (displays the download progress)
     - bottleneck (speeds up xarray operations)
-    - dask (works nicely with xarray)
 
 
 Install with conda (all platforms)
@@ -84,18 +77,17 @@ This is the recommended way to install OGGM.
 Prerequisites
 ~~~~~~~~~~~~~
 
-You should have a recent version of `git`_ and of the `conda`_ package manager.
+You should have a recent version of the `conda`_ package manager.
 You can get `conda`_ by installing `miniconda`_ (the package manager alone -
 recommended)  or `anaconda`_ (the full suite - with many packages you wont
 need).
-
 
 **Linux** users should install a couple of linux packages (not all of them are
 required but it's good to have them anyway)::
 
     $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf4 ttf-bitstream-vera
 
-.. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
+
 .. _miniconda: http://conda.pydata.org/miniconda.html
 .. _anaconda: http://docs.continuum.io/anaconda/install
 
@@ -122,30 +114,28 @@ Don't forget to activate it before going on::
 .. _this problem: https://github.com/conda-forge/geopandas-feedstock/issues/9
 
 
-Packages
-~~~~~~~~
+Dependencies
+~~~~~~~~~~~~
 
-Install the packages from the `conda-forge`_ and oggm channels::
+Install all OGGM dependencies from the conda-forge and oggm conda channels::
 
     conda install -c oggm -c conda-forge oggm-deps
 
-The oggm-deps package is a "meta package". It does not contain any code but
-will insall all the packages oggm needs automatically.
+The `oggm-deps` package is a "meta package". It does not contain any code but
+will install all the packages that oggm needs.
 
 .. warning::
 
     The `conda-forge`_ channel ensures that the complex package dependencies are
     handled correctly. Subsequent installations or upgrades from the default
-    conda channel might brake the chain (see an example `here`_). We strongly
+    conda channel might brake the chain. We strongly
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ (and oggm) per default, as suggested on their
-documentation page::
+You might consider setting `conda-forge`_ (and oggm) per default::
 
     conda config --add channels conda-forge
     conda config --add channels oggm
-    conda install <package-name>
 
 No scientific python installation is complete without installing
 `ipython`_ and `jupyter`_::
@@ -154,36 +144,46 @@ No scientific python installation is complete without installing
 
 
 .. _conda-forge: https://conda-forge.github.io/
-.. _here: https://github.com/ioos/conda-recipes/issues/623
 .. _ipython: https://ipython.org/
 .. _jupyter: https://jupyter.org/
 
-OGGM
-~~~~
+Install OGGM itself
+~~~~~~~~~~~~~~~~~~~
 
-**If you are using conda**, you can install OGGM as a normal conda package::
+First, choose which version of OGGM you would like to install:
 
-    conda install -c oggm -c conda-forge oggm
+- **stable**: this is the latest version officially released and has a fixed
+  version number (e.g. v1.1).
+- **dev**: this is the development version. It might contain new
+  features and bug fixes, but is also likely to continue to change until a
+  new release is made. This is the recommended way if you plan to contribute
+  to the model, and/or if you want to use the most recent model updates.
 
-**If you are using pip**, you can install OGGM from `PyPI <https://pypi.python.org/pypi/oggm>`_::
+**+ install the stable version:**
+
+If you are using conda, you can install stable OGGM as a normal conda package::
+
+    conda install -c oggm oggm
+
+If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/pypi/oggm>`_::
 
     pip install oggm
 
+**+ install the dev version:**
 
-In this case you will be able to use the model but you cannot change its
-code.
-If you want to explore the code or participate to its
-development, we recommend to clone the git repository (or your own fork ,
-see also :ref:`contributing`)::
+For this to work you'll need to have the `git`_ software installed on your
+system. Then, clone the latest repository version::
 
     git clone https://github.com/OGGM/oggm.git
+
+.. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 
 Then go to the project root directory::
 
     cd oggm
 
-And install OGGM in development mode (this is valid for **pip** or **conda**
-environments)::
+And install OGGM in development mode (this is valid for both  **pip** and
+**conda** environments)::
 
     pip install -e .
 
@@ -198,11 +198,11 @@ environments)::
 .. _git pull: https://git-scm.com/docs/git-pull
 
 
-Testing
-~~~~~~~
+Testing OGGM (dev version only)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You are almost there! The last step is to check if everything works as
-expected. From the oggm directory, type::
+You can test your OGGM installation by navigating to the OGGM source code
+directory, then type::
 
     pytest .
 
@@ -240,10 +240,10 @@ Install with virtualenv (linux/debian)
 .. note::
 
    The installation with pip requires a few more steps than with conda.
-   Unless you have a good reason to be here,
+   Unless you have a good reason to be here (and there are some good reasons),
    `Install with conda (all platforms)`_ is probably what you want do do.
 
-The instructions below are for Debian / Ubuntu / Mint systems only!
+The instructions below have been tested on Debian / Ubuntu / Mint systems only!
 
 Linux packages
 ~~~~~~~~~~~~~~
@@ -306,7 +306,8 @@ GDAL is installed::
 The package version (e.g. ``2.2.0``, ``2.3.1``, ...) should match
 that of the python package you want to install. For example, if the linux
 GDAL version is ``2.2.0``, install the latest corresponding python version.
-The following line works on any system and automatically gets the right version::
+The following command should work on any system and automatically parses the
+right version::
 
     $ pip install gdal=="$(gdal-config --version)" --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
@@ -327,4 +328,4 @@ And the salem library::
 OGGM and tests
 ~~~~~~~~~~~~~~
 
-Refer to `OGGM`_ above.
+Refer to `Install OGGM itself`_ above.

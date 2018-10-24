@@ -80,15 +80,16 @@ such as:
 
     A = f_{inv} \, A_0
 
-With :math:`A_0` the standard creep parameter (2.4e-24). Currently,
-:math:`f_{inv}` is calibrated to minimize the volume RMSD of all glaciers
-with a volume estimation in the `GlaThiDa`_ database. It is therefore
-neither glacier nor temperature dependent and does not account for
-uncertainties in GlaThiDa's glacier-wide thickness estimations, two
-approximations which should be better handled in the future.
+With :math:`A_0` the standard creep parameter (:math:`2.4^{-24}`). Currently,
+there is no "optimum" :math:`f_{inv}` parameter in the model. There is a high
+uncertainty in the "true" :math:`A` parameter as well as in all other processes
+affecting the ice thickness. Therefore, we cannot make any recommendation for
+the "best" parameter. Global sensitivity analyses show that the default value
+is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_)
 
-.. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
-
+*Note*: for `ITMIX <https://www.the-cryosphere.net/11/949/2017/>`_, :math:`f_{inv}`
+was set to a value of approximately 3 (which was too high and underestimated
+ice thickness in most cases with the exception of the European Alps).
 
 Distributed ice thickness
 -------------------------
@@ -96,7 +97,6 @@ Distributed ice thickness
 To obtain a 2D map of the glacier bed, the flowline thicknesses need to be
 interpolated to the glacier mask. The current implementation of this
 step in OGGM is currently very simple, but provides nice looking maps:
-
 
 
 .. ipython:: python

@@ -382,7 +382,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'OGGM', 'OGGM Documentation',
-     author, 'OGGM', 'One line description of project.',
+     author, 'OGGM', 'Open Global Glacier Model.',
      'Miscellaneous'),
 ]
 
@@ -408,14 +408,14 @@ intersphinx_mapping = {
 
 # -- OGGM Stuffs ----------------------------------------------------
 
-text_version = ('**This is the model documentation for users and developers '
+text_version = ('  **This is the model documentation for users and developers '
                 'as of version {}**. '
                 'For the documentation of the latest (cutting-edge) '
                 'repository version, visit `docs.oggm.org/en/latest '
                 '<http://docs.oggm.org/en/latest/>`_.'
                 ''.format(oggm.__version__))
 
-text_dev = ('**This is the model documentation for users and developers of '
+text_dev = ('  **This is the model documentation for users and developers of '
             'the latest (cutting-edge) repository version**. For the '
             'documentation of the latest stable release, visit '
             '`docs.oggm.org/en/stable '

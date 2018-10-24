@@ -8,18 +8,25 @@ future mass-balance, volume and geometry of (almost) any glacier in the world
 in a fully automated and extensible workflow. We rely exclusively on publicly
 available data for calibration and validation.
 
+.. note::
+
+    **This is a technical documentation: for general information about the OGGM
+    project and for the latest news, visit** `oggm.org <http://oggm.org>`_.
+
+.. warning::
+
 [version-specific-text]
 
 
-**For more information about the OGGM project and for the latest news, visit**
-`oggm.org <http://oggm.org>`_.
-
-
-Index
------
 
 Principles
 ^^^^^^^^^^
+
+Physical principles implemented in the model and the underlying assumptions,
+with as little code as possible. For more detailed information, we recommend
+to read the OGGM
+`description paper <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_ as
+well.
 
 * :doc:`introduction`
 * :doc:`flowlines`
@@ -40,6 +47,9 @@ Principles
 
 Using OGGM
 ^^^^^^^^^^
+
+How to use the model on your computer or a cluster, with concrete code
+examples.
 
 * :doc:`installing-oggm`
 * :doc:`getting-started`
@@ -66,6 +76,8 @@ Using OGGM
 
 Contributing
 ^^^^^^^^^^^^
+
+Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`

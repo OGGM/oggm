@@ -50,16 +50,15 @@ this downscaling to add any new information than already available at the
 original resolution, but this allows us to have an elevation-dependent dataset
 based on a presumably better climatology. The monthly anomalies are computed
 following [Harris_etal_2010]_ : we use standard anomalies for temperature and
-scaled (fractional) anomalies for precipitation. At the locations where the
-monthly precipitation climatology is 0 we fall back to the standard anomalies.
+scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
 HISTALP
 ~~~~~~~
 
-If `PARAMS['baseline_climate']` is set to 'HISTALP', OGGM will automatically
-download and unpack the data from the `HISTALP`_ website.
+If required by the user, OGGM can also automatically
+download and use the data from the `HISTALP`_ dataset.
 
 .. _HISTALP: http://www.zamg.ac.at/histalp/
 
@@ -78,9 +77,8 @@ recommend to use data from 1850 onwards. This can be done by setting
 User-provided dataset
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can provide any other dataset to OGGM by setting the ``climate_file``
-parameter in ``params.cfg``. See the `HISTALP_oetztal.nc` data file
-in the `sample-data`_ folder for an example format.
+You can provide any other dataset to OGGM. See the `HISTALP_oetztal.nc` data
+file in the OGGM `sample-data`_ folder for an example format.
 
 .. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
 
@@ -97,25 +95,20 @@ period (currently: 1961-1990). This method is often called the
 Currently we can process data from the
 `CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
 project (see :py:func:`tasks.process_cesm_data`) only, but adding other models
-should be relatively easy.
+will be available `soon <https://github.com/OGGM/oggm/issues/469>`_.
 
 
 Elevation dependency
 ~~~~~~~~~~~~~~~~~~~~
 
-OGGM finally needs to compute the temperature and precipitation at the altitude
+OGGM needs to compute the temperature and precipitation at the altitude
 of the glacier grid points. The default is to use a fixed gradient of
 -6.5K km :math:`^{-1}` and no gradient for precipitation. However, OGGM
-implements a module which computes the local gradient by linear
+also implements an optional algorithm which computes the local gradient by linear
 regression of the 9 surrounding grid points. This method requires that the
 near-surface temperature lapse-rates provided by the climate dataset are good
-(in most of the cases you should probably use a fixed gradient).
-The default config parameters are:
-
-.. ipython:: python
-
-    cfg.PARAMS['temp_use_local_gradient']  # use the regression method?
-    cfg.PARAMS['temp_default_gradient']  # constant gradient
+(i.e.: in most of the cases, you should probably use the simple fixed gradient
+instead).
 
 
 Temperature index model
@@ -287,8 +280,6 @@ Here are some more details:
   an influence on the results, but it is small since any change will automatically
   be compensated by :math:`\mu^*`. We are currently quantifying these effects
   more precisely.
-- the cross-validation procedure is shown in FIXME. Please also visit the
-  webiste FIXME
 
 Code used to generate these examples:
 

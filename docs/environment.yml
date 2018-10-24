@@ -1,10 +1,11 @@
-name: oggm
+name: oggmdocs
 channels:
   - oggm
   - conda-forge
 dependencies:
   - python=3.6
   - oggm-deps
+  - numpy>=1.15.1
   - conda-forge/label/dev::rasterio
   - numpydoc
   - ipython
