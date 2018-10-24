@@ -190,7 +190,7 @@ class TestWorkflow(unittest.TestCase):
         gdirs = up_to_inversion()
 
         # Test the glacier charac
-        dfc = utils.glacier_characteristics(gdirs)
+        dfc = utils.compile_glacier_statistics(gdirs)
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]

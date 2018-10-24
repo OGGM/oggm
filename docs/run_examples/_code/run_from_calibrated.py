@@ -92,7 +92,7 @@ execute_entity_task(tasks.run_random_climate, gdirs,
 
 # Compile output
 log.info('Compiling output')
-utils.glacier_characteristics(gdirs)
+utils.compile_glacier_statistics(gdirs)
 utils.compile_run_output(gdirs, filesuffix='_tstar')
 
 # Log

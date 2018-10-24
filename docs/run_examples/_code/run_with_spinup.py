@@ -114,7 +114,7 @@ execute_entity_task(tasks.run_from_climate_data, gdirs,
 
 # Compile output
 log.info('Compiling output')
-utils.glacier_characteristics(gdirs)
+utils.compile_glacier_statistics(gdirs)
 ds1 = utils.compile_run_output(gdirs, filesuffix='_no_spinup')
 ds2 = utils.compile_run_output(gdirs, filesuffix='_with_spinup')
 

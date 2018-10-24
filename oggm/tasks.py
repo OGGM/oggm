@@ -40,3 +40,7 @@ from oggm.core.flowline import run_from_ccsm_data
 
 # Global tasks
 from oggm.core.climate import compute_ref_t_stars
+from oggm.utils import compile_glacier_statistics
+from oggm.utils import compile_run_output
+from oggm.utils import compile_climate_input
+from oggm.utils import compile_task_log
