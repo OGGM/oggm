@@ -110,9 +110,24 @@ def process_custom_climate_data(gdir):
     gdir.write_pickle(out, 'climate_info')
 
 
-@entity_task(log, writes=['cesm_data'])
+@entity_task(log, writes=['gcm_data'])
 def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
-    """ TODO: Write docstring"""
+    """ Processes and writes climate data for individual input 
+    glacier from CCSM3 climate simulations, interpolates the data
+    according to the layout designated in process_cesm_data, and
+    writes to a NETCDF file. 
+    
+    Takes path to Pre-Industrial Will take one year of data for 
+    equillibrium control file in order to calculate anomalies. 
+    simulations and re-order it into the proper hydro year format
+    for OGGM. 
+    
+    TODO: add option for this to process more than one year of 
+    data for transient simulations.
+    
+    TODO: add proper ccsm_data file type into OGGM, and possibly 
+    cfg path for PI_data.
+    """
     filesuffix = filesuffix
     PI_path = Pi_path
 
@@ -229,7 +244,7 @@ def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
                                     float(dscru.ref_hgt), loc_lon, 
                                     precp.lat.values, 
                                     time_unit=time1.units, 
-                                    file_name='cesm_data', 
+                                    file_name='gcm_data', 
                                     filesuffix=filesuffix)
 
     #dsindex._nc.close()
@@ -240,7 +255,7 @@ def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
     
     print("Hello Worlds")
     
-@entity_task(log, writes=['cesm_data'])
+@entity_task(log, writes=['gcm_data'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None):
     """Processes and writes the climate data for this glacier.
@@ -373,7 +388,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                                     float(dscru.ref_hgt),
                                     loc_lon, precp.lat.values,
                                     time_unit=time1.units,
-                                    file_name='cesm_data',
+                                    file_name='gcm_data',
                                     filesuffix=filesuffix)
 
     dsindex._nc.close()
