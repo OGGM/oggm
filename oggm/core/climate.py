@@ -111,7 +111,7 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
+def process_equil_ccsm_data(gdir, pi_path=None, filesuffix=''):
     """ Processes and writes climate data for individual input 
     glacier from CCSM3 climate simulations, interpolates the data
     according to the layout designated in process_cesm_data, and
@@ -124,18 +124,15 @@ def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
     
     TODO: add option for this to process more than one year of 
     data for transient simulations.
-    
-    TODO: add proper ccsm_data file type into OGGM, and possibly 
-    cfg path for PI_data.
     """
     filesuffix = filesuffix
-    PI_path = Pi_path
+    pi_path = pi_path
 
     
     if not (('climate_file' in cfg.PATHS) and  os.path.exists(cfg.PATHS['climate_file'])):
         raise IOError('Custom climate file not found')
-    if PI_path is None:
-        raise ValueError('Need to set Pi_path in process_ccsm_data function')
+    if pi_path is None:
+        raise ValueError('Need to set pi_path in process_equil_ccsm_data function')
     
     #open dataset for precp use
     fpath = cfg.PATHS['climate_file']
@@ -143,7 +140,7 @@ def process_ccsm_data(gdir, Pi_path=None, filesuffix=''):
     #open dataset for tmp use
     xr_ccsm_ts = xr.open_dataset(fpath)
     #repeating for pi
-    xr_pi = xr.open_dataset(PI_path, decode_times=False)
+    xr_pi = xr.open_dataset(pi_path, decode_times=False)
     
     # selecting location
     lon = gdir.cenlon

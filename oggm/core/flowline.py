@@ -1631,7 +1631,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1702,7 +1702,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1754,7 +1754,7 @@ def run_from_climate_data(gdir, ys=None, ye=None,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1799,82 +1799,3 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
 
-@entity_task(log)
-def run_from_ccsm_data(gdir, csvpath, glen_a_input=None, filename='cesm_climate',
-                          input_filesuffix='', filesuffix='',
-                          **kwargs):
-    """
-        Run and store global glacier information from ccsm model output.
-    """
-    
-    import csv
-    
-    fs = cfg.PARAMS['flowline_fs']
-    
-    if glen_a_input != None:
-        glen_a = glen_a_input
-    else: 
-        glen_a = cfg.PARAMS['flowline_glen_a']
-        
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-    
-    d = OrderedDict()
-    d['rgi_id'] = gdir.rgi_id
-    d['name'] = gdir.name
-    d['cenlon'] = gdir.cenlon
-    d['cenlat'] = gdir.cenlat
-    d['rgi_area_km2'] = gdir.rgi_area_km2
-    d['glacier_type'] = gdir.glacier_type
-    d['terminus_type'] = gdir.terminus_type
-    d['notes'] = ""
-    
-    try:
-        mb = mbmods.ConstantMassBalance(gdir, y0=1951, halfsize=0, filename='cesm_data')
-        fls = gdir.read_pickle('model_flowlines')
-    except:
-        log.info('MB Error')
-
-    try:
-        model = FluxBasedModel(fls, mb_model=mb, y0=1951, **kwargs)
-        d['initial_model_volume_km3'] = model.volume_km3
-        d['initial_model_area_km2'] = model.area_km2
-        d['initial_model_length_m'] = model.length_m
-        model.run_until_equilibrium()
-        d['model_volume_km3'] = model.volume_km3
-        d['model_area_km2'] = model.area_km2
-        d['model_length_m'] = model.length_m
-    except RuntimeError as re:
-        if str(re) == "Did not find equilibrium.":
-            log.info('(%s) Trying max_ite=400', gdir.rgi_id)
-            try: 
-                model.run_until_equilibrium(max_ite=400)
-                d['model_volume_km3'] = model.volume_km3
-                d['model_area_km2'] = model.area_km2
-                d['model_length_m'] = model.length_m
-            except RuntimeError as re:
-                log.info('(%s) RuntimeError', gdir.rgi_id)
-                d['notes'] = "RuntimeError"
-        elif str(re) == "Glacier exceeds domain boundaries.":
-            d['notes'] = "RuntimeError: Glacier exceeds domain boundaries"
-            d['model_volume_km3'] = model.volume_km3
-            d['model_area_km2'] = model.area_km2
-            d['model_length_m'] = model.length_m
-        else:
-            log.info('(%s) RuntimeError', gdir.rgi_id)
-            d['notes'] = "RuntimeError" + str(re)
-    except ValueError as ve:
-        log.info('(%s) ValueError', gdir.rgi_id)
-        d['notes'] = "ValueError: " + str(ve)
-    except FloatingPointError as fe:
-        log.info('(%s) FloatingPointError', gdir.rgi_id)
-        d['notes'] = "FloatingPointError: " + str(fe)
-    except FileNotFoundError as fnfe:
-        log.info('(%s) FileNotFoundError', gdir.rgi_id)
-        d['notes'] = "FileNotFoundError: " + str(fnfe)
-   
-    with open(csvpath, 'a+') as csvfile:
-            log.info('hello')
-            fieldnames = ['rgi_id', 'name', 'cenlon', 'cenlat', 'rgi_area_km2', 'glacier_type', 'terminus_type', 'initial_model_volume_km3', 'initial_model_area_km2', 'initial_model_length_m', 'model_volume_km3', 'model_area_km2', 'model_length_m', 'notes']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=',')
-            writer.writerow(d)
