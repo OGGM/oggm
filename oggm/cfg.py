@@ -169,7 +169,7 @@ _doc = ('Some information (dictionary) about the climate data and the mass '
 BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
 
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
-BASENAMES['cesm_data'] = ('cesm_data.nc', _doc)
+BASENAMES['gcm_data'] = ('gcm_data.nc', _doc)
 
 _doc = "A dict containing the glacier's t*, bias, and the flowlines' mu*"
 BASENAMES['local_mustar'] = ('local_mustar.json', _doc)

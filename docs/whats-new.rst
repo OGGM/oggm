@@ -82,7 +82,9 @@ Breaking changes
 - The global task `glacier_characteristics` has been renamed to
   `compile_glacier_statistics` (:pull:`571`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-
+- The ``process_cesm_data`` task has been been moved to climate_prepro.py
+  adressing: :issue:`469` & :pull:`xxx`.
+  By `Anouk Vlug <https://github.com/anoukvlug>`_.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -139,6 +141,13 @@ Enhancements
   also adds some safety checks at the calibration and computation of the
   mass-balance to make sure there is no misused parameters (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ``process_cesm_data`` function has been split into two functions, to make
+  it easier to run oggm with the climate of other GCM's. ``prepro_cesm_data``
+  will replace ``process_cesm_data``. ``process_gcm_data`` can also be used
+  when running oggm with another GCM for the climate. ``process_cesm_data`` can
+  be used as an example when you plan make a function for running OGGM with
+  another GCM (:issue:`469` & :pull:`xxx`).
+  `Anouk Vlug <https://github.com/anoukvlug>`_.
 
 
 Bug fixes
