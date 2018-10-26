@@ -38,6 +38,10 @@ fi
 
 export PATH="$HOME/miniconda/bin:$PATH"
 
+conda config --set always_yes yes --set changeps1 no
+conda update -q conda
+conda update -q --all
+conda info -a
 conda create -n oggm_env -c oggm -c conda-forge python="$PYTHON_VERSION"
 
 source activate oggm_env
