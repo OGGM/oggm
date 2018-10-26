@@ -8,5 +8,5 @@ pip3 install coveralls
 cd /root/oggm
 pip3 install -e .
 pytest oggm --mpl-upload $MPL --cov-config .coveragerc --cov=oggm --cov-report term-missing --run-slow --run-test-env $OGGM_TEST_ENV
-coverage combine
+coverage combine || true
 coveralls || true
