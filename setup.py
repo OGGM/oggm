@@ -96,5 +96,5 @@ setup(
     # Old
     data_files=[],
     # Executable scripts
-    entry_points={},
+    entry_points={'pytest11': ['pytest_oggm = oggm.pytest_plugin']},
 )
