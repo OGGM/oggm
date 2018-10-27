@@ -198,13 +198,13 @@ And install OGGM in development mode (this is valid for both  **pip** and
 .. _git pull: https://git-scm.com/docs/git-pull
 
 
-Testing OGGM (dev version only)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Testing OGGM
+~~~~~~~~~~~~
 
-You can test your OGGM installation by navigating to the OGGM source code
-directory, then type::
+You can test your OGGM installation by running the following command from
+anywhere (don't forget to activate your environment first)::
 
-    pytest .
+    pytest --pyargs oggm
 
 The tests can run for a couple of minutes. If everything worked fine, you
 should see something like::
@@ -228,8 +228,13 @@ should see something like::
     ==================== 112 passed, 52 skipped in 187.35 seconds =====================
 
 
-You can safely ignore deprecation warnings and other DLL messages as long as
-the tests end without errors.
+You can safely ignore deprecation warnings and other messages (if any),
+as long as the tests end without errors.
+
+This runs a minimal suite of tests. If you want to run the entire test suite
+(including graphics and slow running tests), type::
+
+    pytest --pyargs oggm --run-slow --mpl
 
 **Congrats**, you are now set-up for the :ref:`getting-started` section!
 

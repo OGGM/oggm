@@ -45,15 +45,15 @@ def init_mp_pool(reset=False):
     if mpp == -1:
         try:
             mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
-            log.info('Multiprocessing: using slurm allocated '
-                     'processors (N={})'.format(mpp))
+            log.workflow('Multiprocessing: using slurm allocated '
+                         'processors (N={})'.format(mpp))
         except KeyError:
             mpp = mp.cpu_count()
-            log.info('Multiprocessing: using all available '
-                     'processors (N={})'.format(mpp))
+            log.workflow('Multiprocessing: using all available '
+                         'processors (N={})'.format(mpp))
     else:
-        log.info('Multiprocessing: using the requested number of '
-                 'processors (N={})'.format(mpp))
+        log.workflow('Multiprocessing: using the requested number of '
+                     'processors (N={})'.format(mpp))
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
                        initargs=(cfg_contents, global_lock))
     return _mp_pool
@@ -131,6 +131,9 @@ def execute_entity_task(task, gdirs, **kwargs):
     except TypeError:
         gdirs = [gdirs]
 
+    log.workflow('Execute entity task %s on %d glaciers',
+                 task.__name__, len(gdirs))
+
     if task.__dict__.get('global_task', False):
         return task(gdirs, **kwargs)
 
@@ -145,6 +148,7 @@ def execute_entity_task(task, gdirs, **kwargs):
         out = mppool.map(pc, gdirs, chunksize=1)
     else:
         out = [pc(gdir) for gdir in gdirs]
+
     return out
 
 

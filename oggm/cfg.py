@@ -17,10 +17,6 @@ import geopandas as gpd
 from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
 
-# Defaults
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
-
 # Local logger
 log = logging.getLogger(__name__)
 
@@ -202,24 +198,86 @@ _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
 
-def initialize(file=None):
+def set_logging_config(logging_level='INFO'):
+    """Set the global logger parameters.
+
+    Logging levels:
+
+    DEBUG
+        Print detailed information, typically of interest only when diagnosing
+        problems.
+    INFO
+        Print confirmation that things are working as expected, e.g. when
+        each task is run correctly (this is the default).
+    WARNING
+        Indication that something unexpected happened on a glacier,
+        but that OGGM is still working on this glacier.
+    WORKFLOW
+        Print only high level, workflow information (typically, one message
+        per task). Errors will still be printed, but warnings won't.
+    ERROR
+        Print errors only, e.g. when a glacier cannot run properly.
+    CRITICAL
+        Print nothing but fatal errors.
+
+    Parameters
+    ----------
+    logging_level : str or None
+        the logging level. See description above for a list of options. Setting
+        to None is equivalent to CRITICAL, i.e. no log output will be
+        generated.
+    """
+
+    # Add a custom level - just for us
+    logging.addLevelName(35, 'WORKFLOW')
+
+    def workflow(self, message, *args, **kws):
+        """Standard log message with a custom level."""
+        if self.isEnabledFor(35):
+            # Yes, logger takes its '*args' as 'args'.
+            self._log(35, message, args, **kws)
+
+    logging.WORKFLOW = 35
+    logging.Logger.workflow = workflow
+
+    # Remove all handlers associated with the root logger object.
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    # Spammers
+    logging.getLogger("Fiona").setLevel(logging.CRITICAL)
+    logging.getLogger("shapely").setLevel(logging.CRITICAL)
+    logging.getLogger("rasterio").setLevel(logging.CRITICAL)
+
+    # Basic config
+    if logging_level is None:
+        logging_level = 'CRITICAL'
+    logging_level = logging_level.upper()
+    logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        level=getattr(logging, logging_level))
+
+
+def initialize(file=None, logging_level='INFO'):
     """Read the configuration file containing the run's parameters."""
 
     global IS_INITIALIZED
     global PARAMS
     global PATHS
 
+    set_logging_config(logging_level=logging_level)
+
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
 
-    log.info('Parameter file: %s', file)
-
     try:
         cp = ConfigObj(file, file_error=True)
     except (ConfigObjError, IOError) as e:
-        log.critical('Param file could not be parsed (%s): %s', file, e)
+        log.critical('Config file could not be parsed (%s): %s', file, e)
         sys.exit()
+
+    log.workflow('Found config file: %s', file)
 
     # Paths
     oggm_static_paths()

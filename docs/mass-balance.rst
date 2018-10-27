@@ -204,7 +204,7 @@ value to be interpolated to glaciers where no observations are available**.
 The benefit of this approach is best shown with the results of a cross-validation
 study realized by `Marzeion et al., (2012)`_ (and confirmed by OGGM):
 
-.. figure:: _static/mb_crossval.png
+.. figure:: _static/mb_crossval_panel.png
     :width: 100%
 
     Benefit of spatially interpolating :math:`t^{*}` instead of :math:`\mu ^{*}` as shown

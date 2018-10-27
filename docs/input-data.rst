@@ -13,7 +13,7 @@ System settings
 
 OGGM implements a bunch of tools to make access to the input data as painless
 as possible for you, including the automated download of all the required files.
-This requires that you tell OGGM where to store these data.
+This requires you to tell OGGM where to store these data.
 
 
 Calibration data and testing: the ``~/.oggm`` directory
@@ -40,8 +40,8 @@ For example:
 .. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
 
 The ``~/.oggm`` directory should be updated automatically when you update OGGM,
-but if you encounter any problems simply delete it (it will be
-re-downloaded automatically at the next import).
+but if you encounter any problems with is, simply delete the directory (it will
+be re-downloaded automatically at the next import).
 
 
 All other data: auto-downloads and the ``~/.oggm_config`` file
@@ -92,6 +92,7 @@ Some explanations:
 
 .. note::
 
+  For advanced users or cluster configuration:
   ``tmp_dir``, ``cru_dir`` and ``rgi_dir`` can be overridden and set to a
   specific directory by defining an environment variable ``OGGM_EXTRACT_DIR``
   to a directory path. Similarly, the environment variables

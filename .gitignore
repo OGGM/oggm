@@ -13,6 +13,7 @@ __pycache__
 # Notebook stuffs
 examples/*checkpoints
 .ipynb_checkpoints
+*.nbgrader.log
 
 # Tests stuffs
 oggm/tests/result_images
