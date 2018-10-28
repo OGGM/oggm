@@ -134,6 +134,8 @@ autosummary_generate = True
 numpydoc_class_members_toctree = True
 numpydoc_show_class_members = False
 
+ipython_warning_is_error = False
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
