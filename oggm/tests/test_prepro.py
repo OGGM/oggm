@@ -1728,6 +1728,21 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
 
+        # Sanity check - velocities
+        inv = gdir.read_pickle('inversion_output')[-1]
+
+        # vol in m3 and dx in m -> section in m2
+        section = inv['volume'] / inv['dx']
+
+            # Flux in m3 s-1 -> convert to velocity m s-1
+        velocity = inv['flux'] / section
+
+        # Then in m yr-1
+        velocity *= cfg.SEC_IN_YEAR
+
+        # Some reference value I just computed - see if other computers agree
+        np.testing.assert_allclose(np.mean(velocity), 37, atol=5)
+
     def test_invert_hef_from_linear_mb(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
