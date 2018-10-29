@@ -24,7 +24,7 @@ fi
 if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
 	wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Windows-x86_64.exe -O miniconda.exe
 	chmod +x miniconda.exe
-	./miniconda.exe "/S" "/D=$(cygpath -w -a $HOME/miniconda)"
+	travis_wait 40 ./miniconda.exe "/S" "/D=$(cygpath -w -a $HOME/miniconda)"
 	rm miniconda.exe
 elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
 	rvm get head || true

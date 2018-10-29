@@ -120,4 +120,6 @@ matrix:
       os: windows
 
 script:
+  - export -f travis_wait
+  - export -f travis_jigger
   - ./ci/travis_stage_script.sh
