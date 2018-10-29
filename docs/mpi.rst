@@ -5,7 +5,7 @@ Parallel computations
 
 OGGM is designed to use the available resources as well as possible. For single
 nodes machines but with more than one processor (frequent case for personal
-comuters) OGGM ships with a multiprocessing approach which is fairly simple to
+computers) OGGM ships with a multiprocessing approach which is fairly simple to
 use. For cluster environments, use `MPI`_.
 
 
