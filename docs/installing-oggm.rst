@@ -3,27 +3,27 @@
 Installing OGGM
 ===============
 
-OGGM itself is a pure python package, but it has several dependencies wich
-are not trivial to install. The instructions below are
-self-explanatory and should work on any platform.
+OGGM itself is a pure Python package, but it has several dependencies which
+are not trivial to install. The instructions below provide all the required
+detail and should work on any platform.
 
-OGGM is fully `tested`_ with python `version`_ 3.6 on linux and partially
-tested on `windows`_ (windows should be used for development
-purposes only). OGGM doesn't work with python version 2.7.
+OGGM is fully `tested`_ with Python `version`_ 3.6 on Linux and partially
+tested on `Windows`_ (Windows should be used for development
+purposes only). OGGM doesn't work with Python version 2.7.
 
 .. note::
 
-   Complete beginners should get familiar with python and its packaging
+   Complete beginners should get familiar with Python and its packaging
    ecosystem before trying to install and run OGGM.
 
-For most users we recommend to install python and the package dependencies
-with the conda_ package manager:
-`Install with conda (all platforms)`_. Linux users and people
-with experience with `pip`_ can follow the specific instructions
-`Install with virtualenv (linux/debian)`_.
+For most users we recommend following :ref:`the steps here<conda-install>` to
+install Python and the package dependencies with the conda_ package manager.
+Linux or Debian users and people with experience with `pip`_ can
+:ref:`follow the specific instructions here<virtualenv-install>` to install
+with virtualenv.
 
 .. _tested: https://travis-ci.org/OGGM/oggm
-.. _windows: https://ci.appveyor.com/project/fmaussion/oggm
+.. _Windows: https://ci.appveyor.com/project/fmaussion/oggm
 .. _version: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
@@ -33,7 +33,7 @@ with experience with `pip`_ can follow the specific instructions
 Dependencies
 ------------
 
-Standard SciPy track:
+Standard SciPy stack:
     - numpy
     - scipy
     - scikit-image
@@ -69,6 +69,8 @@ Optional:
     - bottleneck (speeds up xarray operations)
 
 
+.. _conda-install:
+
 Install with conda (all platforms)
 ----------------------------------
 
@@ -79,10 +81,10 @@ Prerequisites
 
 You should have a recent version of the `conda`_ package manager.
 You can get `conda`_ by installing `miniconda`_ (the package manager alone -
-recommended)  or `anaconda`_ (the full suite - with many packages you wont
+recommended)  or `anaconda`_ (the full suite - with many packages you won't
 need).
 
-**Linux** users should install a couple of linux packages (not all of them are
+**Linux** users should install a couple of Linux packages (not all of them are
 required but it's good to have them anyway)::
 
     $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf4 ttf-bitstream-vera
@@ -101,14 +103,14 @@ window, type::
     conda create --name oggm_env python=3.X
 
 
-where ``3.X`` is the python version shipped with conda (currently 3.6).
+where ``3.X`` is the Python version shipped with conda (currently 3.6).
 You can of course use any other name for your environment.
 
 Don't forget to activate it before going on::
 
     source activate oggm_env
 
-(on windows: ``activate oggm_env``)
+(on Windows: ``activate oggm_env``)
 
 .. _environment: http://conda.pydata.org/docs/using/envs.html
 .. _this problem: https://github.com/conda-forge/geopandas-feedstock/issues/9
@@ -117,12 +119,12 @@ Don't forget to activate it before going on::
 Dependencies
 ~~~~~~~~~~~~
 
-Install all OGGM dependencies from the conda-forge and oggm conda channels::
+Install all OGGM dependencies from the ``conda-forge`` and ``oggm`` conda channels::
 
     conda install -c oggm -c conda-forge oggm-deps
 
-The `oggm-deps` package is a "meta package". It does not contain any code but
-will install all the packages that oggm needs.
+The ``oggm-deps`` package is a "meta package". It does not contain any code but
+will install all the packages OGGM needs automatically.
 
 .. warning::
 
@@ -132,20 +134,22 @@ will install all the packages that oggm needs.
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ (and oggm) per default::
+You might consider setting `conda-forge`_ (and ``oggm``) as your 
+default channels::
 
     conda config --add channels conda-forge
     conda config --add channels oggm
 
-No scientific python installation is complete without installing
-`ipython`_ and `jupyter`_::
+No scientific Python installation is complete without installing
+`IPython`_ and `Jupyter`_::
 
     conda install -c conda-forge ipython jupyter
 
 
 .. _conda-forge: https://conda-forge.github.io/
-.. _ipython: https://ipython.org/
-.. _jupyter: https://jupyter.org/
+.. _IPython: https://ipython.org/
+.. _Jupyter: https://jupyter.org/
+
 
 Install OGGM itself
 ~~~~~~~~~~~~~~~~~~~
@@ -239,21 +243,26 @@ This runs a minimal suite of tests. If you want to run the entire test suite
 **Congrats**, you are now set-up for the :ref:`getting-started` section!
 
 
-Install with virtualenv (linux/debian)
+.. _virtualenv-install:
+
+Install with virtualenv (Linux/Debian)
 --------------------------------------
 
 .. note::
 
-   The installation with pip requires a few more steps than with conda.
-   Unless you have a good reason to be here (and there are some good reasons),
-   `Install with conda (all platforms)`_ is probably what you want do do.
+   The installation with virtualenv and pip requires a few more steps than with
+   conda. Unless you have a good reason to install by this route,
+   :ref:`installing with conda <conda-install>` is probably what you want to do.
+
 
 The instructions below have been tested on Debian / Ubuntu / Mint systems only!
 
 Linux packages
 ~~~~~~~~~~~~~~
 
-For building stuffs::
+Run the following commands to install required packages.
+
+For the build::
 
     $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev python-setuptools
 
@@ -265,7 +274,7 @@ For GDAL::
 
     $ sudo apt-get install gdal-bin libgdal-dev python-gdal
 
-For NETCDF::
+For NetCDF::
 
     $ sudo apt-get install netcdf-bin ncview python-netcdf4
 
@@ -273,7 +282,9 @@ For NETCDF::
 Virtual environment
 ~~~~~~~~~~~~~~~~~~~
 
-Install::
+Next follow these steps to set up a virtual environment.
+
+Install extensions to virtualenv::
 
     $ sudo apt-get install virtualenvwrapper
 
@@ -281,14 +292,14 @@ Reload your profile::
 
     $ source /etc/profile
 
-Make a new environment with **python 3**::
+Make a new environment, for example called ``oggm_env``, with **Python 3**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python3
 
-(Details: http://simononsoftware.com/virtualenv-tutorial-part-2/ )
+(Further details can be found for example in `this tutorial <http://simononsoftware.com/virtualenv-tutorial-part-2/>`_.)
 
 
-Python Packages
+Python packages
 ~~~~~~~~~~~~~~~
 
 Be sure to be on the working environment::
@@ -299,20 +310,19 @@ Update pip (important!)::
 
     $ pip install --upgrade pip
 
-Install one by one the easy stuff::
+Install some packages one by one::
 
    $ pip install numpy scipy pandas shapely matplotlib
 
-For **GDAL**, it's not as straight forward. First, check which version of
-GDAL is installed::
+Installing **GDAL** is not so straightforward. First, check which version of
+GDAL is installed on your Linux system::
 
     $ gdal-config --version
 
 The package version (e.g. ``2.2.0``, ``2.3.1``, ...) should match
-that of the python package you want to install. For example, if the linux
-GDAL version is ``2.2.0``, install the latest corresponding python version.
-The following command should work on any system and automatically parses the
-right version::
+that of the Python package you want to install. For example, if the Linux
+GDAL version is ``2.2.0``, install the latest corresponding Python version.
+The following command works on any system and automatically gets the right version::
 
     $ pip install gdal=="$(gdal-config --version)" --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
@@ -320,13 +330,13 @@ Fiona also builds upon GDAL, so let's compile it the same way::
 
     $ pip install fiona --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
-(Details: http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html )
+(Details can be found in `this blog post <http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html>`_.)
 
-Install further stuffs::
+Now install further dependencies::
 
     $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless dask bottleneck
 
-And the salem library::
+Finally, install the salem library::
 
     $ pip install git+https://github.com/fmaussion/salem.git
 

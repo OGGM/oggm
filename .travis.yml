@@ -1,6 +1,6 @@
 sudo: required
 dist: trusty
-language: python
+language: bash
 services:
   - docker
 
@@ -18,51 +18,105 @@ cache:
 
 matrix:
   fast_finish: true
+  allow_failures:
+    - os: windows
   include:
-    - env: OGGM_TEST_ENV=prepro MPL=
-      python: 3.6
-    - env: OGGM_TEST_ENV=prepro MPL=
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=numerics MPL=
-      python: 3.6
-    - env: OGGM_TEST_ENV=numerics MPL=
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=models MPL=
-      python: 3.6
-    - env: OGGM_TEST_ENV=models MPL=
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=benchmark MPL=
-      python: 3.6
-    - env: OGGM_TEST_ENV=benchmark MPL=
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=utils MPL=
-      python: 3.6
-    - env: OGGM_TEST_ENV=utils MPL=
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
-      python: 3.6
-    - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
-      python: 3.6
-    - env: OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
-      python: 3.7-dev
-    - env: OGGM_TEST_ENV=graphics MPL=--mpl
-      python: 3.6
-    - env: OGGM_TEST_ENV=graphics MPL=--mpl
-      python: 3.7-dev
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: linux
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: linux
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
+      os: linux
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
+      os: linux
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: linux
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: linux
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
+      os: linux
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: osx
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: osx
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
+      os: osx
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
+      os: osx
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: osx
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: osx
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
+      os: osx
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: windows
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: windows
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
+      os: windows
+    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
+      os: windows
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
+      os: windows
+    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
+      os: windows
+    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
+      os: windows
 
-before_install:
-  - export IMAGE_TAG=latest
-  - test "$TRAVIS_PYTHON_VERSION" = "3.7-dev" && export IMAGE_TAG=py37 || true
-  - docker pull oggm/untested_base:$IMAGE_TAG
-install:
-  - mkdir -p $HOME/dl_cache
-  - export OGGM_DOWNLOAD_CACHE=/dl_cache
-  - docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e MPL -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:$IMAGE_TAG /bin/bash /root/oggm/ci/travis_script.sh
-  - docker cp $PWD oggm_travis:/root/oggm
 script:
-  - export OGGM_DOWNLOAD_CACHE=/dl_cache
-  - docker start -ai oggm_travis
-after_script:
-  - docker rm oggm_travis
+  - ./ci/travis_stage_script.sh

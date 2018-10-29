@@ -3,7 +3,7 @@
 import logging
 import os
 from shutil import rmtree
-import collections
+from collections.abc import Sequence
 # External libs
 import multiprocessing as mp
 import numpy as np
@@ -83,7 +83,7 @@ class _pickle_copier(object):
         else:
             call_func, gdir = arg
         try:
-            if isinstance(gdir, collections.Sequence):
+            if isinstance(gdir, Sequence):
                 gdir, gdir_kwargs = gdir
                 gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
                 return call_func(gdir, **gdir_kwargs)
@@ -175,7 +175,7 @@ def execute_parallel_tasks(gdir, tasks):
     _tasks = []
     for task in tasks:
         kwargs = {}
-        if isinstance(task, collections.Sequence):
+        if isinstance(task, Sequence):
             task, kwargs = task
         _tasks.append((task, (gdir, kwargs)))
 
