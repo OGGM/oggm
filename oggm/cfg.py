@@ -259,7 +259,17 @@ def set_logging_config(logging_level='INFO'):
 
 
 def initialize(file=None, logging_level='INFO'):
-    """Read the configuration file containing the run's parameters."""
+    """Read the configuration file containing the run's parameters.
+
+    This should be the first call of most (all?) OGGM simulations.
+
+    Parameters
+    ----------
+    file : str
+        path to the configuration file (default: OGGM params.cfg)
+    logging_level : str
+        set a logging level. See :func:`set_logging_config` for options.
+    """
 
     global IS_INITIALIZED
     global PARAMS
@@ -277,7 +287,7 @@ def initialize(file=None, logging_level='INFO'):
         log.critical('Config file could not be parsed (%s): %s', file, e)
         sys.exit()
 
-    log.workflow('Found config file: %s', file)
+    log.workflow('Using configuration file: %s', file)
 
     # Paths
     oggm_static_paths()
@@ -484,21 +494,32 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
         return lru
 
 
-def set_intersects_db(path=None):
-    """Read the intersects database.
+def set_intersects_db(path_or_gdf=None):
+    """Set the glacier intersection database for later use.
+
+    See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain such
+    data.
+
+    Parameters
+    ----------
+    path_or_gdf : str of geopandas.GeoDataframe
+        the intersects file to use
     """
 
-    if PARAMS['use_intersects'] and path is not None:
-        if isinstance(path, str):
-            PARAMS['intersects_gdf'] = gpd.read_file(path)
+    if PARAMS['use_intersects'] and path_or_gdf is not None:
+        if isinstance(path_or_gdf, str):
+            PARAMS['intersects_gdf'] = gpd.read_file(path_or_gdf)
         else:
-            PARAMS['intersects_gdf'] = path
+            PARAMS['intersects_gdf'] = path_or_gdf
     else:
         PARAMS['intersects_gdf'] = gpd.GeoDataFrame()
 
 
 def reset_working_dir():
-    """Deletes the working directory."""
+    """Deletes the content of the working directory.
+
+    Careful! Cannot be undone!
+    """
     if PATHS['working_dir']:
         if os.path.exists(PATHS['working_dir']):
             shutil.rmtree(PATHS['working_dir'])

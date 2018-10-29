@@ -239,7 +239,7 @@ def define_glacier_region(gdir, entity=None):
         the glacier geometry to process
     """
 
-    # 1. Make a local glacier map
+    # Make a local glacier map
     proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
@@ -252,7 +252,7 @@ def define_glacier_region(gdir, entity=None):
     geometry = multi_to_poly(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
-    # 2. save transformed geometry to disk
+    # Save transformed geometry to disk
     entity = entity.copy()
     entity['geometry'] = geometry
     # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
@@ -265,7 +265,7 @@ def define_glacier_region(gdir, entity=None):
     if 'DEM_SOURCE' in towrite:
         del towrite['DEM_SOURCE']
 
-    # 3. define glacier area to use
+    # Define glacier area to use
     area = entity['Area']
 
     # Do we want to use the RGI area or ours?
@@ -274,10 +274,10 @@ def define_glacier_region(gdir, entity=None):
         entity['Area'] = area
         towrite['Area'] = area
 
-    # 4. Write shapefile
+    # Write shapefile
     towrite.to_file(gdir.get_filepath('outlines'))
 
-    # 5. Also transform the intersects if necessary
+    # Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
     if len(gdf) > 0:
         gdf = gdf.loc[((gdf.RGIId_1 == gdir.rgi_id) |

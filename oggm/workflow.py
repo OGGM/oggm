@@ -6,6 +6,7 @@ from shutil import rmtree
 import collections
 # External libs
 import multiprocessing as mp
+import numpy as np
 
 # Locals
 import oggm
@@ -222,6 +223,16 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
             if not os.path.exists(gdir.get_filepath('dem')):
                 new_gdirs.append((gdir, dict(entity=entity)))
             gdirs.append(gdir)
+
+    # We can set the intersects file automatically here
+    if (cfg.PARAMS['use_intersects'] and new_gdirs and
+            not cfg.PARAMS['intersects_gdf']):
+        rgi_ids = np.unique(np.sort([gdir.rgi_id for gdir in new_gdirs]))
+        rgi_version = new_gdirs[0].rgi_version
+        fp = utils.get_rgi_intersects_region_file(region='00',
+                                                  version=rgi_version,
+                                                  rgi_ids=rgi_ids)
+        cfg.set_intersects_db(fp)
 
     # If not initialized, run the task in parallel
     execute_entity_task(tasks.define_glacier_region, new_gdirs)

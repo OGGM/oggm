@@ -1,6 +1,6 @@
-#######################
-Developer documentation
-#######################
+#############
+API Reference
+#############
 
 .. currentmodule:: oggm
 
@@ -14,11 +14,29 @@ Tools to set-up and run OGGM.
     :toctree: generated/
     :nosignatures:
 
+    cfg.initialize
+    cfg.set_logging_config
+    cfg.set_intersects_db
+    cfg.reset_working_dir
     workflow.init_glacier_regions
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.climate_tasks
     workflow.inversion_tasks
+
+
+Input/Output
+============
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    utils.get_rgi_dir
+    utils.get_rgi_region_file
+    utils.get_rgi_glacier_entities
+    utils.get_rgi_intersects_dir
+    utils.get_rgi_intersects_region_file
 
 
 .. _apientitytasks:

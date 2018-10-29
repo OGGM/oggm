@@ -102,6 +102,11 @@ Some explanations:
 .. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
 
 
+Glacier outlines and intersects
+-------------------------------
+
+TODO
+
 Topography data
 ---------------
 
