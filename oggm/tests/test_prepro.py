@@ -1734,7 +1734,7 @@ class TestInversion(unittest.TestCase):
         # vol in m3 and dx in m -> section in m2
         section = inv['volume'] / inv['dx']
 
-            # Flux in m3 s-1 -> convert to velocity m s-1
+        # Flux in m3 s-1 -> convert to velocity m s-1
         velocity = inv['flux'] / section
 
         # Then in m yr-1
