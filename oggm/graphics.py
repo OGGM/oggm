@@ -12,12 +12,19 @@ import numpy as np
 import salem
 import shapely.geometry as shpg
 from matplotlib import cm as colormap
+from colorspace import sequential_hcl
 
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
 
 # Module logger
 log = logging.getLogger(__name__)
+
+# Set global colormaps: use effective HCL-based palettes from python-colorspace
+CMAP_DIVS = 30  # number of discrete colours taken from continuous colormaps
+ALTITUDE_CMAP = sequential_hcl("Greens 2").cmap(CMAP_DIVS)
+SECTION_THICKNESS_CMAP = sequential_hcl("Blue-Yellow").cmap(CMAP_DIVS)
+GLACIER_THICKNESS_CMAP = sequential_hcl("Heat", rev = True).cmap(CMAP_DIVS)
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
@@ -216,7 +223,7 @@ def plot_domain(gdirs, ax=None, smap=None):
     except ValueError:
         pass
 
-    cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
+    cm = truncate_colormap(ALTITUDE_CMAP, minval=0.25, maxval=1.0, n=256)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
 
@@ -254,7 +261,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
-    cm = truncate_colormap(colormap.terrain, minval=0.25, maxval=1.0, n=256)
+    cm = truncate_colormap(ALTITUDE_CMAP, minval=0.25, maxval=1.0, n=256)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
     smap.set_data(topo)
@@ -462,9 +469,8 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    cm = plt.cm.get_cmap('YlOrRd')
-    dl = salem.DataLevels(cmap=cm, nlevels=256, data=toplot_th,
-                          vmin=0, vmax=vmax)
+    dl = salem.DataLevels(cmap=SECTION_THICKNESS_CMAP, nlevels=256,
+                          data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
         smap.set_geometry(l, crs=crs, color=c,
@@ -514,7 +520,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     for l in poly_pix.interiors:
         smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
-    smap.set_cmap(plt.get_cmap('viridis'))
+    smap.set_cmap(GLACIER_THICKNESS_CMAP)
     smap.set_plot_params(nlevels=256)
     smap.set_data(thick)
 
@@ -575,9 +581,8 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                 toplot_lines.append(line)
                 toplot_crs.append(crs)
 
-    cm = plt.cm.get_cmap('YlOrRd')
-    dl = salem.DataLevels(cmap=cm, nlevels=256, data=toplot_th,
-                          vmin=0, vmax=vmax)
+    dl = salem.DataLevels(cmap=SECTION_THICKNESS_CMAP, nlevels=256,
+                          data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
         smap.set_geometry(l, crs=crs, color=c,
