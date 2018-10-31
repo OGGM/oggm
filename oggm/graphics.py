@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 CMAP_DIVS = 30  # number of discrete colours taken from continuous colormaps
 ALTITUDE_CMAP = sequential_hcl("Greens 2").cmap(CMAP_DIVS)
 SECTION_THICKNESS_CMAP = sequential_hcl("Blue-Yellow").cmap(CMAP_DIVS)
-GLACIER_THICKNESS_CMAP = sequential_hcl("Heat", rev = True).cmap(CMAP_DIVS)
+GLACIER_THICKNESS_CMAP = sequential_hcl("Heat", rev=True).cmap(CMAP_DIVS)
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):

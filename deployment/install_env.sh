@@ -20,6 +20,7 @@ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj jobl
 
 echo "Installing git packages..."
 pip install git+https://github.com/fmaussion/salem.git
+pip install git+https://github.com/retostauffer/python-colorspace
 
 echo "Done installing pip packages"
 

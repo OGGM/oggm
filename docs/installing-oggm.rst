@@ -68,6 +68,7 @@ Other libraries:
     - boto3
     - `salem <https://github.com/fmaussion/salem>`_
     - `motionless <https://github.com/ryancox/motionless/>`_
+    - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
 
 Optional:
     - progressbar2 (displays the download progress)
