@@ -893,7 +893,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if fls is None:
-            for fn in ['model_flowlines', 'inversion_flowlines']:
+            for fn in ['inversion_flowlines', 'model_flowlines']:
                 try:
                     fls = gdir.read_pickle(fn)
                 except FileNotFoundError:
