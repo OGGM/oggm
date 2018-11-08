@@ -1,6 +1,6 @@
 ###################################################
-# Dockerfile to build a Python 3.5 environment
-# with OGGM installed, based on Ubuntu 16.04.
+# Dockerfile to build a Python 3.6 environment
+# with OGGM installed, based on Ubuntu 18.04.
 ###################################################
 
 FROM oggm/base:latest
