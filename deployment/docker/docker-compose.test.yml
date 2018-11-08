@@ -1,8 +1,11 @@
-sut:
-  build:
-    context: .
-    args:
+version: "3"
+
+services:
+  sut:
+    build:
+      context: .
+      args:
+        - SOURCE_COMMIT
+    command: /root/test.sh
+    environment:
       - SOURCE_COMMIT
-  command: /root/test.sh
-  environment:
-    - SOURCE_COMMIT
