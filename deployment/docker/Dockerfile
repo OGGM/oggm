@@ -6,4 +6,4 @@
 FROM oggm/base:latest
 MAINTAINER Timo Rothenpieler
 
-RUN pip3 install git+https://github.com/OGGM/oggm.git
+RUN if test -n "$SOURCE_COMMIT"; then pip3 install "git+https://github.com/OGGM/oggm.git@$SOURCE_COMMIT"; else pip3 install "git+https://github.com/OGGM/oggm.git"; fi
