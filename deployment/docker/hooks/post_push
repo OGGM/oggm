@@ -1,0 +1,6 @@
+#!/bin/bash
+DATE_ID="$(date +%Y%m%d)"
+docker tag $IMAGE_NAME $DOCKER_REPO:$SOURCE_COMMIT
+docker tag $IMAGE_NAME $DOCKER_REPO:$DATE_ID
+docker push $DOCKER_REPO:$SOURCE_COMMIT
+docker push $DOCKER_REPO:$DATE_ID
