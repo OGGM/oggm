@@ -5,7 +5,5 @@ services:
     build:
       context: .
       args:
-        - SOURCE_COMMIT
+        - SOURCE_COMMIT=master
     command: /root/test.sh
-    environment:
-      - SOURCE_COMMIT
