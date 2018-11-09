@@ -245,11 +245,6 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     if add_downstream and not use_flowlines:
         raise ValueError('Downstream lines can be plotted with flowlines only')
 
-    # Files
-    filename = 'centerlines'
-    if use_flowlines:
-        filename = 'inversion_flowlines'
-
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
@@ -272,7 +267,18 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                               color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = gdir.read_pickle(filename)
+        if use_flowlines:
+            try:
+                cls = gdir.read_pickle('model_flowlines')
+            except FileNotFoundError:
+                try:
+                    cls = gdir.read_pickle('inversion_flowlines')
+                except FileNotFoundError:
+                    raise RuntimeError('Need a valid `model_flowlines` or '
+                                       '`inversion_flowlines` to continue!')\
+                        from None
+        else:
+            cls = gdir.read_pickle('centerlines')
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
