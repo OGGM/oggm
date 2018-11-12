@@ -5,8 +5,9 @@ cd "$(dirname "$0")/.."
 export MPLBACKEND=agg
 
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-    export IMAGE_TAG=latest
-    test "$PYTHON_VERSION" = "3.7" && export IMAGE_TAG=py37 || true
+    test -n "$TEST_CONTAINER" && IMAGE_TAG="$TEST_CONTAINER" || IMAGE_TAG=latest
+    export IMAGE_TAG
+
     docker pull oggm/untested_base:$IMAGE_TAG
 
     mkdir -p $HOME/dl_cache
