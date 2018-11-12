@@ -239,11 +239,18 @@ def plot_domain(gdirs, ax=None, smap=None):
 @_plot_map
 def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                      add_downstream=False, lines_cmap='Set1',
-                     add_line_index=False):
+                     add_line_index=False, use_model_flowlines=False):
     """Plots the centerlines of a glacier directory."""
 
     if add_downstream and not use_flowlines:
         raise ValueError('Downstream lines can be plotted with flowlines only')
+
+    # Files
+    filename = 'centerlines'
+    if use_model_flowlines:
+        filename = 'model_flowlines'
+    elif use_flowlines:
+        filename = 'inversion_flowlines'
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -267,18 +274,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                               color='black', linewidth=0.5)
 
         # plot Centerlines
-        if use_flowlines:
-            try:
-                cls = gdir.read_pickle('model_flowlines')
-            except FileNotFoundError:
-                try:
-                    cls = gdir.read_pickle('inversion_flowlines')
-                except FileNotFoundError:
-                    raise RuntimeError('Need a valid `model_flowlines` or '
-                                       '`inversion_flowlines` to continue!')\
-                        from None
-        else:
-            cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_pickle(filename)
 
         # Go in reverse order for red always being the longuest
         cls = cls[::-1]
