@@ -893,14 +893,15 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if fls is None:
-            for fn in ['model_flowlines', 'inversion_flowlines']:
+            try:
+                fls = gdir.read_pickle('model_flowlines')
+            except FileNotFoundError:
                 try:
-                    fls = gdir.read_pickle(fn)
+                    fls = gdir.read_pickle('inversion_flowlines')
                 except FileNotFoundError:
-                    pass
-            if fls is None:
-                raise RuntimeError('Need a valid `model_flowlines` or '
-                                   '`inversion_flowlines` to continue!')
+                    raise RuntimeError('Need a valid `model_flowlines` or '
+                                       '`inversion_flowlines` to continue!')\
+                        from None
 
         self.fls = fls
 
