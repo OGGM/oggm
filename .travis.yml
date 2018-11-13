@@ -6,6 +6,7 @@ services:
 
 notifications:
   email: false
+  webhooks: https://coveralls.io/webhook
 
 branches:  # blacklist
   except:
@@ -15,6 +16,10 @@ branches:  # blacklist
 cache:
   directories:
     - $HOME/dl_cache
+
+env:
+  global:
+    - COVERALLS_PARALLEL=true
 
 matrix:
   fast_finish: true
