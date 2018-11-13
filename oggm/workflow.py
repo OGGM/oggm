@@ -226,7 +226,7 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
 
     # We can set the intersects file automatically here
     if (cfg.PARAMS['use_intersects'] and new_gdirs and
-            not cfg.PARAMS['intersects_gdf']):
+            (cfg.PARAMS['intersects_gdf'] is None)):
         rgi_ids = np.unique(np.sort([gdir.rgi_id for gdir in new_gdirs]))
         rgi_version = new_gdirs[0].rgi_version
         fp = utils.get_rgi_intersects_region_file(region='00',
