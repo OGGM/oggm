@@ -1,5 +1,6 @@
 """Mass-balance models"""
 # Built ins
+import os
 # External libs
 import numpy as np
 import pandas as pd
@@ -231,8 +232,8 @@ class PastMassBalance(MassBalanceModel):
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
         filename : str, optional
-            set to a different BASENAME if you want to use alternative climate
-            data.
+            if you want to use alternative climate date, set to either a
+            different BASENAME or to the complete filepath
         input_filesuffix : str
             the file suffix of the input climate file
         repeat : bool
@@ -307,7 +308,12 @@ class PastMassBalance(MassBalanceModel):
         self.repeat = repeat
 
         # Read file
-        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
+        if os.path.isfile(filename):
+            fpath = filename
+        else:
+            # must be BASENAME
+            fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
+
         with ncDataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
@@ -872,7 +878,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, fls=None, mu_star=None,
                  mb_model_class=PastMassBalance, use_inversion_flowlines=False,
-                 **kwargs):
+                 filename='climate_monthly', **kwargs):
         """Initialize.
 
         Parameters
@@ -908,6 +914,16 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                    '`inversion_flowlines`, set '
                                    'use_inversion_flowlines=True.') from None
 
+        # If flowline has not climatefile, use filename
+        for fl in fls:
+            if fl.climatefile is None:
+                fl.climatefile = filename
+            elif (fl.climatefile is not None and
+                  filename is not 'climate_monthly'):
+                raise RuntimeError('You provided an alternative climatefile '
+                                   'and a flowline.climatefile. Only use one '
+                                   'of it in order to avoid errors.')
+
         self.fls = fls
 
         # User mu*?
@@ -918,6 +934,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Initialise the mb models
         self.flowline_mb_models = [mb_model_class(gdir, mu_star=fl.mu_star,
+                                                  filename=fl.climatefile,
                                                   **kwargs)
                                    for fl in self.fls]
 
