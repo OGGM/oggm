@@ -871,7 +871,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, fls=None, mu_star=None,
-                 mb_model_class=PastMassBalance, **kwargs):
+                 mb_model_class=PastMassBalance, use_inversion_flowlines=False,
+                 **kwargs):
         """Initialize.
 
         Parameters
@@ -888,19 +889,24 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         mb_model_class : class, optional
             the mass-balance model to use (e.g. PastMassBalance,
             ConstantMassBalance...)
+        use_inversion_flowlines: bool, optional
+            if True 'inversion_flowlines' instead of 'model_flowlines' will be
+            used.
         kwargs : kwargs to pass to mb_model_class
         """
 
         # Read in the flowlines
+        if use_inversion_flowlines:
+            fls = gdir.read_pickle('inversion_flowlines')
+
         if fls is None:
-            for fn in ['model_flowlines', 'inversion_flowlines']:
-                try:
-                    fls = gdir.read_pickle(fn)
-                except FileNotFoundError:
-                    pass
-            if fls is None:
-                raise RuntimeError('Need a valid `model_flowlines` or '
-                                   '`inversion_flowlines` to continue!')
+            try:
+                fls = gdir.read_pickle('model_flowlines')
+            except FileNotFoundError:
+                raise RuntimeError('Need a valid `model_flowlines` file. '
+                                   'If you explicitly want to use '
+                                   '`inversion_flowlines`, set '
+                                   'use_inversion_flowlines=True.') from None
 
         self.fls = fls
 

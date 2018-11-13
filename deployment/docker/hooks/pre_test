@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+sed -i "s/master/$(git rev-parse HEAD)/" docker-compose.test.yml
+cat docker-compose.test.yml

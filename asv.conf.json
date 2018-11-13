@@ -13,7 +13,7 @@
     "environment_type": "oggm_virtualenv",
     "install_timeout": 1800,
 
-    "pythons": ["3.5", "3.6"],
+    "pythons": ["3.5", "3.6", "3.7"],
 
     // The matrix of dependencies to test.  Each key is the name of a
     // package (in PyPI) and the values are version numbers.  An empty

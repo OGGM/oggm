@@ -257,7 +257,7 @@ def test_thick_alt():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_thick_interp():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -352,7 +352,7 @@ def test_ice_cap():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_coxe():
 
     testdir = os.path.join(get_test_dir(), 'tmp_coxe')
