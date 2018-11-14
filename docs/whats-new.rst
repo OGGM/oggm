@@ -18,7 +18,7 @@ Breaking changes
 ~~~~~~~~~~~~~~~~
 
 - The utils.copy_to_basedir() function is changed to being an entity task. In
-  addition cesm_data files, when present, will from now on always be copied
+  addition gcm_data files, when present, will from now on always be copied
   when using this task (:issue:`467` & :pull:`468`).
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
@@ -146,7 +146,7 @@ Enhancements
   will replace ``process_cesm_data``. ``process_gcm_data`` can also be used
   when running oggm with another GCM for the climate. ``process_cesm_data`` can
   be used as an example when you plan make a function for running OGGM with
-  another GCM (:issue:`469` & :pull:`xxx`).
+  another GCM (:issue:`469` & :pull:`582`).
   `Anouk Vlug <https://github.com/anoukvlug>`_.
 
 

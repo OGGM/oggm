@@ -111,12 +111,12 @@ def process_custom_climate_data(gdir):
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_gcm_data(gdir, filesuffix='', precp=None, temp=None,
+def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      time_unit=None, time2=None):
-    ''' Applies the anomaly method to the climate data and stores the data in a
+    """ Applies the anomaly method to the climate data and stores the data in a
     format that can be used by the OGGM mass balance model.
 
-        Parameters
+    Parameters
     ----------
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
@@ -142,7 +142,7 @@ def process_gcm_data(gdir, filesuffix='', precp=None, temp=None,
 
     for an example see: climate_prepro.process_cesm_data()
 
-    '''
+    """
 
     # compute monthly anomalies
     # of temp
@@ -150,12 +150,12 @@ def process_gcm_data(gdir, filesuffix='', precp=None, temp=None,
     ts_tmp_avg = ts_tmp_avg.groupby(ts_tmp_avg.month).mean(dim='time')
     ts_tmp = temp.groupby(temp.month) - ts_tmp_avg
     # of precip -- scaled anomalies
-    ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
+    ts_pre_avg = prcp.isel(time=(prcp.year >= 1961) & (prcp.year <= 1990))
     ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
-    ts_pre_ano = precp.groupby(precp.month) - ts_pre_avg
+    ts_pre_ano = prcp.groupby(prcp.month) - ts_pre_avg
     # scaled anomalies is the default. Standard anomalies above
     # are used later for where ts_pre_avg == 0
-    ts_pre = precp.groupby(precp.month) / ts_pre_avg
+    ts_pre = prcp.groupby(prcp.month) / ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -184,7 +184,7 @@ def process_gcm_data(gdir, filesuffix='', precp=None, temp=None,
 
     gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
                                     float(dscru.ref_hgt),
-                                    precp.lon.values, precp.lat.values,
+                                    prcp.lon.values, prcp.lat.values,
                                     time_unit=time_unit,
                                     file_name='gcm_data',
                                     filesuffix=filesuffix)

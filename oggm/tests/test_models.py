@@ -2534,11 +2534,11 @@ class TestHEF(unittest.TestCase):
 
         # init
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
+        cfg.PATHS['cesm_precl_file'] = f
         climate_prepro.prepro_cesm_data(self.gdir)
 
         # Climate data

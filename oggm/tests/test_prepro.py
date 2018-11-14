@@ -19,8 +19,8 @@ import xarray as xr
 import rasterio
 
 # Local imports
-from oggm.core import (gis, inversion, climate, centerlines, flowline,
-                       massbalance)
+from oggm.core import (gis, inversion, climate_prepro, climate, centerlines,
+                       flowline, massbalance)
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
@@ -2237,12 +2237,12 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
-        oggm.core.climate_prepro.prepro_cesm_data(gdir)
+        cfg.PATHS['cesm_precl_file'] = f
+        climate_prepro.prepro_cesm_data(gdir)
         with warnings.catch_warnings():
             # Long time series are currently a pain pandas
             warnings.filterwarnings("ignore",
@@ -2304,12 +2304,12 @@ class TestGCMClimate(unittest.TestCase):
         utils.compile_climate_input([gdir])
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
-        oggm.core.climate_prepro.prepro_cesm_data(gdir, filesuffix=filesuffix)
+        cfg.PATHS['cesm_precl_file'] = f
+        climate_prepro.prepro_cesm_data(gdir, filesuffix=filesuffix)
         utils.compile_climate_input([gdir], filename=filename,
                                     filesuffix=filesuffix)
 
