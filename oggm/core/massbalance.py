@@ -232,7 +232,7 @@ class PastMassBalance(MassBalanceModel):
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
         filename : str, optional
-            if you want to use alternative climate date, set to either a
+            if you want to use alternative climate data file, set to either a
             different BASENAME or to the complete filepath
         input_filesuffix : str
             the file suffix of the input climate file

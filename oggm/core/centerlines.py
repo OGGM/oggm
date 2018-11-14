@@ -1921,8 +1921,7 @@ def terminus_width_correction(gdir, new_width=None):
 
 
 def intersect_downstream_lines(gdir, candidates):
-    """Find tributary glaciers to a main glacier by intersecting their
-    downstream lines
+    """Find tributaries to a main glacier by intersecting downstream lines
 
     This function might be called from a entity_task, so gdir is a single
     glacier directory
@@ -1932,9 +1931,17 @@ def intersect_downstream_lines(gdir, candidates):
     and do the rest of the preprocessing after this function identified the
     true tributary glaciers.
 
-    :param gdir: oggm.GlacierDirectory of the main glacier
-    :param candidates: list of possible tributary glacier directories
-    :return: tributaries: list of relevant tributary glaciers
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+        The main glacier of interest
+    candidates: list of oggm.GlacierDirectory
+        Possible tributary glaciers to the main glacier
+
+    Returns
+    -------
+    tributaries: list of oggm.GlacierDirectory
+        The true tributary glaciers to the main glacier
     """
 
     # make sure tributaries are iteratable

@@ -1802,7 +1802,9 @@ def run_from_climate_data(gdir, ys=None, ye=None,
 
 
 def merge_tributary_flowlines(main, tribs):
-    """This function will merge multiple tributary glaciers to a main glacier
+    """Merge multiple tributary glaciers to a main glacier
+
+    This function will merge multiple tributary glaciers to a main glacier
     and write modified `model_flowlines` to the main GlacierDirectory.
     Afterwards only the main GlacierDirectory must be processed and the results
     will cover the main and the tributary glaciers.
@@ -1811,9 +1813,12 @@ def merge_tributary_flowlines(main, tribs):
     To be sure about this, use `intersect_downstream_lines` first or embed both
     functions within a suitable workflow.
 
-    :param main: GlacierDirectory, of the glacier of interest
-    :param tribs: List of GlacierDirectories, containing the true tributaries
-    :return:
+    Parameters
+    ----------
+    main : oggm.GlacierDirectory
+        The main glacier of interest
+    tribs: List of oggm.GlacierDirectories
+        The tributary glaciers to the main glacier
     """
 
     # make sure tributaries are iteratable
