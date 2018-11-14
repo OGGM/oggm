@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 @entity_task(log, writes=['gcm_data'])
 def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
-                      fpath_precl=None):
+                     fpath_precl=None):
     """Processes and writes the climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -120,4 +120,3 @@ def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     tempds.close()
     precpcds.close()
     preclpds.close()
-
