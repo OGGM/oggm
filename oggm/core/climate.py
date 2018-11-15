@@ -128,6 +128,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
             time     (time) object
             month    (time) int64
             year     (time) int64
+            dates    (time) object format YYYY-MM-DD hh:mm:ss
     temp : xarray.DataArray
         monthly temperature [K]
             Coordinates:
@@ -136,9 +137,9 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
             time     (time) object
             month    (time) int64
             year     (time) int64
+            dates    (time) object format YYYY-MM-DD hh:mm:ss
     time_unit : str
             format: days since e.g.: days since 0850-01-01 00:00:00
-    time2 : numpy.ndarray
 
     for an example see: climate_prepro.process_cesm_data()
 
@@ -182,7 +183,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
 
-    gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
+    gdir.write_monthly_climate_file(temp.time.dates.values,
+                                    ts_pre.values, ts_tmp.values,
                                     float(dscru.ref_hgt),
                                     prcp.lon.values, prcp.lat.values,
                                     time_unit=time_unit,

@@ -113,10 +113,13 @@ def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
     time_unit = time1.units
 
+    prcp['dates'] = ('time', time2)
+    temp['dates'] = ('time', time2)
+
     dsindex._nc.close()
     tempds.close()
     precpcds.close()
     preclpds.close()
 
-    process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp,
-                     temp=temp, time_unit=time_unit, time2=time2)
+    process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp, temp=temp,
+                     time_unit=time_unit)
