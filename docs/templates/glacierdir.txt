@@ -2,8 +2,8 @@
 
 .. _glacierdir:
 
-Glacier working directories
-===========================
+Glacier directories
+===================
 
 See also: :py:class:`~oggm.GlacierDirectory`
 

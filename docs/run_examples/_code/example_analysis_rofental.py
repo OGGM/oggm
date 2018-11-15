@@ -2,10 +2,10 @@
 from os import path
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, gettempdir
 
 # Local working directory (where OGGM wrote its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_Rofental')
+WORKING_DIR = gettempdir('OGGM_Rofental')
 
 # Plot: the basin, the outlines and the centerlines
 basin = gpd.read_file(get_demo_file('rofental_hydrosheds.shp'))

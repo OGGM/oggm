@@ -193,9 +193,26 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def init_glacier_regions(rgidf=None, reset=False, force=False):
-    """Very first task to do (always).
+    """Initializes the list of GlacierDirectories for this run.
 
-    Set reset=True in order to delete the content of the directories.
+    This is the very first task to do (always). If the directories are already
+    available in the working directory, use them. If not, create new ones.
+
+    Parameters
+    ----------
+    rgidf : GeoDataFrame, optional for pre-computed runs
+        the RGI glacier outlines. If unavailable, OGGM will parse the
+        information from the glacier directories found in the working
+        directory. It is required for new runs.
+    reset : bool
+        delete the existing glacier directories if found.
+    force : bool
+        setting `reset=True` will trigger a yes/no question to the user. Set
+        `force=True` to avoid this.
+
+    Returns
+    -------
+    a list of GlacierDirectory objects
     """
 
     if reset and not force:
@@ -226,12 +243,10 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
 
     # We can set the intersects file automatically here
     if (cfg.PARAMS['use_intersects'] and new_gdirs and
-            (cfg.PARAMS['intersects_gdf'] is None)):
-        rgi_ids = np.unique(np.sort([gdir.rgi_id for gdir in new_gdirs]))
-        rgi_version = new_gdirs[0].rgi_version
-        fp = utils.get_rgi_intersects_region_file(region='00',
-                                                  version=rgi_version,
-                                                  rgi_ids=rgi_ids)
+            (len(cfg.PARAMS['intersects_gdf']) == 0)):
+        rgi_ids = np.unique(np.sort([t[0].rgi_id for t in new_gdirs]))
+        rgi_version = new_gdirs[0][0].rgi_version
+        fp = utils.get_rgi_intersects_entities(rgi_ids, version=rgi_version)
         cfg.set_intersects_db(fp)
 
     # If not initialized, run the task in parallel

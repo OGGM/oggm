@@ -1,5 +1,4 @@
 # Python imports
-from os import path
 import time
 import logging
 
@@ -18,7 +17,7 @@ start = time.time()
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
+WORKING_DIR = utils.gettempdir('OGGM_precalibrated_run')
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?

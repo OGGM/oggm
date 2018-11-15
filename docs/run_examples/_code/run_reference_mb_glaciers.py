@@ -1,5 +1,4 @@
 # Python imports
-from os import path
 import json
 
 # Libs
@@ -26,11 +25,9 @@ baseline = 'CRU'
 cfg.initialize()
 
 # Local paths (where to write the OGGM run output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline,
-                                                              rgi_version,
-                                                              oggm.__version__)
-                        )
+dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
+                                                oggm.__version__)
+WORKING_DIR = utils.gettempdir(dirname, home=True)
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
@@ -103,7 +100,7 @@ rgidf.to_file(path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
 
-# Go - initialize working directories
+# Go - initialize glacier directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks

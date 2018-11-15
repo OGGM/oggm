@@ -1,5 +1,4 @@
 # Python imports
-from os import path
 import time
 import logging
 
@@ -18,12 +17,12 @@ start = time.time()
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
+WORKING_DIR = utils.gettempdir('OGGM_precalibrated_run')
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?
-cfg.PARAMS['use_multiprocessing'] = True
+cfg.PARAMS['use_multiprocessing'] = False
 
 # Here we override some of the default parameters
 # How many grid points around the glacier?
@@ -43,17 +42,13 @@ utils.get_cru_file(var='pre')
 rgi_list = ['RGI60-01.10299', 'RGI60-11.00897', 'RGI60-18.02342']
 rgidf = utils.get_rgi_glacier_entities(rgi_list)
 
-# We use intersects
-db = utils.get_rgi_intersects_region_file(version='61', rgi_ids=rgi_list)
-cfg.set_intersects_db(db)
-
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
 
 log.info('Starting OGGM run')
 log.info('Number of glaciers: {}'.format(len(rgidf)))
 
-# Go - initialize working directories
+# Go - initialize glacier directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Preprocessing and climate tasks

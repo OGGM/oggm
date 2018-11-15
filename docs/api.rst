@@ -37,6 +37,7 @@ Input/Output
     utils.get_rgi_glacier_entities
     utils.get_rgi_intersects_dir
     utils.get_rgi_intersects_region_file
+    utils.get_rgi_intersects_entities
 
 
 .. _apientitytasks:
