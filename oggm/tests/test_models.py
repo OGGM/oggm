@@ -221,8 +221,8 @@ class TestOtherGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
-        climate.local_mustar(gdir, tstar=1930, bias=0)
-        climate.apparent_mb(gdir)
+        climate.local_t_star(gdir, tstar=1930, bias=0)
+        climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
         v, ainv = inversion.mass_conservation_inversion(gdir)
         init_present_time_glacier(gdir)
@@ -292,9 +292,9 @@ class TestMassBalance(unittest.TestCase):
         gdir = self.gdir
         init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        mu_star = df['mu_star'][0]
-        bias = df['bias'][0]
+        df = gdir.read_json('local_mustar')
+        mu_star = df['mu_star_glacierwide']
+        bias = df['bias']
 
         # Climate period
         yrp = [1851, 2000]
@@ -383,6 +383,104 @@ class TestMassBalance(unittest.TestCase):
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
         assert_allclose(mb[50], mb[-50])
 
+        # Go for glacier wide now
+        fls = gdir.read_pickle('inversion_flowlines')
+        mb_gw_mod = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
+                                                            repeat=True,
+                                                            ys=1901, ye=1950)
+        mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
+        assert_allclose(mb, mb_gw)
+
+    def test_glacierwide_mb_model(self):
+
+        gdir = self.gdir
+        init_present_time_glacier(gdir)
+
+        fls = gdir.read_pickle('model_flowlines')
+        h = np.array([])
+        w = np.array([])
+        for fl in fls:
+            w = np.append(w, fl.widths)
+            h = np.append(h, fl.surface_h)
+
+        yrs = np.arange(100) + 1901
+
+        classes = [massbalance.PastMassBalance,
+                   massbalance.ConstantMassBalance,
+                   massbalance.RandomMassBalance]
+
+        for cl in classes:
+
+            if cl is massbalance.RandomMassBalance:
+                kwargs = {'seed': 0}
+            else:
+                kwargs = {}
+
+            mb = cl(gdir, **kwargs)
+            mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
+                                                            mb_model_class=cl,
+                                                            **kwargs)
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs),
+                            mb_gw.get_specific_mb(year=yrs))
+
+            assert_allclose(mb.get_ela(year=yrs),
+                            mb_gw.get_ela(year=yrs))
+
+            _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
+            mbs_h = mb.get_annual_mb(_h, year=1950)
+
+            assert_allclose(mbs_h, mbs_gw)
+
+            mb.bias = 100
+            mb_gw.bias = 100
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
+
+            mb.temp_bias = 100
+            mb_gw.temp_bias = 100
+
+            assert mb.temp_bias == mb_gw.temp_bias
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
+
+            mb.prcp_bias = 100
+            mb_gw.prcp_bias = 100
+
+            assert mb.prcp_bias == mb_gw.prcp_bias
+
+            assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                            mb_gw.get_specific_mb(year=yrs[:10]))
+
+            assert_allclose(mb.get_ela(year=yrs[:10]),
+                            mb_gw.get_ela(year=yrs[:10]))
+
+        cl = massbalance.PastMassBalance
+        mb = cl(gdir)
+        mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
+                                                        mb_model_class=cl)
+        mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
+                                              rdn_prcp_bias_seed=2,
+                                              rdn_temp_bias_seed=3)
+        mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
+                                                 rdn_prcp_bias_seed=2,
+                                                 rdn_temp_bias_seed=3)
+
+        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
+                        mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
+
+        # ELA won't pass because of API incompatibility
+        # assert_allclose(mb.get_ela(year=yrs[:30]),
+        #                 mb_gw.get_ela(year=yrs[:30]))
+
     def test_constant_mb_model(self):
 
         rho = cfg.PARAMS['ice_density']
@@ -390,8 +488,8 @@ class TestMassBalance(unittest.TestCase):
         gdir = self.gdir
         init_present_time_glacier(gdir)
 
-        df = pd.read_csv(gdir.get_filepath('local_mustar'))
-        bias = df['bias'][0]
+        df = gdir.read_json('local_mustar')
+        bias = df['bias']
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -509,7 +607,7 @@ class TestMassBalance(unittest.TestCase):
         r_mbh = 0.
         mbts = yrs * 0.
         for i, yr in enumerate(yrs):
-            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
+            mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
@@ -589,7 +687,7 @@ class TestMassBalance(unittest.TestCase):
         annual_previous = -999.
         for i, yr in enumerate(yrs):
             # specific mass balance
-            mbts[i] = mb_mod.get_specific_mb(h, w, yr)
+            mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
 
             # annual mass balance
             annual = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
@@ -2264,6 +2362,39 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
     @pytest.mark.slow
+    def test_equilibrium_glacier_wide(self):
+
+        init_present_time_glacier(self.gdir)
+
+        cl = massbalance.ConstantMassBalance
+        mb_mod = massbalance.MultipleFlowlineMassBalance(self.gdir,
+                                                         mb_model_class=cl)
+
+        fls = self.gdir.read_pickle('model_flowlines')
+        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                               fs=self.fs,
+                               glen_a=self.glen_a,
+                               min_dt=SEC_IN_DAY/2.,
+                               mb_elev_feedback='never')
+
+        ref_vol = model.volume_km3
+        ref_area = model.area_km2
+        ref_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
+
+        model.run_until_equilibrium(rate=1e-4)
+        self.assertFalse(model.dt_warning)
+        assert model.yr > 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
+        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+
+    @pytest.mark.slow
     def test_commitment(self):
 
         init_present_time_glacier(self.gdir)
@@ -2340,7 +2471,7 @@ class TestHEF(unittest.TestCase):
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if True:
+                if do_plot:
                     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                     vol.plot(ax=ax1)
                     ax1.set_title('Volume')
@@ -2351,7 +2482,7 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-    # @pytest.mark.slow
+    @pytest.mark.slow
     def test_random_sh(self):
 
         init_present_time_glacier(self.gdir)
@@ -2364,7 +2495,7 @@ class TestHEF(unittest.TestCase):
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         climate.process_cru_data(self.gdir)
         climate.compute_ref_t_stars([self.gdir])
-        climate.local_mustar(self.gdir)
+        climate.local_t_star(self.gdir)
 
         run_random_climate(self.gdir, nyears=20, seed=4,
                            bias=0, output_filesuffix='_rdn')

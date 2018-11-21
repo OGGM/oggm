@@ -1,0 +1,3 @@
+#!/bin/bash
+export SOURCE_COMMIT="$(git rev-parse HEAD)"
+exec docker build --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" .

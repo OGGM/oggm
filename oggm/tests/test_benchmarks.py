@@ -32,6 +32,7 @@ def setup_module(module):
 def teardown_module(module):
     utils._urlretrieve = module._url_retrieve
 
+
 class TestSouthGlacier(unittest.TestCase):
 
     # Test case optained from ITMIX
@@ -106,8 +107,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -168,8 +169,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -238,8 +239,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -255,14 +256,15 @@ class TestSouthGlacier(unittest.TestCase):
         fs = cfg.PARAMS['inversion_fs']
 
         def to_optimize(x):
-            execute_entity_task(tasks.mass_conservation_inversion, gdirs,
-                                glen_a=glen_a * x[0],
-                                fs=fs * x[1])
-            execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
+            tasks.mass_conservation_inversion(gdir,
+                                              glen_a=glen_a * x[0],
+                                              fs=fs * x[1])
+            tasks.distribute_thickness_per_altitude(gdir)
             with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
                 thick = ds.distributed_thickness.isel(x=('z', df['i']),
                                                       y=('z', df['j']))
-            return (np.abs(thick - df.thick)).mean()
+                out = (np.abs(thick - df.thick)).mean()
+            return out
 
         opti = optimization.minimize(to_optimize, [1., 1.],
                                      bounds=((0.01, 10), (0.01, 10)),
@@ -315,8 +317,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
             tasks.process_cru_data,
-            tasks.local_mustar,
-            tasks.apparent_mb,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
@@ -327,7 +329,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
-        df = utils.glacier_characteristics(gdirs)
+        df = utils.compile_glacier_statistics(gdirs)
         assert df.inv_thickness_m[0] < 100
 
         if do_plot:

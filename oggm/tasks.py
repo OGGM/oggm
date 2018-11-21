@@ -17,13 +17,13 @@ from oggm.core.centerlines import initialize_flowlines
 from oggm.core.centerlines import catchment_width_geom
 from oggm.core.centerlines import catchment_width_correction
 from oggm.core.centerlines import terminus_width_correction
-from oggm.core.climate import mu_candidates
+from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_histalp_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import process_cesm_data
-from oggm.core.climate import local_mustar
-from oggm.core.climate import apparent_mb
+from oggm.core.climate import local_t_star
+from oggm.core.climate import mu_star_calibration
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import mass_conservation_inversion
@@ -39,5 +39,7 @@ from oggm.utils import copy_to_basedir
 
 # Global tasks
 from oggm.core.climate import compute_ref_t_stars
-from oggm.core.climate import distribute_t_stars
-from oggm.core.climate import crossval_t_stars
+from oggm.utils import compile_glacier_statistics
+from oggm.utils import compile_run_output
+from oggm.utils import compile_climate_input
+from oggm.utils import compile_task_log

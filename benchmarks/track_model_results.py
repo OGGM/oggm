@@ -47,12 +47,12 @@ class hef_prepro:
         tasks.catchment_width_geom(gdir)
         tasks.catchment_width_correction(gdir)
         tasks.process_custom_climate_data(gdir)
-        tasks.mu_candidates(gdir)
+        tasks.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        res = climate.t_star_from_refmb(gdir, mbdf)
-        tasks.local_mustar(gdir, tstar=res['t_star'],
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
+        tasks.local_t_star(gdir, tstar=res['t_star'],
                            bias=res['bias'])
-        tasks.apparent_mb(gdir)
+        tasks.mu_star_calibration(gdir)
 
         tasks.prepare_for_inversion(gdir)
         tasks.mass_conservation_inversion(gdir)
@@ -85,40 +85,45 @@ class hef_prepro:
 
     def track_mustar(self, gdir):
         self.cfg_init()
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
-        return df['mu_star']
+        df = gdir.read_json('local_mustar')
+        assert df['mu_star_allsame']
+        return df['mu_star_glacierwide']
 
     def track_bias(self, gdir):
         self.cfg_init()
-        df = pd.read_csv(gdir.get_filepath('local_mustar')).iloc[0]
+        df = gdir.read_json('local_mustar')
         return df['bias']
 
     def track_mb_1980_avg(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1970)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1970)
         return np.mean(mb_ts)
 
     def track_mb_1980_sigma(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1970)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1970)
         return np.std(mb_ts)
 
     def track_mb_1870_avg(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1860)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1860)
         return np.mean(mb_ts)
 
     def track_mb_1870_sigma(self, gdir):
         self.cfg_init()
         mb = massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
-        mb_ts = mb.get_specific_mb(h, w, year=np.arange(31)+1860)
+        mb_ts = mb.get_specific_mb(heights=h, widths=w,
+                                   year=np.arange(31)+1860)
         return np.std(mb_ts)
 
     def track_inversion_volume(self, gdir):
@@ -187,8 +192,8 @@ class full_workflow:
 
         # Climate tasks -- only data IO and tstar interpolation!
         execute_entity_task(tasks.process_cru_data, gdirs)
-        execute_entity_task(tasks.local_mustar, gdirs)
-        execute_entity_task(tasks.apparent_mb, gdirs)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -211,7 +216,7 @@ class full_workflow:
                             output_filesuffix='_pd')
 
         # Compile output
-        utils.glacier_characteristics(gdirs)
+        utils.compile_glacier_statistics(gdirs)
         utils.compile_run_output(gdirs, filesuffix='_tstar')
         utils.compile_run_output(gdirs, filesuffix='_pd')
         utils.compile_climate_input(gdirs)

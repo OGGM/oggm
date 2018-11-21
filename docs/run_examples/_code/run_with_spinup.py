@@ -70,8 +70,8 @@ task_list = [
     tasks.catchment_width_geom,
     tasks.catchment_width_correction,
     tasks.process_cru_data,
-    tasks.local_mustar,
-    tasks.apparent_mb,
+    tasks.local_t_star,
+    tasks.mu_star_calibration,
 ]
 for task in task_list:
     execute_entity_task(task, gdirs)
@@ -114,7 +114,7 @@ execute_entity_task(tasks.run_from_climate_data, gdirs,
 
 # Compile output
 log.info('Compiling output')
-utils.glacier_characteristics(gdirs)
+utils.compile_glacier_statistics(gdirs)
 ds1 = utils.compile_run_output(gdirs, filesuffix='_no_spinup')
 ds2 = utils.compile_run_output(gdirs, filesuffix='_with_spinup')
 

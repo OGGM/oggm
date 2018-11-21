@@ -286,11 +286,10 @@ def init_hef(reset=False, border=40):
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
     climate.process_custom_climate_data(gdir)
-    climate.mu_candidates(gdir)
     mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-    res = climate.t_star_from_refmb(gdir, mbdf)
-    climate.local_mustar(gdir, tstar=res['t_star'], bias=res['bias'])
-    climate.apparent_mb(gdir)
+    res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
+    climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
+    climate.mu_star_calibration(gdir)
 
     inversion.prepare_for_inversion(gdir, add_debug_var=True)
 

@@ -7,6 +7,13 @@ Version history
 v1.X (unreleased)
 -----------------
 
+New contributors to the project:
+
+- **Matthias Dusch** (PhD student, University of Innsbruck), added extensive
+  cross-validation tools and an associated website.
+- **Philipp Gregor** (Master student, University of Innsbruck), added options
+  to switch on lateral bed stress in the flowline ice dynamics
+
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
@@ -47,7 +54,7 @@ Breaking changes
   steps anyways.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The list of reference t* dates is now generated differently: instead of
-  the complex (and sort of useless) neirest beighbor algorithm we are now
+  the complex (and sort of useless) nearest neighbor algorithm we are now
   referring back to the original method of Marzeion et al. (2012). This comes
   together with other breaking changes, altogether likely to change the
   results of the mass-balance model for some glaciers. For more details see
@@ -62,6 +69,20 @@ Breaking changes
   useless ``volume_inversion`` wrapper (now called
   ``mass_conservation_inversion``)
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The temperature sensitivity mu* is now flowline specific, instead of
+  glacier wide. This change was necessary because it now allows low-lying
+  tributaries to exist, despite of too high glacier wide mu*. This change
+  had some wider reaching consequences in the code base and in the
+  mass-balance models in particular: :pull:`539`. This will also allow to
+  merge neighboring glaciers in the future.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The "human readable" mu* information is now stored in a JSON dict instead
+  of a csv: :pull:`568`.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The global task `glacier_characteristics` has been renamed to
+  `compile_glacier_statistics` (:pull:`571`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 Enhancements
 ~~~~~~~~~~~~

@@ -3,7 +3,7 @@
 import logging
 import os
 from shutil import rmtree
-import collections
+from collections.abc import Sequence
 # External libs
 import multiprocessing as mp
 
@@ -82,7 +82,7 @@ class _pickle_copier(object):
         else:
             call_func, gdir = arg
         try:
-            if isinstance(gdir, collections.Sequence):
+            if isinstance(gdir, Sequence):
                 gdir, gdir_kwargs = gdir
                 gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
                 return call_func(gdir, **gdir_kwargs)
@@ -138,15 +138,14 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     if _have_ogmpi:
         if ogmpi.OGGM_MPI_COMM is not None:
-            ogmpi.mpi_master_spin_tasks(pc, gdirs)
-            return
+            return ogmpi.mpi_master_spin_tasks(pc, gdirs)
 
     if cfg.PARAMS['use_multiprocessing']:
         mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
-        mppool.map(pc, gdirs, chunksize=1)
+        out = mppool.map(pc, gdirs, chunksize=1)
     else:
-        for gdir in gdirs:
-            pc(gdir)
+        out = [pc(gdir) for gdir in gdirs]
+    return out
 
 
 def execute_parallel_tasks(gdir, tasks):
@@ -171,7 +170,7 @@ def execute_parallel_tasks(gdir, tasks):
     _tasks = []
     for task in tasks:
         kwargs = {}
-        if isinstance(task, collections.Sequence):
+        if isinstance(task, Sequence):
             task, kwargs = task
         _tasks.append((task, (gdir, kwargs)))
 
@@ -270,8 +269,8 @@ def climate_tasks(gdirs):
         tasks.compute_ref_t_stars(gdirs)
 
     # Mustar and the apparent mass-balance
-    execute_entity_task(tasks.local_mustar, gdirs)
-    execute_entity_task(tasks.apparent_mb, gdirs)
+    execute_entity_task(tasks.local_t_star, gdirs)
+    execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 
 def inversion_tasks(gdirs):

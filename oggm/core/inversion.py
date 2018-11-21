@@ -455,7 +455,6 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     thick *= init_vol / tmp_vol
 
     # write
-    grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file, 'a') as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:

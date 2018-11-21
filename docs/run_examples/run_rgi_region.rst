@@ -32,7 +32,7 @@ Some analyses
 -------------
 
 The output directory contains some compiled output files. The
-``glacier_characteristics.csv`` file contains various information for each
+``compile_glacier_statistics.csv`` file contains various information for each
 glacier after the preprocessing, and we also wrote the centerlines as a
 shapefile. Let's plot it:
 

@@ -28,7 +28,6 @@ import geopandas as gpd
 import scipy.signal
 import shapely.geometry as shpg
 from skimage import measure
-from scipy import optimize as optimization
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
@@ -82,14 +81,12 @@ class Centerline(object):
         self._widths = None
         self.is_rectangular = None
         self.orig_head = orig_head  # Useful for debugging and for filtering
-
-        # Set by external funcs
-        self.orig_centerline_id = None  # id of original centerline object
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
+        self.mu_star = None  # the mu* associated with the apparent mb
+        self.mu_star_is_valid = False  # if mu* leeds to good flux, keep it
         self.flux = None  # Flux (kg m-2)
-        self.flux_needed_correction = False  # whether this branch was baaad
-        self.flux_before_correction = None
+        self.flux_needs_correction = False  # whether this branch was baaad
 
     def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -214,45 +211,34 @@ class Centerline(object):
     def surface_h(self, value):
         self._surface_h = value
 
-    def set_apparent_mb(self, mb):
+    def set_apparent_mb(self, mb, mu_star=None):
         """Set the apparent mb and flux for the flowline.
 
         MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
 
         This should happen in line order, otherwise it will be wrong.
+
+        Parameters
+        ----------
+        mu_star : float
+            if appropriate, the mu_star associated with this apparent mb
         """
 
         self.apparent_mb = mb
+        self.mu_star = mu_star
 
         # Add MB to current flux and sum
         # no more changes should happen after that
-        flux_needed_correction = False
+        flux_needs_correction = False
         flux = np.cumsum(self.flux + mb * self.widths * self.dx)
-        # We need to keep the flux -- even negative! -- in order to keep
-        # mass conservation downstream. This is quite bad and calls for a
-        # better solution
-        add_flux = flux[-1]
+
         # We filter only lines with two negative grid points, the
         # rest we can cope with
-        if cfg.PARAMS['correct_for_neg_flux'] and flux[-2] < 0:
-            # Some glacier geometries imply that some tributaries have a
-            # negative mass flux, i.e. zero thickness. One can correct for
-            # this effect, but this implies playing around with the
-            # mass-balance...
-            target_flux = 1 if (self.flows_to is not None) else 0
-
-            def to_optimize(x):
-                tmp_flux = self.flux + (x[0] + mb) * self.widths * self.dx
-                tmp_flux = np.cumsum(tmp_flux)
-                return (tmp_flux[-1] - target_flux)**2
-
-            x = optimization.minimize(to_optimize, [1.])['x']
-            flux = np.cumsum(self.flux + (x[0] + mb) * self.widths * self.dx)
-            flux_needed_correction = True
+        if flux[-2] < 0:
+            flux_needs_correction = True
 
         self.flux = flux
-        self.flux_needed_correction = flux_needed_correction
-        self.flux_before_correction = add_flux
+        self.flux_needs_correction = flux_needs_correction
 
         # Add to outflow. That's why it should happen in order
         if self.flows_to is not None:
@@ -260,13 +246,13 @@ class Centerline(object):
             ide = self.flows_to_indice
             if n >= 9:
                 gk = GAUSSIAN_KERNEL[9]
-                self.flows_to.flux[ide-4:ide+5] += gk * add_flux
+                self.flows_to.flux[ide-4:ide+5] += gk * flux[-1]
             elif n >= 7:
                 gk = GAUSSIAN_KERNEL[7]
-                self.flows_to.flux[ide-3:ide+4] += gk * add_flux
+                self.flows_to.flux[ide-3:ide+4] += gk * flux[-1]
             elif n >= 5:
                 gk = GAUSSIAN_KERNEL[5]
-                self.flows_to.flux[ide-2:ide+3] += gk * add_flux
+                self.flows_to.flux[ide-2:ide+3] += gk * flux[-1]
 
 
 def _filter_heads(heads, heads_height, radius, polygon):
@@ -573,7 +559,7 @@ def line_order(line):
 
     Returns
     -------
-    The line;s order
+    The line's order
     """
 
     if len(line.inflows) == 0:
@@ -581,6 +567,26 @@ def line_order(line):
     else:
         levels = [line_order(s) for s in line.inflows]
         return np.max(levels) + 1
+
+
+def line_inflows(line):
+    """Recursive search for all inflows of the given line.
+
+    Parameters
+    ----------
+    line: a Centerline instance
+
+    Returns
+    -------
+    A list of lines (including the line itself) sorted in order
+    """
+
+    out = set([line])
+    for l in line.inflows:
+        out = out.union(line_inflows(l))
+
+    out = np.array(list(out))
+    return list(out[np.argsort([o.order for o in out])])
 
 
 def _make_costgrid(mask, ext, z):
@@ -1528,8 +1534,6 @@ def initialize_flowlines(gdir):
 
     # variables
     cls = gdir.read_pickle('centerlines')
-    poly = gdir.read_pickle('geometries')
-    poly = poly['polygon_pix'].buffer(0.5)  # a small buffer around to be sure
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
