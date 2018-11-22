@@ -2031,6 +2031,59 @@ class TestInversion(unittest.TestCase):
         self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 
 
+class TestCalvingInvert(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_calving')
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        cfg.PARAMS['border'] = 40
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    def test_inversion_with_calving(self):
+
+        coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
+        entity = gpd.read_file(coxe_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.create_dummy_climate_file(gdir)
+        climate.local_t_star(gdir)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v_ref, _ = inversion.mass_conservation_inversion(gdir)
+
+        gdir.inversion_calving_rate = 0.01
+
+        climate.local_t_star(gdir)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v_a, _ = inversion.mass_conservation_inversion(gdir)
+
+        # Calving increases the volume
+        assert v_ref < 0.9*v_a
+
+
 class TestGrindelInvert(unittest.TestCase):
 
     def setUp(self):
