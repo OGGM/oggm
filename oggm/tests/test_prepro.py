@@ -924,6 +924,55 @@ class TestClimate(unittest.TestCase):
                 totest = nc_c.prcp - nc_h.prcp
                 self.assertTrue(totest.mean() < 100)
 
+    def test_distribute_climate_dummy(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdirs = []
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gis.define_glacier_region(gdir, entity=entity)
+        gdirs.append(gdir)
+
+        climate.process_dummy_cru_file(gdirs[0], seed=0)
+        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        cru_dir = os.path.dirname(cru_dir)
+        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['cru_dir'] = cru_dir
+        cfg.PARAMS['baseline_climate'] = 'CRU'
+        climate.process_cru_data(gdirs[1])
+        cfg.PATHS['cru_dir'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        gdh = gdirs[0]
+        gdc = gdirs[1]
+        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
+        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        with xr.open_dataset(f1) as nc_d:
+            with xr.open_dataset(f2) as nc_c:
+                # same altitude
+                assert nc_d.ref_hgt == nc_c.ref_hgt
+                np.testing.assert_allclose(nc_d.temp.mean(), nc_c.temp.mean(),
+                                           atol=0.2)
+                np.testing.assert_allclose(nc_d.temp.mean(), nc_c.temp.mean(),
+                                           rtol=0.1)
+
+                an1 = nc_d.temp.groupby('time.month').mean()
+                an2 = nc_c.temp.groupby('time.month').mean()
+                np.testing.assert_allclose(an1, an2, atol=1)
+
+                an1 = nc_d.prcp.groupby('time.month').mean()
+                an2 = nc_c.prcp.groupby('time.month').mean()
+                np.testing.assert_allclose(an1, an2, rtol=0.2)
+
     def test_distribute_climate_histalp_new(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2067,11 +2116,13 @@ class TestCalvingInvert(unittest.TestCase):
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.create_dummy_climate_file(gdir)
+        climate.process_dummy_cru_file(gdir, seed=0)
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
         v_ref, _ = inversion.mass_conservation_inversion(gdir)
+
+        fls1 = gdir.read_pickle('inversion_flowlines')
 
         gdir.inversion_calving_rate = 0.01
 
@@ -2079,9 +2130,12 @@ class TestCalvingInvert(unittest.TestCase):
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
         v_a, _ = inversion.mass_conservation_inversion(gdir)
+        fls2 = gdir.read_pickle('inversion_flowlines')
 
-        # Calving increases the volume
+        # Calving increases the volume and reduces the mu
         assert v_ref < 0.9*v_a
+        for fl1, fl2 in zip(fls1, fls2):
+            assert fl2.mu_star < fl1.mu_star
 
 
 class TestGrindelInvert(unittest.TestCase):

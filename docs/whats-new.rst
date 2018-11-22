@@ -139,6 +139,9 @@ Enhancements
   also adds some safety checks at the calibration and computation of the
   mass-balance to make sure there is no misused parameters (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
+  (:pull:`603`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes

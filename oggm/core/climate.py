@@ -457,10 +457,25 @@ def process_cru_data(gdir):
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
-def create_dummy_climate_file(gdir, sigma_temp=2, sigma_prcp=0.5):
+def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     """Create a simple baseline climate file for this glacier - for testing!
 
     This simply reproduces the climatology with a little randomness in it.
+
+    TODO: extend the functionality by allowing a monthly varying sigma
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+    sigma_temp : float
+        the standard deviation of the random timeseries (set to 0 for constant
+        ts)
+    sigma_prcp : float
+        the standard deviation of the random timeseries (set to 0 for constant
+        ts)
+    seed : int
+        the RandomState seed
     """
 
     # read the climatology
@@ -545,15 +560,16 @@ def create_dummy_climate_file(gdir, sigma_temp=2, sigma_prcp=0.5):
         ts_grad = np.asarray(ts_grad * ny)
 
     # Make DataArrays
+    rng = np.random.RandomState(seed)
     loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],
                            coords={'month': np.arange(1, 13)})
-    ts_tmp = np.random.randn(len(time)) * sigma_temp
+    ts_tmp = rng.randn(len(time)) * sigma_temp
     ts_tmp = xr.DataArray(ts_tmp, dims=['time'],
                           coords={'time': time})
 
     loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
                            coords={'month': np.arange(1, 13)})
-    ts_pre = (np.random.randn(len(time)) * sigma_prcp + 1).clip(0)
+    ts_pre = (rng.randn(len(time)) * sigma_prcp + 1).clip(0)
     ts_pre = xr.DataArray(ts_pre, dims=['time'],
                           coords={'time': time})
 
@@ -1173,7 +1189,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         raise MassBalanceCalibrationError('{} has a non finite '
                                           'mu'.format(gdir.rgi_id))
 
-    # Clip the mu
+    # If mu out of bounds, raise
     if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
         raise MassBalanceCalibrationError('mu* out of specified bounds.')
 
@@ -1227,7 +1243,6 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True):
                                       args=(fls, cmb, temp, prcp, widths),
                                       xtol=1e-5)
     except ValueError:
-        # TODO: add "f(a) and f(b) must have different signs" check
         raise MassBalanceCalibrationError('{} has mu which exceeds the '
                                           'specified min and max '
                                           'boundaries.'.format(gdir.rgi_id))
