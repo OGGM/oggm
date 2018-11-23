@@ -53,9 +53,6 @@ def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         fpath_precl = cfg.PATHS['cesm_precl_file']
 
     # read the files
-    if LooseVersion(xr.__version__) < LooseVersion('0.11'):
-        raise ImportError('This task needs xarray v0.11 or newer to run.')
-
     tempds = xr.open_dataset(fpath_temp)
     precpcds = xr.open_dataset(fpath_precc)
     preclpds = xr.open_dataset(fpath_precl)
