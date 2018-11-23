@@ -2542,38 +2542,25 @@ class TestHEF(unittest.TestCase):
         climate_prepro.prepro_cesm_data(self.gdir)
 
         # Climate data
-        with warnings.catch_warnings():
-            # Long time series are currently a pain pandas
-            warnings.filterwarnings("ignore",
-                                    message='Unable to decode time axis')
-            fh = gdir.get_filepath('climate_monthly')
-            fcesm = gdir.get_filepath('gcm_data')
-            with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+        fh = gdir.get_filepath('climate_monthly')
+        fcesm = gdir.get_filepath('gcm_data')
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
 
-                tv = cesm.time.values
-                time = pd.period_range(tv[0].strftime('%Y-%m-%d'),
-                                       tv[-1].strftime('%Y-%m-%d'),
-                                       freq='M')
-                cesm['time'] = time
-                cesm.coords['year'] = ('time', time.year)
-                cesm.coords['month'] = ('time', time.month)
-
-                # Let's do some basic checks
-                shist = hist.sel(time=slice('1961', '1990'))
-                scesm = cesm.isel(time=((cesm.year >= 1961) &
-                                        (cesm.year <= 1990)))
-                # Climate during the chosen period should be the same
-                np.testing.assert_allclose(shist.temp.mean(),
-                                           scesm.temp.mean(),
-                                           rtol=1e-3)
-                np.testing.assert_allclose(shist.prcp.mean(),
-                                           scesm.prcp.mean(),
-                                           rtol=1e-3)
-                # And also the anual cycle
-                scru = shist.groupby('time.month').mean()
-                scesm = scesm.groupby(scesm.month).mean()
-                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
-                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+            # Let's do some basic checks
+            shist = hist.sel(time=slice('1961', '1990'))
+            scesm = cesm.sel(time=slice('1961', '1990'))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(shist.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(shist.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+            # And also the anual cycle
+            scru = shist.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
 
         # Mass balance models
         mb_cru = massbalance.PastMassBalance(self.gdir)
