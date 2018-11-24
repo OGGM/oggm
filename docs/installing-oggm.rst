@@ -68,13 +68,13 @@ Other libraries:
     - boto3
     - `salem <https://github.com/fmaussion/salem>`_
     - `motionless <https://github.com/ryancox/motionless/>`_
-    - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
 
 Optional:
     - progressbar2 (displays the download progress)
     - bottleneck (speeds up xarray operations)
     - dask (works nicely with xarray)
-
+    - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
+      (applies HCL-based color palettes to some graphics)
 
 .. _conda-install:
 
@@ -329,9 +329,10 @@ Now install further dependencies::
 
     $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless dask bottleneck
 
-Finally, install the salem library::
+Finally, install the salem and python-colorspace libraries::
 
     $ pip install git+https://github.com/fmaussion/salem.git
+    $ pip install git+https://github.com/retostauffer/python-colorspace.git
 
 OGGM and tests
 ~~~~~~~~~~~~~~

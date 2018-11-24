@@ -12,7 +12,13 @@ import numpy as np
 import salem
 import shapely.geometry as shpg
 from matplotlib import cm as colormap
-from colorspace import sequential_hcl
+
+try:
+    # optional python-colorspace dependency for better (HCL-based) colormaps
+    from colorspace import diverging_hcl, sequential_hcl
+    USE_HCL_CMAP = True
+except ImportError:
+    USE_HCL_CMAP = False
 
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
@@ -20,11 +26,16 @@ from oggm import cfg, utils
 # Module logger
 log = logging.getLogger(__name__)
 
-# Set global colormaps: use effective HCL-based palettes from python-colorspace
-CMAP_DIVS = 30  # number of discrete colours taken from continuous colormaps
-ALTITUDE_CMAP = sequential_hcl("Greens 2").cmap(CMAP_DIVS)
-SECTION_THICKNESS_CMAP = sequential_hcl("Blue-Yellow").cmap(CMAP_DIVS)
-GLACIER_THICKNESS_CMAP = sequential_hcl("Heat", rev=True).cmap(CMAP_DIVS)
+# Set global colormaps
+ALTITUDE_CMAP = colormap.terrain
+if USE_HCL_CMAP:
+    CMAP_DIVS = 100  # number of discrete colours from continuous colormaps
+    THICKNESS_CMAP = sequential_hcl("Blue-Yellow", rev=True).cmap(CMAP_DIVS)
+    SECTION_THICKNESS_CMAP = THICKNESS_CMAP
+    GLACIER_THICKNESS_CMAP = THICKNESS_CMAP
+else:
+    SECTION_THICKNESS_CMAP = plt.cm.get_cmap('YlOrRd')
+    GLACIER_THICKNESS_CMAP = plt.get_cmap('viridis')
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):

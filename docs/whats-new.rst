@@ -13,8 +13,8 @@ New contributors to the project:
   cross-validation tools and an associated website.
 - **Philipp Gregor** (Master student, University of Innsbruck), added options
   to switch on lateral bed stress in the flowline ice dynamics
-- **Sadie Bartholomew** (Software Engineer, UK Met Office), changed colormaps
-  for graphics to Hue-Chroma-Luminance-based palettes from python-colorspace.
+- **Sadie Bartholomew** (Software Engineer, UK Met Office), added ability to
+  replace colormaps in graphics with HCL-based colors using python-colorspace.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -141,8 +141,8 @@ Enhancements
   also adds some safety checks at the calibration and computation of the
   mass-balance to make sure there is no misused parameters (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- Changed colormaps for graphics to Hue-Chroma-Luminance-based palettes from
-  python-colorspace (:pull:`587`).
+- Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
+  improvements when python-colorspace is (optionally) installed (:pull:`587`).
   By `Sadie Bartholomew <https://github.com/sadielbartholomew>`_.
 
 
