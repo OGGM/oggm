@@ -10,10 +10,108 @@ import xarray as xr
 from oggm import cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.core.climate import process_gcm_data
 
 # Module logger
 log = logging.getLogger(__name__)
+
+
+@entity_task(log, writes=['gcm_data', 'climate_info'])
+def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
+                     time_unit='days since 1801-01-01 00:00:00',
+                     calendar=None):
+    """ Applies the anomaly method to the climate data and stores the data in a
+    format that can be used by the OGGM mass balance model.
+
+    For an example implementation see
+    :ref:`core.climate_prepro.process_cesm_data()`
+
+    Parameters
+    ----------
+    filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
+    prcp    : xarray.DataArray - format:
+        monthly total precipitation [mm month-1]
+            Coordinates:
+            lat      float64
+            lon      float64
+            time     (time) cftime object
+    temp : xarray.DataArray
+        monthly temperature [K]
+            Coordinates:
+            lat      float64
+            lon      float64
+            time     (time) cftime object
+    time_unit : str
+        The unit conversion for NetCDF files. It must be adapted to the
+        length of the time series.
+        For example: 'days since 0850-01-01 00:00:00'
+    calendar : str
+        If you use an exotic calendar (e.g. 'noleap')
+    """
+
+    # Standard sanity checks
+    months = temp['time.month']
+    if (months[0] != 1) or (months[-1] != 12):
+        raise ValueError('We expect the files to start in January and end in '
+                         'December!')
+
+    if (np.abs(temp['lon']) > 180) or (np.abs(prcp['lon']) > 180):
+        raise ValueError('We expect the longitude coordinates to be within '
+                         '[-180, 180].')
+
+    # from normal years to hydrological years
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    prcp = prcp[sm-1:sm-13].load()
+    temp = temp[sm-1:sm-13].load()
+
+    # compute monthly anomalies
+    # of temp
+    ts_tmp_avg = temp.sel(time=slice('1961', '1990'))
+    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
+    # of precip -- scaled anomalies
+    ts_pre_avg = prcp.sel(time=slice('1961', '1990'))
+    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre_ano = prcp.groupby('time.month') - ts_pre_avg
+    # scaled anomalies is the default. Standard anomalies above
+    # are used later for where ts_pre_avg == 0
+    ts_pre = prcp.groupby('time.month') / ts_pre_avg
+
+    # Get CRU to apply the anomaly to
+    fpath = gdir.get_filepath('climate_monthly')
+    ds_cru = xr.open_dataset(fpath)
+
+    # Add climate anomaly to CRU clim
+    dscru = ds_cru.sel(time=slice('1961', '1990'))
+    # for temp
+    loc_tmp = dscru.temp.groupby('time.month').mean()
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+    # for prcp
+    loc_pre = dscru.prcp.groupby('time.month').mean()
+    # scaled anomalies
+    ts_pre = ts_pre.groupby('time.month') * loc_pre
+    # standard anomalies
+    ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
+    # Correct infinite values with standard anomalies
+    ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                             ts_pre.values,
+                             ts_pre_ano.values)
+    # The last step might create negative values (unlikely). Clip them
+    ts_pre.values = ts_pre.values.clip(0)
+
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+
+    gdir.write_monthly_climate_file(temp.time.values,
+                                    ts_pre.values, ts_tmp.values,
+                                    float(dscru.ref_hgt),
+                                    prcp.lon.values, prcp.lat.values,
+                                    time_unit=time_unit,
+                                    calendar=calendar,
+                                    file_name='gcm_data',
+                                    filesuffix=filesuffix)
+
+    ds_cru.close()
 
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
