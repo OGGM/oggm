@@ -148,6 +148,9 @@ Enhancements
   ``process_cesm_data`` can also be used as an example when you plan make a
   function for running OGGM with another GCM (:issue:`469` & :pull:`582`).
   `Anouk Vlug <https://github.com/anoukvlug>`_.
+- New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
+  (:pull:`603`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
