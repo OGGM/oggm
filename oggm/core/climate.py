@@ -110,7 +110,7 @@ def process_custom_climate_data(gdir):
     gdir.write_pickle(out, 'climate_info')
 
 
-@entity_task(log, writes=['cesm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      time_unit='days since 1801-01-01 00:00:00',
                      calendar=None):
