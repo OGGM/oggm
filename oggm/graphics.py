@@ -257,7 +257,7 @@ def plot_domain(gdirs, ax=None, smap=None):
 @_plot_map
 def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                      add_downstream=False, lines_cmap='Set1',
-                     add_line_index=False):
+                     add_line_index=False, use_model_flowlines=False):
     """Plots the centerlines of a glacier directory."""
 
     if add_downstream and not use_flowlines:
@@ -265,7 +265,9 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
     # Files
     filename = 'centerlines'
-    if use_flowlines:
+    if use_model_flowlines:
+        filename = 'model_flowlines'
+    elif use_flowlines:
         filename = 'inversion_flowlines'
 
     gdir = gdirs[0]

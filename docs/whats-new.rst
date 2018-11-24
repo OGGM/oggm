@@ -20,7 +20,7 @@ Breaking changes
 ~~~~~~~~~~~~~~~~
 
 - The utils.copy_to_basedir() function is changed to being an entity task. In
-  addition cesm_data files, when present, will from now on always be copied
+  addition gcm_data files, when present, will from now on always be copied
   when using this task (:issue:`467` & :pull:`468`).
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - Accumulation Area Ratio (AAR) is now correctly computed (:issue:`361`).
@@ -84,7 +84,9 @@ Breaking changes
 - The global task `glacier_characteristics` has been renamed to
   `compile_glacier_statistics` (:pull:`571`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-
+- The ``process_cesm_data`` task has been been moved to climate_prepro.py
+  adressing: :issue:`469` & :pull:`582`.
+  By `Anouk Vlug <https://github.com/anoukvlug>`_.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -140,6 +142,16 @@ Enhancements
   (see `blog <https://oggm.org/2018/08/10/histalp-parameters/>`_). The PR
   also adds some safety checks at the calibration and computation of the
   mass-balance to make sure there is no misused parameters (:pull:`493`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ``process_cesm_data`` function has been split into two functions, to make
+  it easier to run oggm with the climate of other GCM's: ``process_cesm_data``
+  reads the CESM files and handles the CESM specific file logic.
+  ``process_gcm_data`` is the general task able to handle all kind of data.
+  ``process_cesm_data`` can also be used as an example when you plan make a
+  function for running OGGM with another GCM (:issue:`469` & :pull:`582`).
+  `Anouk Vlug <https://github.com/anoukvlug>`_.
+- New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
+  (:pull:`603`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
   improvements when python-colorspace is (optionally) installed (:pull:`587`).

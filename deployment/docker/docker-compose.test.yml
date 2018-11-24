@@ -1,3 +1,9 @@
-sut:
-  build: .
-  command: /root/test.sh
+version: "3"
+
+services:
+  sut:
+    build:
+      context: .
+      args:
+        - SOURCE_COMMIT=master
+    command: /root/test.sh

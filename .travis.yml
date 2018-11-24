@@ -6,6 +6,7 @@ services:
 
 notifications:
   email: false
+  webhooks: https://coveralls.io/webhook
 
 branches:  # blacklist
   except:
@@ -16,108 +17,54 @@ cache:
   directories:
     - $HOME/dl_cache
 
+env:
+  global:
+    - COVERALLS_PARALLEL=true
+
 matrix:
   fast_finish: true
   allow_failures:
-    - os: windows
-    - os: osx
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=prepro MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=numerics MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=models MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=benchmark MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=utils MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=graphics MPL=--mpl
   include:
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=prepro MPL=
       os: linux
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=numerics MPL=
       os: linux
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=models MPL=
       os: linux
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=benchmark MPL=
       os: linux
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=utils MPL=
       os: linux
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
       os: linux
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
       os: linux
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
+    - env: TEST_CONTAINER=20181123 OGGM_TEST_ENV=graphics MPL=--mpl
       os: linux
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=prepro MPL=
       os: linux
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=numerics MPL=
       os: linux
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=models MPL=
       os: linux
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=benchmark MPL=
       os: linux
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=utils MPL=
       os: linux
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
       os: linux
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
       os: linux
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=graphics MPL=--mpl
       os: linux
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
-      os: osx
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
-      os: osx
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
-      os: osx
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
-      os: osx
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
-      os: osx
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
-      os: osx
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
-      os: osx
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.6 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.6 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.6 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.6 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.6 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=True
-      os: windows
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.6 MPL=--mpl OGGM_TEST_MULTIPROC=False
-      os: windows
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.6 MPL=--mpl
-      os: windows
-    - env: OGGM_TEST_ENV=prepro PYTHON_VERSION=3.7 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=numerics PYTHON_VERSION=3.7 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=models PYTHON_VERSION=3.7 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=benchmark PYTHON_VERSION=3.7 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=utils PYTHON_VERSION=3.7 MPL=
-      os: windows
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=True
-      os: windows
-    - env: OGGM_TEST_ENV=workflow PYTHON_VERSION=3.7 MPL=--mpl OGGM_TEST_MULTIPROC=False
-      os: windows
-    - env: OGGM_TEST_ENV=graphics PYTHON_VERSION=3.7 MPL=--mpl
-      os: windows
 
 script:
   - export -f travis_wait

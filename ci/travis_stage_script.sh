@@ -5,14 +5,16 @@ cd "$(dirname "$0")/.."
 export MPLBACKEND=agg
 
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-    export IMAGE_TAG=latest
-    test "$PYTHON_VERSION" = "3.7" && export IMAGE_TAG=py37 || true
+    test -n "$TEST_CONTAINER" && IMAGE_TAG="$TEST_CONTAINER" || IMAGE_TAG=latest
+    export IMAGE_TAG
+
     docker pull oggm/untested_base:$IMAGE_TAG
 
     mkdir -p $HOME/dl_cache
     export OGGM_DOWNLOAD_CACHE=/dl_cache
+    [[ ! -z "${TEST_CONTAINER##*[!0-9]*}" ]] && export DO_COVERALLS=1 || unset DO_COVERALLS
 
-    docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e MPL -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:$IMAGE_TAG /bin/bash /root/oggm/ci/travis_script.sh
+    docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e DO_COVERALLS -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e MPL -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:$IMAGE_TAG /bin/bash /root/oggm/ci/travis_script.sh
     docker cp $PWD oggm_travis:/root/oggm
 
     docker start -ai oggm_travis
@@ -24,7 +26,7 @@ fi
 if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
 	wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Windows-x86_64.exe -O miniconda.exe
 	chmod +x miniconda.exe
-	travis_wait 40 ./miniconda.exe "/S" "/D=$(cygpath -w -a $HOME/miniconda)"
+	travis_wait 40 ./miniconda.exe "/S" "/D=$(cygpath -m -a $HOME/miniconda)"
 	rm miniconda.exe
 elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
 	rvm get head || true
