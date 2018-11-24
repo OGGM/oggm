@@ -19,8 +19,8 @@ import xarray as xr
 import rasterio
 
 # Local imports
-from oggm.core import (gis, inversion, climate, centerlines, flowline,
-                       massbalance)
+from oggm.core import (gis, inversion, climate_prepro, climate, centerlines,
+                       flowline, massbalance)
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, tuple2int
@@ -2237,61 +2237,50 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
-        climate.process_cesm_data(gdir)
-        with warnings.catch_warnings():
-            # Long time series are currently a pain pandas
-            warnings.filterwarnings("ignore",
-                                    message='Unable to decode time axis')
-            fh = gdir.get_filepath('climate_monthly')
-            fcesm = gdir.get_filepath('cesm_data')
-            with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
+        cfg.PATHS['cesm_precl_file'] = f
+        climate_prepro.process_cesm_data(gdir)
 
-                tv = cesm.time.values
-                time = pd.period_range(tv[0].strftime('%Y-%m-%d'),
-                                       tv[-1].strftime('%Y-%m-%d'),
-                                       freq='M')
-                cesm['time'] = time
-                cesm.coords['year'] = ('time', time.year)
-                cesm.coords['month'] = ('time', time.month)
+        fh = gdir.get_filepath('climate_monthly')
+        fcesm = gdir.get_filepath('gcm_data')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
 
-                # Let's do some basic checks
-                scru = cru.sel(time=slice('1961', '1990'))
-                scesm = cesm.load().isel(time=((cesm.year >= 1961) &
-                                               (cesm.year <= 1990)))
-                # Climate during the chosen period should be the same
-                np.testing.assert_allclose(scru.temp.mean(),
-                                           scesm.temp.mean(),
-                                           rtol=1e-3)
-                np.testing.assert_allclose(scru.prcp.mean(),
-                                           scesm.prcp.mean(),
-                                           rtol=1e-3)
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cesm.load().isel(time=((cesm['time.year'] >= 1961) &
+                                           (cesm['time.year'] <= 1990)))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
 
-                # And also the anual cycle
-                scru = scru.groupby('time.month').mean()
-                scesm = scesm.groupby(scesm.month).mean()
-                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
-                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+            # And also the annual cycle
+            scru = scru.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
 
-                # How did the annua cycle change with time?
-                scesm1 = cesm.isel(time=((cesm.year >= 1961) &
-                                         (cesm.year <= 1990)))
-                scesm2 = cesm.isel(time=((cesm.year >= 1661) &
-                                         (cesm.year <= 1690)))
-                scesm1 = scesm1.groupby(scesm1.month).mean()
-                scesm2 = scesm2.groupby(scesm2.month).mean()
-                # No more than one degree? (silly test)
-                np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
-                # N more than 30%? (silly test)
-                np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
+            # How did the annua cycle change with time?
+            scesm1 = cesm.isel(time=((cesm['time.year'] >= 1961) &
+                                     (cesm['time.year'] <= 1990)))
+            scesm2 = cesm.isel(time=((cesm['time.year'] >= 1661) &
+                                     (cesm['time.year'] <= 1690)))
+            scesm1 = scesm1.groupby('time.month').mean(dim='time')
+            scesm2 = scesm2.groupby('time.month').mean(dim='time')
+            # No more than one degree? (silly test)
+            np.testing.assert_allclose(scesm1.temp, scesm2.temp, atol=1)
+            # N more than 30%? (silly test)
+            np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
 
     def test_compile_climate_input(self):
 
-        filename = 'cesm_data'
+        filename = 'gcm_data'
         filesuffix = '_cesm'
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2304,57 +2293,53 @@ class TestGCMClimate(unittest.TestCase):
         utils.compile_climate_input([gdir])
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
-        climate.process_cesm_data(gdir, filesuffix=filesuffix)
+        cfg.PATHS['cesm_precl_file'] = f
+        climate_prepro.process_cesm_data(gdir, filesuffix=filesuffix)
         utils.compile_climate_input([gdir], filename=filename,
                                     filesuffix=filesuffix)
 
-        with warnings.catch_warnings():
-            # Long time series are currently a pain pandas
-            warnings.filterwarnings("ignore", message='Unable to decode')
+        # CRU
+        f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
+        f2 = gdir.get_filepath(filename='climate_monthly')
+        with xr.open_dataset(f1) as clim_cru1, \
+                xr.open_dataset(f2) as clim_cru2:
+            np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
+                                       clim_cru2.prcp)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
+                                       clim_cru2.temp)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_hgt),
+                                       clim_cru2.ref_hgt)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lat),
+                                       clim_cru2.ref_pix_lat)
+            np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lon),
+                                       clim_cru2.ref_pix_lon)
+            np.testing.assert_allclose(clim_cru1.calendar_month,
+                                       clim_cru2['time.month'])
+            np.testing.assert_allclose(clim_cru1.calendar_year,
+                                       clim_cru2['time.year'])
+            np.testing.assert_allclose(clim_cru1.hydro_month[[0, -1]],
+                                       [1, 12])
 
-            # CRU
-            f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
-            f2 = gdir.get_filepath(filename='climate_monthly')
-            with xr.open_dataset(f1) as clim_cru1, \
-                    xr.open_dataset(f2) as clim_cru2:
-                np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
-                                           clim_cru2.prcp)
-                np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
-                                           clim_cru2.temp)
-                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_hgt),
-                                           clim_cru2.ref_hgt)
-                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lat),
-                                           clim_cru2.ref_pix_lat)
-                np.testing.assert_allclose(np.squeeze(clim_cru1.ref_pix_lon),
-                                           clim_cru2.ref_pix_lon)
-                np.testing.assert_allclose(clim_cru1.calendar_month,
-                                           clim_cru2['time.month'])
-                np.testing.assert_allclose(clim_cru1.calendar_year,
-                                           clim_cru2['time.year'])
-                np.testing.assert_allclose(clim_cru1.hydro_month[[0, -1]],
-                                           [1, 12])
-
-            # CESM
-            f1 = os.path.join(cfg.PATHS['working_dir'],
-                              'climate_input_cesm.nc')
-            f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
-            with xr.open_dataset(f1) as clim_cesm1, \
-                    xr.open_dataset(f2) as clim_cesm2:
-                np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
-                                           clim_cesm2.prcp)
-                np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
-                                           clim_cesm2.temp)
-                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_hgt),
-                                           clim_cesm2.ref_hgt)
-                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lat),
-                                           clim_cesm2.ref_pix_lat)
-                np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lon),
-                                           clim_cesm2.ref_pix_lon)
+        # CESM
+        f1 = os.path.join(cfg.PATHS['working_dir'],
+                          'climate_input_cesm.nc')
+        f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
+        with xr.open_dataset(f1) as clim_cesm1, \
+                xr.open_dataset(f2) as clim_cesm2:
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
+                                       clim_cesm2.prcp)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
+                                       clim_cesm2.temp)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_hgt),
+                                       clim_cesm2.ref_hgt)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lat),
+                                       clim_cesm2.ref_pix_lat)
+            np.testing.assert_allclose(np.squeeze(clim_cesm1.ref_pix_lon),
+                                       clim_cesm2.ref_pix_lon)
 
 
 class TestIdealizedGdir(unittest.TestCase):
