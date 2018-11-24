@@ -76,6 +76,7 @@ Optional:
     - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
       (applies HCL-based color palettes to some graphics)
 
+
 .. _conda-install:
 
 Install with conda (all platforms)

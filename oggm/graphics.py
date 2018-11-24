@@ -15,7 +15,7 @@ from matplotlib import cm as colormap
 
 try:
     # optional python-colorspace dependency for better (HCL-based) colormaps
-    from colorspace import diverging_hcl, sequential_hcl
+    from colorspace import sequential_hcl
     USE_HCL_CMAP = True
 except ImportError:
     USE_HCL_CMAP = False

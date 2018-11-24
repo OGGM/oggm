@@ -63,8 +63,7 @@ req_packages = ['numpy',
                 'progressbar2',
                 'boto3',
                 'requests',
-                'salem',
-                'python-colorspace']
+                'salem']
 
 
 setup(
