@@ -16,7 +16,7 @@ from oggm.core.climate import process_gcm_data
 log = logging.getLogger(__name__)
 
 
-@entity_task(log, writes=['gcm_data'])
+@entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None):
     """Processes and writes GCM climate data for this glacier.

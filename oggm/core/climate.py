@@ -108,8 +108,8 @@ def process_custom_climate_data(gdir):
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
-    
-    
+
+
 @entity_task(log, writes=['cesm_data', 'climate_info'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      time_unit='days since 1801-01-01 00:00:00',
@@ -209,7 +209,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     ds_cru.close()
 
 
-@entity_task(log, writes=['climate_monthly'])
+@entity_task(log, writes=['climate_monthly', 'climate_info'])
 def process_cru_data(gdir):
     """Processes and writes the climate data for this glacier.
 
@@ -552,7 +552,7 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     gdir.write_pickle(out, 'climate_info')
 
 
-@entity_task(log, writes=['climate_monthly'])
+@entity_task(log, writes=['climate_monthly', 'climate_info'])
 def process_histalp_data(gdir):
     """Processes and writes the climate data for this glacier.
 

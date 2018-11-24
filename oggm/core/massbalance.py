@@ -2,7 +2,6 @@
 # Built ins
 # External libs
 import numpy as np
-import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
 from scipy import optimize as optimization
