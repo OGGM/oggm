@@ -23,7 +23,7 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
-from oggm.core import climate, inversion, centerlines
+from oggm.core import climate_prepro, climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
@@ -2534,51 +2534,38 @@ class TestHEF(unittest.TestCase):
 
         # init
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['gcm_temp_file'] = f
+        cfg.PATHS['cesm_temp_file'] = f
         f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precc_file'] = f
+        cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['gcm_precl_file'] = f
-        climate.process_cesm_data(self.gdir)
+        cfg.PATHS['cesm_precl_file'] = f
+        climate_prepro.process_cesm_data(self.gdir)
 
         # Climate data
-        with warnings.catch_warnings():
-            # Long time series are currently a pain pandas
-            warnings.filterwarnings("ignore",
-                                    message='Unable to decode time axis')
-            fh = gdir.get_filepath('climate_monthly')
-            fcesm = gdir.get_filepath('cesm_data')
-            with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+        fh = gdir.get_filepath('climate_monthly')
+        fcesm = gdir.get_filepath('gcm_data')
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
 
-                tv = cesm.time.values
-                time = pd.period_range(tv[0].strftime('%Y-%m-%d'),
-                                       tv[-1].strftime('%Y-%m-%d'),
-                                       freq='M')
-                cesm['time'] = time
-                cesm.coords['year'] = ('time', time.year)
-                cesm.coords['month'] = ('time', time.month)
-
-                # Let's do some basic checks
-                shist = hist.sel(time=slice('1961', '1990'))
-                scesm = cesm.isel(time=((cesm.year >= 1961) &
-                                        (cesm.year <= 1990)))
-                # Climate during the chosen period should be the same
-                np.testing.assert_allclose(shist.temp.mean(),
-                                           scesm.temp.mean(),
-                                           rtol=1e-3)
-                np.testing.assert_allclose(shist.prcp.mean(),
-                                           scesm.prcp.mean(),
-                                           rtol=1e-3)
-                # And also the anual cycle
-                scru = shist.groupby('time.month').mean()
-                scesm = scesm.groupby(scesm.month).mean()
-                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
-                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+            # Let's do some basic checks
+            shist = hist.sel(time=slice('1961', '1990'))
+            scesm = cesm.sel(time=slice('1961', '1990'))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(shist.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(shist.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+            # And also the anual cycle
+            scru = shist.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
 
         # Mass balance models
         mb_cru = massbalance.PastMassBalance(self.gdir)
         mb_cesm = massbalance.PastMassBalance(self.gdir,
-                                              filename='cesm_data')
+                                              filename='gcm_data')
 
         # Average over 1961-1990
         h, w = self.gdir.get_inversion_flowline_hw()
@@ -2617,7 +2604,7 @@ class TestHEF(unittest.TestCase):
         run_from_climate_data(gdir, ys=1961, ye=1990,
                               output_filesuffix='_hist')
         run_from_climate_data(gdir, ys=1961, ye=1990,
-                              climate_filename='cesm_data',
+                              climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
         ds1 = utils.compile_run_output([gdir], path=False, filesuffix='_hist')

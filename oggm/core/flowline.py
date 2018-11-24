@@ -1631,7 +1631,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1702,7 +1702,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1754,7 +1754,7 @@ def run_from_climate_data(gdir, ys=None, ye=None,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str

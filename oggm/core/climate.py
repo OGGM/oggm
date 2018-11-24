@@ -108,102 +108,69 @@ def process_custom_climate_data(gdir):
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
     gdir.write_pickle(out, 'climate_info')
-
-
+    
+    
 @entity_task(log, writes=['cesm_data', 'climate_info'])
-def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
-                      fpath_precl=None):
-    """Processes and writes the climate data for this glacier.
+def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
+                     time_unit='days since 1801-01-01 00:00:00',
+                     calendar=None):
+    """ Applies the anomaly method to the climate data and stores the data in a
+    format that can be used by the OGGM mass balance model.
 
-    This function is made for interpolating the Community
-    Earth System Model Last Millenial Ensemble (CESM-LME) climate simulations,
-    from Otto-Bliesner et al. (2016), to the high-resolution CL2 climatologies
-    (provided with OGGM) and writes everything to a NetCDF file.
+    For an example implementation see
+    :ref:`core.climate_prepro.process_cesm_data()`
 
     Parameters
     ----------
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
-    fpath_temp : str
-        path to the temp file (default: cfg.PATHS['gcm_temp_file'])
-    fpath_precc : str
-        path to the precc file (default: cfg.PATHS['gcm_precc_file'])
-    fpath_precl : str
-        path to the precl file (default: cfg.PATHS['gcm_precl_file'])
+    prcp    : xarray.DataArray - format:
+        monthly total precipitation [mm month-1]
+            Coordinates:
+            lat      float64
+            lon      float64
+            time     (time) cftime object
+    temp : xarray.DataArray
+        monthly temperature [K]
+            Coordinates:
+            lat      float64
+            lon      float64
+            time     (time) cftime object
+    time_unit : str
+        The unit conversion for NetCDF files. It must be adapted to the
+        length of the time series.
+        For example: 'days since 0850-01-01 00:00:00'
+    calendar : str
+        If you use an exotic calendar (e.g. 'noleap')
     """
 
-    # GCM temperature and precipitation data
-    if fpath_temp is None:
-        if not ('gcm_temp_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['gcm_temp_file']")
-        fpath_temp = cfg.PATHS['gcm_temp_file']
-    if fpath_precc is None:
-        if not ('gcm_precc_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['gcm_precc_file']")
-        fpath_precc = cfg.PATHS['gcm_precc_file']
-    if fpath_precl is None:
-        if not ('gcm_precl_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['gcm_precl_file']")
-        fpath_precl = cfg.PATHS['gcm_precl_file']
+    # Standard sanity checks
+    months = temp['time.month']
+    if (months[0] != 1) or (months[-1] != 12):
+        raise ValueError('We expect the files to start in January and end in '
+                         'December!')
 
-    # read the files
-    with warnings.catch_warnings():
-        # Long time series are currently a pain pandas
-        warnings.filterwarnings("ignore", message='Unable to decode time axis')
-        tempds = xr.open_dataset(fpath_temp)
-    precpcds = xr.open_dataset(fpath_precc, decode_times=False)
-    preclpds = xr.open_dataset(fpath_precl, decode_times=False)
-
-    # select for location
-    lon = gdir.cenlon
-    lat = gdir.cenlat
-
-    # CESM files are in 0-360
-    if lon <= 0:
-        lon += 360
-
-    # take the closest
-    # TODO: consider GCM interpolation?
-    temp = tempds.TREFHT.sel(lat=lat, lon=lon, method='nearest')
-    precp = (precpcds.PRECC.sel(lat=lat, lon=lon, method='nearest') +
-             preclpds.PRECL.sel(lat=lat, lon=lon, method='nearest'))
+    if (np.abs(temp['lon']) > 180) or (np.abs(prcp['lon']) > 180):
+        raise ValueError('We expect the longitude coordinates to be within '
+                         '[-180, 180].')
 
     # from normal years to hydrological years
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    em = sm - 1 if (sm > 1) else 12
-    # TODO: we don't check if the files actually start in January but we should
-    precp = precp[sm-1:sm-13].load()
+    prcp = prcp[sm-1:sm-13].load()
     temp = temp[sm-1:sm-13].load()
-    y0 = int(temp.time.values[0].strftime('%Y'))
-    y1 = int(temp.time.values[-1].strftime('%Y'))
-    time = pd.period_range('{}-{:02d}'.format(y0, sm),
-                           '{}-{:02d}'.format(y1, em), freq='M')
-    temp['time'] = time
-    precp['time'] = time
-    # Workaround for https://github.com/pydata/xarray/issues/1565
-    temp['month'] = ('time', time.month)
-    precp['month'] = ('time', time.month)
-    temp['year'] = ('time', time.year)
-    precp['year'] = ('time', time.year)
-    ny, r = divmod(len(time), 12)
-    assert r == 0
-
-    # Convert m s-1 to mm mth-1
-    ndays = np.tile(np.roll(cfg.DAYS_IN_MONTH, 13-sm), y1 - y0)
-    precp = precp * ndays * (60 * 60 * 24 * 1000)
 
     # compute monthly anomalies
     # of temp
-    ts_tmp_avg = temp.sel(time=(temp.year >= 1961) & (temp.year <= 1990))
-    ts_tmp_avg = ts_tmp_avg.groupby(ts_tmp_avg.month).mean(dim='time')
-    ts_tmp = temp.groupby(temp.month) - ts_tmp_avg
+    ts_tmp_avg = temp.sel(time=slice('1961', '1990'))
+    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
     # of precip -- scaled anomalies
-    ts_pre_avg = precp.isel(time=(precp.year >= 1961) & (precp.year <= 1990))
-    ts_pre_avg = ts_pre_avg.groupby(ts_pre_avg.month).mean(dim='time')
-    ts_pre_ano = precp.groupby(precp.month) - ts_pre_avg
+    ts_pre_avg = prcp.sel(time=slice('1961', '1990'))
+    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre_ano = prcp.groupby('time.month') - ts_pre_avg
     # scaled anomalies is the default. Standard anomalies above
     # are used later for where ts_pre_avg == 0
-    ts_pre = precp.groupby(precp.month) / ts_pre_avg
+    ts_pre = prcp.groupby('time.month') / ts_pre_avg
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_monthly')
@@ -213,13 +180,13 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     dscru = ds_cru.sel(time=slice('1961', '1990'))
     # for temp
     loc_tmp = dscru.temp.groupby('time.month').mean()
-    ts_tmp = ts_tmp.groupby(ts_tmp.month) + loc_tmp
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
     # scaled anomalies
-    ts_pre = ts_pre.groupby(ts_pre.month) * loc_pre
+    ts_pre = ts_pre.groupby('time.month') * loc_pre
     # standard anomalies
-    ts_pre_ano = ts_pre_ano.groupby(ts_pre_ano.month) + loc_pre
+    ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
     # Correct infinite values with standard anomalies
     ts_pre.values = np.where(np.isfinite(ts_pre.values),
                              ts_pre.values,
@@ -227,29 +194,18 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # The last step might create negative values (unlikely). Clip them
     ts_pre.values = ts_pre.values.clip(0)
 
-    # load dates in right format to save
-    dsindex = salem.GeoNetcdf(fpath_temp, monthbegin=True)
-    time1 = dsindex.variables['time']
-    time2 = time1[sm-1:sm-13] - ndays  # to hydrological years
-    time2 = netCDF4.num2date(time2, time1.units, calendar='noleap')
-
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
 
-    # back to -180 - 180
-    loc_lon = precp.lon if precp.lon <= 180 else precp.lon - 360
-
-    gdir.write_monthly_climate_file(time2, ts_pre.values, ts_tmp.values,
+    gdir.write_monthly_climate_file(temp.time.values,
+                                    ts_pre.values, ts_tmp.values,
                                     float(dscru.ref_hgt),
-                                    loc_lon, precp.lat.values,
-                                    time_unit=time1.units,
-                                    file_name='cesm_data',
+                                    prcp.lon.values, prcp.lat.values,
+                                    time_unit=time_unit,
+                                    calendar=calendar,
+                                    file_name='gcm_data',
                                     filesuffix=filesuffix)
 
-    dsindex._nc.close()
-    tempds.close()
-    precpcds.close()
-    preclpds.close()
     ds_cru.close()
 
 
