@@ -83,7 +83,7 @@ cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
                                             '.selection.nc')
 cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
                                             '.selection.nc')
-execute_entity_task(tasks.prepro_cesm_data, gdirs)
+execute_entity_task(tasks.process_cesm_data, gdirs)
 
 # Inversion tasks
 execute_entity_task(tasks.prepare_for_inversion, gdirs)

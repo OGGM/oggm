@@ -2242,7 +2242,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
         cfg.PATHS['cesm_precl_file'] = f
-        climate_prepro.prepro_cesm_data(gdir)
+        climate_prepro.process_cesm_data(gdir)
 
         fh = gdir.get_filepath('climate_monthly')
         fcesm = gdir.get_filepath('gcm_data')
@@ -2298,7 +2298,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
         cfg.PATHS['cesm_precl_file'] = f
-        climate_prepro.prepro_cesm_data(gdir, filesuffix=filesuffix)
+        climate_prepro.process_cesm_data(gdir, filesuffix=filesuffix)
         utils.compile_climate_input([gdir], filename=filename,
                                     filesuffix=filesuffix)
 

@@ -2539,7 +2539,7 @@ class TestHEF(unittest.TestCase):
         cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
         cfg.PATHS['cesm_precl_file'] = f
-        climate_prepro.prepro_cesm_data(self.gdir)
+        climate_prepro.process_cesm_data(self.gdir)
 
         # Climate data
         fh = gdir.get_filepath('climate_monthly')

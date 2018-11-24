@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['gcm_data'])
-def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
-                     fpath_precl=None):
+def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
+                      fpath_precl=None):
     """Processes and writes GCM climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -53,8 +53,8 @@ def prepro_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         fpath_precl = cfg.PATHS['cesm_precl_file']
 
     # read the files
-    if LooseVersion(xr.__version__) < LooseVersion('0.10.9'):
-        raise ImportError('This task needs xarray v0.10.9 or newer to run.')
+    if LooseVersion(xr.__version__) < LooseVersion('0.11'):
+        raise ImportError('This task needs xarray v0.11 or newer to run.')
 
     tempds = xr.open_dataset(fpath_temp)
     precpcds = xr.open_dataset(fpath_precc)
