@@ -13,6 +13,8 @@ New contributors to the project:
   cross-validation tools and an associated website.
 - **Philipp Gregor** (Master student, University of Innsbruck), added options
   to switch on lateral bed stress in the flowline ice dynamics
+- **Sadie Bartholomew** (Software Engineer, UK Met Office), added ability to
+  replace colormaps in graphics with HCL-based colors using python-colorspace.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -151,6 +153,9 @@ Enhancements
 - New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
   (:pull:`603`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
+  improvements when python-colorspace is (optionally) installed (:pull:`587`).
+  By `Sadie Bartholomew <https://github.com/sadielbartholomew>`_.
 
 
 Bug fixes
