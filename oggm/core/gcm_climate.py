@@ -23,7 +23,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     format that can be used by the OGGM mass balance model.
 
     For an example implementation see
-    :ref:`core.climate_prepro.process_cesm_data()`
+    :ref:`process_cesm_data()`
 
     Parameters
     ----------
