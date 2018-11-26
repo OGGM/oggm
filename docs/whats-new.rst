@@ -84,7 +84,7 @@ Breaking changes
 - The global task `glacier_characteristics` has been renamed to
   `compile_glacier_statistics` (:pull:`571`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- The ``process_cesm_data`` task has been been moved to climate_prepro.py
+- The ``process_cesm_data`` task has been been moved to `gcm_climate.py`
   adressing: :issue:`469` & :pull:`582`.
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
 

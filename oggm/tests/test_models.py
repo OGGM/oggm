@@ -23,7 +23,7 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
-from oggm.core import climate_prepro, climate, inversion, centerlines
+from oggm.core import gcm_climate, climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
@@ -2539,7 +2539,7 @@ class TestHEF(unittest.TestCase):
         cfg.PATHS['cesm_precc_file'] = f
         f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
         cfg.PATHS['cesm_precl_file'] = f
-        climate_prepro.process_cesm_data(self.gdir)
+        gcm_climate.process_cesm_data(self.gdir)
 
         # Climate data
         fh = gdir.get_filepath('climate_monthly')
