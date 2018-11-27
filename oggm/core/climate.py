@@ -564,6 +564,9 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     temperature "energies" (temp above 0) and solid precipitation at the
     required height.
 
+    All MB parameters are considered here! (i.e. melt temp, precip scaling
+    factor, etc.)
+
     Parameters
     ----------
     gdir : GlacierDirectory
@@ -663,7 +666,7 @@ def mb_yearly_climate_on_height(gdir, heights, *,
                                 year_range=None, flatten=False):
     """Yearly mass-balance climate of the glacier at a specific height
 
-    The precipitation time series are not corrected!
+    See also: mb_climate_on_height
 
     Parameters
     ----------
@@ -721,7 +724,7 @@ def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
     """Yearly mass-balance climate at all glacier heights,
     multiplied with the flowlines widths. (all in pix coords.)
 
-    The precipitation time series are not corrected!
+    See also: mb_climate_on_height
 
     Parameters
     ----------
@@ -736,7 +739,7 @@ def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
     (years, tempformelt, prcpsol)::
         - years: array of shape (ny)
         - tempformelt:  array of shape (ny)
-        - prcpsol:  array of shape (ny) (not corrected!)
+        - prcpsol:  array of shape (ny)
     """
 
     flowlines = gdir.read_pickle('inversion_flowlines')
