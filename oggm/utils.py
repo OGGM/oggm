@@ -3076,12 +3076,13 @@ class GlacierDirectory(object):
         if rgi_id is not None:
             fname = fname.split('.')
             assert len(fname) == 2
-            fname = fname[0] + '_' + rgi_id + '.' + fname[1]
+            fname = fname[0] + '_' + rgi_id + filesuffix + '.' + fname[1]
 
-        if filesuffix:
+        elif (rgi_id is None) and filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
             fname = fname[0] + filesuffix + '.' + fname[1]
+
         out = os.path.join(self.dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)
