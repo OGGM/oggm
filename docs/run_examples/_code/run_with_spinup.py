@@ -77,12 +77,12 @@ for task in task_list:
     execute_entity_task(task, gdirs)
 
 # Additional climate file (CESM)
-cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'
-                                           '.selection.nc')
-cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
+cfg.PATHS['cesm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'
                                             '.selection.nc')
-cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
-                                            '.selection.nc')
+cfg.PATHS['cesm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
+                                             '.selection.nc')
+cfg.PATHS['cesm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
+                                             '.selection.nc')
 execute_entity_task(tasks.process_cesm_data, gdirs)
 
 # Inversion tasks

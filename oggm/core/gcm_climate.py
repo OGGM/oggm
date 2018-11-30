@@ -164,8 +164,13 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         time_units = nc.variables['time'].units
         calendar = nc.variables['time'].calendar
 
-    time = netCDF4.num2date(tempds.time_bnds[:, 0], time_units,
-                            calendar=calendar)
+    try:
+        # xarray v0.11
+        time = netCDF4.num2date(tempds.time_bnds[:, 0], time_units,
+                                calendar=calendar)
+    except TypeError:
+        # xarray > v0.11
+        time = tempds.time_bnds[:, 0].values
 
     # select for location
     lon = gdir.cenlon
