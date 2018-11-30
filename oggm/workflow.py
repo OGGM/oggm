@@ -81,22 +81,12 @@ class _pickle_copier(object):
             call_func = self.call_func
         else:
             call_func, gdir = arg
-        try:
-            if isinstance(gdir, Sequence):
-                gdir, gdir_kwargs = gdir
-                gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-                return call_func(gdir, **gdir_kwargs)
-            else:
-                return call_func(gdir, **self.out_kwargs)
-        except Exception as e:
-            try:
-                err_msg = ('({0}) exception occured while processing task '
-                           '{1}: {2}'.format(gdir.rgi_id, call_func.__name__,
-                                             str(e)))
-                raise RuntimeError(err_msg) from e
-            except AttributeError:
-                pass
-            raise
+        if isinstance(gdir, Sequence):
+            gdir, gdir_kwargs = gdir
+            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
+            return call_func(gdir, **gdir_kwargs)
+        else:
+            return call_func(gdir, **self.out_kwargs)
 
 
 def reset_multiprocessing():
