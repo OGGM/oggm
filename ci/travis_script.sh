@@ -3,17 +3,21 @@ set -x
 set -e
 
 pip3 install --upgrade git+https://github.com/fmaussion/salem.git
-pip3 install --upgrade coveralls coverage pytest-cov
-
-[[ -n "$DO_COVERALLS" ]] && COV_OPTS="--cov-config .coveragerc --cov=oggm --cov-report term-missing --cov-append" || COV_OPTS=""
+pip3 install --upgrade coveralls coverage
 
 cd /root/oggm
 pip3 install -e .
 
-[[ -n "$DO_COVERALLS" ]] && coverage erase
+COV_OPTS=""
+if [[ -n "$DO_COVERALLS" ]]; then
+	coverage erase --rcfile=.coveragerc
+	COV_OPTS="coverage run --rcfile=.coveragerc --source=./oggm --parallel-mode --module"
+fi
 
-pytest --mpl-upload $MPL $COV_OPTS --run-slow --run-test-env $OGGM_TEST_ENV oggm
+$COV_OPTS pytest --mpl-upload $MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
 
 if [[ -n "$DO_COVERALLS" ]]; then
+	coverage combine --rcfile=.coveragerc
+	coverage report --skip-covered --rcfile=.coveragerc
 	coveralls || true
 fi

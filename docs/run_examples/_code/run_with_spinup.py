@@ -76,12 +76,12 @@ for task in task_list:
     execute_entity_task(task, gdirs)
 
 # Additional climate file (CESM)
-cfg.PATHS['gcm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'
-                                           '.selection.nc')
-cfg.PATHS['gcm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
+cfg.PATHS['cesm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'
                                             '.selection.nc')
-cfg.PATHS['gcm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
-                                            '.selection.nc')
+cfg.PATHS['cesm_precc_file'] = get_demo_file('cesm.PRECC.160001-200512'
+                                             '.selection.nc')
+cfg.PATHS['cesm_precl_file'] = get_demo_file('cesm.PRECL.160001-200512'
+                                             '.selection.nc')
 execute_entity_task(tasks.process_cesm_data, gdirs)
 
 # Inversion tasks
@@ -96,7 +96,7 @@ execute_entity_task(tasks.init_present_time_glacier, gdirs)
 # Run the last 200 years with the default starting point (current glacier)
 # and CESM data as input
 execute_entity_task(tasks.run_from_climate_data, gdirs,
-                    climate_filename='cesm_data',
+                    climate_filename='gcm_data',
                     ys=1801, ye=2000,
                     output_filesuffix='_no_spinup')
 
@@ -106,7 +106,7 @@ execute_entity_task(tasks.run_constant_climate, gdirs,
                     output_filesuffix='_spinup')
 # Run a past climate run based on this spinup
 execute_entity_task(tasks.run_from_climate_data, gdirs,
-                    climate_filename='cesm_data',
+                    climate_filename='gcm_data',
                     ys=1801, ye=2000,
                     init_model_filesuffix='_spinup',
                     output_filesuffix='_with_spinup')

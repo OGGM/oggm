@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import oggm
-import pandas as pd
 import geopandas as gpd
 import xarray as xr
 
