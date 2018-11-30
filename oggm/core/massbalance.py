@@ -214,8 +214,7 @@ class PastMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  filename='climate_monthly', input_filesuffix='',
-                 repeat=False, ys=None, ye=None, check_calib_params=True,
-                 rgi_id=None):
+                 repeat=False, ys=None, ye=None, check_calib_params=True):
         """Initialize.
 
         Parameters
@@ -249,9 +248,6 @@ class PastMassBalance(MassBalanceModel):
             the parameters used during calibration and the ones you are
             using at run time. If they don't match, it will raise an error.
             Set to False to suppress this check.
-        rgi_id: str
-            When a glacier is merged from several glaciers, the rgi_id will
-            allow to load the correct climate file.
 
         Attributes
         ----------
@@ -310,8 +306,7 @@ class PastMassBalance(MassBalanceModel):
         self.repeat = repeat
 
         # Read file
-        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix,
-                                  rgi_id=rgi_id)
+        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
@@ -451,7 +446,7 @@ class ConstantMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, filename='climate_monthly',
-                 input_filesuffix='', rgi_id=None):
+                 input_filesuffix=''):
         """Initialize
 
         Parameters
@@ -479,8 +474,7 @@ class ConstantMassBalance(MassBalanceModel):
         super(ConstantMassBalance, self).__init__()
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
                                      filename=filename,
-                                     input_filesuffix=input_filesuffix,
-                                     rgi_id=rgi_id)
+                                     input_filesuffix=input_filesuffix)
 
         if y0 is None:
             df = gdir.read_json('local_mustar')
@@ -615,7 +609,7 @@ class RandomMassBalance(MassBalanceModel):
     def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, seed=None, filename='climate_monthly',
                  input_filesuffix='', all_years=False,
-                 unique_samples=False, rgi_id=None):
+                 unique_samples=False):
         """Initialize.
 
         Parameters
@@ -656,8 +650,7 @@ class RandomMassBalance(MassBalanceModel):
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
                                      filename=filename,
-                                     input_filesuffix=input_filesuffix,
-                                     rgi_id=rgi_id)
+                                     input_filesuffix=input_filesuffix)
 
         # Climate period
         if all_years:
@@ -878,7 +871,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, fls=None, mu_star=None,
                  mb_model_class=PastMassBalance, use_inversion_flowlines=False,
-                 **kwargs):
+                 input_filesuffix='', **kwargs):
         """Initialize.
 
         Parameters
@@ -898,6 +891,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         use_inversion_flowlines: bool, optional
             if True 'inversion_flowlines' instead of 'model_flowlines' will be
             used.
+        input_filesuffix : str
+            the file suffix of the input climate file
         kwargs : kwargs to pass to mb_model_class
         """
 
@@ -923,9 +918,15 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 fl.mu_star = mu
 
         # Initialise the mb models
-        self.flowline_mb_models = [mb_model_class(gdir, mu_star=fl.mu_star,
-                                                  rgi_id=fl.rgi_id, **kwargs)
-                                   for fl in self.fls]
+        self.flowline_mb_models = []
+        for fl in self.fls:
+            # Merged glaciers will need different climate files, use filesuffix
+            if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
+                input_filesuffix = '_' + fl.rgi_id + input_filesuffix
+
+            self.flowline_mb_models.append(
+                mb_model_class(gdir, mu_star=fl.mu_star,
+                               input_filesuffix=input_filesuffix, **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
 

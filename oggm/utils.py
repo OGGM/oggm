@@ -3046,7 +3046,7 @@ class GlacierDirectory(object):
         """The glacier's RGI area (m2)."""
         return self.rgi_area_km2 * 10**6
 
-    def get_filepath(self, filename, delete=False, filesuffix='', rgi_id=None):
+    def get_filepath(self, filename, delete=False, filesuffix=''):
         """Absolute path to a specific file.
 
         Parameters
@@ -3058,10 +3058,6 @@ class GlacierDirectory(object):
         filesuffix : str
             append a suffix to the filename (useful for model runs). Note
             that the BASENAME remains same.
-        rgi_id: str
-            actual filename might include the RGI_id. In case of a merged
-            glacier the GDir might contain files like 'climate_monthly'
-            associated with different original glaciers.
 
         Returns
         -------
@@ -3072,13 +3068,7 @@ class GlacierDirectory(object):
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
         fname = cfg.BASENAMES[filename]
-
-        if rgi_id is not None:
-            fname = fname.split('.')
-            assert len(fname) == 2
-            fname = fname[0] + '_' + rgi_id + filesuffix + '.' + fname[1]
-
-        elif (rgi_id is None) and filesuffix:
+        if filesuffix:
             fname = fname.split('.')
             assert len(fname) == 2
             fname = fname[0] + filesuffix + '.' + fname[1]
