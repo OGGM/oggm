@@ -497,8 +497,8 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
 def set_intersects_db(path_or_gdf=None):
     """Set the glacier intersection database for later use.
 
-    See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain such
-    data.
+    See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain
+    such data.
 
     Parameters
     ----------

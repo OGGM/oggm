@@ -10,8 +10,8 @@ available data for calibration and validation.
 
 .. note::
 
-    **This is a technical documentation: for general information about the OGGM
-    project and for the latest news, visit** `oggm.org <http://oggm.org>`_.
+    **This is the software documentation: for general information about the
+    OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 
 .. warning::
 
@@ -22,7 +22,7 @@ available data for calibration and validation.
 Principles
 ^^^^^^^^^^
 
-Physical principles implemented in the model and the underlying assumptions,
+Physical principles implemented in the model and their underlying assumptions,
 with as little code as possible. For more detailed information, we recommend
 to read the OGGM
 `description paper <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_ as
@@ -48,16 +48,16 @@ well.
 Using OGGM
 ^^^^^^^^^^
 
-How to use the model on your computer or a cluster, with concrete code
-examples.
+How to use the model, with concrete python code examples.
 
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* :doc:`glacierdir`
 * :doc:`input-data`
+* :doc:`glacierdir`
 * :doc:`mpi`
 * :doc:`run`
 * :doc:`api`
+* :doc:`faq`
 * :doc:`whats-new`
 
 .. toctree::
@@ -67,11 +67,12 @@ examples.
 
     installing-oggm.rst
     getting-started.rst
-    glacierdir.rst
     input-data.rst
+    glacierdir.rst
     mpi.rst
     run.rst
     api.rst
+    faq.rst
     whats-new.rst
 
 Contributing

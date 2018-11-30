@@ -1,5 +1,7 @@
 .. _input-data:
 
+.. currentmodule:: oggm
+
 Input data
 ==========
 
@@ -105,7 +107,29 @@ Some explanations:
 Glacier outlines and intersects
 -------------------------------
 
-TODO
+Glacier outlines are obtained from the `Randolph Glacier Inventory (RGI)`_.
+We recommend to download them right away by opening a python interpreter
+and type:
+
+.. code-block:: python
+
+    from oggm import utils
+    utils.get_rgi_intersects_dir()
+    utils.get_rgi_dir()
+
+The RGI folders should now contain the glacier outlines in the
+`shapefile format <https://en.wikipedia.org/wiki/Shapefile>`_, a format widely
+used in GIS applications. These files can be read by several softwares
+(e.g. `qgis <https://www.qgis.org/en/site/>`_), and OGGM can read them too.
+
+The "RGI Intersects" shapefiles contain the locations of the ice divides
+(intersections between neighboring glaciers). OGGM can make use of them to
+determine which bed shape should be used (rectangular or parabolic). See the
+`rgi tools <https://rgitools.readthedocs.io/en/latest/tools.html#glacier-intersects>`_
+documentation for more information about the intersects.
+
+.. _Randolph Glacier Inventory (RGI): https://www.glims.org/RGI/
+
 
 Topography data
 ---------------
@@ -129,7 +153,8 @@ chosen automatically, depending on the glacier's location. Currently we use:
 .. _Radarsat Antarctic Mapping Project: http://nsidc.org/data/nsidc-0082
 .. _Viewfinder Panoramas DEM3: http://viewfinderpanoramas.org/dem3.html
 
-These data are downloaded only when needed and stored in the ``dl_cache_dir``
+These data are downloaded only when needed (i.e.: during an OGGM run)
+and they are stored in the ``dl_cache_dir``
 directory. The gridded topography is then reprojected and resampled to the local
 glacier map. The local grid is defined on a Transverse Mercator projection centered over
 the glacier, and has a spatial resolution depending on the glacier size. The
@@ -204,7 +229,15 @@ CRU (default)
 ~~~~~~~~~~~~~
 
 If not specified otherwise, OGGM will automatically download and unpack the
-latest dataset from the CRU servers.
+latest dataset from the CRU servers. We recommend to do this before your
+first run. In a python interpreter, type:
+
+.. code-block:: python
+
+    from oggm import utils
+    utils.get_cru_file(var='tmp')
+    utils.get_cru_file(var='pre')
+
 
 .. warning::
 

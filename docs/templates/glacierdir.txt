@@ -5,8 +5,6 @@
 Glacier directories
 ===================
 
-See also: :py:class:`~oggm.GlacierDirectory`
-
 The majority of OGGM tasks are so-called "entity tasks". They
 are standalone operations to be realized on one single glacier entity. These
 tasks are executed sequentially: they often need input
@@ -18,6 +16,8 @@ making the new data available for further computations.
 
 Initalising a glacier directory
 -------------------------------
+
+See also: :py:class:`~oggm.GlacierDirectory`
 
 .. ipython:: python
    :suppress:
@@ -42,7 +42,7 @@ as input:
 
 .. ipython:: python
 
-    base_dir = os.path.join(gettempdir(), 'OGGM_docs', 'GlacierDir')
+    base_dir = gettempdir('GlacierDir_Docs')
     entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
     gdir.dir

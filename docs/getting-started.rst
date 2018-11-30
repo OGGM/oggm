@@ -53,3 +53,18 @@ See :ref:`input-data` for an explanation of these entries.
     where enough space is available: a minimum of 8 Gb for all climate data
     and glacier outlines is necessary. Topography data can quickly grow
     to several Gb as well, even for regional runs.
+
+
+OGGM workflow
+-------------
+
+OGGM run scripts
+----------------
+
+Refer to :ref:`run-set-up` for real-world examples.
+
+
+OGGM sensitivity studies
+------------------------
+
+TODO: notebooks in oggm-edu

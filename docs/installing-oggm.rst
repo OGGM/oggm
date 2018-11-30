@@ -7,9 +7,11 @@ OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 detail and should work on any platform.
 
-OGGM is fully `tested`_ with Python `version`_ 3.6 on Linux and partially
-tested on `Windows`_ (Windows should be used for development
-purposes only). OGGM doesn't work with Python version 2.7.
+OGGM is fully `tested`_ with Python version 3.6 on Linux, and all versions
+above 3.4 should work as well. OGGM doesn't work with Python 2.7.
+
+OGGM itself should also work on Mac OS and Windows platforms, but we make no
+guarantee that our dependencies do.
 
 .. note::
 
@@ -23,8 +25,6 @@ Linux or Debian users and people with experience with `pip`_ can
 with virtualenv.
 
 .. _tested: https://travis-ci.org/OGGM/oggm
-.. _Windows: https://ci.appveyor.com/project/fmaussion/oggm
-.. _version: https://wiki.python.org/moin/Python2orPython3
 .. _conda: http://conda.pydata.org/docs/using/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _strongly recommend: http://python3statement.github.io/
@@ -83,11 +83,6 @@ You should have a recent version of the `conda`_ package manager.
 You can get `conda`_ by installing `miniconda`_ (the package manager alone -
 recommended)  or `anaconda`_ (the full suite - with many packages you won't
 need).
-
-**Linux** users should install a couple of Linux packages (not all of them are
-required but it's good to have them anyway)::
-
-    $ sudo apt-get install build-essential liblapack-dev gfortran libproj-dev git gdal-bin libgdal-dev netcdf-bin ncview python-netcdf4 ttf-bitstream-vera
 
 
 .. _miniconda: http://conda.pydata.org/miniconda.html
@@ -163,7 +158,7 @@ First, choose which version of OGGM you would like to install:
   new release is made. This is the recommended way if you plan to contribute
   to the model, and/or if you want to use the most recent model updates.
 
-**+ install the stable version:**
+**‣ install the stable version:**
 
 If you are using conda, you can install stable OGGM as a normal conda package::
 
@@ -173,7 +168,7 @@ If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/p
 
     pip install oggm
 
-**+ install the dev version:**
+**‣ install the dev version:**
 
 For this to work you'll need to have the `git`_ software installed on your
 system. Then, clone the latest repository version::
@@ -296,7 +291,8 @@ Make a new environment, for example called ``oggm_env``, with **Python 3**::
 
     $ mkvirtualenv oggm_env -p /usr/bin/python3
 
-(Further details can be found for example in `this tutorial <http://simononsoftware.com/virtualenv-tutorial-part-2/>`_.)
+(further details can be found for example in
+`this tutorial <http://simononsoftware.com/virtualenv-tutorial-part-2/>`_)
 
 
 Python packages
