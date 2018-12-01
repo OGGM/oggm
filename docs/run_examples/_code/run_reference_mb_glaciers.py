@@ -1,5 +1,6 @@
 # Python imports
 import json
+import os
 
 # Libs
 import numpy as np
@@ -95,7 +96,7 @@ rgidf = rgidf.loc[rgidf.RGIId.isin([g.rgi_id for g in gdirs])]
 log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
                                                                    len(rgidf)))
-rgidf.to_file(path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
+rgidf.to_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
@@ -123,7 +124,7 @@ execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
 mb_calib = gdirs[0].read_pickle('climate_info')['mb_calib_params']
-with open(path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
+with open(os.path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 
 # And also some statistics

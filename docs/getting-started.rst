@@ -58,13 +58,18 @@ See :ref:`input-data` for an explanation of these entries.
 OGGM workflow
 -------------
 
+For a step by step tutorial of the entire OGGM workflow, download and run
+the
+:download:`getting started <https://raw.githubusercontent.com/OGGM/oggm/master/docs/notebooks/getting_started.ipynb>`
+(right-click -> "Save link as") jupyter notebook.
+
+
 OGGM run scripts
 ----------------
 
-Refer to :ref:`run-set-up` for real-world examples.
+Refer to :ref:`run-set-up` for real-world applications.
 
 
-OGGM sensitivity studies
-------------------------
+OGGM Edu
+--------
 
-TODO: notebooks in oggm-edu

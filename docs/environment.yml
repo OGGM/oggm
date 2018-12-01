@@ -8,7 +8,7 @@ dependencies:
   - numpy>=1.15.1
   - rasterio>=1.0
   - numpydoc
-  - ipython=6.5.0  # until >= 7.1 is out on conda-forge
+  - ipython
   - sphinx
   - pip:
     - git+https://github.com/fmaussion/salem.git

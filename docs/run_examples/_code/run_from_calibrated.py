@@ -22,7 +22,7 @@ utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Use multiprocessing?
-cfg.PARAMS['use_multiprocessing'] = False
+cfg.PARAMS['use_multiprocessing'] = True
 
 # Here we override some of the default parameters
 # How many grid points around the glacier?
