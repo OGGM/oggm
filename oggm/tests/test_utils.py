@@ -395,7 +395,7 @@ class TestFakeDownloads(unittest.TestCase):
             return rgi_f
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            rgi = utils.get_rgi_dir()
+            rgi = utils.get_rgi_dir(version='5')
 
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi, '000_rgi50_manifest.txt'))
@@ -447,7 +447,7 @@ class TestFakeDownloads(unittest.TestCase):
             return rgi_f
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            rgi = utils.get_rgi_intersects_dir()
+            rgi = utils.get_rgi_intersects_dir(version='5')
             utils.get_rgi_intersects_region_file('11', version='5')
             utils.get_rgi_intersects_region_file('00', version='5')
 

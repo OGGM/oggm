@@ -96,6 +96,8 @@ def _plot_map(plotfunc):
     autosave : bool, optional
         set to True to override to a default savefig filename (useful
         for multiprocessing)
+    figsize : tuple, optional
+        size of the figure
     savefig : str, optional
         save the figure to a file instead of displaying it
     savefig_kwargs : dict, optional
@@ -109,12 +111,13 @@ def _plot_map(plotfunc):
     def newplotfunc(gdirs, ax=None, smap=None, add_colorbar=True, title=None,
                     title_comment=None, horizontal_colorbar=False,
                     lonlat_contours_kwargs=None, cbar_ax=None, autosave=False,
-                    add_scalebar=True, savefig=None, savefig_kwargs=None,
+                    add_scalebar=True, figsize=None, savefig=None,
+                    savefig_kwargs=None,
                     **kwargs):
 
         dofig = False
         if ax is None:
-            fig = plt.figure()
+            fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
             dofig = True
 
@@ -182,12 +185,12 @@ def _plot_map(plotfunc):
     return newplotfunc
 
 
-def plot_googlemap(gdirs, ax=None):
+def plot_googlemap(gdirs, ax=None, figsize=None):
     """Plots the glacier(s) over a googlemap."""
 
     dofig = False
     if ax is None:
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         dofig = True
 

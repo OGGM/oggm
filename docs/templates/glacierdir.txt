@@ -2,10 +2,8 @@
 
 .. _glacierdir:
 
-Glacier working directories
-===========================
-
-See also: :py:class:`~oggm.GlacierDirectory`
+Glacier directories
+===================
 
 The majority of OGGM tasks are so-called "entity tasks". They
 are standalone operations to be realized on one single glacier entity. These
@@ -19,6 +17,8 @@ making the new data available for further computations.
 Initalising a glacier directory
 -------------------------------
 
+See also: :py:class:`~oggm.GlacierDirectory`
+
 .. ipython:: python
    :suppress:
 
@@ -28,12 +28,12 @@ Initalising a glacier directory
     import geopandas as gpd
     import oggm
     from oggm import cfg, tasks, graphics
-    from oggm.utils import get_demo_file
+    from oggm.utils import get_demo_file, gettempdir
     cfg.initialize()
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PARAMS['border'] = 20
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-    path = os.path.join(oggm.gettempdir(), 'OGGM_docs', 'GlacierDir')
+    path = os.path.join(gettempdir(), 'OGGM_docs', 'GlacierDir')
     if os.path.exists(path):
         shutil.rmtree(path)
 
@@ -42,7 +42,7 @@ as input:
 
 .. ipython:: python
 
-    base_dir = os.path.join(oggm.gettempdir(), 'OGGM_docs', 'GlacierDir')
+    base_dir = gettempdir('GlacierDir_Docs')
     entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
     gdir.dir

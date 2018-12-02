@@ -8,18 +8,25 @@ future mass-balance, volume and geometry of (almost) any glacier in the world
 in a fully automated and extensible workflow. We rely exclusively on publicly
 available data for calibration and validation.
 
+.. note::
+
+    **This is the software documentation: for general information about the
+    OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+
+.. warning::
+
 [version-specific-text]
 
 
-**For more information about the OGGM project and for the latest news, visit**
-`oggm.org <http://oggm.org>`_.
-
-
-Index
------
 
 Principles
 ^^^^^^^^^^
+
+Physical principles implemented in the model and their underlying assumptions,
+with as little code as possible. For more detailed information, we recommend
+to read the OGGM
+`description paper <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_ as
+well.
 
 * :doc:`introduction`
 * :doc:`flowlines`
@@ -41,13 +48,16 @@ Principles
 Using OGGM
 ^^^^^^^^^^
 
+How to use the model, with concrete python code examples.
+
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* :doc:`glacierdir`
 * :doc:`input-data`
+* :doc:`glacierdir`
 * :doc:`mpi`
 * :doc:`run`
 * :doc:`api`
+* :doc:`faq`
 * :doc:`whats-new`
 
 .. toctree::
@@ -57,15 +67,18 @@ Using OGGM
 
     installing-oggm.rst
     getting-started.rst
-    glacierdir.rst
     input-data.rst
+    glacierdir.rst
     mpi.rst
     run.rst
     api.rst
+    faq.rst
     whats-new.rst
 
 Contributing
 ^^^^^^^^^^^^
+
+Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`
@@ -80,6 +93,7 @@ Contributing
     add-module.rst
     contributing.rst
 
+.. _contact:
 
 Get in touch
 ------------
@@ -197,9 +211,9 @@ About
         :target: https://travis-ci.org/OGGM/oggm
         :alt: Linux build status
 
-    .. image:: https://ci.appveyor.com/api/projects/status/alealh9rxmqgd3nm/branch/master?svg=true
-        :target: https://ci.appveyor.com/project/fmaussion/oggm
-        :alt: Windows-conda build status
+    .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
+        :target: https://cluster.klima.uni-bremen.de/~github/crossval/
+        :alt: Mass-balance cross validation
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest

@@ -6,6 +6,7 @@ from shutil import rmtree
 from collections.abc import Sequence
 # External libs
 import multiprocessing as mp
+import numpy as np
 
 # Locals
 import oggm
@@ -45,15 +46,15 @@ def init_mp_pool(reset=False):
     if mpp == -1:
         try:
             mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
-            log.info('Multiprocessing: using slurm allocated '
-                     'processors (N={})'.format(mpp))
+            log.workflow('Multiprocessing: using slurm allocated '
+                         'processors (N={})'.format(mpp))
         except KeyError:
             mpp = mp.cpu_count()
-            log.info('Multiprocessing: using all available '
-                     'processors (N={})'.format(mpp))
+            log.workflow('Multiprocessing: using all available '
+                         'processors (N={})'.format(mpp))
     else:
-        log.info('Multiprocessing: using the requested number of '
-                 'processors (N={})'.format(mpp))
+        log.workflow('Multiprocessing: using the requested number of '
+                     'processors (N={})'.format(mpp))
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
                        initargs=(cfg_contents, global_lock))
     return _mp_pool
@@ -121,6 +122,9 @@ def execute_entity_task(task, gdirs, **kwargs):
     except TypeError:
         gdirs = [gdirs]
 
+    log.workflow('Execute entity task %s on %d glaciers',
+                 task.__name__, len(gdirs))
+
     if task.__dict__.get('global_task', False):
         return task(gdirs, **kwargs)
 
@@ -135,6 +139,7 @@ def execute_entity_task(task, gdirs, **kwargs):
         out = mppool.map(pc, gdirs, chunksize=1)
     else:
         out = [pc(gdir) for gdir in gdirs]
+
     return out
 
 
@@ -178,9 +183,26 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def init_glacier_regions(rgidf=None, reset=False, force=False):
-    """Very first task to do (always).
+    """Initializes the list of Glacier Directories for this run.
 
-    Set reset=True in order to delete the content of the directories.
+    This is the very first task to do (always). If the directories are already
+    available in the working directory, use them. If not, create new ones.
+
+    Parameters
+    ----------
+    rgidf : GeoDataFrame, optional for pre-computed runs
+        the RGI glacier outlines. If unavailable, OGGM will parse the
+        information from the glacier directories found in the working
+        directory. It is required for new runs.
+    reset : bool
+        delete the existing glacier directories if found.
+    force : bool
+        setting `reset=True` will trigger a yes/no question to the user. Set
+        `force=True` to avoid this.
+
+    Returns
+    -------
+    a list of GlacierDirectory objects
     """
 
     if reset and not force:
@@ -209,6 +231,14 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
                 new_gdirs.append((gdir, dict(entity=entity)))
             gdirs.append(gdir)
 
+    # We can set the intersects file automatically here
+    if (cfg.PARAMS['use_intersects'] and new_gdirs and
+            (len(cfg.PARAMS['intersects_gdf']) == 0)):
+        rgi_ids = np.unique(np.sort([t[0].rgi_id for t in new_gdirs]))
+        rgi_version = new_gdirs[0][0].rgi_version
+        fp = utils.get_rgi_intersects_entities(rgi_ids, version=rgi_version)
+        cfg.set_intersects_db(fp)
+
     # If not initialized, run the task in parallel
     execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
@@ -216,7 +246,12 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
 
 
 def gis_prepro_tasks(gdirs):
-    """Helper function: run all flowlines tasks."""
+    """Shortcut function: run all flowline preprocessing tasks.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
 
     task_list = [
         tasks.glacier_masks,
@@ -234,7 +269,12 @@ def gis_prepro_tasks(gdirs):
 
 
 def climate_tasks(gdirs):
-    """Helper function: run all climate tasks."""
+    """Shortcut function: run all climate related tasks.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
 
     # If not iterable it's ok
     try:
@@ -264,8 +304,12 @@ def climate_tasks(gdirs):
 
 
 def inversion_tasks(gdirs):
-    """Helper function: run all bed inversion tasks."""
+    """Shortcut function: run all ice thickness inversion tasks.
 
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
 

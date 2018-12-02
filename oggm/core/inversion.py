@@ -85,8 +85,9 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
-                msg = '({}) flux at terminus should be zero, but is: ' \
-                      '%.4f km3 ice yr-1'.format(gdir.rgi_id, flux[-1])
+                # TODO: this test doesn't seem meaningful here
+                msg = ('({}) flux at terminus should be zero, but is: '
+                       '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))
                 raise RuntimeError(msg)
             flux[-1] = 0.
 

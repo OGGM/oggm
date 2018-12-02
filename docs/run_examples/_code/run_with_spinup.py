@@ -1,5 +1,4 @@
 # Python imports
-from os import path
 import time
 import logging
 
@@ -23,7 +22,7 @@ start = time.time()
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_spinup_run')
+WORKING_DIR = utils.gettempdir('OGGM_spinup_run')
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
@@ -55,7 +54,7 @@ rgidf = rgidf.sort_values('Area', ascending=False)
 log.info('Starting OGGM run')
 log.info('Number of glaciers: {}'.format(len(rgidf)))
 
-# Go - initialize working directories
+# Go - initialize glacier directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Preprocessing and climate tasks

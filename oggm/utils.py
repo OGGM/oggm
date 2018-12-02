@@ -377,8 +377,13 @@ def del_empty_dirs(s_dir):
     return b_empty
 
 
-def gettempdir(dirname='', reset=False):
+def gettempdir(dirname='', reset=False, home=False):
     """Get a temporary directory.
+
+    The default is to locate it in the system's temporary directory as
+    given by python's `tempfile.gettempdir()/OGGM'. You can set `home=True` for
+    a directory in the user's `home/tmp` folder instead (this isn't really
+    a temporary folder but well...)
 
     Parameters
     ----------
@@ -386,13 +391,17 @@ def gettempdir(dirname='', reset=False):
         if you want to give it a name
     reset : bool
         if it has to be emptied first.
+    home : bool
+        if True, returns `HOME/tmp/OGGM` instead
 
     Returns
     -------
     the path to the temporary directory
     """
-    return mkdir(os.path.join(tempfile.gettempdir(), 'OGGM', dirname),
-                 reset=reset)
+
+    basedir = (os.path.join(os.path.expanduser('~'), 'tmp') if home
+               else tempfile.gettempdir())
+    return mkdir(os.path.join(basedir, 'OGGM', dirname), reset=reset)
 
 
 def get_sys_info():
@@ -1644,7 +1653,7 @@ def get_glathida_file():
 
 
 def get_rgi_dir(version=None, reset=False):
-    """Returns a path to the RGI directory.
+    """Path to the RGI directory.
 
     If the RGI files are not present, download them.
 
@@ -1715,7 +1724,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
 
 
 def get_rgi_region_file(region, version=None, reset=False):
-    """Returns a path to a RGI region file.
+    """Path to the RGI region file.
 
     If the RGI files are not present, download them.
 
@@ -1738,7 +1747,7 @@ def get_rgi_region_file(region, version=None, reset=False):
 
 
 def get_rgi_glacier_entities(rgi_ids, version=None):
-    """A convenience function to get a GeoDataframe for a list of glacier IDs.
+    """Get a list of glacier oulines selected from their IDs.
 
     Parameters
     ----------
@@ -1770,7 +1779,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
 
 
 def get_rgi_intersects_dir(version=None, reset=False):
-    """Returns a path to the RGI directory containing the intersects.
+    """Path to the RGI directory containing the intersect files.
 
     If the files are not present, download them.
 
@@ -1846,29 +1855,25 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     return odir
 
 
-def get_rgi_intersects_region_file(region='00', version=None, rgi_ids=None,
-                                   reset=False):
-    """Returns a path to a RGI regional intersect file.
+def get_rgi_intersects_region_file(region=None, version=None, reset=False):
+    """Path to the RGI regional intersect file.
 
-    If the RGI files are not present, download them. Setting region=00 gives
-    you the global file.
+    If the RGI files are not present, download them.
 
     Parameters
     ----------
     region: str
-        from '00' to '19', with '00' being the global file. From RGI version
-        '61' onwards, '00' will require `rgi_ids` to be set for more clever
-        handling.
+        from '00' to '19', with '00' being the global file (deprecated).
+        From RGI version '61' onwards, please use `get_rgi_intersects_entities`
+        with a list of glaciers instead of relying to the global file.
     version: str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
-    rgi_ids: list, optional
-        list of rgi_ids you want to look for intersections for
     reset: bool
         redownload the RGI file.
 
     Returns
     -------
-    path to the RGI shapefile or shapefile itself (if rgi_id is set)
+    path to the RGI intersects shapefile
     """
 
     if version is None:
@@ -1878,33 +1883,53 @@ def get_rgi_intersects_region_file(region='00', version=None, rgi_ids=None,
 
     rgi_dir = get_rgi_intersects_dir(version=version, reset=reset)
 
-    if rgi_ids is not None:
-        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
-        selection = []
-        for reg in sorted(np.unique(regions)):
-            sh = gpd.read_file(get_rgi_intersects_region_file(reg,
-                                                              version=version))
-            selection.append(sh.loc[sh.RGIId_1.isin(rgi_ids) |
-                                    sh.RGIId_2.isin(rgi_ids)])
-
-        # Make a new dataframe of those
-        selection = pd.concat(selection)
-        selection.crs = sh.crs  # for geolocalisation
-
-        return selection
-
-    # Else, regular workflow
     if region == '00':
         if version in ['50', '60']:
             version = 'AllRegs'
             region = '*'
         else:
-            raise ValueError("From RGI version 61 onwards, please specify "
-                             "`rgi_ids` with `region=='00'`")
+            raise ValueError("From RGI version 61 onwards, please use "
+                             "`get_rgi_intersects_entities()` instead or "
+                             "region 00.")
     f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
                                     '_rgi*' + version + '*.shp')))
     assert len(f) == 1
     return f[0]
+
+
+def get_rgi_intersects_entities(rgi_ids, version=None):
+    """Get a list of glacier intersects selected from their IDs.
+
+    Parameters
+    ----------
+    rgi_ids: list
+        list of rgi_ids you want to look for intersections for
+    version: str
+        '5', '6', '61'... defaults the one specified in cfg.PARAMS
+
+    Returns
+    -------
+    a GeoDataFrame with the selected intersects
+    """
+
+    if version is None:
+        version = cfg.PARAMS['rgi_version']
+    if len(version) == 1:
+        version += '0'
+
+    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    selection = []
+    for reg in sorted(np.unique(regions)):
+        sh = gpd.read_file(get_rgi_intersects_region_file(reg,
+                                                          version=version))
+        selection.append(sh.loc[sh.RGIId_1.isin(rgi_ids) |
+                                sh.RGIId_2.isin(rgi_ids)])
+
+    # Make a new dataframe of those
+    selection = pd.concat(selection)
+    selection.crs = sh.crs  # for geolocalisation
+
+    return selection
 
 
 def get_cru_file(var=None):
