@@ -1653,7 +1653,7 @@ def get_glathida_file():
 
 
 def get_rgi_dir(version=None, reset=False):
-    """Returns a path to the RGI directory.
+    """Path to the RGI directory.
 
     If the RGI files are not present, download them.
 
@@ -1724,7 +1724,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
 
 
 def get_rgi_region_file(region, version=None, reset=False):
-    """Returns a path to a RGI region file.
+    """Path to the RGI region file.
 
     If the RGI files are not present, download them.
 
@@ -1747,7 +1747,7 @@ def get_rgi_region_file(region, version=None, reset=False):
 
 
 def get_rgi_glacier_entities(rgi_ids, version=None):
-    """A convenience function to get a GeoDataframe for a list of glacier IDs.
+    """Get a list of glacier oulines selected from their IDs.
 
     Parameters
     ----------
@@ -1779,7 +1779,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
 
 
 def get_rgi_intersects_dir(version=None, reset=False):
-    """Returns a path to the RGI directory containing the intersects.
+    """Path to the RGI directory containing the intersect files.
 
     If the files are not present, download them.
 
@@ -1856,10 +1856,9 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
 
 
 def get_rgi_intersects_region_file(region=None, version=None, reset=False):
-    """Returns a path to a RGI regional intersect file.
+    """Path to the RGI regional intersect file.
 
-    If the RGI files are not present, download them. Setting region=00 gives
-    you the global file (deprecated).
+    If the RGI files are not present, download them.
 
     Parameters
     ----------
@@ -1899,7 +1898,7 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
 
 
 def get_rgi_intersects_entities(rgi_ids, version=None):
-    """Select the intersects for a list of glacier ids.
+    """Get a list of glacier intersects selected from their IDs.
 
     Parameters
     ----------

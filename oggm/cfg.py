@@ -100,19 +100,26 @@ for ks in [5, 7, 9]:
     kernel = gaussian(ks, 1)
     GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
-_doc = 'A geotiff file containing the DEM (reprojected into the local grid).'
+_doc = ('A geotiff file containing the DEM (reprojected into the local grid).'
+        'This DEM is not smoothed or gap filles, and is the closest to the '
+        'original DEM source.')
 BASENAMES['dem'] = ('dem.tif', _doc)
 
-_doc = 'The glacier outlines in the local projection.'
+_doc = ('The glacier outlines in the local map projection (Transverse '
+        'Mercator).')
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
-_doc = 'The glacier intersects in the local projection.'
+_doc = ('The glacier intersects in the local map projection (Transverse '
+        'Mercator).')
 BASENAMES['intersects'] = ('intersects.shp', _doc)
 
-_doc = 'The flowline catchments in the local projection.'
+_doc = ('Each flowline has a catchment area computed from flow routing '
+        'algorithms: this shapefile stores the catchment outlines (in the '
+        'local map projection (Transverse Mercator).')
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
-_doc = 'The catchments intersections in the local projection.'
+_doc = ('The intersections between cathments (shapefile) in the local map '
+        'projection (Transverse Mercator).')
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
@@ -121,40 +128,42 @@ BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 _doc = 'A dictionary containing runtime diagnostics useful for debugging.'
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
-_doc = 'A netcdf file containing several gridded data variables such as ' \
-       'topography, the glacier masks and more (see the netCDF file metadata).'
+_doc = ('A netcdf file containing several gridded data variables such as ' 
+        'topography, the glacier masks, the interpolated 2D glacier bed, '
+        'and more.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
 
-_doc = 'A ``dict`` containing the shapely.Polygons of a glacier. The ' \
-       '"polygon_hr" entry contains the geometry transformed to the local ' \
-       'grid in (i, j) coordinates, while the "polygon_pix" entry contains ' \
-       'the geometries transformed into the coarse grid (the i, j elements ' \
-       'are integers). The "polygon_area" entry contains the area of the ' \
-       'polygon as computed by Shapely.'
+_doc = ('A dictionary containing the shapely.Polygons of a glacier. The '
+        '"polygon_hr" entry contains the geometry transformed to the local '
+        'grid in (i, j) coordinates, while the "polygon_pix" entry contains '
+        'the geometries transformed into the coarse grid (the i, j elements '
+        'are integers). The "polygon_area" entry contains the area of the '
+        'polygon as computed by Shapely.')
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = 'A ``dict`` containing the downsteam line geometry as well as the bed' \
-       'shape computed from a parabolic fit.'
+_doc = ('A dictionary containing the downsteam line geometry as well as the '
+        'bed shape computed from a parabolic fit.')
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 
 _doc = 'A text file with the source of the topo file (GIMP, SRTM, ...).'
 BASENAMES['dem_source'] = ('dem_source.txt', _doc)
 
-_doc = 'A hypsometry file as provided by RGI (useful for diagnostics).'
+_doc = ('A hypsometry file computed by OGGM and provided in the same format '
+        'as the RGI (useful for diagnostics).')
 BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
-_doc = "A list of len n_centerlines, each element conaining a numpy array " \
-       "of the indices in the glacier grid which represent the centerline's" \
-       " catchment area."
+_doc = ("A list of len `n_centerlines`, each element conaining a numpy array "
+        "of the indices in the glacier grid which represent the centerline's"
+        " catchment area.")
 BASENAMES['catchment_indices'] = ('catchment_indices.pkl', _doc)
 
-_doc = 'A "better" version of the Centerlines, now on a regular spacing ' \
-       'i.e., not on the gridded (i, j) indices. The tails of the ' \
-       'tributaries are cut out to make more realistic junctions. ' \
-       'They are now "1.5D" i.e., with a width.'
+_doc = ('A "better" version of the Centerlines, now on a regular spacing '
+        'i.e., not on the gridded (i, j) indices. The tails of the '
+        'tributaries are cut out to make more realistic junctions. '
+        'They are now "1.5D" i.e., with a width.')
 BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 
 _doc = 'The monthly climate timeseries stored in a netCDF file.'
@@ -186,12 +195,12 @@ _doc = ('When using a linear mass-balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
-_doc = 'A netcdf file containing enough information to reconstruct the ' \
-       'entire flowline glacier along the run (can be data expensive).'
+_doc = ('A netcdf file containing enough information to reconstruct the '
+        'entire flowline glacier along the run (can be data expensive).')
 BASENAMES['model_run'] = ('model_run.nc', _doc)
 
-_doc = 'A netcdf file containing the model diagnostics (volume, ' \
-       'mass-balance, length...).'
+_doc = ('A netcdf file containing the model diagnostics (volume, '
+        'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
 _doc = 'Calving output'
@@ -224,7 +233,7 @@ def set_logging_config(logging_level='INFO'):
     ----------
     logging_level : str or None
         the logging level. See description above for a list of options. Setting
-        to None is equivalent to CRITICAL, i.e. no log output will be
+        to `None` is equivalent to `'CRITICAL'`, i.e. no log output will be
         generated.
     """
 
@@ -495,7 +504,11 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
 
 
 def set_intersects_db(path_or_gdf=None):
-    """Set the glacier intersection database for later use.
+    """Set the glacier intersection database for OGGM to use.
+
+    It is now set automatically by the
+    :func:`oggm.workflow.init_glacier_regions` task, but setting it manually
+    can be useful for a slightly faster run initialization.
 
     See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain
     such data.
@@ -516,9 +529,7 @@ def set_intersects_db(path_or_gdf=None):
 
 
 def reset_working_dir():
-    """Deletes the content of the working directory.
-
-    Careful! Cannot be undone!
+    """Deletes the content of the working directory. Careful: cannot be undone!
     """
     if PATHS['working_dir']:
         if os.path.exists(PATHS['working_dir']):

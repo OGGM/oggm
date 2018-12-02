@@ -93,6 +93,7 @@ Do you want to contribute to the model? This is the right place to start.
     add-module.rst
     contributing.rst
 
+.. _contact:
 
 Get in touch
 ------------

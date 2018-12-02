@@ -183,7 +183,7 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def init_glacier_regions(rgidf=None, reset=False, force=False):
-    """Initializes the list of GlacierDirectories for this run.
+    """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
     available in the working directory, use them. If not, create new ones.
@@ -246,7 +246,12 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
 
 
 def gis_prepro_tasks(gdirs):
-    """Helper function: run all flowlines tasks."""
+    """Shortcut function: run all flowline preprocessing tasks.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
 
     task_list = [
         tasks.glacier_masks,
@@ -264,7 +269,12 @@ def gis_prepro_tasks(gdirs):
 
 
 def climate_tasks(gdirs):
-    """Helper function: run all climate tasks."""
+    """Shortcut function: run all climate related tasks.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
 
     # If not iterable it's ok
     try:
@@ -294,8 +304,12 @@ def climate_tasks(gdirs):
 
 
 def inversion_tasks(gdirs):
-    """Helper function: run all bed inversion tasks."""
+    """Shortcut function: run all ice thickness inversion tasks.
 
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectories
+    """
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
