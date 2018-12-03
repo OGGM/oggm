@@ -1,11 +1,12 @@
-name: oggm
+name: oggmdocs
 channels:
   - oggm
   - conda-forge
 dependencies:
   - python=3.6
   - oggm-deps
-  - conda-forge/label/dev::rasterio
+  - numpy>=1.15.1
+  - rasterio>=1.0
   - numpydoc
   - ipython
   - sphinx

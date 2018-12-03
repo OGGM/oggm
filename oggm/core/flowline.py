@@ -1513,7 +1513,8 @@ def init_present_time_glacier(gdir):
                                section=section, bed_shape=bed_shape,
                                is_trapezoid=np.isfinite(lambdas),
                                lambdas=lambdas,
-                               widths_m=widths_m)
+                               widths_m=widths_m,
+                               rgi_id=cl.rgi_id)
 
         # Update attrs
         nfl.mu_star = cl.mu_star
@@ -1637,7 +1638,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1708,7 +1709,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -1760,7 +1761,7 @@ def run_from_climate_data(gdir, ys=None, ye=None,
         (default is yearly)
     climate_filename : str
         name of the climate file, e.g. 'climate_monthly' (default) or
-        'cesm_data'
+        'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str

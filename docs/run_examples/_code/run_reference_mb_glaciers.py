@@ -1,6 +1,6 @@
 # Python imports
-from os import path
 import json
+import os
 
 # Libs
 import numpy as np
@@ -26,11 +26,9 @@ baseline = 'CRU'
 cfg.initialize()
 
 # Local paths (where to write the OGGM run output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline,
-                                                              rgi_version,
-                                                              oggm.__version__)
-                        )
+dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
+                                                oggm.__version__)
+WORKING_DIR = utils.gettempdir(dirname, home=True)
 utils.mkdir(WORKING_DIR, reset=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
@@ -98,12 +96,12 @@ rgidf = rgidf.loc[rgidf.RGIId.isin([g.rgi_id for g in gdirs])]
 log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
                                                                    len(rgidf)))
-rgidf.to_file(path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
+rgidf.to_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 
 # Sort for more efficient parallel computing
 rgidf = rgidf.sort_values('Area', ascending=False)
 
-# Go - initialize working directories
+# Go - initialize glacier directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Prepro tasks
@@ -126,7 +124,7 @@ execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
 mb_calib = gdirs[0].read_pickle('climate_info')['mb_calib_params']
-with open(path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
+with open(os.path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 
 # And also some statistics

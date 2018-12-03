@@ -12,8 +12,9 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
 
     mkdir -p $HOME/dl_cache
     export OGGM_DOWNLOAD_CACHE=/dl_cache
+    [[ ! -z "${TEST_CONTAINER##*[!0-9]*}" ]] && export DO_COVERALLS=1 || unset DO_COVERALLS
 
-    docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e MPL -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:$IMAGE_TAG /bin/bash /root/oggm/ci/travis_script.sh
+    docker create --name oggm_travis -ti -v $HOME/dl_cache:/dl_cache -e DO_COVERALLS -e OGGM_DOWNLOAD_CACHE -e OGGM_TEST_ENV -e OGGM_TEST_MULTIPROC -e MPL -e CI -e TRAVIS -e TRAVIS_JOB_ID -e TRAVIS_BRANCH -e TRAVIS_PULL_REQUEST oggm/untested_base:$IMAGE_TAG /bin/bash /root/oggm/ci/travis_script.sh
     docker cp $PWD oggm_travis:/root/oggm
 
     docker start -ai oggm_travis

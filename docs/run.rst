@@ -1,3 +1,5 @@
+.. _run-set-up:
+
 Set-up an OGGM run
 ==================
 

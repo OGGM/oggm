@@ -1,5 +1,3 @@
-import os
-
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,13 +10,13 @@ from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb,
                                local_t_star, mu_star_calibration)
 from oggm.core.massbalance import (ConstantMassBalance)
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, gettempdir
 
 cfg.initialize()
 cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
-base_dir = os.path.join(oggm.gettempdir(), 'Climate')
+base_dir = gettempdir('Climate_docs')
 entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
 

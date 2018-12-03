@@ -67,9 +67,9 @@ About
         :target: https://travis-ci.org/OGGM/oggm
         :alt: Linux build status
 
-    .. image:: https://ci.appveyor.com/api/projects/status/alealh9rxmqgd3nm/branch/master?svg=true
-        :target: https://ci.appveyor.com/project/fmaussion/oggm
-        :alt: Windows-conda build status
+    .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
+        :target: https://cluster.klima.uni-bremen.de/~github/crossval/
+        :alt: Mass-balance cross validation
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest/

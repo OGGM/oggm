@@ -1,8 +1,13 @@
-#######################
-Developer documentation
-#######################
+#############
+API Reference
+#############
 
 .. currentmodule:: oggm
+
+This page lists all available functions and classes in OGGM. It's a hard
+work to keep everything up-to-date, so don't hesitate to let us know
+(see :ref:`contact`) if something's missing, or help us (see
+:ref:`contributing`) to write a better documentation!
 
 
 Workflow
@@ -14,11 +19,49 @@ Tools to set-up and run OGGM.
     :toctree: generated/
     :nosignatures:
 
+    cfg.initialize
+    cfg.set_logging_config
+    cfg.set_intersects_db
+    cfg.reset_working_dir
     workflow.init_glacier_regions
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.climate_tasks
     workflow.inversion_tasks
+    utils.compile_glacier_statistics
+    utils.compile_run_output
+    utils.compile_climate_input
+    utils.compile_task_log
+    utils.copy_to_basedir
+
+
+Troubleshooting
+===============
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    utils.show_versions
+
+
+Input/Output
+============
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    utils.get_demo_file
+    utils.get_rgi_dir
+    utils.get_rgi_region_file
+    utils.get_rgi_glacier_entities
+    utils.get_rgi_intersects_dir
+    utils.get_rgi_intersects_region_file
+    utils.get_rgi_intersects_entities
+    utils.get_cru_file
+    utils.get_histalp_file
+    utils.get_ref_mb_glaciers
 
 
 .. _apientitytasks:
@@ -85,10 +128,6 @@ Classes
 
 Listed here are the classes which are relevant at the API level (i.e. classes
 which are used and re-used across modules and tasks).
-
-TODO: add the model classes, etc.
-
-
 
 .. autosummary::
     :toctree: generated/

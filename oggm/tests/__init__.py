@@ -9,10 +9,6 @@ from urllib.request import urlopen, URLError
 from oggm import cfg
 from oggm.utils import SAMPLE_DATA_COMMIT
 
-# Defaults
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
-
 # Some logic to see which environment we are running on
 
 # Matplotlib version changes plots, too
