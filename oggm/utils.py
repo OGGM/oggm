@@ -3097,6 +3097,7 @@ class GlacierDirectory(object):
             fname = fname.split('.')
             assert len(fname) == 2
             fname = fname[0] + filesuffix + '.' + fname[1]
+
         out = os.path.join(self.dir, fname)
         if delete and os.path.isfile(out):
             os.remove(out)

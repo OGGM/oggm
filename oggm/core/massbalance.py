@@ -871,7 +871,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, fls=None, mu_star=None,
                  mb_model_class=PastMassBalance, use_inversion_flowlines=False,
-                 **kwargs):
+                 input_filesuffix='', **kwargs):
         """Initialize.
 
         Parameters
@@ -891,6 +891,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         use_inversion_flowlines: bool, optional
             if True 'inversion_flowlines' instead of 'model_flowlines' will be
             used.
+        input_filesuffix : str
+            the file suffix of the input climate file
         kwargs : kwargs to pass to mb_model_class
         """
 
@@ -916,9 +918,15 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 fl.mu_star = mu
 
         # Initialise the mb models
-        self.flowline_mb_models = [mb_model_class(gdir, mu_star=fl.mu_star,
-                                                  **kwargs)
-                                   for fl in self.fls]
+        self.flowline_mb_models = []
+        for fl in self.fls:
+            # Merged glaciers will need different climate files, use filesuffix
+            if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
+                input_filesuffix = '_' + fl.rgi_id + input_filesuffix
+
+            self.flowline_mb_models.append(
+                mb_model_class(gdir, mu_star=fl.mu_star,
+                               input_filesuffix=input_filesuffix, **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
 
