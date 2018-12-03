@@ -38,7 +38,7 @@ class Flowline(Centerline):
     """The is the input flowline for the model."""
 
     def __init__(self, line=None, dx=1, map_dx=None,
-                 surface_h=None, bed_h=None):
+                 surface_h=None, bed_h=None, rgi_id=None):
         """ Instanciate.
 
         #TODO: documentation
@@ -58,6 +58,7 @@ class Flowline(Centerline):
         self.map_dx = map_dx
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
+        self.rgi_id = rgi_id
 
     @Centerline.widths.getter
     def widths(self):
@@ -129,7 +130,7 @@ class ParabolicBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None, bed_shape=None):
+                 surface_h=None, bed_h=None, bed_shape=None, rgi_id=None):
         """ Instanciate.
 
         Parameters
@@ -141,7 +142,8 @@ class ParabolicBedFlowline(Flowline):
         #TODO: document properties
         """
         super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
-                                                   surface_h, bed_h)
+                                                   surface_h, bed_h,
+                                                   rgi_id=rgi_id)
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
@@ -168,7 +170,7 @@ class RectangularBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None, widths=None):
+                 surface_h=None, bed_h=None, widths=None, rgi_id=None):
         """ Instanciate.
 
         Parameters
@@ -180,7 +182,8 @@ class RectangularBedFlowline(Flowline):
         #TODO: document properties
         """
         super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
-                                                     surface_h, bed_h)
+                                                     surface_h, bed_h,
+                                                     rgi_id=rgi_id)
 
         self._widths = widths
 
@@ -211,7 +214,7 @@ class TrapezoidalBedFlowline(Flowline):
     """A more advanced Flowline."""
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
-                 bed_h=None, widths=None, lambdas=None):
+                 bed_h=None, widths=None, lambdas=None, rgi_id=None):
         """ Instanciate.
 
         Parameters
@@ -223,7 +226,8 @@ class TrapezoidalBedFlowline(Flowline):
         #TODO: document properties
         """
         super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
-                                                     surface_h, bed_h)
+                                                     surface_h, bed_h,
+                                                     rgi_id=rgi_id)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
 
@@ -268,7 +272,7 @@ class MixedBedFlowline(Flowline):
 
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
-                 is_trapezoid=None, lambdas=None, widths_m=None):
+                 is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None):
         """ Instanciate.
 
         Parameters
@@ -283,7 +287,8 @@ class MixedBedFlowline(Flowline):
 
         super(MixedBedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
                                                surface_h=surface_h.copy(),
-                                               bed_h=bed_h.copy())
+                                               bed_h=bed_h.copy(),
+                                               rgi_id=rgi_id)
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)

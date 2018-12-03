@@ -1,6 +1,5 @@
 """Mass-balance models"""
 # Built ins
-import os
 # External libs
 import numpy as np
 import pandas as pd
@@ -308,12 +307,7 @@ class PastMassBalance(MassBalanceModel):
         self.repeat = repeat
 
         # Read file
-        if os.path.isfile(filename):
-            fpath = filename
-        else:
-            # must be BASENAME
-            fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
-
+        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
@@ -878,7 +872,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, fls=None, mu_star=None,
                  mb_model_class=PastMassBalance, use_inversion_flowlines=False,
-                 filename='climate_monthly', **kwargs):
+                 **kwargs):
         """Initialize.
 
         Parameters
@@ -913,16 +907,6 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                    'If you explicitly want to use '
                                    '`inversion_flowlines`, set '
                                    'use_inversion_flowlines=True.') from None
-
-        # If flowline has not climatefile, use filename
-        for fl in fls:
-            if fl.climatefile is None:
-                fl.climatefile = filename
-            elif (fl.climatefile is not None and
-                  filename is not 'climate_monthly'):
-                raise RuntimeError('You provided an alternative climatefile '
-                                   'and a flowline.climatefile. Only use one '
-                                   'of it in order to avoid errors.')
 
         self.fls = fls
 

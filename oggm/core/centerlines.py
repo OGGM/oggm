@@ -56,7 +56,8 @@ class Centerline(object):
     It is instanciated and updated by _join_lines() exclusively
     """
 
-    def __init__(self, line, dx=None, surface_h=None, orig_head=None):
+    def __init__(self, line, dx=None, surface_h=None, orig_head=None,
+                 rgi_id=None):
         """ Instantiate."""
 
         self.line = None  # Shapely LineString
@@ -87,7 +88,7 @@ class Centerline(object):
         self.mu_star_is_valid = False  # if mu* leeds to good flux, keep it
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
-        self.climatefile = None  # Allows individual climate files per flowline
+        self.rgi_id = rgi_id  # Usefull if line is used with another glacier
 
     def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -1599,7 +1600,7 @@ def initialize_flowlines(gdir):
             new_line = shpg.LineString(points[sp:])
 
         sl = Centerline(new_line, dx=dx, surface_h=hgts,
-                        orig_head=cl.orig_head)
+                        orig_head=cl.orig_head, rgi_id=gdir.rgi_id)
         sl.order = cl.order
         fls.append(sl)
 
