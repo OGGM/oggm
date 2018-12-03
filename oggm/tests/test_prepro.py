@@ -68,7 +68,7 @@ class TestGIS(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_border40')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()
