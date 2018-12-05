@@ -275,7 +275,7 @@ def define_glacier_region(gdir, entity=None):
         towrite['Area'] = area
 
     # Write shapefile
-    towrite.to_file(gdir.get_filepath('outlines'))
+    gdir.write_shapefile(towrite, 'outlines')
 
     # Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
@@ -287,7 +287,7 @@ def define_glacier_region(gdir, entity=None):
             if hasattr(gdf.crs, 'srs'):
                 # salem uses pyproj
                 gdf.crs = gdf.crs.srs
-            gdf.to_file(gdir.get_filepath('intersects'))
+            gdir.write_shapefile(gdf, 'intersects')
     else:
         # Sanity check
         if cfg.PARAMS['use_intersects']:
@@ -481,8 +481,7 @@ def glacier_masks(gdir):
         raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
-    outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.read_file(outlines_file).geometry[0]
+    geometry = gdir.read_shapefile('outlines').geometry[0]
 
     # Interpolate shape to a regular path
     glacier_poly_hr = _interp_polygon(geometry, gdir.grid.dx)
@@ -659,8 +658,7 @@ def simple_glacier_masks(gdir):
         raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
-    outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.read_file(outlines_file).geometry[0]
+    geometry = gdir.read_shapefile('outlines').geometry[0]
 
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
@@ -805,7 +803,7 @@ def interpolation_masks(gdir):
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
     if gdir.has_file('intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        gdf = gdir.read_shapefile('intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 

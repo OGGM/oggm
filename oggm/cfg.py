@@ -324,6 +324,7 @@ def initialize(file=None, logging_level='INFO'):
     PARAMS['rgi_version'] = cp['rgi_version']
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
+    PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -353,7 +354,7 @@ def initialize(file=None, logging_level='INFO'):
     download_oggm_files()
 
     # Delete non-floats
-    ltr = ['working_dir', 'dem_file', 'climate_file',
+    ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',

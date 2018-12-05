@@ -209,7 +209,7 @@ def plot_googlemap(gdirs, ax=None, figsize=None):
     cmap.set_rgb(img)
 
     for gdir in gdirs:
-        cmap.set_shapefile(gdir.get_filepath('outlines'))
+        cmap.set_shapefile(gdir.read_shapefile('outlines'))
 
     cmap.plot(ax)
     title = ''
@@ -402,7 +402,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
         # Plot intersects
         if add_intersects and gdir.has_file('intersects'):
-            gdf = gpd.read_file(gdir.get_filepath('intersects'))
+            gdf = gdir.read_shapefile('intersects')
             smap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines

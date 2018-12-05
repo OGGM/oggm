@@ -1514,9 +1514,9 @@ def catchment_intersections(gdir):
         # salem uses pyproj
         gdfc.crs = gdfc.crs.srs
         gdfi.crs = gdfi.crs.srs
-    gdfc.to_file(gdir.get_filepath('flowline_catchments'))
+    gdir.write_shapefile(gdfc, 'flowline_catchments')
     if len(gdfi) > 0:
-        gdfi.to_file(gdir.get_filepath('catchments_intersects'))
+        gdir.write_shapefile(gdfi, 'catchments_intersects')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -1648,12 +1648,12 @@ def catchment_width_geom(gdir):
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
     if gdir.has_file('catchments_intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects'))
+        gdf = gdir.read_shapefile('catchments_intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
     if gdir.has_file('intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        gdf = gdir.read_shapefile('intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 

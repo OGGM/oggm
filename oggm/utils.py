@@ -10,6 +10,7 @@ import bz2
 import json
 import shutil
 import zipfile
+import tarfile
 import sys
 import math
 import datetime
@@ -30,7 +31,7 @@ from urllib.parse import urlparse
 import geopandas as gpd
 import pandas as pd
 import salem
-from salem import lazy_property, read_shapefile
+from salem import lazy_property
 import numpy as np
 import netCDF4
 from scipy import stats
@@ -2826,7 +2827,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     entity.O1Region = '00'
     entity.O2Region = '0'
     gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset)
-    gpd.GeoDataFrame([entity]).to_file(gdir.get_filepath('outlines'))
+    gdir.write_shapefile(gpd.GeoDataFrame([entity]), 'outlines')
 
     # Idealized flowline
     coords = np.arange(0, len(surface_h) - 0.5, 1)
@@ -2911,14 +2912,13 @@ class GlacierDirectory(object):
         if isinstance(rgi_entity, str):
             _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
-            rgi_entity = read_shapefile(_shp)
+            rgi_entity = self._read_shapefile_from_path(_shp)
             crs = salem.check_crs(rgi_entity.crs)
             rgi_entity = rgi_entity.iloc[0]
+            g = rgi_entity['geometry']
             xx, yy = salem.transform_proj(crs, salem.wgs84,
-                                          [rgi_entity['min_x'],
-                                           rgi_entity['max_x']],
-                                          [rgi_entity['min_y'],
-                                           rgi_entity['max_y']])
+                                          [g.bounds[0], g.bounds[2]],
+                                          [g.bounds[1], g.bounds[3]])
         else:
             g = rgi_entity['geometry']
             xx, yy = ([g.bounds[0], g.bounds[2]],
@@ -3060,7 +3060,7 @@ class GlacierDirectory(object):
     def rgi_area_km2(self):
         """The glacier's RGI area (km2)."""
         try:
-            _area = gpd.read_file(self.get_filepath('outlines'))['Area']
+            _area = self.read_shapefile('outlines')['Area']
             return np.round(float(_area), decimals=3)
         except OSError:
             raise RuntimeError('Please run `define_glacier_region` before '
@@ -3111,8 +3111,10 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         """
-
-        return os.path.exists(self.get_filepath(filename))
+        fp = self.get_filepath(filename)
+        if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
+            fp = fp.replace('.shp', '.tar')
+        return os.path.exists(fp)
 
     def add_to_diagnostics(self, key, value):
         """Write a key, value pair to the gdir's runtime diagnostics.
@@ -3230,6 +3232,70 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'w') as f:
             json.dump(var, f)
+
+    @classmethod
+    def _read_shapefile_from_path(cls, fp):
+        if '.shp' not in fp:
+            raise ValueError('File ending not that of a shapefile')
+
+        if cfg.PARAMS['use_tar_shapefiles']:
+            fp = 'tar://' + fp.replace('.shp', '.tar')
+
+        return gpd.read_file(fp)
+
+    def read_shapefile(self, filename, filesuffix=''):
+        """Reads a shapefile located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+
+        Returns
+        -------
+        A geopandas.DataFrame
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        return self._read_shapefile_from_path(fp)
+
+    def write_shapefile(self, var, filename, filesuffix=''):
+        """ Writes a variable to a shapefile on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to shapefile (must be a geopandas.DataFrame)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if '.shp' not in fp:
+            raise ValueError('File ending not that of a shapefile')
+        var.to_file(fp)
+
+        if not cfg.PARAMS['use_tar_shapefiles']:
+            # Done here
+            return
+
+        # Write them in tar
+        fp = fp.replace('.shp', '.tar')
+        if os.path.exists(fp):
+            os.remove(fp)
+
+        # List all files that were written
+        fs = glob.glob(fp.replace('.tar', '.*'))
+        # Add them to tar
+        with tarfile.open(fp, mode='w') as tf:
+            for ff in fs:
+                tf.add(ff, arcname=os.path.basename(ff))
+
+        # Delete the old ones
+        for ff in fs:
+            os.remove(ff)
 
     def create_gridded_ncdf_file(self, fname):
         """Makes a gridded netcdf file template.
