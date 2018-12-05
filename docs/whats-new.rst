@@ -87,6 +87,9 @@ Breaking changes
 - The ``process_cesm_data`` task has been been moved to `gcm_climate.py`
   adressing: :issue:`469` & :pull:`582`.
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
+- The shapefiles are now stored in the glacier directories as compressed
+  tar files, adressing :issue:`367` & :issue:`615`.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~

@@ -3114,6 +3114,8 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename)
         if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
             fp = fp.replace('.shp', '.tar')
+            if cfg.PARAMS['use_compression']:
+                fp += '.gz'
         return os.path.exists(fp)
 
     def add_to_diagnostics(self, key, value):
@@ -3240,6 +3242,8 @@ class GlacierDirectory(object):
 
         if cfg.PARAMS['use_tar_shapefiles']:
             fp = 'tar://' + fp.replace('.shp', '.tar')
+            if cfg.PARAMS['use_compression']:
+                fp += '.gz'
 
         return gpd.read_file(fp)
 
@@ -3283,13 +3287,17 @@ class GlacierDirectory(object):
 
         # Write them in tar
         fp = fp.replace('.shp', '.tar')
+        mode = 'w'
+        if cfg.PARAMS['use_compression']:
+            fp += '.gz'
+            mode += ':gz'
         if os.path.exists(fp):
             os.remove(fp)
 
-        # List all files that were written
-        fs = glob.glob(fp.replace('.tar', '.*'))
+        # List all files that were written as shape
+        fs = glob.glob(fp.replace('.gz', '').replace('.tar', '.*'))
         # Add them to tar
-        with tarfile.open(fp, mode='w') as tf:
+        with tarfile.open(fp, mode=mode) as tf:
             for ff in fs:
                 tf.add(ff, arcname=os.path.basename(ff))
 
