@@ -33,6 +33,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
+from oggm.exceptions import InvalidParamsError
 from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
                         nicenumber, ncDataset)
 
@@ -291,12 +292,12 @@ def define_glacier_region(gdir, entity=None):
     else:
         # Sanity check
         if cfg.PARAMS['use_intersects']:
-            raise RuntimeError('You seem to have forgotten to set the '
-                               'intersects file for this run. OGGM works '
-                               'better with such a file. If you know what '
-                               'your are doing, set '
-                               "cfg.PARAMS['use_intersects'] = False to "
-                               "suppress this error.")
+            raise InvalidParamsError('You seem to have forgotten to set the '
+                                     'intersects file for this run. OGGM '
+                                     'works better with such a file. If you '
+                                     'know what your are doing, set '
+                                     "cfg.PARAMS['use_intersects'] = False to "
+                                     "suppress this error.")
 
     # 6. choose a spatial resolution with respect to the glacier area
     dxmethod = cfg.PARAMS['grid_dx_method']
@@ -313,6 +314,13 @@ def define_glacier_region(gdir, entity=None):
         dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
     log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
+
+    # Safety check
+    if cfg.PARAMS['border'] > 1000:
+        raise InvalidParamsError("You have set a cfg.PARAMS['border'] value "
+                                 "of {}. ".format(cfg.PARAMS['border']) +
+                                 'This a very large value, which is '
+                                 'currently not supported in OGGM.')
 
     # Corners, incl. a buffer of N pix
     ulx = np.min(xx) - cfg.PARAMS['border'] * dx
