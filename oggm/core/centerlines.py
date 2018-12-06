@@ -1371,7 +1371,7 @@ def _width_change_factor(widths):
     return fac
 
 
-@entity_task(log, writes=['catchment_indices'])
+@entity_task(log, writes=['geometries'])
 def catchment_area(gdir):
     """Compute the catchment areas of each tributary line.
 
@@ -1387,8 +1387,8 @@ def catchment_area(gdir):
 
     # Variables
     cls = gdir.read_pickle('centerlines')
-    geoms = gdir.read_pickle('geometries')
-    glacier_pix = geoms['polygon_pix']
+    geom = gdir.read_pickle('geometries')
+    glacier_pix = geom['polygon_pix']
     fpath = gdir.get_filepath('gridded_data')
     with utils.ncDataset(fpath) as nc:
         costgrid = nc.variables['cost_grid'][:]
@@ -1398,7 +1398,8 @@ def catchment_area(gdir):
     # mask and return
     if len(cls) == 1:
         cl_catchments = [np.array(np.nonzero(mask == 1)).T]
-        gdir.write_pickle(cl_catchments, 'catchment_indices')
+        geom['catchment_indices'] = cl_catchments
+        gdir.write_pickle(geom, 'geometries')
         return
 
     # Initialise costgrid and the "catching" dict
@@ -1477,7 +1478,8 @@ def catchment_area(gdir):
     cl_catchments = cl_catchments[::-1]  # put it back in order
 
     # Write the data
-    gdir.write_pickle(cl_catchments, 'catchment_indices')
+    geom['catchment_indices'] = cl_catchments
+    gdir.write_pickle(geom, 'geometries')
 
 
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
@@ -1489,7 +1491,7 @@ def catchment_intersections(gdir):
     gdir : oggm.GlacierDirectory
     """
 
-    catchment_indices = gdir.read_pickle('catchment_indices')
+    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1631,7 +1633,7 @@ def catchment_width_geom(gdir):
 
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('catchment_indices')
+    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
@@ -1744,7 +1746,7 @@ def catchment_width_correction(gdir):
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('catchment_indices')
+    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
