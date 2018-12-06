@@ -138,7 +138,10 @@ _doc = ('A dictionary containing the shapely.Polygons of a glacier. The '
         'grid in (i, j) coordinates, while the "polygon_pix" entry contains '
         'the geometries transformed into the coarse grid (the i, j elements '
         'are integers). The "polygon_area" entry contains the area of the '
-        'polygon as computed by Shapely.')
+        'polygon as computed by Shapely. The "catchment_indices" entry'
+        'contains a list of len `n_centerlines`, each element containing '
+        'a numpy array of the indices in the glacier grid which represent '
+        'the centerlines catchment area.')
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
 _doc = ('A dictionary containing the downsteam line geometry as well as the '
@@ -154,11 +157,6 @@ BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
-
-_doc = ("A list of len `n_centerlines`, each element conaining a numpy array "
-        "of the indices in the glacier grid which represent the centerline's"
-        " catchment area.")
-BASENAMES['catchment_indices'] = ('catchment_indices.pkl', _doc)
 
 _doc = ('A "better" version of the Centerlines, now on a regular spacing '
         'i.e., not on the gridded (i, j) indices. The tails of the '

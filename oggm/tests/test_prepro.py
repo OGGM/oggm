@@ -636,7 +636,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.catchment_area(gdir)
 
-        cis = gdir.read_pickle('catchment_indices')
+        cis = gdir.read_pickle('geometries')['catchment_indices']
 
         # The catchment area must be as big as expected
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
