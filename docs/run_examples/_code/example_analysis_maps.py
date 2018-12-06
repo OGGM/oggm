@@ -1,13 +1,12 @@
 # Python imports
 import logging
-from os import path
 
 # External modules
 import matplotlib.pyplot as plt
 
 # Locals
 import oggm.cfg as cfg
-from oggm import workflow, graphics
+from oggm import workflow, graphics, utils
 from oggm.core import flowline
 
 # Module logger
@@ -17,7 +16,7 @@ log = logging.getLogger(__name__)
 cfg.initialize()
 
 # Local working directory (where OGGM will write its output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
+WORKING_DIR = utils.gettempdir('OGGM_precalibrated_run')
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Initialize from existing directories

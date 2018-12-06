@@ -1,10 +1,12 @@
+import os
 import xarray as xr
 import matplotlib.pyplot as plt
-from os import path
+from oggm.utils import gettempdir
 
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
-ds1 = xr.open_dataset(path.join(WORKING_DIR, 'run_output_tstar.nc'))
-ds2 = xr.open_dataset(path.join(WORKING_DIR, 'run_output_commitment.nc'))
+
+WORKING_DIR = gettempdir('OGGM_precalibrated_run')
+ds1 = xr.open_dataset(os.path.join(WORKING_DIR, 'run_output_tstar.nc'))
+ds2 = xr.open_dataset(os.path.join(WORKING_DIR, 'run_output_commitment.nc'))
 
 v1_km3 = ds1.volume * 1e-9
 v2_km3 = ds2.volume * 1e-9

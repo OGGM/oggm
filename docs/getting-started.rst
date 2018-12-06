@@ -12,129 +12,64 @@ Getting started
     import numpy as np
     np.set_printoptions(threshold=10)
 
-The ultimate goal of OGGM will be to hide the python workflow behind the model
-entirely, and run it only using configuration files and scripts. We are not
-there yet, and if you want to use and participate to the development of OGGM
-you'll have to get your hands dirty. We hope however that the workflow is
-structured enough so that it is possible to jump in without having to
-understand all of its internals.
+Although largely automatised, the OGGM model still requires some python
+scripting to prepare and run a simulation. This documentation will guide you
+through several examples to get you started.
 
-The few examples below are meant to illustrate the general design of OGGM,
-without going into the details of the implementation.
+First step: system settings for input data
+------------------------------------------
 
-Imports
--------
-
-The following imports are necessary for all of the examples:
+OGGM will automatically download all the data it needs for a simulation at
+run time. You can specify where on your computer these files should be stored
+for later use. Let's start by opening a python interpreter and type in:
 
 .. ipython:: python
 
-    import geopandas as gpd
-    import matplotlib.pyplot as plt
-    import oggm
-    import os
-    from oggm import cfg, tasks, graphics
-    from oggm.utils import get_demo_file
-
-Initialisation and GlacierDirectories
--------------------------------------
-
-The first thing to do when running OGGM is to initialise it. This function
-will read the `default configuration file <https://github.com/OGGM/oggm/blob/master/oggm/params.cfg>`_
-which contains all user defined parameters:
-
-.. ipython:: python
-
+    from oggm import cfg
     cfg.initialize()
 
-These parameters are now accessible to all OGGM routines. For example, the
-``cfg.PARAMS`` dict contains some runtime parameters, while ``cfg.PATHS`` stores
-the paths to the input files and the working directory (where the model output
-will be written):
+At your very first import, this will do two things:
+
+1. It will download a small subset of data used for testing and calibration.
+   This data is located in your home directory, in a hidden folder
+   called `.oggm`.
+2. It will create a configuration file in your home folder, where you can
+   indicate where you want to store further input data. This configuration
+   file is also located in your home directory under the name ``.oggm_config``.
+
+
+To locate this config file, you can type:
 
 .. ipython:: python
 
-    cfg.PARAMS['topo_interp']
-    cfg.PARAMS['temp_default_gradient']
-    cfg.PATHS
+    cfg.CONFIG_FILE
 
-We'll use some demo files
-(`shipped with OGGM <https://github.com/OGGM/oggm-sample-data>`_) for the basic
-input:
+See :ref:`input-data` for an explanation of these entries.
 
-.. ipython:: python
+.. important::
 
-    cfg.PATHS['working_dir'] = oggm.gettempdir('oggm_wd')  # working directory
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')  # topography
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))  # intersects
+    The default settings will probably work for you, but we recommend to have
+    a look at this file and set the paths to a directory
+    where enough space is available: a minimum of 8 Gb for all climate data
+    and glacier outlines is necessary. Topography data can quickly grow
+    to several Gb as well, even for regional runs.
 
-The starting point of a run is always a valid `RGI <http://www.glims.org/RGI/>`_ file.
-In this case we use a very small subset of the RGI, the outlines of the
-`Hinereisferner <http://acinn.uibk.ac.at/research/ice-and-climate/projects/hef>`_
-(HEF) in the Austrian Alps:
 
-.. ipython:: python
+OGGM workflow
+-------------
 
-    entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
-    entity
+For a step by step tutorial of the entire OGGM workflow, download and run
+the
+:download:`getting started <https://raw.githubusercontent.com/OGGM/oggm/master/docs/notebooks/getting_started.ipynb>`
+(right-click -> "Save link as") jupyter notebook.
 
-This information is enough to define HEF's :py:class:`GlacierDirectory`:
 
-.. ipython:: python
+OGGM run scripts
+----------------
 
-    gdir = oggm.GlacierDirectory(entity)
+Refer to :ref:`run-set-up` for real-world applications.
 
-:ref:`glacierdir` have two major purposes:
 
-  - carry information about the glacier attributes
-  - handle I/O and filepaths operations
+OGGM Edu
+--------
 
-For example, it will tell OGGM where to write the data for this glacier or
-its terminus type:
-
-.. ipython:: python
-
-    gdir.dir
-    gdir.terminus_type
-
-GlacierDirectories are the input to most OGGM functions. In fact, they are the
-only required input to all :ref:`apientitytasks`. These entity tasks are
-processes which can run on one glacier at a time (the vast majority of OGGM
-tasks are entity tasks). The first task to apply to an empty GlacierDirectory
-is :py:func:`tasks.define_glacier_region`, which sets the local glacier map
-and topography, and :py:func:`tasks.glacier_masks`, which prepares gridded
-topography data:
-
-.. ipython:: python
-
-    tasks.define_glacier_region(gdir, entity=entity)
-    tasks.glacier_masks(gdir)
-    os.listdir(gdir.dir)
-
-The directory is now filled with data. Other tasks can build upon these, for
-example the plotting functions:
-
-.. ipython:: python
-
-    @savefig plot_domain.png width=80%
-    graphics.plot_domain(gdir)
-    plt.show()  # optional in interactive plotting mode
-
-What next?
-----------
-
-This documentation is growing step by step. In the meantime, a good place
-to start is the ``oggm/docs/notebooks`` directory.
-
-You will find several notebooks:
-
-- ``getting_started.ipynb``, which set-ups an entire OGGM run
-  in the Ötztal region.
-- ``flowline_model.ipynb``, which describes the usage of the flowline model
-  for idealized glaciers.
-- ``flowline_with_known_bedrock.ipynb``, which describes the usage of the
-  flowline model with custom boundary conditions.
-- ``specmb_vs_ela.ipynb``, which was used to make the analyses presented in
-  `this blog post about the non linear relationship between specific mass-balance and glacier geometry <http://oggm.org/2017/10/01/specmb-ela/>`_
-- ``dynamics_and_length_changes.ipynb``, which was used to make the analyses
-  presented in `this blog post about the long term length changes of glaciers <http://oggm.org/2017/10/23/length-changes/>`_

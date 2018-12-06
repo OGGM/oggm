@@ -56,7 +56,8 @@ class Centerline(object):
     It is instanciated and updated by _join_lines() exclusively
     """
 
-    def __init__(self, line, dx=None, surface_h=None, orig_head=None):
+    def __init__(self, line, dx=None, surface_h=None, orig_head=None,
+                 rgi_id=None):
         """ Instantiate."""
 
         self.line = None  # Shapely LineString
@@ -87,6 +88,7 @@ class Centerline(object):
         self.mu_star_is_valid = False  # if mu* leeds to good flux, keep it
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
+        self.rgi_id = rgi_id  # Usefull if line is used with another glacier
 
     def set_flows_to(self, other, check_tail=True, last_point=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -1512,9 +1514,9 @@ def catchment_intersections(gdir):
         # salem uses pyproj
         gdfc.crs = gdfc.crs.srs
         gdfi.crs = gdfi.crs.srs
-    gdfc.to_file(gdir.get_filepath('flowline_catchments'))
+    gdir.write_shapefile(gdfc, 'flowline_catchments')
     if len(gdfi) > 0:
-        gdfi.to_file(gdir.get_filepath('catchments_intersects'))
+        gdir.write_shapefile(gdfi, 'catchments_intersects')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -1598,7 +1600,7 @@ def initialize_flowlines(gdir):
             new_line = shpg.LineString(points[sp:])
 
         sl = Centerline(new_line, dx=dx, surface_h=hgts,
-                        orig_head=cl.orig_head)
+                        orig_head=cl.orig_head, rgi_id=gdir.rgi_id)
         sl.order = cl.order
         fls.append(sl)
 
@@ -1646,12 +1648,12 @@ def catchment_width_geom(gdir):
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
     if gdir.has_file('catchments_intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('catchments_intersects'))
+        gdf = gdir.read_shapefile('catchments_intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
     if gdir.has_file('intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        gdf = gdir.read_shapefile('intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 

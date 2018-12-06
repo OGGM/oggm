@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import oggm
-import pandas as pd
 import geopandas as gpd
 import xarray as xr
 
@@ -165,14 +164,13 @@ class full_workflow:
         rgidf = utils.get_rgi_glacier_entities(rgi_list)
 
         # We use intersects
-        db = utils.get_rgi_intersects_region_file(version='61',
-                                                  rgi_ids=rgi_list)
+        db = utils.get_rgi_intersects_entities(rgi_list, version='61')
         cfg.set_intersects_db(db)
 
         # Sort for more efficient parallel computing
         rgidf = rgidf.sort_values('Area', ascending=False)
 
-        # Go - initialize working directories
+        # Go - initialize glacier directories
         gdirs = workflow.init_glacier_regions(rgidf)
 
         # Preprocessing tasks

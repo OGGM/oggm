@@ -9,11 +9,6 @@ introduction about the various type of glacier models).
 
 .. _antarcticglaciers.org: http://www.antarcticglaciers.org/glaciers-and-climate/numerical-ice-sheet-models/hierarchy-ice-sheet-models-introduction/
 
-Here we present the basic physics and numerics of the two models
-implemented currently in OGGM, the ``FluxBasedModel`` (homegrown model with a
-rather simple numerical solver) and the ``MUSCLSuperBeeModel`` (mass-conserving
-numerical scheme, see [Jarosch_etal_2013]_).
-
 .. _ice-flow:
 
 Ice flow
@@ -166,7 +161,7 @@ simplifying the implementation. Similar to the "diffusion approach", the
 model looses mass-conservation in very steep slopes ([Jarosch_etal_2013]_).
 
 The numerical scheme implemented in OGGM is tested against A. Jarosch's
-MUSCLSuperBee Model (see below) and J. Oerleman's diffusion model for
+MUSCLSuperBee Model (see below) and Hans Oerleman's diffusion model for
 various idealized cases. For all cases but the steep slope one the model
 performs very well.
 

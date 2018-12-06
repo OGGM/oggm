@@ -33,6 +33,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
+from oggm.exceptions import InvalidParamsError
 from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
                         nicenumber, ncDataset)
 
@@ -239,7 +240,7 @@ def define_glacier_region(gdir, entity=None):
         the glacier geometry to process
     """
 
-    # 1. Make a local glacier map
+    # Make a local glacier map
     proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
@@ -252,7 +253,7 @@ def define_glacier_region(gdir, entity=None):
     geometry = multi_to_poly(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
-    # 2. save transformed geometry to disk
+    # Save transformed geometry to disk
     entity = entity.copy()
     entity['geometry'] = geometry
     # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
@@ -265,7 +266,7 @@ def define_glacier_region(gdir, entity=None):
     if 'DEM_SOURCE' in towrite:
         del towrite['DEM_SOURCE']
 
-    # 3. define glacier area to use
+    # Define glacier area to use
     area = entity['Area']
 
     # Do we want to use the RGI area or ours?
@@ -274,10 +275,10 @@ def define_glacier_region(gdir, entity=None):
         entity['Area'] = area
         towrite['Area'] = area
 
-    # 4. Write shapefile
-    towrite.to_file(gdir.get_filepath('outlines'))
+    # Write shapefile
+    gdir.write_shapefile(towrite, 'outlines')
 
-    # 5. Also transform the intersects if necessary
+    # Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
     if len(gdf) > 0:
         gdf = gdf.loc[((gdf.RGIId_1 == gdir.rgi_id) |
@@ -287,16 +288,16 @@ def define_glacier_region(gdir, entity=None):
             if hasattr(gdf.crs, 'srs'):
                 # salem uses pyproj
                 gdf.crs = gdf.crs.srs
-            gdf.to_file(gdir.get_filepath('intersects'))
+            gdir.write_shapefile(gdf, 'intersects')
     else:
         # Sanity check
         if cfg.PARAMS['use_intersects']:
-            raise RuntimeError('You seem to have forgotten to set the '
-                               'intersects file for this run. OGGM works '
-                               'better with such a file. If you know what '
-                               'your are doing, set '
-                               "cfg.PARAMS['use_intersects'] = False to "
-                               "suppress this error.")
+            raise InvalidParamsError('You seem to have forgotten to set the '
+                                     'intersects file for this run. OGGM '
+                                     'works better with such a file. If you '
+                                     'know what your are doing, set '
+                                     "cfg.PARAMS['use_intersects'] = False to "
+                                     "suppress this error.")
 
     # 6. choose a spatial resolution with respect to the glacier area
     dxmethod = cfg.PARAMS['grid_dx_method']
@@ -313,6 +314,13 @@ def define_glacier_region(gdir, entity=None):
         dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
     log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
+
+    # Safety check
+    if cfg.PARAMS['border'] > 1000:
+        raise InvalidParamsError("You have set a cfg.PARAMS['border'] value "
+                                 "of {}. ".format(cfg.PARAMS['border']) +
+                                 'This a very large value, which is '
+                                 'currently not supported in OGGM.')
 
     # Corners, incl. a buffer of N pix
     ulx = np.min(xx) - cfg.PARAMS['border'] * dx
@@ -481,8 +489,7 @@ def glacier_masks(gdir):
         raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
-    outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.read_file(outlines_file).geometry[0]
+    geometry = gdir.read_shapefile('outlines').geometry[0]
 
     # Interpolate shape to a regular path
     glacier_poly_hr = _interp_polygon(geometry, gdir.grid.dx)
@@ -659,8 +666,7 @@ def simple_glacier_masks(gdir):
         raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
-    outlines_file = gdir.get_filepath('outlines')
-    geometry = gpd.read_file(outlines_file).geometry[0]
+    geometry = gdir.read_shapefile('outlines').geometry[0]
 
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
@@ -805,7 +811,7 @@ def interpolation_masks(gdir):
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
     if gdir.has_file('intersects'):
         # read and transform to grid
-        gdf = gpd.read_file(gdir.get_filepath('intersects'))
+        gdf = gdir.read_shapefile('intersects')
         salem.transform_geopandas(gdf, gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 

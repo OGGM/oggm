@@ -1,11 +1,6 @@
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
-import logging
-logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.DEBUG)  # noqa: E402
-
 import unittest
 from functools import partial
 import pytest

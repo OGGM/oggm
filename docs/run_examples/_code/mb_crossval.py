@@ -1,5 +1,5 @@
 # Python imports
-from os import path
+import os
 
 # Libs
 import numpy as np
@@ -8,7 +8,7 @@ import geopandas as gpd
 
 # Locals
 import oggm
-from oggm import cfg, workflow, tasks
+from oggm import cfg, workflow, tasks, utils
 from oggm.core.massbalance import PastMassBalance, MultipleFlowlineMassBalance
 import matplotlib.pyplot as plt
 
@@ -27,21 +27,19 @@ if baseline == 'HISTALP':
     cfg.PARAMS['temp_melt'] = -1.75
 
 # Local paths (where to find the OGGM run output)
-WORKING_DIR = path.join(path.expanduser('~'), 'tmp',
-                        'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline,
-                                                              rgi_version,
-                                                              oggm.__version__)
-                        )
+dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
+                                                oggm.__version__)
+WORKING_DIR = utils.gettempdir(dirname, home=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # Read the rgi file
-rgidf = gpd.read_file(path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
+rgidf = gpd.read_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 
-# Go - initialize working directories
+# Go - initialize glacier directories
 gdirs = workflow.init_glacier_regions(rgidf)
 
 # Cross-validation
-file = path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
 ref_df = pd.read_csv(file, index_col=0)
 for i, gdir in enumerate(gdirs):
 
@@ -104,6 +102,6 @@ scores += 'Sigma bias: {:.2f}\n'.format(np.mean(ref_df['CV_MB_SIGMA_BIAS']))
 
 # Output
 print(scores)
-fn = path.join(WORKING_DIR, 'scores.txt')
+fn = os.path.join(WORKING_DIR, 'scores.txt')
 with open(fn, 'w') as f:
     f.write(scores)

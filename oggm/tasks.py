@@ -21,7 +21,8 @@ from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_cru_data
 from oggm.core.climate import process_histalp_data
 from oggm.core.climate import process_custom_climate_data
-from oggm.core.climate import process_cesm_data
+from oggm.core.gcm_climate import process_gcm_data
+from oggm.core.gcm_climate import process_cesm_data
 from oggm.core.climate import local_t_star
 from oggm.core.climate import mu_star_calibration
 from oggm.core.climate import apparent_mb_from_linear_mb

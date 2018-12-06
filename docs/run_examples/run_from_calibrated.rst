@@ -86,9 +86,10 @@ Here is an example of how to read the file:
 
 .. code-block:: python
 
-    from os import path
+    import os
     import pandas as pd
-    WORKING_DIR = path.join(path.expanduser('~'), 'tmp', 'OGGM_precalibrated_run')
+    from oggm.utils import gettempdir
+    WORKING_DIR = gettempdir('OGGM_precalibrated_run')
     df = pd.read_csv(path.join(WORKING_DIR, 'glacier_statistics.csv'))
     print(df)
 
