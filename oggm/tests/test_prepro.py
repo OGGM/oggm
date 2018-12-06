@@ -97,10 +97,10 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         extent = gdir.extent_ll
 
-        tdf = gpd.read_file(gdir.get_filepath('outlines'))
+        tdf = gdir.read_shapefile('outlines')
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['Area']), rtol=1e-2)
-        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
+        self.assertTrue(gdir.has_file('intersects'))
 
         # From string
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
@@ -323,7 +323,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
-        self.assertTrue(os.path.exists(gdir.get_filepath('intersects')))
+        self.assertTrue(gdir.has_file('intersects'))
 
 
 class TestCenterlines(unittest.TestCase):
@@ -731,7 +731,7 @@ class TestGeometry(unittest.TestCase):
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
 
-        tdf = gpd.read_file(gdir.get_filepath('outlines'))
+        tdf = gdir.read_shapefile('outlines')
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
@@ -2152,6 +2152,7 @@ class TestGrindelInvert(unittest.TestCase):
         cfg.initialize()
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiple_flowlines'] = False
+        cfg.PARAMS['use_tar_shapefiles'] = False
         # not crop
         cfg.PARAMS['max_thick_to_width_ratio'] = 10
         cfg.PARAMS['max_shape_param'] = 10
@@ -2291,10 +2292,10 @@ class TestGrindelInvert(unittest.TestCase):
 
         # see that we have as many catchments as flowlines
         fls = gdir.read_pickle('inversion_flowlines')
-        gdfc = gpd.read_file(gdir.get_filepath('flowline_catchments'))
+        gdfc = gdir.read_shapefile('flowline_catchments')
         self.assertEqual(len(fls), len(gdfc))
         # and at least as many intersects
-        gdfc = gpd.read_file(gdir.get_filepath('catchments_intersects'))
+        gdfc = gdir.read_shapefile('catchments_intersects')
         self.assertGreaterEqual(len(gdfc), len(fls)-1)
 
         # check touch borders qualitatively
@@ -2467,6 +2468,7 @@ class TestIdealizedGdir(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['use_intersects'] = False
+        cfg.PARAMS['use_tar_shapefiles'] = False
         cfg.PARAMS['use_multiple_flowlines'] = False
 
     def tearDown(self):
