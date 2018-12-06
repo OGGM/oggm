@@ -88,7 +88,8 @@ Breaking changes
   adressing: :issue:`469` & :pull:`582`.
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - The shapefiles are now stored in the glacier directories as compressed
-  tar files, adressing :issue:`367` & :issue:`615`.
+  tar files, adressing :issue:`367` & :issue:`615`. This option can be
+  turned off with `cfg.PARAMS['use_tar_shapefiles'] = False`.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
