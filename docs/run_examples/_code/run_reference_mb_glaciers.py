@@ -41,9 +41,6 @@ cfg.PARAMS['baseline_climate'] = baseline
 # No need for intersects since this has an effect on the inversion only
 cfg.PARAMS['use_intersects'] = False
 
-# This isn't necessary either - we don't do inversion
-cfg.PARAMS['filter_for_neg_flux'] = False
-
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
