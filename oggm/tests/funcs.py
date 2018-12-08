@@ -13,7 +13,7 @@ import oggm.cfg as cfg
 from oggm.core import gis, inversion, climate, centerlines, flowline
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
-from oggm.utils import _urlretrieve
+from oggm.utils import oggm_urlretrieve
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -215,7 +215,7 @@ def patch_url_retrieve_github(url, *args, **kwargs):
     download elsewhere than expected."""
 
     assert 'github' in url
-    return _urlretrieve(url, *args, **kwargs)
+    return oggm_urlretrieve(url, *args, **kwargs)
 
 
 def use_multiprocessing():

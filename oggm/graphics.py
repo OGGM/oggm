@@ -5,7 +5,6 @@ import logging
 from collections import OrderedDict
 import itertools
 
-import geopandas as gpd
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np

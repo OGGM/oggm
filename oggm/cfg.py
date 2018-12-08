@@ -128,7 +128,7 @@ BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 _doc = 'A dictionary containing runtime diagnostics useful for debugging.'
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
-_doc = ('A netcdf file containing several gridded data variables such as ' 
+_doc = ('A netcdf file containing several gridded data variables such as '
         'topography, the glacier masks, the interpolated 2D glacier bed, '
         'and more.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
@@ -253,6 +253,7 @@ def set_logging_config(logging_level='INFO'):
 
     # Spammers
     logging.getLogger("Fiona").setLevel(logging.CRITICAL)
+    logging.getLogger("fiona").setLevel(logging.CRITICAL)
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
 

@@ -17,10 +17,10 @@ from numpy.testing import assert_array_equal, assert_allclose
 
 import oggm
 from oggm import utils
+from oggm.utils import _downloads
 from oggm import cfg
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github, init_hef
 from oggm.utils import shape_factor_adhikari
-_url_retrieve = None
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -28,12 +28,12 @@ _url_retrieve = None
 
 
 def setup_module(module):
-    module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve_github
+    module._url_retrieve = utils.oggm_urlretrieve
+    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
-    utils._urlretrieve = module._url_retrieve
+    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 def clean_dir(testdir):
@@ -319,14 +319,14 @@ class FakeDownloadManager():
     def __init__(self, func_name, new_func):
         self.func_name = func_name
         self.new_func = new_func
-        self._store = getattr(utils, func_name)
+        self._store = getattr(_downloads, func_name)
 
     def __enter__(self):
-        self._store = getattr(utils, self.func_name)
-        setattr(utils, self.func_name, self.new_func)
+        self._store = getattr(_downloads, self.func_name)
+        setattr(_downloads, self.func_name, self.new_func)
 
     def __exit__(self, *args):
-        setattr(utils, self.func_name, self._store)
+        setattr(_downloads, self.func_name, self._store)
 
 
 class TestFakeDownloads(unittest.TestCase):
@@ -603,12 +603,12 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['working_dir'] = os.path.join(self.dldir, 'wd')
         cfg.PATHS['tmp_dir'] = os.path.join(self.dldir, 'extract')
         self.reset_dir()
-        utils._urlretrieve = _url_retrieve
+        oggm.utils._downloads.oggm_urlretrieve = _url_retrieve
 
     def tearDown(self):
         if os.path.exists(self.dldir):
             shutil.rmtree(self.dldir)
-        utils._urlretrieve = patch_url_retrieve_github
+        utils.oggm_urlretrieve = patch_url_retrieve_github
 
     def reset_dir(self):
         if os.path.exists(self.dldir):
@@ -780,28 +780,31 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.download
     def test_srtmdownload(self):
+        from oggm.utils._downloads import _download_srtm_file
 
         # this zone does exist and file should be small enough for download
         zone = '68_11'
-        fp = utils._download_srtm_file(zone)
+        fp = _download_srtm_file(zone)
         self.assertTrue(os.path.exists(fp))
-        fp = utils._download_srtm_file(zone)
+        fp = _download_srtm_file(zone)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
     def test_srtmdownloadfails(self):
+        from oggm.utils._downloads import _download_srtm_file
 
         # this zone does not exist
         zone = '41_20'
-        self.assertTrue(utils._download_srtm_file(zone) is None)
+        self.assertTrue(_download_srtm_file(zone) is None)
 
     @pytest.mark.creds
     def test_asterdownload(self):
+        from oggm.utils._downloads import _download_aster_file
 
         # this zone does exist and file should be small enough for download
         zone = 'S73E137'
         unit = 'S75E135'
-        fp = utils._download_aster_file(zone, unit)
+        fp = _download_aster_file(zone, unit)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
@@ -817,11 +820,12 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.creds
     def test_asterdownloadfails(self):
+        from oggm.utils._downloads import _download_aster_file
 
         # this zone does not exist
         zone = 'bli'
         unit = 'S75E135'
-        self.assertTrue(utils._download_aster_file(zone, unit) is None)
+        self.assertTrue(_download_aster_file(zone, unit) is None)
 
     @pytest.mark.download
     def test_download_cru(self):
@@ -911,21 +915,23 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.download
     def test_download_dem3_viewpano(self):
+        from oggm.utils._downloads import _download_dem3_viewpano
 
         # this zone does exist and file should be small enough for download
         zone = 'L32'
-        fp = utils._download_dem3_viewpano(zone)
+        fp = _download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
         zone = 'U44'
-        fp = utils._download_dem3_viewpano(zone)
+        fp = _download_dem3_viewpano(zone)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
     def test_download_dem3_viewpano_fails(self):
+        from oggm.utils._downloads import _download_dem3_viewpano
 
         # this zone does not exist
         zone = 'dummy'
-        fp = utils._download_dem3_viewpano(zone)
+        fp = _download_dem3_viewpano(zone)
         self.assertTrue(fp is None)
 
     @pytest.mark.download

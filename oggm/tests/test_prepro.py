@@ -1,9 +1,6 @@
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
-import oggm
-import oggm.utils
-
 import unittest
 import os
 import shutil
@@ -19,6 +16,7 @@ import xarray as xr
 import rasterio
 
 # Local imports
+import oggm
 from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
                        flowline, massbalance)
 import oggm.cfg as cfg
@@ -33,12 +31,12 @@ _url_retrieve = None
 
 
 def setup_module(module):
-    module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve_github
+    module._url_retrieve = utils.oggm_urlretrieve
+    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
-    utils._urlretrieve = module._url_retrieve
+    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 def read_svgcoords(svg_file):
