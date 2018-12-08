@@ -9,6 +9,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 # Local imports
+import oggm
 from oggm.core.massbalance import LinearMassBalance
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY
@@ -39,12 +40,12 @@ _url_retrieve = None
 
 
 def setup_module(module):
-    module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve_github
+    module._url_retrieve = utils.oggm_urlretrieve
+    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
-    utils._urlretrieve = module._url_retrieve
+    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 class TestIdealisedCases(unittest.TestCase):

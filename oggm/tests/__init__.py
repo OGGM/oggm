@@ -1,4 +1,3 @@
-import logging
 import os
 from distutils.version import LooseVersion
 
