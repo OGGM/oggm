@@ -69,7 +69,7 @@ logger = logging.getLogger(__name__)
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '06b270af1be217a8127c303d90212704b74a46ff'
+SAMPLE_DATA_COMMIT = '91cef7818be60ee55961045d4b6dd23d864873e6'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -3686,6 +3686,47 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape_factors[np.isnan(shape_factors)] = 1.
 
     return shape_factors
+
+
+def calving_flux_from_depth(gdir, k=2.4, water_depth=None):
+    """Finds a calving flux from the calving front thickness.
+
+    Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
+    We take the initial output of the model and surface elevation data
+    to calculate the water depth of the calving front.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+    k : float
+        calving constant
+    water_depth :
+        the default is to compute the water_depth from ice thickness
+        at the terminus and altitude. Set this to force the water depth
+        to a certain value
+
+    Returns
+    -------
+    Calving flux in [km3 yr-1]
+    """
+
+    # Read inversion output
+    cl = gdir.read_pickle('inversion_output')[-1]
+    fl = gdir.read_pickle('inversion_flowlines')[-1]
+
+    # Altitude at the terminus and frontal width
+    t_altitude = np.clip(cl['hgt'][-1], 0, None)
+    width = fl.widths[-1] * gdir.grid.dx
+
+    # Calving formula
+    thick = cl['thick'][-1]
+    if water_depth is None:
+        water_depth = thick - t_altitude
+    else:
+        # Correct thickness with prescribed depth
+        thick = water_depth + t_altitude
+    out = k * thick * water_depth * width / 1e9
+    return np.clip(out, 0, None)
 
 
 @entity_task(logger)

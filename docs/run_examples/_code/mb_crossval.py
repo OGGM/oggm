@@ -72,7 +72,7 @@ for i, gdir in enumerate(gdirs):
     ref_df.loc[gdir.rgi_id, 'CV_MB_COR'] = rcor
 
 # Write out
-ref_df.to_csv(path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv'))
+ref_df.to_csv(os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv'))
 
 # Marzeion et al Figure 3
 f, ax = plt.subplots(1, 1)
@@ -92,7 +92,7 @@ ax.set_ylabel('N Glaciers')
 ax.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
 ax.legend(loc='best')
 plt.tight_layout()
-fn = path.join(WORKING_DIR, 'mb_crossval_rgi{}.png'.format(rgi_version))
+fn = os.path.join(WORKING_DIR, 'mb_crossval_rgi{}.png'.format(rgi_version))
 plt.savefig(fn, dpi=150)
 
 scores = 'Median bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].median())

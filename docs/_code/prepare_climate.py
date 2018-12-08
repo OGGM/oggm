@@ -1,3 +1,4 @@
+import os
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np

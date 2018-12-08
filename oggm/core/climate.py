@@ -1037,7 +1037,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
 
-    log.info('(%s) local mu* for t*=%d', gdir.rgi_id, tstar)
+    log.info('(%s) local mu* computation for t*=%d', gdir.rgi_id, tstar)
 
     # Get the corresponding mu
     years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir, year_range=yr)
@@ -1049,9 +1049,14 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         raise MassBalanceCalibrationError('{} has a non finite '
                                           'mu'.format(gdir.rgi_id))
 
+    # Clip it?
+    if cfg.PARAMS['clip_mu_star']:
+        mustar = np.clip(mustar, 0, None)
+
     # If mu out of bounds, raise
-    if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
-        raise MassBalanceCalibrationError('mu* out of specified bounds.')
+    if not (cfg.PARAMS['min_mu_star'] <= mustar <= cfg.PARAMS['max_mu_star']):
+        raise MassBalanceCalibrationError('mu* out of specified bounds: '
+                                          '{:.2f}'.format(mustar))
 
     # Scalars in a small dict for later
     df = dict()
@@ -1075,7 +1080,8 @@ def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
     return np.mean(out - cmb)
 
 
-def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True):
+def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
+                                   force_mu=None):
 
     # Do we have a calving glacier? This is only for the first call!
     # The calving mass-balance is distributed over the valid tributaries of the
@@ -1096,20 +1102,23 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True):
     _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                 year_range=yr_range,
                                                 flatten=False)
-    try:
-        mu_star = optimization.brentq(_mu_star_per_minimization,
-                                      cfg.PARAMS['min_mu_star'],
-                                      cfg.PARAMS['max_mu_star'],
-                                      args=(fls, cmb, temp, prcp, widths),
-                                      xtol=1e-5)
-    except ValueError:
-        raise MassBalanceCalibrationError('{} has mu which exceeds the '
-                                          'specified min and max '
-                                          'boundaries.'.format(gdir.rgi_id))
 
-    if not np.isfinite(mu_star):
-        raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +
-                                          'has a non finite mu.')
+    if force_mu is None:
+        try:
+            mu_star = optimization.brentq(_mu_star_per_minimization,
+                                          cfg.PARAMS['min_mu_star'],
+                                          cfg.PARAMS['max_mu_star'],
+                                          args=(fls, cmb, temp, prcp, widths),
+                                          xtol=1e-5)
+        except ValueError:
+            raise MassBalanceCalibrationError('{} mu* out of specified '
+                                              'bounds.'.format(gdir.rgi_id))
+
+        if not np.isfinite(mu_star):
+            raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +
+                                              'has a non finite mu.')
+    else:
+        mu_star = force_mu
 
     # Reset flux
     for fl in fls:
@@ -1177,8 +1186,10 @@ def mu_star_calibration(gdir):
     for fl in fls:
         fl.mu_star_is_valid = False
 
+    force_mu = 0 if df['mu_star_glacierwide'] == 0 else None
+
     # Let's go
-    _recursive_mu_star_calibration(gdir, fls, t_star)
+    _recursive_mu_star_calibration(gdir, fls, t_star, force_mu=force_mu)
 
     # If the user wants to filter the bad ones we remove them and start all
     # over again until all tributaries are physically consistent with one mu
