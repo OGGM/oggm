@@ -253,6 +253,7 @@ def set_logging_config(logging_level='INFO'):
 
     # Spammers
     logging.getLogger("Fiona").setLevel(logging.CRITICAL)
+    logging.getLogger("fiona").setLevel(logging.CRITICAL)
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
 
