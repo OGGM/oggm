@@ -230,8 +230,8 @@ class PastMassBalance(MassBalanceModel):
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
         filename : str, optional
-            set to a different BASENAME if you want to use alternative climate
-            data.
+            if you want to use alternative climate data file, set to either a
+            different BASENAME or to the complete filepath
         input_filesuffix : str
             the file suffix of the input climate file
         repeat : bool
@@ -922,11 +922,13 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for fl in self.fls:
             # Merged glaciers will need different climate files, use filesuffix
             if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
-                input_filesuffix = '_' + fl.rgi_id + input_filesuffix
+                rgi_filesuffix = '_' + fl.rgi_id + input_filesuffix
+            else:
+                rgi_filesuffix = input_filesuffix
 
             self.flowline_mb_models.append(
                 mb_model_class(gdir, mu_star=fl.mu_star,
-                               input_filesuffix=input_filesuffix, **kwargs))
+                               input_filesuffix=rgi_filesuffix, **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
 

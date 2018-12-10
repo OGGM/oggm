@@ -8,11 +8,14 @@ import warnings
 import copy
 from collections import OrderedDict
 from time import gmtime, strftime
+import os
 
 # External libs
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
+import salem
+import shutil
 
 # Locals
 from oggm import __version__
@@ -1804,3 +1807,136 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                             init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
+
+
+def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
+                              input_filesuffix=''):
+    """Merge multiple tributary glaciers to a main glacier
+
+    This function will merge multiple tributary glaciers to a main glacier
+    and write modified `model_flowlines` to the main GlacierDirectory.
+    Afterwards only the main GlacierDirectory must be processed and the results
+    will cover the main and the tributary glaciers.
+
+    The provided tributaries must have an intersecting downstream line.
+    To be sure about this, use `intersect_downstream_lines` first or embed both
+    functions within a suitable workflow.
+
+    Parameters
+    ----------
+    merged : oggm.GlacierDirectory
+        The new GDir of the glacier of interest
+    tribs: List of oggm.GlacierDirectories
+        The tributary glaciers to the merged glacier
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+    """
+
+    # make sure tributaries are iteratable
+    tribs = utils.tolist(tribs)
+
+    # Buffer in pixels where to cut the incoming centerlines
+    buffer = cfg.PARAMS['kbuffer']
+    # Number of pixels to arbitrarily remove at junctions
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
+
+    # read flowlines of the Main glacier
+    mfls = merged.read_pickle('model_flowlines')
+    # check if [-1] is actually the main flowline, not flowing somewhere else
+    assert mfls[-1].flows_to is None
+    mfl = mfls.pop(-1)  # remove from list and treat seperately
+
+    for trib in tribs:
+
+        tfls = trib.read_pickle('model_flowlines')
+
+        # order flowlines in ascending way
+        tfls.sort(key=lambda x: x.order, reverse=True)
+
+        # check if flowlines are in correct order
+        order = [o.order for i, o in enumerate(tfls)]
+        if not (np.all(np.diff(order) <= 0)) & \
+               (tfls[0].order == np.max(order)):
+            raise RuntimeError('Flowline order is not correct')
+
+        for nr, tfl in enumerate(tfls):
+
+            # 1. Step: Change projection to the main glaciers grid
+            _line = salem.transform_geometry(tfl.line,
+                                             crs=trib.grid, to_crs=merged.grid)
+
+            if nr == 0:
+                # cut tributary main line to size
+                # find area where lines overlap within a given buffer
+                _overlap = _line.intersection(mfl.line.buffer(buffer))
+                _line = _line.difference(_overlap)  # cut to new line
+
+                # if the tributary flowline is longer than the main line,
+                # _line will contain multiple LineStrings: only keep the first
+                try:
+                    _line = _line[0]
+                except TypeError:
+                    pass
+
+                # remove cfg.PARAMS['flowline_junction_pix'] from the _line
+                # gives a bigger gap at the junction and makes sure the last
+                # point is not corrupted in terms of spacing
+                _line = shpg.LineString(_line.coords[:-lid])
+
+            # 2. set new line
+            tfl.set_line(_line)
+
+            # 3. set flow to attributes
+            if nr == 0:
+                # this one flows to the main glacier
+                tfl.set_flows_to(mfl)  # set flows_to also changes mfl!
+            else:
+                # reset to the existing link, neccessary to set attributes
+                tfl.set_flows_to(tfl.flows_to)
+            # remove inflow points, will be set by other flowlines if need be
+            tfl.inflow_points = []
+
+            # 5. set grid size attributes
+            dx = [shpg.Point(tfl.line.coords[i]).distance(
+                shpg.Point(tfl.line.coords[i+1]))
+                for i, pt in enumerate(tfl.line.coords[:-1])]  # get distance
+            # and check if equally spaced
+            if not np.allclose(dx, np.mean(dx), atol=1e-2):
+                raise RuntimeError('Flowline is not evenly spaced.')
+            tfl.dx = np.mean(dx).round(2)
+            tfl.map_dx = mfl.map_dx
+            tfl.dx_meter = tfl.map_dx * tfl.dx
+
+            if nr == 0:
+                # change the array size of tributary main flowline attributs
+                for atr, value in tfl.__dict__.items():
+                    try:
+                        if len(value) > tfl.nx:
+                            tfl.__setattr__(atr, value[:tfl.nx])
+                    except TypeError:
+                        pass
+
+            # replace tributary flowline within the list
+            tfls[nr] = tfl
+
+        # copy climate file to new gdir
+        climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
+        climfile = os.path.join(merged.dir, climfilename)
+        shutil.copyfile(trib.get_filepath(filename,
+                                          filesuffix=input_filesuffix),
+                        climfile)
+
+        mfls = tfls + mfls  # add all tributary flowlines to the main glacier
+    mfls = mfls + [mfl]  # add the main glacier flowline back to the list
+
+    # Set the new flowline levels
+    for fl in mfls:
+        fl.order = line_order(fl)
+
+    # order flowlines in descending way, important for downstream tasks
+    mfls.sort(key=lambda x: x.order, reverse=False)
+
+    # Finally write the flowlines
+    merged.write_pickle(mfls, 'model_flowlines')
