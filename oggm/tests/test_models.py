@@ -2752,17 +2752,21 @@ class TestMergedHEF(unittest.TestCase):
                                      output_filesuffix='_entity',
                                      temperature_bias=tbias, bias=mbbias)
 
+        # create the merged GlacierDirectory
+        merged = utils.initialize_merged_gdir(hef_gdir, gdir_tribs,
+                                              rgidf.loc[rgidf.RGIId ==
+                                                        'RGI50-11.00897'])
         # now merge Kesselwandferner to HEF
-        flowline.merge_tributary_flowlines(hef_gdir, gdir_tribs)
+        flowline.merge_tributary_flowlines(merged, gdir_tribs)
 
         # and run the merged glacier
-        tasks.run_constant_climate(hef_gdir, output_filesuffix='_merged',
+        tasks.run_constant_climate(merged, output_filesuffix='_merged',
                                    nyears=years, y0=y0,
                                    temperature_bias=tbias, bias=mbbias)
 
         ds_entity = utils.compile_run_output([hef_gdir] + gdir_tribs,
                                              path=False, filesuffix='_entity')
-        ds_merged = utils.compile_run_output([hef_gdir],
+        ds_merged = utils.compile_run_output([merged],
                                              path=False, filesuffix='_merged')
 
         # with this setting, both runs should still be identical after 50yrs
