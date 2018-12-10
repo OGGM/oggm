@@ -1921,3 +1921,56 @@ def terminus_width_correction(gdir, new_width=None):
 
     # Overwrite centerlines
     gdir.write_pickle(fls, 'inversion_flowlines')
+
+
+def intersect_downstream_lines(gdir, candidates):
+    """Find tributaries to a main glacier by intersecting downstream lines
+
+    This function might be called from a entity_task, so gdir is a single
+    glacier directory
+
+    The GlacierDirectories must at least contain a `downstream_line`.
+    If you have a lot of candidates, only execute the necessary tasks for that
+    and do the rest of the preprocessing after this function identified the
+    true tributary glaciers.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+        The main glacier of interest
+    candidates: list of oggm.GlacierDirectory
+        Possible tributary glaciers to the main glacier
+
+    Returns
+    -------
+    tributaries: list of oggm.GlacierDirectory
+        The true tributary glaciers to the main glacier
+    """
+
+    # make sure tributaries are iteratable
+    candidates = utils.tolist(candidates)
+
+    # Buffer in pixels around the flowline
+    buffer = cfg.PARAMS['kbuffer']
+
+    # get main glacier downstream line and CRS
+    dline = gdir.read_pickle('downstream_line')['full_line']
+    crs = gdir.grid
+
+    # return list
+    tributaries = []
+
+    # loop over tributaries
+    for trib in candidates:
+        # get tributary glacier downstream line and CRS
+        _dline = trib.read_pickle('downstream_line')['full_line']
+        _crs = trib.grid
+
+        # use salem to transform the grids
+        _trans_dline = salem.transform_geometry(_dline, crs=_crs, to_crs=crs)
+
+        # check for intersection, with a small buffer and add to list
+        if dline.intersects(_trans_dline.buffer(buffer)):
+            tributaries.append(trib)
+
+    return tributaries
