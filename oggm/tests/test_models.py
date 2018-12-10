@@ -2690,7 +2690,6 @@ class TestMergedHEF(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
-
     @pytest.mark.slow
     def test_merged_simulation(self):
 
