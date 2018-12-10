@@ -1819,3 +1819,117 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     else:
         raise ValueError('setup not understood: {}'.format(setup))
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
+
+
+def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
+                           input_filesuffix=''):
+    """
+    Creats a new GlacierDirectory is tributaries are merged to a main glacier
+    This function should be called after centerlines.intersect_downstream_lines
+    and before flowline.merge_tributary_flowlines.
+    It will create a new GlacierDirectory, with a suitable DEM and reproject
+    the flowlines of the main glacier.
+    Parameters
+    ----------
+    main : oggm.GlacierDirectory
+        the main glacier
+    tribs : list of oggm.GlacierDirectories
+        true tributary glaciers to the main glacier
+    maindf : GeoPandasDataFrame
+        of the main glacier
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+    Returns
+    -------
+    merged : oggm.GlacierDirectory
+        the new GDir
+    """
+    from oggm.core.gis import define_glacier_region, glacier_masks
+
+    # make sure tributaries are iteratable
+    tribs = tolist(tribs)
+
+    # read flowlines of the Main glacier
+    mfls = main.read_pickle('model_flowlines')
+
+    # create the new GlacierDirectory
+    # ------------------------------
+    # 0. Get index location of the specific glacier
+    idx = maindf.loc[maindf.RGIId == main.rgi_id].index
+    assert len(idx) == 1
+
+    # add geometry to maindf
+    for trib in tribs:
+        geom = trib.read_pickle('geometries')['polygon_hr']
+        geom = salem.transform_geometry(geom, crs=trib.grid)
+        # TODO should do a concave hull here, or use flowlines to union
+        # TODO or most likely: write a gis.merged_glacier_masks which
+        # TODO writes a geometries.pickle including all tributaries
+        maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry']. \
+            union(geom).convex_hull
+
+    # make some adjustments to the rgi dataframe
+    # 1. update central point of new glacier
+    # Could also use the mean of the Flowline centroids, to shift it more
+    # downstream. But this is more straight forward.
+    maindf.loc[idx, 'CenLon'] = maindf.loc[idx, 'geometry'].centroid.x
+    maindf.loc[idx, 'CenLat'] = maindf.loc[idx, 'geometry'].centroid.y
+    # 2. update names
+    maindf.loc[idx, 'RGIId'] += '_merged'
+    maindf.loc[idx, 'Name'] += ' (merged)'
+
+    # finally create new Glacier Directory
+    # 1. set dx spacing to the one used for the flowlines
+    cfg.PARAMS['grid_dx_method'] = 'fixed'
+    cfg.PARAMS['fixed_dx'] = mfls[-1].map_dx
+    merged = GlacierDirectory(maindf.loc[idx].iloc[0])
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
+    glacier_masks(merged)
+    # reset dx method
+    cfg.PARAMS['grid_dx_method'] = 'square'
+
+    # copy main climate file and climate info to new gdir
+    climfilename = filename + '_' + main.rgi_id + input_filesuffix + '.nc'
+    climfile = os.path.join(merged.dir, climfilename)
+    shutil.copyfile(main.get_filepath(filename, filesuffix=input_filesuffix),
+                    climfile)
+    shutil.copyfile(main.get_filepath('climate_info'),
+                    merged.get_filepath('climate_info'))
+
+    # reproject the flowlines to the new grid
+    for nr, fl in reversed(list(enumerate(mfls))):
+
+        # 1. Step: Change projection to the main glaciers grid
+        _line = salem.transform_geometry(fl.line,
+                                         crs=main.grid, to_crs=merged.grid)
+        # 2. set new line
+        fl.set_line(_line)
+
+        # 3. set flow to attributes
+        if fl.flows_to is not None:
+            fl.set_flows_to(fl.flows_to)
+        # remove inflow points, will be set by other flowlines if need be
+        fl.inflow_points = []
+
+        # 5. set grid size attributes
+        dx = [shpg.Point(fl.line.coords[i]).distance(
+            shpg.Point(fl.line.coords[i+1]))
+            for i, pt in enumerate(fl.line.coords[:-1])]  # get distance
+        # and check if equally spaced
+        if not np.allclose(dx, np.mean(dx), atol=1e-2):
+            raise RuntimeError('Flowline is not evenly spaced.')
+        # dx might very slightly change, but should not
+        fl.dx = np.mean(dx).round(2)
+        # map_dx should stay exactly the same
+        # fl.map_dx = mfls[-1].map_dx
+        fl.dx_meter = fl.map_dx * fl.dx
+
+        # replace flowline within the list
+        mfls[nr] = fl
+
+    # Write the reprojecflowlines
+    merged.write_pickle(mfls, 'model_flowlines')
+
+    return merged
