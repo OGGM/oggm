@@ -5,7 +5,6 @@ import logging
 from collections import OrderedDict
 import itertools
 
-import geopandas as gpd
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
@@ -358,7 +357,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
                           linewidth=2.5, zorder=50)
 
     # catchment areas
-    cis = gdir.read_pickle('catchment_indices')
+    cis = gdir.read_pickle('geometries')['catchment_indices']
     for j, ci in enumerate(cis[::-1]):
         mask[tuple(ci.T)] = j+1
 

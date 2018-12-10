@@ -1,9 +1,6 @@
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
-import oggm
-import oggm.utils
-
 import unittest
 import os
 import shutil
@@ -19,10 +16,12 @@ import xarray as xr
 import rasterio
 
 # Local imports
+import oggm
 from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
                        flowline, massbalance)
 import oggm.cfg as cfg
 from oggm import utils
+from oggm.exceptions import MassBalanceCalibrationError
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm import workflow
@@ -32,12 +31,12 @@ _url_retrieve = None
 
 
 def setup_module(module):
-    module._url_retrieve = utils._urlretrieve
-    utils._urlretrieve = patch_url_retrieve_github
+    module._url_retrieve = utils.oggm_urlretrieve
+    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
 
 
 def teardown_module(module):
-    utils._urlretrieve = module._url_retrieve
+    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 def read_svgcoords(svg_file):
@@ -636,7 +635,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.catchment_area(gdir)
 
-        cis = gdir.read_pickle('catchment_indices')
+        cis = gdir.read_pickle('geometries')['catchment_indices']
 
         # The catchment area must be as big as expected
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -2082,7 +2081,7 @@ class TestInversion(unittest.TestCase):
         self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 
 
-class TestCalvingInvert(unittest.TestCase):
+class TestCoxeCalvingInvert(unittest.TestCase):
 
     def setUp(self):
 
@@ -2127,7 +2126,6 @@ class TestCalvingInvert(unittest.TestCase):
         fls1 = gdir.read_pickle('inversion_flowlines')
 
         gdir.inversion_calving_rate = 0.01
-
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2138,6 +2136,121 @@ class TestCalvingInvert(unittest.TestCase):
         assert v_ref < 0.9*v_a
         for fl1, fl2 in zip(fls1, fls2):
             assert fl2.mu_star < fl1.mu_star
+
+
+class TestColumbiaCalvingLoop(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_columbia')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    @pytest.mark.slow
+    def test_calving_loop(self):
+
+        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_dummy_cru_file(gdir, seed=0)
+
+        rho = cfg.PARAMS['ice_density']
+        i = 0
+        calving_flux = []
+        mu_star = []
+        ite = []
+        cfg.PARAMS['clip_mu_star'] = False
+        cfg.PARAMS['min_mu_star'] = 0  # default is now 1
+        while i < 12:
+
+            # Calculates a calving flux from model output
+            if i == 0:
+                # First call we set to zero (not very necessary,
+                # this first loop could be removed)
+                f_calving = 0
+            elif i == 1:
+                # Second call we set a very small positive calving
+                f_calving = utils.calving_flux_from_depth(gdir, water_depth=1)
+            elif cfg.PARAMS['clip_mu_star']:
+                # If we have to clip mu the calving becomes the real flux
+                fl = gdir.read_pickle('inversion_flowlines')[-1]
+                f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
+            else:
+                # Otherwise it is parameterized
+                f_calving = utils.calving_flux_from_depth(gdir)
+
+            # Give it back to the inversion and recompute
+            gdir.inversion_calving_rate = f_calving
+
+            # At this step we might raise a MassBalanceCalibrationError
+            mu_is_zero = False
+            try:
+                climate.local_t_star(gdir)
+                df = gdir.read_json('local_mustar')
+            except MassBalanceCalibrationError as e:
+                assert 'mu* out of specified bounds' in str(e)
+                # When this happens we clip mu* to zero and store the
+                # bad value (just for plotting)
+                cfg.PARAMS['clip_mu_star'] = True
+                df = gdir.read_json('local_mustar')
+                df['mu_star_glacierwide'] = float(str(e).split(':')[-1])
+                climate.local_t_star(gdir)
+
+            climate.mu_star_calibration(gdir)
+            inversion.prepare_for_inversion(gdir, add_debug_var=True)
+            v_inv, _ = inversion.mass_conservation_inversion(gdir)
+
+            # Store the data
+            calving_flux = np.append(calving_flux, f_calving)
+            mu_star = np.append(mu_star, df['mu_star_glacierwide'])
+            ite = np.append(ite, i)
+
+            # Do we have to do another_loop?
+            if i > 0:
+                avg_one = np.mean(calving_flux[-4:])
+                avg_two = np.mean(calving_flux[-5:-1])
+                difference = abs(avg_two - avg_one)
+                conv = (difference < 0.05 * avg_two or
+                        calving_flux[-1] == 0 or
+                        calving_flux[-1] == calving_flux[-2])
+                if mu_is_zero or conv:
+                    break
+            i += 1
+
+        assert i < 8
+        assert calving_flux[-1] < np.max(calving_flux)
+        assert calving_flux[-1] > 2
+        assert mu_star[-1] == 0
+
+        mbmod = massbalance.MultipleFlowlineMassBalance
+        mb = mbmod(gdir, use_inversion_flowlines=True,
+                   mb_model_class=massbalance.ConstantMassBalance,
+                   bias=0)
+        flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
+        np.testing.assert_allclose(flux_mb, calving_flux[-1], atol=0.001)
 
 
 class TestGrindelInvert(unittest.TestCase):

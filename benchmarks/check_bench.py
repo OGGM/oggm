@@ -52,3 +52,12 @@ if __name__ == '__main__':
         func = getattr(c, func)
         print('% -- run -- full_workflow.{} -- out: {}'.format(func.__name__,
                                                                func(gdir)))
+
+    c = track_model_results.columbia_calving()
+    gdir = c.setup_cache()
+    for func in dir(c):
+        if 'track_' not in func:
+            continue
+        func = getattr(c, func)
+        print('% -- run -- columbia_calving.{} -- out: '
+              '{}'.format(func.__name__, func(gdir)))

@@ -128,7 +128,7 @@ BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 _doc = 'A dictionary containing runtime diagnostics useful for debugging.'
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
-_doc = ('A netcdf file containing several gridded data variables such as ' 
+_doc = ('A netcdf file containing several gridded data variables such as '
         'topography, the glacier masks, the interpolated 2D glacier bed, '
         'and more.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
@@ -138,7 +138,10 @@ _doc = ('A dictionary containing the shapely.Polygons of a glacier. The '
         'grid in (i, j) coordinates, while the "polygon_pix" entry contains '
         'the geometries transformed into the coarse grid (the i, j elements '
         'are integers). The "polygon_area" entry contains the area of the '
-        'polygon as computed by Shapely.')
+        'polygon as computed by Shapely. The "catchment_indices" entry'
+        'contains a list of len `n_centerlines`, each element containing '
+        'a numpy array of the indices in the glacier grid which represent '
+        'the centerlines catchment area.')
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
 _doc = ('A dictionary containing the downsteam line geometry as well as the '
@@ -154,11 +157,6 @@ BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
 _doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
-
-_doc = ("A list of len `n_centerlines`, each element conaining a numpy array "
-        "of the indices in the glacier grid which represent the centerline's"
-        " catchment area.")
-BASENAMES['catchment_indices'] = ('catchment_indices.pkl', _doc)
 
 _doc = ('A "better" version of the Centerlines, now on a regular spacing '
         'i.e., not on the gridded (i, j) indices. The tails of the '
@@ -255,6 +253,7 @@ def set_logging_config(logging_level='INFO'):
 
     # Spammers
     logging.getLogger("Fiona").setLevel(logging.CRITICAL)
+    logging.getLogger("fiona").setLevel(logging.CRITICAL)
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
 
@@ -325,6 +324,7 @@ def initialize(file=None, logging_level='INFO'):
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
+    PARAMS['clip_mu_star'] = cp.as_bool('clip_mu_star')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -360,7 +360,7 @@ def initialize(file=None, logging_level='INFO'):
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'tstar_search_glacierwide',
-           'mpi_recv_buf_size', 'hydro_month_nh',
+           'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
