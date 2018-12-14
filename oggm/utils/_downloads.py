@@ -63,15 +63,15 @@ DEM3REG = {
     'BEAR': [18., 20., 74., 75.],  # Bear Island
     'SHL': [-3., 0., 60., 61.],  # Shetland
     # Antarctica tiles as UTM zones, large files
-    # '01-15': [-180., -91., -90, -60.],
-    # '16-30': [-91., -1., -90., -60.],
-    # '31-45': [-1., 89., -90., -60.],
-    # '46-60': [89., 189., -90., -60.],
+    '01-15': [-180., -91., -90, -60.],
+    '16-30': [-91., -1., -90., -60.],
+    '31-45': [-1., 89., -90., -60.],
+    '46-60': [89., 189., -90., -60.],
     # Greenland tiles
-    # 'GL-North': [-78., -11., 75., 84.],
-    # 'GL-West': [-68., -42., 64., 76.],
-    # 'GL-South': [-52., -40., 59., 64.],
-    # 'GL-East': [-42., -17., 64., 76.]
+    'GL-North': [-78., -11., 75., 84.],
+    'GL-West': [-68., -42., 64., 76.],
+    'GL-South': [-52., -40., 59., 64.],
+    'GL-East': [-42., -17., 64., 76.]
 }
 
 # Function
@@ -1420,18 +1420,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'ARCTICDEM':
         source = 'ARCTICDEM' if source is None else source
         # If we have to automatise this one day, we should use the shapefile
-        # of the tiles, and then:
+        # of the tiles, and then check for RGI region:
         # use_without_check = ['03', '05', '06', '07', '09']
         # to_test_on_shape = ['01', '02', '04', '08']
-        # Alaska                          	1
-        # Western Canada and US           	2
-        # Arctic Canada North             	3
-        # Arctic Canada South             	4
-        # Greenland Periphery             	5
-        # Iceland                         	6
-        # Svalbard                        	7
-        # Scandinavia                     	8
-        # Russian Arctic                  	9
         if source == 'ARCTICDEM':
             _file = _download_arcticdem_from_cluster()
             return [_file], source
