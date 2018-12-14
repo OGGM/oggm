@@ -650,6 +650,45 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 4)
         self.assertEqual(ref, z)
 
+    def test_tandemzone(self):
+
+        z = utils.tandem_zone(lon_ex=[-112.1, -112.1], lat_ex=[-57.1, -57.1])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('S58/W110/TDM1_DEM__30_S58W113', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[52, 52])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('N52/E070/TDM1_DEM__30_N52E071', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[62, 62])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('N62/E070/TDM1_DEM__30_N62E070', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[-82.1, -82.1])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('S83/E060/TDM1_DEM__30_S83E068', z[0])
+
+        ref = sorted(['N00/E000/TDM1_DEM__30_N00E000',
+                      'N00/E000/TDM1_DEM__30_N00E001',
+                      'N00/W000/TDM1_DEM__30_N00W001',
+                      'N00/W000/TDM1_DEM__30_N00W002',
+                      'N01/E000/TDM1_DEM__30_N01E000',
+                      'N01/E000/TDM1_DEM__30_N01E001',
+                      'N01/W000/TDM1_DEM__30_N01W001',
+                      'N01/W000/TDM1_DEM__30_N01W002',
+                      'S01/E000/TDM1_DEM__30_S01E000',
+                      'S01/E000/TDM1_DEM__30_S01E001',
+                      'S01/W000/TDM1_DEM__30_S01W001',
+                      'S01/W000/TDM1_DEM__30_S01W002',
+                      'S02/E000/TDM1_DEM__30_S02E000',
+                      'S02/E000/TDM1_DEM__30_S02E001',
+                      'S02/W000/TDM1_DEM__30_S02W001',
+                      'S02/W000/TDM1_DEM__30_S02W002'
+                      ])
+        z = utils.tandem_zone(lon_ex=[-1.3, 1.4], lat_ex=[-1.3, 1.4])
+        self.assertTrue(len(z) == len(ref))
+        self.assertEqual(ref, z)
+
     def test_asterzone(self):
 
         z, u = utils.aster_zone(lon_ex=[137.5, 137.5],
@@ -796,6 +835,18 @@ class TestDataFiles(unittest.TestCase):
         # this zone does not exist
         zone = '41_20'
         self.assertTrue(_download_srtm_file(zone) is None)
+
+    @pytest.mark.download
+    @pytest.mark.creds
+    def test_tandemdownload(self):
+        from oggm.utils._downloads import _download_tandem_file
+
+        # this zone does exist and file should be small enough for download
+        zone = 'N47/E010/TDM1_DEM__30_N47E011'
+        fp = _download_tandem_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        fp = _download_tandem_file(zone)
+        self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.creds
     def test_asterdownload(self):

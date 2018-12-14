@@ -3,6 +3,7 @@ to be realized by any OGGM pre-processing workflow.
 
 """
 # Built ins
+import os
 import logging
 import json
 import warnings
@@ -343,6 +344,7 @@ def define_glacier_region(gdir, entity=None):
                                          rgi_subregion=gdir.rgi_subregion,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
+    log.debug('(%s) N DEM Files: %s', gdir.rgi_id, len(dem_list))
 
     # A glacier area can cover more than one tile:
     if len(dem_list) == 1:
@@ -380,6 +382,13 @@ def define_glacier_region(gdir, entity=None):
                          .format(cfg.PARAMS['topo_interp']))
 
     dem_reproj = gdir.get_filepath('dem')
+    profile.pop('blockxsize', None)
+    profile.pop('blockysize', None)
+    profile.pop('compress', None)
+    nodata = dem_dss[0].meta.get('nodata', None)
+    if source == 'TANDEM' and nodata is None:
+        # badly tagged geotiffs, let's do it ourselves
+        nodata = -32767
     with rasterio.open(dem_reproj, 'w', **profile) as dest:
         dst_array = np.empty((ny, nx), dtype=dem_dss[0].dtypes[0])
         reproject(
@@ -387,10 +396,12 @@ def define_glacier_region(gdir, entity=None):
             source=dem_data,
             src_crs=dem_dss[0].crs,
             src_transform=src_transform,
+            src_nodata=nodata,
             # Destination parameters
             destination=dst_array,
             dst_transform=dst_transform,
             dst_crs=proj4_str,
+            dst_nodata=nodata,
             # Configuration
             resampling=resampling)
 
@@ -410,6 +421,10 @@ def define_glacier_region(gdir, entity=None):
     source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
     with open(gdir.get_filepath('dem_source'), 'w') as fw:
         fw.write(source_txt)
+        fw.write('\n\n')
+        fw.write('# Data files\n\n')
+        for fname in dem_list:
+            fw.write('{}\n'.format(os.path.basename(fname)))
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])

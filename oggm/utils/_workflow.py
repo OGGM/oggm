@@ -1401,6 +1401,26 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             json.dump(var, f)
 
+    def read_text(self, filename, filesuffix=''):
+        """Reads a text file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+
+        Returns
+        -------
+        the text
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'r') as f:
+            out = f.read()
+        return out
+
     @classmethod
     def _read_shapefile_from_path(cls, fp):
         if '.shp' not in fp:

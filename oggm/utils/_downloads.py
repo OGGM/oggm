@@ -63,15 +63,15 @@ DEM3REG = {
     'BEAR': [18., 20., 74., 75.],  # Bear Island
     'SHL': [-3., 0., 60., 61.],  # Shetland
     # Antarctica tiles as UTM zones, large files
-    # '01-15': [-180., -91., -90, -60.],
-    # '16-30': [-91., -1., -90., -60.],
-    # '31-45': [-1., 89., -90., -60.],
-    # '46-60': [89., 189., -90., -60.],
+    '01-15': [-180., -91., -90, -60.],
+    '16-30': [-91., -1., -90., -60.],
+    '31-45': [-1., 89., -90., -60.],
+    '46-60': [89., 189., -90., -60.],
     # Greenland tiles
-    # 'GL-North': [-78., -11., 75., 84.],
-    # 'GL-West': [-68., -42., 64., 76.],
-    # 'GL-South': [-52., -40., 59., 64.],
-    # 'GL-East': [-42., -17., 64., 76.]
+    'GL-North': [-78., -11., 75., 84.],
+    'GL-West': [-68., -42., 64., 76.],
+    'GL-South': [-52., -40., 59., 64.],
+    'GL-East': [-42., -17., 64., 76.]
 }
 
 # Function
@@ -79,6 +79,27 @@ tuple2int = partial(np.array, dtype=np.int64)
 
 # Global Lock
 lock = mp.Lock()
+
+
+def mkdir(path, reset=False):
+    """Checks if directory exists and if not, create one.
+
+    Parameters
+    ----------
+    reset: erase the content of the directory if exists
+
+    Returns
+    -------
+    the path
+    """
+
+    if reset and os.path.exists(path):
+        shutil.rmtree(path)
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        pass
+    return path
 
 
 def del_empty_dirs(s_dir):
@@ -400,6 +421,54 @@ def _download_srtm_file_unlocked(zone):
     return outpath
 
 
+def _download_tandem_file(zone):
+    with _get_download_lock():
+        return _download_tandem_file_unlocked(zone)
+
+
+def _download_tandem_file_unlocked(zone):
+    """Checks if the tandem data is in the directory and if not, download it.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+    bname = zone.split('/')[-1] + '_DEM.tif'
+    outpath = os.path.join(tmpdir, bname)
+
+    # check if extracted file exists already
+    if os.path.exists(outpath):
+        return outpath
+
+    # Did we download it yet?
+    scpfile = ('/home/data/download/tandemx-90m.dlr.de/90mdem/DEM/'
+               '{}.zip'.format(zone))
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    dest_file = os.path.join(cache_dir, 'scp_tandem', zone + '.zip')
+    if not os.path.exists(dest_file):
+        mkdir(os.path.dirname(dest_file))
+        cmd = 'scp bremen:%s %s' % (scpfile, dest_file)
+        os.system(cmd)
+
+    # That means we tried hard but we couldn't find it
+    if not os.path.exists(dest_file):
+        return None
+
+    # ok we have to extract it
+    if not os.path.exists(outpath):
+        with zipfile.ZipFile(dest_file) as zf:
+            for fn in zf.namelist():
+                if 'DEM/' + bname in fn:
+                    break
+            with open(outpath, 'wb') as fo:
+                fo.write(zf.read(fn))
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
 def _download_dem3_viewpano(zone):
     with _get_download_lock():
         return _download_dem3_viewpano_unlocked(zone)
@@ -557,6 +626,35 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
+def _download_arcticdem_from_cluster():
+    with _get_download_lock():
+        return _download_arcticdem_from_cluster_unlocked()
+
+
+def _download_arcticdem_from_cluster_unlocked():
+    """Checks if the special topo data is in the directory and if not,
+    download it from the cluster.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    # mkdir(tmpdir)
+    fname = 'arcticdem_mosaic_100m_v3.0.tif'
+    outpath = os.path.join(tmpdir, fname)
+
+    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url += fname
+    dfile = file_downloader(url)
+
+    if not os.path.exists(outpath):
+        shutil.copyfile(dfile, outpath)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
 def _get_centerline_lonlat(gdir):
     """Quick n dirty solution to write the centerlines as a shapefile"""
 
@@ -573,27 +671,6 @@ def _get_centerline_lonlat(gdir):
         olist.append(gs)
 
     return olist
-
-
-def mkdir(path, reset=False):
-    """Checks if directory exists and if not, create one.
-
-    Parameters
-    ----------
-    reset: erase the content of the directory if exists
-
-    Returns
-    -------
-    the path
-    """
-
-    if reset and os.path.exists(path):
-        shutil.rmtree(path)
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
-    return path
 
 
 def srtm_zone(lon_ex, lat_ex):
@@ -623,6 +700,76 @@ def srtm_zone(lon_ex, lat_ex):
             zx = np.ceil(dx / srtm_dx)
             zy = np.ceil(dy / srtm_dy)
             zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
+    return list(sorted(set(zones)))
+
+
+def _tandem_path(lon_tile, lat_tile):
+
+    # OK we have a proper tile now
+
+    # First folder level is sorted from S to N
+    level_0 = 'S' if lat_tile < 0 else 'N'
+    level_0 += '{:02d}'.format(abs(lat_tile))
+
+    # Second folder level is sorted from W to E, but in 10 steps
+    level_1 = 'W' if lon_tile < 0 else 'E'
+    level_1 += '{:03d}'.format(divmod(abs(lon_tile), 10)[0] * 10)
+
+    # Level 2 is formating, but depends on lat
+    level_2 = 'W' if lon_tile < 0 else 'E'
+    if abs(lat_tile) <= 60:
+        level_2 += '{:03d}'.format(abs(lon_tile))
+    elif abs(lat_tile) <= 80:
+        level_2 += '{:03d}'.format(divmod(abs(lon_tile), 2)[0] * 2)
+    else:
+        level_2 += '{:03d}'.format(divmod(abs(lon_tile), 4)[0] * 4)
+
+    # Final path
+    out = (level_0 + '/' + level_1 + '/' +
+           'TDM1_DEM__30_{}{}'.format(level_0, level_2))
+    return out
+
+
+def tandem_zone(lon_ex, lat_ex):
+    """Returns a list of TanDEM-X zones covering the desired extent.
+    """
+
+    # Files are one by one tiles, so lets loop over them
+    # For higher lats they are stored in steps of 2 and 4. My code below
+    # is probably giving more files than needed but better safe than sorry
+    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
+                          dtype=np.int)
+    zones = []
+    for lat in lat_tiles:
+        if abs(lat) < 60:
+            l0 = np.floor(lon_ex[0])
+            l1 = np.floor(lon_ex[1])
+        elif abs(lat) < 80:
+            l0 = divmod(lon_ex[0], 2)[0] * 2
+            l1 = divmod(lon_ex[1], 2)[0] * 2
+        elif abs(lat) < 90:
+            l0 = divmod(lon_ex[0], 4)[0] * 4
+            l1 = divmod(lon_ex[1], 4)[0] * 4
+        lon_tiles = np.arange(l0, l1+1, dtype=np.int)
+        for lon in lon_tiles:
+            zones.append(_tandem_path(lon, lat))
+    return list(sorted(set(zones)))
+
+
+def arcticdem_zone(lon_ex, lat_ex):
+    """Returns a list of Arctic-DEM zones covering the desired extent.
+    """
+
+    # Files are one by one tiles, so lets loop over them
+
+    lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
+                          dtype=np.int)
+    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
+                          dtype=np.int)
+    zones = []
+    for lon in lon_tiles:
+        for lat in lat_tiles:
+            zones.append(_tandem_path(lon, lat))
     return list(sorted(set(zones)))
 
 
@@ -1236,6 +1383,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
           - 'DEM3' : http://viewfinderpanoramas.org/
           - 'ASTER' : ASTER data
+          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
+          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
 
     Returns
     -------
@@ -1267,6 +1416,17 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             _file = _download_topo_file_from_cluster('gimpdem_90m_v01.1.tif')
             return [_file], source
 
+    # ArcticDEM also has a polar projection, but here we have a shape
+    if source == 'ARCTICDEM':
+        source = 'ARCTICDEM' if source is None else source
+        # If we have to automatise this one day, we should use the shapefile
+        # of the tiles, and then check for RGI region:
+        # use_without_check = ['03', '05', '06', '07', '09']
+        # to_test_on_shape = ['01', '02', '04', '08']
+        if source == 'ARCTICDEM':
+            _file = _download_arcticdem_from_cluster()
+            return [_file], source
+
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
         if rgi_subregion is None:
@@ -1282,6 +1442,14 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         if source == 'RAMP':
             _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
             return [_file], source
+
+    # TANDEM
+    if source == 'TANDEM':
+        zones = tandem_zone(lon_ex, lat_ex)
+        sources = []
+        for z in zones:
+            sources.append(_download_tandem_file(z))
+        source_str = source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
