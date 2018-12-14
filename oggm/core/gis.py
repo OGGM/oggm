@@ -877,3 +877,141 @@ def interpolation_masks(gdir):
         v.units = 'm'
         v.long_name = 'Distance from border'
         v[:] = dis_from_border
+
+
+def merged_glacier_masks(gdir, geometry):
+    """Makes a gridded mask of a merged glacier outlines.
+
+    This is a simplified version of glacier_masks. We don't need fancy
+    corrections or smoothing here: The flowlines for the actual model run are
+    based on a proper call of glacier_masks.
+
+    This task is only to get outlines etc. for visualization!
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    geometry: shapely.geometry.multipolygon.MultiPolygon
+        united outlines of the merged glaciers
+    """
+
+    # open srtm tif-file:
+    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+    dem = dem_dr.read(1).astype(rasterio.float32)
+
+    # Grid
+    nx = dem_dr.width
+    ny = dem_dr.height
+    assert nx == gdir.grid.nx
+    assert ny == gdir.grid.ny
+
+    if np.min(dem) == np.max(dem):
+        raise RuntimeError('({}) min equal max in the DEM.'
+                           .format(gdir.rgi_id))
+
+    # Projection
+    if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        transf = dem_dr.transform
+    else:
+        transf = dem_dr.affine
+    x0 = transf[2]  # UL corner
+    y0 = transf[5]  # UL corner
+    dx = transf[0]
+    dy = transf[4]  # Negative
+
+    if not (np.allclose(dx, -dy) or np.allclose(dx, gdir.grid.dx) or
+            np.allclose(y0, gdir.grid.corner_grid.y0, atol=1e-2) or
+            np.allclose(x0, gdir.grid.corner_grid.x0, atol=1e-2)):
+        raise RuntimeError('DEM file and Salem Grid do not match!')
+    dem_dr.close()
+
+    # Clip topography to 0 m a.s.l.
+    dem = dem.clip(0)
+
+    # Interpolate shape to a regular path
+    glacier_poly_hr = list(geometry)
+    for nr, poly in enumerate(glacier_poly_hr):
+        # transform geometry to map
+        _geometry = salem.transform_geometry(poly, to_crs=gdir.grid.proj)
+        glacier_poly_hr[nr] = _interp_polygon(_geometry, gdir.grid.dx)
+
+    glacier_poly_hr = shpg.MultiPolygon(glacier_poly_hr)
+
+    # Transform geometry into grid coordinates
+    # It has to be in pix center coordinates because of how skimage works
+    def proj(x, y):
+        grid = gdir.grid.center_grid
+        return grid.transform(x, y, crs=grid.proj)
+
+    glacier_poly_hr = shapely.ops.transform(proj, glacier_poly_hr)
+
+    # simple trick to correct invalid polys:
+    # http://stackoverflow.com/questions/20833344/
+    # fix-invalid-polygon-python-shapely
+    glacier_poly_hr = glacier_poly_hr.buffer(0)
+    if not glacier_poly_hr.is_valid:
+        raise RuntimeError('This glacier geometry is not valid.')
+
+    # Rounded geometry to nearest nearest pix
+    # I can not use _polyg
+    # glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
+    def project(x, y):
+        return np.rint(x).astype(np.int64), np.rint(y).astype(np.int64)
+
+    glacier_poly_pix = shapely.ops.transform(project, glacier_poly_hr)
+
+    # Compute the glacier mask (currently: center pixels + touched)
+    nx, ny = gdir.grid.nx, gdir.grid.ny
+    glacier_mask = np.zeros((ny, nx), dtype=np.uint8)
+    glacier_ext = np.zeros((ny, nx), dtype=np.uint8)
+
+    for poly in glacier_poly_pix:
+        (x, y) = poly.exterior.xy
+        glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 1
+        for gint in poly.interiors:
+            x, y = tuple2int(gint.xy)
+            glacier_mask[skdraw.polygon(y, x)] = 0
+            glacier_mask[y, x] = 0  # on the nunataks, no
+        x, y = tuple2int(poly.exterior.xy)
+        glacier_mask[y, x] = 1
+        glacier_ext[y, x] = 1
+
+    # Last sanity check based on the masked dem
+    tmp_max = np.max(dem[np.where(glacier_mask == 1)])
+    tmp_min = np.min(dem[np.where(glacier_mask == 1)])
+    if tmp_max < (tmp_min + 1):
+        raise RuntimeError('({}) min equal max in the masked DEM.'
+                           .format(gdir.rgi_id))
+
+    # write out the grids in the netcdf file
+    nc = gdir.create_gridded_ncdf_file('gridded_data')
+
+    v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
+    v.units = 'm'
+    v.long_name = 'DEM topography'
+    v[:] = dem
+
+    v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier mask'
+    v[:] = glacier_mask
+
+    v = nc.createVariable('glacier_ext', 'i1', ('y', 'x', ), zlib=True)
+    v.units = '-'
+    v.long_name = 'Glacier external boundaries'
+    v[:] = glacier_ext
+
+    # add some meta stats and close
+    nc.max_h_dem = np.max(dem)
+    nc.min_h_dem = np.min(dem)
+    dem_on_g = dem[np.where(glacier_mask)]
+    nc.max_h_glacier = np.max(dem_on_g)
+    nc.min_h_glacier = np.min(dem_on_g)
+    nc.close()
+
+    geometries = dict()
+    geometries['polygon_hr'] = glacier_poly_hr
+    geometries['polygon_pix'] = glacier_poly_pix
+    geometries['polygon_area'] = geometry.area
+    gdir.write_pickle(geometries, 'geometries')

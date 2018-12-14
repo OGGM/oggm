@@ -1846,7 +1846,7 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     merged : oggm.GlacierDirectory
         the new GDir
     """
-    from oggm.core.gis import define_glacier_region, glacier_masks
+    from oggm.core.gis import define_glacier_region, merged_glacier_masks
 
     # make sure tributaries are iteratable
     tribs = tolist(tribs)
@@ -1867,8 +1867,13 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
         # TODO should do a concave hull here, or use flowlines to union
         # TODO or most likely: write a gis.merged_glacier_masks which
         # TODO writes a geometries.pickle including all tributaries
-        maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry']. \
-            union(geom).convex_hull
+        maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry'].union(geom)
+
+    # store united geometry as shapefile for later use
+    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
+
+    # to get the center point, maximal extensions for DEM and single Polygon:
+    maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry'].convex_hull
 
     # make some adjustments to the rgi dataframe
     # 1. update central point of new glacier
@@ -1885,8 +1890,13 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     cfg.PARAMS['grid_dx_method'] = 'fixed'
     cfg.PARAMS['fixed_dx'] = mfls[-1].map_dx
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
+
+    # run define_glacier_region to get a fitting DEM and proper grid
     define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
-    glacier_masks(merged)
+
+    # write gridded data and geometries for visualization
+    merged_glacier_masks(merged, merged_geometry)
+
     # reset dx method
     cfg.PARAMS['grid_dx_method'] = 'square'
 

@@ -579,8 +579,14 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
 
         crs = gdir.grid.center_grid
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+        if isinstance(poly_pix, shpg.MultiPolygon):
+            for _poly in poly_pix:
+                for l in _poly.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        else:
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
         cls = model.fls
