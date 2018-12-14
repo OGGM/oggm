@@ -402,8 +402,8 @@ def _download_srtm_file_unlocked(zone):
         return outpath
 
     # Did we download it yet?
-    wwwfile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/' +\
-        'SRTM_Data_GeoTiff/srtm_' + zone + '.zip'
+    wwwfile = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/'
+               'TIFF/srtm_' + zone + '.zip')
     dest_file = file_downloader(wwwfile)
 
     # None means we tried hard but we couldn't find it
