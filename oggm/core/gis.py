@@ -450,14 +450,16 @@ def glacier_masks(gdir):
     # Correct the DEM (ASTER...)
     # Currently we just do a linear interp -- ASTER is totally shit anyway
     min_z = -999.
+    dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
-    if (np.min(dem) <= min_z) or np.any(~isfinite):
+    if np.any(~isfinite):
         xx, yy = gdir.grid.ij_coordinates
-        pnan = np.nonzero((dem <= min_z) | (~isfinite))
-        pok = np.nonzero((dem > min_z) | isfinite)
+        pnan = np.nonzero(~isfinite)
+        pok = np.nonzero(isfinite)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                             method='linear')
         log.warning(gdir.rgi_id + ': DEM needed interpolation.')
         gdir.add_to_diagnostics('dem_needed_interpolation', True)
         gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx*ny))
