@@ -317,17 +317,22 @@ def define_glacier_region(gdir, entity=None):
     log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Safety check
-    if cfg.PARAMS['border'] > 1000:
+    border = cfg.PARAMS['border']
+    if border > 1000:
         raise InvalidParamsError("You have set a cfg.PARAMS['border'] value "
                                  "of {}. ".format(cfg.PARAMS['border']) +
                                  'This a very large value, which is '
                                  'currently not supported in OGGM.')
 
+    # For tidewater glaciers we force border to 10
+    if gdir.is_tidewater and cfg.PARAMS['clip_tidewater_border']:
+        border = 10
+
     # Corners, incl. a buffer of N pix
-    ulx = np.min(xx) - cfg.PARAMS['border'] * dx
-    lrx = np.max(xx) + cfg.PARAMS['border'] * dx
-    uly = np.max(yy) + cfg.PARAMS['border'] * dx
-    lry = np.min(yy) - cfg.PARAMS['border'] * dx
+    ulx = np.min(xx) - border * dx
+    lrx = np.max(xx) + border * dx
+    uly = np.max(yy) + border * dx
+    lry = np.min(yy) - border * dx
     # n pixels
     nx = np.int((lrx - ulx) / dx)
     ny = np.int((uly - lry) / dx)
@@ -465,12 +470,21 @@ def glacier_masks(gdir):
         gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx*ny))
 
     isfinite = np.isfinite(dem)
-    if not np.all(isfinite):
+    if np.any(~isfinite):
+        # this happens when extrapolation is needed
         # see how many percent of the dem
-        if np.sum(~isfinite) > (0.2 * nx * ny):
-            raise RuntimeError('({}) too many NaNs in DEM'.format(gdir.rgi_id))
-        log.warning('({}) DEM needed zeros somewhere.'.format(gdir.rgi_id))
-        dem[isfinite] = 0
+        if np.sum(~isfinite) > (0.5 * nx * ny):
+            log.warning('({}) many NaNs in DEM'.format(gdir.rgi_id))
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero(~isfinite)
+        pok = np.nonzero(isfinite)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                             method='nearest')
+        log.warning(gdir.rgi_id + ': DEM needed extrapolation.')
+        gdir.add_to_diagnostics('dem_needed_extrapolation', True)
+        gdir.add_to_diagnostics('dem_extrapol_perc', len(pnan[0]) / (nx*ny))
 
     if np.min(dem) == np.max(dem):
         raise RuntimeError('({}) min equal max in the DEM.'

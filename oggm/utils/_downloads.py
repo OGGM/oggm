@@ -56,9 +56,9 @@ _RGI_METADATA = dict()
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
-    'SVALBARD': [10., 34., 76., 81.],
+    'SVALBARD': [9., 35.99, 75., 84.],
     'JANMAYEN': [-10., -7., 70., 72.],
-    'FJ': [36., 66., 79., 82.],  # Franz Josef Land
+    'FJ': [36., 68., 79., 90.],  # Franz Josef Land
     'FAR': [-8., -6., 61., 63.],  # Faroer
     'BEAR': [18., 20., 74., 75.],  # Bear Island
     'SHL': [-3., 0., 60., 61.],  # Shetland
@@ -321,7 +321,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
             break
         except HttpDownloadError as err:
             # This works well for py3
-            if err.code == 404:
+            if err.code == 404 or err.code == 300:
                 # Ok so this *should* be an ocean tile
                 return None
             elif err.code >= 500 and err.code < 600:
@@ -1452,8 +1452,10 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         source_str = source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
+    # exceptional test for eastern russia:
+    east_max = np.min(lat_ex) > 59 and np.min(lon_ex) > 170
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
-            (source == 'DEM3') or (source == 'ASTER'):
+            (source == 'DEM3') or (source == 'ASTER') or east_max:
         # default is DEM3
         source = 'DEM3' if source is None else source
         if source == 'DEM3':
