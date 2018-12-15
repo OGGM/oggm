@@ -183,7 +183,59 @@ def random_for_plot():
     return gdirs
 
 
-class TestWorkflow(unittest.TestCase):
+class Testools(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_workflow_tools')
+
+        # Init
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+
+        # Read in the RGI file
+        rgi_file = get_demo_file('rgi_oetztal.shp')
+        self.rgidf = gpd.read_file(rgi_file)
+
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+        cfg.PATHS['working_dir'] = self.testdir
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+
+    def test_level_0_and_restart(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf)
+
+        # End - compress all
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        # Test - reopen form tar
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True,
+                                              delete_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert not os.path.exists(gdir.dir + '.tar.gz')
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('gridded_data')
+            assert os.path.exists(gdir.dir + '.tar.gz')
+
+
+class TestFullRun(unittest.TestCase):
 
     @pytest.mark.slow
     def test_some_characs(self):

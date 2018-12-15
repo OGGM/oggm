@@ -921,7 +921,8 @@ class entity_task(object):
             # Run the task
             try:
                 out = task_func(gdir, **kwargs)
-                gdir.log(task_name)
+                if task_name != 'gdir_to_tar':
+                    gdir.log(task_name)
             except Exception as err:
                 # Something happened
                 out = None
@@ -1054,7 +1055,8 @@ class GlacierDirectory(object):
         Calving rate used for the inversion
     """
 
-    def __init__(self, rgi_entity, base_dir=None, reset=False):
+    def __init__(self, rgi_entity, base_dir=None, reset=False,
+                 from_tar=False, delete_tar=False):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -1067,6 +1069,11 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
+        from_tar : str or bool, default=False
+            path to a tar file to extract the gdir data from. If set to `True`,
+            will check for a tar file at the expected location in `base_dir`.
+        delete_tar : bool, default=False
+            delete the original tar file after extraction.
         """
 
         if base_dir is None:
@@ -1076,6 +1083,9 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, str):
+            if from_tar:
+                raise NotImplementedError('`from_tar` and a str entity is '
+                                          'not implemented yet!')
             _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                 rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
@@ -1186,6 +1196,16 @@ class GlacierDirectory(object):
         # make the root dir
         self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
                                 self.rgi_id)
+
+        # Do we have to extract the files first?
+        if from_tar:
+            if not os.path.exists(str(from_tar)):
+                from_tar = self.dir + '.tar.gz'
+            with tarfile.open(from_tar, 'r') as tf:
+                tf.extractall(os.path.dirname(self.dir))
+            if delete_tar:
+                os.remove(from_tar)
+
         if reset and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         mkdir(self.dir)
@@ -1839,3 +1859,27 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     else:
         raise ValueError('setup not understood: {}'.format(setup))
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
+
+
+@entity_task(logger)
+def gdir_to_tar(gdir, delete=True):
+    """Writes the content of a glacier directory to a tar file.
+
+    The tar file is located at the same location of the original directory.
+    The glacier directory objects are useless afterwards! Should be called at
+    the end of a run only!!!
+
+    Parameters
+    ----------
+    delete : bool
+        delete the original directory afterwards (default)
+    """
+
+    source_dir = os.path.normpath(gdir.dir)
+    opath = source_dir + '.tar.gz'
+
+    with tarfile.open(opath, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+    if delete:
+        shutil.rmtree(source_dir)
