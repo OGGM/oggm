@@ -673,10 +673,11 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def prepro_gdir_url(rgi_id, border, prepro_level):
+def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
     # Prepro URL
     base_url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/'
+    base_url += 'RGI{}/'.format(rgi_version)
     base_url += 'b_{:03d}/'.format(border)
     base_url += 'L{:d}/'.format(prepro_level)
     base_url += '{}/{}/{}.tar.gz' .format(rgi_id[:8], rgi_id[:11], rgi_id)
