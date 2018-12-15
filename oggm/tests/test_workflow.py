@@ -196,7 +196,8 @@ class Testools(unittest.TestCase):
         # Read in the RGI file
         rgi_file = get_demo_file('rgi_oetztal.shp')
         self.rgidf = gpd.read_file(rgi_file)
-
+        self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
+                               for rid in self.rgidf.RGIId]
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
@@ -211,7 +212,7 @@ class Testools(unittest.TestCase):
     def clean_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
-    def test_level_0_and_restart(self):
+    def test_to_and_from_tar(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(self.rgidf)
@@ -233,6 +234,17 @@ class Testools(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
+
+    def test_start_from_level_0(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=0,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
 
 class TestFullRun(unittest.TestCase):
