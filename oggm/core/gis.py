@@ -34,7 +34,8 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.exceptions import InvalidParamsError, GeometryError, InvalidDEMError
+from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
+                             InvalidDEMError)
 from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
                         nicenumber, ncDataset)
 
@@ -122,7 +123,7 @@ def multi_to_poly(geometry, gdir=None):
                 log.warning('Geometry {} lost quite a chunk.'.format(rid))
 
     if geometry.type != 'Polygon':
-        raise GeometryError('Geometry {} is not a Polygon.'.format(rid))
+        raise InvalidGeometryError('Geometry {} is not a Polygon.'.format(rid))
     return geometry
 
 
@@ -207,10 +208,11 @@ def _polygon_to_pix(polygon):
                     if tmp.is_valid:
                         break
                 if b == 0.99:
-                    raise GeometryError('This glacier geometry is not valid.')
+                    raise InvalidGeometryError('This glacier geometry is not '
+                                               'valid.')
 
     if not tmp.is_valid:
-        raise GeometryError('This glacier geometry is not valid.')
+        raise InvalidGeometryError('This glacier geometry is not valid.')
 
     return tmp
 
@@ -453,8 +455,8 @@ def glacier_masks(gdir):
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
-    # Correct the DEM (ASTER...)
-    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    # Correct the DEM
+    # Currently we just do a linear interp -- filling is totally shit anyway
     min_z = -999.
     dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
@@ -546,13 +548,13 @@ def glacier_masks(gdir):
     # fix-invalid-polygon-python-shapely
     glacier_poly_hr = glacier_poly_hr.buffer(0)
     if not glacier_poly_hr.is_valid:
-        raise GeometryError('This glacier geometry is not valid.')
+        raise InvalidGeometryError('This glacier geometry is not valid.')
 
     # Rounded nearest pix
     glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
     if glacier_poly_pix.exterior is None:
-        raise GeometryError('Problem in converting glacier geometry to grid '
-                            'resolution.')
+        raise InvalidGeometryError('Problem in converting glacier geometry '
+                                   'to grid resolution.')
 
     # Compute the glacier mask (currently: center pixels + touched)
     nx, ny = gdir.grid.nx, gdir.grid.ny
@@ -588,8 +590,8 @@ def glacier_masks(gdir):
     tmp_max = np.max(dem[np.where(glacier_mask == 1)])
     tmp_min = np.min(dem[np.where(glacier_mask == 1)])
     if tmp_max < (tmp_min + 1):
-        raise RuntimeError('({}) min equal max in the masked DEM.'
-                           .format(gdir.rgi_id))
+        raise InvalidDEMError('({}) min equal max in the masked DEM.'
+                              .format(gdir.rgi_id))
 
     # write out the grids in the netcdf file
     nc = gdir.create_gridded_ncdf_file('gridded_data')
@@ -653,30 +655,51 @@ def simple_glacier_masks(gdir):
     assert nx == gdir.grid.nx
     assert ny == gdir.grid.ny
 
-    # Correct the DEM (ASTER...)
-    # Currently we just do a linear interp -- ASTER is totally shit anyway
+    # Correct the DEM
+    # Currently we just do a linear interp -- filling is totally shit anyway
     min_z = -999.
+    dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
-    if (np.min(dem) <= min_z) or np.any(~isfinite):
+    if np.all(~isfinite):
+        raise InvalidDEMError('Not a single valid grid point in DEM')
+    if np.any(~isfinite):
         xx, yy = gdir.grid.ij_coordinates
-        pnan = np.nonzero((dem <= min_z) | (~isfinite))
-        pok = np.nonzero((dem > min_z) | isfinite)
+        pnan = np.nonzero(~isfinite)
+        pok = np.nonzero(isfinite)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter)
+        try:
+            dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                                 method='linear')
+        except ValueError:
+            raise InvalidDEMError('DEM interpolation not possible.')
         log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+        gdir.add_to_diagnostics('dem_needed_interpolation', True)
+        gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx*ny))
 
     isfinite = np.isfinite(dem)
-    if not np.all(isfinite):
+    if np.any(~isfinite):
+        # this happens when extrapolation is needed
         # see how many percent of the dem
-        if np.sum(~isfinite) > (0.2 * nx * ny):
-            raise RuntimeError('({}) too many NaNs in DEM'.format(gdir.rgi_id))
-        log.warning('({}) DEM needed zeros somewhere.'.format(gdir.rgi_id))
-        dem[isfinite] = 0
+        if np.sum(~isfinite) > (0.5 * nx * ny):
+            log.warning('({}) many NaNs in DEM'.format(gdir.rgi_id))
+        xx, yy = gdir.grid.ij_coordinates
+        pnan = np.nonzero(~isfinite)
+        pok = np.nonzero(isfinite)
+        points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
+        inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
+        try:
+            dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                                 method='nearest')
+        except ValueError:
+            raise InvalidDEMError('DEM extrapolation not possible.')
+        log.warning(gdir.rgi_id + ': DEM needed extrapolation.')
+        gdir.add_to_diagnostics('dem_needed_extrapolation', True)
+        gdir.add_to_diagnostics('dem_extrapol_perc', len(pnan[0]) / (nx*ny))
 
     if np.min(dem) == np.max(dem):
-        raise RuntimeError('({}) min equal max in the DEM.'
-                           .format(gdir.rgi_id))
+        raise InvalidDEMError('({}) min equal max in the DEM.'
+                              .format(gdir.rgi_id))
 
     # Proj
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
@@ -706,7 +729,7 @@ def simple_glacier_masks(gdir):
         smoothed_dem = dem.copy()
 
     if not np.all(np.isfinite(smoothed_dem)):
-        raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
+        raise InvalidDEMError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
     geometry = gdir.read_shapefile('outlines').geometry[0]
@@ -716,7 +739,7 @@ def simple_glacier_masks(gdir):
     # fix-invalid-polygon-python-shapely
     geometry = geometry.buffer(0)
     if not geometry.is_valid:
-        raise RuntimeError('This glacier geometry is not valid.')
+        raise InvalidDEMError('This glacier geometry is not valid.')
 
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
@@ -747,8 +770,8 @@ def simple_glacier_masks(gdir):
     tmp_max = np.max(dem[glacier_mask])
     tmp_min = np.min(dem[glacier_mask])
     if tmp_max < (tmp_min + 1):
-        raise RuntimeError('({}) min equal max in the masked DEM.'
-                           .format(gdir.rgi_id))
+        raise InvalidDEMError('({}) min equal max in the masked DEM.'
+                              .format(gdir.rgi_id))
 
     # hypsometry
     bsize = 50.

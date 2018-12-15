@@ -677,12 +677,12 @@ def _get_centerline_lonlat(gdir):
 def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
     # Prepro URL
-    base_url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/'
-    base_url += 'RGI{}/'.format(rgi_version)
-    base_url += 'b_{:03d}/'.format(border)
-    base_url += 'L{:d}/'.format(prepro_level)
-    base_url += '{}/{}/{}.tar.gz' .format(rgi_id[:8], rgi_id[:11], rgi_id)
-    return base_url
+    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
+    url += 'RGI{}/'.format(rgi_version)
+    url += 'b_{:03d}/'.format(border)
+    url += 'L{:d}/'.format(prepro_level)
+    url += '{}/{}/{}.tar.gz' .format(rgi_id[:8], rgi_id[:11], rgi_id)
+    return url
 
 
 def srtm_zone(lon_ex, lat_ex):

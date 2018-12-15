@@ -2700,12 +2700,14 @@ class TestCatching(unittest.TestCase):
                          'SUCCESS')
         self.assertIsNone(gdir.get_task_status(
             centerlines.compute_centerlines.__name__))
+        self.assertIsNone(gdir.get_error_log())
 
         centerlines.compute_downstream_bedshape(gdir)
 
         s = gdir.get_task_status(
             centerlines.compute_downstream_bedshape.__name__)
         assert 'FileNotFoundError' in s
+        assert 'FileNotFoundError' in gdir.get_error_log()
 
         # Try overwrite
         cfg.PARAMS['auto_skip_task'] = True
@@ -2715,6 +2717,7 @@ class TestCatching(unittest.TestCase):
             lines = logfile.readlines()
         isrun = ['glacier_masks' in l for l in lines]
         assert np.sum(isrun) == 1
+        assert 'FileNotFoundError' in gdir.get_error_log()
 
         cfg.PARAMS['auto_skip_task'] = False
         gis.glacier_masks(gdir)
