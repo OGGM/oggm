@@ -122,6 +122,9 @@ def execute_entity_task(task, gdirs, **kwargs):
     except TypeError:
         gdirs = [gdirs]
 
+    if len(gdirs) == 0:
+        return
+
     log.workflow('Execute entity task %s on %d glaciers',
                  task.__name__, len(gdirs))
 
@@ -182,7 +185,8 @@ def execute_parallel_tasks(gdir, tasks):
             task()
 
 
-def init_glacier_regions(rgidf=None, reset=False, force=False):
+def init_glacier_regions(rgidf=None, reset=False, force=False,
+                         from_tar=False, delete_tar=False):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -199,6 +203,11 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
     force : bool
         setting `reset=True` will trigger a yes/no question to the user. Set
         `force=True` to avoid this.
+    from_tar : bool, default=False
+        Extract the gdir data from a tar file. If set to `True`,
+        will check for a tar file at the expected location in `base_dir`.
+    delete_tar : bool, default=False
+        delete the original tar file after extraction.
 
     Returns
     -------
@@ -226,7 +235,9 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
         for _, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, reset=reset)
+            gdir = oggm.GlacierDirectory(entity, reset=reset,
+                                         from_tar=from_tar,
+                                         delete_tar=delete_tar)
             if not os.path.exists(gdir.get_filepath('dem')):
                 new_gdirs.append((gdir, dict(entity=entity)))
             gdirs.append(gdir)
