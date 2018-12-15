@@ -186,6 +186,7 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def init_glacier_regions(rgidf=None, reset=False, force=False,
+                         from_prepro_level=None,
                          from_tar=False, delete_tar=False):
     """Initializes the list of Glacier Directories for this run.
 
@@ -234,13 +235,23 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
             if files and ('dem.tif' in files):
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
-        for _, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, reset=reset,
-                                         from_tar=from_tar,
-                                         delete_tar=delete_tar)
-            if not os.path.exists(gdir.get_filepath('dem')):
-                new_gdirs.append((gdir, dict(entity=entity)))
-            gdirs.append(gdir)
+        if from_prepro_level is not None:
+            for _, entity in rgidf.iterrows():
+                from_tar = utils.prepro_gdir_url(entity.RGIId,
+                                                 cfg.PARAMS['border'],
+                                                 from_prepro_level)
+                from_tar = utils.file_downloader(from_tar)
+                gdir = oggm.GlacierDirectory(entity, reset=reset,
+                                             from_tar=from_tar)
+                gdirs.append(gdir)
+        else:
+            for _, entity in rgidf.iterrows():
+                gdir = oggm.GlacierDirectory(entity, reset=reset,
+                                             from_tar=from_tar,
+                                             delete_tar=delete_tar)
+                if not os.path.exists(gdir.get_filepath('dem')):
+                    new_gdirs.append((gdir, dict(entity=entity)))
+                gdirs.append(gdir)
 
     # We can set the intersects file automatically here
     if (cfg.PARAMS['use_intersects'] and new_gdirs and
