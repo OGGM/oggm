@@ -235,6 +235,7 @@ class Testools(unittest.TestCase):
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
 
+    @pytest.mark.xfail
     def test_start_from_level_0(self):
 
         # Go - initialize working directories
@@ -245,6 +246,19 @@ class Testools(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('dem')
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    @pytest.mark.xfail
+    def test_start_from_level_2(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=2,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+        workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
 
 
 class TestFullRun(unittest.TestCase):

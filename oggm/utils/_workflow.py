@@ -638,10 +638,13 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     gdirs: the list of GlacierDir to process.
     filesuffix : str
         add suffix to output file
-    path:
+    path : str, bool
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
-    inversion_only: bool
+    add_climate_period : int or list of ints
+        compile climate statistics for the 30 yrs period around the selected
+        date.
+    inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
     """
     from oggm.core.massbalance import (ConstantMassBalance,
@@ -701,6 +704,14 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
             diags = gdir.get_diagnostics()
             for k, v in diags.items():
                 d[k] = v
+        except BaseException:
+            pass
+        try:
+            # Error log
+            errlog = gdir.get_error_log()
+            if errlog is not None:
+                d['error_task'] = errlog.split(';')[-2]
+                d['error_msg'] = errlog.split(';')[-1]
         except BaseException:
             pass
         try:
@@ -1812,6 +1823,28 @@ class GlacierDirectory(object):
             return lines[-1].split(';')[-1]
         else:
             return None
+
+    def get_error_log(self):
+        """Reads the directory's log file to find the invalid task (if any).
+
+        Returns
+        -------
+        The first erros message in this log, None if all good
+        """
+
+        if not os.path.isfile(self.logfile):
+            return None
+
+        with open(self.logfile) as logfile:
+            lines = logfile.readlines()
+
+        for l in lines:
+            if 'SUCCESS' in l:
+                continue
+            return l.replace('\n', '')
+
+        # OK all good
+        return None
 
 
 @entity_task(logger)

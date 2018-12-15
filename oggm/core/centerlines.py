@@ -40,6 +40,8 @@ from salem import lazy_property
 from oggm import utils
 from oggm.utils import tuple2int, line_interpol, interp_nans
 from oggm import entity_task
+from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
+                             GeometryError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -307,7 +309,7 @@ def _filter_heads(heads, heads_height, radius, polygon):
         else:
             extext = ('Geometry collection not expected: '
                       '{}'.format(inter_poly.type))
-            raise NotImplementedError(extext)
+            raise InvalidGeometryError(extext)
 
         # Find other points in radius and in polygon
         _heads = [head]
@@ -381,7 +383,7 @@ def _filter_lines(lines, heads, k, r):
                         if hashead:
                             break
                         else:
-                            raise RuntimeError('Head not found')
+                            raise GeometryError('Head not found')
                 # keep this head line only if it's long enough
                 if diff.length > r:
                     # Fun fact. The heads can be cut by the buffer too
@@ -788,7 +790,7 @@ def compute_centerlines(gdir, heads=None):
         single_fl = True
 
     if 'force_one_flowline' in cfg.PARAMS:
-        raise ValueError('`force_one_flowline` is deprecated')
+        raise InvalidParamsError('`force_one_flowline` is deprecated')
 
     # open
     geom = gdir.read_pickle('geometries')
@@ -855,7 +857,8 @@ def compute_centerlines(gdir, heads=None):
 
     # Final check
     if len(cls) == 0:
-        raise RuntimeError('({}) no centerline found!'.format(gdir.rgi_id))
+        raise GeometryError('({}) no valid centerline could be '
+                            'found!'.format(gdir.rgi_id))
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines')
@@ -940,7 +943,7 @@ def compute_downstream_line(gdir):
                 min_len = len(lids)
                 line = shpg.LineString(np.array(lids)[:, [1, 0]])
     if line is None:
-        raise RuntimeError('Downstream line not found')
+        raise GeometryError('Downstream line not found')
 
     cl = gdir.read_pickle('inversion_flowlines')[-1]
     lline, dline = _line_extend(cl.line, line, cl.dx)
@@ -1192,10 +1195,10 @@ def _mask_to_polygon(mask, gdir=None):
 
     poly = shpg.Polygon(e_line, i_lines).buffer(0)
     if not poly.is_valid:
-        raise RuntimeError('Mask polygon not valid.')
+        raise GeometryError('Mask to polygon conversion error.')
     poly_no = shpg.Polygon(e_line).buffer(0)
     if not poly_no.is_valid:
-        raise RuntimeError('Mask polygon not valid.')
+        raise GeometryError('Mask to polygon conversion error.')
     return poly, poly_no
 
 
@@ -1240,7 +1243,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         line = oline
     else:
         extext = 'Geometry collection not expected: {}'.format(line.type)
-        raise RuntimeError(extext)
+        raise InvalidGeometryError(extext)
 
     # Then take the nunataks into account
     # Make sure we are always returning a MultiLineString for later
@@ -1260,7 +1263,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         line = shpg.MultiLineString(oline)
     else:
         extext = 'Geometry collection not expected: {}'.format(line.type)
-        raise NotImplementedError(extext)
+        raise InvalidGeometryError(extext)
 
     assert line.type == 'MultiLineString'
     width = np.sum([l.length for l in line])
@@ -1335,7 +1338,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
             alt_range_th += 20
             log.warning('Set altitude threshold to {}'.format(alt_range_th))
         if alt_range_th > 2000:
-            raise RuntimeError('Problem by altitude filter.')
+            raise GeometryError('Problem by altitude filter.')
 
     return out_width
 
@@ -1584,7 +1587,7 @@ def initialize_flowlines(gdir):
             hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
             isfin = np.isfinite(hgts)
             if not np.any(isfin):
-                raise RuntimeError('This line has no positive slopes')
+                raise GeometryError('This line has no positive slopes')
             diag_n_bad_slopes += np.sum(~isfin)
             diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
@@ -1689,7 +1692,7 @@ def catchment_width_geom(gdir):
         valid = np.where(np.isfinite(widths))
         if len(valid[0]) == 0:
             errmsg = '({}) first guess widths went wrong.'.format(gdir.rgi_id)
-            raise RuntimeError(errmsg)
+            raise GeometryError(errmsg)
 
         # Ok now the entire centerline is computed.
         # I take all these widths for geometrically valid, and see if they
@@ -1832,8 +1835,8 @@ def catchment_width_correction(gdir):
                 log.warning('(%s) reduced min n per bin to %d', gdir.rgi_id,
                             nmin)
                 if nmin == 0:
-                    raise RuntimeError('({}) no binsize could be chosen '
-                                       .format(gdir.rgi_id))
+                    raise GeometryError('({}) no binsize could be chosen '
+                                        .format(gdir.rgi_id))
         if bsize > 150:
             log.warning('(%s) chosen binsize %d', gdir.rgi_id, bsize)
         else:
@@ -1893,9 +1896,6 @@ def terminus_width_correction(gdir, new_width=None):
     new_width : float
        the new width of the terminus (in meters)
     """
-
-    if new_width is None:
-        raise ValueError('We need a width to run this task!')
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
