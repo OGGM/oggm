@@ -198,7 +198,7 @@ class Testools(unittest.TestCase):
         self.rgidf = gpd.read_file(rgi_file)
         self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
                                for rid in self.rgidf.RGIId]
-        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PARAMS['use_multiprocessing'] = True
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
         self.clean_dir()

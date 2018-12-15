@@ -185,6 +185,23 @@ def execute_parallel_tasks(gdir, tasks):
             task()
 
 
+def _gdirs_from_prepro(entity, from_prepro_level=None,
+                       prepro_border=None, prepro_rgi_version=None):
+
+    if prepro_border is None:
+        prepro_border = cfg.PARAMS['border']
+    if prepro_rgi_version is None:
+        prepro_rgi_version = cfg.PARAMS['rgi_version']
+    tar_url = utils.prepro_gdir_url(prepro_rgi_version,
+                                    entity.RGIId,
+                                    prepro_border,
+                                    from_prepro_level)
+    from_tar = utils.file_downloader(tar_url)
+    if from_tar is None:
+        raise RuntimeError('Could not find L0 file at ' + tar_url)
+    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+
 def init_glacier_regions(rgidf=None, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
                          prepro_rgi_version=None,
@@ -239,6 +256,7 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
     if rgidf is None:
         if reset:
             raise ValueError('Cannot use reset without a rgi file')
+        log.workflow('init_glacier_regions by parsing available folders.')
         # The dirs should be there already
         gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
         for root, _, files in os.walk(gl_dir):
@@ -246,21 +264,15 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
         if from_prepro_level is not None:
+            log.workflow('init_glacier_regions from prepro level {} on '
+                         '{} glaciers.'.format(from_prepro_level, len(rgidf)))
+            entitites = []
             for _, entity in rgidf.iterrows():
-                if prepro_border is None:
-                    prepro_border = cfg.PARAMS['border']
-                if prepro_rgi_version is None:
-                    prepro_rgi_version = cfg.PARAMS['rgi_version']
-                tar_url = utils.prepro_gdir_url(prepro_rgi_version,
-                                                entity.RGIId,
-                                                prepro_border,
-                                                from_prepro_level)
-                from_tar = utils.file_downloader(tar_url)
-                if from_tar is None:
-                    raise RuntimeError('Could not find L0 file at ' + tar_url)
-                gdir = oggm.GlacierDirectory(entity, reset=reset,
-                                             from_tar=from_tar)
-                gdirs.append(gdir)
+                entitites.append(entity)
+            gdirs = execute_entity_task(_gdirs_from_prepro, entitites,
+                                        from_prepro_level=from_prepro_level,
+                                        prepro_border=prepro_border,
+                                        prepro_rgi_version=prepro_rgi_version)
         else:
             for _, entity in rgidf.iterrows():
                 gdir = oggm.GlacierDirectory(entity, reset=reset,

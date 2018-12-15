@@ -34,7 +34,7 @@ except ImportError:
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, GeometryError, InvalidDEMError
 from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
                         nicenumber, ncDataset)
 
@@ -122,7 +122,7 @@ def multi_to_poly(geometry, gdir=None):
                 log.warning('Geometry {} lost quite a chunk.'.format(rid))
 
     if geometry.type != 'Polygon':
-        raise RuntimeError('Geometry {} is not a Polygon.'.format(rid))
+        raise GeometryError('Geometry {} is not a Polygon.'.format(rid))
     return geometry
 
 
@@ -207,10 +207,10 @@ def _polygon_to_pix(polygon):
                     if tmp.is_valid:
                         break
                 if b == 0.99:
-                    raise RuntimeError('This glacier geometry is not valid.')
+                    raise GeometryError('This glacier geometry is not valid.')
 
     if not tmp.is_valid:
-        raise RuntimeError('This glacier geometry is not valid.')
+        raise GeometryError('This glacier geometry is not valid.')
 
     return tmp
 
@@ -309,7 +309,8 @@ def define_glacier_region(gdir, entity=None):
     elif dxmethod == 'fixed':
         dx = np.rint(cfg.PARAMS['fixed_dx'])
     else:
-        raise ValueError('grid_dx_method not supported: {}'.format(dxmethod))
+        raise InvalidParamsError('grid_dx_method not supported: {}'
+                                 .format(dxmethod))
     # Additional trick for varying dx
     if dxmethod in ['linear', 'square']:
         dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
@@ -383,8 +384,8 @@ def define_glacier_region(gdir, entity=None):
     elif cfg.PARAMS['topo_interp'] == 'cubic':
         resampling = Resampling.cubic
     else:
-        raise ValueError('{} interpolation not understood'
-                         .format(cfg.PARAMS['topo_interp']))
+        raise InvalidParamsError('{} interpolation not understood'
+                                 .format(cfg.PARAMS['topo_interp']))
 
     dem_reproj = gdir.get_filepath('dem')
     profile.pop('blockxsize', None)
@@ -457,14 +458,19 @@ def glacier_masks(gdir):
     min_z = -999.
     dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
+    if np.all(~isfinite):
+        raise InvalidDEMError('Not a single valid grid point in DEM')
     if np.any(~isfinite):
         xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
-                             method='linear')
+        try:
+            dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                                 method='linear')
+        except ValueError:
+            raise InvalidDEMError('DEM interpolation not possible.')
         log.warning(gdir.rgi_id + ': DEM needed interpolation.')
         gdir.add_to_diagnostics('dem_needed_interpolation', True)
         gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx*ny))
@@ -480,15 +486,18 @@ def glacier_masks(gdir):
         pok = np.nonzero(isfinite)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
         inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
-        dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
-                             method='nearest')
+        try:
+            dem[pnan] = griddata(points, np.ravel(dem[pok]), inter,
+                                 method='nearest')
+        except ValueError:
+            raise InvalidDEMError('DEM extrapolation not possible.')
         log.warning(gdir.rgi_id + ': DEM needed extrapolation.')
         gdir.add_to_diagnostics('dem_needed_extrapolation', True)
         gdir.add_to_diagnostics('dem_extrapol_perc', len(pnan[0]) / (nx*ny))
 
     if np.min(dem) == np.max(dem):
-        raise RuntimeError('({}) min equal max in the DEM.'
-                           .format(gdir.rgi_id))
+        raise InvalidDEMError('({}) min equal max in the DEM.'
+                              .format(gdir.rgi_id))
 
     # Projection
     if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
@@ -503,7 +512,7 @@ def glacier_masks(gdir):
     if not (np.allclose(dx, -dy) or np.allclose(dx, gdir.grid.dx) or
             np.allclose(y0, gdir.grid.corner_grid.y0, atol=1e-2) or
             np.allclose(x0, gdir.grid.corner_grid.x0, atol=1e-2)):
-        raise RuntimeError('DEM file and Salem Grid do not match!')
+        raise InvalidDEMError('DEM file and Salem Grid do not match!')
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
@@ -517,7 +526,7 @@ def glacier_masks(gdir):
         smoothed_dem = dem.copy()
 
     if not np.all(np.isfinite(smoothed_dem)):
-        raise RuntimeError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
+        raise InvalidDEMError('({}) NaN in smoothed DEM'.format(gdir.rgi_id))
 
     # Geometries
     geometry = gdir.read_shapefile('outlines').geometry[0]
@@ -537,10 +546,13 @@ def glacier_masks(gdir):
     # fix-invalid-polygon-python-shapely
     glacier_poly_hr = glacier_poly_hr.buffer(0)
     if not glacier_poly_hr.is_valid:
-        raise RuntimeError('This glacier geometry is not valid.')
+        raise GeometryError('This glacier geometry is not valid.')
 
     # Rounded nearest pix
     glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
+    if glacier_poly_pix.exterior is None:
+        raise GeometryError('Problem in converting glacier geometry to grid '
+                            'resolution.')
 
     # Compute the glacier mask (currently: center pixels + touched)
     nx, ny = gdir.grid.nx, gdir.grid.ny

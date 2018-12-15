@@ -1198,6 +1198,8 @@ class GlacierDirectory(object):
                                 self.rgi_id)
 
         # Do we have to extract the files first?
+        if (reset or from_tar) and os.path.exists(self.dir):
+            shutil.rmtree(self.dir)
         if from_tar:
             if not os.path.exists(str(from_tar)):
                 from_tar = self.dir + '.tar.gz'
@@ -1205,10 +1207,8 @@ class GlacierDirectory(object):
                 tf.extractall(os.path.dirname(self.dir))
             if delete_tar:
                 os.remove(from_tar)
-
-        if reset and os.path.exists(self.dir):
-            shutil.rmtree(self.dir)
-        mkdir(self.dir)
+        else:
+            mkdir(self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
