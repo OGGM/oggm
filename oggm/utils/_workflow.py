@@ -296,7 +296,6 @@ def pipe_log(gdir, task_func_name, err=None):
             f.write(sep + '\n')
 
 
-
 class DisableLogger():
     """Context manager to temporarily disable all loggers."""
 

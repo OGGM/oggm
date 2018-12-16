@@ -198,7 +198,7 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
                                     from_prepro_level)
     from_tar = utils.file_downloader(tar_url)
     if from_tar is None:
-        raise RuntimeError('Could not find L0 file at ' + tar_url)
+        raise RuntimeError('Could not find file at ' + tar_url)
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
