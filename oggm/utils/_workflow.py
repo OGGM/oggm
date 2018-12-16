@@ -782,7 +782,8 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
             # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0)
+                                                bias=0,
+                                                use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
@@ -818,7 +819,8 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
                 mbcl = ConstantMassBalance
                 mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                    y0=y0)
+                                                    y0=y0,
+                                                    use_inversion_flowlines=True)
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
                 mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
                 pacc = np.where(mbh >= 0)

@@ -285,7 +285,31 @@ class Testools(unittest.TestCase):
             assert gdir.has_file('climate_monthly')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
-        workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
+
+        # Tasks
+        task_list = [
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
+            tasks.prepare_for_inversion,
+            tasks.mass_conservation_inversion,
+            tasks.filter_inversion_output,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs)
+
+        df = utils.compile_glacier_statistics(gdirs, add_climate_period=[1920,
+                                                                         1960,
+                                                                         2000])
+        assert 'tstar_avg_temp_mean_elev' in df
+        assert '1905-1935_avg_temp_mean_elev' in df
 
 
 class TestFullRun(unittest.TestCase):

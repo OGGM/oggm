@@ -338,7 +338,9 @@ def filter_inversion_output(gdir):
 
         # conserve it
         new_vol = np.nansum(volume)
-        assert new_vol != 0
+        if new_vol == 0:
+            # Very small glaciers
+            return
         volume = init_vol / new_vol * volume
         np.testing.assert_allclose(np.nansum(volume), init_vol)
 
