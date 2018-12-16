@@ -281,13 +281,15 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.compile_glacier_statistics([gdir], path=False,
-                                              add_climate_period=1985)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         assert len(df) == 1
         assert np.all(~df.isnull())
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
+
+        df = utils.compile_climate_statistics([gdir], path=False,
+                                              add_climate_period=1985)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
                                    2853, atol=5)
         np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],

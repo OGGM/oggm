@@ -42,7 +42,7 @@ from oggm.utils._downloads import (get_demo_file, get_wgms_files)
 from oggm import cfg
 
 # Module logger
-logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
+log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
 
 def empty_cache():
@@ -294,6 +294,110 @@ def pipe_log(gdir, task_func_name, err=None):
             f.write(err.__class__.__name__ + sep + '{}\n'.format(err))
         else:
             f.write(sep + '\n')
+
+
+
+class DisableLogger():
+    """Context manager to temporarily disable all loggers."""
+
+    def __enter__(self):
+        logging.disable(logging.ERROR)
+
+    def __exit__(self, a, b, c):
+        logging.disable(logging.NOTSET)
+
+
+class entity_task(object):
+    """Decorator for common job-controlling logic.
+
+    All tasks share common operations. This decorator is here to handle them:
+    exceptions, logging, and (some day) database for job-controlling.
+    """
+
+    def __init__(self, log, writes=[]):
+        """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
+
+        Parameters
+        ----------
+        writes: list
+            list of files that the task will write down to disk (must be
+            available in ``cfg.BASENAMES``)
+        """
+        self.log = log
+        self.writes = writes
+
+        cnt = ['    Notes']
+        cnt += ['    -----']
+        cnt += ['    Files writen to the glacier directory:']
+
+        for k in sorted(writes):
+            cnt += [cfg.BASENAMES.doc_str(k)]
+        self.iodoc = '\n'.join(cnt)
+
+    def __call__(self, task_func):
+        """Decorate."""
+
+        # Add to the original docstring
+        if task_func.__doc__ is None:
+            raise RuntimeError('Entity tasks should have a docstring!')
+
+        task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
+
+        @wraps(task_func)
+        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
+
+            if reset is None:
+                reset = not cfg.PARAMS['auto_skip_task']
+
+            task_name = task_func.__name__
+
+            # Filesuffix are typically used to differentiate tasks
+            fsuffix = (kwargs.get('filesuffix', False) or
+                       kwargs.get('output_filesuffix', False))
+            if fsuffix:
+                task_name += fsuffix
+
+            # Do we need to run this task?
+            s = gdir.get_task_status(task_name)
+            if not reset and s and ('SUCCESS' in s):
+                return
+
+            # Log what we are doing
+            if print_log:
+                self.log.info('(%s) %s', gdir.rgi_id, task_name)
+
+            # Run the task
+            try:
+                out = task_func(gdir, **kwargs)
+                if task_name != 'gdir_to_tar':
+                    gdir.log(task_name)
+            except Exception as err:
+                # Something happened
+                out = None
+                gdir.log(task_name, err=err)
+                pipe_log(gdir, task_name, err=err)
+                if print_log:
+                    self.log.error('%s occurred during task %s on %s: %s',
+                                   type(err).__name__, task_name,
+                                   gdir.rgi_id, str(err))
+                if not cfg.PARAMS['continue_on_error']:
+                    raise
+            return out
+
+        _entity_task.__dict__['is_entity_task'] = True
+        return _entity_task
+
+
+def global_task(task_func):
+    """
+    Decorator for common job-controlling logic.
+
+    Indicates that this task expects a list of all GlacierDirs as parameter
+    instead of being called once per dir.
+    """
+
+    task_func.__dict__['global_task'] = True
+    return task_func
 
 
 def _get_centerline_lonlat(gdir):
@@ -624,9 +728,321 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
     return out
 
 
+@entity_task(log)
+def glacier_statistics(gdir, inversion_only=False):
+    """Gather as much statistics as possible about this glacier.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    inversion_only : bool
+        if one wants to summarize the inversion output only (including calving)
+    """
+
+    d = OrderedDict()
+
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['name'] = gdir.name
+    d['cenlon'] = gdir.cenlon
+    d['cenlat'] = gdir.cenlat
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['glacier_type'] = gdir.glacier_type
+    d['terminus_type'] = gdir.terminus_type
+    d['status'] = gdir.status
+
+    # The rest is less certain. We put these in a try block and see
+    # We're good with any error - we store the dict anyway below
+    # TODO: should be done with more preselected errors
+    try:
+        # Inversion
+        if gdir.has_file('inversion_output'):
+            vol = []
+            cl = gdir.read_pickle('inversion_output')
+            for c in cl:
+                vol.extend(c['volume'])
+            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+            area = gdir.rgi_area_km2
+            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+            d['vas_volume_km3'] = 0.034 * (area ** 1.375)
+            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+    except BaseException:
+        pass
+
+    try:
+        # Calving
+        all_calving_data = []
+        all_width = []
+        cl = gdir.read_pickle('calving_output')
+        for c in cl:
+            all_calving_data = c['calving_fluxes'][-1]
+            all_width = c['t_width']
+        d['calving_flux'] = all_calving_data
+        d['calving_front_width'] = all_width
+    except BaseException:
+        pass
+
+    if inversion_only:
+        return d
+
+    try:
+        # Diagnostics
+        diags = gdir.get_diagnostics()
+        for k, v in diags.items():
+            d[k] = v
+    except BaseException:
+        pass
+
+    try:
+        # Error log
+        errlog = gdir.get_error_log()
+        if errlog is not None:
+            d['error_task'] = errlog.split(';')[-2]
+            d['error_msg'] = errlog.split(';')[-1]
+    except BaseException:
+        pass
+
+    try:
+        # Masks related stuff
+        fpath = gdir.get_filepath('gridded_data')
+        with ncDataset(fpath) as nc:
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo'][:]
+        d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+        d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
+        d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+        d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+    except BaseException:
+        pass
+
+    try:
+        # Ext related stuff
+        fpath = gdir.get_filepath('gridded_data')
+        with ncDataset(fpath) as nc:
+            ext = nc.variables['glacier_ext'][:]
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo'][:]
+        d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
+        d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
+        a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
+        d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
+    except BaseException:
+        pass
+
+    try:
+        # Centerlines
+        cls = gdir.read_pickle('centerlines')
+        longuest = 0.
+        for cl in cls:
+            longuest = np.max([longuest, cl.dis_on_line[-1]])
+        d['n_centerlines'] = len(cls)
+        d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+    except BaseException:
+        pass
+
+    try:
+        # Flowline related stuff
+        h = np.array([])
+        widths = np.array([])
+        slope = np.array([])
+        fls = gdir.read_pickle('inversion_flowlines')
+        dx = fls[0].dx * gdir.grid.dx
+        for fl in fls:
+            hgt = fl.surface_h
+            h = np.append(h, hgt)
+            widths = np.append(widths, fl.widths * dx)
+            slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+        d['flowline_mean_elev'] = np.average(h, weights=widths)
+        d['flowline_max_elev'] = np.max(h)
+        d['flowline_min_elev'] = np.min(h)
+        d['flowline_avg_width'] = np.mean(widths)
+        d['flowline_avg_slope'] = np.mean(slope)
+    except BaseException:
+        pass
+
+    try:
+        # MB calib
+        df = gdir.read_json('local_mustar')
+        d['t_star'] = df['t_star']
+        d['mu_star_glacierwide'] = df['mu_star_glacierwide']
+        d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
+        d['mu_star_allsame'] = df['mu_star_allsame']
+        d['mb_bias'] = df['bias']
+    except BaseException:
+        pass
+
+    return d
+
+
 def compile_glacier_statistics(gdirs, filesuffix='', path=True,
-                               add_climate_period=1995,
                                inversion_only=False):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs: the list of GlacierDir to process.
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    inversion_only : bool
+        if one wants to summarize the inversion output only (including calving)
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(glacier_statistics, gdirs,
+                                 inversion_only=inversion_only)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('glacier_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+    return out
+
+
+@entity_task(log)
+def climate_statistics(gdir, add_climate_period=1995):
+    """Gather as much statistics as possible about this glacier.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    add_climate_period : int or list of ints
+        compile climate statistics for the 30 yrs period around the selected
+        date.
+    """
+
+    from oggm.core.massbalance import (ConstantMassBalance,
+                                       MultipleFlowlineMassBalance)
+
+    d = OrderedDict()
+
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['name'] = gdir.name
+    d['cenlon'] = gdir.cenlon
+    d['cenlat'] = gdir.cenlat
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['glacier_type'] = gdir.glacier_type
+    d['terminus_type'] = gdir.terminus_type
+    d['status'] = gdir.status
+
+    # The rest is less certain
+
+    try:
+        # Flowline related stuff
+        h = np.array([])
+        widths = np.array([])
+        slope = np.array([])
+        fls = gdir.read_pickle('inversion_flowlines')
+        dx = fls[0].dx * gdir.grid.dx
+        for fl in fls:
+            hgt = fl.surface_h
+            h = np.append(h, hgt)
+            widths = np.append(widths, fl.widths * dx)
+            slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+        d['flowline_mean_elev'] = np.average(h, weights=widths)
+        d['flowline_max_elev'] = np.max(h)
+        d['flowline_min_elev'] = np.min(h)
+    except BaseException:
+        pass
+
+    try:
+        # Climate and MB at t*
+        mbcl = ConstantMassBalance
+        mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                            bias=0,
+                                            use_inversion_flowlines=True)
+        h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+        mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+        pacc = np.where(mbh >= 0)
+        pab = np.where(mbh < 0)
+        d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
+        try:
+            # Try to get the slope
+            mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
+            d['tstar_mb_grad'] = mb_slope
+        except BaseException:
+            # we don't mind if something goes wrong
+            d['tstar_mb_grad'] = np.NaN
+        d['tstar_ela_h'] = mbmod.get_ela()
+        # Climate
+        t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+            [d['tstar_ela_h'],
+             d['flowline_mean_elev'],
+             d['flowline_max_elev'],
+             d['flowline_min_elev']])
+        for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
+            d['tstar_avg_' + n + '_ela_h'] = v[0]
+            d['tstar_avg_' + n + '_mean_elev'] = v[1]
+            d['tstar_avg_' + n + '_max_elev'] = v[2]
+            d['tstar_avg_' + n + '_min_elev'] = v[3]
+        d['tstar_avg_prcp'] = p[0]
+    except BaseException:
+        pass
+
+    # Climate and MB at specified dates
+    add_climate_period = tolist(add_climate_period)
+    for y0 in add_climate_period:
+        try:
+            fs = '{}-{}'.format(y0 - 15, y0 + 15)
+
+            mbcl = ConstantMassBalance
+            mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                                y0=y0,
+                                                use_inversion_flowlines=True)
+            h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+            mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+            pacc = np.where(mbh >= 0)
+            pab = np.where(mbh < 0)
+            d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
+            try:
+                # Try to get the slope
+                mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
+                d[fs + '_mb_grad'] = mb_slope
+            except BaseException:
+                # we don't mind if something goes wrong
+                d[fs + '_mb_grad'] = np.NaN
+            d[fs + '_ela_h'] = mbmod.get_ela()
+            # Climate
+            t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                [d[fs + '_ela_h'],
+                 d['flowline_mean_elev'],
+                 d['flowline_max_elev'],
+                 d['flowline_min_elev']])
+            for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
+                d[fs + '_avg_' + n + '_ela_h'] = v[0]
+                d[fs + '_avg_' + n + '_mean_elev'] = v[1]
+                d[fs + '_avg_' + n + '_max_elev'] = v[2]
+                d[fs + '_avg_' + n + '_min_elev'] = v[3]
+            d[fs + '_avg_prcp'] = p[0]
+        except BaseException:
+            pass
+
+    return d
+
+
+def compile_climate_statistics(gdirs, filesuffix='', path=True,
+                               add_climate_period=1995):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -644,325 +1060,21 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     add_climate_period : int or list of ints
         compile climate statistics for the 30 yrs period around the selected
         date.
-    inversion_only : bool
-        if one wants to summarize the inversion output only (including calving)
     """
-    from oggm.core.massbalance import (ConstantMassBalance,
-                                       MultipleFlowlineMassBalance)
+    from oggm.workflow import execute_entity_task
 
-    out_df = []
-    for gdir in gdirs:
-
-        d = OrderedDict()
-
-        # Easy stats - this should always be possible
-        d['rgi_id'] = gdir.rgi_id
-        d['rgi_region'] = gdir.rgi_region
-        d['rgi_subregion'] = gdir.rgi_subregion
-        d['name'] = gdir.name
-        d['cenlon'] = gdir.cenlon
-        d['cenlat'] = gdir.cenlat
-        d['rgi_area_km2'] = gdir.rgi_area_km2
-        d['glacier_type'] = gdir.glacier_type
-        d['terminus_type'] = gdir.terminus_type
-        d['status'] = gdir.status
-
-        # The rest is less certain. We put these in a try block and see
-        # We're good with any error - we store the dict anyway below
-        # TODO: should be done with more preselected errors
-        try:
-            # Inversion
-            if gdir.has_file('inversion_output'):
-                vol = []
-                cl = gdir.read_pickle('inversion_output')
-                for c in cl:
-                    vol.extend(c['volume'])
-                d['inv_volume_km3'] = np.nansum(vol) * 1e-9
-                area = gdir.rgi_area_km2
-                d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-                d['vas_volume_km3'] = 0.034 * (area**1.375)
-                d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
-        except BaseException:
-            pass
-        try:
-            # Calving
-            all_calving_data = []
-            all_width = []
-            cl = gdir.read_pickle('calving_output')
-            for c in cl:
-                all_calving_data = c['calving_fluxes'][-1]
-                all_width = c['t_width']
-            d['calving_flux'] = all_calving_data
-            d['calving_front_width'] = all_width
-        except BaseException:
-            pass
-        if inversion_only:
-            out_df.append(d)
-            continue
-        try:
-            # Diagnostics
-            diags = gdir.get_diagnostics()
-            for k, v in diags.items():
-                d[k] = v
-        except BaseException:
-            pass
-        try:
-            # Error log
-            errlog = gdir.get_error_log()
-            if errlog is not None:
-                d['error_task'] = errlog.split(';')[-2]
-                d['error_msg'] = errlog.split(';')[-1]
-        except BaseException:
-            pass
-        try:
-            # Masks related stuff
-            fpath = gdir.get_filepath('gridded_data')
-            with ncDataset(fpath) as nc:
-                mask = nc.variables['glacier_mask'][:]
-                topo = nc.variables['topo'][:]
-            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-            d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
-            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-        except BaseException:
-            pass
-        try:
-            # Ext related stuff
-            fpath = gdir.get_filepath('gridded_data')
-            with ncDataset(fpath) as nc:
-                ext = nc.variables['glacier_ext'][:]
-                mask = nc.variables['glacier_mask'][:]
-                topo = nc.variables['topo'][:]
-            d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
-            d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
-            a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
-            d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
-        except BaseException:
-            pass
-        try:
-            # Centerlines
-            cls = gdir.read_pickle('centerlines')
-            longuest = 0.
-            for cl in cls:
-                longuest = np.max([longuest, cl.dis_on_line[-1]])
-            d['n_centerlines'] = len(cls)
-            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
-        except BaseException:
-            pass
-        try:
-            # Flowline related stuff
-            h = np.array([])
-            widths = np.array([])
-            slope = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
-            dx = fls[0].dx * gdir.grid.dx
-            for fl in fls:
-                hgt = fl.surface_h
-                h = np.append(h, hgt)
-                widths = np.append(widths, fl.widths * dx)
-                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
-            d['flowline_mean_elev'] = np.average(h, weights=widths)
-            d['flowline_max_elev'] = np.max(h)
-            d['flowline_min_elev'] = np.min(h)
-            d['flowline_avg_width'] = np.mean(widths)
-            d['flowline_avg_slope'] = np.mean(slope)
-        except BaseException:
-            pass
-        try:
-            # MB calib
-            df = gdir.read_json('local_mustar')
-            d['t_star'] = df['t_star']
-            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
-            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
-            d['mu_star_allsame'] = df['mu_star_allsame']
-            d['mb_bias'] = df['bias']
-        except BaseException:
-            pass
-        try:
-            # Climate and MB at t*
-            mbcl = ConstantMassBalance
-            mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0,
-                                                use_inversion_flowlines=True)
-            h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-            mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
-            pacc = np.where(mbh >= 0)
-            pab = np.where(mbh < 0)
-            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
-            try:
-                # Try to get the slope
-                mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-                d['tstar_mb_grad'] = mb_slope
-            except BaseException:
-                # we don't mind if something goes wrong
-                d['tstar_mb_grad'] = np.NaN
-            d['tstar_ela_h'] = mbmod.get_ela()
-            # Climate
-            t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-                [d['tstar_ela_h'],
-                 d['flowline_mean_elev'],
-                 d['flowline_max_elev'],
-                 d['flowline_min_elev']])
-            for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-                d['tstar_avg_' + n + '_ela_h'] = v[0]
-                d['tstar_avg_' + n + '_mean_elev'] = v[1]
-                d['tstar_avg_' + n + '_max_elev'] = v[2]
-                d['tstar_avg_' + n + '_min_elev'] = v[3]
-            d['tstar_avg_prcp'] = p[0]
-        except BaseException:
-            pass
-        try:
-            # Climate and MB at specified dates
-            add_climate_period = tolist(add_climate_period)
-            for y0 in add_climate_period:
-                fs = '{}-{}'.format(y0-15, y0+15)
-
-                mbcl = ConstantMassBalance
-                mbmod = MultipleFlowlineMassBalance
-                mbmod = mbmod(gdir, mb_model_class=mbcl, y0=y0,
-                              use_inversion_flowlines=True)
-                h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-                mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
-                pacc = np.where(mbh >= 0)
-                pab = np.where(mbh < 0)
-                d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
-                try:
-                    # Try to get the slope
-                    mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-                    d[fs + '_mb_grad'] = mb_slope
-                except BaseException:
-                    # we don't mind if something goes wrong
-                    d[fs + '_mb_grad'] = np.NaN
-                d[fs + '_ela_h'] = mbmod.get_ela()
-                # Climate
-                t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-                    [d[fs + '_ela_h'],
-                     d['flowline_mean_elev'],
-                     d['flowline_max_elev'],
-                     d['flowline_min_elev']])
-                for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-                    d[fs + '_avg_' + n + '_ela_h'] = v[0]
-                    d[fs + '_avg_' + n + '_mean_elev'] = v[1]
-                    d[fs + '_avg_' + n + '_max_elev'] = v[2]
-                    d[fs + '_avg_' + n + '_min_elev'] = v[3]
-                d[fs + '_avg_prcp'] = p[0]
-        except BaseException:
-            pass
-
-        out_df.append(d)
+    out_df = execute_entity_task(climate_statistics, gdirs,
+                                 add_climate_period=add_climate_period)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                                    ('glacier_statistics' +
+                                    ('climate_statistics' +
                                      filesuffix + '.csv')))
         else:
             out.to_csv(path)
     return out
-
-
-class DisableLogger():
-    """Context manager to temporarily disable all loggers."""
-
-    def __enter__(self):
-        logging.disable(logging.ERROR)
-
-    def __exit__(self, a, b, c):
-        logging.disable(logging.NOTSET)
-
-
-class entity_task(object):
-    """Decorator for common job-controlling logic.
-
-    All tasks share common operations. This decorator is here to handle them:
-    exceptions, logging, and (some day) database for job-controlling.
-    """
-
-    def __init__(self, log, writes=[]):
-        """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
-
-        Parameters
-        ----------
-        writes: list
-            list of files that the task will write down to disk (must be
-            available in ``cfg.BASENAMES``)
-        """
-        self.log = log
-        self.writes = writes
-
-        cnt = ['    Notes']
-        cnt += ['    -----']
-        cnt += ['    Files writen to the glacier directory:']
-
-        for k in sorted(writes):
-            cnt += [cfg.BASENAMES.doc_str(k)]
-        self.iodoc = '\n'.join(cnt)
-
-    def __call__(self, task_func):
-        """Decorate."""
-
-        # Add to the original docstring
-        if task_func.__doc__ is None:
-            raise RuntimeError('Entity tasks should have a docstring!')
-
-        task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
-
-        @wraps(task_func)
-        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
-
-            if reset is None:
-                reset = not cfg.PARAMS['auto_skip_task']
-
-            task_name = task_func.__name__
-
-            # Filesuffix are typically used to differentiate tasks
-            fsuffix = (kwargs.get('filesuffix', False) or
-                       kwargs.get('output_filesuffix', False))
-            if fsuffix:
-                task_name += fsuffix
-
-            # Do we need to run this task?
-            s = gdir.get_task_status(task_name)
-            if not reset and s and ('SUCCESS' in s):
-                return
-
-            # Log what we are doing
-            if print_log:
-                self.log.info('(%s) %s', gdir.rgi_id, task_name)
-
-            # Run the task
-            try:
-                out = task_func(gdir, **kwargs)
-                if task_name != 'gdir_to_tar':
-                    gdir.log(task_name)
-            except Exception as err:
-                # Something happened
-                out = None
-                gdir.log(task_name, err=err)
-                pipe_log(gdir, task_name, err=err)
-                if print_log:
-                    self.log.error('%s occurred during task %s on %s: %s',
-                                   type(err).__name__, task_name,
-                                   gdir.rgi_id, str(err))
-                if not cfg.PARAMS['continue_on_error']:
-                    raise
-            return out
-
-        _entity_task.__dict__['is_entity_task'] = True
-        return _entity_task
-
-
-def global_task(task_func):
-    """
-    Decorator for common job-controlling logic.
-
-    Indicates that this task expects a list of all GlacierDirs as parameter
-    instead of being called once per dir.
-    """
-
-    task_func.__dict__['global_task'] = True
-    return task_func
 
 
 def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
@@ -1849,7 +1961,7 @@ class GlacierDirectory(object):
         return None
 
 
-@entity_task(logger)
+@entity_task(log)
 def copy_to_basedir(gdir, base_dir, setup='run'):
     """Copies the glacier directories and their content to a new location.
 
@@ -1896,7 +2008,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
 
 
-@entity_task(logger)
+@entity_task(log)
 def gdir_to_tar(gdir, delete=True):
     """Writes the content of a glacier directory to a tar file.
 

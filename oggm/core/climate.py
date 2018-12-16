@@ -53,6 +53,10 @@ def process_custom_climate_data(gdir):
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
     y0, y1 = yrs[0], yrs[-1]
+    if cfg.PARAMS['baseline_y0'] != 0:
+        y0 = cfg.PARAMS['baseline_y0']
+    if cfg.PARAMS['baseline_y1'] != 0:
+        y1 = cfg.PARAMS['baseline_y1']
     nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                      t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time

@@ -286,26 +286,19 @@ class Testools(unittest.TestCase):
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
 
-        # Tasks
-        task_list = [
-            tasks.compute_centerlines,
-            tasks.initialize_flowlines,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-            tasks.catchment_area,
-            tasks.catchment_intersections,
-            tasks.catchment_width_geom,
-            tasks.catchment_width_correction,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
-            tasks.prepare_for_inversion,
-            tasks.mass_conservation_inversion,
-            tasks.filter_inversion_output,
-        ]
-        for task in task_list:
-            workflow.execute_entity_task(task, gdirs)
+    @pytest.mark.xfail
+    def test_start_from_level_4(self):
 
-        df = utils.compile_glacier_statistics(gdirs, add_climate_period=[1920,
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+
+        df = utils.compile_glacier_statistics(gdirs)
+        assert 'dem_med_elev' in df
+
+        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
                                                                          1960,
                                                                          2000])
         assert 'tstar_avg_temp_mean_elev' in df
@@ -322,10 +315,11 @@ class TestFullRun(unittest.TestCase):
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs)
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
+        assert np.all(dfc.t_star > 1900)
+        dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
         assert cc < -0.8
-        assert np.all(dfc.t_star > 1900)
         assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @pytest.mark.slow
