@@ -2750,3 +2750,7 @@ class TestCatching(unittest.TestCase):
         assert df['compute_centerlines'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert not np.isfinite(df['not_a_task'])
+
+        # Glacier stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert 'error_task' in df.columns

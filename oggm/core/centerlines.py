@@ -1576,7 +1576,8 @@ def initialize_flowlines(gdir):
         # Interpolate heights
         xx, yy = new_line.xy
         hgts = interpolator((yy, xx))
-        assert len(hgts) >= 5
+        if len(hgts) < 5:
+            raise GeometryError('This centerline is too short')
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
@@ -1587,7 +1588,7 @@ def initialize_flowlines(gdir):
             hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
             isfin = np.isfinite(hgts)
             if not np.any(isfin):
-                raise GeometryError('This line has no positive slopes')
+                raise GeometryError('This centerline has no positive slopes')
             diag_n_bad_slopes += np.sum(~isfin)
             diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
@@ -1600,8 +1601,8 @@ def initialize_flowlines(gdir):
             while len(hgts[sp:]) < 5:
                 sp -= 1
             hgts = utils.interp_nans(hgts[sp:])
-            assert np.all(np.isfinite(hgts))
-            assert len(hgts) >= 5
+            if not (np.all(np.isfinite(hgts)) and len(hgts) >= 5):
+                raise GeometryError('Something went wrong in flowline init')
             new_line = shpg.LineString(points[sp:])
 
         sl = Centerline(new_line, dx=dx, surface_h=hgts,
@@ -1723,7 +1724,8 @@ def catchment_width_geom(gdir):
             is_rectangular[-5:] = True
 
         # Write it in the objects attributes
-        assert len(fil_widths) == n
+        if len(fil_widths) != n:
+            raise GeometryError('Something went wrong')
         fl.widths = fil_widths
         fl.geometrical_widths = wlines
         fl.is_rectangular = is_rectangular
