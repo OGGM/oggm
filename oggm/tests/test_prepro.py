@@ -1329,6 +1329,9 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
 
+        cfg.PARAMS['baseline_y0'] = 1940
+        cfg.PARAMS['baseline_y1'] = 2000
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
