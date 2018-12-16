@@ -188,9 +188,11 @@ class Testools(unittest.TestCase):
     def setUp(self):
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_workflow_tools')
+        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
 
         # Init
         cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = self.dldir
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
         # Read in the RGI file
@@ -208,9 +210,11 @@ class Testools(unittest.TestCase):
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
+        shutil.rmtree(self.dldir)
 
     def clean_dir(self):
         utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.dldir, reset=True)
 
     def test_to_and_from_tar(self):
 
@@ -243,8 +247,11 @@ class Testools(unittest.TestCase):
                                               from_prepro_level=0,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
+        n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
     @pytest.mark.xfail
@@ -255,10 +262,54 @@ class Testools(unittest.TestCase):
                                               from_prepro_level=2,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
+        n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert gdir.has_file('gridded_data')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
         workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
+
+    @pytest.mark.xfail
+    def test_start_from_level_3(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=3,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+            assert gdir.has_file('climate_monthly')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+
+        # Tasks
+        task_list = [
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
+            tasks.prepare_for_inversion,
+            tasks.mass_conservation_inversion,
+            tasks.filter_inversion_output,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs)
+
+        df = utils.compile_glacier_statistics(gdirs, add_climate_period=[1920,
+                                                                         1960,
+                                                                         2000])
+        assert 'tstar_avg_temp_mean_elev' in df
+        assert '1905-1935_avg_temp_mean_elev' in df
 
 
 class TestFullRun(unittest.TestCase):
