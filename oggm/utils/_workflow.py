@@ -38,7 +38,8 @@ from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine)
-from oggm.utils._downloads import (get_demo_file, get_wgms_files)
+from oggm.utils._downloads import (get_demo_file, get_wgms_files,
+                                   get_rgi_glacier_entities)
 from oggm import cfg
 
 # Module logger
@@ -1821,7 +1822,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
 
 
-def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
+def initialize_merged_gdir(main, tribs=[], filename='climate_monthly',
                            input_filesuffix=''):
     """
     Creats a new GlacierDirectory is tributaries are merged to a main glacier
@@ -1833,10 +1834,8 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     ----------
     main : oggm.GlacierDirectory
         the main glacier
-    tribs : list of oggm.GlacierDirectories
+    tribs : list or dictionary containing oggm.GlacierDirectories
         true tributary glaciers to the main glacier
-    maindf : GeoPandasDataFrame
-        of the main glacier
     filename: str
         Baseline climate file
     input_filesuffix: str
@@ -1848,32 +1847,31 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     """
     from oggm.core.gis import define_glacier_region, merged_glacier_masks
 
+    # If its a dict, select the relevant ones
+    if isinstance(tribs, dict):
+        tribs = tribs[main.rgi_id]
     # make sure tributaries are iteratable
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier
     mfls = main.read_pickle('model_flowlines')
 
-    # create the new GlacierDirectory
+    # create the new GlacierDirectory from main glaciers GeoDataFrame
+    maindf = get_rgi_glacier_entities([main.rgi_id])
     # ------------------------------
     # 0. Get index location of the specific glacier
     idx = maindf.loc[maindf.RGIId == main.rgi_id].index
     assert len(idx) == 1
 
-    # add geometry to maindf
+    # add tributary geometries to maindf
+    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
     for trib in tribs:
         geom = trib.read_pickle('geometries')['polygon_hr']
         geom = salem.transform_geometry(geom, crs=trib.grid)
-        # TODO should do a concave hull here, or use flowlines to union
-        # TODO or most likely: write a gis.merged_glacier_masks which
-        # TODO writes a geometries.pickle including all tributaries
-        maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry'].union(geom)
-
-    # store united geometry as shapefile for later use
-    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
+        merged_geometry = merged_geometry.union(geom)
 
     # to get the center point, maximal extensions for DEM and single Polygon:
-    maindf.loc[idx, 'geometry'] = maindf.loc[idx, 'geometry'].convex_hull
+    maindf.loc[idx, 'geometry'] = merged_geometry.convex_hull
 
     # make some adjustments to the rgi dataframe
     # 1. update central point of new glacier
@@ -1883,10 +1881,15 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     maindf.loc[idx, 'CenLat'] = maindf.loc[idx, 'geometry'].centroid.y
     # 2. update names
     maindf.loc[idx, 'RGIId'] += '_merged'
-    maindf.loc[idx, 'Name'] += ' (merged)'
+    if maindf.loc[idx, 'Name'].iloc[0] is None:
+        maindf.loc[idx, 'Name'] = main.name + ' (merged)'
+    else:
+        maindf.loc[idx, 'Name'] += ' (merged)'
 
     # finally create new Glacier Directory
     # 1. set dx spacing to the one used for the flowlines
+    dx_method = cfg.PARAMS['grid_dx_method']
+    dx_spacing = cfg.PARAMS['fixed_dx']
     cfg.PARAMS['grid_dx_method'] = 'fixed'
     cfg.PARAMS['fixed_dx'] = mfls[-1].map_dx
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
@@ -1898,7 +1901,8 @@ def initialize_merged_gdir(main, tribs, maindf, filename='climate_monthly',
     merged_glacier_masks(merged, merged_geometry)
 
     # reset dx method
-    cfg.PARAMS['grid_dx_method'] = 'square'
+    cfg.PARAMS['grid_dx_method'] = dx_method
+    cfg.PARAMS['fixed_dx'] = dx_spacing
 
     # copy main climate file and climate info to new gdir
     climfilename = filename + '_' + main.rgi_id + input_filesuffix + '.nc'

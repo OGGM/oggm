@@ -7,10 +7,12 @@ from collections.abc import Sequence
 # External libs
 import multiprocessing as mp
 import numpy as np
+import geopandas as gpd
 
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
+from oggm.core import centerlines, flowline
 
 # MPI
 try:
@@ -318,3 +320,81 @@ def inversion_tasks(gdirs):
 
     # Filter
     execute_entity_task(tasks.filter_inversion_output, gdirs)
+
+
+def merge_glacier_tasks(gdirs, candidates, filename='climate_monthly',
+                        input_filesuffix=''):
+    """Shortcut function: run all tasks to merge tributaries to a main glacier
+
+    TODO - Automatic search for tributary glaciers
+    TODO - Every tributary should only be used once
+
+    Parameters
+    ----------
+    gdirs: list of GlacierDirectories
+    candidates: list of RGI IDs or Geopandas DataFrame
+        Contains possible Tributaries to the main glaciers
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+
+    Returns
+    -------
+    merged_gdirs: list of merged GlacierDirectories
+
+    """
+
+    # initialise candidates
+    if isinstance(candidates, list):
+        candidates = utils.get_rgi_glacier_entities(candidates)
+    elif not isinstance(candidates, gpd.GeoDataFrame):
+        raise RuntimeError('Format of candidates must be a list of RGI IDs '
+                           'or a GeoDataFrame')
+
+    # make sure gdirs is iteratable
+    gdirs = utils.tolist(gdirs)
+
+    # main glaciers should not be in candidates
+    if np.isin([gd.rgi_id for gd in gdirs], list(candidates.RGIId)).any():
+        raise RuntimeError('Main glaciers can not be in candidates')
+
+    gdirs_candidates = init_glacier_regions(candidates, reset=True, force=True)
+
+    # preprocess all candidates
+    gis_prepro_tasks(gdirs_candidates)
+
+    # find true tributary glaciers
+    tributaries = execute_entity_task(
+        centerlines.intersect_downstream_lines,
+        gdirs, candidates=gdirs_candidates)
+
+    # make one dictionary and a list of all gdirs for further preprocessing
+    tribs_dict = {}
+    gdirs_tribs = []
+    for trb in tributaries:
+        tribs_dict.update(trb)
+        for gd in trb.values():
+            gdirs_tribs += gd
+
+    # check if all tributaries are only used once
+    rgiids = [gd.rgi_id for gd in gdirs_tribs]
+    if not np.unique(rgiids).tolist() == rgiids:
+        raise RuntimeError('Every glacier can only be used once as tributary!')
+
+    # preprocess the tributaries to the end
+    climate_tasks(gdirs_tribs)
+    inversion_tasks(gdirs_tribs)
+    execute_entity_task(tasks.init_present_time_glacier, gdirs_tribs)
+
+    # create merged glacier directories
+    gdirs_merged = execute_entity_task(
+        utils.initialize_merged_gdir, gdirs, tribs=tribs_dict,
+        filename=filename, input_filesuffix=input_filesuffix)
+
+    # Merge the Tributary glacier flowlines to the main glacier one
+    execute_entity_task(flowline.merge_tributary_flowlines,
+                        gdirs_merged, tribs=tribs_dict,
+                        filename=filename, input_filesuffix=input_filesuffix)
+
+    return gdirs_merged

@@ -1923,7 +1923,8 @@ def terminus_width_correction(gdir, new_width=None):
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
-def intersect_downstream_lines(gdir, candidates):
+@entity_task(log)
+def intersect_downstream_lines(gdir, candidates=None):
     """Find tributaries to a main glacier by intersecting downstream lines
 
     This function might be called from a entity_task, so gdir is a single
@@ -1943,8 +1944,8 @@ def intersect_downstream_lines(gdir, candidates):
 
     Returns
     -------
-    tributaries: list of oggm.GlacierDirectory
-        The true tributary glaciers to the main glacier
+    tributaries: dict
+        Key is the main glacier rgi_id, values is a list of tributary rgi_ids
     """
 
     # make sure tributaries are iteratable
@@ -1962,6 +1963,10 @@ def intersect_downstream_lines(gdir, candidates):
 
     # loop over tributaries
     for trib in candidates:
+        # skip self
+        if gdir.rgi_id == trib.rgi_id:
+            continue
+
         # get tributary glacier downstream line and CRS
         _dline = trib.read_pickle('downstream_line')['full_line']
         _crs = trib.grid
@@ -1973,4 +1978,4 @@ def intersect_downstream_lines(gdir, candidates):
         if dline.intersects(_trans_dline.buffer(buffer)):
             tributaries.append(trib)
 
-    return tributaries
+    return {gdir.rgi_id: tributaries}

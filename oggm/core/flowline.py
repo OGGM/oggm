@@ -1809,9 +1809,11 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                             **kwargs)
 
 
-def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
+@entity_task(log)
+def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
                               input_filesuffix=''):
     """Merge multiple tributary glaciers to a main glacier
+    
     This function will merge multiple tributary glaciers to a main glacier
     and write modified `model_flowlines` to the main GlacierDirectory.
     Afterwards only the main GlacierDirectory must be processed and the results
@@ -1821,16 +1823,19 @@ def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
     functions within a suitable workflow.
     Parameters
     ----------
-    merged : oggm.GlacierDirectory
+    main : oggm.GlacierDirectory
         The new GDir of the glacier of interest
-    tribs: List of oggm.GlacierDirectories
-        The tributary glaciers to the merged glacier
+    tribs : list or dictionary containing oggm.GlacierDirectories
+        true tributary glaciers to the main glacier
     filename: str
         Baseline climate file
     input_filesuffix: str
         Filesuffix to the climate file
     """
 
+    # If its a dict, select the relevant ones
+    if isinstance(tribs, dict):
+        tribs = tribs[main.rgi_id.split('_merged')[0]]
     # make sure tributaries are iteratable
     tribs = utils.tolist(tribs)
 
@@ -1840,10 +1845,8 @@ def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
     lid = int(cfg.PARAMS['flowline_junction_pix'])
 
     # read flowlines of the Main glacier
-    mfls = merged.read_pickle('model_flowlines')
-    # check if [-1] is actually the main flowline, not flowing somewhere else
-    assert mfls[-1].flows_to is None
-    mfl = mfls.pop(-1)  # remove from list and treat seperately
+    mfls = main.read_pickle('model_flowlines')
+    mfl = mfls.pop(-1)  # remove main line from list and treat seperately
 
     for trib in tribs:
 
@@ -1862,7 +1865,7 @@ def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
 
             # 1. Step: Change projection to the main glaciers grid
             _line = salem.transform_geometry(tfl.line,
-                                             crs=trib.grid, to_crs=merged.grid)
+                                             crs=trib.grid, to_crs=main.grid)
 
             if nr == 0:
                 # cut tributary main line to size
@@ -1920,7 +1923,7 @@ def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
 
         # copy climate file to new gdir
         climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
-        climfile = os.path.join(merged.dir, climfilename)
+        climfile = os.path.join(main.dir, climfilename)
         shutil.copyfile(trib.get_filepath(filename,
                                           filesuffix=input_filesuffix),
                         climfile)
@@ -1936,4 +1939,4 @@ def merge_tributary_flowlines(merged, tribs, filename='climate_monthly',
     mfls.sort(key=lambda x: x.order, reverse=False)
 
     # Finally write the flowlines
-    merged.write_pickle(mfls, 'model_flowlines')
+    main.write_pickle(mfls, 'model_flowlines')

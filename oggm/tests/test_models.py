@@ -2674,7 +2674,7 @@ class TestMergedHEF(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['correct_for_neg_flux'] = True
-        cfg.PARAMS['baseline_climate'] = ''
+        cfg.PARAMS['baseline_climate'] = 'HISTALP'
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 100
         cfg.PARAMS['prcp_scaling_factor'] = 1.75
@@ -2692,53 +2692,19 @@ class TestMergedHEF(unittest.TestCase):
 
     @pytest.mark.slow
     def test_merged_simulation(self):
-
-        from oggm.core import centerlines, flowline
         import geopandas as gpd
 
         hef_file = utils.get_demo_file('rgi_oetztal.shp')
         rgidf = gpd.read_file(hef_file)
 
-        # HEF = Main glacier
-
-        # Get HEF, Kesselwand (True tributary) and Gepatsch (a wrong candidate)
+        # Get HEF and Kesselwand
         glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
-                          (rgidf.RGIId == 'RGI50-11.00787') |
-                          (rgidf.RGIId == 'RGI50-11.00746')].copy()
+                          (rgidf.RGIId == 'RGI50-11.00787')].copy()
         gdirs = workflow.init_glacier_regions(glcdf)
-
-        # preprocessing
-        tasklist = [
-            tasks.glacier_masks,
-            tasks.compute_centerlines,
-            tasks.initialize_flowlines,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-            tasks.catchment_area,
-            tasks.catchment_intersections,
-            tasks.catchment_width_geom,
-            tasks.catchment_width_correction,
-            tasks.process_custom_climate_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
-            tasks.prepare_for_inversion,
-            tasks.mass_conservation_inversion,
-            tasks.filter_inversion_output,
-            tasks.init_present_time_glacier]
-
-        for task in tasklist:
-            workflow.execute_entity_task(task, gdirs)
-
-        # split hef from candidates
-        id = [gd.rgi_id == 'RGI50-11.00897' for gd in gdirs]
-        hef_gdir = gdirs.pop(np.where(id)[0][0])
-
-        # find true Tributary glaciers to HEF
-        gdir_tribs = centerlines.intersect_downstream_lines(hef_gdir, gdirs)
-
-        # test that Gepatsch is missing and Kesselwand is not
-        assert len(gdir_tribs) == 1
-        assert gdir_tribs[0].rgi_id == 'RGI50-11.00787'
+        workflow.gis_prepro_tasks(gdirs)
+        workflow.climate_tasks(gdirs)
+        workflow.inversion_tasks(gdirs)
+        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
         # run parameters
         years = 200  # arbitrary
@@ -2748,31 +2714,38 @@ class TestMergedHEF(unittest.TestCase):
 
         # run HEF and Kesselwandferner as entities
         workflow.execute_entity_task(tasks.run_constant_climate,
-                                     [hef_gdir] + gdir_tribs,
+                                     gdirs,
                                      nyears=years, y0=y0,
                                      output_filesuffix='_entity',
                                      temperature_bias=tbias, bias=mbbias)
 
-        # create the merged GlacierDirectory
-        merged = utils.initialize_merged_gdir(hef_gdir, gdir_tribs,
-                                              glcdf)
-        # now merge Kesselwandferner to HEF
-        flowline.merge_tributary_flowlines(merged, gdir_tribs)
+        ds_entity = utils.compile_run_output(gdirs,
+                                             path=False, filesuffix='_entity')
+
+        # split hef from kwf
+        id = [gd.rgi_id == 'RGI50-11.00897' for gd in gdirs]
+        hef_gdir = gdirs.pop(np.where(id)[0][0])
+
+        # list of possible tributaries:
+        tributaries = ['RGI60-11.00787',  # 'Kesselwandferner',
+                       'RGI60-11.00746']  # 'Gepatschferner',
+
+        # merge HEF and KWF
+        gdir_merged = workflow.merge_glacier_tasks(hef_gdir, tributaries)
 
         # and run the merged glacier
-        tasks.run_constant_climate(merged, output_filesuffix='_merged',
-                                   nyears=years, y0=y0,
-                                   temperature_bias=tbias, bias=mbbias)
+        workflow.execute_entity_task(tasks.run_constant_climate,
+                                     gdir_merged, output_filesuffix='_merged',
+                                     nyears=years, y0=y0,
+                                     temperature_bias=tbias, bias=mbbias)
 
-        ds_entity = utils.compile_run_output([hef_gdir] + gdir_tribs,
-                                             path=False, filesuffix='_entity')
-        ds_merged = utils.compile_run_output([merged],
+        ds_merged = utils.compile_run_output(gdir_merged,
                                              path=False, filesuffix='_merged')
 
-        # with this setting, both runs should still be identical after 50yrs
+        # with this setting, both runs should still be quite close after 50yrs
         assert_allclose(ds_entity.volume.isel(time=50).sum(),
                         ds_merged.volume.isel(time=50),
-                        rtol=1e-3)
+                        rtol=1e-2)
 
         # After 100yrs a difference will be present but should still be small
         assert_allclose(ds_entity.volume.isel(time=100).sum(),
