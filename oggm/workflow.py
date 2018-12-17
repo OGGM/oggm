@@ -124,6 +124,9 @@ def execute_entity_task(task, gdirs, **kwargs):
     except TypeError:
         gdirs = [gdirs]
 
+    if len(gdirs) == 0:
+        return
+
     log.workflow('Execute entity task %s on %d glaciers',
                  task.__name__, len(gdirs))
 
@@ -184,7 +187,27 @@ def execute_parallel_tasks(gdir, tasks):
             task()
 
 
-def init_glacier_regions(rgidf=None, reset=False, force=False):
+def _gdirs_from_prepro(entity, from_prepro_level=None,
+                       prepro_border=None, prepro_rgi_version=None):
+
+    if prepro_border is None:
+        prepro_border = cfg.PARAMS['border']
+    if prepro_rgi_version is None:
+        prepro_rgi_version = cfg.PARAMS['rgi_version']
+    tar_url = utils.prepro_gdir_url(prepro_rgi_version,
+                                    entity.RGIId,
+                                    prepro_border,
+                                    from_prepro_level)
+    from_tar = utils.file_downloader(tar_url)
+    if from_tar is None:
+        raise RuntimeError('Could not find file at ' + tar_url)
+    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+
+def init_glacier_regions(rgidf=None, reset=False, force=False,
+                         from_prepro_level=None, prepro_border=None,
+                         prepro_rgi_version=None,
+                         from_tar=False, delete_tar=False):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -201,6 +224,20 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
     force : bool
         setting `reset=True` will trigger a yes/no question to the user. Set
         `force=True` to avoid this.
+    from_prepro_level : int
+        get the gdir data from the official pre-processed pool. See the
+        documentation for more information
+    prepro_border : int
+        for `from_prepro_level` only: if you want to override the default
+        behavior which is to use `cfg.PARAMS['border']`
+    prepro_rgi_version : str
+        for `from_prepro_level` only: if you want to override the default
+        behavior which is to use `cfg.PARAMS['rgi_version']`
+    from_tar : bool, default=False
+        extract the gdir data from a tar file. If set to `True`,
+        will check for a tar file at the expected location in `base_dir`.
+    delete_tar : bool, default=False
+        delete the original tar file after extraction.
 
     Returns
     -------
@@ -221,17 +258,31 @@ def init_glacier_regions(rgidf=None, reset=False, force=False):
     if rgidf is None:
         if reset:
             raise ValueError('Cannot use reset without a rgi file')
+        log.workflow('init_glacier_regions by parsing available folders.')
         # The dirs should be there already
         gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
         for root, _, files in os.walk(gl_dir):
             if files and ('dem.tif' in files):
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
-        for _, entity in rgidf.iterrows():
-            gdir = oggm.GlacierDirectory(entity, reset=reset)
-            if not os.path.exists(gdir.get_filepath('dem')):
-                new_gdirs.append((gdir, dict(entity=entity)))
-            gdirs.append(gdir)
+        if from_prepro_level is not None:
+            log.workflow('init_glacier_regions from prepro level {} on '
+                         '{} glaciers.'.format(from_prepro_level, len(rgidf)))
+            entitites = []
+            for _, entity in rgidf.iterrows():
+                entitites.append(entity)
+            gdirs = execute_entity_task(_gdirs_from_prepro, entitites,
+                                        from_prepro_level=from_prepro_level,
+                                        prepro_border=prepro_border,
+                                        prepro_rgi_version=prepro_rgi_version)
+        else:
+            for _, entity in rgidf.iterrows():
+                gdir = oggm.GlacierDirectory(entity, reset=reset,
+                                             from_tar=from_tar,
+                                             delete_tar=delete_tar)
+                if not os.path.exists(gdir.get_filepath('dem')):
+                    new_gdirs.append((gdir, dict(entity=entity)))
+                gdirs.append(gdir)
 
     # We can set the intersects file automatically here
     if (cfg.PARAMS['use_intersects'] and new_gdirs and

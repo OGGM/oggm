@@ -214,7 +214,7 @@ def patch_url_retrieve_github(url, *args, **kwargs):
     """A simple patch to OGGM's download function to make sure we don't
     download elsewhere than expected."""
 
-    assert 'github' in url
+    assert 'github' in url or 'cluster.klima.uni-bremen' in url
     return oggm_urlretrieve(url, *args, **kwargs)
 
 

@@ -183,7 +183,129 @@ def random_for_plot():
     return gdirs
 
 
-class TestWorkflow(unittest.TestCase):
+class Testools(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_workflow_tools')
+        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = self.dldir
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+
+        # Read in the RGI file
+        rgi_file = get_demo_file('rgi_oetztal.shp')
+        self.rgidf = gpd.read_file(rgi_file)
+        self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
+                               for rid in self.rgidf.RGIId]
+        cfg.PARAMS['use_multiprocessing'] = True
+        cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+        cfg.PATHS['working_dir'] = self.testdir
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+        shutil.rmtree(self.dldir)
+
+    def clean_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.dldir, reset=True)
+
+    def test_to_and_from_tar(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf)
+
+        # End - compress all
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        # Test - reopen form tar
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True,
+                                              delete_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert not os.path.exists(gdir.dir + '.tar.gz')
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('gridded_data')
+            assert os.path.exists(gdir.dir + '.tar.gz')
+
+    @pytest.mark.xfail
+    def test_start_from_level_0(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=0,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    @pytest.mark.xfail
+    def test_start_from_level_2(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=2,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
+
+    @pytest.mark.xfail
+    def test_start_from_level_3(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=3,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+            assert gdir.has_file('climate_monthly')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+
+    @pytest.mark.xfail
+    def test_start_from_level_4(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+
+        df = utils.compile_glacier_statistics(gdirs)
+        assert 'dem_med_elev' in df
+
+        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
+                                                                         1960,
+                                                                         2000])
+        assert 'tstar_avg_temp_mean_elev' in df
+        assert '1905-1935_avg_temp_mean_elev' in df
+
+
+class TestFullRun(unittest.TestCase):
 
     @pytest.mark.slow
     def test_some_characs(self):
@@ -193,10 +315,11 @@ class TestWorkflow(unittest.TestCase):
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs)
         self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
+        assert np.all(dfc.t_star > 1900)
+        dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
         assert cc < -0.8
-        assert np.all(dfc.t_star > 1900)
         assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @pytest.mark.slow

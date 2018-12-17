@@ -178,7 +178,7 @@ def _plot_map(plotfunc):
                                    gdirs[0].rgi_id + '.png')
 
         if savefig is not None:
-            plt.savefig(savefig, savefig_kwargs=savefig_kwargs)
+            plt.savefig(savefig, **savefig_kwargs)
             plt.close()
 
     return newplotfunc
