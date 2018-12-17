@@ -363,6 +363,7 @@ def test_coxe():
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
     cfg.PARAMS['border'] = 40
+    cfg.PARAMS['clip_tidewater_border'] = False
     cfg.PARAMS['use_multiple_flowlines'] = False
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')

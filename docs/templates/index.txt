@@ -104,7 +104,7 @@ Get in touch
 - Follow us on `Twitter`_.
 - Or you can always send us an `e-mail`_ the good old way.
 
-.. _e-mail: info@oggm.org
+.. _e-mail: https://mailman.zfn.uni-bremen.de/cgi-bin/mailman/listinfo/oggm-users
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls

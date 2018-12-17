@@ -35,14 +35,14 @@ def process_custom_climate_data(gdir):
 
     if not (('climate_file' in cfg.PATHS) and
             os.path.exists(cfg.PATHS['climate_file'])):
-        raise IOError('Custom climate file not found')
+        raise InvalidParamsError('Custom climate file not found')
 
     if cfg.PARAMS['baseline_climate'] not in ['', 'CUSTOM']:
-        raise ValueError("When using custom climate data please set "
-                         "PARAMS['baseline_climate'] to an empty string "
-                         "or `CUSTOM`. Note that you can now use the "
-                         "`process_histalp_data` task for automated HISTALP "
-                         "data processing.")
+        raise InvalidParamsError("When using custom climate data please set "
+                                 "PARAMS['baseline_climate'] to an empty "
+                                 "string or `CUSTOM`. Note also that you can "
+                                 "now use the `process_histalp_data` task for "
+                                 "automated HISTALP data processing.")
 
     # read the file
     fpath = cfg.PATHS['climate_file']
@@ -53,12 +53,16 @@ def process_custom_climate_data(gdir):
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
     y0, y1 = yrs[0], yrs[-1]
+    if cfg.PARAMS['baseline_y0'] != 0:
+        y0 = cfg.PARAMS['baseline_y0']
+    if cfg.PARAMS['baseline_y1'] != 0:
+        y1 = cfg.PARAMS['baseline_y1']
     nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                      t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time
     ny, r = divmod(len(time), 12)
     if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        raise InvalidParamsError('Climate data should be full years')
 
     # Units
     assert nc_ts._nc.variables['hgt'].units.lower() in ['m', 'meters', 'meter',
@@ -124,7 +128,8 @@ def process_cru_data(gdir):
                       "file instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'CRU':
-        raise ValueError("cfg.PARAMS['baseline_climate'] should be set to CRU")
+        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+                                 "set to CRU")
 
     # read the climatology
     clfile = utils.get_cru_cl_file()
@@ -466,8 +471,8 @@ def process_histalp_data(gdir):
                       "instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'HISTALP':
-        raise ValueError("cfg.PARAMS['baseline_climate'] should be set to "
-                         "HISTALP.")
+        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+                                 "set to HISTALP.")
 
     # read the time out of the pure netcdf file
     ft = utils.get_histalp_file('tmp')
@@ -696,7 +701,8 @@ def mb_yearly_climate_on_height(gdir, heights, *,
 
     ny, r = divmod(len(time), 12)
     if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        raise InvalidParamsError('Climate data should be N full years '
+                                 'exclusively')
     # Last year gives the tone of the hydro year
     years = np.arange(time[-1].year-ny+1, time[-1].year+1, 1)
 
@@ -995,11 +1001,10 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                 vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
-                        raise ValueError('The reference t* you are trying '
-                                         'to use was calibrated with '
-                                         'different MB parameters. You '
-                                         'might have to run the calibration '
-                                         'manually.')
+                        msg = ('The reference t* you are trying to use was '
+                               'calibrated with different MB parameters. You '
+                               'might have to run the calibration manually.')
+                        raise MassBalanceCalibrationError(msg)
                 ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
             else:
                 # Use the the local calibration
