@@ -2674,7 +2674,7 @@ class TestMergedHEF(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['correct_for_neg_flux'] = True
-        cfg.PARAMS['baseline_climate'] = 'HISTALP'
+        cfg.PARAMS['baseline_climate'] = 'CUSTOM'
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 100
         cfg.PARAMS['prcp_scaling_factor'] = 1.75
