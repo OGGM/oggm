@@ -373,8 +373,8 @@ def inversion_tasks(gdirs):
     execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def merge_glacier_tasks(gdirs, candidates, filename='climate_monthly',
-                        input_filesuffix=''):
+def merge_glacier_tasks(gdirs, candidates, maindf=None,
+                        filename='climate_monthly', input_filesuffix=''):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
     TODO - Automatic search for tributary glaciers
@@ -385,6 +385,9 @@ def merge_glacier_tasks(gdirs, candidates, filename='climate_monthly',
     gdirs: list of GlacierDirectories
     candidates: list of RGI IDs or Geopandas DataFrame
         Contains possible Tributaries to the main glaciers
+    maindf: geopandas.GeoDataFrame
+        which contains the main glacier, if None: will be downloaded in
+        initialize_merged_gdir
     filename: str
         Baseline climate file
     input_filesuffix: str
@@ -440,7 +443,7 @@ def merge_glacier_tasks(gdirs, candidates, filename='climate_monthly',
 
     # create merged glacier directories
     gdirs_merged = execute_entity_task(
-        utils.initialize_merged_gdir, gdirs, tribs=tribs_dict,
+        utils.initialize_merged_gdir, gdirs, tribs=tribs_dict, maindf=maindf,
         filename=filename, input_filesuffix=input_filesuffix)
 
     # Merge the Tributary glacier flowlines to the main glacier one

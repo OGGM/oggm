@@ -2731,7 +2731,8 @@ class TestMergedHEF(unittest.TestCase):
                           (rgidf.RGIId == 'RGI50-11.00787')].copy()
 
         # merge HEF and KWF
-        gdir_merged = workflow.merge_glacier_tasks(hef_gdir, trbdf)
+        gdir_merged = workflow.merge_glacier_tasks(hef_gdir, trbdf,
+                                                   maindf=glcdf)
 
         # and run the merged glacier
         workflow.execute_entity_task(tasks.run_constant_climate,
