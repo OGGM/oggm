@@ -605,7 +605,7 @@ class FlowlineModel(object):
     def run_until(self, y1):
         """Runs the model from the current year up to a given year y1.
 
-        This function runs the model within for the difference y1-self.y0
+        This function runs the model for the time difference y1-self.y0
         If self.y0 has not been specified at some point, it is 0 and y1 will
         be the time span in years to run the model for.
 
