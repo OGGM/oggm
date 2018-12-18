@@ -2722,17 +2722,13 @@ class TestMergedHEF(unittest.TestCase):
         ds_entity = utils.compile_run_output(gdirs,
                                              path=False, filesuffix='_entity')
 
-        # split hef from kwf
-        id = [gd.rgi_id == 'RGI50-11.00897' for gd in gdirs]
-        hef_gdir = gdirs.pop(np.where(id)[0][0])
-
-        # KWF and Gepatsch as possible tributaries
-        trbdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00746') |
-                          (rgidf.RGIId == 'RGI50-11.00787')].copy()
+        # HEF plus KWF and Gepatsch as possible tributaries
+        glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
+                          (rgidf.RGIId == 'RGI50-11.00787') |
+                          (rgidf.RGIId == 'RGI50-11.00746')].copy()
 
         # merge HEF and KWF
-        gdir_merged = workflow.merge_glacier_tasks(hef_gdir, trbdf,
-                                                   maindf=glcdf)
+        gdir_merged = workflow.merge_glacier_tasks(glcdf, ['RGI50-11.00897'])
 
         # and run the merged glacier
         workflow.execute_entity_task(tasks.run_constant_climate,

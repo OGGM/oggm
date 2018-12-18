@@ -2008,7 +2008,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
 
 
-def initialize_merged_gdir(main, tribs=[], maindf=None,
+def initialize_merged_gdir(main, tribs=[], glcdf=None,
                            filename='climate_monthly', input_filesuffix=''):
     """
     Creats a new GlacierDirectory is tributaries are merged to a main glacier
@@ -2022,7 +2022,7 @@ def initialize_merged_gdir(main, tribs=[], maindf=None,
         the main glacier
     tribs : list or dictionary containing oggm.GlacierDirectories
         true tributary glaciers to the main glacier
-    maindf: geopandas.GeoDataFrame
+    glcdf: geopandas.GeoDataFrame
         which contains the main glacier, will be downloaded if None
     filename: str
         Baseline climate file
@@ -2044,13 +2044,14 @@ def initialize_merged_gdir(main, tribs=[], maindf=None,
     # read flowlines of the Main glacier
     mfls = main.read_pickle('model_flowlines')
 
-    # create the new GlacierDirectory from main glaciers GeoDataFrame
-    if maindf is None:
-        maindf = get_rgi_glacier_entities([main.rgi_id])
     # ------------------------------
-    # 0. Get index location of the specific glacier
-    idx = maindf.loc[maindf.RGIId == main.rgi_id].index
-    assert len(idx) == 1
+    # 0. create the new GlacierDirectory from main glaciers GeoDataFrame
+    # Should be passed along, if not download it
+    if glcdf is None:
+        glcdf = get_rgi_glacier_entities([main.rgi_id])
+    # Get index location of the specific glacier
+    idx = glcdf.loc[glcdf.RGIId == main.rgi_id].index
+    maindf = glcdf.loc[idx].copy()
 
     # add tributary geometries to maindf
     merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
