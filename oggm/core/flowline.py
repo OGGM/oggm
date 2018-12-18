@@ -603,6 +603,17 @@ class FlowlineModel(object):
         raise NotImplementedError
 
     def run_until(self, y1):
+        """Runs the model from the current year up to a given year y1.
+
+        This function runs the model within for the difference y1-self.y0
+        If self.y0 has not been specified at some point, it is 0 and y1 will
+        be the time span in years to run the model for.
+
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        """
 
         t = (y1-self.y0) * SEC_IN_YEAR
         while self.t < t:
@@ -622,18 +633,30 @@ class FlowlineModel(object):
                             store_monthly_step=False):
         """Runs the model and returns intermediate steps in xarray datasets.
 
-        The function returns two datasets:
-        - model run: this dataset stores the entire glacier geometry. It is
-          useful to visualize the glacier geometry or to restart a new run
-          from a modelled geometry. The glacier state is stored at the begining
-          of each hydrological year (not in between in order to spare disk
-          space)
-        - model diagnostics: this dataset stores a few diagnostic variables
-          such as the volume, area, length and ELA of the glacier. It is
-          stored at a monthly timestep.
+        This function repeatedly calls FlowlineModel.run_until for either
+        monthly or yearly time steps up till the upper time boundary y1.
 
-        You can store the dataset to disk in netcdf files by providing the
-        run_path and diag_path arguments.
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        run_path : str
+            Path and filename where to store the model run dataset
+        diag_path : str
+            Path and filename where to store the model diagnostics dataset
+        store_monthly_step : Bool
+            If True (False)  model diagnostics will be stored monthly (yearly)
+
+        Returns
+        -------
+        run_ds : xarray.Dataset
+            stores the entire glacier geometry. It is useful to visualize the
+            glacier geometry or to restart a new run from a modelled geometry.
+            The glacier state is stored at the begining of each hydrological
+            year (not in between in order to spare disk space).
+        diag_ds : xarray.Dataset
+            stores a few diagnostic variables such as the volume, area, length
+            and ELA of the glacier.
         """
 
         # time
