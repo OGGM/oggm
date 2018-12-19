@@ -2138,7 +2138,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
 
     return merged
 
-  
+
 @entity_task(log)
 def gdir_to_tar(gdir, delete=True):
     """Writes the content of a glacier directory to a tar file.

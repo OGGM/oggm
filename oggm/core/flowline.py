@@ -1813,7 +1813,7 @@ def run_from_climate_data(gdir, ys=None, ye=None,
 def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
                               input_filesuffix=''):
     """Merge multiple tributary glaciers to a main glacier
-    
+
     This function will merge multiple tributary glaciers to a main glacier
     and write modified `model_flowlines` to the main GlacierDirectory.
     Afterwards only the main GlacierDirectory must be processed and the results
