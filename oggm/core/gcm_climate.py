@@ -19,14 +19,20 @@ log = logging.getLogger(__name__)
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      time_unit='days since 1801-01-01 00:00:00',
                      calendar=None):
-    """ Applies the anomaly method to the climate data and stores the data in a
-    format that can be used by the OGGM mass balance model.
+    """ Applies the anomaly method to GCM climate data
 
-    For an example implementation see
-    :ref:`process_cesm_data()`
+    This function can be applied to any GCM data, if it is provided in a
+    suitable :py:class:`xarray.DataArray`. See parameter section for format
+    description.
+
+    For CESM-LME a specific function :py:func:`tasks.process_cesm_data` is
+    available which does the preprocessing of the data and subsequently calls
+    this function.
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
     prcp    : xarray.DataArray - format:
@@ -126,6 +132,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
     fpath_temp : str

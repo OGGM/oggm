@@ -1457,12 +1457,15 @@ def glacier_from_netcdf(path):
 
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
-    """First task after inversion. Merges the data from the various
-    preprocessing tasks into a stand-alone numerical glacier ready for run.
+    """Merges data from preprocessing tasks. First task after inversion!
+
+    This updates the `mode_flowlines` file and creates a stand-alone numerical
+    glacier ready to run.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # Some vars
@@ -1584,6 +1587,30 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
      - it is inelegant
 
      Possibly a method based on mass-conservation checks would be more robust.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    mb_model : :py:class:`core.MassBalanceModel`
+        a MassBalanceModel instance
+    ys : int
+        start year of the model run (default: from the config file)
+    ye : int
+        end year of the model run (default: from the config file)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
      """
 
     kwargs.setdefault('fs', cfg.PARAMS['fs'])
@@ -1636,8 +1663,14 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation
     y0 : int, optional
@@ -1710,8 +1743,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation (default: as long as needed for reaching
         equilibrium)
@@ -1770,10 +1809,16 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           **kwargs):
-    """ Runs glacier with climate input from CRU or a GCM.
+    """ Runs a glacier with climate input from e.g. CRU or a GCM.
+
+    This will initialize a
+    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.flowline.robust_model_run`.
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     ys : int
         start year of the model run (default: from the config file)
     ye : int

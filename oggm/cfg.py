@@ -155,7 +155,7 @@ _doc = ('A hypsometry file computed by OGGM and provided in the same format '
         'as the RGI (useful for diagnostics).')
 BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
-_doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
+_doc = 'A list of :py:class:`oggm.Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
 _doc = ('A "better" version of the Centerlines, now on a regular spacing '
@@ -270,7 +270,8 @@ def set_logging_config(logging_level='INFO'):
 def initialize(file=None, logging_level='INFO'):
     """Read the configuration file containing the run's parameters.
 
-    This should be the first call of most (all?) OGGM simulations.
+    This should be the first call, before using any of the other OGGM modules
+    for most (all?) OGGM simulations.
 
     Parameters
     ----------

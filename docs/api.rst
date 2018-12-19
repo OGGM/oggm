@@ -91,6 +91,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_cru_data
     tasks.process_histalp_data
     tasks.process_custom_climate_data
+    tasks.process_gcm_data
     tasks.process_cesm_data
     tasks.local_t_star
     tasks.mu_star_calibration
@@ -200,3 +201,4 @@ Models
     ConstantMassBalance
     RandomMassBalance
     UncertainMassBalance
+    MultipleFlowlineMassBalance
