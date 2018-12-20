@@ -54,7 +54,8 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # variables
@@ -172,7 +173,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     glen_a : float
         glen's creep parameter A
     fs : float
@@ -311,6 +313,14 @@ def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
 @entity_task(log, writes=['inversion_output'])
 def filter_inversion_output(gdir):
     """Filters the last few grid point whilst conserving total volume.
+
+    The last few grid points sometimes are noisy or can have a negative slope.
+    This function filters them while conserving the total volume.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     if gdir.is_tidewater:
@@ -365,7 +375,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     add_slope : bool
         whether a corrective slope factor should be used or not
@@ -480,7 +490,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     add_slope : bool
         whether a corrective slope factor should be used or not

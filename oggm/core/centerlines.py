@@ -774,11 +774,17 @@ def compute_centerlines(gdir, heads=None):
     They are then sorted according to the modified Strahler number:
     http://en.wikipedia.org/wiki/Strahler_number
 
+    This function does not initialize a :py:class:`oggm.Centerline` but
+    calculates routes along the topography and makes a
+    :py:class:`shapely.Linestring` object from them.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     heads : list, optional
-        list of shpg.Points to use as line heads (default is to compute them
-        like Kienholz did)
+        list of shapely.geometry.Points to use as line heads (default is to
+        compute them like Kienholz did)
     """
 
     # Params
@@ -882,7 +888,7 @@ def compute_centerlines(gdir, heads=None):
 
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_line(gdir):
-    """Compute the line continuing the glacier.
+    """Computes the Flowline along the unglaciated downstream topography
 
     The idea is simple: starting from the glacier tail, compute all the routes
     to all local minimas found at the domain edge. The cheapest is "The One".
@@ -893,7 +899,8 @@ def compute_downstream_line(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # For tidewater glaciers no need for all this
@@ -1110,11 +1117,13 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
+
     Also computes the downstream's altitude.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # For tidewater glaciers no need for all this
@@ -1385,7 +1394,8 @@ def catchment_area(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # Variables
@@ -1489,9 +1499,14 @@ def catchment_area(gdir):
 def catchment_intersections(gdir):
     """Computes the intersections between the catchments.
 
+    A glacier usually consists of several flowlines and each flowline has a
+    distinct catchment area. This function calculates the intersections between
+    these areas.
+
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
@@ -1526,8 +1541,7 @@ def catchment_intersections(gdir):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def initialize_flowlines(gdir):
-    """ Transforms the geometrical Centerlines in the more "physical"
-    "Inversion Flowlines".
+    """ Computes more physical Inversion Flowlines from geometrical Centerlines
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
@@ -1536,7 +1550,8 @@ def initialize_flowlines(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables
@@ -1632,7 +1647,8 @@ def catchment_width_geom(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables
@@ -1746,7 +1762,8 @@ def catchment_width_correction(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables

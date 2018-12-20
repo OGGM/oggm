@@ -606,6 +606,17 @@ class FlowlineModel(object):
         raise NotImplementedError
 
     def run_until(self, y1):
+        """Runs the model from the current year up to a given year y1.
+
+        This function runs the model for the time difference y1-self.y0
+        If self.y0 has not been specified at some point, it is 0 and y1 will
+        be the time span in years to run the model for.
+
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        """
 
         t = (y1-self.y0) * SEC_IN_YEAR
         while self.t < t:
@@ -625,18 +636,30 @@ class FlowlineModel(object):
                             store_monthly_step=False):
         """Runs the model and returns intermediate steps in xarray datasets.
 
-        The function returns two datasets:
-        - model run: this dataset stores the entire glacier geometry. It is
-          useful to visualize the glacier geometry or to restart a new run
-          from a modelled geometry. The glacier state is stored at the begining
-          of each hydrological year (not in between in order to spare disk
-          space)
-        - model diagnostics: this dataset stores a few diagnostic variables
-          such as the volume, area, length and ELA of the glacier. It is
-          stored at a monthly timestep.
+        This function repeatedly calls FlowlineModel.run_until for either
+        monthly or yearly time steps up till the upper time boundary y1.
 
-        You can store the dataset to disk in netcdf files by providing the
-        run_path and diag_path arguments.
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        run_path : str
+            Path and filename where to store the model run dataset
+        diag_path : str
+            Path and filename where to store the model diagnostics dataset
+        store_monthly_step : Bool
+            If True (False)  model diagnostics will be stored monthly (yearly)
+
+        Returns
+        -------
+        run_ds : xarray.Dataset
+            stores the entire glacier geometry. It is useful to visualize the
+            glacier geometry or to restart a new run from a modelled geometry.
+            The glacier state is stored at the begining of each hydrological
+            year (not in between in order to spare disk space).
+        diag_ds : xarray.Dataset
+            stores a few diagnostic variables such as the volume, area, length
+            and ELA of the glacier.
         """
 
         # time
@@ -1437,12 +1460,15 @@ def glacier_from_netcdf(path):
 
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
-    """First task after inversion. Merges the data from the various
-    preprocessing tasks into a stand-alone numerical glacier ready for run.
+    """Merges data from preprocessing tasks. First task after inversion!
+
+    This updates the `mode_flowlines` file and creates a stand-alone numerical
+    glacier ready to run.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # Some vars
@@ -1564,6 +1590,30 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
      - it is inelegant
 
      Possibly a method based on mass-conservation checks would be more robust.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    mb_model : :py:class:`core.MassBalanceModel`
+        a MassBalanceModel instance
+    ys : int
+        start year of the model run (default: from the config file)
+    ye : int
+        end year of the model run (default: from the config file)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
      """
 
     kwargs.setdefault('fs', cfg.PARAMS['fs'])
@@ -1616,8 +1666,14 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation
     y0 : int, optional
@@ -1690,8 +1746,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation (default: as long as needed for reaching
         equilibrium)
@@ -1750,10 +1812,16 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           **kwargs):
-    """ Runs glacier with climate input from CRU or a GCM.
+    """ Runs a glacier with climate input from e.g. CRU or a GCM.
+
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     ys : int
         start year of the model run (default: from the config file)
     ye : int

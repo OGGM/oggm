@@ -907,7 +907,21 @@ def aster_zone(lon_ex, lat_ex):
 
 
 def get_demo_file(fname):
-    """Returns the path to the desired OGGM file."""
+    """Returns the path to the desired OGGM-sample-file.
+
+    If Sample data is not cached it will be downloaded from
+    https://github.com/OGGM/oggm-sample-data
+
+    Parameters
+    ----------
+    fname : str
+        Filename of the desired OGGM-sample-file
+
+    Returns
+    -------
+    str
+        Absolute path to the desired file.
+    """
 
     d = download_oggm_files()
     if fname in d:
@@ -939,7 +953,7 @@ def get_wgms_files():
 
     Returns
     -------
-    (file, dir): paths to the files
+    (file, dir) : paths to the files
     """
 
     download_oggm_files()
@@ -960,7 +974,7 @@ def get_glathida_file():
 
     Returns
     -------
-    file: paths to the file
+    file : paths to the file
     """
 
     # Roll our own
@@ -980,14 +994,15 @@ def get_rgi_dir(version=None, reset=False):
 
     Parameters
     ----------
-    region: str
-        from '01' to '19'
-    version: str
+    version : str
         '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the RGI directory first and downloads the data
 
     Returns
     -------
-    path to the RGI directory
+    str
+        path to the RGI directory
     """
 
     with _get_download_lock():
@@ -1051,14 +1066,17 @@ def get_rgi_region_file(region, version=None, reset=False):
 
     Parameters
     ----------
-    region: str
+    region : str
         from '01' to '19'
-    version: str
+    version : str
         '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the RGI directory first and downloads the data
 
     Returns
     -------
-    path to the RGI shapefile
+    str
+        path to the RGI shapefile
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
@@ -1068,18 +1086,21 @@ def get_rgi_region_file(region, version=None, reset=False):
 
 
 def get_rgi_glacier_entities(rgi_ids, version=None):
-    """Get a list of glacier oulines selected from their IDs.
+    """Get a list of glacier outlines selected from their RGI IDs.
+
+    Will download RGI data if not present.
 
     Parameters
     ----------
-    rgi_ids: list of str
+    rgi_ids : list of str
         the glaciers you want the outlines for
-    version: list of str
+    version : str
         the rgi version
 
     Returns
     -------
-    a geodataframe with the list of glaciers
+    geopandas.GeoDataFrame
+        containing the desired RGI glacier outlines
     """
 
     regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
@@ -1104,9 +1125,17 @@ def get_rgi_intersects_dir(version=None, reset=False):
 
     If the files are not present, download them.
 
+    Parameters
+    ----------
+    version : str
+        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the intersects before redownloading them
+
     Returns
     -------
-    path to the directory
+    str
+        path to the directory
     """
 
     with _get_download_lock():
@@ -1183,18 +1212,19 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
 
     Parameters
     ----------
-    region: str
+    region : str
         from '00' to '19', with '00' being the global file (deprecated).
         From RGI version '61' onwards, please use `get_rgi_intersects_entities`
         with a list of glaciers instead of relying to the global file.
-    version: str
+    version : str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
-    reset: bool
-        redownload the RGI file.
+    reset : bool
+        If True, deletes the intersect file before redownloading it
 
     Returns
     -------
-    path to the RGI intersects shapefile
+    str
+        path to the RGI intersects shapefile
     """
 
     if version is None:
@@ -1219,18 +1249,19 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
 
 
 def get_rgi_intersects_entities(rgi_ids, version=None):
-    """Get a list of glacier intersects selected from their IDs.
+    """Get a list of glacier intersects selected from their RGI IDs.
 
     Parameters
     ----------
-    rgi_ids: list
+    rgi_ids: list of str
         list of rgi_ids you want to look for intersections for
     version: str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
 
     Returns
     -------
-    a GeoDataFrame with the selected intersects
+    geopandas.GeoDataFrame
+        with the selected intersects
     """
 
     if version is None:
@@ -1254,17 +1285,20 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
 
 
 def get_cru_file(var=None):
-    """Returns a path to the desired CRU TS file.
+    """Returns a path to the desired CRU baseline climate file.
 
     If the file is not present, download it.
 
     Parameters
     ----------
-    var: 'tmp' or 'pre'
+    var : str
+        'tmp' for temperature
+        'pre' for precipitation
 
     Returns
     -------
-    path to the CRU file
+    str
+        path to the CRU file
     """
     with _get_download_lock():
         return _get_cru_file_unlocked(var)
@@ -1308,17 +1342,20 @@ def _get_cru_file_unlocked(var=None):
 
 
 def get_histalp_file(var=None):
-    """Returns a path to the desired HISTALP file.
+    """Returns a path to the desired HISTALP baseline climate file.
 
     If the file is not present, download it.
 
     Parameters
     ----------
-    var: 'tmp' or 'pre'
+    var : str
+        'tmp' for temperature
+        'pre' for precipitation
 
     Returns
     -------
-    path to the CRU file
+    str
+        path to the CRU file
     """
     with _get_download_lock():
         return _get_histalp_file_unlocked(var)
@@ -1505,7 +1542,21 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
 
 def get_ref_mb_glaciers(gdirs):
-    """Get the list of glaciers we have valid data for."""
+    """Get the list of glaciers we have valid mass balance measurements for.
+
+    To be valid glaciers must have more than 5 years of measurements and
+    be land terminating.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of glaciers to check for valid reference mass balance data
+
+    Returns
+    -------
+    ref_gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of those glaciers with valid reference mass balance data
+    """
 
     # Get the links
     flink, _ = get_wgms_files()

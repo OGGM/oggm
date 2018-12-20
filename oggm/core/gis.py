@@ -219,8 +219,7 @@ def _polygon_to_pix(polygon):
 
 @entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
 def define_glacier_region(gdir, entity=None):
-    """
-    Very first task: define the glacier's local grid.
+    """Very first task: define the glacier's local grid.
 
     Defines the local projection (Transverse Mercator), centered on the
     glacier. There is some options to set the resolution of the local grid.
@@ -239,7 +238,7 @@ def define_glacier_region(gdir, entity=None):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    entity : geopandas GeoSeries
+    entity : geopandas.GeoSeries
         the glacier geometry to process
     """
 
@@ -437,7 +436,11 @@ def define_glacier_region(gdir, entity=None):
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
 def glacier_masks(gdir):
-    """Makes a gridded mask of the glacier outlines.
+    """Makes a gridded mask of the glacier outlines and topography.
+
+    This function fills holes in the source DEM and produces smoothed gridded
+    topography and glacier outline arrays. These are the ones which will later
+    be used to determine bed and surface height.
 
     Parameters
     ----------

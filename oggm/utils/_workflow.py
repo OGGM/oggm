@@ -474,12 +474,18 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
 
     Parameters
     ----------
-    gdirs : []
-        the list of GlacierDir to process.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     path : str
         where to store (default is on the working dir).
+        Set to `False` to disable disk storage.
     filesuffix : str
         the filesuffix of the run
+
+    Returns
+    -------
+    ds : :py:class:`xarray.Dataset`
+        compiled output
     """
 
     # Get the dimensions of all this
@@ -578,14 +584,20 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
 
     Parameters
     ----------
-    gdirs : []
-        the list of GlacierDir to process.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     path : str
         where to store (default is on the working dir).
+        Set to `False` to disable disk storage.
     filename : str
         BASENAME of the climate input files
     filesuffix : str
         the filesuffix of the compiled file
+
+    Returns
+    -------
+    ds : :py:class:`xarray.Dataset`
+        compiled climate data
     """
 
     # Get the dimensions of all this
@@ -692,17 +704,24 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
 
     Parameters
     ----------
-    gdirs: the list of GlacierDir to process.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     task_names : list of str
         The tasks to check for
     filesuffix : str
         add suffix to output file
     path:
-        Set to "True" in order  to store the info in the working directory
+        Set to `True` in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+        Set to `False` to omit disk storage
     append:
         If a task log file already exists in the working directory, the new
         logs will be added to the existing file
+
+    Returns
+    -------
+    out : :py:class:`pandas.DataFrame`
+        log output
     """
 
     out_df = []
@@ -889,7 +908,8 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
     Parameters
     ----------
-    gdirs: the list of GlacierDir to process.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -1970,6 +1990,8 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to copy
     base_dir : str
         path to the new base directory (should end with "per_glacier" most
         of the times)
