@@ -1086,7 +1086,7 @@ def get_rgi_region_file(region, version=None, reset=False):
 
 
 def get_rgi_glacier_entities(rgi_ids, version=None):
-    """Get a list of glacier oulines selected from their RGI IDs.
+    """Get a list of glacier outlines selected from their RGI IDs.
 
     Will download RGI data if not present.
 
@@ -1094,13 +1094,13 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     ----------
     rgi_ids : list of str
         the glaciers you want the outlines for
-    version : list of str
+    version : str
         the rgi version
 
     Returns
     -------
     geopandas.GeoDataFrame
-        with the list of glaciers
+        containing the desired RGI glacier outlines
     """
 
     regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
@@ -1253,7 +1253,7 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
 
     Parameters
     ----------
-    rgi_ids: list
+    rgi_ids: list of str
         list of rgi_ids you want to look for intersections for
     version: str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
@@ -1549,12 +1549,12 @@ def get_ref_mb_glaciers(gdirs):
 
     Parameters
     ----------
-    gdirs : list of oggm.GlacierDirectories
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         list of glaciers to check for valid reference mass balance data
 
     Returns
     -------
-    list of oggm.GlacierDirectories
+    ref_gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         list of those glaciers with valid reference mass balance data
     """
 

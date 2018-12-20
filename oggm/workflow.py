@@ -108,12 +108,15 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     If you asked for multiprocessing, it will do it.
 
+    If ``task`` has more arguments than `gdir` they have to be keyword
+    arguments.
+
     Parameters
     ----------
     task : function
          the entity task to apply
-    gdirs : list
-         the list of oggm.GlacierDirectory to process.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     """
 
     # If not iterable it's ok
@@ -154,7 +157,7 @@ def execute_parallel_tasks(gdir, tasks):
 
     Parameters
     ----------
-    gdirs : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
          the directory to process.
     tasks : list
          the the list of entity tasks to apply.
@@ -239,7 +242,8 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
 
     Returns
     -------
-    a list of GlacierDirectory objects
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the initialised glacier directories
     """
 
     if reset and not force:
@@ -301,7 +305,8 @@ def gis_prepro_tasks(gdirs):
 
     Parameters
     ----------
-    gdirs : list of GlacierDirectories
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     """
 
     task_list = [
@@ -324,7 +329,8 @@ def climate_tasks(gdirs):
 
     Parameters
     ----------
-    gdirs : list of GlacierDirectories
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     """
 
     # If not iterable it's ok
@@ -359,7 +365,8 @@ def inversion_tasks(gdirs):
 
     Parameters
     ----------
-    gdirs : list of GlacierDirectories
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     """
     # Init
     execute_entity_task(tasks.prepare_for_inversion, gdirs)

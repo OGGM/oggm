@@ -907,7 +907,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
     Parameters
     ----------
-    gdirs : lst of :py:class:`oggm.GlacierDirectory` objects
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
     filesuffix : str
         add suffix to output file
@@ -1989,6 +1989,8 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to copy
     base_dir : str
         path to the new base directory (should end with "per_glacier" most
         of the times)

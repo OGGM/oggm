@@ -1664,8 +1664,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """Runs the random mass-balance model for a given number of years.
 
     This will initialize a
-    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.flowline.robust_model_run`.
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
 
     Parameters
     ----------
@@ -1744,8 +1744,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """Runs the constant mass-balance model for a given number of years.
 
     This will initialize a
-    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.flowline.robust_model_run`.
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
 
     Parameters
     ----------
@@ -1812,8 +1812,8 @@ def run_from_climate_data(gdir, ys=None, ye=None,
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
-    :py:class:`core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.flowline.robust_model_run`.
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
 
     Parameters
     ----------

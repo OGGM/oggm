@@ -238,7 +238,7 @@ def define_glacier_region(gdir, entity=None):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    entity : geopandas GeoSeries
+    entity : geopandas.GeoSeries
         the glacier geometry to process
     """
 

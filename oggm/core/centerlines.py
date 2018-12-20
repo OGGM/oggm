@@ -775,8 +775,8 @@ def compute_centerlines(gdir, heads=None):
     http://en.wikipedia.org/wiki/Strahler_number
 
     This function does not initialize a :py:class:`oggm.Centerline` but
-    calculates routes along the topography and makes
-    :py:class:`shapely.Linestring` from them.
+    calculates routes along the topography and makes a
+    :py:class:`shapely.Linestring` object from them.
 
     Parameters
     ----------

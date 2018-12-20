@@ -22,8 +22,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     """ Applies the anomaly method to GCM climate data
 
     This function can be applied to any GCM data, if it is provided in a
-    suitable :py:class:`xarray.DataArray`. See parameter section for format
-    description.
+    suitable :py:class:`xarray.DataArray`. See Parameter description for
+    format details.
 
     For CESM-LME a specific function :py:func:`tasks.process_cesm_data` is
     available which does the preprocessing of the data and subsequently calls
@@ -35,18 +35,18 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         where to write the data
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
-    prcp    : xarray.DataArray - format:
-        monthly total precipitation [mm month-1]
-            Coordinates:
-            lat      float64
-            lon      float64
-            time     (time) cftime object
-    temp : xarray.DataArray
-        monthly temperature [K]
-            Coordinates:
-            lat      float64
-            lon      float64
-            time     (time) cftime object
+    prcp : :py:class:`xarray.DataArray`
+        | monthly total precipitation [mm month-1]
+        | Coordinates:
+        | lat float64
+        | lon float64
+        | time: cftime object
+    temp : :py:class:`xarray.DataArray`
+        | monthly temperature [K]
+        | Coordinates:
+        | lat float64
+        | lon float64
+        | time cftime object
     time_unit : str
         The unit conversion for NetCDF files. It must be adapted to the
         length of the time series.
