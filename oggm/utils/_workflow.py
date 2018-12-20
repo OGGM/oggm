@@ -38,7 +38,8 @@ from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine)
-from oggm.utils._downloads import (get_demo_file, get_wgms_files)
+from oggm.utils._downloads import (get_demo_file, get_wgms_files,
+                                   get_rgi_glacier_entities)
 from oggm import cfg
 
 # Module logger
@@ -2005,6 +2006,143 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
     else:
         raise ValueError('setup not understood: {}'.format(setup))
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
+
+
+def initialize_merged_gdir(main, tribs=[], glcdf=None,
+                           filename='climate_monthly', input_filesuffix=''):
+    """Creats a new GlacierDirectory if tributaries are merged to a glacier
+
+    This function should be called after centerlines.intersect_downstream_lines
+    and before flowline.merge_tributary_flowlines.
+    It will create a new GlacierDirectory, with a suitable DEM and reproject
+    the flowlines of the main glacier.
+
+    Parameters
+    ----------
+    main : oggm.GlacierDirectory
+        the main glacier
+    tribs : list or dictionary containing oggm.GlacierDirectories
+        true tributary glaciers to the main glacier
+    glcdf: geopandas.GeoDataFrame
+        which contains the main glacier, will be downloaded if None
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+    Returns
+    -------
+    merged : oggm.GlacierDirectory
+        the new GDir
+    """
+    from oggm.core.gis import define_glacier_region, merged_glacier_masks
+
+    # If its a dict, select the relevant ones
+    if isinstance(tribs, dict):
+        tribs = tribs[main.rgi_id]
+    # make sure tributaries are iteratable
+    tribs = tolist(tribs)
+
+    # read flowlines of the Main glacier
+    mfls = main.read_pickle('model_flowlines')
+
+    # ------------------------------
+    # 0. create the new GlacierDirectory from main glaciers GeoDataFrame
+    # Should be passed along, if not download it
+    if glcdf is None:
+        glcdf = get_rgi_glacier_entities([main.rgi_id])
+    # Get index location of the specific glacier
+    idx = glcdf.loc[glcdf.RGIId == main.rgi_id].index
+    maindf = glcdf.loc[idx].copy()
+
+    # add tributary geometries to maindf
+    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
+    for trib in tribs:
+        geom = trib.read_pickle('geometries')['polygon_hr']
+        geom = salem.transform_geometry(geom, crs=trib.grid)
+        merged_geometry = merged_geometry.union(geom)
+
+    # to get the center point, maximal extensions for DEM and single Polygon:
+    maindf.loc[idx, 'geometry'] = merged_geometry.convex_hull
+
+    # make some adjustments to the rgi dataframe
+    # 1. update central point of new glacier
+    # Could also use the mean of the Flowline centroids, to shift it more
+    # downstream. But this is more straight forward.
+    maindf.loc[idx, 'CenLon'] = maindf.loc[idx, 'geometry'].centroid.x
+    maindf.loc[idx, 'CenLat'] = maindf.loc[idx, 'geometry'].centroid.y
+    # 2. update names
+    maindf.loc[idx, 'RGIId'] += '_merged'
+    if maindf.loc[idx, 'Name'].iloc[0] is None:
+        maindf.loc[idx, 'Name'] = main.name + ' (merged)'
+    else:
+        maindf.loc[idx, 'Name'] += ' (merged)'
+
+    # finally create new Glacier Directory
+    # 1. set dx spacing to the one used for the flowlines
+    dx_method = cfg.PARAMS['grid_dx_method']
+    dx_spacing = cfg.PARAMS['fixed_dx']
+    cfg.PARAMS['grid_dx_method'] = 'fixed'
+    cfg.PARAMS['fixed_dx'] = mfls[-1].map_dx
+    merged = GlacierDirectory(maindf.loc[idx].iloc[0])
+
+    # run define_glacier_region to get a fitting DEM and proper grid
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
+
+    # write gridded data and geometries for visualization
+    merged_glacier_masks(merged, merged_geometry)
+
+    # reset dx method
+    cfg.PARAMS['grid_dx_method'] = dx_method
+    cfg.PARAMS['fixed_dx'] = dx_spacing
+
+    # copy main climate file, climate info and local_mustar to new gdir
+    climfilename = filename + '_' + main.rgi_id + input_filesuffix + '.nc'
+    climfile = os.path.join(merged.dir, climfilename)
+    shutil.copyfile(main.get_filepath(filename, filesuffix=input_filesuffix),
+                    climfile)
+    _mufile = os.path.basename(merged.get_filepath('local_mustar')).split('.')
+    mufile = _mufile[0] + '_' + main.rgi_id + '.' + _mufile[1]
+    shutil.copyfile(main.get_filepath('local_mustar'),
+                    os.path.join(merged.dir, mufile))
+    # I think I need the climate_info only for the main glacier
+    shutil.copyfile(main.get_filepath('climate_info'),
+                    merged.get_filepath('climate_info'))
+
+    # reproject the flowlines to the new grid
+    for nr, fl in reversed(list(enumerate(mfls))):
+
+        # 1. Step: Change projection to the main glaciers grid
+        _line = salem.transform_geometry(fl.line,
+                                         crs=main.grid, to_crs=merged.grid)
+        # 2. set new line
+        fl.set_line(_line)
+
+        # 3. set flow to attributes
+        if fl.flows_to is not None:
+            fl.set_flows_to(fl.flows_to)
+        # remove inflow points, will be set by other flowlines if need be
+        fl.inflow_points = []
+
+        # 5. set grid size attributes
+        dx = [shpg.Point(fl.line.coords[i]).distance(
+            shpg.Point(fl.line.coords[i+1]))
+            for i, pt in enumerate(fl.line.coords[:-1])]  # get distance
+        # and check if equally spaced
+        if not np.allclose(dx, np.mean(dx), atol=1e-2):
+            raise RuntimeError('Flowline is not evenly spaced.')
+        # dx might very slightly change, but should not
+        fl.dx = np.mean(dx).round(2)
+        # map_dx should stay exactly the same
+        # fl.map_dx = mfls[-1].map_dx
+        fl.dx_meter = fl.map_dx * fl.dx
+
+        # replace flowline within the list
+        mfls[nr] = fl
+
+    # Write the reprojecflowlines
+    merged.write_pickle(mfls, 'model_flowlines')
+
+    return merged
 
 
 @entity_task(log)

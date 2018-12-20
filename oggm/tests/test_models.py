@@ -2658,3 +2658,94 @@ class TestHEF(unittest.TestCase):
             plt.xlabel('Vol (km3)')
             plt.legend()
             plt.show()
+
+
+class TestMergedHEF(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_merged')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+
+        # Init
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['correct_for_neg_flux'] = True
+        cfg.PARAMS['baseline_climate'] = 'CUSTOM'
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['border'] = 100
+        cfg.PARAMS['prcp_scaling_factor'] = 1.75
+        cfg.PARAMS['temp_melt'] = -1.75
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    @pytest.mark.slow
+    def test_merged_simulation(self):
+        import geopandas as gpd
+
+        hef_file = utils.get_demo_file('rgi_oetztal.shp')
+        rgidf = gpd.read_file(hef_file)
+
+        # Get HEF Kesselwand and Gepatschferner
+        glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
+                          (rgidf.RGIId == 'RGI50-11.00787') |
+                          (rgidf.RGIId == 'RGI50-11.00746')].copy()
+        gdirs = workflow.init_glacier_regions(glcdf)
+        workflow.gis_prepro_tasks(gdirs)
+        workflow.climate_tasks(gdirs)
+        workflow.inversion_tasks(gdirs)
+        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+
+        # run parameters
+        years = 200  # arbitrary
+        y0 = 1950  # arbitrary
+        tbias = -1.0  # arbitrary
+
+        # run HEF and Kesselwandferner as entities
+        gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
+        workflow.execute_entity_task(tasks.run_constant_climate,
+                                     gdirs_entity,
+                                     nyears=years, y0=y0,
+                                     output_filesuffix='_entity',
+                                     temperature_bias=tbias)
+
+        ds_entity = utils.compile_run_output(gdirs_entity,
+                                             path=False, filesuffix='_entity')
+
+        # merge HEF and KWF, include Gepatschferner but should not be merged
+        gdir_merged = workflow.merge_glacier_tasks(gdirs, ['RGI50-11.00897'],
+                                                   glcdf=glcdf)
+
+        # and run the merged glacier
+        workflow.execute_entity_task(tasks.run_constant_climate,
+                                     gdir_merged, output_filesuffix='_merged',
+                                     nyears=years, y0=y0,
+                                     temperature_bias=tbias)
+
+        ds_merged = utils.compile_run_output(gdir_merged,
+                                             path=False, filesuffix='_merged')
+
+        # with this setting, both runs should still be quite close after 50yrs
+        assert_allclose(ds_entity.volume.isel(time=50).sum(),
+                        ds_merged.volume.isel(time=50),
+                        rtol=1e-2)
+
+        # After 100yrs a difference will be present but should still be small
+        assert_allclose(ds_entity.volume.isel(time=100).sum(),
+                        ds_merged.volume.isel(time=100),
+                        rtol=1e-1)
+
+        # After 200yrs the merged glacier should have a larger volume
+        assert (ds_entity.volume.isel(time=200).sum() <
+                ds_merged.volume.isel(time=200))

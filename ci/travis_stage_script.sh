@@ -51,4 +51,4 @@ source activate oggm_env
 conda install -c oggm -c conda-forge oggm-deps pytest pytest-mpl
 pip install -e .
 
-pytest --mpl-upload $MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+pytest --verbose --mpl-upload $MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm

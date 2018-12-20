@@ -14,7 +14,7 @@ if [[ -n "$DO_COVERALLS" ]]; then
 	COV_OPTS="coverage run --rcfile=.coveragerc --source=./oggm --parallel-mode --module"
 fi
 
-$COV_OPTS pytest --mpl-upload $MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+$COV_OPTS pytest --verbose --mpl-upload $MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
 
 if [[ -n "$DO_COVERALLS" ]]; then
 	coverage combine --rcfile=.coveragerc

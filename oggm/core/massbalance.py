@@ -871,7 +871,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, fls=None, mu_star=None,
                  mb_model_class=PastMassBalance, use_inversion_flowlines=False,
-                 input_filesuffix='', **kwargs):
+                 input_filesuffix='', bias=None, **kwargs):
         """Initialize.
 
         Parameters
@@ -893,6 +893,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             used.
         input_filesuffix : str
             the file suffix of the input climate file
+        bias : float, optional
+            set to the alternative value of the calibration bias [mm we yr-1]
+            you want to use (the default is to use the calibrated value)
+            Note that this bias is *substracted* from the computed MB. Indeed:
+            BIAS = MODEL_MB - REFERENCE_MB.
         kwargs : kwargs to pass to mb_model_class
         """
 
@@ -922,11 +927,21 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for fl in self.fls:
             # Merged glaciers will need different climate files, use filesuffix
             if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
-                input_filesuffix = '_' + fl.rgi_id + input_filesuffix
+                rgi_filesuffix = '_' + fl.rgi_id + input_filesuffix
+            else:
+                rgi_filesuffix = input_filesuffix
+
+            # merged glaciers also have a different MB bias from calibration
+            if ((bias is None) and cfg.PARAMS['use_bias_for_run'] and
+                    (fl.rgi_id != gdir.rgi_id)):
+                df = gdir.read_json('local_mustar', filesuffix='_' + fl.rgi_id)
+                fl_bias = df['bias']
+            else:
+                fl_bias = bias
 
             self.flowline_mb_models.append(
-                mb_model_class(gdir, mu_star=fl.mu_star,
-                               input_filesuffix=input_filesuffix, **kwargs))
+                mb_model_class(gdir, mu_star=fl.mu_star, bias=fl_bias,
+                               input_filesuffix=rgi_filesuffix, **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
 
