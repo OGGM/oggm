@@ -2010,12 +2010,13 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
                            filename='climate_monthly', input_filesuffix=''):
-    """
-    Creats a new GlacierDirectory is tributaries are merged to a main glacier
+    """Creats a new GlacierDirectory if tributaries are merged to a glacier
+
     This function should be called after centerlines.intersect_downstream_lines
     and before flowline.merge_tributary_flowlines.
     It will create a new GlacierDirectory, with a suitable DEM and reproject
     the flowlines of the main glacier.
+
     Parameters
     ----------
     main : oggm.GlacierDirectory
@@ -2094,11 +2095,16 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     cfg.PARAMS['grid_dx_method'] = dx_method
     cfg.PARAMS['fixed_dx'] = dx_spacing
 
-    # copy main climate file and climate info to new gdir
+    # copy main climate file, climate info and local_mustar to new gdir
     climfilename = filename + '_' + main.rgi_id + input_filesuffix + '.nc'
     climfile = os.path.join(merged.dir, climfilename)
     shutil.copyfile(main.get_filepath(filename, filesuffix=input_filesuffix),
                     climfile)
+    _mufile = os.path.basename(merged.get_filepath('local_mustar')).split('.')
+    mufile = _mufile[0] + '_' + main.rgi_id + '.' + _mufile[1]
+    shutil.copyfile(main.get_filepath('local_mustar'),
+                    os.path.join(merged.dir, mufile))
+    # I think I need the climate_info only for the main glacier
     shutil.copyfile(main.get_filepath('climate_info'),
                     merged.get_filepath('climate_info'))
 

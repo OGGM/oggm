@@ -1929,9 +1929,6 @@ def terminus_width_correction(gdir, new_width=None):
 def intersect_downstream_lines(gdir, candidates=None):
     """Find tributaries to a main glacier by intersecting downstream lines
 
-    This function might be called from a entity_task, so gdir is a single
-    glacier directory
-
     The GlacierDirectories must at least contain a `downstream_line`.
     If you have a lot of candidates, only execute the necessary tasks for that
     and do the rest of the preprocessing after this function identified the

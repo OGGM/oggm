@@ -1819,8 +1819,8 @@ def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
     Afterwards only the main GlacierDirectory must be processed and the results
     will cover the main and the tributary glaciers.
     The provided tributaries must have an intersecting downstream line.
-    To be sure about this, use `intersect_downstream_lines` first or embed both
-    functions within a suitable workflow.
+    To be sure about this, use `intersect_downstream_lines` first.
+
     Parameters
     ----------
     main : oggm.GlacierDirectory
@@ -1921,12 +1921,16 @@ def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
             # replace tributary flowline within the list
             tfls[nr] = tfl
 
-        # copy climate file to new gdir
+        # copy climate file and local_mustar to new gdir
         climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
         climfile = os.path.join(main.dir, climfilename)
         shutil.copyfile(trib.get_filepath(filename,
                                           filesuffix=input_filesuffix),
                         climfile)
+        _mu = os.path.basename(trib.get_filepath('local_mustar')).split('.')
+        mufile = _mu[0] + '_' + trib.rgi_id + '.' + _mu[1]
+        shutil.copyfile(trib.get_filepath('local_mustar'),
+                        os.path.join(main.dir, mufile))
 
         mfls = tfls + mfls  # add all tributary flowlines to the main glacier
     mfls = mfls + [mfl]  # add the main glacier flowline back to the list

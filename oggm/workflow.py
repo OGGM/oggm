@@ -373,8 +373,8 @@ def inversion_tasks(gdirs):
     execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def merge_glacier_tasks(glcdf, main_rgi_ids, filename='climate_monthly',
-                        input_filesuffix=''):
+def merge_glacier_tasks(gdirs, main_rgi_ids, glcdf=None,
+                        filename='climate_monthly', input_filesuffix=''):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
     TODO - Automatic search for tributary glaciers
@@ -382,10 +382,12 @@ def merge_glacier_tasks(glcdf, main_rgi_ids, filename='climate_monthly',
 
     Parameters
     ----------
-    glcdf: geopandas.GeoDataFrame
-        which contains the main glaciers and the candidates
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        all glaciers, main and tributary. Preprocessed and initialised
     main_rgi_ids: list of str
-        RGI IDs of the main glaciers of interest. Must be in glcdf.
+        RGI IDs of the main glaciers of interest
+    glcdf: geopandas.GeoDataFrame
+        which contains the main glaciers, will be downloaded if None
     filename: str
         Baseline climate file
     input_filesuffix: str
@@ -396,26 +398,16 @@ def merge_glacier_tasks(glcdf, main_rgi_ids, filename='climate_monthly',
     merged_gdirs: list of merged GlacierDirectories
 
     """
-    # init and preprocess all glaciers
-    gdirs_all = init_glacier_regions(glcdf)
-    gis_prepro_tasks(gdirs_all)
-
     # make sure rgi_ids are iteratable
     main_rgi_ids = utils.tolist(main_rgi_ids)
 
     # split main glaciers from candidates
-    maindf = glcdf.loc[glcdf.RGIId.isin(main_rgi_ids)].copy()
-    gdirs_main = [gd for gd in gdirs_all if gd.rgi_id in main_rgi_ids]
-
-    # preprocess the main glaciers to the end
-    climate_tasks(gdirs_main)
-    inversion_tasks(gdirs_main)
-    execute_entity_task(tasks.init_present_time_glacier, gdirs_main)
+    gdirs_main = [gd for gd in gdirs if gd.rgi_id in main_rgi_ids]
 
     # find true tributary glaciers
     tributaries = execute_entity_task(
         centerlines.intersect_downstream_lines,
-        gdirs_main, candidates=gdirs_all)
+        gdirs_main, candidates=gdirs)
 
     # make one dictionary and a list of all gdirs for further preprocessing
     tribs_dict = {}
@@ -430,15 +422,10 @@ def merge_glacier_tasks(glcdf, main_rgi_ids, filename='climate_monthly',
     if not len(np.unique(rgiids)) == len(rgiids):
         raise RuntimeError('Every tributary glacier should only be used once!')
 
-    # preprocess the tributaries to the end
-    climate_tasks(gdirs_tribs)
-    inversion_tasks(gdirs_tribs)
-    execute_entity_task(tasks.init_present_time_glacier, gdirs_tribs)
-
     # create merged glacier directories
     gdirs_merged = execute_entity_task(
         utils.initialize_merged_gdir, gdirs_main, tribs=tribs_dict,
-        glcdf=maindf, filename=filename, input_filesuffix=input_filesuffix)
+        glcdf=glcdf, filename=filename, input_filesuffix=input_filesuffix)
 
     # Merge the Tributary glacier flowlines to the main glacier one
     execute_entity_task(flowline.merge_tributary_flowlines,
