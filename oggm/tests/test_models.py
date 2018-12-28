@@ -2679,6 +2679,7 @@ class TestMergedHEF(unittest.TestCase):
         cfg.PARAMS['border'] = 100
         cfg.PARAMS['prcp_scaling_factor'] = 1.75
         cfg.PARAMS['temp_melt'] = -1.75
+        cfg.PARAMS['use_multiprocessing'] = False
 
     def tearDown(self):
         self.rm_dir()
