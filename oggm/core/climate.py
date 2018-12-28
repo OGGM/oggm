@@ -28,21 +28,27 @@ def process_custom_climate_data(gdir):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format (see
-    oggm-sample-data/test-files/histalp_merged_hef.nc for an example).
+    https://github.com/OGGM/oggm-sample-data test-files/histalp_merged_hef.nc
+    for an example).
 
     This is the way OGGM used to do it for HISTALP before it got automatised.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     if not (('climate_file' in cfg.PATHS) and
             os.path.exists(cfg.PATHS['climate_file'])):
-        raise IOError('Custom climate file not found')
+        raise InvalidParamsError('Custom climate file not found')
 
     if cfg.PARAMS['baseline_climate'] not in ['', 'CUSTOM']:
-        raise ValueError("When using custom climate data please set "
-                         "PARAMS['baseline_climate'] to an empty string "
-                         "or `CUSTOM`. Note that you can now use the "
-                         "`process_histalp_data` task for automated HISTALP "
-                         "data processing.")
+        raise InvalidParamsError("When using custom climate data please set "
+                                 "PARAMS['baseline_climate'] to an empty "
+                                 "string or `CUSTOM`. Note also that you can "
+                                 "now use the `process_histalp_data` task for "
+                                 "automated HISTALP data processing.")
 
     # read the file
     fpath = cfg.PATHS['climate_file']
@@ -53,12 +59,16 @@ def process_custom_climate_data(gdir):
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
     y0, y1 = yrs[0], yrs[-1]
+    if cfg.PARAMS['baseline_y0'] != 0:
+        y0 = cfg.PARAMS['baseline_y0']
+    if cfg.PARAMS['baseline_y1'] != 0:
+        y1 = cfg.PARAMS['baseline_y1']
     nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                      t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time
     ny, r = divmod(len(time), 12)
     if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        raise InvalidParamsError('Climate data should be full years')
 
     # Units
     assert nc_ts._nc.variables['hgt'].units.lower() in ['m', 'meters', 'meter',
@@ -112,10 +122,15 @@ def process_custom_climate_data(gdir):
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
 def process_cru_data(gdir):
-    """Processes and writes the climate data for this glacier.
+    """Processes and writes the CRU baseline climate data for this glacier.
 
     Interpolates the CRU TS data to the high-resolution CL2 climatologies
     (provided with OGGM) and writes everything to a NetCDF file.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -124,7 +139,8 @@ def process_cru_data(gdir):
                       "file instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'CRU':
-        raise ValueError("cfg.PARAMS['baseline_climate'] should be set to CRU")
+        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+                                 "set to CRU")
 
     # read the climatology
     clfile = utils.get_cru_cl_file()
@@ -455,9 +471,14 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
 def process_histalp_data(gdir):
-    """Processes and writes the climate data for this glacier.
+    """Processes and writes the HISTALP baseline climate data for this glacier.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -466,8 +487,8 @@ def process_histalp_data(gdir):
                       "instead.")
 
     if cfg.PARAMS['baseline_climate'] != 'HISTALP':
-        raise ValueError("cfg.PARAMS['baseline_climate'] should be set to "
-                         "HISTALP.")
+        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+                                 "set to HISTALP.")
 
     # read the time out of the pure netcdf file
     ft = utils.get_histalp_file('tmp')
@@ -696,7 +717,8 @@ def mb_yearly_climate_on_height(gdir, heights, *,
 
     ny, r = divmod(len(time), 12)
     if r != 0:
-        raise ValueError('Climate data should be N full years exclusively')
+        raise InvalidParamsError('Climate data should be N full years '
+                                 'exclusively')
     # Last year gives the tone of the hydro year
     years = np.arange(time[-1].year-ny+1, time[-1].year+1, 1)
 
@@ -773,8 +795,12 @@ def glacier_mu_candidates(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
+
+    warnings.warn('The task `glacier_mu_candidates` is deprecated. It should '
+                  'only be used for testing.', DeprecationWarning)
 
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
 
@@ -963,8 +989,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
-    ref_df : pd.Dataframe, optional
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    ref_df : :py:class:`pandas.DataFrame`, optional
         replace the default calibration list with your own.
     tstar: int, optional
         the year where the glacier should be equilibrium
@@ -995,11 +1022,10 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                 vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
-                        raise ValueError('The reference t* you are trying '
-                                         'to use was calibrated with '
-                                         'different MB parameters. You '
-                                         'might have to run the calibration '
-                                         'manually.')
+                        msg = ('The reference t* you are trying to use was '
+                               'calibrated with different MB parameters. You '
+                               'might have to run the calibration manually.')
+                        raise MassBalanceCalibrationError(msg)
                 ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
             else:
                 # Use the the local calibration
@@ -1170,9 +1196,14 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 def mu_star_calibration(gdir):
     """Compute the flowlines' mu* and the associated apparent mass-balance.
 
+    If low lying tributaries have a non-physically consistent Mass-balance
+    this function will either filter them out or calibrate each flowline with a
+    specific mu*. The latter is default and recommended.
+
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # Interpolated data
@@ -1193,6 +1224,7 @@ def mu_star_calibration(gdir):
 
     # If the user wants to filter the bad ones we remove them and start all
     # over again until all tributaries are physically consistent with one mu
+    # This should only work if cfg.PARAMS['correct_for_neg_flux'] == False
     do_filter = [fl.flux_needs_correction for fl in fls]
     if cfg.PARAMS['filter_for_neg_flux'] and np.any(do_filter):
         assert not do_filter[-1]  # This should not happen
@@ -1257,7 +1289,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # Do we have a calving glacier?
@@ -1309,11 +1342,16 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
 
 @global_task
 def compute_ref_t_stars(gdirs):
-    """ Detects the best t* for the reference glaciers.
+    """ Detects the best t* for the reference glaciers and writes them to disk
+
+    This task will be needed for mass balance calibration of custom climate
+    data. For CRU and HISTALP baseline climate a precalibrated list is
+    available and should be used instead.
 
     Parameters
     ----------
-    gdirs: list of oggm.GlacierDirectory objects
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        will be filtered for reference glaciers
     """
 
     if not cfg.PARAMS['run_mb_calibration']:

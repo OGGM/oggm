@@ -160,6 +160,12 @@ Enhancements
 - Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
   improvements when python-colorspace is (optionally) installed (:pull:`587`).
   By `Sadie Bartholomew <https://github.com/sadielbartholomew>`_.
+- Added a workflow ``merge_glacier_tasks`` which merges tributary/surrounding
+  glaciers to a main glacier, allowing mass exchange between them. This is
+  helpfull/neccessary/intended for growing glacier experiments (e.g.
+  paleoglaciology) (:pull:`624`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+
 
 
 Bug fixes

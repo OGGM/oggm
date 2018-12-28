@@ -40,6 +40,8 @@ from salem import lazy_property
 from oggm import utils
 from oggm.utils import tuple2int, line_interpol, interp_nans
 from oggm import entity_task
+from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
+                             GeometryError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -307,7 +309,7 @@ def _filter_heads(heads, heads_height, radius, polygon):
         else:
             extext = ('Geometry collection not expected: '
                       '{}'.format(inter_poly.type))
-            raise NotImplementedError(extext)
+            raise InvalidGeometryError(extext)
 
         # Find other points in radius and in polygon
         _heads = [head]
@@ -381,7 +383,7 @@ def _filter_lines(lines, heads, k, r):
                         if hashead:
                             break
                         else:
-                            raise RuntimeError('Head not found')
+                            raise GeometryError('Head not found')
                 # keep this head line only if it's long enough
                 if diff.length > r:
                     # Fun fact. The heads can be cut by the buffer too
@@ -772,11 +774,17 @@ def compute_centerlines(gdir, heads=None):
     They are then sorted according to the modified Strahler number:
     http://en.wikipedia.org/wiki/Strahler_number
 
+    This function does not initialize a :py:class:`oggm.Centerline` but
+    calculates routes along the topography and makes a
+    :py:class:`shapely.Linestring` object from them.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     heads : list, optional
-        list of shpg.Points to use as line heads (default is to compute them
-        like Kienholz did)
+        list of shapely.geometry.Points to use as line heads (default is to
+        compute them like Kienholz did)
     """
 
     # Params
@@ -788,7 +796,7 @@ def compute_centerlines(gdir, heads=None):
         single_fl = True
 
     if 'force_one_flowline' in cfg.PARAMS:
-        raise ValueError('`force_one_flowline` is deprecated')
+        raise InvalidParamsError('`force_one_flowline` is deprecated')
 
     # open
     geom = gdir.read_pickle('geometries')
@@ -855,7 +863,8 @@ def compute_centerlines(gdir, heads=None):
 
     # Final check
     if len(cls) == 0:
-        raise RuntimeError('({}) no centerline found!'.format(gdir.rgi_id))
+        raise GeometryError('({}) no valid centerline could be '
+                            'found!'.format(gdir.rgi_id))
 
     # Write the data
     gdir.write_pickle(cls, 'centerlines')
@@ -879,7 +888,7 @@ def compute_centerlines(gdir, heads=None):
 
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_line(gdir):
-    """Compute the line continuing the glacier.
+    """Computes the Flowline along the unglaciated downstream topography
 
     The idea is simple: starting from the glacier tail, compute all the routes
     to all local minimas found at the domain edge. The cheapest is "The One".
@@ -890,7 +899,8 @@ def compute_downstream_line(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # For tidewater glaciers no need for all this
@@ -940,7 +950,7 @@ def compute_downstream_line(gdir):
                 min_len = len(lids)
                 line = shpg.LineString(np.array(lids)[:, [1, 0]])
     if line is None:
-        raise RuntimeError('Downstream line not found')
+        raise GeometryError('Downstream line not found')
 
     cl = gdir.read_pickle('inversion_flowlines')[-1]
     lline, dline = _line_extend(cl.line, line, cl.dx)
@@ -1107,11 +1117,13 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
+
     Also computes the downstream's altitude.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # For tidewater glaciers no need for all this
@@ -1192,10 +1204,10 @@ def _mask_to_polygon(mask, gdir=None):
 
     poly = shpg.Polygon(e_line, i_lines).buffer(0)
     if not poly.is_valid:
-        raise RuntimeError('Mask polygon not valid.')
+        raise GeometryError('Mask to polygon conversion error.')
     poly_no = shpg.Polygon(e_line).buffer(0)
     if not poly_no.is_valid:
-        raise RuntimeError('Mask polygon not valid.')
+        raise GeometryError('Mask to polygon conversion error.')
     return poly, poly_no
 
 
@@ -1240,7 +1252,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         line = oline
     else:
         extext = 'Geometry collection not expected: {}'.format(line.type)
-        raise RuntimeError(extext)
+        raise InvalidGeometryError(extext)
 
     # Then take the nunataks into account
     # Make sure we are always returning a MultiLineString for later
@@ -1260,7 +1272,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         line = shpg.MultiLineString(oline)
     else:
         extext = 'Geometry collection not expected: {}'.format(line.type)
-        raise NotImplementedError(extext)
+        raise InvalidGeometryError(extext)
 
     assert line.type == 'MultiLineString'
     width = np.sum([l.length for l in line])
@@ -1335,7 +1347,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
             alt_range_th += 20
             log.warning('Set altitude threshold to {}'.format(alt_range_th))
         if alt_range_th > 2000:
-            raise RuntimeError('Problem by altitude filter.')
+            raise GeometryError('Problem by altitude filter.')
 
     return out_width
 
@@ -1382,7 +1394,8 @@ def catchment_area(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # Variables
@@ -1486,9 +1499,14 @@ def catchment_area(gdir):
 def catchment_intersections(gdir):
     """Computes the intersections between the catchments.
 
+    A glacier usually consists of several flowlines and each flowline has a
+    distinct catchment area. This function calculates the intersections between
+    these areas.
+
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
@@ -1523,8 +1541,7 @@ def catchment_intersections(gdir):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def initialize_flowlines(gdir):
-    """ Transforms the geometrical Centerlines in the more "physical"
-    "Inversion Flowlines".
+    """ Computes more physical Inversion Flowlines from geometrical Centerlines
 
     This interpolates the centerlines on a regular spacing (i.e. not the
     grid's (i, j) indices. Cuts out the tail of the tributaries to make more
@@ -1533,7 +1550,8 @@ def initialize_flowlines(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables
@@ -1573,7 +1591,8 @@ def initialize_flowlines(gdir):
         # Interpolate heights
         xx, yy = new_line.xy
         hgts = interpolator((yy, xx))
-        assert len(hgts) >= 5
+        if len(hgts) < 5:
+            raise GeometryError('This centerline is too short')
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
@@ -1584,7 +1603,7 @@ def initialize_flowlines(gdir):
             hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
             isfin = np.isfinite(hgts)
             if not np.any(isfin):
-                raise RuntimeError('This line has no positive slopes')
+                raise GeometryError('This centerline has no positive slopes')
             diag_n_bad_slopes += np.sum(~isfin)
             diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
@@ -1597,8 +1616,8 @@ def initialize_flowlines(gdir):
             while len(hgts[sp:]) < 5:
                 sp -= 1
             hgts = utils.interp_nans(hgts[sp:])
-            assert np.all(np.isfinite(hgts))
-            assert len(hgts) >= 5
+            if not (np.all(np.isfinite(hgts)) and len(hgts) >= 5):
+                raise GeometryError('Something went wrong in flowline init')
             new_line = shpg.LineString(points[sp:])
 
         sl = Centerline(new_line, dx=dx, surface_h=hgts,
@@ -1628,7 +1647,8 @@ def catchment_width_geom(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables
@@ -1689,7 +1709,7 @@ def catchment_width_geom(gdir):
         valid = np.where(np.isfinite(widths))
         if len(valid[0]) == 0:
             errmsg = '({}) first guess widths went wrong.'.format(gdir.rgi_id)
-            raise RuntimeError(errmsg)
+            raise GeometryError(errmsg)
 
         # Ok now the entire centerline is computed.
         # I take all these widths for geometrically valid, and see if they
@@ -1720,7 +1740,8 @@ def catchment_width_geom(gdir):
             is_rectangular[-5:] = True
 
         # Write it in the objects attributes
-        assert len(fil_widths) == n
+        if len(fil_widths) != n:
+            raise GeometryError('Something went wrong')
         fl.widths = fil_widths
         fl.geometrical_widths = wlines
         fl.is_rectangular = is_rectangular
@@ -1741,7 +1762,8 @@ def catchment_width_correction(gdir):
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
     """
 
     # variables
@@ -1832,8 +1854,8 @@ def catchment_width_correction(gdir):
                 log.warning('(%s) reduced min n per bin to %d', gdir.rgi_id,
                             nmin)
                 if nmin == 0:
-                    raise RuntimeError('({}) no binsize could be chosen '
-                                       .format(gdir.rgi_id))
+                    raise GeometryError('({}) no binsize could be chosen '
+                                        .format(gdir.rgi_id))
         if bsize > 150:
             log.warning('(%s) chosen binsize %d', gdir.rgi_id, bsize)
         else:
@@ -1894,9 +1916,6 @@ def terminus_width_correction(gdir, new_width=None):
        the new width of the terminus (in meters)
     """
 
-    if new_width is None:
-        raise ValueError('We need a width to run this task!')
-
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
     fl = fls[-1]
@@ -1921,3 +1940,58 @@ def terminus_width_correction(gdir, new_width=None):
 
     # Overwrite centerlines
     gdir.write_pickle(fls, 'inversion_flowlines')
+
+
+@entity_task(log)
+def intersect_downstream_lines(gdir, candidates=None):
+    """Find tributaries to a main glacier by intersecting downstream lines
+
+    The GlacierDirectories must at least contain a `downstream_line`.
+    If you have a lot of candidates, only execute the necessary tasks for that
+    and do the rest of the preprocessing after this function identified the
+    true tributary glaciers.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+        The main glacier of interest
+    candidates: list of oggm.GlacierDirectory
+        Possible tributary glaciers to the main glacier
+
+    Returns
+    -------
+    tributaries: dict
+        Key is the main glacier rgi_id, values is a list of tributary rgi_ids
+    """
+
+    # make sure tributaries are iteratable
+    candidates = utils.tolist(candidates)
+
+    # Buffer in pixels around the flowline
+    buffer = cfg.PARAMS['kbuffer']
+
+    # get main glacier downstream line and CRS
+    dline = gdir.read_pickle('downstream_line')['full_line']
+    crs = gdir.grid
+
+    # return list
+    tributaries = []
+
+    # loop over tributaries
+    for trib in candidates:
+        # skip self
+        if gdir.rgi_id == trib.rgi_id:
+            continue
+
+        # get tributary glacier downstream line and CRS
+        _dline = trib.read_pickle('downstream_line')['full_line']
+        _crs = trib.grid
+
+        # use salem to transform the grids
+        _trans_dline = salem.transform_geometry(_dline, crs=_crs, to_crs=crs)
+
+        # check for intersection, with a small buffer and add to list
+        if dline.intersects(_trans_dline.buffer(buffer)):
+            tributaries.append(trib)
+
+    return {gdir.rgi_id: tributaries}

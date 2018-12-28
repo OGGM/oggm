@@ -8,11 +8,14 @@ import warnings
 import copy
 from collections import OrderedDict
 from time import gmtime, strftime
+import os
 
 # External libs
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
+import salem
+import shutil
 
 # Locals
 from oggm import __version__
@@ -603,6 +606,17 @@ class FlowlineModel(object):
         raise NotImplementedError
 
     def run_until(self, y1):
+        """Runs the model from the current year up to a given year y1.
+
+        This function runs the model for the time difference y1-self.y0
+        If self.y0 has not been specified at some point, it is 0 and y1 will
+        be the time span in years to run the model for.
+
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        """
 
         t = (y1-self.y0) * SEC_IN_YEAR
         while self.t < t:
@@ -622,18 +636,30 @@ class FlowlineModel(object):
                             store_monthly_step=False):
         """Runs the model and returns intermediate steps in xarray datasets.
 
-        The function returns two datasets:
-        - model run: this dataset stores the entire glacier geometry. It is
-          useful to visualize the glacier geometry or to restart a new run
-          from a modelled geometry. The glacier state is stored at the begining
-          of each hydrological year (not in between in order to spare disk
-          space)
-        - model diagnostics: this dataset stores a few diagnostic variables
-          such as the volume, area, length and ELA of the glacier. It is
-          stored at a monthly timestep.
+        This function repeatedly calls FlowlineModel.run_until for either
+        monthly or yearly time steps up till the upper time boundary y1.
 
-        You can store the dataset to disk in netcdf files by providing the
-        run_path and diag_path arguments.
+        Parameters
+        ----------
+        y1 : int
+            Upper time span for how long the model should run
+        run_path : str
+            Path and filename where to store the model run dataset
+        diag_path : str
+            Path and filename where to store the model diagnostics dataset
+        store_monthly_step : Bool
+            If True (False)  model diagnostics will be stored monthly (yearly)
+
+        Returns
+        -------
+        run_ds : xarray.Dataset
+            stores the entire glacier geometry. It is useful to visualize the
+            glacier geometry or to restart a new run from a modelled geometry.
+            The glacier state is stored at the begining of each hydrological
+            year (not in between in order to spare disk space).
+        diag_ds : xarray.Dataset
+            stores a few diagnostic variables such as the volume, area, length
+            and ELA of the glacier.
         """
 
         # time
@@ -1434,12 +1460,15 @@ def glacier_from_netcdf(path):
 
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
-    """First task after inversion. Merges the data from the various
-    preprocessing tasks into a stand-alone numerical glacier ready for run.
+    """Merges data from preprocessing tasks. First task after inversion!
+
+    This updates the `mode_flowlines` file and creates a stand-alone numerical
+    glacier ready to run.
 
     Parameters
     ----------
-    gdir : oggm.GlacierDirectory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     """
 
     # Some vars
@@ -1561,6 +1590,30 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
      - it is inelegant
 
      Possibly a method based on mass-conservation checks would be more robust.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    mb_model : :py:class:`core.MassBalanceModel`
+        a MassBalanceModel instance
+    ys : int
+        start year of the model run (default: from the config file)
+    ye : int
+        end year of the model run (default: from the config file)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
      """
 
     kwargs.setdefault('fs', cfg.PARAMS['fs'])
@@ -1613,8 +1666,14 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation
     y0 : int, optional
@@ -1687,8 +1746,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     nyears : int
         length of the simulation (default: as long as needed for reaching
         equilibrium)
@@ -1747,10 +1812,16 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           **kwargs):
-    """ Runs glacier with climate input from CRU or a GCM.
+    """ Runs a glacier with climate input from e.g. CRU or a GCM.
+
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     ys : int
         start year of the model run (default: from the config file)
     ye : int
@@ -1804,3 +1875,140 @@ def run_from_climate_data(gdir, ys=None, ye=None,
                             init_model_fls=init_model_fls,
                             zero_initial_glacier=zero_initial_glacier,
                             **kwargs)
+
+
+@entity_task(log)
+def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
+                              input_filesuffix=''):
+    """Merge multiple tributary glaciers to a main glacier
+
+    This function will merge multiple tributary glaciers to a main glacier
+    and write modified `model_flowlines` to the main GlacierDirectory.
+    Afterwards only the main GlacierDirectory must be processed and the results
+    will cover the main and the tributary glaciers.
+    The provided tributaries must have an intersecting downstream line.
+    To be sure about this, use `intersect_downstream_lines` first.
+
+    Parameters
+    ----------
+    main : oggm.GlacierDirectory
+        The new GDir of the glacier of interest
+    tribs : list or dictionary containing oggm.GlacierDirectories
+        true tributary glaciers to the main glacier
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+    """
+
+    # If its a dict, select the relevant ones
+    if isinstance(tribs, dict):
+        tribs = tribs[main.rgi_id.split('_merged')[0]]
+    # make sure tributaries are iteratable
+    tribs = utils.tolist(tribs)
+
+    # Buffer in pixels where to cut the incoming centerlines
+    buffer = cfg.PARAMS['kbuffer']
+    # Number of pixels to arbitrarily remove at junctions
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
+
+    # read flowlines of the Main glacier
+    mfls = main.read_pickle('model_flowlines')
+    mfl = mfls.pop(-1)  # remove main line from list and treat seperately
+
+    for trib in tribs:
+
+        tfls = trib.read_pickle('model_flowlines')
+
+        # order flowlines in ascending way
+        tfls.sort(key=lambda x: x.order, reverse=True)
+
+        # check if flowlines are in correct order
+        order = [o.order for i, o in enumerate(tfls)]
+        if not (np.all(np.diff(order) <= 0)) & \
+               (tfls[0].order == np.max(order)):
+            raise RuntimeError('Flowline order is not correct')
+
+        for nr, tfl in enumerate(tfls):
+
+            # 1. Step: Change projection to the main glaciers grid
+            _line = salem.transform_geometry(tfl.line,
+                                             crs=trib.grid, to_crs=main.grid)
+
+            if nr == 0:
+                # cut tributary main line to size
+                # find area where lines overlap within a given buffer
+                _overlap = _line.intersection(mfl.line.buffer(buffer))
+                _line = _line.difference(_overlap)  # cut to new line
+
+                # if the tributary flowline is longer than the main line,
+                # _line will contain multiple LineStrings: only keep the first
+                try:
+                    _line = _line[0]
+                except TypeError:
+                    pass
+
+                # remove cfg.PARAMS['flowline_junction_pix'] from the _line
+                # gives a bigger gap at the junction and makes sure the last
+                # point is not corrupted in terms of spacing
+                _line = shpg.LineString(_line.coords[:-lid])
+
+            # 2. set new line
+            tfl.set_line(_line)
+
+            # 3. set flow to attributes
+            if nr == 0:
+                # this one flows to the main glacier
+                tfl.set_flows_to(mfl)  # set flows_to also changes mfl!
+            else:
+                # reset to the existing link, neccessary to set attributes
+                tfl.set_flows_to(tfl.flows_to)
+            # remove inflow points, will be set by other flowlines if need be
+            tfl.inflow_points = []
+
+            # 5. set grid size attributes
+            dx = [shpg.Point(tfl.line.coords[i]).distance(
+                shpg.Point(tfl.line.coords[i+1]))
+                for i, pt in enumerate(tfl.line.coords[:-1])]  # get distance
+            # and check if equally spaced
+            if not np.allclose(dx, np.mean(dx), atol=1e-2):
+                raise RuntimeError('Flowline is not evenly spaced.')
+            tfl.dx = np.mean(dx).round(2)
+            tfl.map_dx = mfl.map_dx
+            tfl.dx_meter = tfl.map_dx * tfl.dx
+
+            if nr == 0:
+                # change the array size of tributary main flowline attributs
+                for atr, value in tfl.__dict__.items():
+                    try:
+                        if len(value) > tfl.nx:
+                            tfl.__setattr__(atr, value[:tfl.nx])
+                    except TypeError:
+                        pass
+
+            # replace tributary flowline within the list
+            tfls[nr] = tfl
+
+        # copy climate file and local_mustar to new gdir
+        climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
+        climfile = os.path.join(main.dir, climfilename)
+        shutil.copyfile(trib.get_filepath(filename,
+                                          filesuffix=input_filesuffix),
+                        climfile)
+        _mu = os.path.basename(trib.get_filepath('local_mustar')).split('.')
+        mufile = _mu[0] + '_' + trib.rgi_id + '.' + _mu[1]
+        shutil.copyfile(trib.get_filepath('local_mustar'),
+                        os.path.join(main.dir, mufile))
+
+        mfls = tfls + mfls  # add all tributary flowlines to the main glacier
+    mfls = mfls + [mfl]  # add the main glacier flowline back to the list
+
+    # Set the new flowline levels
+    for fl in mfls:
+        fl.order = line_order(fl)
+
+    # order flowlines in descending way, important for downstream tasks
+    mfls.sort(key=lambda x: x.order, reverse=False)
+
+    # Finally write the flowlines
+    main.write_pickle(mfls, 'model_flowlines')

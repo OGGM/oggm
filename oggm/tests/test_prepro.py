@@ -1329,6 +1329,9 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
 
+        cfg.PARAMS['baseline_y0'] = 1940
+        cfg.PARAMS['baseline_y1'] = 2000
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -2700,12 +2703,14 @@ class TestCatching(unittest.TestCase):
                          'SUCCESS')
         self.assertIsNone(gdir.get_task_status(
             centerlines.compute_centerlines.__name__))
+        self.assertIsNone(gdir.get_error_log())
 
         centerlines.compute_downstream_bedshape(gdir)
 
         s = gdir.get_task_status(
             centerlines.compute_downstream_bedshape.__name__)
         assert 'FileNotFoundError' in s
+        assert 'FileNotFoundError' in gdir.get_error_log()
 
         # Try overwrite
         cfg.PARAMS['auto_skip_task'] = True
@@ -2715,6 +2720,7 @@ class TestCatching(unittest.TestCase):
             lines = logfile.readlines()
         isrun = ['glacier_masks' in l for l in lines]
         assert np.sum(isrun) == 1
+        assert 'FileNotFoundError' in gdir.get_error_log()
 
         cfg.PARAMS['auto_skip_task'] = False
         gis.glacier_masks(gdir)
@@ -2747,3 +2753,7 @@ class TestCatching(unittest.TestCase):
         assert df['compute_centerlines'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert not np.isfinite(df['not_a_task'])
+
+        # Glacier stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert 'error_task' in df.columns

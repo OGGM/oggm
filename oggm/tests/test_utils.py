@@ -281,13 +281,15 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.compile_glacier_statistics([gdir], path=False,
-                                              add_climate_period=1985)
+        df = utils.compile_glacier_statistics([gdir], path=False)
         assert len(df) == 1
         assert np.all(~df.isnull())
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
+
+        df = utils.compile_climate_statistics([gdir], path=False,
+                                              add_climate_period=1985)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
                                    2853, atol=5)
         np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
@@ -519,8 +521,8 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='srtm_39_03.tif')
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/'
-                        'SRTM_Data_GeoTiff/srtm_39_03.zip')
+            expected = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/'
+                        'srtm_5x5/TIFF/srtm_39_03.zip')
             self.assertEqual(url, expected)
             return tf
 
@@ -648,6 +650,45 @@ class TestDataFiles(unittest.TestCase):
         ref = sorted(['39_04', '38_03', '38_04', '39_03'])
         z = utils.srtm_zone(lon_ex=[6, 14], lat_ex=[41, 48])
         self.assertTrue(len(z) == 4)
+        self.assertEqual(ref, z)
+
+    def test_tandemzone(self):
+
+        z = utils.tandem_zone(lon_ex=[-112.1, -112.1], lat_ex=[-57.1, -57.1])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('S58/W110/TDM1_DEM__30_S58W113', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[52, 52])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('N52/E070/TDM1_DEM__30_N52E071', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[62, 62])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('N62/E070/TDM1_DEM__30_N62E070', z[0])
+
+        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[-82.1, -82.1])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('S83/E060/TDM1_DEM__30_S83E068', z[0])
+
+        ref = sorted(['N00/E000/TDM1_DEM__30_N00E000',
+                      'N00/E000/TDM1_DEM__30_N00E001',
+                      'N00/W000/TDM1_DEM__30_N00W001',
+                      'N00/W000/TDM1_DEM__30_N00W002',
+                      'N01/E000/TDM1_DEM__30_N01E000',
+                      'N01/E000/TDM1_DEM__30_N01E001',
+                      'N01/W000/TDM1_DEM__30_N01W001',
+                      'N01/W000/TDM1_DEM__30_N01W002',
+                      'S01/E000/TDM1_DEM__30_S01E000',
+                      'S01/E000/TDM1_DEM__30_S01E001',
+                      'S01/W000/TDM1_DEM__30_S01W001',
+                      'S01/W000/TDM1_DEM__30_S01W002',
+                      'S02/E000/TDM1_DEM__30_S02E000',
+                      'S02/E000/TDM1_DEM__30_S02E001',
+                      'S02/W000/TDM1_DEM__30_S02W001',
+                      'S02/W000/TDM1_DEM__30_S02W002'
+                      ])
+        z = utils.tandem_zone(lon_ex=[-1.3, 1.4], lat_ex=[-1.3, 1.4])
+        self.assertTrue(len(z) == len(ref))
         self.assertEqual(ref, z)
 
     def test_asterzone(self):
@@ -796,6 +837,18 @@ class TestDataFiles(unittest.TestCase):
         # this zone does not exist
         zone = '41_20'
         self.assertTrue(_download_srtm_file(zone) is None)
+
+    @pytest.mark.download
+    @pytest.mark.creds
+    def test_tandemdownload(self):
+        from oggm.utils._downloads import _download_tandem_file
+
+        # this zone does exist and file should be small enough for download
+        zone = 'N47/E010/TDM1_DEM__30_N47E011'
+        fp = _download_tandem_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        fp = _download_tandem_file(zone)
+        self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.creds
     def test_asterdownload(self):

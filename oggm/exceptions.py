@@ -5,3 +5,15 @@ class InvalidParamsError(ValueError):
 
 class MassBalanceCalibrationError(RuntimeError):
     pass
+
+
+class InvalidDEMError(RuntimeError):
+    pass
+
+
+class InvalidGeometryError(RuntimeError):
+    pass
+
+
+class GeometryError(RuntimeError):
+    pass

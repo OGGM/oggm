@@ -155,7 +155,7 @@ _doc = ('A hypsometry file computed by OGGM and provided in the same format '
         'as the RGI (useful for diagnostics).')
 BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 
-_doc = 'A list of :py:class:`Centerline` instances, sorted by flow order.'
+_doc = 'A list of :py:class:`oggm.Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
 _doc = ('A "better" version of the Centerlines, now on a regular spacing '
@@ -256,6 +256,7 @@ def set_logging_config(logging_level='INFO'):
     logging.getLogger("fiona").setLevel(logging.CRITICAL)
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
+    logging.getLogger("matplotlib").setLevel(logging.CRITICAL)
 
     # Basic config
     if logging_level is None:
@@ -269,7 +270,8 @@ def set_logging_config(logging_level='INFO'):
 def initialize(file=None, logging_level='INFO'):
     """Read the configuration file containing the run's parameters.
 
-    This should be the first call of most (all?) OGGM simulations.
+    This should be the first call, before using any of the other OGGM modules
+    for most (all?) OGGM simulations.
 
     Parameters
     ----------
@@ -325,6 +327,7 @@ def initialize(file=None, logging_level='INFO'):
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
     PARAMS['clip_mu_star'] = cp.as_bool('clip_mu_star')
+    PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -362,7 +365,7 @@ def initialize(file=None, logging_level='INFO'):
            'use_multiple_flowlines', 'tstar_search_glacierwide',
            'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
-           'use_intersects', 'filter_min_slope',
+           'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version',
            'use_shape_factor_for_inversion', 'use_rgi_area',

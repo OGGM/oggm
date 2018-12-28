@@ -56,18 +56,19 @@ _RGI_METADATA = dict()
 
 DEM3REG = {
     'ISL': [-25., -12., 63., 67.],  # Iceland
-    'SVALBARD': [10., 34., 76., 81.],
+    'SVALBARD': [9., 35.99, 75., 84.],
     'JANMAYEN': [-10., -7., 70., 72.],
-    'FJ': [36., 66., 79., 82.],  # Franz Josef Land
+    'FJ': [36., 68., 79., 90.],  # Franz Josef Land
     'FAR': [-8., -6., 61., 63.],  # Faroer
     'BEAR': [18., 20., 74., 75.],  # Bear Island
     'SHL': [-3., 0., 60., 61.],  # Shetland
     # Antarctica tiles as UTM zones, large files
-    # '01-15': [-180., -91., -90, -60.],
-    # '16-30': [-91., -1., -90., -60.],
-    # '31-45': [-1., 89., -90., -60.],
-    # '46-60': [89., 189., -90., -60.],
+    '01-15': [-180., -91., -90, -60.],
+    '16-30': [-91., -1., -90., -60.],
+    '31-45': [-1., 89., -90., -60.],
+    '46-60': [89., 189., -90., -60.],
     # Greenland tiles
+    # These are creating problems!
     # 'GL-North': [-78., -11., 75., 84.],
     # 'GL-West': [-68., -42., 64., 76.],
     # 'GL-South': [-52., -40., 59., 64.],
@@ -79,6 +80,27 @@ tuple2int = partial(np.array, dtype=np.int64)
 
 # Global Lock
 lock = mp.Lock()
+
+
+def mkdir(path, reset=False):
+    """Checks if directory exists and if not, create one.
+
+    Parameters
+    ----------
+    reset: erase the content of the directory if exists
+
+    Returns
+    -------
+    the path
+    """
+
+    if reset and os.path.exists(path):
+        shutil.rmtree(path)
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        pass
+    return path
 
 
 def del_empty_dirs(s_dir):
@@ -300,7 +322,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
             break
         except HttpDownloadError as err:
             # This works well for py3
-            if err.code == 404:
+            if err.code == 404 or err.code == 300:
                 # Ok so this *should* be an ocean tile
                 return None
             elif err.code >= 500 and err.code < 600:
@@ -381,8 +403,8 @@ def _download_srtm_file_unlocked(zone):
         return outpath
 
     # Did we download it yet?
-    wwwfile = 'http://srtm.csi.cgiar.org/SRT-ZIP/SRTM_V41/' +\
-        'SRTM_Data_GeoTiff/srtm_' + zone + '.zip'
+    wwwfile = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/'
+               'TIFF/srtm_' + zone + '.zip')
     dest_file = file_downloader(wwwfile)
 
     # None means we tried hard but we couldn't find it
@@ -393,6 +415,54 @@ def _download_srtm_file_unlocked(zone):
     if not os.path.exists(outpath):
         with zipfile.ZipFile(dest_file) as zf:
             zf.extractall(tmpdir)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
+def _download_tandem_file(zone):
+    with _get_download_lock():
+        return _download_tandem_file_unlocked(zone)
+
+
+def _download_tandem_file_unlocked(zone):
+    """Checks if the tandem data is in the directory and if not, download it.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+    bname = zone.split('/')[-1] + '_DEM.tif'
+    outpath = os.path.join(tmpdir, bname)
+
+    # check if extracted file exists already
+    if os.path.exists(outpath):
+        return outpath
+
+    # Did we download it yet?
+    scpfile = ('/home/data/download/tandemx-90m.dlr.de/90mdem/DEM/'
+               '{}.zip'.format(zone))
+    cache_dir = cfg.PATHS['dl_cache_dir']
+    dest_file = os.path.join(cache_dir, 'scp_tandem', zone + '.zip')
+    if not os.path.exists(dest_file):
+        mkdir(os.path.dirname(dest_file))
+        cmd = 'scp bremen:%s %s' % (scpfile, dest_file)
+        os.system(cmd)
+
+    # That means we tried hard but we couldn't find it
+    if not os.path.exists(dest_file):
+        return None
+
+    # ok we have to extract it
+    if not os.path.exists(outpath):
+        with zipfile.ZipFile(dest_file) as zf:
+            for fn in zf.namelist():
+                if 'DEM/' + bname in fn:
+                    break
+            with open(outpath, 'wb') as fo:
+                fo.write(zf.read(fn))
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(outpath)
@@ -557,6 +627,35 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
+def _download_arcticdem_from_cluster():
+    with _get_download_lock():
+        return _download_arcticdem_from_cluster_unlocked()
+
+
+def _download_arcticdem_from_cluster_unlocked():
+    """Checks if the special topo data is in the directory and if not,
+    download it from the cluster.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    # mkdir(tmpdir)
+    fname = 'arcticdem_mosaic_100m_v3.0.tif'
+    outpath = os.path.join(tmpdir, fname)
+
+    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url += fname
+    dfile = file_downloader(url)
+
+    if not os.path.exists(outpath):
+        shutil.copyfile(dfile, outpath)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
 def _get_centerline_lonlat(gdir):
     """Quick n dirty solution to write the centerlines as a shapefile"""
 
@@ -575,25 +674,15 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def mkdir(path, reset=False):
-    """Checks if directory exists and if not, create one.
+def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
-    Parameters
-    ----------
-    reset: erase the content of the directory if exists
-
-    Returns
-    -------
-    the path
-    """
-
-    if reset and os.path.exists(path):
-        shutil.rmtree(path)
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
-    return path
+    # Prepro URL
+    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
+    url += 'RGI{}/'.format(rgi_version)
+    url += 'b_{:03d}/'.format(border)
+    url += 'L{:d}/'.format(prepro_level)
+    url += '{}/{}/{}.tar.gz' .format(rgi_id[:8], rgi_id[:11], rgi_id)
+    return url
 
 
 def srtm_zone(lon_ex, lat_ex):
@@ -623,6 +712,76 @@ def srtm_zone(lon_ex, lat_ex):
             zx = np.ceil(dx / srtm_dx)
             zy = np.ceil(dy / srtm_dy)
             zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
+    return list(sorted(set(zones)))
+
+
+def _tandem_path(lon_tile, lat_tile):
+
+    # OK we have a proper tile now
+
+    # First folder level is sorted from S to N
+    level_0 = 'S' if lat_tile < 0 else 'N'
+    level_0 += '{:02d}'.format(abs(lat_tile))
+
+    # Second folder level is sorted from W to E, but in 10 steps
+    level_1 = 'W' if lon_tile < 0 else 'E'
+    level_1 += '{:03d}'.format(divmod(abs(lon_tile), 10)[0] * 10)
+
+    # Level 2 is formating, but depends on lat
+    level_2 = 'W' if lon_tile < 0 else 'E'
+    if abs(lat_tile) <= 60:
+        level_2 += '{:03d}'.format(abs(lon_tile))
+    elif abs(lat_tile) <= 80:
+        level_2 += '{:03d}'.format(divmod(abs(lon_tile), 2)[0] * 2)
+    else:
+        level_2 += '{:03d}'.format(divmod(abs(lon_tile), 4)[0] * 4)
+
+    # Final path
+    out = (level_0 + '/' + level_1 + '/' +
+           'TDM1_DEM__30_{}{}'.format(level_0, level_2))
+    return out
+
+
+def tandem_zone(lon_ex, lat_ex):
+    """Returns a list of TanDEM-X zones covering the desired extent.
+    """
+
+    # Files are one by one tiles, so lets loop over them
+    # For higher lats they are stored in steps of 2 and 4. My code below
+    # is probably giving more files than needed but better safe than sorry
+    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
+                          dtype=np.int)
+    zones = []
+    for lat in lat_tiles:
+        if abs(lat) < 60:
+            l0 = np.floor(lon_ex[0])
+            l1 = np.floor(lon_ex[1])
+        elif abs(lat) < 80:
+            l0 = divmod(lon_ex[0], 2)[0] * 2
+            l1 = divmod(lon_ex[1], 2)[0] * 2
+        elif abs(lat) < 90:
+            l0 = divmod(lon_ex[0], 4)[0] * 4
+            l1 = divmod(lon_ex[1], 4)[0] * 4
+        lon_tiles = np.arange(l0, l1+1, dtype=np.int)
+        for lon in lon_tiles:
+            zones.append(_tandem_path(lon, lat))
+    return list(sorted(set(zones)))
+
+
+def arcticdem_zone(lon_ex, lat_ex):
+    """Returns a list of Arctic-DEM zones covering the desired extent.
+    """
+
+    # Files are one by one tiles, so lets loop over them
+
+    lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
+                          dtype=np.int)
+    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
+                          dtype=np.int)
+    zones = []
+    for lon in lon_tiles:
+        for lat in lat_tiles:
+            zones.append(_tandem_path(lon, lat))
     return list(sorted(set(zones)))
 
 
@@ -748,7 +907,21 @@ def aster_zone(lon_ex, lat_ex):
 
 
 def get_demo_file(fname):
-    """Returns the path to the desired OGGM file."""
+    """Returns the path to the desired OGGM-sample-file.
+
+    If Sample data is not cached it will be downloaded from
+    https://github.com/OGGM/oggm-sample-data
+
+    Parameters
+    ----------
+    fname : str
+        Filename of the desired OGGM-sample-file
+
+    Returns
+    -------
+    str
+        Absolute path to the desired file.
+    """
 
     d = download_oggm_files()
     if fname in d:
@@ -780,7 +953,7 @@ def get_wgms_files():
 
     Returns
     -------
-    (file, dir): paths to the files
+    (file, dir) : paths to the files
     """
 
     download_oggm_files()
@@ -801,7 +974,7 @@ def get_glathida_file():
 
     Returns
     -------
-    file: paths to the file
+    file : paths to the file
     """
 
     # Roll our own
@@ -821,14 +994,15 @@ def get_rgi_dir(version=None, reset=False):
 
     Parameters
     ----------
-    region: str
-        from '01' to '19'
-    version: str
+    version : str
         '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the RGI directory first and downloads the data
 
     Returns
     -------
-    path to the RGI directory
+    str
+        path to the RGI directory
     """
 
     with _get_download_lock():
@@ -892,14 +1066,17 @@ def get_rgi_region_file(region, version=None, reset=False):
 
     Parameters
     ----------
-    region: str
+    region : str
         from '01' to '19'
-    version: str
+    version : str
         '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the RGI directory first and downloads the data
 
     Returns
     -------
-    path to the RGI shapefile
+    str
+        path to the RGI shapefile
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
@@ -909,18 +1086,21 @@ def get_rgi_region_file(region, version=None, reset=False):
 
 
 def get_rgi_glacier_entities(rgi_ids, version=None):
-    """Get a list of glacier oulines selected from their IDs.
+    """Get a list of glacier outlines selected from their RGI IDs.
+
+    Will download RGI data if not present.
 
     Parameters
     ----------
-    rgi_ids: list of str
+    rgi_ids : list of str
         the glaciers you want the outlines for
-    version: list of str
+    version : str
         the rgi version
 
     Returns
     -------
-    a geodataframe with the list of glaciers
+    geopandas.GeoDataFrame
+        containing the desired RGI glacier outlines
     """
 
     regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
@@ -945,9 +1125,17 @@ def get_rgi_intersects_dir(version=None, reset=False):
 
     If the files are not present, download them.
 
+    Parameters
+    ----------
+    version : str
+        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+    reset : bool
+        If True, deletes the intersects before redownloading them
+
     Returns
     -------
-    path to the directory
+    str
+        path to the directory
     """
 
     with _get_download_lock():
@@ -1024,18 +1212,19 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
 
     Parameters
     ----------
-    region: str
+    region : str
         from '00' to '19', with '00' being the global file (deprecated).
         From RGI version '61' onwards, please use `get_rgi_intersects_entities`
         with a list of glaciers instead of relying to the global file.
-    version: str
+    version : str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
-    reset: bool
-        redownload the RGI file.
+    reset : bool
+        If True, deletes the intersect file before redownloading it
 
     Returns
     -------
-    path to the RGI intersects shapefile
+    str
+        path to the RGI intersects shapefile
     """
 
     if version is None:
@@ -1060,18 +1249,19 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
 
 
 def get_rgi_intersects_entities(rgi_ids, version=None):
-    """Get a list of glacier intersects selected from their IDs.
+    """Get a list of glacier intersects selected from their RGI IDs.
 
     Parameters
     ----------
-    rgi_ids: list
+    rgi_ids: list of str
         list of rgi_ids you want to look for intersections for
     version: str
         '5', '6', '61'... defaults the one specified in cfg.PARAMS
 
     Returns
     -------
-    a GeoDataFrame with the selected intersects
+    geopandas.GeoDataFrame
+        with the selected intersects
     """
 
     if version is None:
@@ -1095,17 +1285,20 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
 
 
 def get_cru_file(var=None):
-    """Returns a path to the desired CRU TS file.
+    """Returns a path to the desired CRU baseline climate file.
 
     If the file is not present, download it.
 
     Parameters
     ----------
-    var: 'tmp' or 'pre'
+    var : str
+        'tmp' for temperature
+        'pre' for precipitation
 
     Returns
     -------
-    path to the CRU file
+    str
+        path to the CRU file
     """
     with _get_download_lock():
         return _get_cru_file_unlocked(var)
@@ -1149,17 +1342,20 @@ def _get_cru_file_unlocked(var=None):
 
 
 def get_histalp_file(var=None):
-    """Returns a path to the desired HISTALP file.
+    """Returns a path to the desired HISTALP baseline climate file.
 
     If the file is not present, download it.
 
     Parameters
     ----------
-    var: 'tmp' or 'pre'
+    var : str
+        'tmp' for temperature
+        'pre' for precipitation
 
     Returns
     -------
-    path to the CRU file
+    str
+        path to the CRU file
     """
     with _get_download_lock():
         return _get_histalp_file_unlocked(var)
@@ -1236,6 +1432,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
           - 'DEM3' : http://viewfinderpanoramas.org/
           - 'ASTER' : ASTER data
+          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
+          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
 
     Returns
     -------
@@ -1267,6 +1465,17 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             _file = _download_topo_file_from_cluster('gimpdem_90m_v01.1.tif')
             return [_file], source
 
+    # ArcticDEM also has a polar projection, but here we have a shape
+    if source == 'ARCTICDEM':
+        source = 'ARCTICDEM' if source is None else source
+        # If we have to automatise this one day, we should use the shapefile
+        # of the tiles, and then check for RGI region:
+        # use_without_check = ['03', '05', '06', '07', '09']
+        # to_test_on_shape = ['01', '02', '04', '08']
+        if source == 'ARCTICDEM':
+            _file = _download_arcticdem_from_cluster()
+            return [_file], source
+
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
         if rgi_subregion is None:
@@ -1283,9 +1492,19 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
             return [_file], source
 
+    # TANDEM
+    if source == 'TANDEM':
+        zones = tandem_zone(lon_ex, lat_ex)
+        sources = []
+        for z in zones:
+            sources.append(_download_tandem_file(z))
+        source_str = source
+
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
+    # exceptional test for eastern russia:
+    east_max = np.min(lat_ex) > 59 and np.min(lon_ex) > 170
     if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
-            (source == 'DEM3') or (source == 'ASTER'):
+            (source == 'DEM3') or (source == 'ASTER') or east_max:
         # default is DEM3
         source = 'DEM3' if source is None else source
         if source == 'DEM3':
@@ -1323,7 +1542,21 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
 
 def get_ref_mb_glaciers(gdirs):
-    """Get the list of glaciers we have valid data for."""
+    """Get the list of glaciers we have valid mass balance measurements for.
+
+    To be valid glaciers must have more than 5 years of measurements and
+    be land terminating.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of glaciers to check for valid reference mass balance data
+
+    Returns
+    -------
+    ref_gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of those glaciers with valid reference mass balance data
+    """
 
     # Get the links
     flink, _ = get_wgms_files()
