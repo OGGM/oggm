@@ -4,6 +4,7 @@ omit =
     */tests/*
     */sandbox/*
     */mpi.py
+    */_version.py
     */__init__.py
 
 concurrency = multiprocessing
@@ -13,6 +14,7 @@ omit =
     */sandbox/*
     */tests/*
     */mpi.py
+    */_version.py
     */__init__.py
     */pytest_plugin.py
 
