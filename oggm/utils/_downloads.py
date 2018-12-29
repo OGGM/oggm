@@ -155,6 +155,13 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     except KeyError:
         fb_cache_dir = ''
 
+    print('in _cached_download_helper')
+    print('cache_dir:')
+    print(cache_dir)
+    print('fb_cache_dir:')
+    print(fb_cache_dir)
+    print('')
+
     if not cache_dir:
         # Defaults to working directory: it must be set!
         if not cfg.PATHS['working_dir']:
@@ -172,6 +179,10 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     if cache_ro:
         cache_path = fb_path
+
+    print('later: cache_path')
+    print(cache_path)
+    print('')
 
     if not cfg.PARAMS['has_internet']:
         raise NoInternetException("Download required, but "
@@ -354,6 +365,11 @@ def download_oggm_files():
 
 def _download_oggm_files_unlocked():
     """Checks if the demo data is already on the cache and downloads it."""
+
+    print('in _download_oggm_files_unlocked')
+    print('cfg.PATHS:')
+    print(cfg.PATHS)
+    print('')
 
     zip_url = 'https://github.com/%s/archive/%s.zip' % \
               (SAMPLE_DATA_GH_REPO, SAMPLE_DATA_COMMIT)
