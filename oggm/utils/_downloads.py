@@ -153,7 +153,9 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         # this is for real runs
         fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
     except KeyError:
-        fb_cache_dir = ''
+        # Nothing have been set up yet, this is bad - use tmp
+        # This should happen on RO cluster only but still
+        fb_cache_dir = os.path.join(cfg.PATHS['tmp_dir'], 'cache')
 
     if not cache_dir:
         # Defaults to working directory: it must be set!
