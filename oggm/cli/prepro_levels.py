@@ -98,8 +98,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Module logger
     log = logging.getLogger(__name__)
-    log.info('Starting run for RGI reg: ' + rgi_reg)
-    log.info('Number of glaciers: {}'.format(len(rgidf)))
+    log.workflow('Starting prepro run for RGI reg: {} '
+                 'and border: {}'.format(rgi_reg, border))
+    log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
     # Input
     if test_topofile:
@@ -203,8 +204,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Log
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)
-    log.info('OGGM prepro_levels is done! Time needed: '
-             '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+    log.workflow('OGGM prepro_levels is done! Time needed: '
+                 '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
 
 def parse_args(args):
