@@ -106,7 +106,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         cfg.PATHS['dem_file'] = test_topofile
 
     # L1 - initialize working directories
-    gdirs = workflow.init_glacier_regions(rgidf, reset=True)
+    gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L1', 'summary')
