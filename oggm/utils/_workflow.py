@@ -469,7 +469,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
             c.write(feature(i, row))
 
 
-def compile_run_output(gdirs, path=True, filesuffix=''):
+def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
@@ -481,6 +481,8 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         Set to `False` to disable disk storage.
     filesuffix : str
         the filesuffix of the run
+    use_compression : bool
+        use zlib compression on the output netCDF files
 
     Returns
     -------
@@ -574,12 +576,20 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'run_output' + filesuffix + '.nc')
-        ds.to_netcdf(path)
+
+        enc_var = {'dtype': 'float32'}
+        if use_compression:
+            enc_var['complevel'] = 5,
+            enc_var['zlib'] = True
+        encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
+
+        ds.to_netcdf(path, encoding=encoding)
+
     return ds
 
 
 def compile_climate_input(gdirs, path=True, filename='climate_monthly',
-                          filesuffix=''):
+                          filesuffix='', use_compression=True):
     """Merge the climate input files in the glacier directories into one file.
 
     Parameters
@@ -593,6 +603,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         BASENAME of the climate input files
     filesuffix : str
         the filesuffix of the compiled file
+    use_compression : bool
+        use zlib compression on the output netCDF files
 
     Returns
     -------
@@ -694,7 +706,17 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'climate_input' + filesuffix + '.nc')
-        ds.to_netcdf(path)
+
+        enc_var = {'dtype': 'float32'}
+        if use_compression:
+            enc_var['complevel'] = 5,
+            enc_var['zlib'] = True
+        vars = ['temp', 'prcp']
+        if has_grad:
+            vars += ['grad']
+        encoding = {v: enc_var for v in vars}
+
+        ds.to_netcdf(path, encoding=encoding)
     return ds
 
 
