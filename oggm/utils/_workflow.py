@@ -2032,7 +2032,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_monthly', 'gridded_data',
+                 'local_mustar', 'climate_monthly',
                  'gcm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
