@@ -331,3 +331,25 @@ def init_hef(reset=False, border=40):
     flowline.init_present_time_glacier(gdir)
 
     return gdir
+
+
+class TempEnvironmentVariable:
+    """Context manager for environment variables
+
+    https://gist.github.com/devhero/7e015f0ce0abacab3880d33c26f07674
+    """
+    def __init__(self, **kwargs):
+        self.envs = kwargs
+
+    def __enter__(self):
+        self.old_envs = {}
+        for k, v in self.envs.items():
+            self.old_envs[k] = os.environ.get(k)
+            os.environ[k] = v
+
+    def __exit__(self, *args):
+        for k, v in self.old_envs.items():
+            if v:
+                os.environ[k] = v
+            else:
+                del os.environ[k]

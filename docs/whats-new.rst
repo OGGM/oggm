@@ -154,7 +154,7 @@ Enhancements
   ``process_cesm_data`` can also be used as an example when you plan make a
   function for running OGGM with another GCM (:issue:`469` & :pull:`582`).
   `Anouk Vlug <https://github.com/anoukvlug>`_.
-- New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
+- New ``process_dummy_cru_file`` task to run OGGM with randomized CRU data
   (:pull:`603`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
@@ -165,6 +165,9 @@ Enhancements
   helpfull/neccessary/intended for growing glacier experiments (e.g.
   paleoglaciology) (:pull:`624`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- New ``oggm_prepro`` command line tool to run the OGGM preprocessing tasks
+  and compress the directories (:pull:`648`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 
