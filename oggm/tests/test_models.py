@@ -2603,8 +2603,8 @@ class TestHEF(unittest.TestCase):
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
-        ds1 = utils.compile_run_output([gdir], path=False, filesuffix='_hist')
-        ds2 = utils.compile_run_output([gdir], path=False, filesuffix='_cesm')
+        ds1 = utils.compile_run_output([gdir], filesuffix='_hist')
+        ds2 = utils.compile_run_output([gdir], filesuffix='_cesm')
 
         assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
                         ds2.volume.isel(rgi_id=0, time=-1),

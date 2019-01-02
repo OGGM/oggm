@@ -579,7 +579,7 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
 
         enc_var = {'dtype': 'float32'}
         if use_compression:
-            enc_var['complevel'] = 5,
+            enc_var['complevel'] = 5
             enc_var['zlib'] = True
         encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
 
@@ -709,7 +709,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
 
         enc_var = {'dtype': 'float32'}
         if use_compression:
-            enc_var['complevel'] = 5,
+            enc_var['complevel'] = 5
             enc_var['zlib'] = True
         vars = ['temp', 'prcp']
         if has_grad:
