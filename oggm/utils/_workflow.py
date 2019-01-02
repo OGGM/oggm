@@ -1337,10 +1337,10 @@ class GlacierDirectory(object):
             rgi_date = None
         self.rgi_date = rgi_date
 
-        # The divides dirs are created by gis.define_glacier_region, but we
-        # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
-                                self.rgi_id)
+        # Root directory
+        self.base_dir = os.path.normpath(base_dir)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:8],
+                                self.rgi_id[:11], self.rgi_id)
 
         # Do we have to extract the files first?
         if (reset or from_tar) and os.path.exists(self.dir):
@@ -1982,7 +1982,7 @@ class GlacierDirectory(object):
 
 
 @entity_task(log)
-def copy_to_basedir(gdir, base_dir, setup='run'):
+def copy_to_basedir(gdir, base_dir=None, setup='run'):
     """Copies the glacier directories and their content to a new location.
 
     This utility function allows to select certain files only, thus
@@ -2168,24 +2168,35 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
 
 
 @entity_task(log)
-def gdir_to_tar(gdir, delete=True):
+def gdir_to_tar(gdir, base_dir=None, delete=True):
     """Writes the content of a glacier directory to a tar file.
 
     The tar file is located at the same location of the original directory.
-    The glacier directory objects are useless afterwards! Should be called at
-    the end of a run only!!!
+    The glacier directory objects are useless if deleted!
 
     Parameters
     ----------
+    base_dir : str
+        path to the basedir where to write the directory (defaults to the
+        same location of the original directory)
     delete : bool
         delete the original directory afterwards (default)
+
+    Returns
+    -------
+    the path to the tar file
     """
 
     source_dir = os.path.normpath(gdir.dir)
     opath = source_dir + '.tar.gz'
+    if base_dir is not None:
+        opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
+        mkdir(os.path.dirname(opath))
 
     with tarfile.open(opath, "w:gz") as tar:
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
     if delete:
         shutil.rmtree(source_dir)
+
+    return opath
