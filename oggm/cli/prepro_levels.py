@@ -20,7 +20,8 @@ from oggm.exceptions import InvalidParamsError
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', is_test=False,
-                      test_rgidf=None, test_intersects_file=None):
+                      test_rgidf=None, test_intersects_file=None,
+                      test_crudir=None):
     """Does the actual job.
 
     Parameters
@@ -124,8 +125,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L3 - Tasks
     # Pre-download other files just in case
-    _ = utils.get_cru_file(var='tmp')
-    _ = utils.get_cru_file(var='pre')
+    if test_crudir is None:
+        _ = utils.get_cru_file(var='tmp')
+        _ = utils.get_cru_file(var='pre')
+    else:
+        cfg.PATHS['cru_dir'] = test_crudir
+
     workflow.execute_entity_task(tasks.process_cru_data, gdirs)
 
     # Glacier stats

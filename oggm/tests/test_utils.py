@@ -464,8 +464,8 @@ class TestPreproCLI(unittest.TestCase):
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160'])
 
-        assert 'tests' in kwargs['working_dir']
-        assert 'tests' in kwargs['output_folder']
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
@@ -483,8 +483,8 @@ class TestPreproCLI(unittest.TestCase):
 
             kwargs = prepro_levels.parse_args([])
 
-            assert 'tests' in kwargs['working_dir']
-            assert 'tests' in kwargs['output_folder']
+            assert 'working_dir' in kwargs
+            assert 'output_folder' in kwargs
             assert kwargs['rgi_version'] is None
             assert kwargs['rgi_reg'] == '01'
             assert kwargs['border'] == 160
@@ -499,8 +499,8 @@ class TestPreproCLI(unittest.TestCase):
                                            '--working-dir', 'local/work',
                                            ])
 
-        assert 'tests' in kwargs['working_dir']
-        assert 'tests' in kwargs['output_folder']
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
         assert kwargs['rgi_version'] is None
@@ -515,8 +515,6 @@ class TestPreproCLI(unittest.TestCase):
                                            '--test',
                                            ])
 
-        assert 'tests' in kwargs['working_dir']
-        assert 'tests' in kwargs['output_folder']
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
         assert kwargs['rgi_version'] is None
@@ -546,8 +544,6 @@ class TestPreproCLI(unittest.TestCase):
 
             kwargs = prepro_levels.parse_args([])
 
-            assert 'tests' in kwargs['working_dir']
-            assert 'tests' in kwargs['output_folder']
             assert 'local' in kwargs['working_dir']
             assert 'local' in kwargs['output_folder']
             assert kwargs['rgi_version'] is None
@@ -562,8 +558,6 @@ class TestPreproCLI(unittest.TestCase):
 
             kwargs = prepro_levels.parse_args([])
 
-            assert 'tests' not in kwargs['working_dir']
-            assert 'tests' not in kwargs['output_folder']
             assert 'local' in kwargs['working_dir']
             assert 'local' in kwargs['output_folder']
             assert kwargs['rgi_version'] is None
@@ -578,12 +572,15 @@ class TestPreproCLI(unittest.TestCase):
         inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
 
+        cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter)
+                          test_rgidf=rgidf, test_intersects_file=inter,
+                          test_crudir=os.path.dirname(cru_file))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1','summary',
                                       'glacier_statistics_11.csv'))
