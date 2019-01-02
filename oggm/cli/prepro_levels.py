@@ -21,7 +21,7 @@ from oggm.exceptions import InvalidParamsError
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', is_test=False,
                       test_rgidf=None, test_intersects_file=None,
-                      test_crudir=None):
+                      test_topofile=None, test_crudir=None):
     """Does the actual job.
 
     Parameters
@@ -41,6 +41,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     test_rgidf : shapefile
         for testing purposes only
     test_intersects_file : shapefile
+        for testing purposes only
+    test_topofile : str
+        for testing purposes only
+    test_crudir : str
         for testing purposes only
     """
 
@@ -96,6 +100,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log = logging.getLogger(__name__)
     log.info('Starting run for RGI reg: ' + rgi_reg)
     log.info('Number of glaciers: {}'.format(len(rgidf)))
+
+    # Input
+    if test_topofile:
+        cfg.PATHS['dem_file'] = test_topofile
 
     # L1 - initialize working directories
     gdirs = workflow.init_glacier_regions(rgidf)

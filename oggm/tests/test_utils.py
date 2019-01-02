@@ -577,9 +577,11 @@ class TestPreproCLI(unittest.TestCase):
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
+                          test_topofile=topof,
                           test_crudir=os.path.dirname(cru_file))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
