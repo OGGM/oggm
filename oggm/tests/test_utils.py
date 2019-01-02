@@ -540,7 +540,7 @@ class TestPreproCLI(unittest.TestCase):
                                      OGGM_MAP_BORDER='120',
                                      OGGM_OUTDIR='local/out',
                                      OGGM_WORKDIR='local/work',
-                                ):
+                                     ):
 
             kwargs = prepro_levels.parse_args([])
 
@@ -554,7 +554,7 @@ class TestPreproCLI(unittest.TestCase):
                                      OGGM_MAP_BORDER='120',
                                      OGGM_OUTDIR='/local/out',
                                      OGGM_WORKDIR='/local/work',
-                                ):
+                                     ):
 
             kwargs = prepro_levels.parse_args([])
 
@@ -582,11 +582,11 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_crudir=os.path.dirname(cru_file))
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1','summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'dem_source' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L4','summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L4', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'inv_volume_km3' in df
 
