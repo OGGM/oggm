@@ -48,6 +48,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     """
 
+    # TODO: temporarily silence Fiona deprecation warnings
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    # Module logger
+    log = logging.getLogger(__name__)
+
     # Time
     start = time.time()
 
@@ -77,6 +84,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     border_dir_name = 'b_{:03d}'.format(border)
     base_dir = os.path.join(output_folder, rgi_dir_name, border_dir_name)
 
+    # Add a package version file
+    utils.mkdir(base_dir)
+    opath = os.path.join(base_dir, 'package_versions.txt')
+    with open(opath, 'w') as vfile:
+        vfile.write(utils.show_versions(logger=log))
+
     if test_rgidf is None:
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
@@ -96,8 +109,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
 
-    # Module logger
-    log = logging.getLogger(__name__)
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))

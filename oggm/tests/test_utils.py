@@ -53,7 +53,8 @@ class TestFuncs(unittest.TestCase):
 
     def test_show_versions(self):
         # just see that it runs
-        utils.show_versions()
+        out = utils.show_versions()
+        assert len(out) > 30
 
     def test_signchange(self):
         ts = pd.Series([-2., -1., 1., 2., 3], index=np.arange(5))
@@ -592,6 +593,8 @@ class TestPreproCLI(unittest.TestCase):
                                       'glacier_statistics_11.csv'))
         assert 'inv_volume_km3' in df
 
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
+                                           'package_versions.txt'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
