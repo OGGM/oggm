@@ -115,9 +115,13 @@ def show_versions(logger=None):
     ----------
     logger : optional
         the logger you want to send the printouts to. If None, will use stdout
+
+    Returns
+    -------
+    the output string
     """
 
-    _print = print if logger is None else logger.info
+    _print = print if logger is None else logger.workflow
 
     sys_info = get_sys_info()
 
@@ -134,6 +138,9 @@ def show_versions(logger=None):
         ("fiona", lambda mod: mod.__version__),
         ("osgeo.gdal", lambda mod: mod.__version__),
         ("pyproj", lambda mod: mod.__version__),
+        ("shapely", lambda mod: mod.__version__),
+        ("xarray", lambda mod: mod.__version__),
+        ("salem", lambda mod: mod.__version__),
     ]
 
     deps_blob = list()
@@ -148,12 +155,15 @@ def show_versions(logger=None):
         except BaseException:
             deps_blob.append((modname, None))
 
-    _print("  System info:")
+    out = ["# System info:"]
     for k, stat in sys_info:
-        _print("%s: %s" % (k, stat))
-    _print("  Packages info:")
+        out.append("%s: %s" % (k, stat))
+    out.append("# Packages info:")
     for k, stat in deps_blob:
-        _print("%s: %s" % (k, stat))
+        out.append("%s: %s" % (k, stat))
+    for l in out:
+        _print(l)
+    return '\n'.join(out)
 
 
 class SuperclassMeta(type):
