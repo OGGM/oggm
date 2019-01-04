@@ -1,0 +1,9 @@
+.. _basenames:
+
+cfg.BASENAMES
+-------------
+
+This is a list of the files that can be found in the glacier directory or
+its divides. These data files and their names are standardized and listed in the
+:py:mod:`oggm.cfg` module. If you want to implement your own task you'll
+have to add an entry to this file too.

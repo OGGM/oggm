@@ -379,7 +379,6 @@ class TestStartFromPrepro(unittest.TestCase):
             assert not os.path.exists(gdir.dir + '.tar.gz')
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @pytest.mark.xfail
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
@@ -394,7 +393,6 @@ class TestStartFromPrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @pytest.mark.xfail
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
@@ -410,7 +408,6 @@ class TestStartFromPrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
 
-    @pytest.mark.xfail
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
@@ -426,7 +423,6 @@ class TestStartFromPrepro(unittest.TestCase):
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
 
-    @pytest.mark.xfail
     def test_start_from_level_4(self):
 
         # Go - initialize working directories

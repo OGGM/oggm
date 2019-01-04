@@ -410,42 +410,50 @@ intersphinx_mapping = {
 
 # -- OGGM Stuffs ----------------------------------------------------
 
-text_version = ('  **This is the model documentation for users and developers '
+text_version = ('.. warning:: \n\n'
+                '  **This is the model documentation for users and developers '
                 'as of version {}**. '
                 'For the documentation of the latest (cutting-edge) '
                 'repository version, visit `docs.oggm.org/en/latest '
-                '<http://docs.oggm.org/en/latest/>`_.'
+                '<http://docs.oggm.org/en/latest/>`_.\n'
                 ''.format(oggm.__version__))
 
-text_dev = ('  **This is the model documentation for users and developers of '
+text_dev = ('.. warning:: \n\n'
+            '  **This is the model documentation for users and developers of '
             'the latest (cutting-edge) repository version**. For the '
             'documentation of the latest stable release, visit '
             '`docs.oggm.org/en/stable '
-            '<http://docs.oggm.org/en/stable/>`_.')
+            '<http://docs.oggm.org/en/stable/>`_.\n')
 
 
 def write_index():
     """This is to write the docs for the index automatically."""
 
     here = os.path.dirname(__file__)
-    origfile = os.path.join(here, 'templates/index.txt')
-    filename = os.path.join(here, 'index.rst')
+    filename = os.path.join(here, '_generated', 'version_text.txt')
+
+    try:
+        os.makedirs(os.path.dirname(filename))
+    except FileExistsError:
+        pass
 
     text = text_version if '+' not in oggm.__version__ else text_dev
-    with open(origfile) as f1:
-        with open(filename, 'w') as f2:
-            for line in f1:
-                if '[version-specific-text]' in line:
-                    line = text
-                f2.write(line)
+
+    with open(filename, 'w') as f:
+        f.write(text)
 
 
 def write_gdir_doc():
     """This is to write the docs for glacierdir automatically."""
 
     here = os.path.dirname(__file__)
-    origfile = os.path.join(here, 'templates/glacierdir.txt')
-    filename = os.path.join(here, 'glacierdir.rst')
+    origfile = os.path.join(here, '_templates', 'basenames.txt')
+    filename = os.path.join(here, '_generated', 'basenames.txt')
+
+    try:
+        os.makedirs(os.path.dirname(filename))
+    except FileExistsError:
+        pass
 
     shutil.copyfile(origfile, filename)
 
