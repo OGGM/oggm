@@ -377,12 +377,50 @@ class TestStartFromPrepro(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert not os.path.exists(gdir.dir + '.tar.gz')
+            assert gdir.rgi_area_km2 > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_to_and_from_tar_string(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf)
+
+        # End - compress all
+        base_dir = os.path.join(self.testdir, 'new_base_dir')
+        utils.mkdir(base_dir, reset=True)
+        paths = workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
+                                             base_dir=base_dir, delete=False)
+
+        # Test - reopen form tar after copy
+        new_base_dir = os.path.join(self.testdir, 'newer_base_dir')
+        utils.mkdir(new_base_dir, reset=True)
+        for p, gdir in zip(paths, gdirs):
+            assert base_dir in p
+            new_gdir = utils.GlacierDirectory(gdir.rgi_id,
+                                              base_dir=new_base_dir,
+                                              from_tar=p)
+            assert new_gdir.rgi_area_km2 == gdir.rgi_area_km2
+            assert new_base_dir in new_gdir.base_dir
 
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+                                              from_prepro_level=1,
+                                              prepro_rgi_version='61',
+                                              prepro_border=160)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_start_from_level_1_str(self):
+
+        # Go - initialize working directories
+        entitites = self.rgidf.iloc[:4].RGIId
+        gdirs = workflow.init_glacier_regions(entitites,
                                               from_prepro_level=1,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
