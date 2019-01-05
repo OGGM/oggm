@@ -1260,11 +1260,21 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, str):
+            # Get the meta from the shape file directly
             if from_tar:
-                raise NotImplementedError('`from_tar` and a str entity is '
-                                          'not implemented yet!')
-            _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
-                                rgi_entity, 'outlines.shp')
+                _dir = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                                    rgi_entity)
+                if not os.path.exists(str(from_tar)):
+                    from_tar = _dir + '.tar.gz'
+                with tarfile.open(from_tar, 'r') as tf:
+                    tf.extractall(os.path.dirname(_dir))
+                if delete_tar:
+                    os.remove(from_tar)
+                from_tar = False  # to not re-unpack later below
+                _shp = os.path.join(_dir, 'outlines.shp')
+            else:
+                _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                                    rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
             crs = salem.check_crs(rgi_entity.crs)
             rgi_entity = rgi_entity.iloc[0]
