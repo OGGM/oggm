@@ -420,10 +420,9 @@ class TestStartFromPrepro(unittest.TestCase):
 
         # Go - initialize working directories
         entitites = self.rgidf.iloc[:4].RGIId
+        cfg.PARAMS['border'] = 10
         gdirs = workflow.init_glacier_regions(entitites,
-                                              from_prepro_level=1,
-                                              prepro_rgi_version='61',
-                                              prepro_border=160)
+                                              from_prepro_level=1)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')

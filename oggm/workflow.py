@@ -194,7 +194,7 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
                        prepro_border=None, prepro_rgi_version=None):
 
     if prepro_border is None:
-        prepro_border = cfg.PARAMS['border']
+        prepro_border = int(cfg.PARAMS['border'])
     if prepro_rgi_version is None:
         prepro_rgi_version = cfg.PARAMS['rgi_version']
     try:
