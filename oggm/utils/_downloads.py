@@ -622,7 +622,7 @@ def _download_topo_file_from_cluster_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
     url += fname + '.zip'
     dfile = file_downloader(url)
 
@@ -653,7 +653,7 @@ def _download_arcticdem_from_cluster_unlocked():
     fname = 'arcticdem_mosaic_100m_v3.0.tif'
     outpath = os.path.join(tmpdir, fname)
 
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
     url += fname
     dfile = file_downloader(url)
 
@@ -687,7 +687,7 @@ def _get_centerline_lonlat(gdir):
 def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
     # Prepro URL
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
+    url = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
@@ -1041,7 +1041,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     elif version == '60':
         dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
     elif version == '61':
-        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/rgi_61.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1169,7 +1169,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir)
 
-    dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/'
+    dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
