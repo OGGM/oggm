@@ -6,6 +6,7 @@ import os
 import tempfile
 import gzip
 import json
+import time
 import shutil
 import tarfile
 import sys
@@ -1188,6 +1189,29 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     return gdir
 
 
+def _robust_tar_extract(from_tar, to_dir, delete_tar=False):
+    """For some obscure reason this operation randomly fails.
+
+    Try to make it more robust.
+    """
+    count = 0
+    while count < 10:
+        try:
+            if os.path.exists(to_dir):
+                shutil.rmtree(to_dir)
+            if count > 1:
+                time.sleep(0.1)
+            with tarfile.open(from_tar, 'r') as tf:
+                tf.extractall(os.path.dirname(to_dir))
+            break
+        except FileExistsError:
+            count += 1
+            if count == 10:
+                raise
+    if delete_tar:
+        os.remove(from_tar)
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -1266,10 +1290,7 @@ class GlacierDirectory(object):
                                     rgi_entity)
                 if not os.path.exists(str(from_tar)):
                     from_tar = _dir + '.tar.gz'
-                with tarfile.open(from_tar, 'r') as tf:
-                    tf.extractall(os.path.dirname(_dir))
-                if delete_tar:
-                    os.remove(from_tar)
+                _robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -1390,10 +1411,7 @@ class GlacierDirectory(object):
         if from_tar:
             if not os.path.exists(str(from_tar)):
                 from_tar = self.dir + '.tar.gz'
-            with tarfile.open(from_tar, 'r') as tf:
-                tf.extractall(os.path.dirname(self.dir))
-            if delete_tar:
-                os.remove(from_tar)
+            _robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
         else:
             mkdir(self.dir)
 
