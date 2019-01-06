@@ -795,7 +795,7 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/rgi/' +
+            expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V50_Intersects.zip')
             self.assertEqual(url, expected)
             return rgi_f
@@ -817,7 +817,7 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, cache_name=None, reset=False):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/rgi/' +
+            expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V60_Intersects.zip')
             self.assertEqual(url, expected)
             return rgi_f
