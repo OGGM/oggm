@@ -83,348 +83,6 @@ class TestBensModel(unittest.TestCase):
         shutil.rmtree(self.testdir_cru)
         os.makedirs(self.testdir_cru)
 
-    def test_oggm_mb_climate(self):
-        """ Testing the `mb_climate_on_height(gdir, heights)` function.
-
-        Said function computes the monthly mass balance relevant climate parameters,
-        such as melting temperature and solid precipitation. The tests are performed
-        using the Hintereisferner and the HistAlp climate data,
-        for three different settings:
-        - all (climate) data points available
-        - only one year (1802)
-        - only two years (1803 - 1804)
-
-        For each setting all of the following cases are tested:
-        - shape of returned values (one value per month and elevation level)
-        - returned melting temperature at reference elevation in comparison to reference temperature
-        - same results for same elevation levels
-        - only solid precipitation given high elevation (8000 m) i.e. subzero temperatures
-        - zero solid precipitation given low elevation (-8000 m) i.e. highly positive temperatures
-        - zero melting temperature given high elevation (8000 m) i.e. subzero temperatures
-
-        """
-
-        # read the Hintereisferner DEM
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-
-        # initialize the GlacierDirectory
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        # define the local grid
-        gis.define_glacier_region(gdir, entity=entity)
-        # process the given climate file
-        climate.process_custom_climate_data(gdir)
-
-        # read the following variable from the center pixel (46.83N 10.75E)
-        # of the Hintereisferner HistAlp climate file for the entire time period
-        # from October 1801 until September 2003
-        # - surface height in m asl.
-        # - total precipitation amount in kg/m2
-        # - 2m air temperature in °C
-        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
-            ref_h = nc_r.variables['hgt'][1, 1]
-            ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_t = nc_r.variables['temp'][:, 1, 1]
-            # compute positive melting temperature
-            ref_t = np.where(ref_t < cfg.PARAMS['temp_melt'], 0,
-                             ref_t - cfg.PARAMS['temp_melt'])
-
-        # define some (arbitrary) elevation levels
-        hgts = np.array([ref_h, ref_h, -8000, 8000])
-        # get mass balance relevant climate parameters,
-        # i.e. melting temperature and solid precipitation
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts)
-        # remove precipitation scaling factor
-        prcp /= cfg.PARAMS['prcp_scaling_factor']
-
-        # define number of points of time axis (n_years * 12 month)
-        ref_nt = 202*12
-        # time variable is supposed to have 12 values per year
-        self.assertTrue(len(time) == ref_nt)
-        # temperature and precipitation variables are supposed to have
-        # one row per elevation level and one column per month/year combination
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-        # compare the mass balance relevant temperature at reference elevation
-        # to reference melting temperature
-        np.testing.assert_allclose(temp[0, :], ref_t)
-        # test if the method returns the same temperature values
-        # for the same elevation level
-        np.testing.assert_allclose(temp[0, :], temp[1, :])
-        # test if the method returns the same precipitation values
-        # for the same elevation level
-        np.testing.assert_allclose(prcp[0, :], prcp[1, :])
-        # the temperature at an elevation of 8000 meters (hgts[3])
-        # has to be below 0°C and therefore all fallen precipitation
-        # will be solid
-        np.testing.assert_allclose(prcp[3, :], ref_p)
-        # the temperature at an elevation of -8000 meters (hgts[2])
-        # has to be high enough so that all fallen precipitation
-        # will be liquid (i.e. solid precipitation == 0)
-        np.testing.assert_allclose(prcp[2, :], ref_p*0)
-        # the temperature at an elevation of 8000 meters (hgts[3])
-        # has to be below 0°C and therefore the melting temperature
-        # will be zero too
-        np.testing.assert_allclose(temp[3, :], ref_t*0)
-
-        # perform the same tests but for data of 1802 only
-        yr = [1802, 1802]
-        # get mass balance relevant climate parameters
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts,
-                                                        year_range=yr)
-        # remove precipitation scaling parameter
-        prcp /= cfg.PARAMS['prcp_scaling_factor']
-        # define number of points of time axis (12 month)
-        ref_nt = 1*12
-        # same assertions as above
-        self.assertTrue(len(time) == ref_nt)
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-        np.testing.assert_allclose(temp[0, :], ref_t[0:12])
-        np.testing.assert_allclose(temp[0, :], temp[1, :])
-        np.testing.assert_allclose(prcp[0, :], prcp[1, :])
-        np.testing.assert_allclose(prcp[3, :], ref_p[0:12])
-        np.testing.assert_allclose(prcp[2, :], ref_p[0:12]*0)
-        np.testing.assert_allclose(temp[3, :], ref_p[0:12]*0)
-
-        # perform the same tests but for data between 1803 and 1804 only
-        yr = [1803, 1804]
-        # get mass balance relevant climate parameters
-        time, temp, prcp = climate.mb_climate_on_height(gdir, hgts,
-                                                        year_range=yr)
-        # remove precipitation scaling factor
-        prcp /= cfg.PARAMS['prcp_scaling_factor']
-        # define number of points of time axis (2 years * 12 month)
-        ref_nt = 2*12
-        # same assertions as above
-        self.assertTrue(len(time) == ref_nt)
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-        np.testing.assert_allclose(temp[0, :], ref_t[12:36])
-        np.testing.assert_allclose(temp[0, :], temp[1, :])
-        np.testing.assert_allclose(prcp[0, :], prcp[1, :])
-        np.testing.assert_allclose(prcp[3, :], ref_p[12:36])
-        np.testing.assert_allclose(prcp[2, :], ref_p[12:36]*0)
-        np.testing.assert_allclose(temp[3, :], ref_p[12:36]*0)
-
-    def test_oggm_yearly_mb_climate(self):
-        """ Testing the `mb_yearly_climate_on_height(gdir, heights)` function.
-
-        Said function computes the yearly summed mass balance relevant climate parameters,
-        such as melting temperature and solid precipitation. The tests are performed
-        using the Hintereisferner and the HistAlp climate data,
-        for two different settings
-        - all (climate) data points available
-        - only two years (1803 - 1804)
-        once for the given elevation levels (`flatten=False`) and
-        once as a glacier average (`flatten=True`).
-
-        The following cases are tested, but not all for each test setting.
-        - shape of returned values (one value per year and elevation level)
-        - returned melting temperature at reference elevation in comparison to reference temperature
-        - same results for same elevation levels
-        - only solid precipitation given high elevation (8000 m) i.e. subzero temperatures
-        - zero solid precipitation given low elevation (-8000 m) i.e. highly positive temperatures
-        - zero melting temperature given high elevation (8000 m) i.e. subzero temperatures
-
-        """
-
-        cfg.PARAMS['prcp_scaling_factor'] = 1
-
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
-        climate.process_custom_climate_data(gdir)
-
-        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
-            ref_h = nc_r.variables['hgt'][1, 1]
-            ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_t = nc_r.variables['temp'][:, 1, 1]
-            ref_t = np.where(ref_t <= cfg.PARAMS['temp_melt'], 0,
-                             ref_t - cfg.PARAMS['temp_melt'])
-
-        # NORMAL --------------------------------------------------------------
-        hgts = np.array([ref_h, ref_h, -8000, 8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts)
-
-        ref_nt = 202
-        self.assertTrue(len(years) == ref_nt)
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-
-        yr = [1802, 1802]
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
-                                                                year_range=yr)
-        ref_nt = 1
-        self.assertTrue(len(years) == ref_nt)
-        self.assertTrue(years == 1802)
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-        np.testing.assert_allclose(temp[0, :], np.sum(ref_t[0:12]))
-        np.testing.assert_allclose(temp[0, :], temp[1, :])
-        np.testing.assert_allclose(prcp[0, :], prcp[1, :])
-        np.testing.assert_allclose(prcp[3, :], np.sum(ref_p[0:12]))
-        np.testing.assert_allclose(prcp[2, :], np.sum(ref_p[0:12])*0)
-        np.testing.assert_allclose(temp[3, :], np.sum(ref_p[0:12])*0)
-
-        yr = [1803, 1804]
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
-                                                                year_range=yr)
-        ref_nt = 2
-        self.assertTrue(len(years) == ref_nt)
-        np.testing.assert_allclose(years, yr)
-        self.assertTrue(temp.shape == (4, ref_nt))
-        self.assertTrue(prcp.shape == (4, ref_nt))
-        np.testing.assert_allclose(prcp[2, :], [0, 0])
-        np.testing.assert_allclose(temp[3, :], [0, 0])
-
-        # FLATTEN -------------------------------------------------------------
-        hgts = np.array([ref_h, ref_h, -8000, 8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
-                                                                flatten=True)
-
-        ref_nt = 202
-        self.assertTrue(len(years) == ref_nt)
-        self.assertTrue(temp.shape == (ref_nt,))
-        self.assertTrue(prcp.shape == (ref_nt,))
-
-        yr = [1802, 1802]
-        hgts = np.array([ref_h])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
-                                                                year_range=yr,
-                                                                flatten=True)
-        ref_nt = 1
-        self.assertTrue(len(years) == ref_nt)
-        self.assertTrue(years == 1802)
-        self.assertTrue(temp.shape == (ref_nt,))
-        self.assertTrue(prcp.shape == (ref_nt,))
-        np.testing.assert_allclose(temp[:], np.sum(ref_t[0:12]))
-
-        yr = [1802, 1802]
-        hgts = np.array([8000])
-        years, temp, prcp = climate.mb_yearly_climate_on_height(gdir, hgts,
-                                                                year_range=yr,
-                                                                flatten=True)
-        np.testing.assert_allclose(prcp[:], np.sum(ref_p[0:12]))
-
-    def test_oggm_local_t_star(self):
-        """
-
-
-        """
-        # read the Hintereisferner DEM
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-
-        # set the precipitation scaling factor @ASK
-        cfg.PARAMS['prcp_scaling_factor'] = 2.9
-
-        # initialize the GlacierDirectory
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        # define the local grid and the glacier mask
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        # run centerline prepro tasks
-        centerlines.compute_centerlines(gdir)
-        centerlines.initialize_flowlines(gdir)
-        centerlines.catchment_area(gdir)
-        centerlines.catchment_width_geom(gdir)
-        centerlines.catchment_width_correction(gdir)
-        # process the given climate file
-        climate.process_custom_climate_data(gdir)
-        # compute mu candidates for every 31 year period
-        climate.glacier_mu_candidates(gdir)
-        # read reference glacier mass balance data
-        mbdf = gdir.get_ref_mb_data()
-        # compute the reference t* for the glacier
-        # given the reference of mass balance measurements
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
-        t_star, bias = res['t_star'], res['bias']
-
-        # compute local t* and the corresponding mu*
-        climate.local_t_star(gdir, tstar=t_star, bias=bias)
-        # compute the mu* for each flow line
-        climate.mu_star_calibration(gdir)
-        # use the mu candidate at t* as glacier wide reference value
-        ci = gdir.read_pickle('climate_info')
-        mu_ref = ci['mu_candidates_glacierwide'].loc[t_star]
-
-        # Check for apparent mb to be zeros
-        # ---------------------------------
-
-        # read the inversion flow lines
-        fls = gdir.read_pickle('inversion_flowlines')
-        # initialize the total mass balance
-        tmb = 0.
-        # for each flow line
-        for fl in fls:
-            # each grid point must have a value of apparent mass balance
-            self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
-            # the flow line mu* must be similar to the glacier wide mu*
-            np.testing.assert_allclose(mu_ref, fl.mu_star, atol=1e-3)
-            # add the flow line apparent mass balance to the total mass balance
-            tmb += np.sum(fl.apparent_mb * fl.widths)
-            # the flux correction flag can not be set
-            assert not fl.flux_needs_correction
-
-        # the total apparant mass balance must be zero
-        np.testing.assert_allclose(tmb, 0., atol=0.01)
-        # the flux through the last grid point of the main flow line must be zero
-        np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
-
-        # read the result from the mu* calibration
-        df = gdir.read_json('local_mustar')
-        # check the "mu* all same" flag
-        assert df['mu_star_allsame']
-        # compare values of mu* between the local_mustar.json
-        # and the climate_info.pkl files
-        np.testing.assert_allclose(mu_ref, df['mu_star_flowline_avg'],
-                                   atol=1e-3)
-        np.testing.assert_allclose(mu_ref, df['mu_star_glacierwide'],
-                                   atol=1e-3)
-
-        # Check mass balance profile/gradient
-        # -----------------------------------
-
-        # read the inversion flow lines
-        fls = gdir.read_pickle('inversion_flowlines')
-        # create empty containers
-        mb_on_h = np.array([])
-        h = np.array([])
-        # for each flow line
-        for fl in fls:
-            # get mass balance relevant climate parameters
-            # on the elevation of each grid point
-            y, t, p = climate.mb_yearly_climate_on_height(gdir, fl.surface_h)
-            # compute average value per elevation level
-            # over all years with reference mb measurements
-            selind = np.searchsorted(y, mbdf.index)
-            t = np.mean(t[:, selind], axis=1)
-            p = np.mean(p[:, selind], axis=1)
-            # compute point mass balance per grid point
-            # (i.e. elevation level) and add to container
-            mb_on_h = np.append(mb_on_h, p - mu_ref * t)
-            # add elevation levels to container
-            h = np.append(h, fl.surface_h)
-
-        # get reference mass balance profile data from WGMS
-        dfg = gdir.get_ref_mb_profile().mean()
-        # limit point mass balance to elevations below 3100 m asl. @ASK
-        dfg = dfg[dfg.index < 3100]
-        pok = np.where(h < 3100)
-        # compute slope of mass balance profile
-        from scipy.stats import linregress
-        slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
-        slope_our, _, _, _, _ = linregress(h[pok], mb_on_h[pok])
-        # slopes of observed and computed mass balance profile
-        # must equal to at least 90%
-        np.testing.assert_allclose(slope_obs, slope_our, rtol=0.1)
-
-        # reset precipitation scaling factor to default value
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-
     def test_terminus_temp(self):
         """Testing the subroutine which computes the terminus temperature
         from the given climate file and glacier DEM. Pretty straight forward
@@ -442,8 +100,8 @@ class TestBensModel(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         # read the following variable from the center pixel (46.83N 10.75E)
-        # of the Hintereisferner HistAlp climate file for the entire time period
-        # from October 1801 until September 2003
+        # of the Hintereisferner HistAlp climate file for the
+        # entire time period from October 1801 until September 2003
         # - surface height in m asl.
         # - total precipitation amount in kg/m2
         # - 2m air temperature in °C
@@ -459,7 +117,8 @@ class TestBensModel(unittest.TestCase):
 
         # the terminus temperature must equal the input temperature
         # if terminus elevation equals reference elevation
-        temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad, ref_hgt=ref_h,
+        temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad,
+                                                   ref_hgt=ref_h,
                                                    terminus_hgt=ref_h,
                                                    temp_anomaly=temp_anomaly)
         np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
@@ -467,7 +126,8 @@ class TestBensModel(unittest.TestCase):
         # the terminus temperature must equal the input terperature
         # if the gradient is zero
         for term_h in np.array([-100, 0, 100]) + ref_h:
-            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad=0, ref_hgt=ref_h,
+            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad=0,
+                                                       ref_hgt=ref_h,
                                                        terminus_hgt=term_h,
                                                        temp_anomaly=temp_anomaly)
             np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
@@ -477,10 +137,12 @@ class TestBensModel(unittest.TestCase):
         for h_diff in np.array([-100, 0, 100]):
             term_h = ref_h + h_diff
             temp_diff = temp_grad * h_diff
-            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad, ref_hgt=ref_h,
+            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad,
+                                                       ref_hgt=ref_h,
                                                        terminus_hgt=term_h,
                                                        temp_anomaly=temp_anomaly)
-            np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly + temp_diff)
+            np.testing.assert_allclose(temp_terminus,
+                                       ref_t + temp_anomaly + temp_diff)
 
     def test_solid_prcp(self):
         """Tests the subroutine which computes solid precipitation amount from
@@ -499,8 +161,8 @@ class TestBensModel(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         # read the following variable from the center pixel (46.83N 10.75E)
-        # of the Hintereisferner HistAlp climate file for the entire time period
-        # from October 1801 until September 2003
+        # of the Hintereisferner HistAlp climate file for the
+        # entire time period from October 1801 until September 2003
         # - surface height in m asl.
         # - total precipitation amount in kg/m2
         # - 2m air temperature in °C
@@ -519,27 +181,31 @@ class TestBensModel(unittest.TestCase):
         min_hgt = ref_h - 100
         max_hgt = ref_h + 100
 
-        # if the terminus temperature is below the threshold for solid precipitation
-        # all fallen precipitation must be solid
+        # if the terminus temperature is below the threshold for
+        # solid precipitation all fallen precipitation must be solid
         temp_terminus = ref_t * 0 + temp_all_solid
-        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt, min_hgt, max_hgt,
-                                             temp_terminus, temp_all_solid, temp_grad,
+        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
+                                             min_hgt, max_hgt,
+                                             temp_terminus, temp_all_solid,
+                                             temp_grad,
                                              prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, ref_p)
 
         # if the temperature at the maximal elevation is above the threshold
         # for solid precipitation all fallen precipitation must be liquid
         temp_terminus = ref_t + 100
-        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt, min_hgt, max_hgt,
-                                             temp_terminus, temp_all_solid, temp_grad,
+        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
+                                             min_hgt, max_hgt,
+                                             temp_terminus, temp_all_solid,
+                                             temp_grad,
                                              prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, 0)
 
     def test_yearly_mb_temp_prcp(self):
         """ Test the routine which returns the yearly mass balance relevant
-        climate parameters, i.e. positive melting temperature and solid precipitation.
-        The testing target is the output of the corresponding OGGM routine
-        `get_yearly_mb_climate_on_glacier(gdir)`."""
+        climate parameters, i.e. positive melting temperature and solid
+        precipitation. The testing target is the output of the corresponding
+        OGGM routine `get_yearly_mb_climate_on_glacier(gdir)`."""
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -562,8 +228,8 @@ class TestBensModel(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         # read the following variable from the center pixel (46.83N 10.75E)
-        # of the Hintereisferner HistAlp climate file for the entire time period
-        # from October 1801 until September 2003
+        # of the Hintereisferner HistAlp climate file for the
+        # entire time period from October 1801 until September 2003
         # - surface height in m asl.
         # - total precipitation amount in kg/m2
         # - 2m air temperature in °C
@@ -583,8 +249,10 @@ class TestBensModel(unittest.TestCase):
         # get yearly sums of terminus temperature and solid precipitation
         years, temp, prcp = ben.get_yearly_mb_temp_prcp(gdir)
 
-        # use the OGGM methode to get the mass balance relevant climate parameters
-        years_oggm, temp_oggm, prcp_oggm = climate.mb_yearly_climate_on_glacier(gdir)
+        # use the OGGM methode to get the mass balance
+        # relevant climate parameters
+        years_oggm, temp_oggm, prcp_oggm = \
+            climate.mb_yearly_climate_on_glacier(gdir)
 
         # compute averages
         yearly_temp_mean = temp.mean()
@@ -592,7 +260,8 @@ class TestBensModel(unittest.TestCase):
         yearly_temp_oggm_mean = temp_oggm.mean()
         yearly_prcp_oggm_mean = prcp_oggm.mean()
 
-        # the average glacier wide energy input must be less than at the terminus
+        # the average glacier wide energy input
+        # must be less than at the terminus
         assert(yearly_temp_oggm_mean <= yearly_temp_mean)
         # the average glacier wide mass input must be higher
         # TODO: does it acutally?! And if so, why?! @ASK
@@ -619,9 +288,9 @@ class TestBensModel(unittest.TestCase):
             mask = nc.variables['glacier_mask'][:]
             topo = nc.variables['topo'][:]
         heights = np.array([np.min(topo[np.where(mask == 1)])])
-        years_height, temp_height, _ = climate.mb_yearly_climate_on_height(gdir,
-                                                                           heights,
-                                                                           flatten=False)
+        years_height, temp_height, _ = \
+            climate.mb_yearly_climate_on_height(gdir, heights, flatten=False)
+
         temp_height = temp_height[0]
         # compute correlation
         temp_term_corr = np.corrcoef(temp, temp_height)[0, 1]
@@ -635,11 +304,10 @@ class TestBensModel(unittest.TestCase):
         heights = np.array([])
         for fl in fls:
             heights = np.append(heights, fl.surface_h)
-        years_height, _, prcp_height = climate.mb_yearly_climate_on_height(gdir,
-                                                                           heights,
-                                                                           flatten=True)
+        years_height, _, prcp_height = \
+            climate.mb_yearly_climate_on_height(gdir, heights, flatten=True)
         # compute correlation
-        prcp_corr = np.corrcoef(prcp, prcp_height)[0,1]
+        prcp_corr = np.corrcoef(prcp, prcp_height)[0, 1]
         # correlation must be higher than set threshold
         corr_threshold = 0.90
         assert (prcp_corr >= corr_threshold)
@@ -694,7 +362,9 @@ class TestBensModel(unittest.TestCase):
         min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
 
         # define mass balance model
-        ben_mb = ben.BenMassBalance(gdir, mu_star=ben_params['mu_star'], bias=0)
+        ben_mb = ben.BenMassBalance(gdir,
+                                    mu_star=ben_params['mu_star'],
+                                    bias=0)
         # define 31-year climate period around t*
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         years = np.arange(t_star - mu_hp, t_star + mu_hp + 1)

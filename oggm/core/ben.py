@@ -3,21 +3,9 @@
 # External libs
 import numpy as np
 import pandas as pd
-import xarray as xr
 import netCDF4
 import os
-import shutil
 import datetime
-
-# import unittest
-import unittest
-import pytest
-
-# import gis libs
-import salem
-import rasterio
-import geopandas as gpd
-import shapely.geometry as shpg
 
 
 # import OGGM modules
@@ -39,16 +27,19 @@ from oggm.core import (gis, inversion, climate, centerlines, flowline,
 from oggm.core.massbalance import MassBalanceModel
 
 
-def _compute_temp_terminus(temp, temp_grad, ref_hgt, terminus_hgt, temp_anomaly=0):
+def _compute_temp_terminus(temp, temp_grad, ref_hgt,
+                           terminus_hgt, temp_anomaly=0):
     """ Computes the monthly mean temperature at the glacier terminus.
 
     :param temp: (netCDF4 variable) monthly mean climatological temperature
     :param temp_grad: (netCDF4 variable or float) temperature lapse rate
     :param ref_hgt: (float) reference elevation for climatological temperature
     :param terminus_hgt: (float) elevation of the glacier terminus
-    :param temp_anomaly: (netCDF4 variable or float) monthly mean temperature anomaly, default 0
+    :param temp_anomaly: (netCDF4 variable or float) monthly mean
+        temperature anomaly, default 0
 
-    :return: (netCDF4 variable) monthly mean temperature at the glacier terminus
+    :return: (netCDF4 variable) monthly mean temperature
+        at the glacier terminus
     """
     temp_terminus = temp + temp_grad * (terminus_hgt - ref_hgt) + temp_anomaly
     return temp_terminus
@@ -58,23 +49,30 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
                         temp_terminus, temp_all_solid, temp_grad,
                         prcp_grad=0, prcp_anomaly=0):
     """
-    TODO: Attention: does not check for division by zero, if `max_hgt` equals `min_hgt`
+    TODO: Attention: does not check for division by zero,
+        if `max_hgt` equals `min_hgt`
 
     :param prcp: (netCDF4 variable) monthly mean climatological precipitation
     :param prcp_factor: (float) precipitation scaling factor
-    :param ref_hgt: (float) reference elevation for climatological precipitation
+    :param ref_hgt: (float) reference elevation for
+        climatological precipitation
     :param min_hgt: (float) minimum glacier elevation
     :param max_hgt: (float) maximum glacier elevation
-    :param temp_terminus: (netCDF4 variable) monthly mean temperature at the glacier terminus
-    :param temp_all_solid: (float) temperature threshold for solid precipitation
+    :param temp_terminus: (netCDF4 variable) monthly mean temperature
+        at the glacier terminus
+    :param temp_all_solid: (float) temperature threshold for
+        solid precipitation
     :param temp_grad: (netCDF4 variable or float) temperature lapse rate
     :param prcp_grad: (netCDF4 variable or float) precipitation gradient
-    :param prcp_anomaly: (netCDF4 variable or float) monthly mean precipitation anomaly, default 0
+    :param prcp_anomaly: (netCDF4 variable or float) monthly mean
+        precipitation anomaly, default 0
 
     :return: (netCDF4 variable) monthly mean solid precipitation
     """
     # compute fraction of solid precipitation
-    f_solid = 1 + (temp_terminus - temp_all_solid) / (temp_grad * (max_hgt - min_hgt))
+    f_solid = (1
+               + (temp_terminus - temp_all_solid)
+               / (temp_grad * (max_hgt - min_hgt)))
     f_solid = np.clip(f_solid, 0, 1)
 
     # compute mean elevation
@@ -142,14 +140,14 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
             try:
                 p0 = p0[0]
             except IndexError:
-                raise climate.MassBalanceCalibrationError('time_range[0] not found in '
-                                                          'file')
+                raise climate.MassBalanceCalibrationError('time_range[0] '
+                                                          'not found in file')
             p1 = np.where(time == time_range[1])[0]
             try:
                 p1 = p1[0]
             except IndexError:
-                raise climate.MassBalanceCalibrationError('time_range[1] not found in '
-                                                          'file')
+                raise climate.MassBalanceCalibrationError('time_range[1] not '
+                                                          'found in file')
         else:
             p0 = 0
             p1 = len(time)-1
@@ -185,8 +183,10 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
     # compute positive 'melting' temperature/energy input
     temp = np.clip(temp_terminus - temp_melt, a_min=0, a_max=None)
     # get solid precipitation
-    prcp_solid = _compute_solid_prcp(iprcp, prcp_fac, ref_hgt, min_elev, max_elev,
-                                     temp_terminus, temp_all_solid, igrad, prcp_grad)
+    prcp_solid = _compute_solid_prcp(iprcp, prcp_fac, ref_hgt,
+                                     min_elev, max_elev,
+                                     temp_terminus, temp_all_solid,
+                                     igrad, prcp_grad)
 
     # Check if climate data includes all 12 month of all years
     ny, r = divmod(len(time), 12)
@@ -209,11 +209,11 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
-    If ``tstar`` and ``bias`` are not provided, they will be interpolated from
-    the reference t* list.
+    If ``tstar`` and ``bias`` are not provided, they will be
+    interpolated from the reference t* list.
 
-    Note: the glacier wide mu* is here just for indication. It might be
-    different from the flowlines' mu* in some cases.
+    Note: the glacier wide mu* is here just for indication.
+    It might be different from the flow lines' mu* in some cases.
 
     Parameters
     ----------
@@ -239,8 +239,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
-                    msg = ('If you are using a custom climate file you should '
-                           'run your own MB calibration.')
+                    msg = ('If you are using a custom climate file you '
+                           'should run your own MB calibration.')
                     raise climate.MassBalanceCalibrationError(msg)
                 v = gdir.rgi_version[0]  # major version relevant
 
@@ -288,7 +288,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
     yr = [tstar - mu_hp, tstar + mu_hp]
 
-    # get monthly climatological values of terminus temperature and solid precipitation
+    # get monthly climatological values
+    # of terminus temperature and solid precipitation
     years, temp, prcp = get_yearly_mb_temp_prcp(gdir, year_range=yr)
 
     # solve mass balance equation for mu*
@@ -302,7 +303,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # Clip the mu
     if not (cfg.PARAMS['min_mu_star'] < mustar < cfg.PARAMS['max_mu_star']):
-        raise climate.MassBalanceCalibrationError('mu* out of specified bounds.')
+        raise climate.MassBalanceCalibrationError('mu* out of '
+                                                  'specified bounds.')
 
     # Scalars in a small dict for later
     df = dict()
@@ -437,7 +439,8 @@ class BenMassBalance(MassBalanceModel):
 
         :param min_hgt: (float) glacier terminus elevation [m asl.]
         :param max_hgt: (float) maximal glacier surface elevation [m asl.]
-        :param year: (float) floating year, following the hydrological year convention
+        :param year: (float) floating year, following the
+            hydrological year convention
         :return:
             temp_for_melt: (float) positive terminus temperature [°C]
             prcp_solid: (float) solid precipitation amount [kg/m^2]
@@ -457,9 +460,11 @@ class BenMassBalance(MassBalanceModel):
         igrad = self.grad[pok]
 
         # compute terminus temperature
-        temp_terminus = _compute_temp_terminus(itemp, igrad, self.ref_hgt, min_hgt)
+        temp_terminus = _compute_temp_terminus(itemp, igrad,
+                                               self.ref_hgt, min_hgt)
         # compute positive 'melting' temperature/energy input
-        temp_for_melt = np.clip(temp_terminus - self.t_melt, a_min=0, a_max=None)
+        temp_for_melt = np.clip(temp_terminus - self.t_melt,
+                                a_min=0, a_max=None)
         # compute solid precipitation
         prcp_solid = _compute_solid_prcp(iprcp, 1,
                                          self.ref_hgt, min_hgt, max_hgt,
@@ -474,12 +479,15 @@ class BenMassBalance(MassBalanceModel):
 
         :param min_hgt: (float) glacier terminus elevation
         :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float year and month, using the hydrological year convention
+        :param year: (float) float year and month, using the
+            hydrological year convention
 
         :return: average glacier wide mass balance [m/s]
         """
         # get melting temperature and solid precipitation
-        temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt, max_hgt, year=year)
+        temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt,
+                                                             max_hgt,
+                                                             year=year)
         # compute mass balance
         mb_month = prcp_solid - self.mu_star * temp_for_melt
         # apply mass balance bias
@@ -496,8 +504,10 @@ class BenMassBalance(MassBalanceModel):
         :param max_hgt: (float) maximal glacier surface elevation [m asl.]
         :param year: (float) year, following the hydrological year convention
         :return:
-            temp_for_melt: (float array, size 12) monthly positive terminus temperature [°C]
-            prcp_solid: (float array, size 12) monthly solid precipitation amount [kg/m^2]
+            temp_for_melt: (float array, size 12)
+                monthly positive terminus temperature [°C]
+            prcp_solid: (float array, size 12)
+                monthly solid precipitation amount [kg/m^2]
         """
         # process given time index
         year = np.floor(year)
@@ -516,9 +526,11 @@ class BenMassBalance(MassBalanceModel):
         igrad = self.grad[pok]
 
         # compute terminus temperature
-        temp_terminus = _compute_temp_terminus(itemp, igrad, self.ref_hgt, min_hgt)
+        temp_terminus = _compute_temp_terminus(itemp, igrad,
+                                               self.ref_hgt, min_hgt)
         # compute positive 'melting' temperature/energy input
-        temp_for_melt = np.clip(temp_terminus - self.t_melt, a_min=0, a_max=None)
+        temp_for_melt = np.clip(temp_terminus - self.t_melt,
+                                a_min=0, a_max=None)
         # compute solid precipitation
         # prcp factor is set to 1 since it the time series is already corrected
         prcp_solid = _compute_solid_prcp(iprcp, 1,
@@ -527,7 +539,7 @@ class BenMassBalance(MassBalanceModel):
 
         return temp_for_melt, prcp_solid
 
-    def get_annual_mb(self,  min_hgt, max_hgt, year):
+    def get_annual_mb(self, min_hgt, max_hgt, year):
         """ Compute and return the annual glacier wide
         mass balance for the given year.
         Possible mb bias is applied...
@@ -539,15 +551,17 @@ class BenMassBalance(MassBalanceModel):
         :return: average glacier wide mass balance [m/s]
         """
         # get annual mass balance climate
-        temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt, max_hgt, year)
+        temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt,
+                                                            max_hgt,
+                                                            year)
         # compute mass balance
         mb_annual = np.sum(prcp_solid - self.mu_star * temp_for_melt)
         # apply bias and convert into SI units
         return (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
 
     def get_specific_mb(self, min_hgt, max_hgt, year):
-        """ Compute and return the annual specific mass balance for the given year.
-        Possible mb bias is applied...
+        """ Compute and return the annual specific mass balance
+        for the given year.Possible mb bias is applied...
 
         :param min_hgt: (float) glacier terminus elevation
         :param max_hgt: (float) maximal glacier (surface) elevation
@@ -557,29 +571,34 @@ class BenMassBalance(MassBalanceModel):
             millimeter water equivalent per year [mm w.e. yr-1]
         """
         # get annual mass balance climate
-        temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt, max_hgt, year)
+        temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt,
+                                                            max_hgt,
+                                                            year)
         # compute mass balance
         mb_annual = np.sum(prcp_solid - self.mu_star * temp_for_melt)
         # apply bias
-        return (mb_annual - self.bias)
+        return mb_annual - self.bias
 
     def get_monthly_specific_mb(self, min_hgt=None, max_hgt=None, year=None):
-        """ Compute and return the monthly specific mass balance for the given month.
-        Possible mb bias is applied...
+        """ Compute and return the monthly specific mass balance
+        for the given month. Possible mb bias is applied...
 
         :param min_hgt: (float) glacier terminus elevation
         :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float month, using the hydrological year convention
+        :param year: (float) float month, using the
+            hydrological year convention
 
         :return: glacier wide average mass balance, units of
             millimeter water equivalent per months [mm w.e. yr-1]
         """
         # get annual mass balance climate
-        temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt, max_hgt, year)
+        temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt,
+                                                             max_hgt,
+                                                             year)
         # compute mass balance
         mb_annual = np.sum(prcp_solid - self.mu_star * temp_for_melt)
         # apply bias and convert into SI units
-        return (mb_annual - self.bias)
+        return mb_annual - self.bias
 
     def get_ela(self, year=None):
         raise NotImplementedError('The equilibrium line altitude can not be ' +
