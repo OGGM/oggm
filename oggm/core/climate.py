@@ -977,7 +977,7 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
-@entity_task(log, writes=['local_mustar'])
+@entity_task(log, writes=['local_mustar'], fallback=utils.fb_local_t_star)
 def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
