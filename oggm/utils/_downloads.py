@@ -37,6 +37,7 @@ except NameError:
 
 # Locals
 import oggm.cfg as cfg
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -152,13 +153,17 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     try:
         # this is for real runs
         fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
+        check_fb_dir = False
     except KeyError:
-        fb_cache_dir = ''
+        # Nothing have been set up yet, this is bad - use tmp
+        # This should happen on RO cluster only but still
+        fb_cache_dir = os.path.join(cfg.CACHE_DIR, 'cache')
+        check_fb_dir = True
 
     if not cache_dir:
         # Defaults to working directory: it must be set!
         if not cfg.PATHS['working_dir']:
-            raise ValueError("Need a valid PATHS['working_dir']!")
+            raise InvalidParamsError("Need a valid PATHS['working_dir']!")
         cache_dir = fb_cache_dir
         cache_ro = False
 
@@ -171,6 +176,11 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         return cache_path
 
     if cache_ro:
+        if check_fb_dir:
+            # Add a manual check that we are caching sample data download
+            if 'oggm-sample-data' not in fb_path:
+                raise InvalidParamsError('Attempting to download something '
+                                         'with invalid global settings.')
         cache_path = fb_path
 
     if not cfg.PARAMS['has_internet']:
@@ -612,7 +622,7 @@ def _download_topo_file_from_cluster_unlocked(fname):
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, fname)
 
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
     url += fname + '.zip'
     dfile = file_downloader(url)
 
@@ -643,7 +653,7 @@ def _download_arcticdem_from_cluster_unlocked():
     fname = 'arcticdem_mosaic_100m_v3.0.tif'
     outpath = os.path.join(tmpdir, fname)
 
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/dems/'
+    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
     url += fname
     dfile = file_downloader(url)
 
@@ -677,7 +687,7 @@ def _get_centerline_lonlat(gdir):
 def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
     # Prepro URL
-    url = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
+    url = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
@@ -1020,8 +1030,8 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
-        raise ValueError('The RGI data directory has to be'
-                         'specified explicitly.')
+        raise InvalidParamsError('The RGI data directory has to be'
+                                 'specified explicitly.')
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     rgi_dir = os.path.join(rgi_dir, 'RGIV' + version)
     mkdir(rgi_dir, reset=reset)
@@ -1031,7 +1041,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     elif version == '60':
         dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
     elif version == '61':
-        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/rgi_61.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1153,13 +1163,13 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
 
     # Be sure the user gave a sensible path to the RGI dir
     if not rgi_dir:
-        raise ValueError('The RGI data directory has to be'
-                         'specified explicitly.')
+        raise InvalidParamsError('The RGI data directory has to be'
+                                 'specified explicitly.')
 
     rgi_dir = os.path.abspath(os.path.expanduser(rgi_dir))
     mkdir(rgi_dir)
 
-    dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/rgi/'
+    dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
@@ -1239,9 +1249,8 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
             version = 'AllRegs'
             region = '*'
         else:
-            raise ValueError("From RGI version 61 onwards, please use "
-                             "`get_rgi_intersects_entities()` instead or "
-                             "region 00.")
+            raise InvalidParamsError("From RGI version 61 onwards, please use "
+                                     "get_rgi_intersects_entities() instead.")
     f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
                                     '_rgi*' + version + '*.shp')))
     assert len(f) == 1
@@ -1310,14 +1319,14 @@ def _get_cru_file_unlocked(var=None):
 
     # Be sure the user gave a sensible path to the climate dir
     if not cru_dir:
-        raise ValueError('The CRU data directory has to be'
-                         'specified explicitly.')
+        raise InvalidParamsError('The CRU data directory has to be'
+                                 'specified explicitly.')
     cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
     mkdir(cru_dir)
 
     # Be sure input makes sense
     if var not in ['tmp', 'pre']:
-        raise ValueError('CRU variable {} does not exist!'.format(var))
+        raise InvalidParamsError('CRU variable {} does not exist!'.format(var))
 
     # The user files may have different dates, so search for patterns
     bname = 'cru_ts*.{}.dat.nc'.format(var)
@@ -1367,14 +1376,15 @@ def _get_histalp_file_unlocked(var=None):
 
     # Be sure the user gave a sensible path to the climate dir
     if not cru_dir:
-        raise ValueError('The CRU data directory has to be'
-                         'specified explicitly.')
+        raise InvalidParamsError('The CRU data directory has to be'
+                                 'specified explicitly.')
     cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
     mkdir(cru_dir)
 
     # Be sure input makes sense
     if var not in ['tmp', 'pre']:
-        raise ValueError('HISTALP variable {} does not exist!'.format(var))
+        raise InvalidParamsError('HISTALP variable {} '
+                                 'does not exist!'.format(var))
 
     # File to look for
     if var == 'tmp':
@@ -1479,7 +1489,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     # Same for Antarctica
     if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
         if rgi_subregion is None:
-            raise ValueError('Must specify subregion for Antarctica')
+            raise InvalidParamsError('Must specify subregion for Antarctica')
         else:
             dem3_regs = ['19-01', '19-02', '19-03', '19-04', '19-05']
             should_dem3 = rgi_subregion in dem3_regs

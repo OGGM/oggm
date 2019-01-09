@@ -6,6 +6,7 @@ import os
 import tempfile
 import gzip
 import json
+import time
 import shutil
 import tarfile
 import sys
@@ -115,9 +116,13 @@ def show_versions(logger=None):
     ----------
     logger : optional
         the logger you want to send the printouts to. If None, will use stdout
+
+    Returns
+    -------
+    the output string
     """
 
-    _print = print if logger is None else logger.info
+    _print = print if logger is None else logger.workflow
 
     sys_info = get_sys_info()
 
@@ -134,6 +139,9 @@ def show_versions(logger=None):
         ("fiona", lambda mod: mod.__version__),
         ("osgeo.gdal", lambda mod: mod.__version__),
         ("pyproj", lambda mod: mod.__version__),
+        ("shapely", lambda mod: mod.__version__),
+        ("xarray", lambda mod: mod.__version__),
+        ("salem", lambda mod: mod.__version__),
     ]
 
     deps_blob = list()
@@ -148,12 +156,15 @@ def show_versions(logger=None):
         except BaseException:
             deps_blob.append((modname, None))
 
-    _print("  System info:")
+    out = ["# System info:"]
     for k, stat in sys_info:
-        _print("%s: %s" % (k, stat))
-    _print("  Packages info:")
+        out.append("%s: %s" % (k, stat))
+    out.append("# Packages info:")
     for k, stat in deps_blob:
-        _print("%s: %s" % (k, stat))
+        out.append("%s: %s" % (k, stat))
+    for l in out:
+        _print(l)
+    return '\n'.join(out)
 
 
 class SuperclassMeta(type):
@@ -469,7 +480,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
             c.write(feature(i, row))
 
 
-def compile_run_output(gdirs, path=True, filesuffix=''):
+def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
@@ -481,6 +492,8 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         Set to `False` to disable disk storage.
     filesuffix : str
         the filesuffix of the run
+    use_compression : bool
+        use zlib compression on the output netCDF files
 
     Returns
     -------
@@ -574,12 +587,20 @@ def compile_run_output(gdirs, path=True, filesuffix=''):
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'run_output' + filesuffix + '.nc')
-        ds.to_netcdf(path)
+
+        enc_var = {'dtype': 'float32'}
+        if use_compression:
+            enc_var['complevel'] = 5
+            enc_var['zlib'] = True
+        encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
+
+        ds.to_netcdf(path, encoding=encoding)
+
     return ds
 
 
 def compile_climate_input(gdirs, path=True, filename='climate_monthly',
-                          filesuffix=''):
+                          filesuffix='', use_compression=True):
     """Merge the climate input files in the glacier directories into one file.
 
     Parameters
@@ -593,6 +614,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         BASENAME of the climate input files
     filesuffix : str
         the filesuffix of the compiled file
+    use_compression : bool
+        use zlib compression on the output netCDF files
 
     Returns
     -------
@@ -694,7 +717,17 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'climate_input' + filesuffix + '.nc')
-        ds.to_netcdf(path)
+
+        enc_var = {'dtype': 'float32'}
+        if use_compression:
+            enc_var['complevel'] = 5
+            enc_var['zlib'] = True
+        vars = ['temp', 'prcp']
+        if has_grad:
+            vars += ['grad']
+        encoding = {v: enc_var for v in vars}
+
+        ds.to_netcdf(path, encoding=encoding)
     return ds
 
 
@@ -1156,6 +1189,29 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     return gdir
 
 
+def _robust_tar_extract(from_tar, to_dir, delete_tar=False):
+    """For some obscure reason this operation randomly fails.
+
+    Try to make it more robust.
+    """
+    count = 0
+    while count < 10:
+        try:
+            if os.path.exists(to_dir):
+                shutil.rmtree(to_dir)
+            if count > 1:
+                time.sleep(0.1)
+            with tarfile.open(from_tar, 'r') as tf:
+                tf.extractall(os.path.dirname(to_dir))
+            break
+        except FileExistsError:
+            count += 1
+            if count == 10:
+                raise
+    if delete_tar:
+        os.remove(from_tar)
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -1228,11 +1284,18 @@ class GlacierDirectory(object):
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, str):
+            # Get the meta from the shape file directly
             if from_tar:
-                raise NotImplementedError('`from_tar` and a str entity is '
-                                          'not implemented yet!')
-            _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
-                                rgi_entity, 'outlines.shp')
+                _dir = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                                    rgi_entity)
+                if not os.path.exists(str(from_tar)):
+                    from_tar = _dir + '.tar.gz'
+                _robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
+                from_tar = False  # to not re-unpack later below
+                _shp = os.path.join(_dir, 'outlines.shp')
+            else:
+                _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                                    rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
             crs = salem.check_crs(rgi_entity.crs)
             rgi_entity = rgi_entity.iloc[0]
@@ -1337,10 +1400,10 @@ class GlacierDirectory(object):
             rgi_date = None
         self.rgi_date = rgi_date
 
-        # The divides dirs are created by gis.define_glacier_region, but we
-        # make the root dir
-        self.dir = os.path.join(base_dir, self.rgi_id[:8], self.rgi_id[:11],
-                                self.rgi_id)
+        # Root directory
+        self.base_dir = os.path.normpath(base_dir)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:8],
+                                self.rgi_id[:11], self.rgi_id)
 
         # Do we have to extract the files first?
         if (reset or from_tar) and os.path.exists(self.dir):
@@ -1348,10 +1411,7 @@ class GlacierDirectory(object):
         if from_tar:
             if not os.path.exists(str(from_tar)):
                 from_tar = self.dir + '.tar.gz'
-            with tarfile.open(from_tar, 'r') as tf:
-                tf.extractall(os.path.dirname(self.dir))
-            if delete_tar:
-                os.remove(from_tar)
+            _robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
         else:
             mkdir(self.dir)
 
@@ -1982,7 +2042,7 @@ class GlacierDirectory(object):
 
 
 @entity_task(log)
-def copy_to_basedir(gdir, base_dir, setup='run'):
+def copy_to_basedir(gdir, base_dir=None, setup='run'):
     """Copies the glacier directories and their content to a new location.
 
     This utility function allows to select certain files only, thus
@@ -2010,7 +2070,7 @@ def copy_to_basedir(gdir, base_dir, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_monthly', 'gridded_data',
+                 'local_mustar', 'climate_monthly',
                  'gcm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -2168,24 +2228,35 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
 
 
 @entity_task(log)
-def gdir_to_tar(gdir, delete=True):
+def gdir_to_tar(gdir, base_dir=None, delete=True):
     """Writes the content of a glacier directory to a tar file.
 
     The tar file is located at the same location of the original directory.
-    The glacier directory objects are useless afterwards! Should be called at
-    the end of a run only!!!
+    The glacier directory objects are useless if deleted!
 
     Parameters
     ----------
+    base_dir : str
+        path to the basedir where to write the directory (defaults to the
+        same location of the original directory)
     delete : bool
         delete the original directory afterwards (default)
+
+    Returns
+    -------
+    the path to the tar file
     """
 
     source_dir = os.path.normpath(gdir.dir)
     opath = source_dir + '.tar.gz'
+    if base_dir is not None:
+        opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
+        mkdir(os.path.dirname(opath))
 
     with tarfile.open(opath, "w:gz") as tar:
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
     if delete:
         shutil.rmtree(source_dir)
+
+    return opath

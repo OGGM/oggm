@@ -21,7 +21,3 @@ except ImportError:
 from oggm.utils import entity_task, global_task, GlacierDirectory
 from oggm.core.centerlines import Centerline
 from oggm.core.flowline import Flowline
-
-# Make sure we have the sample data at import
-from oggm.utils import download_oggm_files
-download_oggm_files()
