@@ -25,7 +25,7 @@ def fb_local_t_star(gdir):
     gdir.write_json(df, 'local_mustar')
 
 
-def mu_star_calibration(gdir):
+def fb_mu_star_calibration(gdir):
     """A Fallback function if climate.mu_star_calibration raises an Error.
 
     This function will still read, expand and write a `local_mustar.json`,

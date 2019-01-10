@@ -1193,7 +1193,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 
 
 @entity_task(log, writes=['inversion_flowlines'],
-             fallback=utils.mu_star_calibration)
+             fallback=utils.fb_mu_star_calibration)
 def mu_star_calibration(gdir):
     """Compute the flowlines' mu* and the associated apparent mass-balance.
 
