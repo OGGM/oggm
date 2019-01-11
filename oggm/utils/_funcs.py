@@ -114,6 +114,9 @@ def query_yes_no(question, default="yes"):  # pragma: no cover
 def tolist(arg, length=None):
     """Makes sure that arg is a list."""
 
+    if isinstance(arg, str):
+        return [arg]
+
     try:
         (e for e in arg)
     except TypeError:
