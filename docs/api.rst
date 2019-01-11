@@ -153,25 +153,20 @@ avoiding to re-do unnecessary computations.
 Initialising a glacier directory
 --------------------------------
 
-The 
+The easiest way to initialize a glacier directory is to start from a
+pre-processed state available on the OGGM servers:
+
 
 .. ipython:: python
-   :suppress:
 
-    import os, shutil
-    import numpy as np
-    np.set_printoptions(threshold=10)
-    import geopandas as gpd
-    import oggm
-    from oggm import cfg, tasks, graphics
-    from oggm.utils import get_demo_file, gettempdir
+    import os
+    from oggm import cfg, tasks, workflow, graphics
+    from oggm.utils import gettempdir
     cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PARAMS['border'] = 20
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-    path = os.path.join(gettempdir(), 'OGGM_docs', 'GlacierDir')
-    if os.path.exists(path):
-        shutil.rmtree(path)
+    cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir')
+    workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=0)
+
 
 If no directory has been created yet, a GlacierDirectory requires an RGI entity
 as input:
