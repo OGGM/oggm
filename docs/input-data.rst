@@ -9,6 +9,12 @@ OGGM needs various data files to run. To date, **we rely exclusively on
 open-access data that are all downloaded automatically for the user**. This
 page explains the various ways OGGM relies upon to get the the data it needs.
 
+First, you will have to set-up your :ref:`System settings`. You'll need to
+do this only once per computer. Then, we recommend to start your runs from
+:ref:`preprodir`: these are ready-to-run :ref:`glacierdir` at various levels
+of pre-processing state, thus reducing the amount of preprocessing you'll
+have to do yourself. It is also possible to do a full run from scratch, in
+which case OGGM will download the :ref:`rawdata` for you as well.
 
 System settings
 ---------------
@@ -84,8 +90,8 @@ Some explanations:
   following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
   this directory might still grow to quite a large size. Simply delete it
   if you want to get this space back.
-- ``cru_dir`` is the location where the CRU climate files are extracted. They
-  are quite large! (approx. 6Gb)
+- ``cru_dir`` is the location where the CRU climate files are extracted if
+  needed. They are quite large! (approx. 6Gb)
 - ``rgi_dir`` is the location where the RGI shapefiles are extracted.
 - ``test_dir`` is the location where OGGM will write some of its output during
   tests. It can be set to ``tmp_dir`` if you want to, but it can also be
@@ -103,9 +109,20 @@ Some explanations:
 
 .. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
 
+.. _preprodir:
+
+Pre-processed directories
+-------------------------
+
+
+
+.. _rawdata:
+
+Raw data sources
+----------------
 
 Glacier outlines and intersects
--------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Glacier outlines are obtained from the `Randolph Glacier Inventory (RGI)`_.
 We recommend to download them right away by opening a python interpreter
@@ -132,7 +149,7 @@ documentation for more information about the intersects.
 
 
 Topography data
----------------
+~~~~~~~~~~~~~~~
 
 When creating a :ref:`glacierdir` a suitable topographical data source is
 chosen automatically, depending on the glacier's location. Currently we use:
@@ -216,7 +233,7 @@ VIEWFINDER PANORAMAS DEMs
 
 
 Climate data
-------------
+~~~~~~~~~~~~
 
 The MB model implemented in OGGM needs monthly time series of temperature and
 precipitation. The current default is to download and use the `CRU TS`_
@@ -225,8 +242,7 @@ data provided by the Climatic Research Unit of the University of East Anglia.
 .. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
 
 
-CRU (default)
-~~~~~~~~~~~~~
+**‣ CRU (default)**
 
 If not specified otherwise, OGGM will automatically download and unpack the
 latest dataset from the CRU servers. We recommend to do this before your
@@ -263,8 +279,7 @@ International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
 
-User-provided dataset
-~~~~~~~~~~~~~~~~~~~~~
+**‣ User-provided dataset**
 
 You can provide any other dataset to OGGM by setting the ``climate_file``
 parameter in ``params.cfg``. See the HISTALP data file in the `sample-data`_
@@ -272,8 +287,7 @@ folder for an example.
 
 .. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
 
-GCM data
-~~~~~~~~
+**‣ GCM data**
 
 OGGM can also use climate model output to drive the mass-balance model. In
 this case we still rely on gridded observations (CRU) for the baseline
@@ -288,6 +302,6 @@ should be relatively easy.
 
 
 Mass-balance data
------------------
+~~~~~~~~~~~~~~~~~
 
 TODO
