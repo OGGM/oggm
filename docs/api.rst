@@ -160,49 +160,54 @@ pre-processed state available on the OGGM servers:
 .. ipython:: python
 
     import os
-    from oggm import cfg, tasks, workflow, graphics
+    import oggm
+    from oggm import cfg, workflow
     from oggm.utils import gettempdir
-    cfg.initialize()
-    cfg.PARAMS['border'] = 20
+    cfg.initialize()  # always initialize before an OGGM task
+    # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir')
-    workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=0)
+    gdirs = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=1,
+                                          prepro_border=10)
+    gdir = gdirs[0]  # init_glacier_regions always returns a list
 
 
-If no directory has been created yet, a GlacierDirectory requires an RGI entity
-as input:
+We just downloaded the minimal input for a glacier directory. The
+``GlacierDirectory`` object contains the glacier metadata:
 
 .. ipython:: python
 
-    base_dir = gettempdir('GlacierDir_Docs')
-    entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
-    gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
-    gdir.dir
+    gdir
     gdir.rgi_id
 
-Note that this directory has just been created and is empty. The
-:py:func:`tasks.define_glacier_region` will fill it with the first data files:
+It also points to a specific directory in disk, where the files are written
+to:
 
 .. ipython:: python
 
-    tasks.define_glacier_region(gdir, entity=entity)
+    gdir.dir
     os.listdir(gdir.dir)
+
+Users usually don't have to care about *where* the data is located.
+``GlacierDirectory`` objects help you to get this information:
+
+
+.. ipython:: python
+
+    fdem = gdir.get_filepath('dem')
+    fdem
+    import xarray as xr
+    @savefig plot_gdir_dem.png width=80%
+    xr.open_rasterio(fdem).plot(cmap='terrain')
 
 This persistence on disk allows for example to continue a workflow that has
 been previously interrupted. Initialising a GlacierDirectory from a non-empty
-folder won't erase its content (you'll have to set ``reset=True`` explicitly
-if you want that):
+folder won't erase its content:
 
 .. ipython:: python
 
-    gdir = oggm.GlacierDirectory(entity, base_dir=base_dir)
+    gdir = oggm.GlacierDirectory('RGI60-11.00897')
     os.listdir(gdir.dir)  # the directory still contains the data
 
-You can also initialise a non-empty GlacierDirectory with its RGI ID, thus
-sparing the reading of the shapefile every time:
-
-.. ipython:: python
-
-    gdir = oggm.GlacierDirectory('RGI50-11.00897', base_dir=base_dir)
 
 .. include:: _generated/basenames.txt
 
