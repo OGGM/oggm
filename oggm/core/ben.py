@@ -48,9 +48,7 @@ def _compute_temp_terminus(temp, temp_grad, ref_hgt,
 def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
                         temp_terminus, temp_all_solid, temp_grad,
                         prcp_grad=0, prcp_anomaly=0):
-    """
-    TODO: Attention: does not check for division by zero,
-        if `max_hgt` equals `min_hgt`
+    """ TODO: write description
 
     :param prcp: (netCDF4 variable) monthly mean climatological precipitation
     :param prcp_factor: (float) precipitation scaling factor
@@ -70,10 +68,15 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
     :return: (netCDF4 variable) monthly mean solid precipitation
     """
     # compute fraction of solid precipitation
-    f_solid = (1
-               + (temp_terminus - temp_all_solid)
-               / (temp_grad * (max_hgt - min_hgt)))
-    f_solid = np.clip(f_solid, 0, 1)
+    if max_hgt == min_hgt:
+        # prevent division by zero if max_hgt equals min_hgt
+        f_solid = (temp_terminus <= temp_all_solid).astype(int)
+    else:
+        # use scaling defined in paper
+        f_solid = (1
+                   + (temp_terminus - temp_all_solid)
+                   / (temp_grad * (max_hgt - min_hgt)))
+        f_solid = np.clip(f_solid, 0, 1)
 
     # compute mean elevation
     mean_hgt = 0.5 * (min_hgt + max_hgt)
@@ -372,7 +375,7 @@ class BenMassBalance(MassBalanceModel):
 
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
-                df = gdir.read_json('local_mustar')
+                df = gdir.read_json('ben_params')
                 bias = df['bias']
             else:
                 bias = 0.
@@ -598,6 +601,7 @@ class BenMassBalance(MassBalanceModel):
         # compute mass balance
         mb_annual = np.sum(prcp_solid - self.mu_star * temp_for_melt)
         # apply bias and convert into SI units
+        # TODO: scale bias to monthly values!
         return mb_annual - self.bias
 
     def get_ela(self, year=None):

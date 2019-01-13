@@ -205,6 +205,10 @@ BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
+_doc = "A dict containing the glacier's t*, bias, mu*. " \
+       "Analogous to 'local_mustar.json', but for Ben's model."
+BASENAMES['ben_params'] = ('ben_params.json', _doc)
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
