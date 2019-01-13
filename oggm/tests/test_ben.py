@@ -526,4 +526,44 @@ class TestBensModel(unittest.TestCase):
         pass
 
     def test_specific_mb(self):
-        pass
+        """ Compare the specific mass balance to the one computed
+        using the OGGM function of the PastMassBalance model. """
+        # run all needed prepo tasks
+        gdir = self._setup_mb_test()
+
+        # define temporal range
+        ys = 1802
+        ye = 2003
+        years = np.arange(ys, ye + 1)
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+
+        # get flowlines
+        fls = gdir.read_pickle('inversion_flowlines')
+
+        # instance mb models
+        ben_mbmod = ben.BenMassBalance(gdir)
+        past_mbmod = massbalance.PastMassBalance(gdir)
+
+        # create empty container
+        past_mb = np.empty(years.size)
+        ben_mb = np.empty(years.size)
+        # get specific mass balance for all years
+        for i, year in enumerate(years):
+            past_mb[i] = past_mbmod.get_specific_mb(fls=fls, year=year)
+            ben_mb[i] = ben_mbmod.get_specific_mb(min_hgt, max_hgt, year)
+
+        # compute ans check correlation
+        assert np.corrcoef(past_mb, ben_mb)[0, 1] > 0.9
+
+        # compute average
+        past_avg = past_mb.mean()
+        ben_avg = ben_mb.mean()
+        # check relative error
+        assert (1 - ben_avg / past_avg) < 0.3
+
+        # check signs
+        past_sign = np.sign(past_mb)
+        ben_sign = np.sign(ben_mb)
+        assert np.corrcoef(past_sign, ben_sign)[0, 1] >= 0.75

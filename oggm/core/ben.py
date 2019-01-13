@@ -494,7 +494,7 @@ class BenMassBalance(MassBalanceModel):
         # compute mass balance
         mb_month = prcp_solid - self.mu_star * temp_for_melt
         # apply mass balance bias
-        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+        mb_month -= self.bias / SEC_IN_YEAR * SEC_IN_MONTH
         # convert into SI units [m_ice/s]
         return mb_month / SEC_IN_MONTH / self.rho
 
@@ -599,10 +599,9 @@ class BenMassBalance(MassBalanceModel):
                                                              max_hgt,
                                                              year)
         # compute mass balance
-        mb_annual = np.sum(prcp_solid - self.mu_star * temp_for_melt)
-        # apply bias and convert into SI units
-        # TODO: scale bias to monthly values!
-        return mb_annual - self.bias
+        mb_monthly = np.sum(prcp_solid - self.mu_star * temp_for_melt)
+        # apply bias and return
+        return mb_monthly - (self.bias / SEC_IN_YEAR * SEC_IN_MONTH)
 
     def get_ela(self, year=None):
         raise NotImplementedError('The equilibrium line altitude can not be ' +
