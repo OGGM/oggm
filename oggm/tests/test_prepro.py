@@ -1448,6 +1448,45 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
+    def test_local_t_star_fallback(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        _prcp_sf = cfg.PARAMS['prcp_scaling_factor']
+        # small scaling factor will force small mu* to compensate lack of PRCP
+        cfg.PARAMS['prcp_scaling_factor'] = 1e-3
+        cfg.PARAMS['continue_on_error'] = True
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        climate.glacier_mu_candidates(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+
+        # here, an error should occur as mu* < cfg.PARAMS['min_mu_star']
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+
+        # check if file has been written
+        assert os.path.isfile(gdir.get_filepath('local_mustar'))
+
+        df = gdir.read_json('local_mustar')
+        assert np.isnan(df['bias'])
+        assert np.isnan(df['t_star'])
+        assert np.isnan(df['mu_star_glacierwide'])
+        assert df['rgi_id'] == gdir.rgi_id
+
+        cfg.PARAMS['prcp_scaling_factor'] = _prcp_sf
+        cfg.PARAMS['continue_on_error'] = False
+
     def test_automated_workflow(self):
 
         cfg.PARAMS['run_mb_calibration'] = False

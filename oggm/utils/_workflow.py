@@ -325,7 +325,7 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, log, writes=[]):
+    def __init__(self, log, writes=[], fallback=None):
         """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
 
         Parameters
@@ -333,9 +333,12 @@ class entity_task(object):
         writes: list
             list of files that the task will write down to disk (must be
             available in ``cfg.BASENAMES``)
+        fallback: python function
+            will be executed on gdir if entity_task fails
         """
         self.log = log
         self.writes = writes
+        self.fallback = fallback
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -393,6 +396,9 @@ class entity_task(object):
                                    gdir.rgi_id, str(err))
                 if not cfg.PARAMS['continue_on_error']:
                     raise
+
+                if self.fallback is not None:
+                    self.fallback(gdir)
             return out
 
         _entity_task.__dict__['is_entity_task'] = True

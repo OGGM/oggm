@@ -173,6 +173,11 @@ Enhancements
 - `init_glacier_regions` task now accepts RGI Ids strongs as input instead of
   only Geodataframes previously (:pull:`656`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ``entity_task`` decorator now accepts a fallback-function which will be
+  executed if a task fails and `cfg.PARAMS['continue_on_error'] = True`. So far
+  only one fallback function is implemented for ``climate.local_t_star`
+  (:pull:`663`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 
 
