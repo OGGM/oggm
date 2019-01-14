@@ -1474,14 +1474,18 @@ class TestClimate(unittest.TestCase):
 
         # here, an error should occur as mu* < cfg.PARAMS['min_mu_star']
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
-
         # check if file has been written
         assert os.path.isfile(gdir.get_filepath('local_mustar'))
+
+        climate.mu_star_calibration(gdir)
 
         df = gdir.read_json('local_mustar')
         assert np.isnan(df['bias'])
         assert np.isnan(df['t_star'])
         assert np.isnan(df['mu_star_glacierwide'])
+        assert np.isnan(df['mu_star_flowline_avg'])
+        assert np.isnan(df['mu_star_allsame'])
+        assert np.isnan(df['mu_star_per_flowline']).all()
         assert df['rgi_id'] == gdir.rgi_id
 
         cfg.PARAMS['prcp_scaling_factor'] = _prcp_sf
