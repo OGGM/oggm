@@ -2,6 +2,7 @@
 
 # External libs
 import numpy as np
+import pandas as pd
 import os
 import shutil
 
@@ -37,9 +38,6 @@ class TestBensModel(unittest.TestCase):
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        # self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_cru')
-        # if not os.path.exists(self.testdir_cru):
-        #     os.makedirs(self.testdir_cru)
         self.clean_dir()
 
         # Init
@@ -61,14 +59,11 @@ class TestBensModel(unittest.TestCase):
     def rm_dir(self):
         """Removes the test directories."""
         shutil.rmtree(self.testdir)
-        # shutil.rmtree(self.testdir_cru)
 
     def clean_dir(self):
         """Cleans the test directories."""
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
-        # shutil.rmtree(self.testdir_cru)
-        # os.makedirs(self.testdir_cru)
 
     def test_terminus_temp(self):
         """Testing the subroutine which computes the terminus temperature
@@ -236,25 +231,6 @@ class TestBensModel(unittest.TestCase):
         # process the given climate file
         climate.process_custom_climate_data(gdir)
 
-        # read the following variable from the center pixel (46.83N 10.75E)
-        # of the Hintereisferner HistAlp climate file for the
-        # entire time period from October 1801 until September 2003
-        # - surface height in m asl.
-        # - total precipitation amount in kg/m2
-        # - 2m air temperature in °C
-        with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
-            ref_h = nc_r.variables['hgt'][1, 1]
-            ref_p = nc_r.variables['prcp'][:, 1, 1]
-            ref_t = nc_r.variables['temp'][:, 1, 1]
-
-        # define needed parameters
-        prcp_anomaly = 0
-        prcp_grad = 3e-4
-        prcp_factor = cfg.PARAMS['prcp_scaling_factor']
-        prcp_factor = 1
-        temp_all_solid = cfg.PARAMS['temp_all_solid']
-        temp_grad = cfg.PARAMS['temp_default_gradient']
-
         # get yearly sums of terminus temperature and solid precipitation
         years, temp, prcp = ben.get_yearly_mb_temp_prcp(gdir)
 
@@ -271,10 +247,10 @@ class TestBensModel(unittest.TestCase):
 
         # the average glacier wide energy input
         # must be less than at the terminus
-        assert(yearly_temp_oggm_mean <= yearly_temp_mean)
+        assert yearly_temp_oggm_mean <= yearly_temp_mean
         # the average glacier wide mass input must be higher
         # TODO: does it acutally?! And if so, why?! @ASK
-        assert (yearly_prcp_oggm_mean >= yearly_prcp_mean)
+        assert yearly_prcp_oggm_mean >= yearly_prcp_mean
 
         # compute differences to mean
         temp_diff = temp - yearly_temp_mean
@@ -287,9 +263,9 @@ class TestBensModel(unittest.TestCase):
 
         # correlation must be higher than set threshold
         corr_threshold = 0.8
-        assert(temp_diff_corr >= corr_threshold)
+        assert temp_diff_corr >= corr_threshold
         corr_threshold = 0.9
-        assert(prcp_diff_corr >= corr_threshold)
+        assert prcp_diff_corr >= corr_threshold
 
         # get terminus temperature using the OGGM routine
         fpath = gdir.get_filepath('gridded_data')
@@ -305,7 +281,7 @@ class TestBensModel(unittest.TestCase):
         temp_term_corr = np.corrcoef(temp, temp_height)[0, 1]
         # both temperature time series have to be equal
         corr_threshold = 1
-        assert(temp_term_corr >= corr_threshold)
+        assert temp_term_corr >= corr_threshold
         np.testing.assert_allclose(temp, temp_height)
 
         # get solid precipitation averaged over the glacier (not weighted with widths)
@@ -319,7 +295,7 @@ class TestBensModel(unittest.TestCase):
         prcp_corr = np.corrcoef(prcp, prcp_height)[0, 1]
         # correlation must be higher than set threshold
         corr_threshold = 0.90
-        assert (prcp_corr >= corr_threshold)
+        assert prcp_corr >= corr_threshold
 
         # TODO: assert absolute values (or differences) of precipitation @ASK
 
@@ -388,23 +364,6 @@ class TestBensModel(unittest.TestCase):
         # check for apparent mb to be zero (to the third decimal digit)
         np.testing.assert_allclose(mb_sum, 0, atol=1e-3)
 
-    def test_monthly_climate(self):
-        """ Compute and return monthly positive terminus temperature
-        and solid precipitation amount for given month.
-
-        :param min_hgt: (float) glacier terminus elevation [m asl.]
-        :param max_hgt: (float) maximal glacier surface elevation [m asl.]
-        :param year: (float) floating year, following the
-            hydrological year convention
-        :return:
-            temp_for_melt: (float) positive terminus temperature [°C]
-            prcp_solid: (float) solid precipitation amount [kg/m^2]
-        """
-        # set min and max height at reference
-        # test size/lenght of returned data sets
-        # test absolute values (mean, sum, min, max?!)
-        # test
-
     def _setup_mb_test(self):
         """ Avoiding a chunk of code duplicate. """
         # read the Hintereisferner DEM
@@ -447,14 +406,14 @@ class TestBensModel(unittest.TestCase):
     def test_monthly_climate(self):
         """ Test the routine getting the monthly climate against
         the routine getting annual climate. """
-        # run all needed prepo tasks
+        # run all needed prepro tasks
         gdir = self._setup_mb_test()
-
-        # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
 
         # instance the mass balance models
         mbmod = ben.BenMassBalance(gdir)
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
 
         # get all month of the year in the
         # floating (hydrological) year convention
@@ -484,16 +443,16 @@ class TestBensModel(unittest.TestCase):
     def test_annual_climate(self):
         """ Test my routine against the corresponding OGGM routine from
         the `PastMassBalance()` model. """
-        # run all needed prepo tasks
+        # run all needed prepro tasks
         gdir = self._setup_mb_test()
-
-        # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
-        heights = np.array([min_hgt, (min_hgt + max_hgt) / 2, max_hgt])
 
         # instance the mass balance models
         ben_mbmod = ben.BenMassBalance(gdir)
         past_mbmod = massbalance.PastMassBalance(gdir)
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        heights = np.array([min_hgt, (min_hgt + max_hgt) / 2, max_hgt])
 
         # specify a year
         year = 1975
@@ -510,41 +469,110 @@ class TestBensModel(unittest.TestCase):
         # compare terminus temperature
         np.testing.assert_allclose(temp_for_melt_ben,
                                    temp_for_melt_oggm[0],
-                                   atol=1e-3)
+                                   rtol=1e-3)
         # compare solid precipitation
         assert prcp_solid_ben >= prcp_solid_oggm[0]
         assert abs(1 - prcp_solid_ben/prcp_solid_oggm[1]) <= 0.15
         assert prcp_solid_ben <= prcp_solid_oggm[2]
 
     def test_annual_mb(self):
-        pass
+        """ Test the routine computing the annual mass balance. """
+        # run all needed prepro tasks
+        gdir = self._setup_mb_test()
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+
+        # define temporal range
+        year = 1975
+        years = np.array([year, year])
+
+        # get mass balance relevant climate data
+        _, temp, prcp = ben.get_yearly_mb_temp_prcp(gdir, year_range=years)
+        temp = temp[0]
+        prcp = prcp[0]
+
+        # read mu* and bias from ben_params
+        ben_params = gdir.read_json('ben_params')
+        mu_star = ben_params['mu_star']
+        bias = ben_params['bias']
+
+        # specify scaling factor for SI units [kg s-1]
+        fac_SI = cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+
+        # compute mass balance 'by hand'
+        mb_ref = (prcp - mu_star * temp - bias) / fac_SI
+        # compute mb 'by model'
+        mb_mod = ben.BenMassBalance(gdir).get_annual_mb(min_hgt, max_hgt, year)
+
+        # compare mass balances with bias
+        np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
+
+        # compute mass balance 'by hand'
+        mb_ref = (prcp - mu_star * temp) / fac_SI
+        # compute mb 'by model'
+        mb_mod = ben.BenMassBalance(gdir, bias=0).get_annual_mb(min_hgt,
+                                                                max_hgt,
+                                                                year)
+
+        # compare mass balances without bias
+        np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
 
     def test_monthly_mb(self):
         pass
 
     def test_monthly_specific_mb(self):
-        pass
+        """ Test the monthly specific mass balance against the
+        corresponding yearly mass balance. """
+        # run all needed prepro tasks
+        gdir = self._setup_mb_test()
+
+        # instance mb models
+        ben_mbmod = ben.BenMassBalance(gdir)
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+
+        # get all month of that year in the
+        # floating (hydrological) year convention
+        year = 1803
+        months = np.linspace(year, year + 1, num=12, endpoint=False)
+
+        # compute monthly specific mass balance for
+        # all month of given year and store in array
+        spec_mb_month = np.empty(months.size)
+        for i, month in enumerate(months):
+            spec_mb_month[i] = ben_mbmod.get_monthly_specific_mb(min_hgt,
+                                                                 max_hgt,
+                                                                 month)
+
+        # compute yearly specific mass balance
+        spec_mb_year = ben_mbmod.get_specific_mb(min_hgt, max_hgt, year)
+
+        # compare
+        np.testing.assert_allclose(spec_mb_month.sum(), spec_mb_year,
+                                   rtol=1e-3)
 
     def test_specific_mb(self):
         """ Compare the specific mass balance to the one computed
         using the OGGM function of the PastMassBalance model. """
-        # run all needed prepo tasks
+        # run all needed prepro tasks
         gdir = self._setup_mb_test()
+
+        # instance mb models
+        ben_mbmod = ben.BenMassBalance(gdir)
+        past_mbmod = massbalance.PastMassBalance(gdir)
+
+        # get relevant glacier surface elevation
+        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
 
         # define temporal range
         ys = 1802
         ye = 2003
         years = np.arange(ys, ye + 1)
 
-        # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
-
-        # get flowlines
+        # get flow lines
         fls = gdir.read_pickle('inversion_flowlines')
-
-        # instance mb models
-        ben_mbmod = ben.BenMassBalance(gdir)
-        past_mbmod = massbalance.PastMassBalance(gdir)
 
         # create empty container
         past_mb = np.empty(years.size)
@@ -567,3 +595,8 @@ class TestBensModel(unittest.TestCase):
         past_sign = np.sign(past_mb)
         ben_sign = np.sign(ben_mb)
         assert np.corrcoef(past_sign, ben_sign)[0, 1] >= 0.75
+
+        # compare to reference mb measurements
+        mbs = pd.DataFrame(gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
+        mbs['ben'] = pd.Series(ben_mb, index=years)
+        assert mbs.corr().iloc[0, 1] >= 0.8
