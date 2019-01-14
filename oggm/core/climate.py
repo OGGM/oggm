@@ -831,9 +831,8 @@ def glacier_mu_candidates(gdir):
                                           .format(gdir.rgi_id))
 
     # Write
-    d = gdir.read_pickle('climate_info')
-    d['mu_candidates_glacierwide'] = pd.Series(data=mu_yr_clim, index=years)
-    gdir.write_pickle(d, 'climate_info')
+    ci['mu_candidates_glacierwide'] = pd.Series(data=mu_yr_clim, index=years)
+    gdir.write_pickle(ci, 'climate_info')
 
 
 @entity_task(log, writes=['climate_info'])
