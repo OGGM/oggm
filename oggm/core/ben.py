@@ -358,13 +358,6 @@ class BenMassBalance(MassBalanceModel):
             using at run time. If they don't match, it will raise an error.
             Set to False to suppress this check.
 
-        Attributes
-        ----------
-        temp_bias : float, default 0
-            Add a temperature bias to the time series
-        prcp_bias : float, default 1
-            Precipitation factor to the time series (called bias for
-            consistency with `temp_bias`)
         """
 
         super(BenMassBalance, self).__init__()
@@ -435,6 +428,14 @@ class BenMassBalance(MassBalanceModel):
             self.ref_hgt = nc.ref_hgt
             self.ys = self.years[0] if ys is None else ys
             self.ye = self.years[-1] if ye is None else ye
+
+        # compute climatological precipitation around t*
+        # needed later to estimate the volume/lenght scaling parameter
+        t_star = gdir.read_json('ben_params')['t_star']
+        mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+        yr = [t_star - mu_hp, t_star + mu_hp]
+        _, _, prcp_clim = get_yearly_mb_temp_prcp(gdir, year_range=yr)
+        self.prcp_clim = prcp_clim
 
     def get_monthly_climate(self, min_hgt, max_hgt, year):
         """ Compute and return monthly positive terminus temperature
@@ -606,3 +607,46 @@ class BenMassBalance(MassBalanceModel):
     def get_ela(self, year=None):
         raise NotImplementedError('The equilibrium line altitude can not be ' +
                                   'computed for the `BenMassBalance` model.')
+
+
+class BenModel(object):
+    """ TODO: docstring """
+
+    def __init__(self, area_0, min_hgt, max_hgt, mb_model):
+        """ Instance new glacier model
+            TODO: docstring
+            TODO: finalise & test initialization method
+        """
+        # define geometrical/spatial parameters
+        self.area = area_0
+        self.min_hgt = min_hgt
+        self.min_hgt_0 = min_hgt
+        self.max_hgt_0 = max_hgt
+
+        # compute volume and length from area (using scaling parameters)
+        self.length = cfg.PARAMS['c_length'] * area_0**cfg.PARAMS['q_length']
+        self.length_0 = self.length
+        self.volume = (cfg.PARAMS['c_volume']
+                       * area_0**cfg.PARAMS['gamma_volume'])
+
+        # define mass balance model
+        self.mb_model = mb_model
+
+        # compute scaling parameters
+        self._compute_scaling_params()
+
+        pass
+
+    def _compute_scaling_params(self):
+        """ Compute the scaling parameters for glacier length `tau_l`
+        and glacier surface area `tau_a` for current time step. """
+        self.tau_l = self.volume / self.mb_model.prcp_clim
+        self.tau_a = self.tau_l * self.area / self.length**2
+
+    def step(self):
+        """ TODO """
+        pass
+
+    def run_until(self):
+        """ TODO """
+        pass

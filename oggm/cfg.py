@@ -358,6 +358,18 @@ def initialize(file=None, logging_level='INFO'):
     k = 'use_shape_factor_for_fluxbasedmodel'
     PARAMS[k] = cp[k]
 
+    # Area-volume scaling parameters
+    k = 'c_volume'
+    PARAMS[k] = cp[k]
+    k = 'gamma_volume'
+    PARAMS[k] = cp[k]
+
+    # Area-lenght scaling parameters
+    k = 'c_length'
+    PARAMS[k] = cp[k]
+    k = 'q_lenght'
+    PARAMS[k] = cp[k]
+
     # Make sure we have a proper cache dir
     from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
