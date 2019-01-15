@@ -318,7 +318,7 @@ class TestStartFromPrepro(unittest.TestCase):
         self.rgidf = gpd.read_file(rgi_file)
         self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
                                for rid in self.rgidf.RGIId]
-        cfg.PARAMS['use_multiprocessing'] = True
+        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
         self.clean_dir()
@@ -405,7 +405,7 @@ class TestStartFromPrepro(unittest.TestCase):
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=1,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
@@ -419,9 +419,20 @@ class TestStartFromPrepro(unittest.TestCase):
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
-        entitites = self.rgidf.iloc[:4].RGIId
+        entitites = self.rgidf.iloc[:2].RGIId
         cfg.PARAMS['border'] = 10
         gdirs = workflow.init_glacier_regions(entitites,
+                                              from_prepro_level=1)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+        # One string
+        cfg.PARAMS['border'] = 10
+        gdirs = workflow.init_glacier_regions('RGI60-11.00897',
                                               from_prepro_level=1)
         n_intersects = 0
         for gdir in gdirs:
@@ -433,7 +444,7 @@ class TestStartFromPrepro(unittest.TestCase):
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=2,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
@@ -448,7 +459,7 @@ class TestStartFromPrepro(unittest.TestCase):
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=3,
                                               prepro_rgi_version='61',
                                               prepro_border=160)
@@ -463,7 +474,7 @@ class TestStartFromPrepro(unittest.TestCase):
     def test_start_from_level_4(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:4],
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
                                               prepro_border=160)

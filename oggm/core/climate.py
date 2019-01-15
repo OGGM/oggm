@@ -831,9 +831,8 @@ def glacier_mu_candidates(gdir):
                                           .format(gdir.rgi_id))
 
     # Write
-    d = gdir.read_pickle('climate_info')
-    d['mu_candidates_glacierwide'] = pd.Series(data=mu_yr_clim, index=years)
-    gdir.write_pickle(d, 'climate_info')
+    ci['mu_candidates_glacierwide'] = pd.Series(data=mu_yr_clim, index=years)
+    gdir.write_pickle(ci, 'climate_info')
 
 
 @entity_task(log, writes=['climate_info'])
@@ -977,7 +976,28 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
-@entity_task(log, writes=['local_mustar'])
+def _fallback_local_t_star(gdir):
+    """A Fallback function if climate.local_t_star raises an Error.
+
+    This function will still write a `local_mustar.json`, filled with NANs,
+    if climate.local_t_star fails and cfg.PARAMS['continue_on_error'] = True.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+
+    """
+    # Scalars in a small dict for later
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = np.nan
+    df['bias'] = np.nan
+    df['mu_star_glacierwide'] = np.nan
+    gdir.write_json(df, 'local_mustar')
+
+
+@entity_task(log, writes=['local_mustar'], fallback=_fallback_local_t_star)
 def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
@@ -1192,7 +1212,31 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
         fl.mu_star_is_valid = True
 
 
-@entity_task(log, writes=['inversion_flowlines'])
+def _fallback_mu_star_calibration(gdir):
+    """A Fallback function if climate.mu_star_calibration raises an Error.
+￼
+￼	    This function will still read, expand and write a `local_mustar.json`,
+    filled with NANs, if climate.mu_star_calibration fails
+    and if cfg.PARAMS['continue_on_error'] = True.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+
+    """
+    # read json
+    df = gdir.read_json('local_mustar')
+    # add these keys which mu_star_calibration would add
+    df['mu_star_per_flowline'] = [np.nan]
+    df['mu_star_flowline_avg'] = np.nan
+    df['mu_star_allsame'] = np.nan
+    # write
+    gdir.write_json(df, 'local_mustar')
+
+
+@entity_task(log, writes=['inversion_flowlines'],
+             fallback=_fallback_mu_star_calibration)
 def mu_star_calibration(gdir):
     """Compute the flowlines' mu* and the associated apparent mass-balance.
 
