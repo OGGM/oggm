@@ -13,10 +13,8 @@ available data for calibration and validation.
     **This is the software documentation: for general information about the
     OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 
-.. warning::
 
-[version-specific-text]
-
+.. include:: _generated/version_text.txt
 
 
 Principles
@@ -53,7 +51,6 @@ How to use the model, with concrete python code examples.
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`input-data`
-* :doc:`glacierdir`
 * :doc:`mpi`
 * :doc:`run`
 * :doc:`api`
@@ -68,7 +65,6 @@ How to use the model, with concrete python code examples.
     installing-oggm.rst
     getting-started.rst
     input-data.rst
-    glacierdir.rst
     mpi.rst
     run.rst
     api.rst

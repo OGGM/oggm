@@ -114,6 +114,9 @@ def query_yes_no(question, default="yes"):  # pragma: no cover
 def tolist(arg, length=None):
     """Makes sure that arg is a list."""
 
+    if isinstance(arg, str):
+        return [arg]
+
     try:
         (e for e in arg)
     except TypeError:
@@ -700,7 +703,10 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None):
         thick = water_depth + t_altitude
     out = k * thick * water_depth * width / 1e9
 
+<<<<<<< HEAD
     if out < 0:
         out = 0
 
+=======
+>>>>>>> 798f522139052ac0462ce2a0652374662699d268
     return np.clip(out, 0, None)

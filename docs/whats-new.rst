@@ -13,6 +13,8 @@ New contributors to the project:
   cross-validation tools and an associated website.
 - **Philipp Gregor** (Master student, University of Innsbruck), added options
   to switch on lateral bed stress in the flowline ice dynamics
+- **Nicolas Champollion** (PostDoc, University of Bremen), added GCM data
+  IO routines.
 - **Sadie Bartholomew** (Software Engineer, UK Met Office), added ability to
   replace colormaps in graphics with HCL-based colors using python-colorspace.
 
@@ -154,7 +156,7 @@ Enhancements
   ``process_cesm_data`` can also be used as an example when you plan make a
   function for running OGGM with another GCM (:issue:`469` & :pull:`582`).
   `Anouk Vlug <https://github.com/anoukvlug>`_.
-- New ``process_dummy_cru_file`` taks to run OGGM with randomized CRU data
+- New ``process_dummy_cru_file`` task to run OGGM with randomized CRU data
   (:pull:`603`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Colormaps in some graphics are replaced with Hue-Chroma-Luminance (HCL) based
@@ -164,6 +166,17 @@ Enhancements
   glaciers to a main glacier, allowing mass exchange between them. This is
   helpfull/neccessary/intended for growing glacier experiments (e.g.
   paleoglaciology) (:pull:`624`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- New ``oggm_prepro`` command line tool to run the OGGM preprocessing tasks
+  and compress the directories (:pull:`648`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- `init_glacier_regions` task now accepts RGI Ids strongs as input instead of
+  only Geodataframes previously (:pull:`656`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- The ``entity_task`` decorator now accepts a fallback-function which will be
+  executed if a task fails and `cfg.PARAMS['continue_on_error'] = True`. So far
+  only one fallback function is implemented for ``climate.local_t_star`
+  (:pull:`663`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 

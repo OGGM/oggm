@@ -84,7 +84,7 @@ class _pickle_copier(object):
             call_func = self.call_func
         else:
             call_func, gdir = arg
-        if isinstance(gdir, Sequence):
+        if isinstance(gdir, Sequence) and not isinstance(gdir, str):
             gdir, gdir_kwargs = gdir
             gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
             return call_func(gdir, **gdir_kwargs)
@@ -194,11 +194,15 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
                        prepro_border=None, prepro_rgi_version=None):
 
     if prepro_border is None:
-        prepro_border = cfg.PARAMS['border']
+        prepro_border = int(cfg.PARAMS['border'])
     if prepro_rgi_version is None:
         prepro_rgi_version = cfg.PARAMS['rgi_version']
+    try:
+        rid = entity.RGIId
+    except AttributeError:
+        rid = entity
     tar_url = utils.prepro_gdir_url(prepro_rgi_version,
-                                    entity.RGIId,
+                                    rid,
                                     prepro_border,
                                     from_prepro_level)
     from_tar = utils.file_downloader(tar_url)
@@ -207,7 +211,7 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
-def init_glacier_regions(rgidf=None, reset=False, force=False,
+def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
                          prepro_rgi_version=None,
                          from_tar=False, delete_tar=False):
@@ -218,7 +222,7 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
 
     Parameters
     ----------
-    rgidf : GeoDataFrame, optional for pre-computed runs
+    rgidf : GeoDataFrame or list of ids, optional for pre-computed runs
         the RGI glacier outlines. If unavailable, OGGM will parse the
         information from the glacier directories found in the working
         directory. It is required for new runs.
@@ -261,26 +265,35 @@ def init_glacier_regions(rgidf=None, reset=False, force=False,
     new_gdirs = []
     if rgidf is None:
         if reset:
-            raise ValueError('Cannot use reset without a rgi file')
-        log.workflow('init_glacier_regions by parsing available folders.')
+            raise ValueError('Cannot use reset without setting rgidf')
+        log.workflow('init_glacier_regions by parsing available folders '
+                     '(can be slow).')
         # The dirs should be there already
         gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
         for root, _, files in os.walk(gl_dir):
             if files and ('dem.tif' in files):
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
+
+        # Check if dataframe or list of strs
+        try:
+            entities = []
+            for _, entity in rgidf.iterrows():
+                entities.append(entity)
+        except AttributeError:
+            entities = utils.tolist(rgidf)
+
         if from_prepro_level is not None:
             log.workflow('init_glacier_regions from prepro level {} on '
-                         '{} glaciers.'.format(from_prepro_level, len(rgidf)))
-            entitites = []
-            for _, entity in rgidf.iterrows():
-                entitites.append(entity)
-            gdirs = execute_entity_task(_gdirs_from_prepro, entitites,
+                         '{} glaciers.'.format(from_prepro_level,
+                                               len(entities)))
+            gdirs = execute_entity_task(_gdirs_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version)
         else:
-            for _, entity in rgidf.iterrows():
+            # TODO: if necessary this could use multiprocessing as well
+            for entity in entities:
                 gdir = oggm.GlacierDirectory(entity, reset=reset,
                                              from_tar=from_tar,
                                              delete_tar=delete_tar)
