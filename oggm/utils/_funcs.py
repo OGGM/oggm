@@ -657,7 +657,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     return shape_factors
 
 
-def calving_flux_from_depth(gdir, k=2.4, water_depth=None):
+def calving_flux_from_depth(gdir, k=None, water_depth=None):
     """Finds a calving flux from the calving front thickness.
 
     Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
@@ -679,6 +679,10 @@ def calving_flux_from_depth(gdir, k=2.4, water_depth=None):
     Calving flux in [km3 yr-1]
     """
 
+    # Defaults
+    if k is None:
+        k = cfg.PARAMS['k_calving']
+
     # Read inversion output
     cl = gdir.read_pickle('inversion_output')[-1]
     fl = gdir.read_pickle('inversion_flowlines')[-1]
@@ -695,4 +699,5 @@ def calving_flux_from_depth(gdir, k=2.4, water_depth=None):
         # Correct thickness with prescribed depth
         thick = water_depth + t_altitude
     out = k * thick * water_depth * width / 1e9
+
     return np.clip(out, 0, None)
