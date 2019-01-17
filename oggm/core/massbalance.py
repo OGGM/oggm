@@ -915,6 +915,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                    'use_inversion_flowlines=True.') from None
 
         self.fls = fls
+        _y0 = kwargs.get('y0', None)
 
         # User mu*?
         if mu_star is not None:
@@ -938,6 +939,14 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 fl_bias = df['bias']
             else:
                 fl_bias = bias
+
+            # Constant and RandomMassBalance need y0 if not provided
+            if (issubclass(mb_model_class, RandomMassBalance) or
+                issubclass(mb_model_class, ConstantMassBalance)) and (
+                    fl.rgi_id != gdir.rgi_id) and (_y0 is None):
+
+                df = gdir.read_json('local_mustar', filesuffix='_' + fl.rgi_id)
+                kwargs['y0'] = df['t_star']
 
             self.flowline_mb_models.append(
                 mb_model_class(gdir, mu_star=fl.mu_star, bias=fl_bias,
