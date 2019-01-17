@@ -915,7 +915,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                    'use_inversion_flowlines=True.') from None
 
         self.fls = fls
-        _y0 = kwargs.get('y0')
+        _y0 = kwargs.get('y0', None)
 
         # User mu*?
         if mu_star is not None:

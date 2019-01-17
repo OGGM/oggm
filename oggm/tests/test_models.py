@@ -2710,14 +2710,13 @@ class TestMergedHEF(unittest.TestCase):
 
         # run parameters
         years = 200  # arbitrary
-        y0 = 1950  # arbitrary
         tbias = -1.0  # arbitrary
 
         # run HEF and Kesselwandferner as entities
         gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
         workflow.execute_entity_task(tasks.run_constant_climate,
                                      gdirs_entity,
-                                     nyears=years, y0=y0,
+                                     nyears=years,
                                      output_filesuffix='_entity',
                                      temperature_bias=tbias)
 
@@ -2731,7 +2730,7 @@ class TestMergedHEF(unittest.TestCase):
         # and run the merged glacier
         workflow.execute_entity_task(tasks.run_constant_climate,
                                      gdir_merged, output_filesuffix='_merged',
-                                     nyears=years, y0=y0,
+                                     nyears=years,
                                      temperature_bias=tbias)
 
         ds_merged = utils.compile_run_output(gdir_merged,
