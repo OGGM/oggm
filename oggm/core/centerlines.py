@@ -106,8 +106,7 @@ class Centerline(object):
         if check_tail:
             # Project the point and Check that its not too close
             prdis = other.line.project(self.tail, normalized=False)
-            ind_closest = np.argmin(np.abs(other.dis_on_line - prdis))
-            ind_closest = np.asscalar(ind_closest)
+            ind_closest = np.argmin(np.abs(other.dis_on_line - prdis)).item()
             n = len(other.dis_on_line)
             if n >= 9:
                 ind_closest = np.clip(ind_closest, 4, n-5)
@@ -497,8 +496,7 @@ def _projection_point(centerline, point):
     (flow_point, ind_closest): Shapely Point and indice in the line
     """
     prdis = centerline.line.project(point, normalized=False)
-    ind_closest = np.argmin(np.abs(centerline.dis_on_line - prdis))
-    ind_closest = np.asscalar(ind_closest)
+    ind_closest = np.argmin(np.abs(centerline.dis_on_line - prdis)).item()
     flow_point = shpg.Point(centerline.line.coords[int(ind_closest)])
     return flow_point
 
