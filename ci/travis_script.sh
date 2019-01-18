@@ -2,11 +2,11 @@
 set -x
 set -e
 
-pip3 install --upgrade git+https://github.com/fmaussion/salem.git
-pip3 install --upgrade coveralls coverage
+$PIP install --upgrade git+https://github.com/fmaussion/salem.git
+$PIP install --upgrade coveralls coverage
 
 cd /root/oggm
-pip3 install -e .
+$PIP install -e .
 
 COV_OPTS=""
 if [[ -n "$DO_COVERALLS" ]]; then
