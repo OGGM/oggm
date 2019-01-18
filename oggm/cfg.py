@@ -364,10 +364,10 @@ def initialize(file=None, logging_level='INFO'):
     k = 'gamma_volume'
     PARAMS[k] = cp[k]
 
-    # Area-lenght scaling parameters
+    # Area-length scaling parameters
     k = 'c_length'
     PARAMS[k] = cp[k]
-    k = 'q_lenght'
+    k = 'q_length'
     PARAMS[k] = cp[k]
 
     # Make sure we have a proper cache dir

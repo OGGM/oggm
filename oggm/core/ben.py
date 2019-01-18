@@ -26,6 +26,8 @@ from oggm.core import (gis, inversion, climate, centerlines, flowline,
 
 from oggm.core.massbalance import MassBalanceModel
 
+def test():
+    pass
 
 def _compute_temp_terminus(temp, temp_grad, ref_hgt,
                            terminus_hgt, temp_anomaly=0):
@@ -435,7 +437,7 @@ class BenMassBalance(MassBalanceModel):
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         yr = [t_star - mu_hp, t_star + mu_hp]
         _, _, prcp_clim = get_yearly_mb_temp_prcp(gdir, year_range=yr)
-        self.prcp_clim = prcp_clim
+        self.prcp_clim = np.mean(prcp_clim)
 
     def get_monthly_climate(self, min_hgt, max_hgt, year):
         """ Compute and return monthly positive terminus temperature
@@ -612,41 +614,141 @@ class BenMassBalance(MassBalanceModel):
 class BenModel(object):
     """ TODO: docstring """
 
-    def __init__(self, area_0, min_hgt, max_hgt, mb_model):
+    def __repr__(self):
+        return "{}: {}".format(self.__class__, self.__dict__)
+
+    def __str__(self):
+        """ String representation of the dynamic model, includes current
+        year, area, volume, length and terminus elevation. """
+        return "{}\nyear: {}\n".format(self.__class__, self.year) \
+            + "area [km2]: {:.2f}\n".format(self.area) \
+            + "volume [km3]: {:.3f}\n".format(self.volume) \
+            + "length [km]: {:.2f}\n".format(self.length) \
+            + "min elev [m asl.]: {:.0f}\n".format(self.min_hgt) \
+            + "spec mb [mm we. yr-1]: {:.2f}".format(self.spec_mb)
+
+    def __init__(self, year_0, area_0, min_hgt, max_hgt, mb_model):
         """ Instance new glacier model
             TODO: docstring
             TODO: finalise & test initialization method
         """
+        # get constants from cfg.PARAMS
+        self.rho = cfg.PARAMS['ice_density']
+        self.cl = cfg.PARAMS['c_length']
+        self.ql = cfg.PARAMS['q_length']
+        self.ca = cfg.PARAMS['c_volume']
+        self.gamma = cfg.PARAMS['gamma_volume']
+
+        # define temporal index
+        self.year_0 = year_0
+        self.year = year_0
+
         # define geometrical/spatial parameters
         self.area = area_0
         self.min_hgt = min_hgt
         self.min_hgt_0 = min_hgt
-        self.max_hgt_0 = max_hgt
+        self.max_hgt = max_hgt
 
         # compute volume and length from area (using scaling parameters)
-        self.length = cfg.PARAMS['c_length'] * area_0**cfg.PARAMS['q_length']
+        self.length = self.cl * area_0**self.ql
         self.length_0 = self.length
-        self.volume = (cfg.PARAMS['c_volume']
-                       * area_0**cfg.PARAMS['gamma_volume'])
+        self.volume = (self.ca * area_0**self.gamma)
 
-        # define mass balance model
+        # define mass balance model and spec mb
         self.mb_model = mb_model
+        self.spec_mb = mb_model.get_specific_mb(self.min_hgt,
+                                                self.max_hgt,
+                                                self.year)
 
-        # compute scaling parameters
-        self._compute_scaling_params()
+        # compute time scales
+        self._compute_time_scales()
 
-        pass
-
-    def _compute_scaling_params(self):
-        """ Compute the scaling parameters for glacier length `tau_l`
+    def _compute_time_scales(self):
+        """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
-        self.tau_l = self.volume / self.mb_model.prcp_clim
+        self.tau_l = self.volume * 1e6 / self.mb_model.prcp_clim
         self.tau_a = self.tau_l * self.area / self.length**2
 
     def step(self):
-        """ TODO """
-        pass
+        """ Advance model glacier by one year. This includes the following:
+            - computing the specific mass balance
+            - computing volume change and new volume
+            - computing area change and new area
+            - computing length change and new length
+            - computing new terminus elevation
+        """
+        # get specific mass balance B(t)
+        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
+                                                     self.max_hgt,
+                                                     self.year)
+        # compute volume change dV(t)
+        dV = self.area * self.spec_mb * 1e-6 / self.rho
+        # compute new volume V(t+1)
+        self.volume += dV
 
-    def run_until(self):
-        """ TODO """
-        pass
+        # compute area change dA
+        dA = ((self.volume / self.ca) ** (1/self.gamma)
+              - self.area) / self.tau_a
+        # compute new area A(t+1)
+        self.area += dA
+        # compute length change dL
+        dL = ((self.volume / self.cl) ** (1 / self.ql)
+              - self.length) / self.tau_l
+        # compute new length L(t+1)
+        self.length += dL
+        # compute new terminus elevation
+        self.min_hgt = self.max_hgt + (self.length / self.length_0
+                                       * (self.min_hgt_0 - self.max_hgt))
+
+        # compute new time scales
+        self._compute_time_scales()
+
+        # increment year
+        self.year += 1
+
+    def run_until(self, year_end, reset=False):
+        """
+
+        :param year_end:
+        :param reset:
+        :return:
+        """
+
+        # reset parameters to starting values
+        if reset:
+            self.year = self.year_0
+            self.area = self.area_0
+            self.min_hgt = self.min_hgt_0
+            # compute volume and length from area (using scaling parameters)
+            self.length = self.cl * self.area_0**self.ql
+            self.length_0 = self.length
+            self.volume = (self.ca * self.area_0**self.gamma)
+            # compute time scales
+            self._compute_time_scales()
+
+        # check validity of end year
+        if year_end < self.year:
+            raise ValueError('Cannot run until {}, already at year {}'.format(
+                year_end, self.year))
+
+        # create empty containers
+        years = np.arange(self.year, year_end + 1)
+        area = np.empty(years.size)
+        length = np.empty(years.size)
+        volume = np.empty(years.size)
+        min_hgt = np.empty(years.size)
+
+        # iterate over all years
+        for i, year in enumerate(years):
+            if i != 0:
+                # run model for one year
+                self.step()
+
+            # store metrics
+            area[i] = self.area
+            length[i] = self.length
+            volume[i] = self.volume
+            min_hgt[i] = self.min_hgt
+
+        # return metrics
+        return years, area, length, volume, min_hgt
