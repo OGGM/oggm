@@ -1768,18 +1768,6 @@ class GlacierDirectory(object):
         v.standard_name = 'projection_y_coordinate'
         v[:] = y
 
-        v = nc.createVariable('longitude', 'f4', ('y', 'x'), zlib=True)
-        v.units = 'degrees_east'
-        v.long_name = 'longitude coordinate'
-        v.standard_name = 'longitude'
-        v[:] = lon
-
-        v = nc.createVariable('latitude', 'f4', ('y', 'x'), zlib=True)
-        v.units = 'degrees_north'
-        v.long_name = 'latitude coordinate'
-        v.standard_name = 'latitude'
-        v[:] = lat
-
         return nc
 
     def write_monthly_climate_file(self, time, prcp, temp,

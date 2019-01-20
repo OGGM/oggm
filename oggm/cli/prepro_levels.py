@@ -131,7 +131,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  base_dir=os.path.join(base_dir, 'L1'))
 
     # L2 - Tasks
-    workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+    # Pre-download other files just in case
+    if test_crudir is None:
+        _ = utils.get_cru_file(var='tmp')
+        _ = utils.get_cru_file(var='pre')
+    else:
+        cfg.PATHS['cru_dir'] = test_crudir
+
+    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L2', 'summary')
@@ -144,27 +151,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  base_dir=os.path.join(base_dir, 'L2'))
 
     # L3 - Tasks
-    # Pre-download other files just in case
-    if test_crudir is None:
-        _ = utils.get_cru_file(var='tmp')
-        _ = utils.get_cru_file(var='pre')
-    else:
-        cfg.PATHS['cru_dir'] = test_crudir
-
-    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
-
-    # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L3', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-
-    # L3 OK - compress all in output directory
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=os.path.join(base_dir, 'L3'))
-
-    # L4 - Tasks
+    workflow.execute_entity_task(tasks.glacier_masks, gdirs)
     task_list = [
+        tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.initialize_flowlines,
         tasks.compute_downstream_line,
@@ -183,7 +172,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(task, gdirs)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L4', 'summary')
+    sum_dir = os.path.join(base_dir, 'L3', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
@@ -191,25 +180,25 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_climate_statistics(gdirs, add_climate_period=climate_periods,
                                      path=opath)
 
-    # L4 OK - compress all in output directory
+    # L3 OK - compress all in output directory
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=os.path.join(base_dir, 'L4'))
+                                 base_dir=os.path.join(base_dir, 'L3'))
 
-    # L5 - Tasks
+    # L4 - Tasks
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L5', 'summary')
+    sum_dir = os.path.join(base_dir, 'L4', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # Copy mini data to new dir
-    base_dir = os.path.join(base_dir, 'L5')
+    base_dir = os.path.join(base_dir, 'L4')
     mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
                                               base_dir=base_dir)
 
-    # L5 OK - compress all in output directory
+    # L4 OK - compress all in output directory
     workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
 
     # Log
