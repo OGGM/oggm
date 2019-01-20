@@ -633,9 +633,13 @@ class TestPreproCLI(unittest.TestCase):
                                       'glacier_statistics_11.csv'))
         assert 'dem_source' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L4', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'inv_volume_km3' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1945-1975_avg_prcp' in df
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -643,22 +647,42 @@ class TestPreproCLI(unittest.TestCase):
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
 
-        # See if we can start from lev 5
+        # See if we can start from all levs
+        from oggm import tasks
+        from oggm.core.flowline import FlowlineModel
+        cfg.PARAMS['continue_on_error'] = False
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+        # L2
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        tasks.glacier_masks(gdir)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
 
-        from oggm import tasks
-        cfg.PARAMS['contine_on_error'] = False
+        # L3
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        tasks.init_present_time_glacier(gdir)
         model = tasks.run_random_climate(gdir, nyears=10)
-        from oggm.core.flowline import FlowlineModel
         assert isinstance(model, FlowlineModel)
+
+        # L4
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, nyears=10)
+        assert isinstance(model, FlowlineModel)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
 
 
 def touch(path):
