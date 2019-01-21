@@ -638,7 +638,7 @@ class FlowlineModel(object):
 
         # time
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
-
+        
         if store_monthly_step:
             monthly_time = utils.monthly_timeseries(self.yr, y1)
         else:
@@ -987,7 +987,7 @@ class FluxBasedModel(FlowlineModel):
 
 
 class MassConservationChecker(FluxBasedModel):
-    """This checks if the FluzBasedmodel is conserving mass."""
+    """This checks if the FluxBasedmodel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
         """ Instanciate.
@@ -1582,11 +1582,13 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         if zero_initial_glacier:
             for fl in fls:
                 fl.thick = fl.thick * 0.
+                
         model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                                inplace=True,
                                time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
+        
         try:
             model.run_until_and_store(ye, run_path=run_path,
                                       diag_path=diag_path,

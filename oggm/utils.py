@@ -401,7 +401,7 @@ def gettempdir(dirname='', reset=False, home=False):
 
     basedir = (os.path.join(os.path.expanduser('~'), 'tmp') if home
                else tempfile.gettempdir())
-    return mkdir(os.path.join(basedir, 'OGGM', dirname), reset=reset)
+    return mkdir(os.path.join(basedir, dirname), reset=reset)
 
 
 def get_sys_info():
@@ -433,7 +433,7 @@ def show_versions(logger=None):
     logger : optional
         the logger you want to send the printouts to. If None, will use stdout
     """
-
+    
     _print = print if logger is None else logger.info
 
     sys_info = get_sys_info()
@@ -3339,13 +3339,32 @@ class GlacierDirectory(object):
 
             timev = nc.createVariable('time', 'i4', ('time',))
             tatts = {'units': time_unit}
-            if calendar is not None:
-                tatts['calendar'] = calendar
-                numdate = netCDF4.date2num([t for t in time], time_unit,
-                                           calendar=calendar)
-            else:
-                numdate = netCDF4.date2num([t for t in time], time_unit)
+            timev.long_name = 'time'
+            timev.standard_name = 'time'
 
+
+            ##################################################################################
+            ### ISSSUE: Why converting date to numbers ?
+            if cfg.PARAMS['baseline_climate'] == 'CRU':
+
+                if calendar is not None:
+                    tatts['calendar'] = calendar
+                    numdate = netCDF4.date2num([t for t in time], time_unit,
+                                                calendar=calendar)
+                else:
+                    numdate = netCDF4.date2num([t for t in time], time_unit)
+            ##################################################################################
+
+            
+            elif cfg.PARAMS['baseline_climate'] == 'GCM':
+                numdate = np.array([])
+                for t in time:
+                    conversion = (np.datetime64(t).astype('M8[s]') - np.datetime64('1800-01-01T00:00:00').astype('M8[s]')) / np.timedelta64(1, 'D')
+                    numdate = np.append(numdate, conversion)
+
+            else:
+                raise ValueError("We expect baseline_climate parameter to be set to CRU or GCM")
+            
             timev.setncatts(tatts)
             timev[:] = numdate
 
