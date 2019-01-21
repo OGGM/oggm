@@ -307,3 +307,17 @@ def process_gcm_data(gdir, filesuffix='', fpath_temp=None, fpath_precip=None):
                          time_unit=time_units, calendar=calendar)
     
 
+
+@entity_task(log, writes=['gcm_data', 'climate_info'])
+def scaled_gcm_temp(gdir, filesuffix='', fpath_temp=None, fpath_precip=None):
+    """ Read, process, write and store the GCM climate data data for this glacier
+    in a format that can be used by the OGGM mass balance model and in the glacier
+    directory. Scaled the GCM temperature field at the end of the 21st century
+    to 1.5 or 2.0 degrees
+    """
+    
+    # TO DO - Take RCP2.6 - Calculate temp anomaly 2070-2100 - Calculate scaling
+    # factor to 1.5 and 2 degrees - Linearly apply this factor to the GCM temp
+    # time series
+    
+    
