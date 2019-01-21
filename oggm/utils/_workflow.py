@@ -42,6 +42,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -1195,7 +1196,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     return gdir
 
 
-def _robust_tar_extract(from_tar, to_dir, delete_tar=False):
+def _robust_extract(to_dir, *args, **kwargs):
     """For some obscure reason this operation randomly fails.
 
     Try to make it more robust.
@@ -1203,17 +1204,37 @@ def _robust_tar_extract(from_tar, to_dir, delete_tar=False):
     count = 0
     while count < 10:
         try:
-            if os.path.exists(to_dir):
-                shutil.rmtree(to_dir)
             if count > 1:
                 time.sleep(0.1)
-            with tarfile.open(from_tar, 'r') as tf:
+            with tarfile.open(*args, **kwargs) as tf:
                 tf.extractall(os.path.dirname(to_dir))
             break
         except FileExistsError:
             count += 1
             if count == 10:
                 raise
+
+
+def robust_tar_extract(from_tar, to_dir, delete_tar=False):
+    """Extract a tar file - also checks for a "tar in tar" situation"""
+
+    if os.path.isfile(from_tar):
+        _robust_extract(to_dir, from_tar, 'r')
+    else:
+        # maybe a tar in tar
+        base_tar = os.path.dirname(from_tar) + '.tar'
+        if not os.path.isfile(base_tar):
+            raise FileNotFoundError('Could not find a tarfile with path: '
+                                    '{}'.format(from_tar))
+        if delete_tar:
+            raise InvalidParamsError('Cannot delete tar in tar.')
+        # Open the tar
+        bname = os.path.basename(from_tar)
+        dirbname = os.path.basename(os.path.dirname(from_tar))
+        with tarfile.open(base_tar, 'r') as tf:
+            i_from_tar = tf.getmember(os.path.join(dirbname, bname))
+            _robust_extract(to_dir, fileobj=tf.extractfile(i_from_tar))
+
     if delete_tar:
         os.remove(from_tar)
 
@@ -1296,7 +1317,7 @@ class GlacierDirectory(object):
                                     rgi_entity)
                 if not os.path.exists(str(from_tar)):
                     from_tar = _dir + '.tar.gz'
-                _robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
+                robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -1415,9 +1436,9 @@ class GlacierDirectory(object):
         if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
         if from_tar:
-            if not os.path.exists(str(from_tar)):
+            if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            _robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
         else:
             mkdir(self.dir)
 
@@ -1752,7 +1773,6 @@ class GlacierDirectory(object):
         nc.author_info = 'Open Global Glacier Model'
         nc.proj_srs = self.grid.proj.srs
 
-        lon, lat = self.grid.ll_coordinates
         x = self.grid.x0 + np.arange(self.grid.nx) * self.grid.dx
         y = self.grid.y0 + np.arange(self.grid.ny) * self.grid.dy
 
@@ -2254,3 +2274,36 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         shutil.rmtree(source_dir)
 
     return opath
+
+
+def base_dir_to_tar(base_dir=None, delete=True):
+    """Merge the directories into 1000 bundles as tar files.
+
+    The tar file is located at the same location of the original directory.
+
+    Parameters
+    ----------
+    base_dir : str
+        path to the basedir to parse (defaults to the working directory)
+    to_base_dir : str
+        path to the basedir where to write the directory (defaults to the
+        same location of the original directory)
+    delete : bool
+        delete the original directory tars afterwards (default)
+    """
+
+    if base_dir is None:
+        if not cfg.PATHS.get('working_dir', None):
+            raise ValueError("Need a valid PATHS['working_dir']!")
+        base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+
+    for dirname, subdirlist, filelist in os.walk(base_dir):
+        # RGI60-01.00
+        bname = os.path.basename(dirname)
+        if not (len(bname) == 11 and bname[-3] == '.'):
+            continue
+        opath = dirname + '.tar'
+        with tarfile.open(opath, 'w') as tar:
+            tar.add(dirname, arcname=os.path.basename(dirname))
+        if delete:
+            shutil.rmtree(dirname)
