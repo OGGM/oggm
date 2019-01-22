@@ -1315,7 +1315,7 @@ class GlacierDirectory(object):
             if from_tar:
                 _dir = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                     rgi_entity)
-                if not os.path.exists(str(from_tar)):
+                if from_tar is True:
                     from_tar = _dir + '.tar.gz'
                 robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
