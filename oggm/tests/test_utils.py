@@ -656,9 +656,19 @@ class TestPreproCLI(unittest.TestCase):
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
+        # L1
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        tasks.glacier_masks(gdir)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
         # L2
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
                             rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.glacier_masks(gdir)
         with pytest.raises(FileNotFoundError):
@@ -667,6 +677,7 @@ class TestPreproCLI(unittest.TestCase):
         # L3
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
                             rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.init_present_time_glacier(gdir)
         model = tasks.run_random_climate(gdir, nyears=10)
@@ -675,6 +686,7 @@ class TestPreproCLI(unittest.TestCase):
         # L4
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
                             rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
