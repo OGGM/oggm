@@ -127,8 +127,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L1 OK - compress all in output directory
+    l_base_dir = os.path.join(base_dir, 'L1')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=os.path.join(base_dir, 'L1'))
+                                 base_dir=l_base_dir)
+    utils.base_dir_to_tar(l_base_dir)
 
     # L2 - Tasks
     # Pre-download other files just in case
@@ -147,8 +149,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L2 OK - compress all in output directory
+    l_base_dir = os.path.join(base_dir, 'L2')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=os.path.join(base_dir, 'L2'))
+                                 base_dir=l_base_dir)
+    utils.base_dir_to_tar(l_base_dir)
 
     # L3 - Tasks
     workflow.execute_entity_task(tasks.glacier_masks, gdirs)
@@ -181,8 +185,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      path=opath)
 
     # L3 OK - compress all in output directory
+    l_base_dir = os.path.join(base_dir, 'L3')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=os.path.join(base_dir, 'L3'))
+                                 base_dir=l_base_dir)
+    utils.base_dir_to_tar(l_base_dir)
 
     # L4 - Tasks
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
@@ -200,6 +206,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L4 OK - compress all in output directory
     workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
+    utils.base_dir_to_tar(base_dir)
 
     # Log
     m, s = divmod(time.time() - start, 60)

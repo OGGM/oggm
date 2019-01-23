@@ -8,6 +8,7 @@ import time
 import gzip
 import bz2
 import pytest
+from unittest import mock
 
 import salem
 import numpy as np
@@ -27,6 +28,9 @@ from oggm.exceptions import InvalidParamsError
 
 pytestmark = pytest.mark.test_env("utils")
 _url_retrieve = None
+
+TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~fmaussion/'
+                 'test_gdirs/oggm_v1.1/')
 
 
 def setup_module(module):
@@ -301,23 +305,19 @@ class TestWorkflowTools(unittest.TestCase):
                                    2811, atol=200)
 
 
-class TestStartFromPrepro(unittest.TestCase):
+class TestStartFromTar(unittest.TestCase):
 
     def setUp(self):
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_workflow_tools')
-        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_tar_tools')
 
         # Init
         cfg.initialize()
-        cfg.PATHS['dl_cache_dir'] = self.dldir
         cfg.set_intersects_db(utils.get_demo_file('rgi_intersect_oetztal.shp'))
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
         self.rgidf = gpd.read_file(rgi_file)
-        self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
-                               for rid in self.rgidf.RGIId]
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
@@ -328,11 +328,9 @@ class TestStartFromPrepro(unittest.TestCase):
 
     def rm_dir(self):
         shutil.rmtree(self.testdir)
-        shutil.rmtree(self.dldir)
 
     def clean_dir(self):
         utils.mkdir(self.testdir, reset=True)
-        utils.mkdir(self.dldir, reset=True)
 
     def test_to_and_from_tar(self):
 
@@ -402,13 +400,46 @@ class TestStartFromPrepro(unittest.TestCase):
             assert new_gdir.rgi_area_km2 == gdir.rgi_area_km2
             assert new_base_dir in new_gdir.base_dir
 
+
+class TestStartFromOnlinePrepro(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_tools')
+        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = self.dldir
+
+        # Read in the RGI file
+        rgi_file = utils.get_demo_file('rgi_oetztal.shp')
+        self.rgidf = gpd.read_file(rgi_file)
+        self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
+                               for rid in self.rgidf.RGIId]
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PATHS['working_dir'] = self.testdir
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+        shutil.rmtree(self.dldir)
+
+    def clean_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.dldir, reset=True)
+
+    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=1,
                                               prepro_rgi_version='61',
-                                              prepro_border=160)
+                                              prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -416,11 +447,12 @@ class TestStartFromPrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
+    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
         entitites = self.rgidf.iloc[:2].RGIId
-        cfg.PARAMS['border'] = 10
+        cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_regions(entitites,
                                               from_prepro_level=1)
         n_intersects = 0
@@ -431,7 +463,7 @@ class TestStartFromPrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
         # One string
-        cfg.PARAMS['border'] = 10
+        cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_regions('RGI60-11.00897',
                                               from_prepro_level=1)
         n_intersects = 0
@@ -441,28 +473,30 @@ class TestStartFromPrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
+    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=2,
                                               prepro_rgi_version='61',
-                                              prepro_border=160)
+                                              prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
-            assert gdir.has_file('gridded_data')
+            assert gdir.has_file('climate_monthly')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
-        workflow.execute_entity_task(tasks.compute_centerlines, gdirs)
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
+    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=3,
                                               prepro_rgi_version='61',
-                                              prepro_border=160)
+                                              prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -470,14 +504,6 @@ class TestStartFromPrepro(unittest.TestCase):
             assert gdir.has_file('climate_monthly')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
-
-    def test_start_from_level_4(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
-                                              from_prepro_level=4,
-                                              prepro_rgi_version='61',
-                                              prepro_border=160)
 
         df = utils.compile_glacier_statistics(gdirs)
         assert 'dem_med_elev' in df
@@ -487,6 +513,19 @@ class TestStartFromPrepro(unittest.TestCase):
                                                                          2000])
         assert 'tstar_avg_temp_mean_elev' in df
         assert '1905-1935_avg_temp_mean_elev' in df
+
+        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+
+    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    def test_start_from_level_4(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=20)
+        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                     nyears=10)
 
 
 class TestPreproCLI(unittest.TestCase):
@@ -617,6 +656,12 @@ class TestPreproCLI(unittest.TestCase):
         inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
 
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
+
         cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
 
         wdir = os.path.join(self.testdir, 'wd')
@@ -656,10 +701,19 @@ class TestPreproCLI(unittest.TestCase):
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
+        # L1
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        tasks.glacier_masks(gdir)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
         # L2
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
                             rid[:8], rid[:11], rid + '.tar.gz')
-        assert os.path.isfile(tarf)
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.glacier_masks(gdir)
         with pytest.raises(FileNotFoundError):
@@ -668,7 +722,7 @@ class TestPreproCLI(unittest.TestCase):
         # L3
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
                             rid[:8], rid[:11], rid + '.tar.gz')
-        assert os.path.isfile(tarf)
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.init_present_time_glacier(gdir)
         model = tasks.run_random_climate(gdir, nyears=10)
@@ -677,7 +731,7 @@ class TestPreproCLI(unittest.TestCase):
         # L4
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
                             rid[:8], rid[:11], rid + '.tar.gz')
-        assert os.path.isfile(tarf)
+        assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)

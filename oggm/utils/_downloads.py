@@ -53,6 +53,8 @@ CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
 
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
+GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
+
 _RGI_METADATA = dict()
 
 DEM3REG = {
@@ -687,11 +689,11 @@ def _get_centerline_lonlat(gdir):
 def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
 
     # Prepro URL
-    url = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
+    url = GDIR_URL
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
-    url += '{}/{}/{}.tar.gz' .format(rgi_id[:8], rgi_id[:11], rgi_id)
+    url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
     return url
 
 
