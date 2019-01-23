@@ -55,6 +55,8 @@ HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
 
+CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
+
 _RGI_METADATA = dict()
 
 DEM3REG = {
@@ -1551,6 +1553,29 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     else:
         raise RuntimeError('No topography file available for extent lat:{0},'
                            'lon:{1}!'.format(lat_ex, lon_ex))
+
+
+def get_cmip5_file(filename, reset=False):
+    """Download a global CMIP5 file.
+
+    List of files: https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/
+
+    Parameters
+    ----------
+    filename : str
+        the file to download, e.g 'pr_ann_ACCESS1-3_rcp85_r1i1p1_g025.nc'
+        or 'tas_ann_ACCESS1-3_rcp45_r1i1p1_g025.nc'
+    reset : bool
+        force re-download of an existing file
+
+    Returns
+    -------
+    the path to the netCDF file
+    """
+
+    prefix = filename.split('_')[0]
+    dfile = CMIP5_URL + prefix + '/' + filename
+    return file_downloader(dfile, reset=reset)
 
 
 def get_ref_mb_glaciers(gdirs):

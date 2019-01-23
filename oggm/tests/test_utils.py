@@ -1035,6 +1035,30 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'ASTER'
 
+    def test_cmip5(self):
+
+        fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
+
+        def down_check(url, reset=False):
+            expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
+                        '/pr/pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc')
+            self.assertEqual(url, expected)
+            return True
+
+        with FakeDownloadManager('file_downloader', down_check):
+            assert utils.get_cmip5_file(fn)
+
+        fn = 'tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc'
+
+        def down_check(url, reset=False):
+            expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
+                        '/tas/tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc')
+            self.assertEqual(url, expected)
+            return True
+
+        with FakeDownloadManager('file_downloader', down_check):
+            assert utils.get_cmip5_file(fn)
+
 
 class TestDataFiles(unittest.TestCase):
 
@@ -1427,6 +1451,12 @@ class TestDataFiles(unittest.TestCase):
         zone = 'dummy'
         fp = _download_dem3_viewpano(zone)
         self.assertTrue(fp is None)
+
+    @pytest.mark.download
+    def test_download_cmip5(self):
+        fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
+        fp = utils.get_cmip5_file(fn)
+        self.assertTrue(os.path.isfile(fp))
 
     @pytest.mark.download
     def test_auto_topo(self):
