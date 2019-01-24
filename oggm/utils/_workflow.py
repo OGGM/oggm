@@ -1793,7 +1793,7 @@ class GlacierDirectory(object):
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
                                    gradient=None,
-                                   time_unit='days since 1801-01-01 00:00:00',
+                                   time_unit=None,
                                    calendar=None,
                                    file_name='climate_monthly',
                                    filesuffix=''):
@@ -1801,20 +1801,32 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        time
-        prcp
-        temp
-        ref_pix_hgt
-        ref_pix_lon
-        ref_pix_lat
-        gradient
-        time_unit
-        file_name
-        filesuffix
-
-        Returns
-        -------
-
+        time : ndarray
+            the time array, in a format understood by netCDF4
+        prcp : ndarray
+            the precipitation array (unit: 'kg m-2 month-1')
+        temp : ndarray
+            the temperature array (unit: 'degC')
+        ref_pix_hgt : float
+            the elevation of the dataset's reference altitude
+            (for correction). In practice it is the same altitude as the
+            baseline climate.
+        ref_pix_lon : float
+            the location of the gridded data's grid point
+        ref_pix_lat : float
+            the location of the gridded data's grid point
+        gradient : ndarray, optional
+            whether to use a time varying gradient
+        time_unit : str
+            the reference time unit for your time array. This should be chosen
+            depending on the length of your data. The default is to choose
+            it ourselves based on the starting year.
+        calendar : str
+            If you use an exotic calendar (e.g. 'noleap')
+        file_name : str
+            How to name the file
+        filesuffix : str
+            Apply a suffix to the file
         """
 
         # overwrite as default
@@ -1823,6 +1835,17 @@ class GlacierDirectory(object):
             os.remove(fpath)
 
         zlib = cfg.PARAMS['compress_climate_netcdf']
+        
+        if time_unit is None:
+            # http://pandas.pydata.org/pandas-docs/stable/timeseries.html
+            # #timestamp-limitations
+            if time[0].year > 1800:
+                time_unit = 'days since 1801-01-01 00:00:00'
+            elif time[0].year >= 0:
+                time_unit = ('days since {:04d}-01-01 '
+                             '00:00:00'.format(time[0].year))
+            else:
+                raise InvalidParamsError('Time format not supported')
 
         with ncDataset(fpath, 'w', format='NETCDF4') as nc:
             nc.ref_hgt = ref_pix_hgt
@@ -1837,6 +1860,7 @@ class GlacierDirectory(object):
             nc.author_info = 'Open Global Glacier Model'
 
             timev = nc.createVariable('time', 'i4', ('time',))
+            
             tatts = {'units': time_unit}
             if calendar is not None:
                 tatts['calendar'] = calendar

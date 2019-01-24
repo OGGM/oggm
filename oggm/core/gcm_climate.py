@@ -17,8 +17,7 @@ log = logging.getLogger(__name__)
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
-                     time_unit='days since 1801-01-01 00:00:00',
-                     calendar=None):
+                     time_unit=None, calendar=None):
     """ Applies the anomaly method to GCM climate data
 
     This function can be applied to any GCM data, if it is provided in a
@@ -49,7 +48,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         | time cftime object
     time_unit : str
         The unit conversion for NetCDF files. It must be adapted to the
-        length of the time series.
+        length of the time series. The default is to choose
+        it ourselves based on the starting year.
         For example: 'days since 0850-01-01 00:00:00'
     calendar : str
         If you use an exotic calendar (e.g. 'noleap')
@@ -169,12 +169,12 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # Get the time right - i.e. from time bounds
     # Fix for https://github.com/pydata/xarray/issues/2565
     with utils.ncDataset(fpath_temp, mode='r') as nc:
-        time_units = nc.variables['time'].units
+        time_unit = nc.variables['time'].units
         calendar = nc.variables['time'].calendar
 
     try:
         # xarray v0.11
-        time = netCDF4.num2date(tempds.time_bnds[:, 0], time_units,
+        time = netCDF4.num2date(tempds.time_bnds[:, 0], time_unit,
                                 calendar=calendar)
     except TypeError:
         # xarray > v0.11
@@ -215,4 +215,4 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # - time_unit='days since 0850-01-01 00:00:00'
     # - calendar='noleap'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp, temp=temp,
-                     time_unit=time_units, calendar=calendar)
+                     time_unit=time_unit, calendar=calendar)
