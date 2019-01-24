@@ -1864,10 +1864,21 @@ class GlacierDirectory(object):
             tatts = {'units': time_unit}
             if calendar is not None:
                 tatts['calendar'] = calendar
-                numdate = netCDF4.date2num([t for t in time], time_unit,
-                                           calendar=calendar)
+                try:
+                    numdate = netCDF4.date2num([t for t in time], time_unit,
+                                               calendar=calendar)
+                except TypeError:
+                    # numpy's broken datetime only works for us precision
+                    time = time.astype('M8[us]').astype(datetime.datetime)
+                    numdate = netCDF4.date2num(time, time_unit,
+                                               calendar=calendar)
             else:
-                numdate = netCDF4.date2num([t for t in time], time_unit)
+                try:
+                    numdate = netCDF4.date2num([t for t in time], time_unit)
+                except TypeError:
+                    # numpy's broken datetime only works for us precision
+                    time = time.astype('M8[us]').astype(datetime.datetime)
+                    numdate = netCDF4.date2num(time, time_unit)
 
             timev.setncatts(tatts)
             timev[:] = numdate

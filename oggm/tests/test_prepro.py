@@ -2547,6 +2547,59 @@ class TestGCMClimate(unittest.TestCase):
             # N more than 30%? (silly test)
             np.testing.assert_allclose(scesm1.prcp, scesm2.prcp, rtol=0.3)
 
+    def test_process_cmip5(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_temp_file'] = f
+        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_precip_file'] = f
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4')
+
+        fh = gdir.get_filepath('climate_monthly')
+        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cmip.load().isel(time=((cmip['time.year'] >= 1961) &
+                                           (cmip['time.year'] <= 1990)))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+
+            # And also the annual cycle
+            scru = scru.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+            # How did the annual cycle change with time?
+            scmip1 = cmip.isel(time=((cmip['time.year'] >= 1961) &
+                                     (cmip['time.year'] <= 1990)))
+            scmip2 = cmip.isel(time=((cmip['time.year'] >= 2061) &
+                                     (cmip['time.year'] <= 2090)))
+            scmip1 = scmip1.groupby('time.month').mean(dim='time')
+            scmip2 = scmip2.groupby('time.month').mean(dim='time')
+            # It has warmed
+            assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
+            # N more than 30%? (silly test)
+            np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
     def test_compile_climate_input(self):
 
         filename = 'gcm_data'

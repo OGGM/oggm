@@ -2,6 +2,7 @@
 # Built ins
 import logging
 from distutils.version import LooseVersion
+from datetime import datetime
 # External libs
 import numpy as np
 import netCDF4
@@ -123,7 +124,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None):
-    """Processes and writes GCM climate data for this glacier.
+    """Processes and writes CESM climate data for this glacier.
 
     This function is made for interpolating the Community
     Earth System Model Last Millennium Ensemble (CESM-LME) climate simulations,
@@ -144,7 +145,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         path to the precl file (default: cfg.PATHS['cesm_precl_file'])
     """
 
-    # GCM temperature and precipitation data
+    # CESM temperature and precipitation data
     if fpath_temp is None:
         if not ('cesm_temp_file' in cfg.PATHS):
             raise ValueError("Need to set cfg.PATHS['cesm_temp_file']")
@@ -216,3 +217,82 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # - calendar='noleap'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp, temp=temp,
                      time_unit=time_unit, calendar=calendar)
+
+
+@entity_task(log, writes=['gcm_data', 'climate_info'])
+def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
+                       fpath_precip=None):
+    """Read, process and store the CMIP5 climate data data for this glacier.
+
+    It stores the data in a format that can be used by the OGGM mass balance
+    model and in the glacier directory.
+
+    Currently, this function is built for the CMIP5 projection simulation
+    (https://pcmdi.llnl.gov/mips/cmip5/) from Taylor et al. (2012).
+
+    Parameters
+    ----------
+    filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
+    fpath_temp : str
+        path to the temp file (default: cfg.PATHS['cmip5_temp_file'])
+    fpath_precip : str
+        path to the precip file (default: cfg.PATHS['cmip5_precip_file'])
+    """
+
+    # Get the path of GCM temperature & precipitation data
+    if fpath_temp is None:
+        if not ('cmip5_temp_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['cmip5_temp_file']")
+        fpath_temp = cfg.PATHS['cmip5_temp_file']
+    if fpath_precip is None:
+        if not ('cmip5_precip_file' in cfg.PATHS):
+            raise ValueError("Need to set cfg.PATHS['cmip5_precip_file']")
+        fpath_precip = cfg.PATHS['cmip5_precip_file']
+
+    # Read the GCM files
+    tempds = xr.open_dataset(fpath_temp, decode_times=False)
+    precipds = xr.open_dataset(fpath_precip, decode_times=False)
+
+    with utils.ncDataset(fpath_temp, mode='r') as nc:
+        time_units = nc.variables['time'].units
+        calendar = nc.variables['time'].calendar
+        time = netCDF4.num2date(nc.variables['time'][:], time_units)
+
+    # Select for location
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+
+    # Conversion of the longitude
+    if lon <= 0:
+        lon += 360
+
+    # Take the closest to the glacier
+    # Should we consider GCM interpolation?
+    temp = tempds.tas.sel(lat=lat, lon=lon, method='nearest')
+    precip = precipds.pr.sel(lat=lat, lon=lon, method='nearest')
+
+    # Time needs a set to start of month
+    time = [datetime(t.year, t.month, 1) for t in time]
+    temp['time'] = time
+    precip['time'] = time
+
+    temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
+    precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
+
+    # Convert kg m-2 s-1 to mm mth-1 => 1 kg m-2 = 1 mm !!!
+    if temp.time[0].dt.month != 1:
+        raise ValueError('We expect the files to start in January!')
+
+    ny, r = divmod(len(temp), 12)
+    assert r == 0
+    precip = precip * precip.time.dt.days_in_month * (60 * 60 * 24)
+
+    tempds.close()
+    precipds.close()
+
+    # Here:
+    # - time_unit='days since 1870-01-15 12:00:00'
+    # - calendar='standard'
+    process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
+                     time_unit=time_units, calendar=calendar)
