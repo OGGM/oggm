@@ -178,7 +178,8 @@ Enhancements
   only one fallback function is implemented for ``climate.local_t_star`
   (:pull:`663`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
-
+- New `process_gcm_data` task to handle CMIP5 files.
+  By `Nicolas Champollion <https://github.com/nchampollion>`_.
 
 
 Bug fixes
