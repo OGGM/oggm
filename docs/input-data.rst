@@ -136,20 +136,18 @@ Processing levels
 Currently, there are five available levels of pre-processing:
 
 - **Level 1**: the lowest level, with directories containing the glacier
-  topography and galcier outlines only.
-- **Level 2**, adding a gridded glacier mask to the topography (i.e. to
-  know where the glacier is located in raster format).
-- **Level 3**, adding the baseline climate timeseries (CRU, see below) to this
+  topography and glacier outlines only.
+- **Level 2**, adding the baseline climate timeseries (CRU, see below) to this
   folder.
-- **Level 4**, adding the output of all necessary pre-processing tasks
+- **Level 3**, adding the output of all necessary pre-processing tasks
   for a dynamical run, including the bed inversion using the default
   parameters.
-- **Level 5**, same as level 4 but with all intermediate ouptut files removed.
-  The strong advantage of level 5 files is that their size is considerably
+- **Level 4**, same as level 3 but with all intermediate ouptut files removed.
+  The strong advantage of level 4 files is that their size is considerably
   reduced, at the cost that certain operations (like plotting on maps or
-  run the bed inversion again) are not possible.
+  running the bed inversion algorithm again) are not possible.
 
-In practice, most users are going to use level 5 or level 4 files, with some
+In practice, most users are going to use level 3 or level 4 files, with some
 use cases relying on lower levels.
 
 Map size
@@ -180,7 +178,7 @@ Here is an example with the Hintereisferner in the Alps:
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
     for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 250]):
         gdir = workflow.init_glacier_regions('RGI60-11.00897',
-                                             from_prepro_level=2,
+                                             from_prepro_level=1,
                                              prepro_border=border)
         graphics.plot_domain(gdir, ax=ax, title='Border: {}'.format(border),
                              add_colorbar=False,
@@ -190,30 +188,29 @@ Here is an example with the Hintereisferner in the Alps:
 
 
 For runs into the Little Ice Age, a border value of 160 is more than enough.
-For simulations into the 21st century, a border value of 80 or even 10 is
+For simulations into the 21st century, a border value of 80 is
 sufficient.
 
 Users should be aware that the amount of data to download isn't small,
-especially for full directories at levels 2 to 4. Here is an indicative
+especially for full directories at levels 3. Here is an indicative
 table for the total amount of data for all 18 RGI regions
 (excluding Antarctica):
 
 ======  =====  =====  =====  =====
 Level   B  10  B  80  B 160  B 250
 ======  =====  =====  =====  =====
-**L1**  2.8G   11G    31G    65G
-**L2**  7.5G   41G    115G   247G
-**L3**  11G    44G    118G   250G
-**L4**  14G    48G    122G   255G
-**L5**  4.6G   4.8G   5.2G   5.6G
+**L1**  2.4G   11G    29G    63G
+**L2**  5.1G   14G    32G    65G
+**L3**  13G    44G    115G   244G
+**L4**  4.2G   4.5G   4.8G   5.3G
 ======  =====  =====  =====  =====
 
 Certain regions are much smaller than others of course. As an indication,
-with prepro level 4 and a border 160, the Alps are 2.2G large, Greenland
-12G, and Iceland 365M.
+with prepro level 3 and a map border of 160, the Alps are 2G large, Greenland
+11G, and Iceland 334M.
 
-Therefore, it is recommended to always pick the smallest border value, and
-to start your runs from level 5 if possible.
+Therefore, it is recommended to always pick the smallest border value suitable
+for your research question, and to start your runs from level 4 if possible.
 
 .. note::
 
