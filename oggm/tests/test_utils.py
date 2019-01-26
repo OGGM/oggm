@@ -739,6 +739,157 @@ class TestPreproCLI(unittest.TestCase):
             tasks.init_present_time_glacier(gdir)
 
 
+class TestBenchmarkCLI(unittest.TestCase):
+
+    def setUp(self):
+        self.testdir = os.path.join(get_test_dir(), 'tmp_benchmarks')
+        self.reset_dir()
+
+    def tearDown(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    def reset_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+
+    def test_parse_args(self):
+
+        from oggm.cli import benchmark
+
+        kwargs = benchmark.parse_args(['--rgi-reg', '1',
+                                       '--map-border', '160'])
+
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
+        assert kwargs['rgi_version'] is None
+        assert kwargs['rgi_reg'] == '01'
+        assert kwargs['border'] == 160
+
+        with pytest.raises(InvalidParamsError):
+            benchmark.parse_args([])
+
+        with pytest.raises(InvalidParamsError):
+            benchmark.parse_args(['--rgi-reg', '1'])
+
+        with pytest.raises(InvalidParamsError):
+            benchmark.parse_args(['--map-border', '160'])
+
+        with TempEnvironmentVariable(OGGM_RGI_REG='1', OGGM_MAP_BORDER='160'):
+
+            kwargs = benchmark.parse_args([])
+
+            assert 'working_dir' in kwargs
+            assert 'output_folder' in kwargs
+            assert kwargs['rgi_version'] is None
+            assert kwargs['rgi_reg'] == '01'
+            assert kwargs['border'] == 160
+            assert not kwargs['is_test']
+
+        with pytest.raises(InvalidParamsError):
+            benchmark.parse_args([])
+
+        kwargs = benchmark.parse_args(['--rgi-reg', '1',
+                                       '--map-border', '160',
+                                       '--output', 'local/out',
+                                       '--working-dir', 'local/work',
+                                       ])
+
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
+        assert 'local' in kwargs['working_dir']
+        assert 'local' in kwargs['output_folder']
+        assert kwargs['rgi_version'] is None
+        assert kwargs['rgi_reg'] == '01'
+        assert kwargs['border'] == 160
+        assert not kwargs['is_test']
+
+        kwargs = benchmark.parse_args(['--rgi-reg', '1',
+                                       '--map-border', '160',
+                                       '--output', 'local/out',
+                                       '--working-dir', 'local/work',
+                                       '--test',
+                                       ])
+
+        assert 'local' in kwargs['working_dir']
+        assert 'local' in kwargs['output_folder']
+        assert kwargs['rgi_version'] is None
+        assert kwargs['rgi_reg'] == '01'
+        assert kwargs['border'] == 160
+        assert kwargs['is_test']
+
+        kwargs = benchmark.parse_args(['--rgi-reg', '1',
+                                       '--map-border', '160',
+                                       '--output', '/local/out',
+                                       '--working-dir', '/local/work',
+                                       ])
+
+        assert 'tests' not in kwargs['working_dir']
+        assert 'tests' not in kwargs['output_folder']
+        assert 'local' in kwargs['working_dir']
+        assert 'local' in kwargs['output_folder']
+        assert kwargs['rgi_version'] is None
+        assert kwargs['rgi_reg'] == '01'
+        assert kwargs['border'] == 160
+
+        with TempEnvironmentVariable(OGGM_RGI_REG='12',
+                                     OGGM_MAP_BORDER='120',
+                                     OGGM_OUTDIR='local/out',
+                                     OGGM_WORKDIR='local/work',
+                                     ):
+
+            kwargs = benchmark.parse_args([])
+
+            assert 'local' in kwargs['working_dir']
+            assert 'local' in kwargs['output_folder']
+            assert kwargs['rgi_version'] is None
+            assert kwargs['rgi_reg'] == '12'
+            assert kwargs['border'] == 120
+
+        with TempEnvironmentVariable(OGGM_RGI_REG='12',
+                                     OGGM_MAP_BORDER='120',
+                                     OGGM_OUTDIR='/local/out',
+                                     OGGM_WORKDIR='/local/work',
+                                     ):
+
+            kwargs = benchmark.parse_args([])
+
+            assert 'local' in kwargs['working_dir']
+            assert 'local' in kwargs['output_folder']
+            assert kwargs['rgi_version'] is None
+            assert kwargs['rgi_reg'] == '12'
+            assert kwargs['border'] == 120
+
+    def test_full_run(self):
+
+        from oggm.cli.benchmark import run_benchmark
+
+        # Read in the RGI file
+        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
+
+        cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_benchmark(rgi_version=None, rgi_reg='11', border=80,
+                      output_folder=odir, working_dir=wdir, is_test=True,
+                      test_rgidf=rgidf, test_intersects_file=inter,
+                      test_topofile=topof,
+                      test_crudir=os.path.dirname(cru_file))
+
+        df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
+                         index_col=0)
+        assert len(df) > 15
+
+
 def touch(path):
     """Equivalent to linux's touch"""
     with open(path, 'a'):

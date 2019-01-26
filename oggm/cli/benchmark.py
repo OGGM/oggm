@@ -1,6 +1,6 @@
-"""Command line arguments to the oggm_prepro command
+"""Command line arguments to the oggm_benchmark command
 
-Type `$ oggm_prepro -h` for help
+Type `$ oggm_benchmark -h` for help
 
 """
 
@@ -10,6 +10,7 @@ import sys
 import argparse
 import time
 import logging
+import pandas as pd
 import geopandas as gpd
 
 # Locals
@@ -18,7 +19,16 @@ from oggm import utils, workflow, tasks
 from oggm.exceptions import InvalidParamsError
 
 
-def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
+def _add_time_to_df(df, index, t):
+    df.loc[index, 't'] = t
+    m, s = divmod(t, 60)
+    h, m = divmod(m, 60)
+    df.loc[index, 'H'] = h
+    df.loc[index, 'M'] = m
+    df.loc[index, 'S'] = s
+
+
+def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', is_test=False,
                       test_rgidf=None, test_intersects_file=None,
                       test_topofile=None, test_crudir=None):
@@ -55,9 +65,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Module logger
     log = logging.getLogger(__name__)
 
-    # Time
-    start = time.time()
-
     # Initialize OGGM and set up the run parameters
     cfg.initialize(logging_level='WORKFLOW')
 
@@ -76,13 +83,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     cfg.PARAMS['continue_on_error'] = True
 
     # For statistics
-    climate_periods = [1920, 1960, 2000]
+    odf = pd.DataFrame()
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
-    rgi_dir_name = 'RGI{}'.format(rgi_version)
-    border_dir_name = 'b_{:03d}'.format(border)
-    base_dir = os.path.join(output_folder, rgi_dir_name, border_dir_name)
+    base_dir = os.path.join(output_folder)
 
     # Add a package version file
     utils.mkdir(base_dir)
@@ -90,6 +95,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
+    # Read RGI
+    start = time.time()
     if test_rgidf is None:
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
@@ -104,7 +111,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if is_test:
         # Just for fun
-        rgidf = rgidf.sample(4)
+        rgidf = rgidf.sample(2)
+    _add_time_to_df(odf, 'Read RGI', time.time()-start)
 
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
@@ -117,22 +125,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if test_topofile:
         cfg.PATHS['dem_file'] = test_topofile
 
-    # L1 - initialize working directories
+    # Initialize working directories
+    start = time.time()
     gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+    _add_time_to_df(odf, 'init_glacier_regions', time.time()-start)
 
-    # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L1', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-
-    # L1 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L1')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
-
-    # L2 - Tasks
     # Pre-download other files just in case
     if test_crudir is None:
         _ = utils.get_cru_file(var='tmp')
@@ -140,22 +137,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     else:
         cfg.PATHS['cru_dir'] = test_crudir
 
-    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
-
-    # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L2', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-
-    # L2 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L2')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
-
-    # L3 - Tasks
+    # Tasks
     task_list = [
+        tasks.process_cru_data,
         tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.initialize_flowlines,
@@ -170,56 +154,57 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         tasks.prepare_for_inversion,
         tasks.mass_conservation_inversion,
         tasks.filter_inversion_output,
+        tasks.init_present_time_glacier,
     ]
     for task in task_list:
+        start = time.time()
         workflow.execute_entity_task(task, gdirs)
+        _add_time_to_df(odf, task.__name__, time.time()-start)
 
-    # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L3', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-    opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_climate_statistics(gdirs, add_climate_period=climate_periods,
-                                     path=opath)
+    # Runs
+    start = time.time()
+    workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                 nyears=250, bias=0, seed=0,
+                                 output_filesuffix='_tstar')
+    _add_time_to_df(odf, 'run_random_climate_tstar_250', time.time()-start)
 
-    # L3 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L3')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+    workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                 nyears=250, y0=1995, seed=0,
+                                 output_filesuffix='_commit')
+    _add_time_to_df(odf, 'run_random_climate_commit_250', time.time()-start)
 
-    # L4 - Tasks
-    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+    # Compile results
+    start = time.time()
+    utils.compile_glacier_statistics(gdirs)
+    _add_time_to_df(odf, 'compile_glacier_statistics', time.time()-start)
 
-    # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L4', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
+    start = time.time()
+    utils.compile_climate_statistics(gdirs,
+                                     add_climate_period=[1920, 1960, 2000])
+    _add_time_to_df(odf, 'compile_climate_statistics', time.time()-start)
 
-    # Copy mini data to new dir
-    base_dir = os.path.join(base_dir, 'L4')
-    mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
-                                              base_dir=base_dir)
+    start = time.time()
+    utils.compile_run_output(gdirs, filesuffix='_tstar')
+    _add_time_to_df(odf, 'compile_run_output_tstar', time.time()-start)
 
-    # L4 OK - compress all in output directory
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
-    utils.base_dir_to_tar(base_dir)
+    start = time.time()
+    utils.compile_run_output(gdirs, filesuffix='_commit')
+    _add_time_to_df(odf, 'compile_run_output_commit', time.time()-start)
 
     # Log
-    m, s = divmod(time.time() - start, 60)
-    h, m = divmod(m, 60)
-    log.workflow('OGGM prepro_levels is done! Time needed: '
-                 '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+    opath = os.path.join(base_dir, 'benchmarks_b{:03d}.csv'.format(border))
+    odf.index.name = 'Task'
+    odf.to_csv(opath)
+    log.workflow('OGGM benchmarks is done!')
 
 
 def parse_args(args):
     """Check input arguments and env variables"""
 
     # CLI args
-    description = ('Generate the preprocessed OGGM glacier directories for '
-                   'this OGGM version.')
+    description = ('Run an OGGM benchmark on a selected RGI Region. '
+                   'This writes a benchmark_{border}.txt file where '
+                   'the results are summarized')
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--map-border', type=int,
                         help='the size of the map border. Is required if '
@@ -280,4 +265,4 @@ def parse_args(args):
 def main():
     """Script entry point"""
 
-    run_prepro_levels(**parse_args(sys.argv[1:]))
+    run_benchmark(**parse_args(sys.argv[1:]))
