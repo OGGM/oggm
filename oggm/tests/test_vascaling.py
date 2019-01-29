@@ -1,4 +1,4 @@
-"""TODO: Description """
+""" Tests for the volume/area scaling model in `vascaling.py`. """
 
 # External libs
 import numpy as np
@@ -12,28 +12,22 @@ import unittest
 # import gis libs
 import geopandas as gpd
 
-
 # import OGGM modules
 import oggm
 import oggm.cfg as cfg
-
 from oggm import utils
 from oggm.utils import get_demo_file, ncDataset
-
-from oggm.core import (gis, ben, climate, centerlines, massbalance)
-
+from oggm.core import gis, vascaling, climate, centerlines, massbalance
 from oggm.tests.funcs import get_test_dir
 
 
-class TestBensModel(unittest.TestCase):
-    """ Unittest TestCase testing the implementation of Bens model. @TODO """
+class TestVAScalingModel(unittest.TestCase):
+    """ Unittest TestCase testing the implementation of the volume/area scaling
+    model, based on Marzeion et. al., 2012. """
 
     def setUp(self):
-        """ Creates two different test directories, one for the HistAlp or
-            costume climate file and one for the CRU climate file.
-            OGGM initialisation, paths and parameters are set.
-            TODO: do I need a CRU test directory?!
-        """
+        """ Instance the TestCase, create the test directory,
+        OGGM initialisation and setting paths and parameters. """
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
         if not os.path.exists(self.testdir):
@@ -53,22 +47,22 @@ class TestBensModel(unittest.TestCase):
         cfg.PARAMS['use_multiprocessing'] = False
 
     def tearDown(self):
-        """Removes the test directories."""
+        """ Removes the test directories. """
         self.rm_dir()
 
     def rm_dir(self):
-        """Removes the test directories."""
+        """ Removes the test directories. """
         shutil.rmtree(self.testdir)
 
     def clean_dir(self):
-        """Cleans the test directories."""
+        """ Cleans the test directories. """
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
     def test_terminus_temp(self):
-        """Testing the subroutine which computes the terminus temperature
+        """ Testing the subroutine which computes the terminus temperature
         from the given climate file and glacier DEM. Pretty straight forward
-        and somewhat useless, but nice finger exercise."""
+        and somewhat useless, but nice finger exercise. """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -99,19 +93,19 @@ class TestBensModel(unittest.TestCase):
 
         # the terminus temperature must equal the input temperature
         # if terminus elevation equals reference elevation
-        temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad,
-                                                   ref_hgt=ref_h,
-                                                   terminus_hgt=ref_h,
-                                                   temp_anomaly=temp_anomaly)
+        temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
+                                                         ref_hgt=ref_h,
+                                                         terminus_hgt=ref_h,
+                                                         temp_anomaly=temp_anomaly)
         np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # the terminus temperature must equal the input terperature
         # if the gradient is zero
         for term_h in np.array([-100, 0, 100]) + ref_h:
-            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad=0,
-                                                       ref_hgt=ref_h,
-                                                       terminus_hgt=term_h,
-                                                       temp_anomaly=temp_anomaly)
+            temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad=0,
+                                                             ref_hgt=ref_h,
+                                                             terminus_hgt=term_h,
+                                                             temp_anomaly=temp_anomaly)
             np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # now test the routine with actual elevation differences
@@ -119,17 +113,16 @@ class TestBensModel(unittest.TestCase):
         for h_diff in np.array([-100, 0, 100]):
             term_h = ref_h + h_diff
             temp_diff = temp_grad * h_diff
-            temp_terminus = ben._compute_temp_terminus(ref_t, temp_grad,
-                                                       ref_hgt=ref_h,
-                                                       terminus_hgt=term_h,
-                                                       temp_anomaly=temp_anomaly)
+            temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
+                                                             ref_hgt=ref_h,
+                                                             terminus_hgt=term_h,
+                                                             temp_anomaly=temp_anomaly)
             np.testing.assert_allclose(temp_terminus,
                                        ref_t + temp_anomaly + temp_diff)
 
     def test_solid_prcp(self):
-        """Tests the subroutine which computes solid precipitation amount from
-        given total precipitation and temperature.
-        """
+        """ Tests the subroutine which computes solid precipitation amount from
+        given total precipitation and temperature. """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -166,28 +159,27 @@ class TestBensModel(unittest.TestCase):
         # if the terminus temperature is below the threshold for
         # solid precipitation all fallen precipitation must be solid
         temp_terminus = ref_t * 0 + temp_all_solid
-        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
-                                             min_hgt, max_hgt,
-                                             temp_terminus, temp_all_solid,
-                                             temp_grad,
-                                             prcp_grad=0, prcp_anomaly=0)
+        solid_prcp = vascaling._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
+                                                   min_hgt, max_hgt,
+                                                   temp_terminus, temp_all_solid,
+                                                   temp_grad,
+                                                   prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, ref_p)
 
         # if the temperature at the maximal elevation is above the threshold
         # for solid precipitation all fallen precipitation must be liquid
         temp_terminus = ref_t + 100
-        solid_prcp = ben._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
-                                             min_hgt, max_hgt,
-                                             temp_terminus, temp_all_solid,
-                                             temp_grad,
-                                             prcp_grad=0, prcp_anomaly=0)
+        solid_prcp = vascaling._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
+                                                   min_hgt, max_hgt,
+                                                   temp_terminus, temp_all_solid,
+                                                   temp_grad,
+                                                   prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, 0)
 
     def test_min_max_elevation(self):
-        """ Test the helper method which computes the minimal and
-            maximal glacier surface elevation in meters asl,
-            from the given DEM and glacier outline.
-        """
+        """ Test the helper method which computes the minimal and maximal
+        glacier surface elevation in meters asl, from the given DEM and glacier
+        outline. """
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -198,19 +190,21 @@ class TestBensModel(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
 
-        # set targets
-        min_target = 2446.0
-        max_target = 3684.0
+        # set targets from RGI
+
+        min_target = 2430.0
+        max_target = 3674.0
         # get values from method
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
-        assert min_target == min_hgt
-        assert max_target == max_hgt
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
+        # test with one percentage relative tolerance
+        np.testing.assert_allclose(min_hgt, min_target, rtol=1e-2)
+        np.testing.assert_allclose(max_hgt, max_target, rtol=1e-2)
 
     def test_yearly_mb_temp_prcp(self):
         """ Test the routine which returns the yearly mass balance relevant
         climate parameters, i.e. positive melting temperature and solid
         precipitation. The testing target is the output of the corresponding
-        OGGM routine `get_yearly_mb_climate_on_glacier(gdir)`."""
+        OGGM routine `get_yearly_mb_climate_on_glacier(gdir)`. """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -232,7 +226,7 @@ class TestBensModel(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         # get yearly sums of terminus temperature and solid precipitation
-        years, temp, prcp = ben.get_yearly_mb_temp_prcp(gdir)
+        years, temp, prcp = vascaling.get_yearly_mb_temp_prcp(gdir)
 
         # use the OGGM methode to get the mass balance
         # relevant climate parameters
@@ -298,17 +292,13 @@ class TestBensModel(unittest.TestCase):
         assert prcp_corr >= corr_threshold
 
         # TODO: assert absolute values (or differences) of precipitation @ASK
-
         pass
 
     def test_local_t_star(self):
-        """ The cumulative specific mass balance over the 31-year
-            climate period centered around t* must be zero,
-            given a successful mu* calibration. The mass balance
-            bias is not applied.
-
-            TODO: The comparison with the MB profiles is omitted for now.
-        """
+        """ The cumulative specific mass balance over the 31-year climate
+        period centered around t* must be zero, given a successful mu*
+        calibration. The mass balance bias is not applied.
+        TODO: The comparison with the MB profiles is omitted for now. """
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -339,17 +329,17 @@ class TestBensModel(unittest.TestCase):
         t_star, bias = res['t_star'], res['bias']
 
         # compute local t* and the corresponding mu*
-        ben.local_t_star(gdir, tstar=t_star, bias=bias)
+        vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
         # read calibration results
-        ben_params = gdir.read_json('ben_params')
+        vascaling_mustar = gdir.read_json('vascaling_mustar')
 
         # get min and max glacier elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # define mass balance model
-        ben_mb = ben.BenMassBalance(gdir,
-                                    mu_star=ben_params['mu_star'],
-                                    bias=0)
+        vas_mb = vascaling.VAScalingMassBalance(gdir,
+                                                mu_star=vascaling_mustar['mu_star'],
+                                                bias=0)
         # define 31-year climate period around t*
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         years = np.arange(t_star - mu_hp, t_star + mu_hp + 1)
@@ -357,7 +347,7 @@ class TestBensModel(unittest.TestCase):
         # and compute specific mass balance
         mb_yearly = np.empty(years.size)
         for i, year in enumerate(years):
-            mb_yearly[i] = ben_mb.get_specific_mb(min_hgt, max_hgt, year)
+            mb_yearly[i] = vas_mb.get_specific_mb(min_hgt, max_hgt, year)
 
         # compute sum over climate period
         mb_sum = np.sum(mb_yearly)
@@ -365,7 +355,8 @@ class TestBensModel(unittest.TestCase):
         np.testing.assert_allclose(mb_sum, 0, atol=1e-3)
 
     def _setup_mb_test(self):
-        """ Avoiding a chunk of code duplicate. """
+        """ Avoiding a chunk of code duplicate. Performs needed prepo tasks and
+         returns the oggm.GlacierDirectory. """
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -394,7 +385,7 @@ class TestBensModel(unittest.TestCase):
         t_star, bias = res['t_star'], res['bias']
 
         # compute local t* and the corresponding mu*
-        ben.local_t_star(gdir, tstar=t_star, bias=bias)
+        vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
 
         # run OGGM mu* calibration
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
@@ -410,10 +401,10 @@ class TestBensModel(unittest.TestCase):
         gdir = self._setup_mb_test()
 
         # instance the mass balance models
-        mbmod = ben.BenMassBalance(gdir)
+        mbmod = vascaling.VAScalingMassBalance(gdir)
 
         # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # get all month of the year in the
         # floating (hydrological) year convention
@@ -447,33 +438,33 @@ class TestBensModel(unittest.TestCase):
         gdir = self._setup_mb_test()
 
         # instance the mass balance models
-        ben_mbmod = ben.BenMassBalance(gdir)
+        vas_mbmod = vascaling.VAScalingMassBalance(gdir)
         past_mbmod = massbalance.PastMassBalance(gdir)
 
         # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
         heights = np.array([min_hgt, (min_hgt + max_hgt) / 2, max_hgt])
 
         # specify a year
         year = 1975
         # get mass balance relevant climate information
-        temp_for_melt_ben, prcp_solid_ben = \
-            ben_mbmod.get_annual_climate(min_hgt, max_hgt, year)
+        temp_for_melt_vas, prcp_solid_vas = \
+            vas_mbmod.get_annual_climate(min_hgt, max_hgt, year)
         _, temp_for_melt_oggm, _, prcp_solid_oggm = \
             past_mbmod.get_annual_climate(heights, year)
 
         # prepare my (monthly) values for comparison
-        temp_for_melt_ben = temp_for_melt_ben.sum()
-        prcp_solid_ben = prcp_solid_ben.sum()
+        temp_for_melt_vas = temp_for_melt_vas.sum()
+        prcp_solid_vas = prcp_solid_vas.sum()
 
         # compare terminus temperature
-        np.testing.assert_allclose(temp_for_melt_ben,
+        np.testing.assert_allclose(temp_for_melt_vas,
                                    temp_for_melt_oggm[0],
                                    rtol=1e-3)
         # compare solid precipitation
-        assert prcp_solid_ben >= prcp_solid_oggm[0]
-        assert abs(1 - prcp_solid_ben/prcp_solid_oggm[1]) <= 0.15
-        assert prcp_solid_ben <= prcp_solid_oggm[2]
+        assert prcp_solid_vas >= prcp_solid_oggm[0]
+        assert abs(1 - prcp_solid_vas/prcp_solid_oggm[1]) <= 0.15
+        assert prcp_solid_vas <= prcp_solid_oggm[2]
 
     def test_annual_mb(self):
         """ Test the routine computing the annual mass balance. """
@@ -481,21 +472,21 @@ class TestBensModel(unittest.TestCase):
         gdir = self._setup_mb_test()
 
         # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # define temporal range
         year = 1975
         years = np.array([year, year])
 
         # get mass balance relevant climate data
-        _, temp, prcp = ben.get_yearly_mb_temp_prcp(gdir, year_range=years)
+        _, temp, prcp = vascaling.get_yearly_mb_temp_prcp(gdir, year_range=years)
         temp = temp[0]
         prcp = prcp[0]
 
-        # read mu* and bias from ben_params
-        ben_params = gdir.read_json('ben_params')
-        mu_star = ben_params['mu_star']
-        bias = ben_params['bias']
+        # read mu* and bias from vascaling_mustar
+        vascaling_mustar = gdir.read_json('vascaling_mustar')
+        mu_star = vascaling_mustar['mu_star']
+        bias = vascaling_mustar['bias']
 
         # specify scaling factor for SI units [kg s-1]
         fac_SI = cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
@@ -503,7 +494,7 @@ class TestBensModel(unittest.TestCase):
         # compute mass balance 'by hand'
         mb_ref = (prcp - mu_star * temp - bias) / fac_SI
         # compute mb 'by model'
-        mb_mod = ben.BenMassBalance(gdir).get_annual_mb(min_hgt, max_hgt, year)
+        mb_mod = vascaling.VAScalingMassBalance(gdir).get_annual_mb(min_hgt, max_hgt, year)
 
         # compare mass balances with bias
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
@@ -511,9 +502,9 @@ class TestBensModel(unittest.TestCase):
         # compute mass balance 'by hand'
         mb_ref = (prcp - mu_star * temp) / fac_SI
         # compute mb 'by model'
-        mb_mod = ben.BenMassBalance(gdir, bias=0).get_annual_mb(min_hgt,
-                                                                max_hgt,
-                                                                year)
+        mb_mod = vascaling.VAScalingMassBalance(gdir, bias=0).get_annual_mb(min_hgt,
+                                                                            max_hgt,
+                                                                            year)
 
         # compare mass balances without bias
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
@@ -528,10 +519,10 @@ class TestBensModel(unittest.TestCase):
         gdir = self._setup_mb_test()
 
         # instance mb models
-        ben_mbmod = ben.BenMassBalance(gdir)
+        vas_mbmod = vascaling.VAScalingMassBalance(gdir)
 
         # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # get all month of that year in the
         # floating (hydrological) year convention
@@ -542,12 +533,12 @@ class TestBensModel(unittest.TestCase):
         # all month of given year and store in array
         spec_mb_month = np.empty(months.size)
         for i, month in enumerate(months):
-            spec_mb_month[i] = ben_mbmod.get_monthly_specific_mb(min_hgt,
+            spec_mb_month[i] = vas_mbmod.get_monthly_specific_mb(min_hgt,
                                                                  max_hgt,
                                                                  month)
 
         # compute yearly specific mass balance
-        spec_mb_year = ben_mbmod.get_specific_mb(min_hgt, max_hgt, year)
+        spec_mb_year = vas_mbmod.get_specific_mb(min_hgt, max_hgt, year)
 
         # compare
         np.testing.assert_allclose(spec_mb_month.sum(), spec_mb_year,
@@ -560,11 +551,11 @@ class TestBensModel(unittest.TestCase):
         gdir = self._setup_mb_test()
 
         # instance mb models
-        ben_mbmod = ben.BenMassBalance(gdir)
+        vas_mbmod = vascaling.VAScalingMassBalance(gdir)
         past_mbmod = massbalance.PastMassBalance(gdir)
 
         # get relevant glacier surface elevation
-        min_hgt, max_hgt = ben.get_min_max_elevation(gdir)
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # define temporal range
         ys = 1802
@@ -576,27 +567,27 @@ class TestBensModel(unittest.TestCase):
 
         # create empty container
         past_mb = np.empty(years.size)
-        ben_mb = np.empty(years.size)
+        vas_mb = np.empty(years.size)
         # get specific mass balance for all years
         for i, year in enumerate(years):
             past_mb[i] = past_mbmod.get_specific_mb(fls=fls, year=year)
-            ben_mb[i] = ben_mbmod.get_specific_mb(min_hgt, max_hgt, year)
+            vas_mb[i] = vas_mbmod.get_specific_mb(min_hgt, max_hgt, year)
 
         # compute ans check correlation
-        assert np.corrcoef(past_mb, ben_mb)[0, 1] > 0.9
+        assert np.corrcoef(past_mb, vas_mb)[0, 1] > 0.9
 
         # compute average
         past_avg = past_mb.mean()
-        ben_avg = ben_mb.mean()
+        vas_avg = vas_mb.mean()
         # check relative error
-        assert (1 - ben_avg / past_avg) < 0.3
+        assert (1 - vas_avg / past_avg) < 0.3
 
         # check signs
         past_sign = np.sign(past_mb)
-        ben_sign = np.sign(ben_mb)
-        assert np.corrcoef(past_sign, ben_sign)[0, 1] >= 0.75
+        vas_sign = np.sign(vas_mb)
+        assert np.corrcoef(past_sign, vas_sign)[0, 1] >= 0.75
 
         # compare to reference mb measurements
         mbs = pd.DataFrame(gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
-        mbs['ben'] = pd.Series(ben_mb, index=years)
+        mbs['vas'] = pd.Series(vas_mb, index=years)
         assert mbs.corr().iloc[0, 1] >= 0.8

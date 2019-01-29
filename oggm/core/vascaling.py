@@ -1,4 +1,11 @@
-"""Implementation of the 'original' model from Bens paper"""
+""" Implementation of the 'original' volume/area scaling glacier model from
+Marzeion et. al. 2012, see http://www.the-cryosphere.net/6/1295/2012/.
+While the mass balance model is comparable to OGGMs past mass balance model,
+the 'dynamic' part does not include any ice physics but works with ares/volume
+and length/volume scaling instead.
+
+Author: Moritz Oberrauch
+"""
 
 # External libs
 import numpy as np
@@ -7,31 +14,21 @@ import netCDF4
 import os
 import datetime
 
-
 # import OGGM modules
-import oggm
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH, BASENAMES
-
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm import utils
-from oggm.utils import get_demo_file, tuple2int
-from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
-                        date_to_floatyear, monthly_timeseries, ncDataset,
-                        tolist)
-
-from oggm import workflow
-
-from oggm.core import (gis, inversion, climate, centerlines, flowline,
-                       massbalance)
-
+from oggm.utils import floatyear_to_date, ncDataset
+from oggm.core import climate
 from oggm.core.massbalance import MassBalanceModel
 
-def test():
-    pass
 
 def _compute_temp_terminus(temp, temp_grad, ref_hgt,
                            terminus_hgt, temp_anomaly=0):
-    """ Computes the monthly mean temperature at the glacier terminus.
+    """ Computes the (monthly) mean temperature at the glacier terminus,
+    following section 2.1.2 of Marzeion et. al., 2012. The input temperature
+    is scaled by the given temperature gradient and the elevation difference
+    between reference altitude and the glacier terminus elevation.
 
     :param temp: (netCDF4 variable) monthly mean climatological temperature
     :param temp_grad: (netCDF4 variable or float) temperature lapse rate
@@ -50,7 +47,13 @@ def _compute_temp_terminus(temp, temp_grad, ref_hgt,
 def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
                         temp_terminus, temp_all_solid, temp_grad,
                         prcp_grad=0, prcp_anomaly=0):
-    """ TODO: write description
+    """ Compute the (monthly) amount of solid precipitation onto the glacier
+    surface, following section 2.1.1 of Marzeion et. al., 2012. The fraction of
+    solid precipitation depends mainly on the terminus temperature and the
+    temperature thresholds for solid and liquid precipitation. It is possible
+    to scale the precipitation amount from the reference elevation to the
+    average glacier surface elevation given a gradient (zero per default).
+
 
     :param prcp: (netCDF4 variable) monthly mean climatological precipitation
     :param prcp_factor: (float) precipitation scaling factor
@@ -63,9 +66,10 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
     :param temp_all_solid: (float) temperature threshold for
         solid precipitation
     :param temp_grad: (netCDF4 variable or float) temperature lapse rate
-    :param prcp_grad: (netCDF4 variable or float) precipitation gradient
-    :param prcp_anomaly: (netCDF4 variable or float) monthly mean
-        precipitation anomaly, default 0
+    :param prcp_grad: (netCDF4 variable or float, optional) precipitation
+        lapse rate, default=0
+    :param prcp_anomaly: (netCDF4 variable or float, optional) monthly mean
+        precipitation anomaly, default=0
 
     :return: (netCDF4 variable) monthly mean solid precipitation
     """
@@ -75,8 +79,7 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
         f_solid = (temp_terminus <= temp_all_solid).astype(int)
     else:
         # use scaling defined in paper
-        f_solid = (1
-                   + (temp_terminus - temp_all_solid)
+        f_solid = (1 + (temp_terminus - temp_all_solid)
                    / (temp_grad * (max_hgt - min_hgt)))
         f_solid = np.clip(f_solid, 0, 1)
 
@@ -91,33 +94,41 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
 
 
 def get_min_max_elevation(gdir):
-    """ Reads the DEM and computes the minimal and
-        maximal glacier surface elevation in meters asl,
-        from the given glacier outline.
+    """ Reads the DEM and computes the minimal and maximal glacier surface
+     elevation in meters asl, from the given (RGI) glacier outline.
 
-    :param gdir: OGGM glacier directory
-    :return: [float, float] minimal and maximal glacier surface elevation
+    :param gdir: (oggm.GlacierDirectory)
+    :return: ([float, float]) minimal and maximal glacier surface elevation
     """
-    # get relevant elevation information
+    # open DEM file and mask the glacier surface area
     fpath = gdir.get_filepath('gridded_data')
     with ncDataset(fpath) as nc:
         mask = nc.variables['glacier_mask'][:]
         topo = nc.variables['topo'][:]
+    # get relevant elevation information
     min_elev = np.min(topo[np.where(mask == 1)])
     max_elev = np.max(topo[np.where(mask == 1)])
+
     return min_elev, max_elev
 
 
 def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
-    """ @TODO:
+    """ Read climate file and compute mass balance relevant climate parameters.
+    Those are the positive melting temperature at glacier terminus elevation
+    as energy input and the amount of solid precipitation onto the glacier
+    surface as mass input. Both parameters are computes as yearly sums.
 
-    :param gdir:
-    :param min_hgt:
-    :param max_hgt:
-    :param time_range:
-    :param year_range:
-    :return:
+    Default is to read all data, but it is possible to specify a time range by
+    giving two (included) datetime bounds. Similarly, the year range limits the
+    returned data to the given bounds of (hydrological) years.
+
+    :param gdir: (oggm.GlacierDirectory)
+    :param time_range: (datetime tuple, optional) [t0, t1] time bounds
+    :param year_range: (float tuple, optional) [y0, y1] year range
+    :return: (float array, float array, float array)
+        hydrological years as index, melting temperature, solid precipitation
     """
+    # convert hydrological year range into time range
     if year_range is not None:
         sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
         em = sm - 1 if (sm > 1) else 12
@@ -125,21 +136,25 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
         t1 = datetime.datetime(year_range[1], em, 1)
         return get_yearly_mb_temp_prcp(gdir, time_range=[t0, t1])
 
-    # Parameters
+    # get needed parameters
     temp_all_solid = cfg.PARAMS['temp_all_solid']
     temp_melt = cfg.PARAMS['temp_melt']
     prcp_fac = cfg.PARAMS['prcp_scaling_factor']
     default_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    # Marzeion et. al., 2012 used a precipitation lapse rate of 3%/100m.
+    # But the prcp gradient is omitted for now.
     # prcp_grad = 3e-4
     prcp_grad = 0
-    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
 
-    # Read file
+    # read the climate file
     igrad = None
     with utils.ncDataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)
+        # limit data to given time range and
+        # raise errors is bounds are outside available data
         if time_range is not None:
             p0 = np.where(time == time_range[0])[0]
             try:
@@ -159,51 +174,49 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
         time = time[p0:p1+1]
 
-        # Read timeseries
+        # read time series of temperature and precipitation
         itemp = nc.variables['temp'][p0:p1+1]
         iprcp = nc.variables['prcp'][p0:p1+1]
+        # read time series of temperature lapse rate
         if 'gradient' in nc.variables:
             igrad = nc.variables['gradient'][p0:p1+1]
             # Security for stuff that can happen with local gradients
             igrad = np.where(~np.isfinite(igrad), default_grad, igrad)
             igrad = np.clip(igrad, g_minmax[0], g_minmax[1])
+        # read climate data reference elevation
         ref_hgt = nc.ref_hgt
 
-    # Default gradient?
+    # use the default gradient if no gradient is supplied by the climate file
     if igrad is None:
         igrad = itemp * 0 + default_grad
 
-    # The following is my code. So abandon all hope, you who enter here.
+    # Up to this point, the code is mainly copy and paste from the
+    # corresponding OGGM routine, with some minor adaptions.
+    # What follows is my code: So abandon all hope, you who enter here!
 
     # get relevant elevation information
-    fpath = gdir.get_filepath('gridded_data')
-    with ncDataset(fpath) as nc:
-        mask = nc.variables['glacier_mask'][:]
-        topo = nc.variables['topo'][:]
-    min_elev = np.min(topo[np.where(mask == 1)])
-    max_elev = np.max(topo[np.where(mask == 1)])
+    min_hgt, max_hgt = get_min_max_elevation(gdir)
 
     # get temperature at glacier terminus
-    temp_terminus = _compute_temp_terminus(itemp, igrad, ref_hgt, min_elev)
+    temp_terminus = _compute_temp_terminus(itemp, igrad, ref_hgt, min_hgt)
     # compute positive 'melting' temperature/energy input
     temp = np.clip(temp_terminus - temp_melt, a_min=0, a_max=None)
     # get solid precipitation
     prcp_solid = _compute_solid_prcp(iprcp, prcp_fac, ref_hgt,
-                                     min_elev, max_elev,
+                                     min_hgt, max_hgt,
                                      temp_terminus, temp_all_solid,
                                      igrad, prcp_grad)
 
-    # Check if climate data includes all 12 month of all years
+    # check if climate data includes all 12 month of all years
     ny, r = divmod(len(time), 12)
     if r != 0:
         raise ValueError('Climate data should be N full years exclusively')
-    # Last year gives the tone of the hydro year
+    # last year gives the tone of the hydro year
     years = np.arange(time[-1].year - ny + 1, time[-1].year + 1, 1)
 
     # compute sums over hydrological year
     temp_yr = np.zeros(len(years))
     prcp_yr = np.zeros(len(years))
-
     for i, y in enumerate(years):
         temp_yr[i] = np.sum(temp[i * 12:(i + 1) * 12])
         prcp_yr[i] = np.sum(prcp_solid[i * 12:(i + 1) * 12])
@@ -211,27 +224,27 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
     return years, temp_yr, prcp_yr
 
 
-def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
+def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
-    If ``tstar`` and ``bias`` are not provided, they will be
-    interpolated from the reference t* list.
+    If `tstar` and `bias` are not provided, they will be interpolated from the
+    reference t* list.
+    The mass balance calibration parameters (i.e. temperature lapse rate,
+    temperature thresholds for melting, solid and liquid precipitation,
+    precipitation scaling factor) are written to the climate_info.pkl file.
 
-    Note: the glacier wide mu* is here just for indication.
-    It might be different from the flow lines' mu* in some cases.
+    The results of the calibration process (i.e. t*, mu*, bias) are stored in
+    the `vascaling_mustar.json` file, to be used later by other tasks.
 
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    ref_df : pd.Dataframe, optional
-        replace the default calibration list with your own.
-    tstar: int, optional
-        the year where the glacier should be equilibrium
-    bias: float, optional
-        the associated reference bias
+    :param gdir: (oggm.GlacierDirectory)
+    :param ref_df: (pd.Dataframe, optional) replace the default calibration
+        list with a costum one
+    :param tstar: (int, optional) the year when the glacier should be in
+        equilibrium
+    :param bias: (float, optional) the associated reference bias
     """
 
-    # Relevant mb params
+    # specify relevant mass balance parameters
     params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
               'temp_melt', 'prcp_scaling_factor']
 
@@ -317,11 +330,15 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     df['t_star'] = int(tstar)
     df['bias'] = bias
     df['mu_star'] = mustar
-    gdir.write_json(df, 'ben_params')
+    gdir.write_json(df, 'vascaling_mustar')
 
 
-class BenMassBalance(MassBalanceModel):
-    """Original mass balance model, used in Ben's paper."""
+class VAScalingMassBalance(MassBalanceModel):
+    """ Original mass balance model, used in Marzeion et. al., 2012.
+    The general concept is similar to the oggm.PastMassBalance model.
+    Thereby the main difference is that the Volume/Area Scaling mass balance
+    model returns only one glacier wide mass balance value per month or year.
+    """
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  filename='climate_monthly', input_filesuffix='',
@@ -330,55 +347,54 @@ class BenMassBalance(MassBalanceModel):
 
         Parameters
         ----------
-        gdir : GlacierDirectory
-            the glacier directory
-        mu_star : float, optional
-            set to the alternative value of mu* you want to use
-            (the default is to use the calibrated value).
-        bias : float, optional
+        :param gdir : (oggm.GlacierDirectory) the glacier directory
+        :param mu_star : (float, optional)
+            set to the alternative value of mu* you want to use, while
+            the default is to use the calibrated value
+        :param bias : (float, optional)
             set to the alternative value of the calibration bias [mm we yr-1]
             you want to use (the default is to use the calibrated value)
             Note that this bias is *substracted* from the computed MB. Indeed:
-            BIAS = MODEL_MB - REFERENCE_MB.
-        filename : str, optional
+            BIAS = MODEL_MB - REFERENCE_MB
+        :param filename : (str, optional)
             set to a different BASENAME if you want to use alternative climate
-            data.
-        input_filesuffix : str
-            the file suffix of the input climate file
-        repeat : bool
+            data
+        input_filesuffix : (str, optional)
+            the file suffix of the input climate file, no suffix as default
+        repeat : (bool)
             Whether the climate period given by [ys, ye] should be repeated
-            indefinitely in a circular way
-        ys : int
+            indefinitely in a circular way, default=False
+        ys : (int)
             The start of the climate period where the MB model is valid
             (default: the period with available data)
-        ye : int
+        ye : (int)
             The end of the climate period where the MB model is valid
             (default: the period with available data)
-        check_calib_params : bool
+        check_calib_params : (bool)
             OGGM will try hard not to use wrongly calibrated mu* by checking
             the parameters used during calibration and the ones you are
             using at run time. If they don't match, it will raise an error.
             Set to False to suppress this check.
 
         """
+        # initalize of oggm.MassBalanceModel
+        super(VAScalingMassBalance, self).__init__()
 
-        super(BenMassBalance, self).__init__()
-        self.valid_bounds = [-1e4, 2e4]  # in m
+        # read mass balance parameters from file
         if mu_star is None:
-            df = gdir.read_json('ben_params')
+            df = gdir.read_json('vascaling_mustar')
             mu_star = df['mu_star']
-
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
-                df = gdir.read_json('ben_params')
+                df = gdir.read_json('vascaling_mustar')
                 bias = df['bias']
             else:
                 bias = 0.
-
+        # set mass balance parameters
         self.mu_star = mu_star
         self.bias = bias
 
-        # Parameters
+        # set mass balance calibration parameters
         self.t_solid = cfg.PARAMS['temp_all_solid']
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
@@ -396,12 +412,12 @@ class BenMassBalance(MassBalanceModel):
                                        'Set `check_calib_params=False` '
                                        'to ignore this warning.')
 
-        # Public attributes
+        # set public attributes
         self.temp_bias = 0.
         self.prcp_bias = 1.
         self.repeat = repeat
 
-        # Read file
+        # read climate file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
             # time
@@ -433,10 +449,12 @@ class BenMassBalance(MassBalanceModel):
 
         # compute climatological precipitation around t*
         # needed later to estimate the volume/lenght scaling parameter
-        t_star = gdir.read_json('ben_params')['t_star']
+        t_star = gdir.read_json('vascaling_mustar')['t_star']
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         yr = [t_star - mu_hp, t_star + mu_hp]
         _, _, prcp_clim = get_yearly_mb_temp_prcp(gdir, year_range=yr)
+        # convert from [mm we. yr-1] into SI units [m we. yr-1]
+        prcp_clim = prcp_clim * 1e-3
         self.prcp_clim = np.mean(prcp_clim)
 
     def get_monthly_climate(self, min_hgt, max_hgt, year):
@@ -488,7 +506,7 @@ class BenMassBalance(MassBalanceModel):
         :param year: (float) float year and month, using the
             hydrological year convention
 
-        :return: average glacier wide mass balance [m/s]
+        :return: (float) average glacier wide mass balance [m/s]
         """
         # get melting temperature and solid precipitation
         temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt,
@@ -546,15 +564,14 @@ class BenMassBalance(MassBalanceModel):
         return temp_for_melt, prcp_solid
 
     def get_annual_mb(self, min_hgt, max_hgt, year):
-        """ Compute and return the annual glacier wide
-        mass balance for the given year.
-        Possible mb bias is applied...
+        """ Compute and return the annual glacier wide mass balance for the
+        given year. Possible mb bias is applied...
 
         :param min_hgt: (float) glacier terminus elevation
         :param max_hgt: (float) maximal glacier (surface) elevation
         :param year: (float) float year, using the hydrological year convention
 
-        :return: average glacier wide mass balance [m/s]
+        :return: (float) average glacier wide mass balance [m/s]
         """
         # get annual mass balance climate
         temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt,
@@ -567,13 +584,13 @@ class BenMassBalance(MassBalanceModel):
 
     def get_specific_mb(self, min_hgt, max_hgt, year):
         """ Compute and return the annual specific mass balance
-        for the given year.Possible mb bias is applied...
+        for the given year. Possible mb bias is applied...
 
         :param min_hgt: (float) glacier terminus elevation
         :param max_hgt: (float) maximal glacier (surface) elevation
         :param year: (float) float year, using the hydrological year convention
 
-        :return: glacier wide average mass balance, units of
+        :return: (float) glacier wide average mass balance, units of
             millimeter water equivalent per year [mm w.e. yr-1]
         """
         # get annual mass balance climate
@@ -594,7 +611,7 @@ class BenMassBalance(MassBalanceModel):
         :param year: (float) float month, using the
             hydrological year convention
 
-        :return: glacier wide average mass balance, units of
+        :return: (float) glacier wide average mass balance, units of
             millimeter water equivalent per months [mm w.e. yr-1]
         """
         # get annual mass balance climate
@@ -607,124 +624,151 @@ class BenMassBalance(MassBalanceModel):
         return mb_monthly - (self.bias / SEC_IN_YEAR * SEC_IN_MONTH)
 
     def get_ela(self, year=None):
+        """ The ELA can not be calculated using this mass balance model. """
         raise NotImplementedError('The equilibrium line altitude can not be ' +
-                                  'computed for the `BenMassBalance` model.')
+                                  'computed for the `VAScalingMassBalance` model.')
 
 
-class BenModel(object):
-    """ TODO: docstring """
+class VAScalingModel(object):
+    """ The volume area scaling glacier model following Marzeion et. al., 2012.
+
+    @TODO
+
+    All used parameters are in SI units (even the climatological precipitation
+    is given in [m. we yr-1]).
+    """
 
     def __repr__(self):
+        """ Object representation. """
         return "{}: {}".format(self.__class__, self.__dict__)
 
     def __str__(self):
         """ String representation of the dynamic model, includes current
         year, area, volume, length and terminus elevation. """
         return "{}\nyear: {}\n".format(self.__class__, self.year) \
-            + "area [km2]: {:.2f}\n".format(self.area) \
-            + "volume [km3]: {:.3f}\n".format(self.volume) \
-            + "length [km]: {:.2f}\n".format(self.length) \
+            + "area [km2]: {:.2f}\n".format(self.area_m2 / 1e6) \
+            + "volume [km3]: {:.3f}\n".format(self.volume_m3 / 1e9) \
+            + "length [km]: {:.2f}\n".format(self.length_m / 1e3) \
             + "min elev [m asl.]: {:.0f}\n".format(self.min_hgt) \
             + "spec mb [mm we. yr-1]: {:.2f}".format(self.spec_mb)
 
-    def __init__(self, year_0, area_0, min_hgt, max_hgt, mb_model):
-        """ Instance new glacier model
-            TODO: docstring
-            TODO: finalise & test initialization method
+    def __init__(self, year_0, area_m2_0, min_hgt, max_hgt, mb_model):
+        """ Instance new glacier model.
+
+        :param year_0: (float) year when the simulation starts
+        :param area_m2_0: (float) starting area (at year_0) in m2
+        :param min_hgt: (float) glacier terminus elevation (at year_0)
+        :param max_hgt: (float) maximal glacier surface elevation (at year_0)
+        :param mb_model: (ben.VAScalingMassBalance) instance of mass balance model
         """
+
         # get constants from cfg.PARAMS
         self.rho = cfg.PARAMS['ice_density']
-        self.cl = cfg.PARAMS['c_length']
+
+        # get scaling constants
+        self.cl = cfg.PARAMS['c_length_m']
+        self.ca = cfg.PARAMS['c_area_m2']
+
+        # get scaling exponents
         self.ql = cfg.PARAMS['q_length']
-        self.ca = cfg.PARAMS['c_volume']
-        self.gamma = cfg.PARAMS['gamma_volume']
+        self.gamma = cfg.PARAMS['gamma_area']
 
         # define temporal index
         self.year_0 = year_0
         self.year = year_0
 
         # define geometrical/spatial parameters
-        self.area = area_0
+        self.area_m2_0 = area_m2_0
+        self.area_m2 = area_m2_0
         self.min_hgt = min_hgt
         self.min_hgt_0 = min_hgt
         self.max_hgt = max_hgt
 
-        # compute volume and length from area (using scaling parameters)
-        self.length = self.cl * area_0**self.ql
-        self.length_0 = self.length
-        self.volume = (self.ca * area_0**self.gamma)
+        # compute volume (m3) and length (m) from area (using scaling parameters)
+        self.volume_m3_0 = self.ca * self.area_m2 ** self.gamma
+        self.volume_m3 = self.volume_m3_0
+        # self.length = self.cl * area_0**self.ql
+        self.length_m_0 = (self.volume_m3 / self.cl) ** (1 / self.ql)
+        self.length_m = self.length_m_0
 
         # define mass balance model and spec mb
         self.mb_model = mb_model
         self.spec_mb = mb_model.get_specific_mb(self.min_hgt,
                                                 self.max_hgt,
                                                 self.year)
+        # create geometry change parameters
+        self.dL = 0
+        self.dA = 0
+        self.dV = 0
 
-        # compute time scales
-        self._compute_time_scales()
+        # create time scale parameters
+        self.tau_a = 1
+        self.tau_l = 1
 
     def _compute_time_scales(self):
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
-        self.tau_l = self.volume * 1e6 / self.mb_model.prcp_clim
-        self.tau_a = self.tau_l * self.area / self.length**2
+        self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
+        self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
 
     def step(self):
         """ Advance model glacier by one year. This includes the following:
+            - computing time scales
             - computing the specific mass balance
             - computing volume change and new volume
             - computing area change and new area
             - computing length change and new length
             - computing new terminus elevation
         """
+        # compute time scales
+        self._compute_time_scales()
+
         # get specific mass balance B(t)
         self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
                                                      self.max_hgt,
                                                      self.year)
+
         # compute volume change dV(t)
-        dV = self.area * self.spec_mb * 1e-6 / self.rho
+        self.dV = self.area_m2 * self.spec_mb / self.rho
         # compute new volume V(t+1)
-        self.volume += dV
+        self.volume_m3 += self.dV
 
-        # compute area change dA
-        dA = ((self.volume / self.ca) ** (1/self.gamma)
-              - self.area) / self.tau_a
+        # compute area change dA(t)
+        self.dA = ((self.volume_m3 / self.ca) ** (1 / self.gamma)
+                   - self.area_m2) / self.tau_a
         # compute new area A(t+1)
-        self.area += dA
-        # compute length change dL
-        dL = ((self.volume / self.cl) ** (1 / self.ql)
-              - self.length) / self.tau_l
+        self.area_m2 += self.dA
+        # compute length change dL(t)
+        self.dL = ((self.volume_m3 / self.cl) ** (1 / self.ql)
+                   - self.length_m) / self.tau_l
         # compute new length L(t+1)
-        self.length += dL
-        # compute new terminus elevation
-        self.min_hgt = self.max_hgt + (self.length / self.length_0
+        self.length_m += self.dL
+        # compute new terminus elevation min_hgt(t+1)
+        self.min_hgt = self.max_hgt + (self.length_m / self.length_m_0
                                        * (self.min_hgt_0 - self.max_hgt))
-
-        # compute new time scales
-        self._compute_time_scales()
 
         # increment year
         self.year += 1
 
     def run_until(self, year_end, reset=False):
-        """
+        """ Runs the model till the specified year.
+        Returns all geometric parameters (i.e. lenght, area, volume and
+        terminus elevation) for each modelled year, as well as the years as
+        index. TODO: run_and_store() or similar, but for now ok?!
 
-        :param year_end:
-        :param reset:
+        :param year_end: (float) end of modeling period
+        :param reset: (bool, optional) If `True`, the model will start from
+            `year_0`, otherwise from its current position in time (default).
         :return:
         """
 
         # reset parameters to starting values
         if reset:
             self.year = self.year_0
-            self.area = self.area_0
+            self.area_m2 = self.area_0
             self.min_hgt = self.min_hgt_0
-            # compute volume and length from area (using scaling parameters)
-            self.length = self.cl * self.area_0**self.ql
-            self.length_0 = self.length
-            self.volume = (self.ca * self.area_0**self.gamma)
-            # compute time scales
-            self._compute_time_scales()
+            self.length_m = self.length_m_0
+            self.volume_m3 = self.volume_m3_0
 
         # check validity of end year
         if year_end < self.year:
@@ -733,9 +777,9 @@ class BenModel(object):
 
         # create empty containers
         years = np.arange(self.year, year_end + 1)
-        area = np.empty(years.size)
-        length = np.empty(years.size)
-        volume = np.empty(years.size)
+        area_m2 = np.empty(years.size)
+        length_m2 = np.empty(years.size)
+        volume_m3 = np.empty(years.size)
         min_hgt = np.empty(years.size)
 
         # iterate over all years
@@ -745,10 +789,10 @@ class BenModel(object):
                 self.step()
 
             # store metrics
-            area[i] = self.area
-            length[i] = self.length
-            volume[i] = self.volume
+            area_m2[i] = self.area_m2
+            length_m2[i] = self.length_m
+            volume_m3[i] = self.volume_m3
             min_hgt[i] = self.min_hgt
 
         # return metrics
-        return years, area, length, volume, min_hgt
+        return years, length_m2, area_m2, volume_m3, min_hgt

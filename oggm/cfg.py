@@ -205,9 +205,9 @@ BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 _doc = 'Calving output'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
-_doc = "A dict containing the glacier's t*, bias, mu*. " \
-       "Analogous to 'local_mustar.json', but for Ben's model."
-BASENAMES['ben_params'] = ('ben_params.json', _doc)
+_doc = "A dict containing the glacier's t*, bias, mu*. Analogous " \
+       "to 'local_mustar.json', but for the volume/area scaling model."
+BASENAMES['vascaling_mustar'] = ('vascaling_mustar.json', _doc)
 
 
 def set_logging_config(logging_level='INFO'):
@@ -356,18 +356,6 @@ def initialize(file=None, logging_level='INFO'):
 
     # Flowline model
     k = 'use_shape_factor_for_fluxbasedmodel'
-    PARAMS[k] = cp[k]
-
-    # Area-volume scaling parameters
-    k = 'c_volume'
-    PARAMS[k] = cp[k]
-    k = 'gamma_volume'
-    PARAMS[k] = cp[k]
-
-    # Area-length scaling parameters
-    k = 'c_length'
-    PARAMS[k] = cp[k]
-    k = 'q_length'
     PARAMS[k] = cp[k]
 
     # Make sure we have a proper cache dir
