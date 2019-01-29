@@ -190,8 +190,9 @@ def execute_parallel_tasks(gdir, tasks):
             task()
 
 
-def _gdirs_from_prepro(entity, from_prepro_level=None,
-                       prepro_border=None, prepro_rgi_version=None):
+def gdir_from_prepro(entity, from_prepro_level=None,
+                     prepro_border=None, prepro_rgi_version=None,
+                     check_demo_glacier=False):
 
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
@@ -201,10 +202,17 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
         rid = entity.RGIId
     except AttributeError:
         rid = entity
-    tar_url = utils.prepro_gdir_url(prepro_rgi_version,
-                                    rid,
-                                    prepro_border,
-                                    from_prepro_level)
+
+    demo_url = False
+    if check_demo_glacier:
+        demo_id = utils.demo_glacier_id(entity)
+        if demo_id is not None:
+            rid = demo_id
+            entity = demo_id
+            demo_url = True
+
+    tar_url = utils.prepro_gdir_url(prepro_rgi_version, rid, prepro_border,
+                                    from_prepro_level, demo_url=demo_url)
     tar_base = utils.file_downloader(tar_url)
     if tar_base is None:
         raise RuntimeError('Could not find file at ' + tar_url)
@@ -215,7 +223,8 @@ def _gdirs_from_prepro(entity, from_prepro_level=None,
 def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
                          prepro_rgi_version=None,
-                         from_tar=False, delete_tar=False):
+                         from_tar=False, delete_tar=False,
+                         use_demo_glaciers=None):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -241,9 +250,15 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     prepro_rgi_version : str
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
+    use_demo_glaciers : bool
+        whether to check the demo glaciers for download (faster than the
+        standard prepro downloads). The default is to decide whether or
+        not to check based on simple crietria such as glacier list size.
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
+    delete_tar : bool, default=False
+        delete the original tar file after extraction.
     delete_tar : bool, default=False
         delete the original tar file after extraction.
 
@@ -284,14 +299,19 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         except AttributeError:
             entities = utils.tolist(rgidf)
 
+        # Check demo
+        if use_demo_glaciers is None:
+            use_demo_glaciers = len(entities) < 100
+
         if from_prepro_level is not None:
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
-            gdirs = execute_entity_task(_gdirs_from_prepro, entities,
+            gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
-                                        prepro_rgi_version=prepro_rgi_version)
+                                        prepro_rgi_version=prepro_rgi_version,
+                                        check_demo_glacier=use_demo_glaciers)
         else:
             # TODO: if necessary this could use multiprocessing as well
             for entity in entities:

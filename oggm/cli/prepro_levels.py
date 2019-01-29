@@ -20,7 +20,7 @@ from oggm.exceptions import InvalidParamsError
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', is_test=False,
-                      test_rgidf=None, test_intersects_file=None,
+                      demo=False, test_rgidf=None, test_intersects_file=None,
                       test_topofile=None, test_crudir=None):
     """Does the actual job.
 
@@ -38,6 +38,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         path to the OGGM working directory
     is_test : bool
         to test on a couple of glaciers only!
+    demo : bool
+        to run the prepro for the list of demo glaciers
     test_rgidf : shapefile
         for testing purposes only
     test_intersects_file : shapefile
@@ -90,7 +92,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
-    if test_rgidf is None:
+    if demo:
+        rgidf = utils.get_rgi_glacier_entities(cfg.DEMO_GLACIERS.index)
+    elif test_rgidf is None:
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
@@ -239,6 +243,9 @@ def parse_args(args):
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or'
                              '$OGGM_OUTDIR.')
+    parser.add_argument('--demo', nargs='?', const=True, default=False,
+                        help='if you want to run the prepro for the '
+                             'list of demo glaciers.')
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
@@ -246,6 +253,8 @@ def parse_args(args):
 
     # Check input
     rgi_reg = args.rgi_reg
+    if args.demo:
+        rgi_reg = 0
     if not rgi_reg:
         rgi_reg = os.environ.get('OGGM_RGI_REG', None)
         if rgi_reg is None:
@@ -275,7 +284,8 @@ def parse_args(args):
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
-                working_dir=working_dir, is_test=args.test)
+                working_dir=working_dir, is_test=args.test,
+                demo=args.demo)
 
 
 def main():

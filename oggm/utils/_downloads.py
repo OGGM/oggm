@@ -54,6 +54,7 @@ CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
+DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
 
@@ -688,10 +689,10 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level):
+def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level, demo_url=False):
 
     # Prepro URL
-    url = GDIR_URL
+    url = DEMO_GDIR_URL if demo_url else GDIR_URL
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)

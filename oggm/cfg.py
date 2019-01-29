@@ -85,6 +85,7 @@ PARAMS = ResettingOrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 LRUHANDLERS = ResettingOrderedDict()
+DEMO_GLACIERS = None
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -284,6 +285,7 @@ def initialize(file=None, logging_level='INFO'):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
+    global DEMO_GLACIERS
 
     set_logging_config(logging_level=logging_level)
 
@@ -394,6 +396,11 @@ def initialize(file=None, logging_level='INFO'):
     # Pre extract cru cl to avoid problems by multiproc
     from oggm.utils import get_cru_cl_file
     get_cru_cl_file()
+
+    # Read in the demo glaciers
+    file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                        'data', 'demo_glaciers.csv')
+    DEMO_GLACIERS = pd.read_csv(file, index_col=0)
 
 
 def oggm_static_paths():
@@ -549,6 +556,7 @@ def pack_config():
         'PARAMS': PARAMS,
         'PATHS': PATHS,
         'LRUHANDLERS': LRUHANDLERS,
+        'DEMO_GLACIERS': DEMO_GLACIERS,
         'BASENAMES': dict(BASENAMES)
     }
 
@@ -556,12 +564,13 @@ def pack_config():
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS
+    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS, DEMO_GLACIERS
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
     LRUHANDLERS = cfg_dict['LRUHANDLERS']
+    DEMO_GLACIERS = cfg_dict['DEMO_GLACIERS']
 
     # BASENAMES is a DocumentedDict, which cannot be pickled because
     # set intentionally mismatches with get
