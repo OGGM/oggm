@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import os
 import shutil
+from sklearn.metrics import mean_squared_error as mse
 
 # import unittest
 import unittest
@@ -17,7 +18,8 @@ import oggm
 import oggm.cfg as cfg
 from oggm import utils
 from oggm.utils import get_demo_file, ncDataset
-from oggm.core import gis, vascaling, climate, centerlines, massbalance
+from oggm.core import (gis, vascaling, climate, centerlines,
+                       massbalance, flowline, inversion)
 from oggm.tests.funcs import get_test_dir
 
 
@@ -591,3 +593,148 @@ class TestVAScalingModel(unittest.TestCase):
         mbs = pd.DataFrame(gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
         mbs['vas'] = pd.Series(vas_mb, index=years)
         assert mbs.corr().iloc[0, 1] >= 0.8
+
+    def test_time_scales(self):
+        pass
+
+    def test_step(self):
+        pass
+
+    def test_run_until(self):
+        """ Test the volume/area scaling model against the oggm.FluxBasedModel.
+
+        Both models run the Hintereisferner over the entire HistAlp climate
+        period, initialized with the 2003 RGI outline without spin up.
+
+        The following two parameters for length, area and volume are tested:
+            - correlation coefficient
+            - relative RMSE, i.e. RMSE/mean(OGGM). Whereby the results from the
+                VAS model are offset with the average differences to the OGGM
+                results.
+
+        """
+        # read the Hintereisferner DEM
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        # process the given climate file
+        climate.process_custom_climate_data(gdir)
+
+        # run center line preprocessing tasks
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # read reference glacier mass balance data
+        mbdf = gdir.get_ref_mb_data()
+        # compute the reference t* for the glacier
+        # given the reference of mass balance measurements
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+
+        # --------------------
+        #  SCALING MODEL
+        # --------------------
+
+        # compute local t* and the corresponding mu*
+        vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
+
+        # instance the mass balance models
+        vas_mbmod = vascaling.VAScalingMassBalance(gdir)
+
+        # get reference area
+        a0 = gdir.rgi_area_m2
+        # get reference year
+        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        # get min and max glacier surface elevation
+        h0, h1 = vascaling.get_min_max_elevation(gdir)
+
+        vas_model = vascaling.VAScalingModel(year_0=y0, area_m2_0=a0,
+                                             min_hgt=h0, max_hgt=h1,
+                                             mb_model=vas_mbmod)
+
+        # let model run over entire HistAlp climate period
+        years_vas, length_m_vas, area_m2_vas, volume_m3_vas, _ = \
+            vas_model.run_until(2003)
+
+        # ------
+        #  OGGM
+        # ------
+
+        # compute local t* and the corresponding mu*
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+        climate.mu_star_calibration(gdir)
+
+        # instance the mass balance models
+        mb_mod = massbalance.PastMassBalance(gdir)
+
+        # performe ice thickness inversion
+        inversion.prepare_for_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        inversion.filter_inversion_output(gdir)
+
+        # initialize present time glacier
+        flowline.init_present_time_glacier(gdir)
+
+        # instance flowline model
+        fls = gdir.read_pickle('model_flowlines')
+        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        fl_mod = flowline.FluxBasedModel(flowlines=fls, mb_model=mb_mod, y0=y0)
+
+        # run model and store output as xarray data set
+        _, oggm_ds = fl_mod.run_until_and_store(2003)
+
+        years_oggm = oggm_ds.hydro_year.values
+        length_m_oggm = oggm_ds.length_m.values
+        area_m2_oggm = oggm_ds.area_m2.values
+        volume_m3_oggm = oggm_ds.volume_m3
+
+        # temporal indices must be equal
+        assert (years_vas == years_oggm).all()
+
+        # test length
+        df = pd.DataFrame(np.array([length_m_vas, length_m_oggm]).T,
+                          index=years_vas, columns=['vas', 'oggm'])
+        # test for high correlation
+        assert df.corr().loc['oggm', 'vas'] >= 0.94
+        # test for low relative rmse
+        mean_diff = (df.oggm - df.vas).mean()
+        df['vas_corr'] = df.vas + mean_diff
+        mean = df.oggm.mean()
+        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
+        assert rmse / mean < 0.04
+
+        # test area
+        df = pd.DataFrame(np.array([area_m2_vas, area_m2_oggm]).T,
+                          index=years_vas, columns=['vas', 'oggm'])
+        # test for high correlation
+        assert df.corr().loc['oggm', 'vas'] >= 0.96
+        # test for low relative rmse
+        mean_diff = (df.oggm - df.vas).mean()
+        df['vas_corr'] = df.vas + mean_diff
+        mean = df.oggm.mean()
+        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
+        assert rmse/mean < 0.02
+
+        # test volume
+        df = pd.DataFrame(np.array([volume_m3_vas, volume_m3_oggm]).T,
+                          index=years_vas, columns=['vas', 'oggm'])
+        # test for high correlation
+        assert df.corr().loc['oggm', 'vas'] >= 0.98
+        # test for low relative rmse
+        mean_diff = (df.oggm - df.vas).mean()
+        df['vas_corr'] = df.vas + mean_diff
+        mean = df.oggm.mean()
+        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
+        assert rmse / mean < 0.03
