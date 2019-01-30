@@ -487,6 +487,32 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
             c.write(feature(i, row))
 
 
+def demo_glacier_id(key):
+    """Get the RGI id of a glacier by name or key: None if not found."""
+
+    df = cfg.DEMO_GLACIERS
+
+    # Is the name in key?
+    s = df.loc[df.Key.str.lower() == key.lower()]
+    if len(s) == 1:
+        return s.index[0]
+
+    # Is the name in name?
+    s = df.loc[df.Name.str.lower() == key.lower()]
+    if len(s) == 1:
+        return s.index[0]
+
+    # Is the name in Ids?
+    try:
+        s = df.loc[[key]]
+        if len(s) == 1:
+            return s.index[0]
+    except KeyError:
+        pass
+
+    return None
+
+
 def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     """Merge the output of the model runs of several gdirs into one file.
 

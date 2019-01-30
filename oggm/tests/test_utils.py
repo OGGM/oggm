@@ -304,6 +304,16 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
                                    2811, atol=200)
 
+    def test_demo_glacier_id(self):
+
+        cfg.initialize()
+        assert utils.demo_glacier_id('hef') == 'RGI60-11.00897'
+        assert utils.demo_glacier_id('HeF') == 'RGI60-11.00897'
+        assert utils.demo_glacier_id('HintereisFerner') == 'RGI60-11.00897'
+        assert utils.demo_glacier_id('Mer de Glace') == 'RGI60-11.03643'
+        assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
+        assert utils.demo_glacier_id('Mer Glace') is None
+
 
 class TestStartFromTar(unittest.TestCase):
 
@@ -439,7 +449,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=1,
                                               prepro_rgi_version='61',
-                                              prepro_border=20)
+                                              prepro_border=20,
+                                              use_demo_glaciers=False)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -454,7 +465,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         entitites = self.rgidf.iloc[:2].RGIId
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_regions(entitites,
-                                              from_prepro_level=1)
+                                              from_prepro_level=1,
+                                              use_demo_glaciers=False)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -465,7 +477,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # One string
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_regions('RGI60-11.00897',
-                                              from_prepro_level=1)
+                                              from_prepro_level=1,
+                                              use_demo_glaciers=False)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -480,7 +493,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=2,
                                               prepro_rgi_version='61',
-                                              prepro_border=20)
+                                              prepro_border=20,
+                                              use_demo_glaciers=False)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -496,7 +510,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=3,
                                               prepro_rgi_version='61',
-                                              prepro_border=20)
+                                              prepro_border=20,
+                                              use_demo_glaciers=False)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -523,7 +538,18 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         gdirs = workflow.init_glacier_regions(self.rgidf.iloc[:2],
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
-                                              prepro_border=20)
+                                              prepro_border=20,
+                                              use_demo_glaciers=False)
+        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                     nyears=10)
+
+    def test_start_from_demo(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(['kwf', 'hef'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10)
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -576,6 +602,22 @@ class TestPreproCLI(unittest.TestCase):
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
+
+        kwargs = prepro_levels.parse_args(['--demo',
+                                           '--map-border', '160',
+                                           '--output', 'local/out',
+                                           '--working-dir', 'local/work',
+                                           ])
+
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
+        assert 'local' in kwargs['working_dir']
+        assert 'local' in kwargs['output_folder']
+        assert kwargs['rgi_version'] is None
+        assert kwargs['rgi_reg'] == '00'
+        assert kwargs['border'] == 160
+        assert not kwargs['is_test']
+        assert kwargs['demo']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',

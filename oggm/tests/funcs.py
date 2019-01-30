@@ -215,7 +215,8 @@ def patch_url_retrieve_github(url, *args, **kwargs):
     download elsewhere than expected."""
 
     assert ('github' in url or
-            'cluster.klima.uni-bremen.de/~fmaussion/test_gdirs/' in url)
+            'cluster.klima.uni-bremen.de/~fmaussion/test_gdirs/' in url or
+            'cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/' in url)
     return oggm_urlretrieve(url, *args, **kwargs)
 
 
