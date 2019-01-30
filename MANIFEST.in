@@ -1,2 +1,4 @@
 include versioneer.py
 include oggm/_version.py
+include oggm/params.cfg
+include oggm/data/demo_glaciers.csv

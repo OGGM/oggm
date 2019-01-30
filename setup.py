@@ -87,15 +87,12 @@ setup(
     python_requires='>=3.5',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
+    # Include package data
+    include_package_data=True,
     # Install dependencies
     install_requires=req_packages,
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
-    # data files that need to be installed
-    package_data={'oggm': ['params.cfg'],
-                  'oggm/data': ['demo_glaciers.csv']},
-    # Old
-    data_files=[],
     # Executable scripts
     entry_points={
         'pytest11': ['pytest_oggm = oggm.pytest_plugin'],
