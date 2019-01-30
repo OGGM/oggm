@@ -255,7 +255,7 @@ def parse_args(args):
     rgi_reg = args.rgi_reg
     if args.demo:
         rgi_reg = 0
-    if not rgi_reg:
+    if not rgi_reg and not args.demo:
         rgi_reg = os.environ.get('OGGM_RGI_REG', None)
         if rgi_reg is None:
             raise InvalidParamsError('--rgi-reg is required!')

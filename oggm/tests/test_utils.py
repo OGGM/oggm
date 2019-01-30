@@ -614,7 +614,7 @@ class TestPreproCLI(unittest.TestCase):
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
         assert kwargs['rgi_version'] is None
-        assert kwargs['rgi_reg'] is None
+        assert kwargs['rgi_reg'] == '00'
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert kwargs['demo']
