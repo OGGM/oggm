@@ -92,8 +92,7 @@ setup(
     # additional groups of dependencies here (e.g. development dependencies).
     extras_require={},
     # data files that need to be installed
-    package_data={'oggm': ['params.cfg'],
-                  'oggm/data': ['demo_glaciers.csv']},
+    package_data={},
     # Old
     data_files=[],
     # Executable scripts
