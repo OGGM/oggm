@@ -101,6 +101,7 @@ setup(
         'pytest11': ['pytest_oggm = oggm.pytest_plugin'],
         'console_scripts': [
             'oggm_prepro = oggm.cli.prepro_levels:main',
+            'oggm_benchmark = oggm.cli.benchmark:main',
         ],
     },
 )
