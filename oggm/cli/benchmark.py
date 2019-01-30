@@ -29,9 +29,9 @@ def _add_time_to_df(df, index, t):
 
 
 def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
-                      output_folder='', working_dir='', is_test=False,
-                      test_rgidf=None, test_intersects_file=None,
-                      test_topofile=None, test_crudir=None):
+                  output_folder='', working_dir='', is_test=False,
+                  test_rgidf=None, test_intersects_file=None,
+                  test_topofile=None, test_crudir=None):
     """Does the actual job.
 
     Parameters
