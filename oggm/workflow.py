@@ -205,7 +205,7 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
     demo_url = False
     if check_demo_glacier:
-        demo_id = utils.demo_glacier_id(entity)
+        demo_id = utils.demo_glacier_id(rid)
         if demo_id is not None:
             rid = demo_id
             entity = demo_id
