@@ -7,6 +7,7 @@ import shutil
 import time
 import gzip
 import bz2
+import zlib
 import pytest
 from unittest import mock
 
@@ -995,6 +996,51 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
         utils.mkdir(cfg.PATHS['cru_dir'])
+
+    def prepare_verify_test(self, valid_size=True, valid_crc32=True):
+        self.reset_dir()
+        cfg.PARAMS['dl_verify'] = True
+
+        tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com', 'test.txt')
+
+        file_size = 1024
+        file_data = os.urandom(file_size)
+        file_crc32 = zlib.crc32(file_data)
+
+        utils.mkdir(os.path.dirname(tgt_path))
+        with open(tgt_path, 'wb') as f:
+            f.write(file_data)
+
+        if not valid_size:
+            file_size += 1
+        if not valid_crc32:
+            file_crc32 += 1
+
+        data = utils.get_dl_verify_data()
+        data['test.com/test.txt'] = (file_size, file_crc32)
+
+        return 'https://test.com/test.txt'
+
+    def test_dl_verify(self):
+        def fake_down(dl_func, cache_path):
+            assert False
+
+        with FakeDownloadManager('_call_dl_func', fake_down):
+            url = self.prepare_verify_test(True, True)
+            utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(False, True)
+            with self.assertRaises(utils.VerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(True, False)
+            with self.assertRaises(utils.VerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(False, False)
+            with self.assertRaises(utils.VerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
 
     def test_github_no_internet(self):
         self.reset_dir()
