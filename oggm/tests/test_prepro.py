@@ -525,7 +525,7 @@ class TestCenterlines(unittest.TestCase):
         entity['Area'] = entity['AREA']
         entity['CenLat'] = entity['CENLAT']
         entity['CenLon'] = entity['CENLON']
-        entity.BgnDate = 0
+        entity.BgnDate = '-999'
         entity.Name = 'Baltoro'
         entity.GlacType = '0000'
         entity.Status = '0'
@@ -538,6 +538,8 @@ class TestCenterlines(unittest.TestCase):
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         cls = gdir.read_pickle('centerlines')
+
+        assert gdir.rgi_date == 2009
 
         sub = centerlines.line_inflows(cls[-1])
         self.assertEqual(set(cls), set(sub))

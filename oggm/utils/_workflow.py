@@ -44,6 +44,29 @@ from oggm.utils._downloads import (get_demo_file, get_wgms_files,
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError
 
+
+# Default RGI date (median per region)
+RGI_DATE = {'01': 2009,
+            '02': 2004,
+            '03': 1999,
+            '04': 2001,
+            '05': 2001,
+            '06': 2000,
+            '07': 2008,
+            '08': 2002,
+            '09': 2001,
+            '10': 2011,
+            '11': 2003,
+            '12': 2001,
+            '13': 2006,
+            '14': 2001,
+            '15': 2001,
+            '16': 2000,
+            '17': 2000,
+            '18': 1978,
+            '19': 1989,
+            }
+
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
@@ -552,7 +575,6 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
             i += 1
 
     # OK found it, open it and prepare the output
-
     with xr.open_dataset(ppath) as ds_diag:
         time = ds_diag.time.values
         yrs = ds_diag.hydro_year.values
@@ -1290,9 +1312,9 @@ class GlacierDirectory(object):
         The glacier's RGI area (km2)
     cenlon, cenlat : float
         The glacier centerpoint's lon/lat
-    rgi_date : datetime
-        The RGI's BGNDATE attribute if available. Otherwise, defaults to
-        2003-01-01
+    rgi_date : int
+        The RGI's BGNDATE year attribute if available. Otherwise, defaults to
+        the median year for the RGI region
     rgi_region : str
         The RGI region name
     name : str
@@ -1446,11 +1468,9 @@ class GlacierDirectory(object):
         self.hemisphere = 'sh' if self.cenlat < 0 else 'nh'
 
         # convert the date
-        try:
-            rgi_date = pd.to_datetime(rgi_datestr[0:4],
-                                      errors='raise', format='%Y')
-        except BaseException:
-            rgi_date = None
+        rgi_date = int(rgi_datestr[0:4])
+        if rgi_date < 0:
+            rgi_date = RGI_DATE[self.rgi_region]
         self.rgi_date = rgi_date
 
         # Root directory
