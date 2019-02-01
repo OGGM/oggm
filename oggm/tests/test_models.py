@@ -85,7 +85,7 @@ class TestInitFlowline(unittest.TestCase):
 
         ofl = gdir.read_pickle('inversion_flowlines')[-1]
 
-        self.assertTrue(gdir.rgi_date.year == 2003)
+        self.assertTrue(gdir.rgi_date == 2003)
         self.assertTrue(len(fls) == 3)
 
         vol = 0.
@@ -2522,6 +2522,36 @@ class TestHEF(unittest.TestCase):
                     plt.show()
 
         self.gdir.hemisphere = 'nh'
+
+    def test_start_from_spinup(self):
+
+        init_present_time_glacier(self.gdir)
+
+        fls = self.gdir.read_pickle('model_flowlines')
+        vol = 0
+        area = 0
+        for fl in fls:
+            vol += fl.volume_km3
+            area += fl.area_km2
+        assert self.gdir.rgi_date == 2003
+
+        # Make a dummy run for 0 years
+        run_from_climate_data(self.gdir, ye=2003, output_filesuffix='_1')
+
+        fp = self.gdir.get_filepath('model_run', filesuffix='_1')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area)
+            np.testing.assert_allclose(fmod.volume_km3, vol)
+
+        # Again
+        run_from_climate_data(self.gdir, ye=2003, init_model_filesuffix='_1',
+                              output_filesuffix='_2')
+        fp = self.gdir.get_filepath('model_run', filesuffix='_2')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area)
+            np.testing.assert_allclose(fmod.volume_km3, vol)
 
     @pytest.mark.slow
     def test_cesm(self):
