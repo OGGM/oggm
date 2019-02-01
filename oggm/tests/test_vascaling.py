@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import os
 import shutil
-from sklearn.metrics import mean_squared_error as mse
 
 # import unittest
 import unittest
@@ -17,7 +16,8 @@ import geopandas as gpd
 import oggm
 import oggm.cfg as cfg
 from oggm import utils
-from oggm.utils import get_demo_file, ncDataset
+from oggm.utils import (get_demo_file, ncDataset,
+                        md, rmsd_anomaly, rel_err, corrcoef)
 from oggm.core import (gis, vascaling, climate, centerlines,
                        massbalance, flowline, inversion)
 from oggm.tests.funcs import get_test_dir
@@ -235,33 +235,20 @@ class TestVAScalingModel(unittest.TestCase):
         years_oggm, temp_oggm, prcp_oggm = \
             climate.mb_yearly_climate_on_glacier(gdir)
 
-        # compute averages
-        yearly_temp_mean = temp.mean()
-        yearly_prcp_mean = prcp.mean()
-        yearly_temp_oggm_mean = temp_oggm.mean()
-        yearly_prcp_oggm_mean = prcp_oggm.mean()
-
-        # the average glacier wide energy input
-        # must be less than at the terminus
-        assert yearly_temp_oggm_mean <= yearly_temp_mean
-        # the average glacier wide mass input must be higher
-        # TODO: does it acutally?! And if so, why?! @ASK
-        assert yearly_prcp_oggm_mean >= yearly_prcp_mean
-
-        # compute differences to mean
-        temp_diff = temp - yearly_temp_mean
-        temp_oggm_diff = temp_oggm - yearly_temp_oggm_mean
-        prcp_diff = prcp - yearly_prcp_mean
-        prcp_oggm_diff = prcp_oggm - yearly_prcp_oggm_mean
-        # compute correlation between anomalies
-        temp_diff_corr = np.corrcoef(temp_diff, temp_oggm_diff)[0, 1]
-        prcp_diff_corr = np.corrcoef(prcp_diff, prcp_oggm_diff)[0, 1]
+        # the energy input at the glacier terminus must be greater than (or
+        # equal to) the glacier wide average, since the air temperature drops
+        # with elevation, i.e. the mean deviation must be positive, using the
+        # OGGM data as reference
+        assert md(temp_oggm, temp) >= 0
+        # consequentially, the average mass input must be less than (or equal
+        # to) the mass input integrated over the whole glacier surface, i.e.
+        # the mean deviation must be negative, using the OGGM data as reference
+        # TODO: does it actually?! And if so, why?! @ASK
+        assert md(prcp_oggm, prcp) <= 0
 
         # correlation must be higher than set threshold
-        corr_threshold = 0.8
-        assert temp_diff_corr >= corr_threshold
-        corr_threshold = 0.9
-        assert prcp_diff_corr >= corr_threshold
+        assert corrcoef(temp, temp_oggm) >= 0.8
+        assert corrcoef(prcp, prcp_oggm) >= 0.9
 
         # get terminus temperature using the OGGM routine
         fpath = gdir.get_filepath('gridded_data')
@@ -271,14 +258,9 @@ class TestVAScalingModel(unittest.TestCase):
         heights = np.array([np.min(topo[np.where(mask == 1)])])
         years_height, temp_height, _ = \
             climate.mb_yearly_climate_on_height(gdir, heights, flatten=False)
-
         temp_height = temp_height[0]
-        # compute correlation
-        temp_term_corr = np.corrcoef(temp, temp_height)[0, 1]
-        # both temperature time series have to be equal
-        corr_threshold = 1
-        assert temp_term_corr >= corr_threshold
-        np.testing.assert_allclose(temp, temp_height)
+        # both time series must be equal
+        np.testing.assert_array_equal(temp, temp_height)
 
         # get solid precipitation averaged over the glacier (not weighted with widths)
         fls = gdir.read_pickle('inversion_flowlines')
@@ -287,11 +269,8 @@ class TestVAScalingModel(unittest.TestCase):
             heights = np.append(heights, fl.surface_h)
         years_height, _, prcp_height = \
             climate.mb_yearly_climate_on_height(gdir, heights, flatten=True)
-        # compute correlation
-        prcp_corr = np.corrcoef(prcp, prcp_height)[0, 1]
         # correlation must be higher than set threshold
-        corr_threshold = 0.90
-        assert prcp_corr >= corr_threshold
+        assert corrcoef(prcp, prcp_height) >= 0.9
 
         # TODO: assert absolute values (or differences) of precipitation @ASK
         pass
@@ -447,7 +426,7 @@ class TestVAScalingModel(unittest.TestCase):
         min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
         heights = np.array([min_hgt, (min_hgt + max_hgt) / 2, max_hgt])
 
-        # specify a year
+        # specify an (arbitray) year
         year = 1975
         # get mass balance relevant climate information
         temp_for_melt_vas, prcp_solid_vas = \
@@ -459,14 +438,21 @@ class TestVAScalingModel(unittest.TestCase):
         temp_for_melt_vas = temp_for_melt_vas.sum()
         prcp_solid_vas = prcp_solid_vas.sum()
 
-        # compare terminus temperature
+        # computed positive terminus melting temperature must be equal for both
+        # used methods, i.e. temp_VAS == temp_OGGM
         np.testing.assert_allclose(temp_for_melt_vas,
                                    temp_for_melt_oggm[0],
                                    rtol=1e-3)
-        # compare solid precipitation
-        assert prcp_solid_vas >= prcp_solid_oggm[0]
-        assert abs(1 - prcp_solid_vas/prcp_solid_oggm[1]) <= 0.15
-        assert prcp_solid_vas <= prcp_solid_oggm[2]
+
+        # glacier averaged solid precipitation amount must be greater than (or
+        # equal to) solid precipitation amount at glacier terminus elevation
+        assert md(prcp_solid_oggm[0], prcp_solid_vas) >= 0
+        # glacier averaged solid precipitation amount must be comparable to the
+        # solid precipitation amount at average glacier surface elevation
+        assert rel_err(prcp_solid_oggm[1], prcp_solid_vas) <= 0.15
+        # glacier averaged solid precipitation amount must be less than (or
+        # equal to) solid precipitation amount at maximum glacier elevation
+        assert md(prcp_solid_oggm[2], prcp_solid_vas) <= 0
 
     def test_annual_mb(self):
         """ Test the routine computing the annual mass balance. """
@@ -495,19 +481,18 @@ class TestVAScalingModel(unittest.TestCase):
 
         # compute mass balance 'by hand'
         mb_ref = (prcp - mu_star * temp - bias) / fac_SI
-        # compute mb 'by model'
-        mb_mod = vascaling.VAScalingMassBalance(gdir).get_annual_mb(min_hgt, max_hgt, year)
-
+        # compute mb using the VAS mass balance model
+        mb_mod = vascaling.VAScalingMassBalance(gdir).get_annual_mb(min_hgt,
+                                                                    max_hgt,
+                                                                    year)
         # compare mass balances with bias
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
 
         # compute mass balance 'by hand'
         mb_ref = (prcp - mu_star * temp) / fac_SI
         # compute mb 'by model'
-        mb_mod = vascaling.VAScalingMassBalance(gdir, bias=0).get_annual_mb(min_hgt,
-                                                                            max_hgt,
-                                                                            year)
-
+        mb_mod = vascaling.VAScalingMassBalance(gdir, bias=0).\
+            get_annual_mb(min_hgt, max_hgt, year)
         # compare mass balances without bias
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
 
@@ -575,24 +560,22 @@ class TestVAScalingModel(unittest.TestCase):
             past_mb[i] = past_mbmod.get_specific_mb(fls=fls, year=year)
             vas_mb[i] = vas_mbmod.get_specific_mb(min_hgt, max_hgt, year)
 
-        # compute ans check correlation
-        assert np.corrcoef(past_mb, vas_mb)[0, 1] > 0.9
+        # compute and check correlation
+        assert corrcoef(past_mb, vas_mb) >= 0.9
 
-        # compute average
-        past_avg = past_mb.mean()
-        vas_avg = vas_mb.mean()
-        # check relative error
-        assert (1 - vas_avg / past_avg) < 0.3
+        # relative error of average spec mb
+        # TODO: does this even make any sense?!
+        assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.3
 
-        # check signs
-        past_sign = np.sign(past_mb)
-        vas_sign = np.sign(vas_mb)
-        assert np.corrcoef(past_sign, vas_sign)[0, 1] >= 0.75
+        # check correlation of positive and negative mb years
+        assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.75
 
         # compare to reference mb measurements
         mbs = pd.DataFrame(gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
         mbs['vas'] = pd.Series(vas_mb, index=years)
         assert mbs.corr().iloc[0, 1] >= 0.8
+        mbs = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+        assert corrcoef(vas_mb[np.in1d(years, mbs.index)], mbs) >= 0.8
 
     def test_time_scales(self):
         pass
@@ -703,38 +686,22 @@ class TestVAScalingModel(unittest.TestCase):
         # temporal indices must be equal
         assert (years_vas == years_oggm).all()
 
-        # test length
-        df = pd.DataFrame(np.array([length_m_vas, length_m_oggm]).T,
-                          index=years_vas, columns=['vas', 'oggm'])
-        # test for high correlation
-        assert df.corr().loc['oggm', 'vas'] >= 0.94
-        # test for low relative rmse
-        mean_diff = (df.oggm - df.vas).mean()
-        df['vas_corr'] = df.vas + mean_diff
-        mean = df.oggm.mean()
-        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
-        assert rmse / mean < 0.04
+        # the two length time series must be highly correlated
+        assert corrcoef(length_m_oggm, length_m_vas) >= 0.94
+        # the starting lengths are quite different for the OGGM and the VAS
+        # model, which results in a higher RMSD. To prevent that, we compute
+        # the RMSD between the anomalies to their respective average of both
+        # time series. A length of 300m is chosen as upper RMSD limit.
+        assert rmsd_anomaly(length_m_oggm, length_m_vas) <= 0.3e3
 
-        # test area
-        df = pd.DataFrame(np.array([area_m2_vas, area_m2_oggm]).T,
-                          index=years_vas, columns=['vas', 'oggm'])
-        # test for high correlation
-        assert df.corr().loc['oggm', 'vas'] >= 0.96
-        # test for low relative rmse
-        mean_diff = (df.oggm - df.vas).mean()
-        df['vas_corr'] = df.vas + mean_diff
-        mean = df.oggm.mean()
-        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
-        assert rmse/mean < 0.02
+        # the two area time series must be highly correlated
+        assert corrcoef(area_m2_oggm, area_m2_vas) >= 0.96
+        # the RMSD between the anomalies to their respective average of both
+        # time series. An area of 0.16km2 is chosen as upper RMSD limit.
+        assert rmsd_anomaly(area_m2_oggm, area_m2_vas) <= 0.16e6
 
-        # test volume
-        df = pd.DataFrame(np.array([volume_m3_vas, volume_m3_oggm]).T,
-                          index=years_vas, columns=['vas', 'oggm'])
-        # test for high correlation
-        assert df.corr().loc['oggm', 'vas'] >= 0.98
-        # test for low relative rmse
-        mean_diff = (df.oggm - df.vas).mean()
-        df['vas_corr'] = df.vas + mean_diff
-        mean = df.oggm.mean()
-        rmse = np.sqrt(mse(df.oggm, df.vas_corr))
-        assert rmse / mean < 0.03
+        # the two volume time series must be highly correlated
+        assert corrcoef(volume_m3_oggm, volume_m3_vas) >= 0.98
+        # the RMSD between the anomalies to their respective average of both
+        # time series. An area of 0.2km3 is chosen as upper RMSD limit.
+        assert rmsd_anomaly(volume_m3_oggm, volume_m3_vas) <= 0.2e9
