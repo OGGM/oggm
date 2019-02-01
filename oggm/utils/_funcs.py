@@ -309,6 +309,11 @@ def rmsd(ref, data, axis=None):
     return np.sqrt(np.mean((np.asarray(ref) - data)**2, axis=axis))
 
 
+def rmsd_anomaly(ref, data):
+    """Root Mean Squared Deviation of anomalies to mean."""
+    return rmsd(ref - np.mean(ref), data - np.mean(data))
+
+
 def rel_err(ref, data):
     """Relative error. Ref should be non-zero"""
     return (np.asarray(data) - ref) / ref
