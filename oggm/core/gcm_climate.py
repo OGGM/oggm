@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
+                     year_range=('1961', '1990'), scale_stddev=False,
                      time_unit=None, calendar=None):
     """ Applies the anomaly method to GCM climate data
 
@@ -47,6 +48,11 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         | lat float64
         | lon float64
         | time cftime object
+    year_range : tuple of str
+        the year range for which you want to compute the anomalies. Default
+        is `('1961', '1990')`
+    scale_stddev : bool
+        whether or not to scale the temperature standard deviation as well
     time_unit : str
         The unit conversion for NetCDF files. It must be adapted to the
         length of the time series. The default is to choose
@@ -71,28 +77,49 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     prcp = prcp[sm-1:sm-13].load()
     temp = temp[sm-1:sm-13].load()
 
+    # Get CRU to apply the anomaly to
+    fpath = gdir.get_filepath('climate_monthly')
+    ds_cru = xr.open_dataset(fpath)
+
+    # Add CRU clim
+    dscru = ds_cru.sel(time=slice(*year_range))
+
     # compute monthly anomalies
     # of temp
-    ts_tmp_avg = temp.sel(time=slice('1961', '1990'))
-    ts_tmp_avg = ts_tmp_avg.groupby('time.month').mean(dim='time')
+    if scale_stddev:
+        # This is a bit more arithmetic
+        ts_tmp_sel = temp.sel(time=slice(*year_range))
+        ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
+        std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
+        std_fac = std_fac.roll(month=13-sm)
+        std_fac = np.tile(std_fac.data, len(temp) // 12)
+        win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) +1
+
+        def roll_func(x, axis=None):
+            assert axis == 1
+            x = x[:, ::12]
+            n = len(x[0, :]) // 2
+            xm = np.nanmean(x, axis=axis)
+            return xm + (x[:, n] - xm) * std_fac
+
+        temp = temp.rolling(time=win_size, center=True,
+                            min_periods=1).reduce(roll_func)
+
+    ts_tmp_sel = temp.sel(time=slice(*year_range))
+    ts_tmp_avg = ts_tmp_sel.groupby('time.month').mean(dim='time')
     ts_tmp = temp.groupby('time.month') - ts_tmp_avg
     # of precip -- scaled anomalies
-    ts_pre_avg = prcp.sel(time=slice('1961', '1990'))
+    ts_pre_avg = prcp.sel(time=slice(*year_range))
     ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
     ts_pre_ano = prcp.groupby('time.month') - ts_pre_avg
     # scaled anomalies is the default. Standard anomalies above
     # are used later for where ts_pre_avg == 0
     ts_pre = prcp.groupby('time.month') / ts_pre_avg
 
-    # Get CRU to apply the anomaly to
-    fpath = gdir.get_filepath('climate_monthly')
-    ds_cru = xr.open_dataset(fpath)
-
-    # Add climate anomaly to CRU clim
-    dscru = ds_cru.sel(time=slice('1961', '1990'))
     # for temp
     loc_tmp = dscru.temp.groupby('time.month').mean()
     ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+
     # for prcp
     loc_pre = dscru.prcp.groupby('time.month').mean()
     # scaled anomalies
@@ -103,7 +130,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     ts_pre.values = np.where(np.isfinite(ts_pre.values),
                              ts_pre.values,
                              ts_pre_ano.values)
-    # The last step might create negative values (unlikely). Clip them
+    # The previous step might create negative values (unlikely). Clip them
     ts_pre.values = ts_pre.values.clip(0)
 
     assert np.all(np.isfinite(ts_pre.values))
@@ -123,7 +150,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
-                      fpath_precl=None):
+                      fpath_precl=None, **kwargs):
     """Processes and writes CESM climate data for this glacier.
 
     This function is made for interpolating the Community
@@ -143,6 +170,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         path to the precc file (default: cfg.PATHS['cesm_precc_file'])
     fpath_precl : str
         path to the precl file (default: cfg.PATHS['cesm_precl_file'])
+    **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
     # CESM temperature and precipitation data
@@ -216,12 +244,12 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # - time_unit='days since 0850-01-01 00:00:00'
     # - calendar='noleap'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp, temp=temp,
-                     time_unit=time_unit, calendar=calendar)
+                     time_unit=time_unit, calendar=calendar, **kwargs)
 
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
-                       fpath_precip=None):
+                       fpath_precip=None, **kwargs):
     """Read, process and store the CMIP5 climate data data for this glacier.
 
     It stores the data in a format that can be used by the OGGM mass balance
@@ -238,6 +266,7 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
         path to the temp file (default: cfg.PATHS['cmip5_temp_file'])
     fpath_precip : str
         path to the precip file (default: cfg.PATHS['cmip5_precip_file'])
+    **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
     # Get the path of GCM temperature & precipitation data
@@ -295,4 +324,4 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
     # - time_unit='days since 1870-01-15 12:00:00'
     # - calendar='standard'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
-                     time_unit=time_units, calendar=calendar)
+                     time_unit=time_units, calendar=calendar, **kwargs)
