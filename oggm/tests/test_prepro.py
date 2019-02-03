@@ -2584,6 +2584,11 @@ class TestGCMClimate(unittest.TestCase):
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
 
+            # Here no std dev!
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            assert not np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+
             # And also the annual cycle
             scru = scru.groupby('time.month').mean(dim='time')
             scesm = scesm.groupby('time.month').mean(dim='time')
@@ -2601,6 +2606,75 @@ class TestGCMClimate(unittest.TestCase):
             assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
             # N more than 30%? (silly test)
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
+    def test_process_cmip5_scale(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_temp_file'] = f
+        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_precip_file'] = f
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns')
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4',
+                                       scale_stddev=True)
+
+        fh = gdir.get_filepath('climate_monthly')
+        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cmip.load().isel(time=((cmip['time.year'] >= 1961) &
+                                           (cmip['time.year'] <= 1990)))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+
+            # And also the annual cycle
+            _scru = scru.groupby('time.month').mean(dim='time')
+            _scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(_scru.prcp, _scesm.prcp, rtol=1e-3)
+
+            # Here also std dev!
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+
+            # How did the annual cycle change with time?
+            scmip1 = cmip.isel(time=((cmip['time.year'] >= 1961) &
+                                     (cmip['time.year'] <= 1990)))
+            scmip2 = cmip.isel(time=((cmip['time.year'] >= 2061) &
+                                     (cmip['time.year'] <= 2090)))
+            scmip1 = scmip1.groupby('time.month').mean(dim='time')
+            scmip2 = scmip2.groupby('time.month').mean(dim='time')
+            # It has warmed
+            assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
+            # N more than 30%? (silly test)
+            np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
+        # Check that the two variabilies still correlate a lot
+        f1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_ns')
+        f2 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(f1) as ds1, xr.open_dataset(f2) as ds2:
+            n = 30*12+1
+            ss1 = ds1.temp.rolling(time=n, min_periods=1, center=True).std()
+            ss2 = ds2.temp.rolling(time=n, min_periods=1, center=True).std()
+            assert utils.corrcoef(ss1, ss2) > 0.9
 
     def test_compile_climate_input(self):
 
