@@ -93,7 +93,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
         std_fac = std_fac.roll(month=13-sm)
         std_fac = np.tile(std_fac.data, len(temp) // 12)
-        win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) +1
+        win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) + 1
 
         def roll_func(x, axis=None):
             assert axis == 1
