@@ -7,6 +7,7 @@ import tempfile
 import gzip
 import json
 import time
+import random
 import shutil
 import tarfile
 import sys
@@ -1253,9 +1254,11 @@ def _robust_extract(to_dir, *args, **kwargs):
     while count < 10:
         try:
             if count > 1:
-                time.sleep(0.1)
+                time.sleep(random.uniform(0.05, 0.1))
             with tarfile.open(*args, **kwargs) as tf:
                 tf.extractall(os.path.dirname(to_dir))
+                # Add a sleep just because
+                time.sleep(random.uniform(0.05, 0.1))
             break
         except FileExistsError:
             count += 1
@@ -2074,8 +2077,21 @@ class GlacierDirectory(object):
             line += 'SUCCESS'
         else:
             line += err.__class__.__name__ + ': {}'.format(err)
-        with open(self.logfile, 'a') as logfile:
-            logfile.write(line + '\n')
+
+        count = 0
+        while count < 5:
+            try:
+                with open(self.logfile, 'a') as logfile:
+                    logfile.write(line + '\n')
+                break
+            except FileNotFoundError:
+                # I really don't know when this error happens
+                # In this case sleep and try again
+                time.sleep(0.05)
+                count += 1
+
+        if count == 5:
+            log.warning('Could not write to logfile: ' + line)
 
     def get_task_status(self, task_name):
         """Opens this directory's log file to see if a task was already run.
@@ -2112,7 +2128,7 @@ class GlacierDirectory(object):
 
         Returns
         -------
-        The first erros message in this log, None if all good
+        The first error message in this log, None if all good
         """
 
         if not os.path.isfile(self.logfile):
