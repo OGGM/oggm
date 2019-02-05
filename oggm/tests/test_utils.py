@@ -1666,6 +1666,28 @@ class TestDataFiles(unittest.TestCase):
         for fp in fdem:
             self.assertTrue(os.path.exists(fp))
 
+    @pytest.mark.download
+    def test_from_prepro(self):
+
+        # Read in the RGI file
+        rgi_file = utils.get_demo_file('rgi_oetztal.shp')
+        rgidf = gpd.read_file(rgi_file)
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
+                          for rid in rgidf.RGIId]
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf.iloc[:2],
+                                              from_prepro_level=1,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10,
+                                              use_demo_glaciers=False)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
 
 class TestSkyIsFalling(unittest.TestCase):
 

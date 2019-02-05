@@ -53,7 +53,7 @@ CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
 
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
-GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
+GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
