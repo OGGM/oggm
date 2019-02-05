@@ -1673,7 +1673,7 @@ class TestDataFiles(unittest.TestCase):
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
         rgidf = gpd.read_file(rgi_file)
         rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
-                               for rid in rgidf.RGIId]
+                          for rid in rgidf.RGIId]
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(rgidf.iloc[:2],
