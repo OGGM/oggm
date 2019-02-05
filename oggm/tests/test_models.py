@@ -2553,6 +2553,38 @@ class TestHEF(unittest.TestCase):
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
+    def test_start_from_spinup_min_ys(self):
+
+        init_present_time_glacier(self.gdir)
+
+        fls = self.gdir.read_pickle('model_flowlines')
+        vol = 0
+        area = 0
+        for fl in fls:
+            vol += fl.volume_km3
+            area += fl.area_km2
+        assert self.gdir.rgi_date == 2003
+
+        # Make a dummy run for 0 years
+        run_from_climate_data(self.gdir, ye=2002, min_ys=2002,
+                              output_filesuffix='_1')
+
+        fp = self.gdir.get_filepath('model_run', filesuffix='_1')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area)
+            np.testing.assert_allclose(fmod.volume_km3, vol)
+
+        # Again
+        run_from_climate_data(self.gdir, ys=2002, ye=2003,
+                              init_model_filesuffix='_1',
+                              output_filesuffix='_2')
+        fp = self.gdir.get_filepath('model_run', filesuffix='_2')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
+            np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
+
     @pytest.mark.slow
     def test_cesm(self):
 
