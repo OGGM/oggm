@@ -1482,12 +1482,16 @@ class GlacierDirectory(object):
         # Do we have to extract the files first?
         if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
+
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
             robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
         else:
             mkdir(self.dir)
+
+        if not os.path.isdir(self.dir):
+            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
