@@ -1251,18 +1251,16 @@ def _robust_extract(to_dir, *args, **kwargs):
     Try to make it more robust.
     """
     count = 0
-    while count < 10:
+    while count < 5:
         try:
             if count > 1:
                 time.sleep(random.uniform(0.05, 0.1))
             with tarfile.open(*args, **kwargs) as tf:
                 tf.extractall(os.path.dirname(to_dir))
-                # Add a sleep just because
-                time.sleep(random.uniform(0.05, 0.1))
             break
         except FileExistsError:
             count += 1
-            if count == 10:
+            if count == 5:
                 raise
 
 
