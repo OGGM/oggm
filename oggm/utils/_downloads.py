@@ -231,7 +231,12 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     """
     path = _cached_download_helper(cache_obj_name, dl_func, reset)
 
-    if cfg.PARAMS['dl_verify']:
+    try:
+        dl_verify = cfg.PARAMS['dl_verify']
+    except KeyError:
+        dl_verify = True
+
+    if dl_verify:
         data = get_dl_verify_data()
         crc32 = 0
         with open(path, 'rb') as f:
