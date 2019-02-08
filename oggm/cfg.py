@@ -414,6 +414,7 @@ def oggm_static_paths():
         config = ConfigObj()
         config['dl_cache_dir'] = os.path.join(dldir, 'download_cache')
         config['dl_cache_readonly'] = False
+        config['dl_verify'] = True
         config['tmp_dir'] = os.path.join(dldir, 'tmp')
         config['cru_dir'] = os.path.join(dldir, 'cru')
         config['rgi_dir'] = os.path.join(dldir, 'rgi')
@@ -431,7 +432,7 @@ def oggm_static_paths():
         sys.exit()
 
     # Check that all keys are here
-    for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir',
+    for k in ['dl_cache_dir', 'dl_cache_readonly', 'dl_verify', 'tmp_dir',
               'cru_dir', 'rgi_dir', 'test_dir', 'has_internet']:
         if k not in config:
             raise RuntimeError('The oggm config file ({}) should have an '
@@ -465,6 +466,7 @@ def oggm_static_paths():
     # Other
     PARAMS['has_internet'] = config.as_bool('has_internet')
     PARAMS['dl_cache_readonly'] = config.as_bool('dl_cache_readonly')
+    PARAMS['dl_verify'] = config.as_bool('dl_verify')
 
     # Create cache dir if possible
     if not os.path.exists(PATHS['dl_cache_dir']):
