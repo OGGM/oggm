@@ -24,7 +24,8 @@ from oggm import cfg
 from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
                               init_hef, TempEnvironmentVariable)
 from oggm.utils import shape_factor_adhikari
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import (InvalidParamsError,
+                             DownloadVerificationFailedException)
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -1001,7 +1002,8 @@ class TestFakeDownloads(unittest.TestCase):
         self.reset_dir()
         cfg.PARAMS['dl_verify'] = True
 
-        tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com', 'test.txt')
+        tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com',
+                                'test.txt')
 
         file_size = 1024
         file_data = os.urandom(file_size)
@@ -1030,15 +1032,15 @@ class TestFakeDownloads(unittest.TestCase):
             utils.oggm_urlretrieve(url)
 
             url = self.prepare_verify_test(False, True)
-            with self.assertRaises(utils.VerificationFailedException):
+            with self.assertRaises(DownloadVerificationFailedException):
                 utils.oggm_urlretrieve(url)
 
             url = self.prepare_verify_test(True, False)
-            with self.assertRaises(utils.VerificationFailedException):
+            with self.assertRaises(DownloadVerificationFailedException):
                 utils.oggm_urlretrieve(url)
 
             url = self.prepare_verify_test(False, False)
-            with self.assertRaises(utils.VerificationFailedException):
+            with self.assertRaises(DownloadVerificationFailedException):
                 utils.oggm_urlretrieve(url)
 
 

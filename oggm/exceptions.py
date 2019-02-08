@@ -17,3 +17,20 @@ class InvalidGeometryError(RuntimeError):
 
 class GeometryError(RuntimeError):
     pass
+
+
+class NoInternetException(Exception):
+    pass
+
+
+class DownloadVerificationFailedException(Exception):
+    pass
+
+
+class HttpDownloadError(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+class HttpContentTooShortError(Exception):
+    pass
