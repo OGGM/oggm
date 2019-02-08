@@ -39,7 +39,9 @@ except NameError:
 
 # Locals
 import oggm.cfg as cfg
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import (InvalidParamsError, NoInternetException,
+                             DownloadVerificationFailedException,
+                             HttpDownloadError, HttpContentTooShortError)
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -131,23 +133,6 @@ def del_empty_dirs(s_dir):
 
 def _get_download_lock():
     return lock
-
-
-class NoInternetException(Exception):
-    pass
-
-
-class VerificationFailedException(Exception):
-    pass
-
-
-class HttpDownloadError(Exception):
-    def __init__(self, code):
-        self.code = code
-
-
-class HttpContentTooShortError(Exception):
-    pass
 
 
 def get_dl_verify_data():
@@ -267,7 +252,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
                     path,
                     size, crc32.to_bytes(4, byteorder='big').hex(),
                     data[0], data[1].to_bytes(4, byteorder='big').hex())
-                raise VerificationFailedException(err)
+                raise DownloadVerificationFailedException(err)
             logger.info('%s verified successfully.' % path)
 
     return path
