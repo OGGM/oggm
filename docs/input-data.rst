@@ -224,6 +224,10 @@ for your research question, and to start your runs from level 4 if possible.
 Raw data sources
 ----------------
 
+These data are used to create the pre-processed directories explained above.
+If you want to run your own workflow from A to Z, or if you would like
+to know which data are used in OGGM, read further!
+
 Glacier outlines and intersects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
