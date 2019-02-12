@@ -703,4 +703,4 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None):
         thick = water_depth + t_altitude
     out = k * thick * water_depth * width / 1e9
 
-    return np.clip(out, 0, None)
+    return np.clip(out, 0, None), width, water_depth

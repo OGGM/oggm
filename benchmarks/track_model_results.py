@@ -304,14 +304,15 @@ class columbia_calving:
                 f_calving = 0
             elif i == 1:
                 # Second call we set a very small positive calving
-                f_calving = utils.calving_flux_from_depth(gdir, water_depth=1)
+                f_calving = utils.calving_flux_from_depth(gdir,
+                                                          water_depth=1)[0]
             elif cfg.PARAMS['clip_mu_star']:
                 # If we have to clip mu the calving becomes the real flux
                 fl = gdir.read_pickle('inversion_flowlines')[-1]
                 f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
             else:
                 # Otherwise it is parameterized
-                f_calving = utils.calving_flux_from_depth(gdir)
+                f_calving, _, _ = utils.calving_flux_from_depth(gdir)
 
             # Give it back to the inversion and recompute
             gdir.inversion_calving_rate = f_calving
