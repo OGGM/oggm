@@ -2300,6 +2300,84 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
         np.testing.assert_allclose(flux_mb, calving_flux[-1], atol=0.001)
 
+        # Same with no overshoot
+        cfg.PARAMS['k_calving'] = 0.2
+
+        i = 0
+        calving_flux = []
+        mu_star = []
+        ite = []
+        cfg.PARAMS['clip_mu_star'] = False
+        cfg.PARAMS['min_mu_star'] = 0
+
+        while i < 12:
+
+            # Calculates a calving flux from model output
+            if i == 0:
+                # First call we set to zero (not very necessary,
+                # this first loop could be removed)
+                f_calving = 0
+            elif i == 1:
+                # Second call we set a very small positive calving
+                f_calving = utils.calving_flux_from_depth(gdir, water_depth=1)
+            elif cfg.PARAMS['clip_mu_star']:
+                # If we have to clip mu the calving becomes the real flux
+                fl = gdir.read_pickle('inversion_flowlines')[-1]
+                f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
+            else:
+                # Otherwise it is parameterized
+                f_calving = utils.calving_flux_from_depth(gdir)
+
+            # Give it back to the inversion and recompute
+            gdir.inversion_calving_rate = f_calving
+
+            # At this step we might raise a MassBalanceCalibrationError
+            mu_is_zero = False
+            try:
+                climate.local_t_star(gdir)
+                df = gdir.read_json('local_mustar')
+            except MassBalanceCalibrationError as e:
+                assert 'mu* out of specified bounds' in str(e)
+                # When this happens we clip mu* to zero and store the
+                # bad value (just for plotting)
+                cfg.PARAMS['clip_mu_star'] = True
+                df = gdir.read_json('local_mustar')
+                df['mu_star_glacierwide'] = float(str(e).split(':')[-1])
+                climate.local_t_star(gdir)
+
+            climate.mu_star_calibration(gdir)
+            inversion.prepare_for_inversion(gdir, add_debug_var=True)
+            v_inv, _ = inversion.mass_conservation_inversion(gdir)
+
+            # Store the data
+            calving_flux = np.append(calving_flux, f_calving)
+            mu_star = np.append(mu_star, df['mu_star_glacierwide'])
+            ite = np.append(ite, i)
+
+            # Do we have to do another_loop?
+            if i > 0:
+                avg_one = np.mean(calving_flux[-4:])
+                avg_two = np.mean(calving_flux[-5:-1])
+                difference = abs(avg_two - avg_one)
+                conv = (difference < 0.05 * avg_two or
+                        calving_flux[-1] == 0 or
+                        calving_flux[-1] == calving_flux[-2])
+                if mu_is_zero or conv:
+                    break
+            i += 1
+
+        assert calving_flux[-1] == np.max(calving_flux)
+        assert calving_flux[-1] > 0.5
+        assert calving_flux[-1] < 1
+        assert mu_star[-1] > 0
+
+        mbmod = massbalance.MultipleFlowlineMassBalance
+        mb = mbmod(gdir, use_inversion_flowlines=True,
+                   mb_model_class=massbalance.ConstantMassBalance,
+                   bias=0)
+        flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
+        np.testing.assert_allclose(flux_mb, calving_flux[-1], atol=0.001)
+
 
 class TestGrindelInvert(unittest.TestCase):
 
