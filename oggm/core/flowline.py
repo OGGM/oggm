@@ -809,13 +809,15 @@ class FluxBasedModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
-                 time_stepping='user',
+                 time_stepping='user', calving_param='simple_cliff',
+                 calving_k=2.4,
                  **kwargs):
         """ Instanciate.
 
         Parameters
         ----------
-
+        calving_param : 'simple_cliff', 'k_flux'
+        calving_k : only for calving_param='k_flux'
         Properties
         ----------
         #TODO: document properties
@@ -853,6 +855,12 @@ class FluxBasedModel(FlowlineModel):
         self.max_dt = max_dt
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
+        self.calving_param = calving_param
+        self.calving_k = calving_k
+
+        if self.calving_param not in ['simple_cliff', 'k_flux']:
+            raise InvalidParamsError("calving_param should be of "
+                                     "['simple_cliff', 'k_flux']")
 
         # Do we want to use shape factors?
         self.sf_func = None
@@ -871,7 +879,7 @@ class FluxBasedModel(FlowlineModel):
             nx = fl.nx
             if trib[0] is not None:
                 nx = fl.nx + 1
-            elif self.is_tidewater:
+            elif self.is_tidewater and self.calving_param == 'simple_cliff':
                 nx = fl.nx + 1
             a = np.zeros(nx+1)
             b = np.zeros(nx+1)
@@ -912,7 +920,7 @@ class FluxBasedModel(FlowlineModel):
                 surface_h = np.append(surface_h, fl_to.surface_h[ide])
                 thick = np.append(thick, thick[-1])
                 section = np.append(section, section[-1])
-            elif self.is_tidewater:
+            elif self.is_tidewater and self.calving_param == 'simple_cliff':
                 # For tidewater glacier, we trick and set the outgoing thick
                 # to zero (for numerical stability and this should quite OK
                 # represent what happens at the calving tongue)
@@ -961,7 +969,7 @@ class FluxBasedModel(FlowlineModel):
                 flxs.append(flx_stag[:-1])
                 aflxs.append(znxm1)
                 u_stag = u_stag[:-1]
-            elif self.is_tidewater:
+            elif self.is_tidewater and self.calving_param == 'simple_cliff':
                 flxs.append(flx_stag[:-1])
                 aflxs.append(znxm1)
                 u_stag = u_stag[:-1]
@@ -999,19 +1007,42 @@ class FluxBasedModel(FlowlineModel):
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt +
                            aflx*dt + mb)
 
-            # Keep positive values only and store
-            fl.section = new_section.clip(0)
-
             # Add the last flux to the tributary
             # this is ok because the lines are sorted in order
             if trib[0] is not None:
                 aflxs[trib[0]][trib[1]:trib[2]] += (flx_stag[-1].clip(0) *
                                                     trib[3])
             elif self.is_tidewater:
-                # -2 because the last flux is zero per construction
-                # TODO: not sure if this is the way to go yet,
-                # but mass conservation is OK
-                self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt*dx
+                # Main flowline on tidewater
+                if self.calving_param == 'simple_cliff':
+                    # -2 because the last flux is zero per construction
+                    # TODO: not sure if this is the way to go yet,
+                    # but mass conservation is OK
+                    cf = flx_stag[-2].clip(0)*dt*dx
+                elif self.calving_param == 'k_flux':
+
+                    # Find last ice grid point
+                    p_ice = np.nonzero(fl.thick > 0)[0]
+                    if len(p_ice) == 0:
+                        cf = 0
+                    else:
+                        p_ice = p_ice[-1]
+                        # Compute the calving flux
+                        width = fl.widths[p_ice] * fl.dx_meter
+                        water_depth = fl.thick[p_ice] - fl.surface_h[p_ice]
+                        if water_depth <= 0:
+                            cf = 0
+                        else:
+                            cf = self.calving_k / cfg.SEC_IN_YEAR
+                            cf *= fl.thick[p_ice] * water_depth * width * dt
+
+                        # Remove it from last section
+                        new_section[p_ice] = new_section[p_ice] - cf / dx
+
+                self.calving_m3_since_y0 += cf
+
+            # Keep positive values only and store
+            fl.section = new_section.clip(0)
 
         # Next step
         self.t += dt

@@ -2,6 +2,8 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import unittest
+import os
+import shutil
 from functools import partial
 import pytest
 import copy
@@ -22,7 +24,7 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
                               dummy_width_bed_tributary,
-                              patch_url_retrieve_github)
+                              patch_url_retrieve_github, get_test_dir)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -854,6 +856,108 @@ class TestIdealisedCases(unittest.TestCase):
         with pytest.raises(RuntimeError) as excinfo:
             model.run_until(300)
         assert 'exceeds domain boundaries' in str(excinfo.value)
+
+
+class TestCalving(unittest.TestCase):
+
+    def setUp(self):
+
+        cfg.initialize()
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_ideal_calve')
+
+        from oggm import GlacierDirectory
+        from oggm.tasks import define_glacier_region
+        import geopandas as gpd
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dem_file'] = utils.get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = self.testdir
+
+        hef_file = utils.get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        self.gdir = GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+        define_glacier_region(self.gdir, entity=entity)
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        if os.path.exists(self.testdir):
+            shutil.rmtree(self.testdir)
+
+    def simple_plot(self, model):  # pragma: no cover
+        ocls = self.gdir.read_pickle('inversion_output')
+        ithick = ocls[-1]['thick']
+        pg = model.fls[-1].thick > 0
+        plt.figure()
+        bh = model.fls[-1].bed_h[pg]
+        sh = model.fls[-1].surface_h[pg]
+        plt.plot(sh, 'k')
+        plt.plot(bh, 'C0', label='Real bed')
+        plt.plot(sh - ithick, 'C3', label='Computed bed')
+        plt.title('Compare Shape')
+        plt.xlabel('[dx]')
+        plt.ylabel('Elevation [m]')
+        plt.legend(loc=3)
+        plt.show()
+
+    def test_k_calving(self):
+
+        k = 0.4
+
+        fls = dummy_constant_bed(hmax=1000., hmin=-1000., min_clip=-200)
+        mb = LinearMassBalance(400.)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=cfg.PARAMS['glen_a'], fs=0,
+                               is_tidewater=True, time_stepping='conservative',
+                               calving_param='k_flux', calving_k=k)
+
+        model.run_until(800)
+        print(model.calving_m3_since_y0)
+        print(model.yr)
+
+        import shapely.geometry as shpg
+        from oggm.core import centerlines, climate, inversion
+        fls = []
+        for fl in model.fls:
+            pg = np.where(fl.thick > 0)
+            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+            flo = centerlines.Centerline(line, dx=fl.dx,
+                                         surface_h=fl.surface_h[pg])
+            flo.widths = fl.widths[pg]
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            fls.append(flo)
+        self.gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        self.gdir.is_tidewater = True
+
+        # Altitude at the terminus and frontal width
+        t_altitude = flo.surface_h[-1]
+        width = flo.widths[-1] * flo.dx
+
+        # Calving formula
+        thick = fl.thick[pg][-1]
+        water_depth = thick - t_altitude
+        thick = 200
+        f_calving = k * thick * water_depth * width / 1e9 * 10000
+        self.gdir.inversion_calving_rate = f_calving * self.gdir.rgi_area_m2 / model.area_m2
+
+        climate.apparent_mb_from_linear_mb(self.gdir)
+        inversion.prepare_for_inversion(self.gdir)
+        v, _ = inversion.mass_conservation_inversion(self.gdir)
+
+        # assert_allclose(v, model.volume_m3, rtol=0.01)
+        self.simple_plot(model)
+
+        # plt.plot(fls[-1].bed_h, 'k')
+        # plt.plot(fls[-1].surface_h, 'C3')
+        # plt.plot(fls[-1].surface_h * 0., 'C0')
+        # plt.legend()
+        # plt.show()
 
 
 class TestSia2d(unittest.TestCase):

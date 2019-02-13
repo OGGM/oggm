@@ -17,11 +17,13 @@ from oggm.utils import oggm_urlretrieve
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
-                       widths=3.):
+                       widths=3., min_clip=None):
 
     dx = 1.
 
     surface_h = np.linspace(hmax, hmin, nx)
+    if min_clip is not None:
+        surface_h = surface_h.clip(min_clip)
     bed_h = surface_h
     widths = surface_h * 0. + widths
     coords = np.arange(0, nx - 0.5, 1)
