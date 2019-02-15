@@ -2256,6 +2256,17 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
 
+        # Test with smaller k and large water depth
+        cfg.PARAMS['k_calving'] = 0.2
+        df = utils.find_inversion_calving(gdir, water_depth=1200)
+
+        assert max(df.index) < 14
+        assert max(df.index) > 6
+        assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 0.5
+        assert df.calving_flux.iloc[-1] < 1
+        assert df.mu_star.iloc[-1] > 0
+
 
 class TestGrindelInvert(unittest.TestCase):
 

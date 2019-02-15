@@ -660,7 +660,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     return shape_factors
 
 
-def calving_flux_from_depth(gdir, k=None, water_depth=None):
+def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None):
     """Finds a calving flux from the calving front thickness.
 
     Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
@@ -676,6 +676,9 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None):
         the default is to compute the water_depth from ice thickness
         at the terminus and altitude. Set this to force the water depth
         to a certain value
+    thick :
+        Set this to force the ice thickness to a certain value (for
+        sensitivity experiments).
 
     Returns
     -------
@@ -696,11 +699,12 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None):
     fl = gdir.read_pickle('inversion_flowlines')[-1]
 
     # Altitude at the terminus and frontal width
-    t_altitude = np.clip(cl['hgt'][-1], 0, None)
+    t_altitude = np.clip(fl.surface_h[-1], 0, None)
     width = fl.widths[-1] * gdir.grid.dx
 
     # Calving formula
-    thick = cl['thick'][-1]
+    if thick is None:
+        thick = cl['thick'][-1]
     if water_depth is None:
         water_depth = thick - t_altitude
     else:
@@ -712,7 +716,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None):
             'width': width,
             'thick': thick,
             'water_depth': water_depth,
-            'free_board': t_altitude-thick}
+            'free_board': t_altitude}
 
 
 def find_inversion_calving(gdir, water_depth=1, max_ite=30,
@@ -740,6 +744,7 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
     i = 0
     cfg.PARAMS['clip_mu_star'] = False
     odf = pd.DataFrame()
+    mu_is_zero = False
     while i < max_ite:
 
         # Calculates a calving flux from model output
@@ -757,6 +762,7 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
             # inversion
             fl = gdir.read_pickle('inversion_flowlines')[-1]
             f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
+            mu_is_zero = True
         else:
             # Otherwise it is parameterized by the calving law
             f_calving = calving_flux_from_depth(gdir)['flux']
@@ -765,7 +771,6 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
         gdir.inversion_calving_rate = f_calving
 
         # At this step we might raise a MassBalanceCalibrationError
-        mu_is_zero = False
         try:
             climate.local_t_star(gdir)
             df = gdir.read_json('local_mustar')
@@ -781,22 +786,24 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir, add_debug_var=True)
         v_inv, _ = inversion.mass_conservation_inversion(gdir)
+        out = calving_flux_from_depth(gdir)
 
         # Store the data
         odf.loc[i, 'calving_flux'] = f_calving
         odf.loc[i, 'mu_star'] = df['mu_star_glacierwide']
+        odf.loc[i, 'calving_law_flux'] = out['flux']
+        odf.loc[i, 'width'] = out['width']
+        odf.loc[i, 'thick'] = out['thick']
+        odf.loc[i, 'water_depth'] = out['water_depth']
+        odf.loc[i, 'free_board'] = out['free_board']
 
         # Do we have to do another_loop?
         calving_flux = odf.calving_flux.values
         if stop_after_convergence and i > 0:
-            avg_one = np.mean(calving_flux[-4:])
-            avg_two = np.mean(calving_flux[-5:-1])
-            difference = abs(avg_two - avg_one)
-            conv = (difference < 0.01 * abs(avg_two) or
-                    calving_flux[-1] == 0 or
-                    calving_flux[-1] == calving_flux[-2])
+            conv = np.allclose(calving_flux[-1], out['flux'], rtol=0.001)
             if mu_is_zero or conv:
                 break
         i += 1
 
+    odf.index.name = 'iterations'
     return odf
