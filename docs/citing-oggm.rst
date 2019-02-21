@@ -30,7 +30,7 @@ BibTeX entry::
 .. _Geoscientific Model Development: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
 
 
-Sofwtare DOI
+Software DOI
 ------------
 
 If you want to refer to a specific version of the software you can use
