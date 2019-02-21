@@ -1646,14 +1646,19 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                                time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
-        try:
-            model.run_until_and_store(ye, run_path=run_path,
-                                      diag_path=diag_path,
-                                      store_monthly_step=store_monthly_step)
-        except (RuntimeError, FloatingPointError):
-            if step == 'ultra-conservative':
-                raise
-            continue
+
+        with np.warnings.catch_warnings():
+            # For operational runs we ignore the warnings
+            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            try:
+                model.run_until_and_store(ye, run_path=run_path,
+                                          diag_path=diag_path,
+                                          store_monthly_step=store_monthly_step)
+            except (RuntimeError, FloatingPointError):
+                if step == 'ultra-conservative':
+                    raise
+                continue
+
         # If we get here we good
         log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
