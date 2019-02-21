@@ -1653,7 +1653,8 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
             try:
                 model.run_until_and_store(ye, run_path=run_path,
                                           diag_path=diag_path,
-                                          store_monthly_step=store_monthly_step)
+                                          store_monthly_step=store_monthly_step
+                                          )
             except (RuntimeError, FloatingPointError):
                 if step == 'ultra-conservative':
                     raise

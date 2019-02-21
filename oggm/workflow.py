@@ -275,8 +275,9 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         prepro_border = int(cfg.PARAMS['border'])
 
     if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
-        raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
-                                 "should be one of: 10, 80, 160, 250.")
+        if 'test' not in utils._downloads.GDIR_URL:
+            raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
+                                     "should be one of: 10, 80, 160, 250.")
 
     # if reset delete also the log directory
     if reset:
