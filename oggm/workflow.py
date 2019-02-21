@@ -274,7 +274,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
 
-    if prepro_border not in [10, 80, 160, 250]:
+    if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
         raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
                                  "should be one of: 10, 80, 160, 250.")
 
