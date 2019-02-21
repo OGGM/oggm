@@ -800,7 +800,11 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
         # Do we have to do another_loop?
         calving_flux = odf.calving_flux.values
         if stop_after_convergence and i > 0:
-            conv = np.allclose(calving_flux[-1], out['flux'], rtol=0.001)
+            # We want to make sure that we don't converge by chance
+            # so we test on last two iterations
+            conv = (np.allclose(calving_flux[[-1, -2]],
+                                [out['flux'], out['flux']],
+                                rtol=0.01))
             if mu_is_zero or conv:
                 break
         i += 1
