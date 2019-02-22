@@ -310,7 +310,9 @@ def rmsd(ref, data, axis=None):
 
 
 def rmsd_anomaly(ref, data):
-    """Root Mean Squared Deviation of anomalies to mean."""
+    """Root Mean Squared Deviation of anomalies to mean,
+    i.e. rmsd(ref - mean(ref), data - mean(data)).
+    """
     return rmsd(ref - np.mean(ref), data - np.mean(data))
 
 

@@ -13,12 +13,17 @@ import pandas as pd
 import netCDF4
 import os
 import datetime
+from scipy.optimize import minimize_scalar
 
 # import OGGM modules
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
+
 from oggm import utils
 from oggm.utils import floatyear_to_date, ncDataset
+from oggm.workflow import execute_entity_task
+from oggm.exceptions import InvalidParamsError, MassBalanceCalibrationError
+
 from oggm.core import climate
 from oggm.core.massbalance import MassBalanceModel
 
@@ -252,27 +257,10 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
         # Do our own interpolation of t_start for given glacier
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
-                # Make some checks and use the default one
-                climate_info = gdir.read_pickle('climate_info')
-                source = climate_info['baseline_climate_source']
-                ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
-                if not np.any(s in source.upper() for s in ok_source):
-                    msg = ('If you are using a custom climate file you '
-                           'should run your own MB calibration.')
-                    raise climate.MassBalanceCalibrationError(msg)
-                v = gdir.rgi_version[0]  # major version relevant
-
-                # Check that the params are fine
-                str_s = 'cru4' if 'CRU' in source else 'histalp'
-                vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
-                for k in params:
-                    if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
-                        raise ValueError('The reference t* you are trying '
-                                         'to use was calibrated with '
-                                         'difference MB parameters. You '
-                                         'might have to run the calibration '
-                                         'manually.')
-                ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
+                # TODO: this is a quick and dirty fix. Has to be changes in
+                # analogy to the climate.local_tstar()
+                fp = '/Users/oberrauch/oggm-fork/oggm/data/ref_tstars_vas_rgi6_histalp.csv'
+                ref_df = pd.read_csv(fp)
             else:
                 # Use the the local calibration
                 fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
@@ -331,6 +319,193 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     df['bias'] = bias
     df['mu_star'] = mustar
     gdir.write_json(df, 'vascaling_mustar')
+
+
+def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
+    """ Computes the reference year t* for the given glacier and mass balance
+    measurements.
+
+    :param gdir: (oggm.GlacierDirectory)
+    :param mbdf: (pandas.Series) observed MB data indexed by year. If None,
+        read automatically from the reference data
+    :param write_diagnostics: (bool) whether to write additional information to
+        the `climate_info.pkl` file or not, default=False
+
+    :return: A dictionary containing t* and the corresponding mass balance bias
+        beta*, {t_star:[], bias:[]}
+    """
+    # make sure we have no marine terminating glacier
+    assert gdir.terminus_type == 'Land-terminating'
+    # get reference time series of mass balance measurements
+    if mbdf is None:
+        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+    # get list of years with mass balance measurements
+    ref_years = mbdf.index.values
+    # compute average observed mass-balance
+    ref_mb = np.mean(mbdf)
+
+    # Compute one mu candidate per year and the associated statistics
+    # Only get the years were we consider looking for t*
+    y0, y1 = cfg.PARAMS['tstar_search_window']
+    ci = gdir.read_pickle('climate_info')
+    y0 = y0 or ci['baseline_hydro_yr_0']
+    y1 = y1 or ci['baseline_hydro_yr_1']
+    years = np.arange(y0, y1+1)
+
+    ny = len(years)
+    mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
+    mb_per_mu = pd.Series(index=years)
+
+    # get mass balance relevant climate parameters
+    years, temp, prcp = get_yearly_mb_temp_prcp(gdir, year_range=[y0, y1])
+
+    # get climate parameters, but only for years with mass balance measurements
+    selind = np.searchsorted(years, mbdf.index)
+    sel_temp = temp[selind]
+    sel_prcp = prcp[selind]
+    sel_temp = np.mean(sel_temp)
+    sel_prcp = np.mean(sel_prcp)
+
+    # for each year in the climatic period around t* (ignoring the first and
+    # last 15-years), compute a mu-candidate by solving the mass balance
+    # equation for mu. afterwards compute the average (modeled) mass balance
+    # over all years with mass balance measurements using the mu-candidate
+    for i, y in enumerate(years):
+        # ignore begin and end, i.e. if the
+        if ((i - mu_hp) < 0) or ((i + mu_hp) >= ny):
+            continue
+
+        # compute average melting temperature
+        t_avg = np.mean(temp[i - mu_hp:i + mu_hp + 1])
+        # skip if if too cold, i.e. no melt occurs (division by zero)
+        if t_avg < 1e-3:
+            continue
+        # compute the mu candidate for the current year, by solving the mass
+        # balance equation for mu*
+        mu = np.mean(prcp[i - mu_hp:i + mu_hp + 1]) / t_avg
+
+        # compute mass balance using the calculated mu and the average climate
+        # conditions over the years with mass balance records
+        mb_per_mu[y] = np.mean(sel_prcp - mu * sel_temp)
+
+    # compute differences between computed mass balance and reference value
+    diff = (mb_per_mu - ref_mb).dropna()
+    # raise error if no mu could be calculated for any year
+    if len(diff) == 0:
+        raise MassBalanceCalibrationError('No single valid mu candidate for '
+                                          'this glacier!')
+
+    # choose mu* as the mu candidate with the smallest absolute bias
+    amin = np.abs(diff).idxmin()
+
+    # write results to the `climate_info.pkl`
+    d = gdir.read_pickle('climate_info')
+    d['t_star'] = amin
+    d['bias'] = diff[amin]
+    if write_diagnostics:
+        d['avg_mb_per_mu'] = mb_per_mu
+        d['avg_ref_mb'] = ref_mb
+
+    gdir.write_pickle(d, 'climate_info')
+
+    return {'t_star': amin, 'bias': diff[amin]}
+
+
+def compute_ref_t_stars(gdirs):
+    """ Detects the best t* for the reference glaciers and writes them to disk
+
+    This task will be needed for mass balance calibration of custom climate
+    data. For CRU and HISTALP baseline climate a precalibrated list is
+    available and should be used instead.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        will be filtered for reference glaciers
+    """
+
+    if not cfg.PARAMS['run_mb_calibration']:
+        raise InvalidParamsError('Are you sure you want to calibrate the '
+                                 'reference t*? There is a pre-calibrated '
+                                 'version available. If you know what you are '
+                                 'doing and still want to calibrate, set the '
+                                 '`run_mb_calibration` parameter to `True`.')
+
+    # Reference glaciers only if in the list and period is good
+    ref_gdirs = utils.get_ref_mb_glaciers(gdirs)
+
+    # Run
+    out = execute_entity_task(t_star_from_refmb, ref_gdirs)
+
+    # Loop write
+    df = pd.DataFrame()
+    for gdir, res in zip(ref_gdirs, out):
+        # list of mus compatibles with refmb
+        rid = gdir.rgi_id
+        df.loc[rid, 'lon'] = gdir.cenlon
+        df.loc[rid, 'lat'] = gdir.cenlat
+        df.loc[rid, 'n_mb_years'] = len(gdir.get_ref_mb_data())
+        df.loc[rid, 'tstar'] = res['t_star']
+        df.loc[rid, 'bias'] = res['bias']
+
+    # Write out
+    df['tstar'] = df['tstar'].astype(int)
+    df['n_mb_years'] = df['n_mb_years'].astype(int)
+    file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+    df.sort_index().to_csv(file)
+
+
+def find_start_area(gdir):
+    """ The following preprocessing tasks are needed: @TODO
+
+    :param gdir: (oggm.GlacierDirectory)
+    :return: (scipy.optimize.OptimizeResult)
+    """
+
+    # instance the mass balance models
+    mbmod = VAScalingMassBalance(gdir)
+
+    # get reference area and year from RGI
+    a_rgi = gdir.rgi_area_m2
+    rgi_df = utils.get_rgi_glacier_entities([gdir.rgi_id])
+    y_rgi = int(rgi_df.BgnDate.values[0][:4])
+    # get min and max glacier surface elevation
+    h_min, h_max = get_min_max_elevation(gdir)
+
+    # set up the glacier model with the reference values (from RGI)
+    model_ref = VAScalingModel(year_0=y_rgi, area_m2_0=a_rgi,
+                               min_hgt=h_min, max_hgt=h_max,
+                               mb_model=mbmod)
+
+    def _to_minimize(area_m2_start, ref):
+        """ Initialize VAS glacier model as copy of the reference model (model_ref)
+        and adjust the model to the given starting area (area_m2_start) and
+        starting year (1851). Let the model evolve to the same year as the
+        reference model. Compute and return the relative absolute area error.
+
+        :param area_m2_start: (float)
+        :param ref: (oggm.VAScalingModel)
+        :return: (float) relative absolute area error
+        """
+        # define model
+        model_tmp = VAScalingModel(year_0=ref.year_0,
+                                   area_m2_0=ref.area_m2_0,
+                                   min_hgt=ref.min_hgt_0,
+                                   max_hgt=ref.max_hgt,
+                                   mb_model=ref.mb_model)
+        # scale to desired starting size
+        model_tmp.create_start_glacier(area_m2_start)
+        # run and compare, return relative error
+        return np.abs(model_tmp.run_and_compare(ref))
+
+    # define bounds - between 100m2 and two times the reference size
+    area_m2_bounds = [100, 2 * model_ref.area_m2_0]
+    # run minimization
+    minimization_res = minimize_scalar(_to_minimize, args=(model_ref),
+                                       bounds=area_m2_bounds,
+                                       method='bounded')
+
+    return minimization_res
 
 
 class VAScalingMassBalance(MassBalanceModel):
@@ -629,13 +804,167 @@ class VAScalingMassBalance(MassBalanceModel):
                                   'computed for the `VAScalingMassBalance` model.')
 
 
+class RandomVASMassBalance(MassBalanceModel):
+    """Random shuffle of all MB years within a given time period.
+
+    This is useful for finding a possible past glacier state or for sensitivity
+    experiments.
+
+    Note that this is going to be sensitive to extreme years in certain
+    periods, but it is by far more physically reasonable than other
+    approaches based on gaussian assumptions.
+    """
+
+    def __init__(self, gdir, mu_star=None, bias=None,
+                 y0=None, halfsize=15, seed=None, filename='climate_monthly',
+                 input_filesuffix='', all_years=False,
+                 unique_samples=False):
+        """Initialize.
+
+        Parameters
+        ----------
+        gdir : GlacierDirectory
+            the glacier directory
+        mu_star : float, optional
+            set to the alternative value of mu* you want to use
+            (the default is to use the calibrated value)
+        bias : float, optional
+            set to the alternative value of the calibration bias [mm we yr-1]
+            you want to use (the default is to use the calibrated value)
+            Note that this bias is *substracted* from the computed MB. Indeed:
+            BIAS = MODEL_MB - REFERENCE_MB.
+        y0 : int, optional, default: tstar
+            the year at the center of the period of interest. The default
+            is to use tstar as center.
+        halfsize : int, optional
+            the half-size of the time window (window size = 2 * halfsize + 1)
+        seed : int, optional
+            Random seed used to initialize the pseudo-random number generator.
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
+        input_filesuffix : str
+            the file suffix of the input climate file
+        all_years : bool
+            if True, overwrites ``y0`` and ``halfsize`` to use all available
+            years.
+        unique_samples: bool
+            if true, chosen random mass-balance years will only be available
+            once per random climate period-length
+            if false, every model year will be chosen from the random climate
+            period with the same probability
+        """
+
+        super(RandomVASMassBalance, self).__init__()
+        # initialize the VAS equivalent of the PastMassBalance model over the
+        # whole available climate period
+        self.mbmod = VAScalingMassBalance(gdir, mu_star=mu_star, bias=bias,
+                                          filename=filename,
+                                          input_filesuffix=input_filesuffix)
+
+        # define years of climate period
+        if all_years:
+            # use full climate period
+            self.years = self.mbmod.years
+        else:
+            if y0 is None:
+                # choose t* as center of climate period
+                df = gdir.read_json('vascaling_mustar')
+                y0 = df['t_star']
+            # use 31-year period around given year `y0`
+            self.years = np.arange(y0-halfsize, y0+halfsize+1)
+        # define year range and number of years
+        self.yr_range = (self.years[0], self.years[-1]+1)
+        self.ny = len(self.years)
+
+        # define random state
+        self.rng = np.random.RandomState(seed)
+        self._state_yr = dict()
+
+        # whether or not to sample with or without replacement
+        self.unique_samples = unique_samples
+        if self.unique_samples:
+            self.sampling_years = self.years
+
+    @property
+    def temp_bias(self):
+        """Temperature bias to add to the original series."""
+        return self.mbmod.temp_bias
+
+    @temp_bias.setter
+    def temp_bias(self, value):
+        """Temperature bias to add to the original series."""
+        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
+        self.mbmod.temp_bias = value
+
+    @property
+    def prcp_bias(self):
+        """Precipitation factor to apply to the original series."""
+        return self.mbmod.prcp_bias
+
+    @prcp_bias.setter
+    def prcp_bias(self, value):
+        """Precipitation factor to apply to the original series."""
+        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
+        self.mbmod.prcp_bias = value
+
+    @property
+    def bias(self):
+        """Residual bias to apply to the original series."""
+        return self.mbmod.bias
+
+    @bias.setter
+    def bias(self, value):
+        """Residual bias to apply to the original series."""
+        self.mbmod.bias = value
+
+    def get_state_yr(self, year=None):
+        """For a given year, get the random year associated to it."""
+        year = int(year)
+        if year not in self._state_yr:
+            if self.unique_samples:
+                # --- Sampling without replacement ---
+                if self.sampling_years.size == 0:
+                    # refill sample pool when all years were picked once
+                    self.sampling_years = self.years
+                # choose one year which was not used in the current period
+                _sample = self.rng.choice(self.sampling_years)
+                # write chosen year to dictionary
+                self._state_yr[year] = _sample
+                # update sample pool: remove the chosen year from it
+                self.sampling_years = np.delete(
+                    self.sampling_years,
+                    np.where(self.sampling_years == _sample))
+            else:
+                # --- Sampling with replacement ---
+                self._state_yr[year] = self.rng.randint(*self.yr_range)
+        return self._state_yr[year]
+
+    def get_monthly_mb(self, min_hgt, max_hgt, year=None):
+        ryr, m = floatyear_to_date(year)
+        ryr = utils.date_to_floatyear(self.get_state_yr(ryr), m)
+        return self.mbmod.get_monthly_mb(min_hgt, max_hgt, year=ryr)
+
+    def get_annual_mb(self, min_hgt, max_hgt, year=None):
+        ryr = self.get_state_yr(int(year))
+        return self.mbmod.get_annual_mb(min_hgt, max_hgt, year=ryr)
+
+    def get_specific_mb(self, min_hgt, max_hgt, year):
+        ryr = self.get_state_yr(int(year))
+        return self.mbmod.get_specific_mb(min_hgt, max_hgt, year=ryr)
+
+
 class VAScalingModel(object):
     """ The volume area scaling glacier model following Marzeion et. al., 2012.
 
     @TODO
 
     All used parameters are in SI units (even the climatological precipitation
-    is given in [m. we yr-1]).
+    (attribute of the mass balance model) is given in [m. we yr-1]).
     """
 
     def __repr__(self):
@@ -650,7 +979,7 @@ class VAScalingModel(object):
             + "volume [km3]: {:.3f}\n".format(self.volume_m3 / 1e9) \
             + "length [km]: {:.2f}\n".format(self.length_m / 1e3) \
             + "min elev [m asl.]: {:.0f}\n".format(self.min_hgt) \
-            + "spec mb [mm we. yr-1]: {:.2f}".format(self.spec_mb)
+            + "spec mb [mm w.e. yr-1]: {:.2f}".format(self.spec_mb)
 
     def __init__(self, year_0, area_m2_0, min_hgt, max_hgt, mb_model):
         """ Instance new glacier model.
@@ -685,7 +1014,7 @@ class VAScalingModel(object):
         self.max_hgt = max_hgt
 
         # compute volume (m3) and length (m) from area (using scaling parameters)
-        self.volume_m3_0 = self.ca * self.area_m2 ** self.gamma
+        self.volume_m3_0 = self.ca * self.area_m2_0 ** self.gamma
         self.volume_m3 = self.volume_m3_0
         # self.length = self.cl * area_0**self.ql
         self.length_m_0 = (self.volume_m3 / self.cl) ** (1 / self.ql)
@@ -693,9 +1022,9 @@ class VAScalingModel(object):
 
         # define mass balance model and spec mb
         self.mb_model = mb_model
-        self.spec_mb = mb_model.get_specific_mb(self.min_hgt,
-                                                self.max_hgt,
-                                                self.year)
+        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
+                                                     self.max_hgt,
+                                                     self.year)
         # create geometry change parameters
         self.dL = 0
         self.dA = 0
@@ -705,11 +1034,49 @@ class VAScalingModel(object):
         self.tau_a = 1
         self.tau_l = 1
 
+    def adjust_start_values(self, length_m):
+        """ Set start length and volume to custom (known/measured) values.
+
+        :param length_m: (float) glacier length in meters
+        """
+        raise NotImplementedError
+        # change start volume and length
+        self.length_m_0 = length_m
+        volume_m3_0 = self.cl * self.length_m_0 ** self.ql
+        area_m2_0 = (1 / self.ca * volume_m3_0) ** (1 / self.gamma)
+        self.area_m2_0 = area_m2_0
+        self.volume_m3_0 = volume_m3_0
+        # reset model
+        self.reset()
+
     def _compute_time_scales(self):
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
         self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
         self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
+
+    def reset(self):
+        """ Set model attributes back to starting values. """
+        self.year = self.year_0
+        self.length_m = self.length_m_0
+        self.area_m2 = self.area_m2_0
+        self.volume_m3 = self.volume_m3_0
+        self.min_hgt = self.min_hgt_0
+
+        # define mass balance model and spec mb
+        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
+                                                     self.max_hgt,
+                                                     self.year)
+
+        # create geometry change parameters
+        self.dL = 0
+        self.dA = 0
+        self.dV = 0
+
+        # create time scale parameters
+        self.tau_a = 1
+        self.tau_l = 1
+        pass
 
     def step(self):
         """ Advance model glacier by one year. This includes the following:
@@ -752,7 +1119,7 @@ class VAScalingModel(object):
 
     def run_until(self, year_end, reset=False):
         """ Runs the model till the specified year.
-        Returns all geometric parameters (i.e. lenght, area, volume and
+        Returns all geometric parameters (i.e. length, area, volume and
         terminus elevation) for each modelled year, as well as the years as
         index. TODO: run_and_store() or similar, but for now ok?!
 
@@ -764,11 +1131,7 @@ class VAScalingModel(object):
 
         # reset parameters to starting values
         if reset:
-            self.year = self.year_0
-            self.area_m2 = self.area_0
-            self.min_hgt = self.min_hgt_0
-            self.length_m = self.length_m_0
-            self.volume_m3 = self.volume_m3_0
+            self.reset()
 
         # check validity of end year
         if year_end < self.year:
@@ -781,6 +1144,7 @@ class VAScalingModel(object):
         length_m2 = np.empty(years.size)
         volume_m3 = np.empty(years.size)
         min_hgt = np.empty(years.size)
+        spec_mb = np.empty(years.size)
 
         # iterate over all years
         for i, year in enumerate(years):
@@ -793,6 +1157,149 @@ class VAScalingModel(object):
             length_m2[i] = self.length_m
             volume_m3[i] = self.volume_m3
             min_hgt[i] = self.min_hgt
+            spec_mb[i] = self.spec_mb
 
         # return metrics
-        return years, length_m2, area_m2, volume_m3, min_hgt
+        return years, length_m2, area_m2, volume_m3, min_hgt, spec_mb
+
+    def run_and_store(self, year_end, reset=False):
+        """ Runs the model till the specified year.
+        Returns all geometric parameters (i.e. lenght, area, volume and
+        terminus elevation) for each modelled year, as well as the years as
+        index. TODO: run_and_store() or similar, but for now ok?!
+
+        :param year_end: (float) end of modeling period
+        :param reset: (bool, optional) If `True`, the model will start from
+            `year_0`, otherwise from its current position in time (default).
+        :return:
+        """
+
+        # reset parameters to starting values
+        if reset:
+            self.reset()
+
+        # check validity of end year
+        if year_end < self.year:
+            raise ValueError('Cannot run until {}, already at year {}'.format(
+                year_end, self.year))
+
+        # create empty containers
+        years = np.arange(self.year, year_end + 1)
+        year0 = np.empty(years.size)
+        length_m = np.empty(years.size)
+        length_m_0 = np.empty(years.size)
+        dL = np.empty(years.size)
+
+        area_m2 = np.empty(years.size)
+        area_m2_0 = np.empty(years.size)
+        dA = np.empty(years.size)
+
+        volume_m3 = np.empty(years.size)
+        volume_m3_0 = np.empty(years.size)
+        dV = np.empty(years.size)
+
+        tau_l = np.empty(years.size)
+        tau_a = np.empty(years.size)
+
+        ca = np.empty(years.size)
+        gamma = np.empty(years.size)
+        cl = np.empty(years.size)
+        ql = np.empty(years.size)
+
+        min_hgt = np.empty(years.size)
+        min_hgt_0 = np.empty(years.size)
+        max_hgt = np.empty(years.size)
+        rho = np.empty(years.size)
+        spec_mb = np.empty(years.size)
+
+        # iterate over all years
+        for i, year in enumerate(years):
+            if i != 0:
+                # run model for one year
+                self.step()
+
+            # store metrics
+            year0[i] = self.year_0
+            
+            length_m[i] = self.length_m
+            length_m_0[i] = self.length_m_0
+            dL[i] = self.dL
+
+            area_m2[i] = self.area_m2
+            area_m2_0[i] = self.area_m2_0
+            dA[i] = self.dA
+
+            volume_m3[i] = self.volume_m3
+            volume_m3_0[i] = self.volume_m3_0
+            dV[i] = self.dV
+
+            tau_l[i] = self.tau_l
+            tau_a[i] = self.tau_a
+
+            ca[i] = self.ca
+            gamma[i] = self.gamma
+            cl[i] = self.cl
+            ql[i] = self.ql
+
+            min_hgt[i] = self.min_hgt
+            min_hgt_0[i] = self.min_hgt_0
+            max_hgt[i] = self.max_hgt
+            rho[i] = self.rho
+            spec_mb[i] = self.spec_mb
+
+        # create DataFrame
+        columns = ['year0', 'length_m', 'length_m_0', 'dL', 'area_m2',
+                   'area_m2_0', 'dA', 'volume_m3', 'volume_m3_0', 'dV',
+                   'tau_l', 'tau_a', 'ca', 'gamma', 'cl', 'ql', 'min_hgt',
+                   'min_hgt_0', 'max_hgt', 'rho', 'spec_mb']
+        df = pd.DataFrame(np.array([year0, length_m, length_m_0, dL, area_m2,
+                                    area_m2_0, dA, volume_m3, volume_m3_0, dV,
+                                    tau_l, tau_a, ca, gamma, cl, ql, min_hgt,
+                                    min_hgt_0, max_hgt, rho, spec_mb]).T,
+                          index=years, columns=columns)
+        # return metrics
+        return df
+
+    def create_start_glacier(self, area_m2_start, year_start=1851):
+        """ Instance model with given starting glacier area, for the iterative
+        process of seeking the glacier’s surface area at the beginning of the
+        model integration. Default starting year is 1851.
+
+        The corresponding terminus elevation is scaled given the most recent
+        (measured) outline, which must not be representative.
+
+        :param area_m2_start: (float) starting surface area guess [m2]
+        :param year_start: (float, optional) corresponding starting year,
+            1851 per default
+        """
+        # compute volume (m3) and length (m) from area (using scaling parameters)
+        volume_m3_start = self.ca * area_m2_start ** self.gamma
+        length_m_start = (volume_m3_start / self.cl) ** (1 / self.ql)
+        # compute corresponding terminus elevation
+        min_hgt_start = self.max_hgt + (length_m_start / self.length_m_0
+                                        * (self.min_hgt_0 - self.max_hgt))
+        self.__init__(year_start, area_m2_start, min_hgt_start,
+                      self.max_hgt, self.mb_model)
+
+    def run_and_compare(self, model_ref):
+        """ Let the model glacier evolve to the same year as the reference
+        model (`model_ref`). Compute and return the relative error in area.
+
+        :param model_ref: (oggm.vascaling.VAScalingModel)
+        """
+        # run model and store area
+        years, _, area, _, _, _ = self.run_until(year_end=model_ref.year,
+                                                 reset=True)
+        assert years[-1] == model_ref.year
+        # compute relative difference to reference area
+        rel_error = 1 - area[-1]/model_ref.area_m2
+
+        return rel_error
+
+    def start_area_minimization(self):
+        """ Find the start area which results in a best fitting area after
+        model integration
+
+        :return:
+        """
+        pass

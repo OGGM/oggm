@@ -648,7 +648,7 @@ class TestVAScalingModel(unittest.TestCase):
                                              mb_model=vas_mbmod)
 
         # let model run over entire HistAlp climate period
-        years_vas, length_m_vas, area_m2_vas, volume_m3_vas, _ = \
+        years_vas, length_m_vas, area_m2_vas, volume_m3_vas, _, _ = \
             vas_model.run_until(2003)
 
         # ------

@@ -855,7 +855,7 @@ class UncertainMassBalance(MassBalanceModel):
 class MultipleFlowlineMassBalance(MassBalanceModel):
     """Handle mass-balance at the glacier level instead of flowline level.
 
-    Convenience class doing not much more than wraping a list of mass-balance
+    Convenience class doing not much more than wrapping a list of mass-balance
     models, one for each flowline.
 
     This is useful for real-case studies, where each flowline might have a
