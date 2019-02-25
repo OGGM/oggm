@@ -24,7 +24,9 @@ class NoInternetException(Exception):
 
 
 class DownloadVerificationFailedException(Exception):
-    pass
+    def __init__(self, msg=None, path=None):
+        self.msg = msg
+        self.path = path
 
 
 class HttpDownloadError(Exception):
