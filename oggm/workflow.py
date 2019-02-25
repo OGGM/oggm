@@ -211,9 +211,8 @@ def gdir_from_prepro(entity, from_prepro_level=None,
             entity = demo_id
             demo_url = True
 
-    tar_url = utils.prepro_gdir_url(prepro_rgi_version, rid, prepro_border,
-                                    from_prepro_level, demo_url=demo_url)
-    tar_base = utils.file_downloader(tar_url)
+    tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
+                                     from_prepro_level, demo_url=demo_url)
     if tar_base is None:
         raise RuntimeError('Could not find file at ' + tar_url)
     from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')

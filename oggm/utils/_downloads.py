@@ -295,13 +295,6 @@ def _requests_urlretrieve(url, path, reporthook):
 
 
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
-    with _get_download_lock():
-        return _oggm_urlretrieve_unlocked(url, cache_obj_name, reset,
-                                          reporthook)
-
-
-def _oggm_urlretrieve_unlocked(url, cache_obj_name=None, reset=False,
-                               reporthook=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
@@ -755,15 +748,22 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level, demo_url=False):
+def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, demo_url=False):
+    with _get_download_lock():
+        return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,
+                                         prepro_level, demo_url)
 
+
+def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
+                              demo_url=False):
     # Prepro URL
     url = DEMO_GDIR_URL if demo_url else GDIR_URL
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
     url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
-    return url
+
+    return file_downloader(url)
 
 
 def srtm_zone(lon_ex, lat_ex):
