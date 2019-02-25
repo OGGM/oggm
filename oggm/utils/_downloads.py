@@ -414,7 +414,10 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
             time.sleep(10)
             continue
         except DownloadVerificationFailedException as err:
-            os.remove(err.path)
+            try:
+                os.remove(err.path)
+            except FileNotFoundError:
+                pass
             logger.info("Downloading %s failed with "
                         "DownloadVerificationFailedException\n %s\n"
                         "The file might have changed or is corrupted. "
