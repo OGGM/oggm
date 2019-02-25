@@ -295,6 +295,13 @@ def _requests_urlretrieve(url, path, reporthook):
 
 
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
+    with _get_download_lock():
+        return _oggm_urlretrieve_unlocked(url, cache_obj_name, reset,
+                                          reporthook)
+
+
+def _oggm_urlretrieve_unlocked(url, cache_obj_name=None, reset=False,
+                               reporthook=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
