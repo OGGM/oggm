@@ -748,15 +748,26 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def prepro_gdir_url(rgi_version, rgi_id, border, prepro_level, demo_url=False):
+def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, demo_url=False):
+    with _get_download_lock():
+        return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,
+                                         prepro_level, demo_url)
 
+
+def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
+                              demo_url=False):
     # Prepro URL
     url = DEMO_GDIR_URL if demo_url else GDIR_URL
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
     url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
-    return url
+
+    tar_base = file_downloader(url)
+    if tar_base is None:
+        raise RuntimeError('Could not find file at ' + url)
+
+    return tar_base
 
 
 def srtm_zone(lon_ex, lat_ex):
