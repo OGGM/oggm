@@ -257,7 +257,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
                     path,
                     size, crc32.to_bytes(4, byteorder='big').hex(),
                     data[0], data[1].to_bytes(4, byteorder='big').hex())
-                raise DownloadVerificationFailedException(err)
+                raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
 
     return path
@@ -412,6 +412,17 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
                         " error %s, retrying in 10 seconds... %s/%s" %
                         (www_path, err.code, retry_counter, retry_max))
             time.sleep(10)
+            continue
+        except DownloadVerificationFailedException as err:
+            try:
+                os.remove(err.path)
+            except FileNotFoundError:
+                pass
+            logger.info("Downloading %s failed with "
+                        "DownloadVerificationFailedException\n %s\n"
+                        "The file might have changed or is corrupted. "
+                        "File deleted. Re-downloading... %s/%s" %
+                        (www_path, err.msg, retry_counter, retry_max))
             continue
 
     # See if we managed (fail is allowed)
