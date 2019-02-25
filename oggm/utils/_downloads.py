@@ -417,9 +417,9 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
             os.remove(err.path)
             logger.info("Downloading %s failed with "
                         "DownloadVerificationFailedException\n %s\n"
-                        "The file might have changed or is corrupted."
+                        "The file might have changed or is corrupted. "
                         "File deleted. Re-downloading... %s/%s" %
-                        (www_path, err.msg, retry_counter, retry_max)
+                        (www_path, err.msg, retry_counter, retry_max))
             continue
 
     # See if we managed (fail is allowed)

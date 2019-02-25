@@ -555,6 +555,31 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
+    def test_corrupted_file(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(['hef'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10)
+
+        cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 10, 4,
+                                      demo_url=True)
+        assert 'cluster.klima.uni-bremen.de/~fmaussion/' in cfile
+
+        # Replace with a dummy file
+        os.remove(cfile)
+        with open(cfile, 'w') as f:
+            f.write('ups')
+
+        # This should retrigger a download and just work
+        gdirs = workflow.init_glacier_regions(['hef'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10)
+        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                     nyears=10)
+
 
 class TestPreproCLI(unittest.TestCase):
 
