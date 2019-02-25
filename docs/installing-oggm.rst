@@ -157,8 +157,11 @@ First, choose which version of OGGM you would like to install:
   version number (e.g. v1.1).
 - **dev**: this is the development version. It might contain new
   features and bug fixes, but is also likely to continue to change until a
-  new release is made. This is the recommended way if you plan to contribute
-  to the model, and/or if you want to use the most recent model updates.
+  new release is made. This is the recommended way if you want to use the
+  latest changes to the code.
+- **dev+code**: this is the recommended way if you plan to explore the OGGM
+  codebase, contribute to the model, and/or if you want to use the most
+  recent model updates.
 
 **‣ install the stable version:**
 
@@ -171,6 +174,17 @@ If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/p
     pip install oggm
 
 **‣ install the dev version:**
+
+For this to work you'll need to have the `git`_ software installed on your
+system. In your conda environmnent, simply do::
+
+    pip install --upgrade git+https://github.com/OGGM/oggm.git
+
+With this command you can also update an already installed OGGM version
+to the latest version.
+
+
+**‣ install the dev version + get access to the OGGM code:**
 
 For this to work you'll need to have the `git`_ software installed on your
 system. Then, clone the latest repository version::
