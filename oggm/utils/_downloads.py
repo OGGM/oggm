@@ -763,7 +763,11 @@ def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
     url += 'L{:d}/'.format(prepro_level)
     url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
 
-    return file_downloader(url)
+    tar_base = file_downloader(url)
+    if tar_base is None:
+        raise RuntimeError('Could not find file at ' + url)
+
+    return tar_base
 
 
 def srtm_zone(lon_ex, lat_ex):
