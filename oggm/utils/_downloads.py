@@ -420,13 +420,6 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
                         (www_path, err.code, retry_counter, retry_max))
             time.sleep(10)
             continue
-        except DownloadVerificationFailedException:
-            logger.info("Downloading %s failed with"
-                        "DownloadVerificationFailedException, "
-                        "retrying in 10 seconds... %s/%s" %
-                        (www_path, retry_counter, retry_max))
-            time.sleep(10)
-            continue
 
     # See if we managed (fail is allowed)
     if not local_path or not os.path.exists(local_path):
