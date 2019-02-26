@@ -130,11 +130,13 @@ for gd in gdirs:
 
     mb_mod = MultipleFlowlineMassBalance(gd,
                                          mb_model_class=ConstantMassBalance,
+                                         use_inversion_flowlines=True,
                                          bias=0)  # bias=0 because of calib!
     mb = mb_mod.get_specific_mb()
     np.testing.assert_allclose(mb, 0, atol=5)  # atol for numerical errors
 
-    mb_mod = MultipleFlowlineMassBalance(gd, mb_model_class=PastMassBalance)
+    mb_mod = MultipleFlowlineMassBalance(gd, mb_model_class=PastMassBalance,
+                                         use_inversion_flowlines=True)
 
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
