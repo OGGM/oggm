@@ -43,9 +43,9 @@ It depends what you mean by "long-term": at centenial time scales, yes. At
 millenial time scales, maybe. At glacial time scales, probably not. The major
 issue we have to face with OGGM is that it uses a "glacier-centric" approach:
 it can simulate the mountain glaciers and ice-caps we know from contemporary
-inventories, but
-it cannot simulate glaciers which have disappeared today but don't exist
-anymore. Also, if glaciers grow into large ice complexes and ice caps, the
+inventories, but it cannot simulate glaciers which existed before but have
+disappeared until today.
+Also, if glaciers grow into large ice complexes and ice caps, the
 flowline assumption becomes much less valid than for typical valley glaciers
 found today. For these situations, fully distributed models like PISM
 are more appropriate.
