@@ -51,7 +51,7 @@ For example:
 .. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
 
 The ``~/.oggm`` directory should be updated automatically when you update OGGM,
-but if you encounter any problems with is, simply delete the directory (it will
+but if you encounter any problems with it, simply delete the directory (it will
 be re-downloaded automatically at the next import).
 
 
@@ -80,7 +80,7 @@ Some explanations:
   downloaded will be cached for later use. Most of the users won't need to
   explore this folder (it is organized as a list of urls) but you have to make
   sure to set this path to a folder with sufficient disk space available. This
-  folder can be shared across computers if needed. Once an url is stored
+  folder can be shared across computers if needed. Once a file is stored
   in this cache folder, OGGM won't download it again.
 - ``dl_cache_readonly`` indicates if writing is allowed in this folder (this is
   the default). Setting this to ``True`` will prevent any further download in
@@ -288,10 +288,10 @@ default in OGGM is to use the following rule:
 
     \Delta x = d_1 \sqrt{S} + d_2
 
-where :math:`\Delta x` is the grid spatial resolution (in m),  :math:`S` the
-glacier area (in km) and :math:`d_1`, :math:`d_2` some parameters (set to 14 and 10,
+where :math:`\Delta x` is the grid spatial resolution (in m), :math:`S` the
+glacier area (in km\ :math:`^{2}`) and :math:`d_1`, :math:`d_2` some parameters (set to 14 and 10,
 respectively). If the chosen spatial resolution is larger than 200 m
-(:math:`S \ge` 185 km :math:`^{2}`) we clip it to this value.
+(:math:`S \ge` 185 km\ :math:`^{2}`) we clip it to this value.
 
 
 .. ipython:: python
