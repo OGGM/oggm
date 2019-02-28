@@ -4,6 +4,18 @@
 Version history
 ===============
 
+v1.1.x (unreleased)
+-------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
 v1.1 (28.02.2019)
 -----------------
 
