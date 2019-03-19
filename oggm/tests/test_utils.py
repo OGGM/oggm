@@ -1098,7 +1098,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='test.txt')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
             self.assertEqual(url, expected)
             return rgi_f
@@ -1117,7 +1117,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='01_rgi60_Region.shp')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi60_manifest.txt')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
             self.assertEqual(url, expected)
             return rgi_f
@@ -1149,7 +1149,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='intersects_rgi50_AllRegs.shp')
         rgi_f = make_fake_zipdir(rgi_dir)
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V50_Intersects.zip')
             self.assertEqual(url, expected)
@@ -1171,7 +1171,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='Intersects_OGGM_Manifest.txt')
         rgi_f = make_fake_zipdir(rgi_dir)
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V60_Intersects.zip')
             self.assertEqual(url, expected)
@@ -1191,7 +1191,7 @@ class TestFakeDownloads(unittest.TestCase):
         with gzip.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
                         'cruts.1709081022.v4.01/tmp/'
                         'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
@@ -1210,7 +1210,7 @@ class TestFakeDownloads(unittest.TestCase):
         with bz2.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('http://www.zamg.ac.at/histalp/download/grid5m/'
                         'HISTALP_temperature_1780-2014.nc.bz2')
             self.assertEqual(url, expected)
@@ -1227,7 +1227,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = make_fake_zipdir(os.path.join(self.dldir, 'srtm_39_03'),
                               fakefile='srtm_39_03.tif')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/'
                         'srtm_5x5/TIFF/srtm_39_03.zip')
             self.assertEqual(url, expected)
@@ -1241,7 +1241,7 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_dem3(self):
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)
             return self.dem3_testfile
@@ -1254,7 +1254,7 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_ramp(self):
 
-        def down_check(url):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'AntarcticDEM_wgs84.tif'
             self.assertEqual(url, expected)
             return 'yo'
@@ -1270,7 +1270,7 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_gimp(self):
 
-        def down_check(url):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'gimpdem_90m_v01.1.tif'
             self.assertEqual(url, expected)
             return 'yo'
@@ -1289,7 +1289,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTM2_S88W121'),
                               fakefile='ASTGTM2_S88W121_dem.tif')
 
-        def down_check(url):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
             self.assertEqual(url, expected)
             return tf
@@ -1305,7 +1305,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
 
-        def down_check(url, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
                         '/pr/pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)
@@ -1316,7 +1316,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         fn = 'tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc'
 
-        def down_check(url, reset=False):
+        def down_check(url, cache_name=None, reset=False, auth=None):
             expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
                         '/tas/tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)

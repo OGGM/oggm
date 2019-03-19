@@ -263,14 +263,14 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     return path
 
 
-def _requests_urlretrieve(url, path, reporthook):
+def _requests_urlretrieve(url, path, reporthook, auth=None):
     """Implements the required features of urlretrieve on top of requests
     """
 
     chunk_size = 128 * 1024
     chunk_count = 0
 
-    with requests.get(url, stream=True) as r:
+    with requests.get(url, stream=True, auth=auth) as r:
         if r.status_code != 200:
             raise HttpDownloadError(r.status_code)
         r.raise_for_status()
@@ -294,11 +294,14 @@ def _requests_urlretrieve(url, path, reporthook):
             raise HttpContentTooShortError()
 
 
-def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
+def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
+                     reporthook=None, auth=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
     and returns the local path.
+
+    auth is expected to be either a tuple of ('username', 'password') or None.
     """
 
     if cache_obj_name is None:
@@ -307,13 +310,13 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
 
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
-        _requests_urlretrieve(url, cache_path, reporthook)
+        _requests_urlretrieve(url, cache_path, reporthook, auth)
         return cache_path
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def _progress_urlretrieve(url, cache_name=None, reset=False):
+def _progress_urlretrieve(url, cache_name=None, reset=False, auth=None):
     """Downloads a file, returns its local path, and shows a progressbar."""
 
     try:
@@ -331,14 +334,15 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
         res = oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset,
-                               reporthook=_upd)
+                               reporthook=_upd, auth=auth)
         try:
             pbar[0].finish()
         except BaseException:
             pass
         return res
     except (ImportError, ModuleNotFoundError):
-        return oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset)
+        return oggm_urlretrieve(url, cache_obj_name=cache_name,
+                                reset=reset, auth=auth)
 
 
 def aws_file_download(aws_path, cache_name=None, reset=False):
@@ -381,7 +385,8 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
+def file_downloader(www_path, retry_max=5, cache_name=None,
+                    reset=False, auth=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -391,7 +396,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
         try:
             retry_counter += 1
             local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
-                                               reset=reset)
+                                               reset=reset, auth=auth)
             # if no error, exit
             break
         except HttpDownloadError as err:
