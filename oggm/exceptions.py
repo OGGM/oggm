@@ -23,6 +23,10 @@ class NoInternetException(Exception):
     pass
 
 
+class DownloadCredentialsMissingException(Exception):
+    pass
+
+
 class DownloadVerificationFailedException(Exception):
     def __init__(self, msg=None, path=None):
         self.msg = msg

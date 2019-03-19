@@ -41,6 +41,7 @@ except NameError:
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
+                             DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError)
 
 # Module logger
@@ -531,18 +532,25 @@ def _download_tandem_file_unlocked(zone):
     if os.path.exists(outpath):
         return outpath
 
+    # Grab auth parameters
+    tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
+    if not os.path.isfile(tdmauthfile):
+        raise DownloadCredentialsMissingException(
+            tdmauthfile + ' does not exist.')
+    with open(tdmauthfile, 'r') as f:
+        tdmuser = f.readline().strip()
+        tdmpass = f.readline().strip()
+    if not tdmuser or not tdmpass:
+        raise DownloadCredentialsMissingException(
+            'Could not read credentials from ' + tdmauthfile)
+
     # Did we download it yet?
-    scpfile = ('/home/data/download/tandemx-90m.dlr.de/90mdem/DEM/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
                '{}.zip'.format(zone))
-    cache_dir = cfg.PATHS['dl_cache_dir']
-    dest_file = os.path.join(cache_dir, 'scp_tandem', zone + '.zip')
-    if not os.path.exists(dest_file):
-        mkdir(os.path.dirname(dest_file))
-        cmd = 'scp bremen:%s %s' % (scpfile, dest_file)
-        os.system(cmd)
+    dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
 
     # That means we tried hard but we couldn't find it
-    if not os.path.exists(dest_file):
+    if not dest_file:
         return None
 
     # ok we have to extract it
