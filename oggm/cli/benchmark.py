@@ -168,6 +168,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
                                  output_filesuffix='_tstar')
     _add_time_to_df(odf, 'run_random_climate_tstar_250', time.time()-start)
 
+    start = time.time()
     workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                  nyears=250, y0=1995, seed=0,
                                  output_filesuffix='_commit')
