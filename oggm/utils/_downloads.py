@@ -536,7 +536,7 @@ def _download_tandem_file_unlocked(zone):
     tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
     if not os.path.isfile(tdmauthfile):
         raise DownloadCredentialsMissingException(
-            tdmauthfile + ' does not exist.')
+            tdmauthfile + ' does not exist. Login using oggm_tdmdem90_login.')
     with open(tdmauthfile, 'r') as f:
         tdmuser = f.readline().strip()
         tdmpass = f.readline().strip()
