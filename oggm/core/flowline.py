@@ -22,6 +22,7 @@ from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
+from oggm.exceptions import InvalidParamsError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance,
@@ -676,6 +677,11 @@ class FlowlineModel(object):
         if run_path is not None:
             self.to_netcdf(run_path)
         ny = len(yearly_time)
+        if ny == 1:
+            yrs = [yrs]
+            cyrs = [cyrs]
+            months = [months]
+            cmonths = [cmonths]
         nm = len(monthly_time)
         sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
         widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
@@ -1640,14 +1646,20 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                                time_stepping=step,
                                is_tidewater=gdir.is_tidewater,
                                **kwargs)
-        try:
-            model.run_until_and_store(ye, run_path=run_path,
-                                      diag_path=diag_path,
-                                      store_monthly_step=store_monthly_step)
-        except (RuntimeError, FloatingPointError):
-            if step == 'ultra-conservative':
-                raise
-            continue
+
+        with np.warnings.catch_warnings():
+            # For operational runs we ignore the warnings
+            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            try:
+                model.run_until_and_store(ye, run_path=run_path,
+                                          diag_path=diag_path,
+                                          store_monthly_step=store_monthly_step
+                                          )
+            except (RuntimeError, FloatingPointError):
+                if step == 'ultra-conservative':
+                    raise
+                continue
+
         # If we get here we good
         log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
@@ -1805,7 +1817,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 
 @entity_task(log)
-def run_from_climate_data(gdir, ys=None, ye=None,
+def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                           store_monthly_step=False,
                           climate_filename='climate_monthly',
                           climate_input_filesuffix='', output_filesuffix='',
@@ -1823,9 +1835,13 @@ def run_from_climate_data(gdir, ys=None, ye=None,
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     ys : int
-        start year of the model run (default: from the config file)
+        start year of the model run (default: from the glacier geometry
+        date)
     ye : int
-        end year of the model run (default: from the config file)
+        end year of the model run (no default: needs to be set)
+    min_ys : int
+        if you want to impose a minimum start year, regardless if the glacier
+        inventory date is later.
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -1853,9 +1869,14 @@ def run_from_climate_data(gdir, ys=None, ye=None,
     """
 
     if ys is None:
-        ys = cfg.PARAMS['ys']
+        try:
+            ys = gdir.rgi_date.year
+        except AttributeError:
+            ys = gdir.rgi_date
     if ye is None:
-        ye = cfg.PARAMS['ye']
+        raise InvalidParamsError('Need to set the `ye` kwarg!')
+    if min_ys is not None:
+        ys = ys if ys < min_ys else min_ys
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)

@@ -7,6 +7,7 @@ import shutil
 import time
 import gzip
 import bz2
+import zlib
 import pytest
 from unittest import mock
 
@@ -23,7 +24,8 @@ from oggm import cfg
 from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
                               init_hef, TempEnvironmentVariable)
 from oggm.utils import shape_factor_adhikari
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import (InvalidParamsError,
+                             DownloadVerificationFailedException)
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -996,6 +998,52 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['rgi_dir'])
         utils.mkdir(cfg.PATHS['cru_dir'])
 
+    def prepare_verify_test(self, valid_size=True, valid_crc32=True):
+        self.reset_dir()
+        cfg.PARAMS['dl_verify'] = True
+
+        tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com',
+                                'test.txt')
+
+        file_size = 1024
+        file_data = os.urandom(file_size)
+        file_crc32 = zlib.crc32(file_data)
+
+        utils.mkdir(os.path.dirname(tgt_path))
+        with open(tgt_path, 'wb') as f:
+            f.write(file_data)
+
+        if not valid_size:
+            file_size += 1
+        if not valid_crc32:
+            file_crc32 += 1
+
+        data = utils.get_dl_verify_data()
+        data['test.com/test.txt'] = (file_size, file_crc32)
+
+        return 'https://test.com/test.txt'
+
+    def test_dl_verify(self):
+        def fake_down(dl_func, cache_path):
+            assert False
+
+        with FakeDownloadManager('_call_dl_func', fake_down):
+            url = self.prepare_verify_test(True, True)
+            utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(False, True)
+            with self.assertRaises(DownloadVerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(True, False)
+            with self.assertRaises(DownloadVerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
+            url = self.prepare_verify_test(False, False)
+            with self.assertRaises(DownloadVerificationFailedException):
+                utils.oggm_urlretrieve(url)
+
+
     def test_github_no_internet(self):
         self.reset_dir()
         cache_dir = cfg.CACHE_DIR
@@ -1665,6 +1713,28 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual(len(fdem), 3)
         for fp in fdem:
             self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_from_prepro(self):
+
+        # Read in the RGI file
+        rgi_file = utils.get_demo_file('rgi_oetztal.shp')
+        rgidf = gpd.read_file(rgi_file)
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
+                          for rid in rgidf.RGIId]
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf.iloc[:2],
+                                              from_prepro_level=1,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10,
+                                              use_demo_glaciers=False)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
 
 class TestSkyIsFalling(unittest.TestCase):

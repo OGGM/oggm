@@ -38,13 +38,10 @@ cfg.PARAMS['run_mb_calibration'] = True
 # We are using which baseline data?
 cfg.PARAMS['baseline_climate'] = baseline
 
-# No need for intersects since this has an effect on the inversion only
-cfg.PARAMS['use_intersects'] = False
-
 # Use multiprocessing?
 cfg.PARAMS['use_multiprocessing'] = True
 
-# Set to True for operational runs
+# Set to True for operational runs - here we want all glaciers to run
 cfg.PARAMS['continue_on_error'] = False
 
 if baseline == 'HISTALP':

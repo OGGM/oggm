@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import os
 import shutil
+import copy
 
 # import unittest
 import unittest
@@ -36,15 +37,23 @@ class TestVAScalingModel(unittest.TestCase):
             os.makedirs(self.testdir)
         self.clean_dir()
 
-        # Init
+        # load default parametere file and set working directory
         cfg.initialize()
-        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
+        # set path to GIS files
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        # set parameters for climate file and mass balance calibration
+        cfg.PARAMS['baseline_climate'] = 'CUSTOM'
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 10
         cfg.PARAMS['run_mb_calibration'] = True
-        cfg.PARAMS['baseline_climate'] = ''
+        # adjust parameters for HistAlp climate
+        cfg.PARAMS['prcp_scaling_factor'] = 1.75
+        cfg.PARAMS['temp_melt'] = -1.75
+        cfg.PARAMS['temp_all_liq'] = 2.
+        cfg.PARAMS['temp_all_solid'] = 0.
+        cfg.PARAMS['temp_default_gradient'] = -0.0065
+
         # coveralls.io has issues if multiprocessing is enabled
         cfg.PARAMS['use_multiprocessing'] = False
 
@@ -247,8 +256,8 @@ class TestVAScalingModel(unittest.TestCase):
         assert md(prcp_oggm, prcp) <= 0
 
         # correlation must be higher than set threshold
-        assert corrcoef(temp, temp_oggm) >= 0.8
-        assert corrcoef(prcp, prcp_oggm) >= 0.9
+        assert corrcoef(temp, temp_oggm) >= 0.94
+        assert corrcoef(prcp, prcp_oggm) >= 0.98
 
         # get terminus temperature using the OGGM routine
         fpath = gdir.get_filepath('gridded_data')
@@ -270,7 +279,7 @@ class TestVAScalingModel(unittest.TestCase):
         years_height, _, prcp_height = \
             climate.mb_yearly_climate_on_height(gdir, heights, flatten=True)
         # correlation must be higher than set threshold
-        assert corrcoef(prcp, prcp_height) >= 0.9
+        assert corrcoef(prcp, prcp_height) >= 0.99
 
         # TODO: assert absolute values (or differences) of precipitation @ASK
         pass
@@ -283,10 +292,6 @@ class TestVAScalingModel(unittest.TestCase):
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-
-        # set the precipitation scaling factor
-        # TODO: omit or keep?! Only necessary for profiles
-        # cfg.PARAMS['prcp_scaling_factor'] = 2.9
 
         # initialize the GlacierDirectory
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
@@ -306,21 +311,21 @@ class TestVAScalingModel(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()
         # compute the reference t* for the glacier
         # given the reference of mass balance measurements
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        #res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        res = vascaling.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
 
         # compute local t* and the corresponding mu*
         vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
         # read calibration results
         vascaling_mustar = gdir.read_json('vascaling_mustar')
+        mu_star = vascaling_mustar['mu_star']
 
         # get min and max glacier elevation
         min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
 
         # define mass balance model
-        vas_mb = vascaling.VAScalingMassBalance(gdir,
-                                                mu_star=vascaling_mustar['mu_star'],
-                                                bias=0)
+        vas_mb = vascaling.VAScalingMassBalance(gdir, mu_star=mu_star, bias=0)
         # define 31-year climate period around t*
         mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
         years = np.arange(t_star - mu_hp, t_star + mu_hp + 1)
@@ -333,7 +338,15 @@ class TestVAScalingModel(unittest.TestCase):
         # compute sum over climate period
         mb_sum = np.sum(mb_yearly)
         # check for apparent mb to be zero (to the third decimal digit)
-        np.testing.assert_allclose(mb_sum, 0, atol=1e-3)
+        np.testing.assert_allclose(mb_sum, 0, atol=3e-4)
+
+    def test_ref_t_stars(self):
+        # TODO
+        pass
+
+    # -------------------------
+    # Test mass balance models
+    # -------------------------
 
     def _setup_mb_test(self):
         """ Avoiding a chunk of code duplicate. Performs needed prepo tasks and
@@ -362,7 +375,7 @@ class TestVAScalingModel(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()
         # compute the reference t* for the glacier
         # given the reference of mass balance measurements
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        res = vascaling.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
 
         # compute local t* and the corresponding mu*
@@ -491,7 +504,7 @@ class TestVAScalingModel(unittest.TestCase):
         # compute mass balance 'by hand'
         mb_ref = (prcp - mu_star * temp) / fac_SI
         # compute mb 'by model'
-        mb_mod = vascaling.VAScalingMassBalance(gdir, bias=0).\
+        mb_mod = vascaling.VAScalingMassBalance(gdir, bias=0). \
             get_annual_mb(min_hgt, max_hgt, year)
         # compare mass balances without bias
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
@@ -561,27 +574,118 @@ class TestVAScalingModel(unittest.TestCase):
             vas_mb[i] = vas_mbmod.get_specific_mb(min_hgt, max_hgt, year)
 
         # compute and check correlation
-        assert corrcoef(past_mb, vas_mb) >= 0.9
+        assert corrcoef(past_mb, vas_mb) >= 0.94
 
         # relative error of average spec mb
         # TODO: does this even make any sense?!
-        assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.3
+        assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.36
 
         # check correlation of positive and negative mb years
-        assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.75
+        assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.77
 
         # compare to reference mb measurements
-        mbs = pd.DataFrame(gdir.get_ref_mb_data()['ANNUAL_BALANCE'])
-        mbs['vas'] = pd.Series(vas_mb, index=years)
-        assert mbs.corr().iloc[0, 1] >= 0.8
         mbs = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         assert corrcoef(vas_mb[np.in1d(years, mbs.index)], mbs) >= 0.8
 
+    # -------------------
+    # Test scaling model
+    # -------------------
+
+    def _set_up_VAS_model(self):
+        """ Avoiding a chunk of code duplicate. Set's up a running volume/area
+        scaling model, including all needed prepo tasks. """
+        # read the Hintereisferner DEM
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        # process the given climate file
+        climate.process_custom_climate_data(gdir)
+
+        # run center line preprocessing tasks
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # read reference glacier mass balance data
+        mbdf = gdir.get_ref_mb_data()
+        # compute the reference t* for the glacier
+        # given the reference of mass balance measurements
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+
+        # --------------------
+        #  MASS BALANCE TASKS
+        # --------------------
+
+        # compute local t* and the corresponding mu*
+        vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
+
+        # instance the mass balance models
+        mbmod = vascaling.VAScalingMassBalance(gdir)
+
+        # ----------------
+        #  DYNAMICAL PART
+        # ----------------
+        # get reference area
+        a0 = gdir.rgi_area_m2
+        # get reference year
+        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        # get min and max glacier surface elevation
+        h0, h1 = vascaling.get_min_max_elevation(gdir)
+
+        model = vascaling.VAScalingModel(year_0=y0, area_m2_0=a0,
+                                         min_hgt=h0, max_hgt=h1,
+                                         mb_model=mbmod)
+        return gdir, model
+
     def test_time_scales(self):
-        pass
+        """ Test the internal method which computes the glaciers time scales
+        for length change and area change.
+        TODO: come up with some more sophisticated tests """
+        # get glacier directory and set up VAS model
+        _, model = self._set_up_VAS_model()
+        # compute time scales
+        model._compute_time_scales()
+        # compare to given values
+        np.testing.assert_allclose(model.tau_l, 55.6, atol=0.1)
+        np.testing.assert_allclose(model.tau_a, 17.6, atol=0.1)
+
+    def test_reset(self):
+        """ Test the method which sets the model back to its initial state. """
+        # get glacier directory and set up VAS model
+        _, model = self._set_up_VAS_model()
+        # run for some number of years
+        n_years = 10
+        model.run_until(model.year + n_years)
+        # reset the model
+        model.reset()
+        # check if initial values are restored
+        assert model.year == model.year_0
+        assert model.length_m == model.length_m_0
+        assert model.area_m2 == model.area_m2_0
+        assert model.volume_m3 == model.volume_m3_0
+        assert model.min_hgt == model.min_hgt_0
 
     def test_step(self):
-        pass
+        # get glacier directory and set up VAS model
+        _, model = self._set_up_VAS_model()
+        # copy initial state of the model
+        m0 = copy.deepcopy(model)
+        # advance model glacier by one year
+        model.step()
+        # compare initial to advanced model state
+        dV = m0.mb_model.get_specific_mb(m0.min_hgt, m0.max_hgt, m0.year) \
+             * m0.area_m2 / m0.rho
+        np.testing.assert_allclose(model.volume_m3 - m0.volume_m3, dV)
 
     def test_run_until(self):
         """ Test the volume/area scaling model against the oggm.FluxBasedModel.

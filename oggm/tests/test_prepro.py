@@ -525,7 +525,7 @@ class TestCenterlines(unittest.TestCase):
         entity['Area'] = entity['AREA']
         entity['CenLat'] = entity['CENLAT']
         entity['CenLon'] = entity['CENLON']
-        entity.BgnDate = 0
+        entity.BgnDate = '-999'
         entity.Name = 'Baltoro'
         entity.GlacType = '0000'
         entity.Status = '0'
@@ -538,6 +538,8 @@ class TestCenterlines(unittest.TestCase):
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
         cls = gdir.read_pickle('centerlines')
+
+        assert gdir.rgi_date == 2009
 
         sub = centerlines.line_inflows(cls[-1])
         self.assertEqual(set(cls), set(sub))
@@ -2223,80 +2225,47 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.process_dummy_cru_file(gdir, seed=0)
 
-        rho = cfg.PARAMS['ice_density']
-        i = 0
-        calving_flux = []
-        mu_star = []
-        ite = []
-        cfg.PARAMS['clip_mu_star'] = False
-        cfg.PARAMS['min_mu_star'] = 0  # default is now 1
-        while i < 12:
+        # Test default k (it overshoots)
+        df = utils.find_inversion_calving(gdir)
 
-            # Calculates a calving flux from model output
-            if i == 0:
-                # First call we set to zero (not very necessary,
-                # this first loop could be removed)
-                f_calving = 0
-            elif i == 1:
-                # Second call we set a very small positive calving
-                f_calving = utils.calving_flux_from_depth(gdir, water_depth=1)
-            elif cfg.PARAMS['clip_mu_star']:
-                # If we have to clip mu the calving becomes the real flux
-                fl = gdir.read_pickle('inversion_flowlines')[-1]
-                f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
-            else:
-                # Otherwise it is parameterized
-                f_calving = utils.calving_flux_from_depth(gdir)
+        assert max(df.index) < 8
+        assert max(df.index) > 3
+        assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 2
+        assert df.mu_star.iloc[-1] == 0
 
-            # Give it back to the inversion and recompute
-            gdir.inversion_calving_rate = f_calving
-
-            # At this step we might raise a MassBalanceCalibrationError
-            mu_is_zero = False
-            try:
-                climate.local_t_star(gdir)
-                df = gdir.read_json('local_mustar')
-            except MassBalanceCalibrationError as e:
-                assert 'mu* out of specified bounds' in str(e)
-                # When this happens we clip mu* to zero and store the
-                # bad value (just for plotting)
-                cfg.PARAMS['clip_mu_star'] = True
-                df = gdir.read_json('local_mustar')
-                df['mu_star_glacierwide'] = float(str(e).split(':')[-1])
-                climate.local_t_star(gdir)
-
-            climate.mu_star_calibration(gdir)
-            inversion.prepare_for_inversion(gdir, add_debug_var=True)
-            v_inv, _ = inversion.mass_conservation_inversion(gdir)
-
-            # Store the data
-            calving_flux = np.append(calving_flux, f_calving)
-            mu_star = np.append(mu_star, df['mu_star_glacierwide'])
-            ite = np.append(ite, i)
-
-            # Do we have to do another_loop?
-            if i > 0:
-                avg_one = np.mean(calving_flux[-4:])
-                avg_two = np.mean(calving_flux[-5:-1])
-                difference = abs(avg_two - avg_one)
-                conv = (difference < 0.05 * avg_two or
-                        calving_flux[-1] == 0 or
-                        calving_flux[-1] == calving_flux[-2])
-                if mu_is_zero or conv:
-                    break
-            i += 1
-
-        assert i < 8
-        assert calving_flux[-1] < np.max(calving_flux)
-        assert calving_flux[-1] > 2
-        assert mu_star[-1] == 0
-
+        # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
         mb = mbmod(gdir, use_inversion_flowlines=True,
                    mb_model_class=massbalance.ConstantMassBalance,
                    bias=0)
+
+        rho = cfg.PARAMS['ice_density']
         flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
-        np.testing.assert_allclose(flux_mb, calving_flux[-1], atol=0.001)
+        np.testing.assert_allclose(flux_mb, df.calving_flux.iloc[-1],
+                                   atol=0.001)
+
+        # Test with smaller k (it doesn't overshoot)
+        cfg.PARAMS['k_calving'] = 0.2
+        df = utils.find_inversion_calving(gdir)
+
+        assert max(df.index) < 14
+        assert max(df.index) > 8
+        assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 0.5
+        assert df.calving_flux.iloc[-1] < 1
+        assert df.mu_star.iloc[-1] > 0
+
+        # Test with smaller k and large water depth
+        cfg.PARAMS['k_calving'] = 0.2
+        df = utils.find_inversion_calving(gdir, water_depth=1200)
+
+        assert max(df.index) < 14
+        assert max(df.index) > 6
+        assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 0.5
+        assert df.calving_flux.iloc[-1] < 1
+        assert df.mu_star.iloc[-1] > 0
 
 
 class TestGrindelInvert(unittest.TestCase):
@@ -2582,6 +2551,11 @@ class TestGCMClimate(unittest.TestCase):
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
 
+            # Here no std dev!
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            assert not np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+
             # And also the annual cycle
             scru = scru.groupby('time.month').mean(dim='time')
             scesm = scesm.groupby('time.month').mean(dim='time')
@@ -2599,6 +2573,75 @@ class TestGCMClimate(unittest.TestCase):
             assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
             # N more than 30%? (silly test)
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
+    def test_process_cmip5_scale(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        climate.process_cru_data(gdir)
+
+        ci = gdir.read_pickle('climate_info')
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_temp_file'] = f
+        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        cfg.PATHS['cmip5_precip_file'] = f
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns')
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4',
+                                       scale_stddev=True)
+
+        fh = gdir.get_filepath('climate_monthly')
+        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cmip.load().isel(time=((cmip['time.year'] >= 1961) &
+                                           (cmip['time.year'] <= 1990)))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+
+            # And also the annual cycle
+            _scru = scru.groupby('time.month').mean(dim='time')
+            _scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(_scru.prcp, _scesm.prcp, rtol=1e-3)
+
+            # Here also std dev!
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+
+            # How did the annual cycle change with time?
+            scmip1 = cmip.isel(time=((cmip['time.year'] >= 1961) &
+                                     (cmip['time.year'] <= 1990)))
+            scmip2 = cmip.isel(time=((cmip['time.year'] >= 2061) &
+                                     (cmip['time.year'] <= 2090)))
+            scmip1 = scmip1.groupby('time.month').mean(dim='time')
+            scmip2 = scmip2.groupby('time.month').mean(dim='time')
+            # It has warmed
+            assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
+            # N more than 30%? (silly test)
+            np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
+        # Check that the two variabilies still correlate a lot
+        f1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_ns')
+        f2 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(f1) as ds1, xr.open_dataset(f2) as ds2:
+            n = 30*12+1
+            ss1 = ds1.temp.rolling(time=n, min_periods=1, center=True).std()
+            ss2 = ds2.temp.rolling(time=n, min_periods=1, center=True).std()
+            assert utils.corrcoef(ss1, ss2) > 0.9
 
     def test_compile_climate_input(self):
 

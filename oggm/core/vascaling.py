@@ -10,14 +10,18 @@ Author: Moritz Oberrauch
 # External libs
 import numpy as np
 import pandas as pd
+import xarray as xr
 import netCDF4
 import os
 import datetime
+from time import gmtime, strftime
 from scipy.optimize import minimize_scalar
 
 # import OGGM modules
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
+
+from oggm import __version__
 
 from oggm import utils
 from oggm.utils import floatyear_to_date, ncDataset
@@ -258,8 +262,10 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # TODO: this is a quick and dirty fix. Has to be changes in
-                # analogy to the climate.local_tstar()
-                fp = '/Users/oberrauch/oggm-fork/oggm/data/ref_tstars_vas_rgi6_histalp.csv'
+                # analogy to the climate.local_tstar() searching all provided
+                # prepared ref_tstars.csv files
+                fp = '/Users/oberrauch/oggm-fork/oggm/data/' \
+                     'ref_tstars_vas_rgi6_histalp.csv'
                 ref_df = pd.read_csv(fp)
             else:
                 # Use the the local calibration
@@ -801,7 +807,8 @@ class VAScalingMassBalance(MassBalanceModel):
     def get_ela(self, year=None):
         """ The ELA can not be calculated using this mass balance model. """
         raise NotImplementedError('The equilibrium line altitude can not be ' +
-                                  'computed for the `VAScalingMassBalance` model.')
+                                  'computed for the `VAScalingMassBalance` ' +
+                                  'model.')
 
 
 class RandomVASMassBalance(MassBalanceModel):
@@ -862,6 +869,9 @@ class RandomVASMassBalance(MassBalanceModel):
                                           filename=filename,
                                           input_filesuffix=input_filesuffix)
 
+        # get mb model parameters
+        self.prcp_clim = self.mbmod.prcp_clim
+
         # define years of climate period
         if all_years:
             # use full climate period
@@ -870,9 +880,12 @@ class RandomVASMassBalance(MassBalanceModel):
             if y0 is None:
                 # choose t* as center of climate period
                 df = gdir.read_json('vascaling_mustar')
-                y0 = df['t_star']
+                self.y0 = df['t_star']
+            else:
+                # set y0 as attribute
+                self.y0 = y0
             # use 31-year period around given year `y0`
-            self.years = np.arange(y0-halfsize, y0+halfsize+1)
+            self.years = np.arange(self.y0-halfsize, self.y0+halfsize+1)
         # define year range and number of years
         self.yr_range = (self.years[0], self.years[-1]+1)
         self.ny = len(self.years)
@@ -957,6 +970,47 @@ class RandomVASMassBalance(MassBalanceModel):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_specific_mb(min_hgt, max_hgt, year=ryr)
 
+    def get_ela(self, year=None):
+        """ The ELA can not be calculated using this mass balance model. """
+        raise NotImplementedError('The equilibrium line altitude can not be ' +
+                                  'computed for the `VAScalingMassBalance` ' +
+                                  'model.')
+
+
+def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                           bias=None, seed=None, temperature_bias=None,
+                           output_filesuffix='',
+                           climate_filename='climate_monthly',
+                           climate_input_filesuffix='', unique_samples=False):
+
+    # instance mass balance model
+    mb_mod = RandomVASMassBalance(gdir, y0=y0, halfsize=halfsize, bias=bias,
+                                  seed=seed, filename=climate_filename,
+                                  input_filesuffix=climate_input_filesuffix,
+                                  unique_samples=unique_samples)
+
+    if temperature_bias is not None:
+        # add given temperature bias to mass balance model
+        mb_mod.temp_bias = temperature_bias
+
+    # where to store the model output
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix='vas',
+                                  delete=True)
+
+    # instance the model
+    min_hgt, max_hgt = get_min_max_elevation(gdir)
+    model = VAScalingModel(year_0=0, area_m2_0=gdir.rgi_area_m2,
+                           min_hgt=min_hgt, max_hgt=max_hgt,
+                           mb_model=mb_mod)
+    # specify path where to store model diagnostics
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+    # run model
+    model.run_until_and_store(year_end=nyears, diag_path=diag_path)
+
+    return model
+
 
 class VAScalingModel(object):
     """ The volume area scaling glacier model following Marzeion et. al., 2012.
@@ -1034,21 +1088,6 @@ class VAScalingModel(object):
         self.tau_a = 1
         self.tau_l = 1
 
-    def adjust_start_values(self, length_m):
-        """ Set start length and volume to custom (known/measured) values.
-
-        :param length_m: (float) glacier length in meters
-        """
-        raise NotImplementedError
-        # change start volume and length
-        self.length_m_0 = length_m
-        volume_m3_0 = self.cl * self.length_m_0 ** self.ql
-        area_m2_0 = (1 / self.ca * volume_m3_0) ** (1 / self.gamma)
-        self.area_m2_0 = area_m2_0
-        self.volume_m3_0 = volume_m3_0
-        # reset model
-        self.reset()
-
     def _compute_time_scales(self):
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
@@ -1068,7 +1107,7 @@ class VAScalingModel(object):
                                                      self.max_hgt,
                                                      self.year)
 
-        # create geometry change parameters
+        # reset geometry change parameters
         self.dL = 0
         self.dA = 0
         self.dV = 0
@@ -1119,14 +1158,15 @@ class VAScalingModel(object):
 
     def run_until(self, year_end, reset=False):
         """ Runs the model till the specified year.
-        Returns all geometric parameters (i.e. length, area, volume and
-        terminus elevation) for each modelled year, as well as the years as
-        index. TODO: run_and_store() or similar, but for now ok?!
+        Returns all geometric parameters (i.e. length, area, volume, terminus
+        elevation and specific mass balance) at the end of the model evolution.
 
         :param year_end: (float) end of modeling period
         :param reset: (bool, optional) If `True`, the model will start from
             `year_0`, otherwise from its current position in time (default).
-        :return:
+        :return: the geometric glacier parameters at the end of the
+            model evolution (all float): year, length [m], area [m2], volume
+            [m3], terminus elevation [m asl.], specific mass balance [mm we.]
         """
 
         # reset parameters to starting values
@@ -1135,130 +1175,128 @@ class VAScalingModel(object):
 
         # check validity of end year
         if year_end < self.year:
-            raise ValueError('Cannot run until {}, already at year {}'.format(
+            # raise warning if model year already past given year, and don't
+            # run the model - return current parameters
+            raise Warning('Cannot run until {}, already at year {}'.format(
                 year_end, self.year))
-
-        # create empty containers
-        years = np.arange(self.year, year_end + 1)
-        area_m2 = np.empty(years.size)
-        length_m2 = np.empty(years.size)
-        volume_m3 = np.empty(years.size)
-        min_hgt = np.empty(years.size)
-        spec_mb = np.empty(years.size)
-
-        # iterate over all years
-        for i, year in enumerate(years):
-            if i != 0:
+        else:
+            # iterate over all years
+            while self.year < year_end:
                 # run model for one year
                 self.step()
 
-            # store metrics
-            area_m2[i] = self.area_m2
-            length_m2[i] = self.length_m
-            volume_m3[i] = self.volume_m3
-            min_hgt[i] = self.min_hgt
-            spec_mb[i] = self.spec_mb
-
         # return metrics
-        return years, length_m2, area_m2, volume_m3, min_hgt, spec_mb
+        return (self.year, self.length_m, self.area_m2,
+                self.volume_m3, self.min_hgt, self.spec_mb)
 
-    def run_and_store(self, year_end, reset=False):
-        """ Runs the model till the specified year.
-        Returns all geometric parameters (i.e. lenght, area, volume and
-        terminus elevation) for each modelled year, as well as the years as
-        index. TODO: run_and_store() or similar, but for now ok?!
+    def run_until_and_store(self, year_end, diag_path=None, reset=False):
+        """ Runs the model till the specified year. Returns all relevant
+        parameters (i.e. length, area, volume, terminus elevation and specific
+        mass balance) for each time step as a xarray.Dataset. If a file path is
+        give the dataset is written to file.
 
         :param year_end: (float) end of modeling period
+        :param diag_path: (str) path where to store glacier diagnostics
         :param reset: (bool, optional) If `True`, the model will start from
             `year_0`, otherwise from its current position in time (default).
-        :return:
+        :return: (xarray.Dataset) model parameters for each time step.
         """
-
         # reset parameters to starting values
+        # TODO: is this OGGM compatible
         if reset:
             self.reset()
 
         # check validity of end year
+        # TODO: find out how OGGM handles this
         if year_end < self.year:
             raise ValueError('Cannot run until {}, already at year {}'.format(
                 year_end, self.year))
 
-        # create empty containers
-        years = np.arange(self.year, year_end + 1)
-        year0 = np.empty(years.size)
-        length_m = np.empty(years.size)
-        length_m_0 = np.empty(years.size)
-        dL = np.empty(years.size)
+        # define different temporal indices
+        yearly_time = np.arange(np.floor(self.year), np.floor(year_end) + 1)
 
-        area_m2 = np.empty(years.size)
-        area_m2_0 = np.empty(years.size)
-        dA = np.empty(years.size)
+        # TODO: include `store_monthly_step` in parameter list or remove IF:
+        store_monthly_step = False
+        if store_monthly_step:
+            # get monthly time index
+            monthly_time = utils.monthly_timeseries(self.year, year_end)
+        else:
+            # monthly time
+            monthly_time = yearly_time.copy()
+        # get years and month for hydrological year and calender year
+        yrs, months = utils.floatyear_to_date(monthly_time)
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
 
-        volume_m3 = np.empty(years.size)
-        volume_m3_0 = np.empty(years.size)
-        dV = np.empty(years.size)
+        # get number of temporal indices
+        ny = len(yearly_time)
+        nm = len(monthly_time)
+        # deal with one dimensional temporal indices
+        if ny == 1:
+            yrs = [yrs]
+            cyrs = [cyrs]
+            months = [months]
+            cmonths = [cmonths]
 
-        tau_l = np.empty(years.size)
-        tau_a = np.empty(years.size)
+        # initialize diagnostics output file
+        diag_ds = xr.Dataset()
 
-        ca = np.empty(years.size)
-        gamma = np.empty(years.size)
-        cl = np.empty(years.size)
-        ql = np.empty(years.size)
+        # Global attributes
+        diag_ds.attrs['description'] = 'VAS model output'
+        diag_ds.attrs['oggm_version'] = __version__
+        diag_ds.attrs['calendar'] = '365-day no leap'
+        diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
+                                                  gmtime())
 
-        min_hgt = np.empty(years.size)
-        min_hgt_0 = np.empty(years.size)
-        max_hgt = np.empty(years.size)
-        rho = np.empty(years.size)
-        spec_mb = np.empty(years.size)
+        # Coordinates
+        diag_ds.coords['time'] = ('time', monthly_time)
+        diag_ds.coords['hydro_year'] = ('time', yrs)
+        diag_ds.coords['hydro_month'] = ('time', months)
+        diag_ds.coords['calendar_year'] = ('time', cyrs)
+        diag_ds.coords['calendar_month'] = ('time', cmonths)
+        # add description as attribute to coordinates
+        diag_ds['time'].attrs['description'] = 'Floating hydrological year'
+        diag_ds['hydro_year'].attrs['description'] = 'Hydrological year'
+        diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
+        diag_ds['calendar_year'].attrs['description'] = 'Calendar year'
+        diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
 
-        # iterate over all years
-        for i, year in enumerate(years):
-            if i != 0:
-                # run model for one year
-                self.step()
+        # create empty variables and attributes
+        diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
+        diag_ds['volume_m3'].attrs['unit'] = 'm 3'
+        diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
+        diag_ds['area_m2'].attrs['unit'] = 'm 2'
+        diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['length_m'].attrs['description'] = 'Glacier length'
+        diag_ds['length_m'].attrs['unit'] = 'm 3'
+        diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
+                                                 'Altitude  (ELA)')
+        diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
+        diag_ds['spec_mb'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['spec_mb'].attrs['description'] = 'Specific mass balance'
+        diag_ds['spec_mb'].attrs['unit'] = 'mm w.e. yr-1'
+        diag_ds['min_hgt'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['min_hgt'].attrs['description'] = 'Terminus elevation'
+        diag_ds['min_hgt'].attrs['unit'] = 'm asl.'
+        # TODO: handel tidewater glaciers
 
-            # store metrics
-            year0[i] = self.year_0
-            
-            length_m[i] = self.length_m
-            length_m_0[i] = self.length_m_0
-            dL[i] = self.dL
+        # run the model
+        for i, yr in enumerate(monthly_time):
+            self.run_until(yr)
+            # store diagnostics
+            diag_ds['volume_m3'].data[i] = self.volume_m3
+            diag_ds['area_m2'].data[i] = self.area_m2
+            diag_ds['length_m'].data[i] = self.length_m
+            diag_ds['spec_mb'].data[i] = self.spec_mb
+            diag_ds['min_hgt'].data[i] = self.min_hgt
 
-            area_m2[i] = self.area_m2
-            area_m2_0[i] = self.area_m2_0
-            dA[i] = self.dA
+        if diag_path is not None:
+            # write to file
+            diag_ds.to_netcdf(diag_path)
 
-            volume_m3[i] = self.volume_m3
-            volume_m3_0[i] = self.volume_m3_0
-            dV[i] = self.dV
-
-            tau_l[i] = self.tau_l
-            tau_a[i] = self.tau_a
-
-            ca[i] = self.ca
-            gamma[i] = self.gamma
-            cl[i] = self.cl
-            ql[i] = self.ql
-
-            min_hgt[i] = self.min_hgt
-            min_hgt_0[i] = self.min_hgt_0
-            max_hgt[i] = self.max_hgt
-            rho[i] = self.rho
-            spec_mb[i] = self.spec_mb
-
-        # create DataFrame
-        columns = ['year0', 'length_m', 'length_m_0', 'dL', 'area_m2',
-                   'area_m2_0', 'dA', 'volume_m3', 'volume_m3_0', 'dV',
-                   'tau_l', 'tau_a', 'ca', 'gamma', 'cl', 'ql', 'min_hgt',
-                   'min_hgt_0', 'max_hgt', 'rho', 'spec_mb']
-        df = pd.DataFrame(np.array([year0, length_m, length_m_0, dL, area_m2,
-                                    area_m2_0, dA, volume_m3, volume_m3_0, dV,
-                                    tau_l, tau_a, ca, gamma, cl, ql, min_hgt,
-                                    min_hgt_0, max_hgt, rho, spec_mb]).T,
-                          index=years, columns=columns)
-        # return metrics
-        return df
+        return diag_ds
 
     def create_start_glacier(self, area_m2_start, year_start=1851):
         """ Instance model with given starting glacier area, for the iterative
@@ -1285,7 +1323,7 @@ class VAScalingModel(object):
         """ Let the model glacier evolve to the same year as the reference
         model (`model_ref`). Compute and return the relative error in area.
 
-        :param model_ref: (oggm.vascaling.VAScalingModel)
+        :param model_ref: (oggm.vascaling.VAScalingModel) reference model
         """
         # run model and store area
         years, _, area, _, _, _ = self.run_until(year_end=model_ref.year,

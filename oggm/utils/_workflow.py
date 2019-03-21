@@ -7,6 +7,7 @@ import tempfile
 import gzip
 import json
 import time
+import random
 import shutil
 import tarfile
 import sys
@@ -43,6 +44,29 @@ from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError
+
+
+# Default RGI date (median per region)
+RGI_DATE = {'01': 2009,
+            '02': 2004,
+            '03': 1999,
+            '04': 2001,
+            '05': 2001,
+            '06': 2000,
+            '07': 2008,
+            '08': 2002,
+            '09': 2001,
+            '10': 2011,
+            '11': 2003,
+            '12': 2001,
+            '13': 2006,
+            '14': 2001,
+            '15': 2001,
+            '16': 2000,
+            '17': 2000,
+            '18': 1978,
+            '19': 1989,
+            }
 
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -552,7 +576,6 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
             i += 1
 
     # OK found it, open it and prepare the output
-
     with xr.open_dataset(ppath) as ds_diag:
         time = ds_diag.time.values
         yrs = ds_diag.hydro_year.values
@@ -1228,16 +1251,16 @@ def _robust_extract(to_dir, *args, **kwargs):
     Try to make it more robust.
     """
     count = 0
-    while count < 10:
+    while count < 5:
         try:
             if count > 1:
-                time.sleep(0.1)
+                time.sleep(random.uniform(0.05, 0.1))
             with tarfile.open(*args, **kwargs) as tf:
                 tf.extractall(os.path.dirname(to_dir))
             break
         except FileExistsError:
             count += 1
-            if count == 10:
+            if count == 5:
                 raise
 
 
@@ -1290,9 +1313,9 @@ class GlacierDirectory(object):
         The glacier's RGI area (km2)
     cenlon, cenlat : float
         The glacier centerpoint's lon/lat
-    rgi_date : datetime
-        The RGI's BGNDATE attribute if available. Otherwise, defaults to
-        2003-01-01
+    rgi_date : int
+        The RGI's BGNDATE year attribute if available. Otherwise, defaults to
+        the median year for the RGI region
     rgi_region : str
         The RGI region name
     name : str
@@ -1446,11 +1469,9 @@ class GlacierDirectory(object):
         self.hemisphere = 'sh' if self.cenlat < 0 else 'nh'
 
         # convert the date
-        try:
-            rgi_date = pd.to_datetime(rgi_datestr[0:4],
-                                      errors='raise', format='%Y')
-        except BaseException:
-            rgi_date = None
+        rgi_date = int(rgi_datestr[0:4])
+        if rgi_date < 0:
+            rgi_date = RGI_DATE[self.rgi_region]
         self.rgi_date = rgi_date
 
         # Root directory
@@ -1461,12 +1482,16 @@ class GlacierDirectory(object):
         # Do we have to extract the files first?
         if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
+
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
             robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
         else:
             mkdir(self.dir)
+
+        if not os.path.isdir(self.dir):
+            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
@@ -2054,8 +2079,21 @@ class GlacierDirectory(object):
             line += 'SUCCESS'
         else:
             line += err.__class__.__name__ + ': {}'.format(err)
-        with open(self.logfile, 'a') as logfile:
-            logfile.write(line + '\n')
+
+        count = 0
+        while count < 5:
+            try:
+                with open(self.logfile, 'a') as logfile:
+                    logfile.write(line + '\n')
+                break
+            except FileNotFoundError:
+                # I really don't know when this error happens
+                # In this case sleep and try again
+                time.sleep(0.05)
+                count += 1
+
+        if count == 5:
+            log.warning('Could not write to logfile: ' + line)
 
     def get_task_status(self, task_name):
         """Opens this directory's log file to see if a task was already run.
@@ -2092,7 +2130,7 @@ class GlacierDirectory(object):
 
         Returns
         -------
-        The first erros message in this log, None if all good
+        The first error message in this log, None if all good
         """
 
         if not os.path.isfile(self.logfile):

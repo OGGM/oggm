@@ -1,2 +1,3 @@
 # ignore /my_code directory
 my_code/
+.DS_Store

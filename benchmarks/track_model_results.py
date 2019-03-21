@@ -288,88 +288,30 @@ class columbia_calving:
         tasks.catchment_width_correction(gdir)
         climate.process_dummy_cru_file(gdir, seed=0)
 
-        rho = cfg.PARAMS['ice_density']
-        i = 0
-        calving_flux = []
-        mu_star = []
-        ite = []
-        cfg.PARAMS['clip_mu_star'] = False
-        cfg.PARAMS['min_mu_star'] = 0  # default is now 1
-        while i < 12:
+        # Test default k (it overshoots)
+        df1 = utils.find_inversion_calving(gdir)
 
-            # Calculates a calving flux from model output
-            if i == 0:
-                # First call we set to zero (not very necessary,
-                # this first loop could be removed)
-                f_calving = 0
-            elif i == 1:
-                # Second call we set a very small positive calving
-                f_calving = utils.calving_flux_from_depth(gdir, water_depth=1)
-            elif cfg.PARAMS['clip_mu_star']:
-                # If we have to clip mu the calving becomes the real flux
-                fl = gdir.read_pickle('inversion_flowlines')[-1]
-                f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
-            else:
-                # Otherwise it is parameterized
-                f_calving = utils.calving_flux_from_depth(gdir)
+        # Test with smaller k (it doesn't overshoot)
+        cfg.PARAMS['k_calving'] = 0.2
+        df2 = utils.find_inversion_calving(gdir)
 
-            # Give it back to the inversion and recompute
-            gdir.inversion_calving_rate = f_calving
+        return (df1.calving_flux.values, df1.mu_star.values,
+                df2.calving_flux.values, df2.mu_star.values)
 
-            # At this step we might raise a MassBalanceCalibrationError
-            mu_is_zero = False
-            try:
-                climate.local_t_star(gdir)
-                df = gdir.read_json('local_mustar')
-            except MassBalanceCalibrationError as e:
-                assert 'mu* out of specified bounds' in str(e)
-                # When this happens we clip mu* to zero and store the
-                # bad value (just for plotting)
-                cfg.PARAMS['clip_mu_star'] = True
-                df = gdir.read_json('local_mustar')
-                df['mu_star_glacierwide'] = float(str(e).split(':')[-1])
-                climate.local_t_star(gdir)
-
-            climate.mu_star_calibration(gdir)
-            tasks.prepare_for_inversion(gdir, add_debug_var=True)
-            v_inv, _ = tasks.mass_conservation_inversion(gdir)
-
-            # Store the data
-            calving_flux = np.append(calving_flux, f_calving)
-            mu_star = np.append(mu_star, df['mu_star_glacierwide'])
-            ite = np.append(ite, i)
-
-            # Do we have to do another_loop?
-            if i > 0:
-                avg_one = np.mean(calving_flux[-4:])
-                avg_two = np.mean(calving_flux[-5:-1])
-                difference = abs(avg_two - avg_one)
-                conv = (difference < 0.05 * avg_two or
-                        calving_flux[-1] == 0 or
-                        calving_flux[-1] == calving_flux[-2])
-                if mu_is_zero or conv:
-                    break
-            i += 1
-
-        assert i < 8
-        assert calving_flux[-1] < np.max(calving_flux)
-        assert calving_flux[-1] > 2
-        assert mu_star[-1] == 0
-
-        mbmod = massbalance.MultipleFlowlineMassBalance
-        mb = mbmod(gdir, use_inversion_flowlines=True,
-                   mb_model_class=massbalance.ConstantMassBalance,
-                   bias=0)
-        flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
-        np.testing.assert_allclose(flux_mb, calving_flux[-1], atol=0.001)
-
-        return calving_flux, mu_star
-
-    def track_endloop_calving_flux(self, values):
+    def track_over_endloop_calving_flux(self, values):
         return values[0][-1]
 
-    def track_startloop_mu_star(self, values):
+    def track_over_startloop_mu_star(self, values):
         return values[1][0]
 
-    def track_endloop_mu_star(self, values):
+    def track_over_endloop_mu_star(self, values):
         return values[1][-1]
+
+    def track_under_endloop_calving_flux(self, values):
+        return values[2][-1]
+
+    def track_under_startloop_mu_star(self, values):
+        return values[3][0]
+
+    def track_under_endloop_mu_star(self, values):
+        return values[3][-1]

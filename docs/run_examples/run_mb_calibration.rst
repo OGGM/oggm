@@ -2,18 +2,21 @@
 
 .. _run-calibration:
 
-3. Run the mass-balance calibration
+5. Run the mass-balance calibration
 ===================================
 
 Sometimes you will need to do the mass-balance calibration yourself. For
-example if you use alternate climate data, or change the parameters of the
-model. Here we show how to run the calibration for all available reference
-glaciers, but you can also doit for any regional subset of course.
+example if you use alternate climate data, or if you change the global
+parameters of the model (such as precipitation scaling factor or melting
+threshold, for example). Here we show how to run the calibration
+for all available reference glaciers. We also use this example to illustrate
+how to do a "full run", i.e. without relying on :ref:`preprodir`.
 
 The output of this script is the ``ref_tstars.csv`` file, which is found in
 the working directory. The ``ref_tstars.csv`` file can then be used for further
 runs, simply by copying it in the corresponding working directory before the
 run.
+
 
 Script
 ------

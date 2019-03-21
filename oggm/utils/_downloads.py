@@ -4,7 +4,9 @@
 import glob
 import os
 import gzip
+import lzma
 import bz2
+import zlib
 import shutil
 import zipfile
 import sys
@@ -37,7 +39,9 @@ except NameError:
 
 # Locals
 import oggm.cfg as cfg
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import (InvalidParamsError, NoInternetException,
+                             DownloadVerificationFailedException,
+                             HttpDownloadError, HttpContentTooShortError)
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -53,7 +57,7 @@ CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
 
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
-GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/oggm_v1.1/'
+GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
@@ -86,6 +90,9 @@ tuple2int = partial(np.array, dtype=np.int64)
 
 # Global Lock
 lock = mp.Lock()
+
+# Download verification dictionary
+_dl_verify_data = None
 
 
 def mkdir(path, reset=False):
@@ -128,21 +135,32 @@ def _get_download_lock():
     return lock
 
 
-class NoInternetException(Exception):
-    pass
+def get_dl_verify_data():
+    """Returns a dictionary with all known download object hashes.
 
+    The returned dictionary resolves str: cache_obj_name
+    to a tuple (int: size, int: crc32).
+    """
+    global _dl_verify_data
 
-class HttpDownloadError(Exception):
-    def __init__(self, code):
-        self.code = code
+    if _dl_verify_data is None:
+        data = dict()
+        path = os.path.join(os.path.dirname(__file__), '_downloads.crc32.xz')
+        with lzma.open(path, 'rb') as f:
+            for line in f:
+                line = line.decode('utf-8').strip()
+                if not line:
+                    continue
+                elems = line.split(' ', 2)
+                assert len(elems[0]) == 8
+                data[elems[2]] = (int(elems[1]), int(elems[0], 16))
+        _dl_verify_data = data
 
-
-class HttpContentTooShortError(Exception):
-    pass
+    return _dl_verify_data
 
 
 def _call_dl_func(dl_func, cache_path):
-    """Helper so the actual call to downloads cann be overridden
+    """Helper so the actual call to downloads can be overridden
     """
     return dl_func(cache_path)
 
@@ -204,6 +222,47 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     return cache_path
 
 
+def _verified_download_helper(cache_obj_name, dl_func, reset=False):
+    """Helper function for downloads.
+
+    Verifies the size and hash of the downloaded file against the included
+    list of known static files.
+    Uses _cached_download_helper to perform the actual download.
+    """
+    path = _cached_download_helper(cache_obj_name, dl_func, reset)
+
+    try:
+        dl_verify = cfg.PARAMS['dl_verify']
+    except KeyError:
+        dl_verify = True
+
+    if dl_verify:
+        data = get_dl_verify_data()
+        crc32 = 0
+        with open(path, 'rb') as f:
+            while True:
+                b = f.read(0xFFFF)
+                if not b:
+                    break
+                crc32 = zlib.crc32(b, crc32)
+        size = os.path.getsize(path)
+
+        if cache_obj_name not in data:
+            logger.warning('No known hash for %s: %s %s' %
+                           (path, size, crc32.to_bytes(4, byteorder='big').hex()))
+        else:
+            data = data[cache_obj_name]
+            if data[0] != size or data[1] != crc32:
+                err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
+                    path,
+                    size, crc32.to_bytes(4, byteorder='big').hex(),
+                    data[0], data[1].to_bytes(4, byteorder='big').hex())
+                raise DownloadVerificationFailedException(err)
+            logger.info('%s verified successfully.' % path)
+
+    return path
+
+
 def _requests_urlretrieve(url, path, reporthook):
     """Implements the required features of urlretrieve on top of requests
     """
@@ -251,7 +310,7 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
         _requests_urlretrieve(url, cache_path, reporthook)
         return cache_path
 
-    return _cached_download_helper(cache_obj_name, _dlf, reset)
+    return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
 def _progress_urlretrieve(url, cache_name=None, reset=False):
@@ -319,7 +378,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
                 raise
         return cache_path
 
-    return _cached_download_helper(cache_obj_name, _dlf, reset)
+    return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
 def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):

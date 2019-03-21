@@ -228,9 +228,8 @@ def plot_domain(gdirs, ax=None, smap=None):
 
     # Files
     gdir = gdirs[0]
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
 
+    topo = salem.GeoTiff(gdir.get_filepath('dem')).get_vardata()
     try:
         smap.set_data(topo)
     except ValueError:
@@ -242,14 +241,18 @@ def plot_domain(gdirs, ax=None, smap=None):
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
 
-        # Plot boundaries
-        poly_pix = geom['polygon_pix']
-        smap.set_geometry(poly_pix, crs=crs, fc='white',
-                          alpha=0.3, zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        try:
+            geom = gdir.read_pickle('geometries')
+
+            # Plot boundaries
+            poly_pix = geom['polygon_pix']
+            smap.set_geometry(poly_pix, crs=crs, fc='white',
+                              alpha=0.3, zorder=2, linewidth=.2)
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        except FileNotFoundError:
+            smap.set_shapefile(gdir.read_shapefile('outlines'))
 
     smap.plot(ax)
 

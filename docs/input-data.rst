@@ -5,10 +5,19 @@
 Input data
 ==========
 
-OGGM needs various data files to run. To date, **we rely exclusively on
+OGGM needs various data files to run. Currently, **we rely exclusively on
 open-access data that are all downloaded automatically for the user**. This
-page explains the various ways OGGM relies upon to get the the data it needs.
+page explains the various ways OGGM uses to get to the data it needs.
 
+First, you will have to set-up your :ref:`system-settings` (you'll need to
+do this only once per computer). Then, we recommend to start your runs from
+:ref:`preprodir`: these are ready-to-run :ref:`glacierdir` at various levels
+of pre-processing state, thus reducing the amount of pre-processing you'll
+have to do yourself. It is also possible to do a full run "from scratch", in
+which case OGGM will download the :ref:`rawdata` for you as well.
+
+
+.. _system-settings:
 
 System settings
 ---------------
@@ -84,13 +93,13 @@ Some explanations:
   following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
   this directory might still grow to quite a large size. Simply delete it
   if you want to get this space back.
-- ``cru_dir`` is the location where the CRU climate files are extracted. They
-  are quite large! (approx. 6Gb)
+- ``cru_dir`` is the location where the CRU climate files are extracted if
+  needed. They are quite large! (approx. 6Gb)
 - ``rgi_dir`` is the location where the RGI shapefiles are extracted.
 - ``test_dir`` is the location where OGGM will write some of its output during
   tests. It can be set to ``tmp_dir`` if you want to, but it can also be
-  another directory (for example a fast SSD disk). This folder shouldn't grow
-  too large but here again, delete it if you need to.
+  another directory (for example a fast SSD disk). This folder shouldn't become
+  too large but here again, don't hesitate to delete it if you need to.
 
 .. note::
 
@@ -103,9 +112,124 @@ Some explanations:
 
 .. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
 
+.. _preprodir:
+
+Pre-processed directories
+-------------------------
+
+The simplest way to run OGGM is to rely on :ref:`glacierdir` which have been
+prepared for you by the OGGM developers. Depending on your use case,
+you can start from various levels of pre-processing, and various map sizes.
+
+All these directories have been generated with the default parameters
+of the current stable OGGM version. If you want to change these parameters,
+you'll have to do a full run from scratch using the :ref:`rawdata`.
+
+To start from a pre-processed state, simply use the
+:py:func:`workflow.init_glacier_regions` function with the
+``from_prepro_level`` and ``prepro_border`` keyword arguments set to the
+values of your choice.
+
+Processing levels
+~~~~~~~~~~~~~~~~~
+
+Currently, there are five available levels of pre-processing:
+
+- **Level 1**: the lowest level, with directories containing the glacier
+  topography and glacier outlines only.
+- **Level 2**, adding the baseline climate timeseries (CRU, see below) to this
+  folder.
+- **Level 3**, adding the output of all necessary pre-processing tasks
+  for a dynamical run, including the bed inversion using the default
+  parameters.
+- **Level 4**, same as level 3 but with all intermediate ouptut files removed.
+  The strong advantage of level 4 files is that their size is considerably
+  reduced, at the cost that certain operations (like plotting on maps or
+  running the bed inversion algorithm again) are not possible.
+
+In practice, most users are going to use level 3 or level 4 files, with some
+use cases relying on lower levels.
+
+Map size
+~~~~~~~~
+
+The size of the local glacier map is given in number of grid points *outside*
+the glacier boundaries. The larger the map, the largest the glacier can
+become. Therefore, user should choose the map border parameter depending
+on the expected glacier growth in their simulations: for most cases,
+a border value of 80 or 160 should be enough.
+
+Here is an example with the Hintereisferner in the Alps:
+
+.. ipython:: python
+   :suppress:
+
+    import os
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from oggm import cfg, tasks, workflow, graphics
+    from oggm.utils import gettempdir
+
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_BorderSize')
+
+.. ipython:: python
+
+    f, axs = plt.subplots(2, 2, figsize=(8, 6))
+    for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 250]):
+        gdir = workflow.init_glacier_regions('RGI60-11.00897',
+                                             from_prepro_level=1,
+                                             prepro_border=border)
+        graphics.plot_domain(gdir, ax=ax, title='Border: {}'.format(border),
+                             add_colorbar=False,
+                             lonlat_contours_kwargs={'add_tick_labels':False})
+    @savefig plot_border_size.png width=100%
+    plt.tight_layout(); plt.show()
+
+
+For runs into the Little Ice Age, a border value of 160 is more than enough.
+For simulations into the 21st century, a border value of 80 is
+sufficient.
+
+Users should be aware that the amount of data to download isn't small,
+especially for full directories at levels 3. Here is an indicative
+table for the total amount of data for all 18 RGI regions
+(excluding Antarctica):
+
+======  =====  =====  =====  =====
+Level   B  10  B  80  B 160  B 250
+======  =====  =====  =====  =====
+**L1**  2.4G   11G    29G    63G
+**L2**  5.1G   14G    32G    65G
+**L3**  13G    44G    115G   244G
+**L4**  4.2G   4.5G   4.8G   5.3G
+======  =====  =====  =====  =====
+
+Certain regions are much smaller than others of course. As an indication,
+with prepro level 3 and a map border of 160, the Alps are 2G large, Greenland
+11G, and Iceland 334M.
+
+Therefore, it is recommended to always pick the smallest border value suitable
+for your research question, and to start your runs from level 4 if possible.
+
+.. note::
+
+  The data download of the preprocessed directories will occur one single time
+  only: after the first download, the data will be cached in OGGM's
+  ``dl_cache_dir`` folder (see above).
+
+
+.. _rawdata:
+
+Raw data sources
+----------------
+
+These data are used to create the pre-processed directories explained above.
+If you want to run your own workflow from A to Z, or if you would like
+to know which data are used in OGGM, read further!
 
 Glacier outlines and intersects
--------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Glacier outlines are obtained from the `Randolph Glacier Inventory (RGI)`_.
 We recommend to download them right away by opening a python interpreter
@@ -132,7 +256,7 @@ documentation for more information about the intersects.
 
 
 Topography data
----------------
+~~~~~~~~~~~~~~~
 
 When creating a :ref:`glacierdir` a suitable topographical data source is
 chosen automatically, depending on the glacier's location. Currently we use:
@@ -216,7 +340,7 @@ VIEWFINDER PANORAMAS DEMs
 
 
 Climate data
-------------
+~~~~~~~~~~~~
 
 The MB model implemented in OGGM needs monthly time series of temperature and
 precipitation. The current default is to download and use the `CRU TS`_
@@ -225,8 +349,7 @@ data provided by the Climatic Research Unit of the University of East Anglia.
 .. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
 
 
-CRU (default)
-~~~~~~~~~~~~~
+**‣ CRU (default)**
 
 If not specified otherwise, OGGM will automatically download and unpack the
 latest dataset from the CRU servers. We recommend to do this before your
@@ -263,8 +386,7 @@ International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
 
-User-provided dataset
-~~~~~~~~~~~~~~~~~~~~~
+**‣ User-provided dataset**
 
 You can provide any other dataset to OGGM by setting the ``climate_file``
 parameter in ``params.cfg``. See the HISTALP data file in the `sample-data`_
@@ -272,8 +394,7 @@ folder for an example.
 
 .. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
 
-GCM data
-~~~~~~~~
+**‣ GCM data**
 
 OGGM can also use climate model output to drive the mass-balance model. In
 this case we still rely on gridded observations (CRU) for the baseline
@@ -288,6 +409,40 @@ should be relatively easy.
 
 
 Mass-balance data
------------------
+~~~~~~~~~~~~~~~~~
 
-TODO
+In-situ mass-balance data is used by OGGM to calibrate and validate the
+mass-balance model. We reliy on mass-balance observations provided by the
+World Glacier Monitoring Service (`WGMS`_).
+The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
+values for several hundreds of glaciers worldwide. We exclude water-terminating
+glaciers and the time series with less than five years of
+data.
+Since 2017, the WGMS provides a lookup table
+linking the RGI and the WGMS databases. We updated this list for version 6 of
+the RGI, leaving us with 254 mass balance time series. These are not equally
+reparted over the globe:
+
+.. figure:: _static/wgms_rgi_map.png
+    :width: 100%
+
+    Map of the RGI regions; the red dots indicate the glacier locations
+    and the blue circles the location of the 254 reference WGMS
+    glaciers used by the OGGM calibration. From our `GMD paper`_.
+
+These data are shipped automatically with OGGM. All reference glaciers
+have access to the timeseries through the glacier directory:
+
+
+.. ipython:: python
+
+    gdir = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=4,
+                                         prepro_border=10)[0]
+    mb = gdir.get_ref_mb_data()
+    @savefig plot_ref_mbdata.png width=100%
+    mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner')
+
+
+.. _WGMS: https://wgms.ch
+.. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
+.. _GMD Paper: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
