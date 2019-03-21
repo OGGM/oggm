@@ -295,6 +295,14 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpContentTooShortError()
 
 
+def _get_url_cache_name(url):
+    """Returns the cache name for any given url.
+    """
+
+    res = urlparse(url)
+    return res.netloc + res.path
+
+
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                      reporthook=None, auth=None):
     """Wrapper around urlretrieve, to implement our caching logic.
@@ -306,8 +314,7 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
     """
 
     if cache_obj_name is None:
-        cache_obj_name = urlparse(url)
-        cache_obj_name = cache_obj_name.netloc + cache_obj_name.path
+        cache_obj_name = _get_url_cache_name(url)
 
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
@@ -420,15 +427,24 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
             time.sleep(10)
             continue
         except DownloadVerificationFailedException as err:
-            try:
-                os.remove(err.path)
-            except FileNotFoundError:
-                pass
-            logger.info("Downloading %s failed with "
-                        "DownloadVerificationFailedException\n %s\n"
-                        "The file might have changed or is corrupted. "
-                        "File deleted. Re-downloading... %s/%s" %
-                        (www_path, err.msg, retry_counter, retry_max))
+            if (cfg.PATHS['dl_cache_dir'] and
+                  err.path.startswith(cfg.PATHS['dl_cache_dir']) and
+                  cfg.PARAMS['dl_cache_readonly']):
+                if not cache_name:
+                    cache_name = _get_url_cache_name(www_path)
+                cache_name = "GLOBAL_CACHE_INVALID/" + cache_name
+                retry_counter -= 1
+                logger.info("Global cache for %s is invalid!")
+            else:
+                try:
+                    os.remove(err.path)
+                except FileNotFoundError:
+                    pass
+                logger.info("Downloading %s failed with "
+                            "DownloadVerificationFailedException\n %s\n"
+                            "The file might have changed or is corrupted. "
+                            "File deleted. Re-downloading... %s/%s" %
+                            (www_path, err.msg, retry_counter, retry_max))
             continue
 
     # See if we managed (fail is allowed)
