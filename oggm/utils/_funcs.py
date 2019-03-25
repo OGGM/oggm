@@ -660,13 +660,12 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     return shape_factors
 
 
-def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None):
+def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
+                            fix_water_depth=False):
     """Finds a calving flux from the calving front thickness.
-
     Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
     We take the initial output of the model and surface elevation data
     to calculate the water depth of the calving front.
-
     Parameters
     ----------
     gdir : GlacierDirectory
@@ -679,7 +678,9 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None):
     thick :
         Set this to force the ice thickness to a certain value (for
         sensitivity experiments).
-
+    fix_water_depth :
+        If we have water depth from Bathymetry we fix the water depth
+        and forget about the free-board
     Returns
     -------
     A dictionary containing:
@@ -703,14 +704,21 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None):
     width = fl.widths[-1] * gdir.grid.dx
 
     # Calving formula
-    if thick is None:
-        thick = cl['thick'][-1]
-    if water_depth is None:
-        water_depth = thick - t_altitude
+    if fix_water_depth:
+        # We forget about the free-board water_depth is fix and so is
+        # the first thicknes equal to t_altitude + 1 m.
+        if thick is None:
+            thick = cl['thick'][-1]
+        flux = k * thick * water_depth * width / 1e9
     else:
-        # Correct thickness with prescribed depth
-        thick = water_depth + t_altitude
-    flux = k * thick * water_depth * width / 1e9
+        if thick is None:
+            thick = cl['thick'][-1]
+        if water_depth is None:
+            water_depth = thick - t_altitude
+        else:
+            # Correct thickness with prescribed depth
+            thick = water_depth + t_altitude
+        flux = k * thick * water_depth * width / 1e9
 
     return {'flux': np.clip(flux, 0, None),
             'width': width,
@@ -720,11 +728,10 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None):
 
 
 def find_inversion_calving(gdir, water_depth=1, max_ite=30,
-                           stop_after_convergence=True):
+                           stop_after_convergence=True,
+                           fix_water_depth=False):
     """Iterative search for a calving flux compatible with the bed inversion.
-
     See Recinos et al 2019 for details.
-
     Parameters
     ----------
     water_depth : float
@@ -753,8 +760,19 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
             # from a non-calving glacier)
             f_calving = 0
         elif i == 1:
-            # Second call we set a small positive calving to start with
-            out = calving_flux_from_depth(gdir, water_depth=water_depth)
+            if fix_water_depth:
+                # We fix the water and calculate a pre-calving
+                # assuming the first thicknes to be:
+                cl = gdir.read_pickle('inversion_output')[-1]
+                t_altitude = cl['hgt'][-1]
+                thick = t_altitude + 1
+                out = calving_flux_from_depth(gdir,
+                                              water_depth=water_depth,
+                                              thick=thick,
+                                              fix_water_depth=True)
+            else:
+                # Second call we set a small positive calving to start with
+                out = calving_flux_from_depth(gdir, water_depth=water_depth)
             f_calving = out['flux']
         elif cfg.PARAMS['clip_mu_star']:
             # If we had to clip mu, the inversion calving becomes the real
@@ -765,7 +783,13 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
             mu_is_zero = True
         else:
             # Otherwise it is parameterized by the calving law
-            f_calving = calving_flux_from_depth(gdir)['flux']
+            if fix_water_depth:
+                out = calving_flux_from_depth(gdir,
+                                              water_depth=water_depth,
+                                              fix_water_depth=True)
+                f_calving = out['flux']
+            else:
+                f_calving = calving_flux_from_depth(gdir)['flux']
 
         # Give it back to the inversion and recompute
         gdir.inversion_calving_rate = f_calving
@@ -786,7 +810,12 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir, add_debug_var=True)
         v_inv, _ = inversion.mass_conservation_inversion(gdir)
-        out = calving_flux_from_depth(gdir)
+        if fix_water_depth:
+            out = calving_flux_from_depth(gdir,
+                                          water_depth=water_depth,
+                                          fix_water_depth=True)
+        else:
+            out = calving_flux_from_depth(gdir)
 
         # Store the data
         odf.loc[i, 'calving_flux'] = f_calving
