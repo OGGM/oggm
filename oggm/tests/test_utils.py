@@ -7,7 +7,7 @@ import shutil
 import time
 import gzip
 import bz2
-import zlib
+import hashlib
 import pytest
 from unittest import mock
 
@@ -1032,7 +1032,8 @@ class TestFakeDownloads(unittest.TestCase):
 
         file_size = 1024
         file_data = os.urandom(file_size)
-        file_crc32 = zlib.crc32(file_data)
+        file_sha256 = hashlib.sha256()
+        file_sha256.update(file_data)
 
         utils.mkdir(os.path.dirname(tgt_path))
         with open(tgt_path, 'wb') as f:
@@ -1041,10 +1042,12 @@ class TestFakeDownloads(unittest.TestCase):
         if not valid_size:
             file_size += 1
         if not valid_crc32:
-            file_crc32 += 1
+            file_sha256.update(b'1234ABCD')
+
+        file_sha256 = file_sha256.digest()
 
         data = utils.get_dl_verify_data()
-        data['test.com/test.txt'] = (file_size, file_crc32)
+        data['test.com/test.txt'] = (file_size, file_sha256)
 
         return 'https://test.com/test.txt'
 
