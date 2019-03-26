@@ -7,8 +7,9 @@ import os
 import shutil
 import copy
 
-# import unittest
+# import test libs
 import unittest
+import pytest
 
 # import gis libs
 import geopandas as gpd
@@ -22,6 +23,9 @@ from oggm.utils import (get_demo_file, ncDataset,
 from oggm.core import (gis, vascaling, climate, centerlines,
                        massbalance, flowline, inversion)
 from oggm.tests.funcs import get_test_dir
+
+
+pytestmark = pytest.mark.test_env("utils")
 
 
 class TestVAScalingModel(unittest.TestCase):
@@ -683,8 +687,7 @@ class TestVAScalingModel(unittest.TestCase):
         # advance model glacier by one year
         model.step()
         # compare initial to advanced model state
-        dV = m0.mb_model.get_specific_mb(m0.min_hgt, m0.max_hgt, m0.year) \
-             * m0.area_m2 / m0.rho
+        dV = m0.spec_mb * m0.area_m2 / m0.rho
         np.testing.assert_allclose(model.volume_m3 - m0.volume_m3, dV)
 
     def test_run_until(self):

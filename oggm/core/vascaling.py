@@ -1088,6 +1088,13 @@ class VAScalingModel(object):
         self.tau_a = 1
         self.tau_l = 1
 
+    def _get_specific_mb(self):
+        """ Invoke `get_specific_mb()` from mass balance model for current year
+        and glacier terminus elevation. """
+        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
+                                                     self.max_hgt,
+                                                     self.year)
+
     def _compute_time_scales(self):
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
@@ -1103,9 +1110,7 @@ class VAScalingModel(object):
         self.min_hgt = self.min_hgt_0
 
         # define mass balance model and spec mb
-        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
-                                                     self.max_hgt,
-                                                     self.year)
+        self._get_specific_mb()
 
         # reset geometry change parameters
         self.dL = 0
@@ -1130,9 +1135,7 @@ class VAScalingModel(object):
         self._compute_time_scales()
 
         # get specific mass balance B(t)
-        self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
-                                                     self.max_hgt,
-                                                     self.year)
+        self._get_specific_mb()
 
         # compute volume change dV(t)
         self.dV = self.area_m2 * self.spec_mb / self.rho
@@ -1326,11 +1329,12 @@ class VAScalingModel(object):
         :param model_ref: (oggm.vascaling.VAScalingModel) reference model
         """
         # run model and store area
-        years, _, area, _, _, _ = self.run_until(year_end=model_ref.year,
-                                                 reset=True)
-        assert years[-1] == model_ref.year
+        year, _, area, _, _, _ = self.run_until(year_end=model_ref.year,
+                                                reset=True)
+
+        assert year == model_ref.year
         # compute relative difference to reference area
-        rel_error = 1 - area[-1]/model_ref.area_m2
+        rel_error = 1 - area/model_ref.area_m2
 
         return rel_error
 
