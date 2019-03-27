@@ -291,8 +291,7 @@ class TestVAScalingModel(unittest.TestCase):
     def test_local_t_star(self):
         """ The cumulative specific mass balance over the 31-year climate
         period centered around t* must be zero, given a successful mu*
-        calibration. The mass balance bias is not applied.
-        TODO: The comparison with the MB profiles is omitted for now. """
+        calibration. The mass balance bias is not applied. """
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -341,6 +340,7 @@ class TestVAScalingModel(unittest.TestCase):
 
         # compute sum over climate period
         mb_sum = np.sum(mb_yearly)
+        print(mb_sum)
         # check for apparent mb to be zero (to the third decimal digit)
         np.testing.assert_allclose(mb_sum, 0, atol=3e-4)
 
@@ -660,7 +660,7 @@ class TestVAScalingModel(unittest.TestCase):
         # compute time scales
         model._compute_time_scales()
         # compare to given values
-        np.testing.assert_allclose(model.tau_l, 55.6, atol=0.1)
+        np.testing.assert_allclose(model.tau_l, 52.6, atol=0.1)
         np.testing.assert_allclose(model.tau_a, 17.6, atol=0.1)
 
     def test_reset(self):
@@ -690,7 +690,7 @@ class TestVAScalingModel(unittest.TestCase):
         dV = m0.spec_mb * m0.area_m2 / m0.rho
         np.testing.assert_allclose(model.volume_m3 - m0.volume_m3, dV)
 
-    def test_run_until(self):
+    def test_run_until_and_store(self):
         """ Test the volume/area scaling model against the oggm.FluxBasedModel.
 
         Both models run the Hintereisferner over the entire HistAlp climate
@@ -755,8 +755,7 @@ class TestVAScalingModel(unittest.TestCase):
                                              mb_model=vas_mbmod)
 
         # let model run over entire HistAlp climate period
-        years_vas, length_m_vas, area_m2_vas, volume_m3_vas, _, _ = \
-            vas_model.run_until(2003)
+        vas_ds = vas_model.run_until_and_store(2003)
 
         # ------
         #  OGGM
@@ -769,7 +768,7 @@ class TestVAScalingModel(unittest.TestCase):
         # instance the mass balance models
         mb_mod = massbalance.PastMassBalance(gdir)
 
-        # performe ice thickness inversion
+        # perform ice thickness inversion
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
         inversion.filter_inversion_output(gdir)
@@ -785,30 +784,20 @@ class TestVAScalingModel(unittest.TestCase):
         # run model and store output as xarray data set
         _, oggm_ds = fl_mod.run_until_and_store(2003)
 
-        years_oggm = oggm_ds.hydro_year.values
-        length_m_oggm = oggm_ds.length_m.values
-        area_m2_oggm = oggm_ds.area_m2.values
-        volume_m3_oggm = oggm_ds.volume_m3
-
         # temporal indices must be equal
-        assert (years_vas == years_oggm).all()
+        assert (vas_ds.time == oggm_ds.time).all()
 
-        # the two length time series must be highly correlated
-        assert corrcoef(length_m_oggm, length_m_vas) >= 0.94
-        # the starting lengths are quite different for the OGGM and the VAS
-        # model, which results in a higher RMSD. To prevent that, we compute
-        # the RMSD between the anomalies to their respective average of both
-        # time series. A length of 300m is chosen as upper RMSD limit.
-        assert rmsd_anomaly(length_m_oggm, length_m_vas) <= 0.3e3
+        # specify which parameters to compare and their respective correlation
+        # coefficients and rmsd values
+        params = ['length_m', 'area_m2', 'volume_m3']
+        corr_coeffs = np.array([0.94, 0.92, 0.95])
+        rmsds = np.array([0.38e3, 0.12e6, 0.03e9])
 
-        # the two area time series must be highly correlated
-        assert corrcoef(area_m2_oggm, area_m2_vas) >= 0.96
-        # the RMSD between the anomalies to their respective average of both
-        # time series. An area of 0.16km2 is chosen as upper RMSD limit.
-        assert rmsd_anomaly(area_m2_oggm, area_m2_vas) <= 0.16e6
+        # compare given parameters
+        for param, cc, rmsd in zip(params, corr_coeffs, rmsds):
+            print(param)
+            # correlation coefficient
+            assert corrcoef(oggm_ds[param].values, vas_ds[param].values) >= cc
+            # rmsd
+            assert rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values) <= rmsd
 
-        # the two volume time series must be highly correlated
-        assert corrcoef(volume_m3_oggm, volume_m3_vas) >= 0.98
-        # the RMSD between the anomalies to their respective average of both
-        # time series. An area of 0.2km3 is chosen as upper RMSD limit.
-        assert rmsd_anomaly(volume_m3_oggm, volume_m3_vas) <= 0.2e9
