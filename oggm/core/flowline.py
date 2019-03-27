@@ -2100,7 +2100,6 @@ def _all_inflows(clines, cline):
     Find all centerlines flowing into the centerline examined recursevly:
     This includes the centerlines flowing in the tributary centerlines
     of the examined centerline.
-
     -----------
     Parameters:
     clines: centerlines of the examined glacier
@@ -2119,7 +2118,6 @@ def _all_inflows(clines, cline):
 def get_mb_catchment(gdir):
     """Adds the pointwise catchment area and linear mass balance
     to the glacier netcdf
-
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
@@ -2142,27 +2140,27 @@ def get_mb_catchment(gdir):
     zones = np.unique(catchment_mask[~np.isnan(catchment_mask)]).astype(np.int)
     # find the lowest altitude of each catchment area
     lows = []
+    inflow_ixs = []
+    direct_ixs = []
+    # assign the inflow indexes to each point of the glacier
+    catch_flows = catchment_mask.astype(str)
     for z in zones:
         # the index of this array corresponds to
         # the index of the catchment area
         lows.append(np.min(topo[catchment_mask == z]))
-    lows = np.array(lows)
-
-    # get all the catchment areas indexes flowing
-    # in each catchment area: this array will have the
-    # lenght of the zones array and each element contains
-    # all the indexes of the catchment areas flowing into
-    # the respective catchment area
-    inflow_ixs = []
-    for z in zones:
+        # get all the catchment areas indexes flowing
+        # in each catchment area: this array will have the
+        # lenght of the zones array and each element contains
+        # all the indexes of the catchment areas flowing into
+        # the respective catchment area
         cline = clines[z]
         inflow_ixs.append('_'.join(_all_inflows(clines, cline)))
-    inflow_ixs = np.array(inflow_ixs)
-
-    # assign the inflow indexes to each point of the glacier
-    catch_flows = catchment_mask.astype(str)
-    for z in zones:
+        # get only direct flows for each catchment area
+        direct_ixs.append([str(clines.index(cline.inflows[i]))
+                           for i in range(len(cline.inflows))])
         catch_flows[catchment_mask == z] = inflow_ixs[z]
+    inflow_ixs = np.array(inflow_ixs)
+    lows = np.array(lows)
 
     # ### Mass Balance ###
     h = topo[glacier_mask == 1]
@@ -2176,18 +2174,30 @@ def get_mb_catchment(gdir):
     mbmod = LinearMassBalance(float(ela_h['x']))
     mb_on_z = mbmod.get_annual_mb(heights=h) * cfg.SEC_IN_YEAR
 
+    # altitude based mass balance
+    mb_above_z = mb_on_z * np.NaN
+    for i, _h in enumerate(h):
+        mb_above_z[i] = np.sum(mb_on_z[h > _h])
+
+    mb_above_z_2d = topo * np.NAN
+    mb_above_z_2d[glacier_mask == 1] = mb_above_z
+
+    # ### Catchment Areas ###
     mb_2d = topo * np.NAN
     mb_sum = mb_2d * np.NaN
     mb_2d[glacier_mask == 1] = mb_on_z
     catchment_area = glacier_mask * np.NaN
-    catchment_flows = topo * np.NaN
+    # uncomment if one ones a list of incoming flows
+    # pointwise in the netcdf file
+    # catchment_flows = topo * np.NaN
 
     for i, row in enumerate(topo):
         for j, alt in enumerate(row):
             if glacier_mask[i, j]:
                 # mask the catchemnt area of the pt itself
                 # eliminating points below the pt altitude
-                self_mask = ((catchment_mask == catchment_mask[i, j])
+                z = int(catchment_mask[i, j])
+                self_mask = ((catchment_mask == z)
                              & (topo >= alt))
                 if catch_flows[i, j] and catch_flows[i, j] != 'nan':
                     # transform the cathment flows string into an array
@@ -2195,10 +2205,40 @@ def get_mb_catchment(gdir):
                     # elminate the indexes of the catchment areas
                     # which join the flow below the altitude of the pt
                     ixs = ixs[lows[ixs] >= alt]
-                    if ixs.size:
-                        catchment_flows[i, j] = np.int(''.join(ixs.astype(str)))
-                    else:
-                        catchment_flows[i, j] = np.NaN
+                    # select only the catchment areas flowing
+                    # directly into the one of the point
+                    all_direct_in = np.array(direct_ixs[z]).astype(int)
+                    direct = ixs[np.isin(ixs, all_direct_in)]
+                    inflow_direct = []
+                    # for each direct flow above the point
+                    # find all the catchment areas flowing
+                    # into the direct flow and create an array
+                    # containing all these catchment areas
+                    for ix in direct:
+                        if inflow_ixs[ix]:
+                            inflow_direct.append(np.array(inflow_ixs[ix]
+                                                          .split('_')
+                                                          ).astype(int))
+                    # this contains all the flows of the catchment areas
+                    # flowing into a catchment area flowing directly into
+                    # the point catchment area
+                    inflow_direct = np.ravel(np.array(inflow_direct))
+                    # add the catchment areas flowing directly in the
+                    # catchment area of the point
+                    ixs = np.concatenate((inflow_direct,
+                                          direct)).astype(int)
+                    # eleminate all cathment areas not flowing
+                    # into the catchment areas flowing directly
+                    # into the point catchment area
+
+                    # uncomment if one ones a list of incoming flows
+                    # pointwise in the netcdf file
+                    # if ixs.size:
+                    #     catchment_flows[i, j] = np.int(''.join(ixs
+                    #                                            .astype(str)))
+                    # else:
+                    #     catchment_flows[i, j] = np.NaN
+
                     # list of masks of cathment areas
                     inflow_masks = [catchment_mask == ix for ix in ixs]
                     # join the list with OR to generate
@@ -2208,7 +2248,11 @@ def get_mb_catchment(gdir):
                         inflow_mask = np.logical_or(inflow_mask, m)
                 else:
                     inflow_mask = np.zeros_like(catchment_mask)
-                    catchment_flows[i, j]  = np.NaN
+
+                    # uncomment if one ones a list of incoming flows
+                    # pointwise in the netcdf file
+                    # catchment_flows[i, j] = np.NaN
+
                 # join the mask of the self catchment area
                 # together with the inflows ones
                 all_mask = np.logical_or(self_mask, inflow_mask)
@@ -2219,13 +2263,6 @@ def get_mb_catchment(gdir):
                 # based on the point catchment area
                 mb_sum[i, j] = np.sum(mb_2d[all_mask])
 
-    # altitude based mass balance
-    mb_above_z = mb_on_z * np.NaN
-    for i, _h in enumerate(h):
-        mb_above_z[i] = np.sum(mb_on_z[h > _h])
-
-    mb_above_z_2d = topo * np.NAN
-    mb_above_z_2d[glacier_mask == 1] = mb_above_z
     # save to file
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
 
@@ -2269,12 +2306,13 @@ def get_mb_catchment(gdir):
         v.long_name = 'Catchment mask'
         v[:] = catchment_mask
 
-        # add catchment area
-        vn = 'catchment_flows'
-        if vn in nc.variables:
-            v = nc.variables[vn]
-        else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = '-'
-        v.long_name = 'Catchment flows'
-        v[:] = catchment_flows
+        # uncomment if one ones a list of incoming flows
+        # pointwise in the netcdf file
+        # vn = 'catchment_flows'
+        # if vn in nc.variables:
+        #     v = nc.variables[vn]
+        # else:
+        #     v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        # v.units = '-'
+        # v.long_name = 'Catchment flows indexes'
+        # v[:] = catchment_flows
