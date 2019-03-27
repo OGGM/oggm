@@ -26,12 +26,14 @@ from oggm.exceptions import InvalidParamsError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance,
-                                   RandomMassBalance)
+                                   RandomMassBalance,
+                                   LinearMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_HOUR
 from oggm.cfg import G, GAUSSIAN_KERNEL
+from scipy import optimize as optimization
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -2091,3 +2093,188 @@ def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
 
     # Finally write the flowlines
     main.write_pickle(mfls, 'model_flowlines')
+
+
+def _all_inflows(clines, cline):
+    '''
+    Find all centerlines flowing into the centerline examined recursevly:
+    This includes the centerlines flowing in the tributary centerlines
+    of the examined centerline.
+
+    -----------
+    Parameters:
+    clines: centerlines of the examined glacier
+    cline: centerline to control
+    Returns: list of strings of centerlines
+    '''
+    ixs = []
+    ixs.extend([str(clines.index(cline.inflows[i]))
+                for i in range(len(cline.inflows))])
+    for cl in cline.inflows:
+        ixs.extend(_all_inflows(clines, cl))
+    return ixs
+
+
+@entity_task(log)
+def get_mb_catchment(gdir):
+    """Adds the pointwise catchment area and linear mass balance
+    to the glacier netcdf
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
+        glacier_mask = nc.variables['glacier_mask'][:]
+        catchment_mask = glacier_mask * np.NaN
+
+    # get the center lines
+    clines = gdir.read_pickle('centerlines')
+
+    # catchment areas
+    cis = gdir.read_pickle('geometries')['catchment_indices']
+    for j, ci in enumerate(cis):
+        catchment_mask[tuple(ci.T)] = j
+
+    # find all catchemnt indexes
+    zones = np.unique(catchment_mask[~np.isnan(catchment_mask)]).astype(np.int)
+    # find the lowest altitude of each catchment area
+    lows = []
+    for z in zones:
+        # the index of this array corresponds to
+        # the index of the catchment area
+        lows.append(np.min(topo[catchment_mask == z]))
+    lows = np.array(lows)
+
+    # get all the catchment areas indexes flowing
+    # in each catchment area: this array will have the
+    # lenght of the zones array and each element contains
+    # all the indexes of the catchment areas flowing into
+    # the respective catchment area
+    inflow_ixs = []
+    for z in zones:
+        cline = clines[z]
+        inflow_ixs.append('_'.join(_all_inflows(clines, cline)))
+    inflow_ixs = np.array(inflow_ixs)
+
+    # assign the inflow indexes to each point of the glacier
+    catch_flows = catchment_mask.astype(str)
+    for z in zones:
+        catch_flows[catchment_mask == z] = inflow_ixs[z]
+
+    # ### Mass Balance ###
+    h = topo[glacier_mask == 1]
+
+    def to_minimize(ela_h):
+        mbmod = LinearMassBalance(ela_h[0])
+        smb = mbmod.get_annual_mb(heights=h) * cfg.SEC_IN_YEAR
+        return np.sum(smb)**2
+
+    ela_h = optimization.minimize(to_minimize, [0.], method='Powell')
+    mbmod = LinearMassBalance(float(ela_h['x']))
+    mb_on_z = mbmod.get_annual_mb(heights=h) * cfg.SEC_IN_YEAR
+
+    mb_2d = topo * np.NAN
+    mb_sum = mb_2d * np.NaN
+    mb_2d[glacier_mask == 1] = mb_on_z
+    catchment_area = glacier_mask * np.NaN
+    catchment_flows = topo * np.NaN
+
+    for i, row in enumerate(topo):
+        for j, alt in enumerate(row):
+            if glacier_mask[i, j]:
+                # mask the catchemnt area of the pt itself
+                # eliminating points below the pt altitude
+                self_mask = ((catchment_mask == catchment_mask[i, j])
+                             & (topo >= alt))
+                if catch_flows[i, j] and catch_flows[i, j] != 'nan':
+                    # transform the cathment flows string into an array
+                    ixs = np.array(catch_flows[i, j].split('_')).astype(int)
+                    # elminate the indexes of the catchment areas
+                    # which join the flow below the altitude of the pt
+                    ixs = ixs[lows[ixs] >= alt]
+                    if ixs.size:
+                        catchment_flows[i, j] = np.int(''.join(ixs.astype(str)))
+                    else:
+                        catchment_flows[i, j] = np.NaN
+                    # list of masks of cathment areas
+                    inflow_masks = [catchment_mask == ix for ix in ixs]
+                    # join the list with OR to generate
+                    # the final mask of inflows area
+                    inflow_mask = np.zeros_like(catchment_mask)
+                    for m in inflow_masks:
+                        inflow_mask = np.logical_or(inflow_mask, m)
+                else:
+                    inflow_mask = np.zeros_like(catchment_mask)
+                    catchment_flows[i, j]  = np.NaN
+                # join the mask of the self catchment area
+                # together with the inflows ones
+                all_mask = np.logical_or(self_mask, inflow_mask)
+                # pointwise catchment area
+                catchment_area[i, j] = ((np.count_nonzero(all_mask)
+                                         * gdir.grid.dx**2) / 1000.**2)
+                # pointwise summed mass balance
+                # based on the point catchment area
+                mb_sum[i, j] = np.sum(mb_2d[all_mask])
+
+    # altitude based mass balance
+    mb_above_z = mb_on_z * np.NaN
+    for i, _h in enumerate(h):
+        mb_above_z[i] = np.sum(mb_on_z[h > _h])
+
+    mb_above_z_2d = topo * np.NAN
+    mb_above_z_2d[glacier_mask == 1] = mb_above_z
+    # save to file
+    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+
+        # add catchment area mass balance
+        vn = 'mb_catchment'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Mass Balance per Catchment Area'
+        v[:] = mb_sum
+
+        # add altitude base mass balance
+        vn = 'mb_altitude'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Mass Balance Altitude Based'
+        v[:] = mb_above_z_2d
+
+        # add pointwise catchment area
+        vn = 'catchment_area'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'km^2'
+        v.long_name = 'Pointwise catchment area'
+        v[:] = catchment_area
+
+        # add catchment area
+        vn = 'catchment_mask'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Catchment mask'
+        v[:] = catchment_mask
+
+        # add catchment area
+        vn = 'catchment_flows'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Catchment flows'
+        v[:] = catchment_flows

@@ -39,6 +39,7 @@ from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
+from oggm.core.flowline import get_mb_catchment
 from oggm.utils import copy_to_basedir
 
 # Global tasks
