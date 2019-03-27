@@ -864,6 +864,22 @@ def tandem_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
+def aw3d30_zone(lon_ex, lat_ex):
+    """Returns a list of AW3D30 zones covering the desired extent.
+    """
+
+    # Files are one by one tiles, so lets loop over them
+    lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
+                          dtype=np.int)
+    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
+                          dtype=np.int)
+    zones = []
+    for lon in lon_tiles:
+        for lat in lat_tiles:
+            zones.append(_aw3d30_path(lon, lat))
+    return list(sorted(set(zones)))
+
+
 def arcticdem_zone(lon_ex, lat_ex):
     """Returns a list of Arctic-DEM zones covering the desired extent.
     """
