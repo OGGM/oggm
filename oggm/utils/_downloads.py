@@ -316,7 +316,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
 
     with requests.get(url, stream=True, auth=auth) as r:
         if r.status_code != 200:
-            raise HttpDownloadError(r.status_code)
+            raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
 
         size = r.headers.get('content-length') or 0
