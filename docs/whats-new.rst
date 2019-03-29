@@ -13,6 +13,10 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Adapted `graphics.plot_domain`, `graphics.plot_centerlines` and
+  `graphics_plot_modeloutput_map` to work with merged glaciers (:pull:`726`).
+  By `Matthias DUsch <https://github.com/matthiasdusch>`_.
+
 Bug fixes
 ~~~~~~~~~
 
