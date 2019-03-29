@@ -249,8 +249,13 @@ def plot_domain(gdirs, ax=None, smap=None):
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='white',
                               alpha=0.3, zorder=2, linewidth=.2)
-            for l in poly_pix.interiors:
-                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+            if isinstance(poly_pix, shpg.MultiPolygon):
+                for _poly in poly_pix:
+                    for l in _poly.interiors:
+                        smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+            else:
+                for l in poly_pix.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
         except FileNotFoundError:
             smap.set_shapefile(gdir.read_shapefile('outlines'))
 
@@ -292,9 +297,13 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
         smap.set_geometry(poly_pix, crs=crs, fc='white',
                           alpha=0.3, zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs,
-                              color='black', linewidth=0.5)
+        if isinstance(poly_pix, shpg.MultiPolygon):
+            for _poly in poly_pix:
+                for l in _poly.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        else:
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
         cls = gdir.read_pickle(filename)
@@ -349,8 +358,13 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     poly_pix = geom['polygon_pix']
     smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
                       linewidth=.2)
-    for l in poly_pix.interiors:
-        smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+    if isinstance(poly_pix, shpg.MultiPolygon):
+        for _poly in poly_pix:
+            for l in _poly.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+    else:
+        for l in poly_pix.interiors:
+            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
     # plot Centerlines
     cls = gdir.read_pickle('centerlines')[::-1]
@@ -374,9 +388,14 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
 @_plot_map
 def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
                          add_intersects=False, add_touches=False,
-                         lines_cmap='Set1'):
+                         lines_cmap='Set1', use_model_flowlines=False):
     """Plots the catchment widths out of a glacier directory.
     """
+
+    # Files
+    filename = 'inversion_flowlines'
+    if use_model_flowlines:
+        filename = 'model_flowlines'
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -399,8 +418,13 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
         poly_pix = geom['polygon_pix']
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
                           linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        if isinstance(poly_pix, shpg.MultiPolygon):
+            for _poly in poly_pix:
+                for l in _poly.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        else:
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # Plot intersects
         if add_intersects and gdir.has_file('intersects'):
@@ -408,7 +432,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
             smap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')[::-1]
+        cls = gdir.read_pickle(filename)[::-1]
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             smap.set_geometry(l.line, crs=crs, color=c,
@@ -470,8 +494,13 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
         poly_pix = geom['polygon_pix']
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
                           linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        if isinstance(poly_pix, shpg.MultiPolygon):
+            for _poly in poly_pix:
+                for l in _poly.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        else:
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
         cls = gdir.read_pickle('inversion_flowlines')
@@ -535,8 +564,13 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     # Plot boundaries
     poly_pix = geom['polygon_pix']
     smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
-    for l in poly_pix.interiors:
-        smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+    if isinstance(poly_pix, shpg.MultiPolygon):
+        for _poly in poly_pix:
+            for l in _poly.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+    else:
+        for l in poly_pix.interiors:
+            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
     smap.set_cmap(GLACIER_THICKNESS_CMAP)
     smap.set_plot_params(nlevels=256)

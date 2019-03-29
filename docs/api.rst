@@ -28,6 +28,7 @@ Tools to set-up and run OGGM.
     workflow.gis_prepro_tasks
     workflow.climate_tasks
     workflow.inversion_tasks
+    workflow.merge_glacier_tasks
     utils.compile_glacier_statistics
     utils.compile_run_output
     utils.compile_climate_input
