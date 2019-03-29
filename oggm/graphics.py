@@ -249,8 +249,10 @@ def plot_domain(gdirs, ax=None, smap=None):
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='white',
                               alpha=0.3, zorder=2, linewidth=.2)
-            for l in poly_pix.interiors:
-                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+            poly_pix = utils.tolist(poly_pix)
+            for _poly in poly_pix:
+                for l in _poly.interiors:
+                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
         except FileNotFoundError:
             smap.set_shapefile(gdir.read_shapefile('outlines'))
 
@@ -292,9 +294,10 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
         smap.set_geometry(poly_pix, crs=crs, fc='white',
                           alpha=0.3, zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs,
-                              color='black', linewidth=0.5)
+        poly_pix = utils.tolist(poly_pix)
+        for _poly in poly_pix:
+            for l in _poly.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
         cls = gdir.read_pickle(filename)
@@ -583,12 +586,9 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
         crs = gdir.grid.center_grid
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
 
-        if isinstance(poly_pix, shpg.MultiPolygon):
-            for _poly in poly_pix:
-                for l in _poly.interiors:
-                    smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
-        else:
-            for l in poly_pix.interiors:
+        poly_pix = utils.tolist(poly_pix)
+        for _poly in poly_pix:
+            for l in _poly.interiors:
                 smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
