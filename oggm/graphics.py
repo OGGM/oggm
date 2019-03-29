@@ -252,7 +252,8 @@ def plot_domain(gdirs, ax=None, smap=None):
             if isinstance(poly_pix, shpg.MultiPolygon):
                 for _poly in poly_pix:
                     for l in _poly.interiors:
-                        smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+                        smap.set_geometry(l, crs=crs, color='black',
+                                          linewidth=0.5)
             else:
                 for l in poly_pix.interiors:
                     smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
