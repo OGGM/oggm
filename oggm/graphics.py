@@ -388,14 +388,9 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
 @_plot_map
 def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
                          add_intersects=False, add_touches=False,
-                         lines_cmap='Set1', use_model_flowlines=False):
+                         lines_cmap='Set1'):
     """Plots the catchment widths out of a glacier directory.
     """
-
-    # Files
-    filename = 'inversion_flowlines'
-    if use_model_flowlines:
-        filename = 'model_flowlines'
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -432,7 +427,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
             smap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
-        cls = gdir.read_pickle(filename)[::-1]
+        cls = gdir.read_pickle('inversion_flowlines')[::-1]
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             smap.set_geometry(l.line, crs=crs, color=c,
