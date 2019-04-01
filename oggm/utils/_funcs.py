@@ -681,6 +681,10 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
     fix_water_depth :
         If we have water depth from Bathymetry we fix the water depth
         and forget about the free-board
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0ea2e20a63c3c987ad9118686afc01724327e57a
     Returns
     -------
     A dictionary containing:
@@ -709,7 +713,6 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
         # the first thicknes equal to t_altitude + 1 m.
         if thick is None:
             thick = cl['thick'][-1]
-        flux = k * thick * water_depth * width / 1e9
     else:
         if thick is None:
             thick = cl['thick'][-1]
@@ -718,7 +721,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
         else:
             # Correct thickness with prescribed depth
             thick = water_depth + t_altitude
-        flux = k * thick * water_depth * width / 1e9
+    flux = k * thick * water_depth * width / 1e9
 
     return {'flux': np.clip(flux, 0, None),
             'width': width,
