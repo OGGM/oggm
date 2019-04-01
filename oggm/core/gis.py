@@ -37,7 +37,7 @@ import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError)
 from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
-                        nicenumber, ncDataset)
+                        nicenumber, ncDataset, tolist)
 
 
 # Module logger
@@ -999,7 +999,8 @@ def merged_glacier_masks(gdir, geometry):
     dem = dem.clip(0)
 
     # Interpolate shape to a regular path
-    glacier_poly_hr = list(geometry)
+    glacier_poly_hr = tolist(geometry)
+
     for nr, poly in enumerate(glacier_poly_hr):
         # transform geometry to map
         _geometry = salem.transform_geometry(poly, to_crs=gdir.grid.proj)
@@ -1029,13 +1030,14 @@ def merged_glacier_masks(gdir, geometry):
         return np.rint(x).astype(np.int64), np.rint(y).astype(np.int64)
 
     glacier_poly_pix = shapely.ops.transform(project, glacier_poly_hr)
+    glacier_poly_pix_iter = tolist(glacier_poly_pix)
 
     # Compute the glacier mask (currently: center pixels + touched)
     nx, ny = gdir.grid.nx, gdir.grid.ny
     glacier_mask = np.zeros((ny, nx), dtype=np.uint8)
     glacier_ext = np.zeros((ny, nx), dtype=np.uint8)
 
-    for poly in glacier_poly_pix:
+    for poly in glacier_poly_pix_iter:
         (x, y) = poly.exterior.xy
         glacier_mask[skdraw.polygon(np.array(y), np.array(x))] = 1
         for gint in poly.interiors:
