@@ -663,11 +663,11 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
 def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
                             fixed_water_depth=False):
     """Finds a calving flux from the calving front thickness.
-    
+
     Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
     We take the initial output of the model and surface elevation data
     to calculate the water depth of the calving front.
-    
+
     Parameters
     ----------
     gdir : GlacierDirectory
@@ -840,7 +840,7 @@ def find_inversion_calving(gdir, initial_water_depth=1, max_ite=30,
         # Do we have to do another_loop?
         calving_flux = odf.calving_flux.values
         if stop_after_convergence and i > 0:
-            # We want to make sure that we don't "converge" by chance
+            # We want to make sure that we don't converge by chance
             # so we test on last two iterations
             conv = (np.allclose(calving_flux[[-1, -2]],
                                 [out['flux'], out['flux']],
