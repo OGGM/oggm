@@ -766,9 +766,7 @@ def find_inversion_calving(gdir, water_depth=1, max_ite=30,
             if fix_water_depth:
                 # We fix the water and calculate a pre-calving
                 # assuming the first thicknes to be:
-                cl = gdir.read_pickle('inversion_output')[-1]
-                t_altitude = cl['hgt'][-1]
-                thick = t_altitude + 1
+                thick = water_depth + 1
                 out = calving_flux_from_depth(gdir,
                                               water_depth=water_depth,
                                               thick=thick,
