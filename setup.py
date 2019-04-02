@@ -3,7 +3,6 @@
    Adapted from the Python Packaging Authority template."""
 
 from setuptools import setup, find_packages  # Always prefer setuptools
-import versioneer
 
 
 DISTNAME = 'oggm'
@@ -69,10 +68,11 @@ req_packages = ['numpy',
 setup(
     # Project info
     name=DISTNAME,
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
     description=DESCRIPTION,
     long_description=LONG_DESCRIPTION,
+    # Version info
+    setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
+    use_scm_version=True,
     # The project's main homepage.
     url=URL,
     # Author details
