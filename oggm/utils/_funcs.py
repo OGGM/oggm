@@ -729,7 +729,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
             'free_board': t_altitude}
 
 
-def find_inversion_calving(gdir, initial_water_depth=1, max_ite=30,
+def find_inversion_calving(gdir, initial_water_depth=None, max_ite=30,
                            stop_after_convergence=True,
                            fixed_water_depth=False):
     """Iterative search for a calving flux compatible with the bed inversion.
@@ -740,7 +740,8 @@ def find_inversion_calving(gdir, initial_water_depth=1, max_ite=30,
     ----------
     initial_water_depth : float
         the initial water depth starting the loop (for sensitivity experiments
-        or to fix it to an observed value)
+        or to fix it to an observed value). The default is to use 1/3 of the
+        terminus elevation if > 10 m, and 10 m otherwise
     max_ite : int
         the maximal number of iterations allowed before raising an error
     stop_after_convergence : bool
@@ -753,6 +754,11 @@ def find_inversion_calving(gdir, initial_water_depth=1, max_ite=30,
     # Shortcuts
     from oggm.core import climate, inversion
     from oggm.exceptions import MassBalanceCalibrationError
+
+    # Input
+    if initial_water_depth is None:
+        fl = gdir.read_pickle('inversion_flowlines')[-1]
+        initial_water_depth = np.clip(fl.surface_h[-1] / 3, 10, None)
 
     rho = cfg.PARAMS['ice_density']
 

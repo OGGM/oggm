@@ -2201,14 +2201,13 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         cfg.PARAMS['border'] = 10
 
         entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
 
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
-        centerlines.compute_downstream_bedshape(gdir)
         centerlines.catchment_area(gdir)
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
@@ -2249,6 +2248,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
+        default_calving = cfg.PARAMS['k_calving']
         cfg.PARAMS['k_calving'] = 0.2
         df = utils.find_inversion_calving(gdir)
 
@@ -2270,12 +2270,9 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
 
-    @pytest.mark.slow
-    def test_calving_loop_fixed_water_depth(self):
-
-        gdir = self.gdir
-
+        # Test with fixed water depth
         water_depth = 275.282
+        cfg.PARAMS['k_calving'] = default_calving
 
         # Test with fixed water depth (it still overshoots, quickly)
         df = utils.find_inversion_calving(gdir,
