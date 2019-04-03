@@ -2228,7 +2228,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         gdir = self.gdir
 
         # Test default k (it overshoots)
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 8
         assert max(df.index) > 3
@@ -2250,7 +2250,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         # Test with smaller k (it doesn't overshoot)
         default_calving = cfg.PARAMS['k_calving']
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 14
         assert max(df.index) > 8
@@ -2261,7 +2261,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
 
         # Test with smaller k and large starting water depth
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir, initial_water_depth=1200)
+        df = inversion.find_inversion_calving(gdir, initial_water_depth=1200)
 
         assert max(df.index) < 14
         assert max(df.index) > 6
@@ -2275,7 +2275,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         cfg.PARAMS['k_calving'] = default_calving
 
         # Test with fixed water depth (it still overshoots, quickly)
-        df = utils.find_inversion_calving(gdir,
+        df = inversion.find_inversion_calving(gdir,
                                           initial_water_depth=water_depth,
                                           fixed_water_depth=True)
 
@@ -2287,7 +2287,7 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
 
         # Test with smaller k (it doesn't overshoot)
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir,
+        df = inversion.find_inversion_calving(gdir,
                                           initial_water_depth=water_depth,
                                           fixed_water_depth=True)
 
@@ -2297,6 +2297,13 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
         assert df.water_depth.iloc[-1] == water_depth
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        assert odf.calving_n_iterations < 10
+        np.testing.assert_allclose(odf.calving_flux, np.max(df.calving_flux))
+        np.testing.assert_allclose(odf.calving_front_water_depth,
+                                   df.water_depth.iloc[-1])
 
 
 class TestGrindelInvert(unittest.TestCase):
