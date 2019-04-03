@@ -4,8 +4,8 @@
 Version history
 ===============
 
-v1.1.x (unreleased)
--------------------
+v1.2 (unreleased)
+-----------------
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -15,7 +15,11 @@ Enhancements
 
 - Adapted `graphics.plot_domain`, `graphics.plot_centerlines` and
   `graphics_plot_modeloutput_map` to work with merged glaciers (:pull:`726`).
-  By `Matthias DUsch <https://github.com/matthiasdusch>`_.
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- Added (and updated) an official task to find the calving flux based on the
+  mass-conservation inversion (`inversion.find_inversion_calving`). This
+  is still in experimentation phase! (:pull:`720`).
+  By `Beatriz Recinos <https://github.com/bearecinos>`_.
 
 Bug fixes
 ~~~~~~~~~

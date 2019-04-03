@@ -2276,8 +2276,8 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
 
         # Test with fixed water depth (it still overshoots, quickly)
         df = inversion.find_inversion_calving(gdir,
-                                          initial_water_depth=water_depth,
-                                          fixed_water_depth=True)
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
 
         assert max(df.index) < 10
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
@@ -2288,8 +2288,8 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         # Test with smaller k (it doesn't overshoot)
         cfg.PARAMS['k_calving'] = 0.2
         df = inversion.find_inversion_calving(gdir,
-                                          initial_water_depth=water_depth,
-                                          fixed_water_depth=True)
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
 
         assert max(df.index) < 10
         assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
