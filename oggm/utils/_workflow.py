@@ -884,14 +884,16 @@ def glacier_statistics(gdir, inversion_only=False):
 
     try:
         # Calving
-        all_calving_data = []
-        all_width = []
-        cl = gdir.read_pickle('calving_output')
-        for c in cl:
-            all_calving_data = c['calving_fluxes'][-1]
-            all_width = c['t_width']
-        d['calving_flux'] = all_calving_data
-        d['calving_front_width'] = all_width
+        df = pd.read_csv(gdir.get_filepath('calving_loop'), index_col=0)
+        df = df.iloc[-1]
+        d['calving_n_iterations'] = df.name
+        d['calving_flux'] = df.calving_flux
+        d['calving_mu_star'] = df.mu_star
+        d['calving_calving_law_flux'] = df.calving_law_flux
+        d['calving_front_width'] = df.width
+        d['calving_front_thick'] = df.thick
+        d['calving_front_water_depth'] = df.water_depth
+        d['calving_front_free_board'] = df.free_board
     except BaseException:
         pass
 

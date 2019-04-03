@@ -2200,6 +2200,21 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
         cfg.PARAMS['border'] = 10
 
+        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_dummy_cru_file(gdir, seed=0)
+        self.gdir = gdir
+
     def tearDown(self):
         self.rm_dir()
 
@@ -2210,23 +2225,10 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
     @pytest.mark.slow
     def test_calving_loop(self):
 
-        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        centerlines.compute_centerlines(gdir)
-        centerlines.initialize_flowlines(gdir)
-        centerlines.compute_downstream_line(gdir)
-        centerlines.compute_downstream_bedshape(gdir)
-        centerlines.catchment_area(gdir)
-        centerlines.catchment_intersections(gdir)
-        centerlines.catchment_width_geom(gdir)
-        centerlines.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
+        gdir = self.gdir
 
         # Test default k (it overshoots)
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 8
         assert max(df.index) > 3
@@ -2246,8 +2248,9 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
+        default_calving = cfg.PARAMS['k_calving']
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 14
         assert max(df.index) > 8
@@ -2256,9 +2259,9 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
 
-        # Test with smaller k and large water depth
+        # Test with smaller k and large starting water depth
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir, water_depth=1200)
+        df = inversion.find_inversion_calving(gdir, initial_water_depth=1200)
 
         assert max(df.index) < 14
         assert max(df.index) > 6
@@ -2266,6 +2269,41 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
+
+        # Test with fixed water depth
+        water_depth = 275.282
+        cfg.PARAMS['k_calving'] = default_calving
+
+        # Test with fixed water depth (it still overshoots, quickly)
+        df = inversion.find_inversion_calving(gdir,
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
+
+        assert max(df.index) < 10
+        assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 2
+        assert df.mu_star.iloc[-1] == 0
+        assert df.water_depth.iloc[-1] == water_depth
+
+        # Test with smaller k (it doesn't overshoot)
+        cfg.PARAMS['k_calving'] = 0.2
+        df = inversion.find_inversion_calving(gdir,
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
+
+        assert max(df.index) < 10
+        assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 0.1
+        assert df.calving_flux.iloc[-1] < 1
+        assert df.mu_star.iloc[-1] > 0
+        assert df.water_depth.iloc[-1] == water_depth
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        assert odf.calving_n_iterations < 10
+        np.testing.assert_allclose(odf.calving_flux, np.max(df.calving_flux))
+        np.testing.assert_allclose(odf.calving_front_water_depth,
+                                   df.water_depth.iloc[-1])
 
 
 class TestGrindelInvert(unittest.TestCase):
