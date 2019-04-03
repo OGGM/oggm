@@ -6,7 +6,7 @@ import os
 import gzip
 import lzma
 import bz2
-import zlib
+import hashlib
 import shutil
 import zipfile
 import sys
@@ -62,6 +62,9 @@ GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
+
+CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.xz'
+CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 
 _RGI_METADATA = dict()
 
@@ -140,22 +143,66 @@ def get_dl_verify_data():
     """Returns a dictionary with all known download object hashes.
 
     The returned dictionary resolves str: cache_obj_name
-    to a tuple (int: size, int: crc32).
+    to a tuple (int: size, bytes: sha256).
     """
     global _dl_verify_data
 
-    if _dl_verify_data is None:
-        data = dict()
-        path = os.path.join(os.path.dirname(__file__), '_downloads.crc32.xz')
-        with lzma.open(path, 'rb') as f:
-            for line in f:
-                line = line.decode('utf-8').strip()
-                if not line:
-                    continue
-                elems = line.split(' ', 2)
-                assert len(elems[0]) == 8
-                data[elems[2]] = (int(elems[1]), int(elems[0], 16))
-        _dl_verify_data = data
+    if _dl_verify_data is not None:
+        return _dl_verify_data
+
+    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
+
+    with requests.get(CHECKSUM_VALIDATION_URL) as req:
+        if req.status_code != 200:
+            verify_file_sha256 = None
+            logger.warning('Failed getting verification checksum.')
+        else:
+            verify_file_sha256 = req.text.split(maxsplit=1)[0]
+            verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+
+    def do_verify():
+        if os.path.isfile(verify_file_path) and verify_file_sha256:
+            sha256 = hashlib.sha256()
+            with open(verify_file_path, 'rb') as f:
+                for b in iter(lambda: f.read(0xFFFF), b''):
+                    sha256.update(b)
+            if sha256.digest() != verify_file_sha256:
+                logger.warning('%s changed or invalid, deleting.'
+                               % (verify_file_path))
+                os.remove(verify_file_path)
+
+    do_verify()
+
+    if not os.path.isfile(verify_file_path):
+        logger.info('Downloading %s to %s...'
+                    % (CHECKSUM_URL, verify_file_path))
+
+        with requests.get(CHECKSUM_URL, stream=True) as req:
+            if req.status_code == 200:
+                with open(verify_file_path, 'wb') as f:
+                    for b in req.iter_content(chunk_size=0xFFFF):
+                        if b:
+                            f.write(b)
+
+        logger.info('Done downloading.')
+
+        do_verify()
+
+    if not os.path.isfile(verify_file_path):
+        logger.warning('Downloading and verifiying checksums failed.')
+        return dict()
+
+    data = dict()
+    with lzma.open(verify_file_path, 'rb') as f:
+        for line in f:
+            line = line.decode('utf-8').strip()
+            if not line:
+                continue
+            elems = line.split(maxsplit=2)
+            data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
+    _dl_verify_data = data
+
+    logger.info('Successfully loaded verification data.')
 
     return _dl_verify_data
 
@@ -239,25 +286,21 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
 
     if dl_verify:
         data = get_dl_verify_data()
-        crc32 = 0
+        sha256 = hashlib.sha256()
         with open(path, 'rb') as f:
-            while True:
-                b = f.read(0xFFFF)
-                if not b:
-                    break
-                crc32 = zlib.crc32(b, crc32)
+            for b in iter(lambda: f.read(0xFFFF), b''):
+                sha256.update(b)
+        sha256 = sha256.digest()
         size = os.path.getsize(path)
 
         if cache_obj_name not in data:
             logger.warning('No known hash for %s: %s %s' %
-                           (path, size, crc32.to_bytes(4, byteorder='big').hex()))
+                           (path, size, sha256.hex()))
         else:
             data = data[cache_obj_name]
-            if data[0] != size or data[1] != crc32:
+            if data[0] != size or data[1] != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path,
-                    size, crc32.to_bytes(4, byteorder='big').hex(),
-                    data[0], data[1].to_bytes(4, byteorder='big').hex())
+                    path, size, sha256.hex(), data[0], data[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
 
@@ -273,7 +316,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
 
     with requests.get(url, stream=True, auth=auth) as r:
         if r.status_code != 200:
-            raise HttpDownloadError(r.status_code)
+            raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
 
         size = r.headers.get('content-length') or 0
