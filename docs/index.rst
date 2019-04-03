@@ -53,6 +53,7 @@ How to use the model, with concrete python code examples.
 * :doc:`input-data`
 * :doc:`mpi`
 * :doc:`run`
+* :doc:`cluster`
 * :doc:`api`
 * :doc:`faq`
 * :doc:`whats-new`
@@ -68,6 +69,7 @@ How to use the model, with concrete python code examples.
     mpi.rst
     run.rst
     api.rst
+    cluster.rst
     faq.rst
     whats-new.rst
 

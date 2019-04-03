@@ -6,7 +6,7 @@ Parallel computations
 OGGM is designed to use the available resources as well as possible. For single
 nodes machines but with more than one processor (frequent case for personal
 computers) OGGM ships with a multiprocessing approach which is fairly simple to
-use. For cluster environments, use `MPI`_.
+use. For cluster environments, you can use `MPI`_.
 
 
 Multiprocessing
@@ -51,12 +51,17 @@ or pip::
     pip install mpi4py
 
 
-mpi4py itself depends on a working mpi environment, which is usually supplied by the maintainers of your cluster.
-On conda, it comes with its own copy of mpich, which is nice and easy for quick testing, but likely undesireable for the performance of actual runs.
+mpi4py itself depends on a working mpi environment, which is usually supplied
+by the maintainers of your cluster.
+On conda, it comes with its own copy of mpich, which is nice and easy for
+quick testing, but likely undesirable for the performance of actual runs.
 
-For an actual run, invoke any script using oggm via mpiexec, and pass the ``--mpi`` parameter to the script itself::
+For an actual run, invoke any script using oggm via mpiexec, and pass the
+``--mpi`` parameter to the script itself::
 
     mpiexec -n 10 python ./run_rgi_region.py --mpi
 
-Be aware that the first process with rank 0 is the manager process, that by itself does not do any calculations and is only used to distribute tasks.
-So the actual number of working processes is one lower than the number passed to mpiexec/your clusters scheduler.
+Be aware that the first process with rank 0 is the manager process, that by
+itself does not do any calculations and is only used to distribute tasks.
+So the actual number of working processes is one lower than the number passed
+to mpiexec/your clusters scheduler.
