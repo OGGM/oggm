@@ -652,7 +652,16 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
             'free_board': t_altitude}
 
 
-@entity_task(log, writes=['calving_loop'])
+def _calving_fallback():
+    """Restore defaults in case we exit with error"""
+
+    # Bounds on mu*
+    cfg.PARAMS['min_mu_star'] = 1.
+    # Whether to clip mu to a min of zero (only recommended for calving exps)
+    cfg.PARAMS['clip_mu_star'] = False
+
+
+@entity_task(log, writes=['calving_loop'], fallback=_calving_fallback)
 def find_inversion_calving(gdir, initial_water_depth=None, max_ite=30,
                            stop_after_convergence=True,
                            fixed_water_depth=False):
@@ -749,6 +758,7 @@ def find_inversion_calving(gdir, initial_water_depth=None, max_ite=30,
             climate.local_t_star(gdir)
 
         climate.mu_star_calibration(gdir)
+
         inversion.prepare_for_inversion(gdir, add_debug_var=True)
         v_inv, _ = inversion.mass_conservation_inversion(gdir)
         if fixed_water_depth:
@@ -779,6 +789,12 @@ def find_inversion_calving(gdir, initial_water_depth=None, max_ite=30,
                 break
         i += 1
 
+    # Write output
     odf.index.name = 'iterations'
     odf.to_csv(gdir.get_filepath('calving_loop'))
+
+    # Restore defaults
+    cfg.PARAMS['min_mu_star'] = 1.
+    cfg.PARAMS['clip_mu_star'] = False
+
     return odf
