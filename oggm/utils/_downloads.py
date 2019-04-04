@@ -42,6 +42,7 @@ import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              HttpDownloadError, HttpContentTooShortError)
+from oggm import utils
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -741,6 +742,43 @@ def _download_arcticdem_from_cluster_unlocked():
     return outpath
 
 
+def _download_aw3d30_file(zone):
+    with _get_download_lock():
+        return _download_aw3d30_file_unlocked(zone)
+
+
+def _download_aw3d30_file_unlocked(zone):
+    """Checks if the AW3D30 data is in the directory and if not, download it.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+    outpath = os.path.join(tmpdir, zone + '_AVE_DSM.tif')
+
+    # check if extracted file exists already
+    if os.path.exists(outpath):
+        return outpath
+
+    # Did we download it yet?
+    wwwfile = ('ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
+               + zone + '.tar.gz')
+    dest_file = file_downloader(wwwfile)
+
+    # None means we tried hard but we couldn't find it
+    if not dest_file:
+        return None
+
+    # ok we have to extract it
+    if not os.path.exists(outpath):
+        utils.robust_tar_extract(dest_file, tmpdir)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
 def _get_centerline_lonlat(gdir):
     """Quick n dirty solution to write the centerlines as a shapefile"""
 
@@ -862,6 +900,34 @@ def tandem_zone(lon_ex, lat_ex):
         for lon in lon_tiles:
             zones.append(_tandem_path(lon, lat))
     return list(sorted(set(zones)))
+
+
+def _aw3d30_path(lon_tile, lat_tile):
+
+    # OK we have a proper tile now
+
+    # Folders are sorted with N E S W in 5 degree steps
+    # But in N and E the lower boundary is indicated
+    # e.g. N060 contains N060 - N064
+    # e.g. E000 contains E000 - E004
+    # but S and W indicate the upper boundary:
+    # e.g. S010 contains S006 - S010
+    # e.g. W095 contains W091 - W095
+
+    # get letters
+    NS = 'S' if lat_tile < 0 else 'N'
+    EW = 'W' if lon_tile < 0 else 'E'
+
+    # get lat/lon
+    lon = abs(5 * np.floor(lon_tile/5))
+    lat = abs(5 * np.floor(lat_tile/5))
+
+    folder = '%s%.3d%s%.3d' % (NS, lon, EW, lat)
+    file = '%s%.3d%s%.3d' % (NS, abs(lon_tile), EW, abs(lat_tile))
+
+    # Final path
+    out = folder + '/' + file
+    return out
 
 
 def aw3d30_zone(lon_ex, lat_ex):
@@ -1546,6 +1612,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'ASTER' : ASTER data
           - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
+          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
 
     Returns
     -------
@@ -1610,6 +1677,14 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         sources = []
         for z in zones:
             sources.append(_download_tandem_file(z))
+        source_str = source
+
+    # AW3D30 - ALOS Global Digital Surface Model 3D 30m from JAXA
+    if source == 'AW3D30':
+        zones = aw3d30_zone(lon_ex, lat_ex)
+        sources = []
+        for z in zones:
+            sources.append(_download_aw3d30_file(z))
         source_str = source
 
     # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
