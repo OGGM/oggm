@@ -319,7 +319,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
 
-        size = r.headers.get('content-length') or 0
+        size = r.headers.get('content-length') or -1
         size = int(size)
 
         if reporthook:
