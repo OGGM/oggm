@@ -761,9 +761,9 @@ def _download_aw3d30_file_unlocked(zone):
         return outpath
 
     # Did we download it yet?
-    wwwfile = ('ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
+    ftpfile = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
                + zone + '.tar.gz')
-    dest_file = file_downloader(wwwfile)
+    dest_file = file_downloader(ftpfile)
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
