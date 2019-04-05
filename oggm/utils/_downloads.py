@@ -15,6 +15,8 @@ import logging
 from functools import partial
 import time
 import fnmatch
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
 
 # External libs
@@ -319,7 +321,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
 
-        size = r.headers.get('content-length') or 0
+        size = r.headers.get('content-length') or -1
         size = int(size)
 
         if reporthook:
@@ -336,6 +338,25 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
 
         if chunk_count * chunk_size < size:
             raise HttpContentTooShortError()
+
+
+def _classic_urlretrieve(url, path, reporthook, auth=None):
+    """Thin wrapper around pythons urllib urlretrieve
+    """
+
+    ourl = url
+    if auth:
+        u = urlparse(url)
+        if '@' not in u.netloc:
+            netloc = auth[0] + ':' + auth[1] + '@' + u.netloc
+            url = u._replace(netloc=netloc).geturl()
+
+    try:
+        urllib.request.urlretrieve(url, cache_path, reporthook)
+    except urllib.error.HTTPError as e:
+        raise HttpDownloadError(e.code, ourl)
+    except urllib.error.ContentTooShortError as e:
+        raise HttpContentTooShortError()
 
 
 def _get_url_cache_name(url):
@@ -361,7 +382,10 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
 
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
-        _requests_urlretrieve(url, cache_path, reporthook, auth)
+        try:
+            _requests_urlretrieve(url, cache_path, reporthook, auth)
+        except requests.exceptions.InvalidSchema:
+            _classic_urlretrieve(url, cache_path, reporthook, auth)
         return cache_path
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
