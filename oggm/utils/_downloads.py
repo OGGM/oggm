@@ -154,13 +154,17 @@ def get_dl_verify_data():
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
 
-    with requests.get(CHECKSUM_VALIDATION_URL) as req:
-        if req.status_code != 200:
-            verify_file_sha256 = None
-            logger.warning('Failed getting verification checksum.')
-        else:
-            verify_file_sha256 = req.text.split(maxsplit=1)[0]
-            verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+    try:
+        with requests.get(CHECKSUM_VALIDATION_URL) as req:
+            if req.status_code != 200:
+                verify_file_sha256 = None
+                logger.warning('Failed getting verification checksum.')
+            else:
+                verify_file_sha256 = req.text.split(maxsplit=1)[0]
+                verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+    except requests.exceptions.ConnectionError:
+        verify_file_sha256 = None
+        logger.warning('Failed getting verification checksum.')
 
     def do_verify():
         if os.path.isfile(verify_file_path) and verify_file_sha256:
