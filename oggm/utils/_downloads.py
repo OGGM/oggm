@@ -159,9 +159,9 @@ def get_dl_verify_data():
             req.raise_for_status()
             verify_file_sha256 = req.text.split(maxsplit=1)[0]
             verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
-    except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError):
+    except Exception as e:
         verify_file_sha256 = None
-        logger.warning('Failed getting verification checksum.')
+        logger.warning('Failed getting verification checksum: ' + repr(e))
 
     def do_verify():
         if os.path.isfile(verify_file_path) and verify_file_sha256:
