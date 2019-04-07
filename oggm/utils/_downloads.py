@@ -156,13 +156,10 @@ def get_dl_verify_data():
 
     try:
         with requests.get(CHECKSUM_VALIDATION_URL) as req:
-            if req.status_code != 200:
-                verify_file_sha256 = None
-                logger.warning('Failed getting verification checksum.')
-            else:
-                verify_file_sha256 = req.text.split(maxsplit=1)[0]
-                verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
-    except requests.exceptions.ConnectionError:
+            req.raise_for_status()
+            verify_file_sha256 = req.text.split(maxsplit=1)[0]
+            verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+    except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError):
         verify_file_sha256 = None
         logger.warning('Failed getting verification checksum.')
 
