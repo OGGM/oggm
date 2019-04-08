@@ -23,7 +23,7 @@ Principles
 Physical principles implemented in the model and their underlying assumptions,
 with as little code as possible. For more detailed information, we recommend
 to read the OGGM
-`description paper <https://www.www.geosci-model-dev.net/12/909/2019/>`_ as
+`description paper <https://www.geosci-model-dev.net/12/909/2019/>`_ as
 well.
 
 * :doc:`introduction`
