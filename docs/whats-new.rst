@@ -30,7 +30,7 @@ v1.1 (28.02.2019)
 This is a major new release of the OGGM model, with substantial improvements
 to version 1. We recommend to use this version from now on. It coincides
 with the publication of our publication in
-`Geoscientific Model Development <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_.
+`Geoscientific Model Development <https://www.geosci-model-dev.net/12/909/2019/>`_.
 
 New contributors to the project:
 

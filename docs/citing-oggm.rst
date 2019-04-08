@@ -8,26 +8,27 @@ Publication
 -----------
 
 If you want to refer to OGGM in your publications or presentations, please
-refer to the paper in `Geoscientific Model Development`_ (in review).
+refer to the paper in `Geoscientific Model Development`_.
 
 BibTeX entry::
 
-    @Article{gmd-2018-9,
-    AUTHOR = {Maussion, F. and Butenko, A. and Eis, J. and Fourteau, K. and
+    @Article{gmd-12-909-2019,
+    AUTHOR = {Maussion, F. and Butenko, A. and Champollion, N. and Dusch, M.
+              and Eis, J. and Fourteau, K. and Gregor, P. and
               Jarosch, A. H. and Landmann, J. and Oesterle, F. and
               Recinos, B. and Rothenpieler, T. and Vlug, A. and
               Wild, C. T. and Marzeion, B.},
-    TITLE = {The Open Global Glacier Model (OGGM) v1.0},
-    JOURNAL = {Geoscientific Model Development Discussions},
-    VOLUME = {2018},
-    YEAR = {2018},
-    PAGES = {1--33},
-    URL = {https://www.geosci-model-dev-discuss.net/gmd-2018-9/},
-    DOI = {10.5194/gmd-2018-9}
+    TITLE = {The Open Global Glacier Model (OGGM) v1.1},
+    JOURNAL = {Geoscientific Model Development},
+    VOLUME = {2019},
+    YEAR = {2019},
+    PAGES = {909--931},
+    URL = {https://www.geosci-model-dev.net/12/909/2019/},
+    DOI = {10.5194/gmd-12-909-2019}
     }
 
 
-.. _Geoscientific Model Development: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+.. _Geoscientific Model Development: https://www.geosci-model-dev.net/12/909/2019/
 
 
 Software DOI
@@ -36,17 +37,17 @@ Software DOI
 If you want to refer to a specific version of the software you can use
 the `Zenodo citation`_ for this purpose. An example BibTeX entry::
 
-    @misc{OGGM_v1.0.0,
-    author       = {Fabien Maussion and Timo Rothenpieler and
-                    Beatriz Recinos and Anouk Vlug and
-                    Ben Marzeion and Felix Oesterle and
-                    Johannes Landmann and Alex Jarosch and
-                    Julia Eis and Anton Butenko and Schmitty Smith},
-    title        = {OGGM/oggm: v1.0.0},
-    month        = jan,
-    year         = 2018,
-    doi          = {10.5281/zenodo.1149701},
-    url          = {https://doi.org/10.5281/zenodo.1149701}
+    @misc{OGGM_v1.1,
+    author       = {Fabien Maussion and Timo Rothenpieler and Matthias Dusch
+                    and Beatriz Recinos and Anouk Vlug and Ben Marzeion and
+                    Johannes Landmann and Julia Eis and Sadie Bartholomew and
+                    Nicolas Champollion and Philipp Gregor and Anton Butenko
+                    and Schmitty Smith and Moritz Oberrauch},
+    title        = {OGGM/oggm: v1.1},
+    month        = feb,
+    year         = 2019,
+    doi          = {10.5281/zenodo.2580277},
+    url          = {https://doi.org/10.5281/zenodo.2580277}
     }
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645

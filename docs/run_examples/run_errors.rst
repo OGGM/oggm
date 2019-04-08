@@ -4,7 +4,7 @@
 ===================
 
 OGGM will not be able to run on a number of glaciers. We summarized the reasons
-for this in `our GMD publication <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_
+for this in `our GMD publication <https://www.geosci-model-dev.net/12/909/2019/>`_
 and showed that the number of failing glaciers can be quite high depending
 on the region considered.
 

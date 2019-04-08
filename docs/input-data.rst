@@ -445,4 +445,4 @@ have access to the timeseries through the glacier directory:
 
 .. _WGMS: https://wgms.ch
 .. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
-.. _GMD Paper: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+.. _GMD Paper: https://www.geosci-model-dev.net/12/909/2019/
