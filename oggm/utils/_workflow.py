@@ -514,7 +514,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
 def demo_glacier_id(key):
     """Get the RGI id of a glacier by name or key: None if not found."""
 
-    df = cfg.DEMO_GLACIERS
+    df = cfg.DATA['demo_glaciers']
 
     # Is the name in key?
     s = df.loc[df.Key.str.lower() == key.lower()]
@@ -1965,13 +1965,10 @@ class GlacierDirectory(object):
             h = np.append(h, fl.surface_h)
         return h, w * self.grid.dx
 
-    def get_ref_mb_data(self):
-        """Get the reference mb data from WGMS (for some glaciers only!).
+    def set_ref_mb_data(self, mb_df=None):
 
-        Raises an Error if it isn't a reference glacier at all.
-        """
+        if mb_df is None:
 
-        if self._mbdf is None:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
@@ -1983,7 +1980,26 @@ class GlacierDirectory(object):
             reff = os.path.join(mbdatadir,
                                 'mbdata_WGMS-{:05d}.csv'.format(wid))
             # list of years
-            self._mbdf = pd.read_csv(reff).set_index('YEAR')
+            mb_df = pd.read_csv(reff).set_index('YEAR')
+
+        # Quality checks
+        if 'ANNUAL_BALANCE' not in mb_df:
+            raise InvalidParamsError('Need an "ANNUAL_BALANCE" column in the '
+                                     'dataframe.')
+        if not mb_df.index.is_integer():
+            raise InvalidParamsError('The index needs to be integer years')
+
+        mb_df.index.name = 'YEAR'
+        self._mbdf = mb_df
+
+    def get_ref_mb_data(self):
+        """Get the reference mb data from WGMS (for some glaciers only!).
+
+        Raises an Error if it isn't a reference glacier at all.
+        """
+
+        if self._mbdf is None:
+            self.set_ref_mb_data()
 
         # logic for period
         if not self.has_file('climate_info'):
@@ -2037,7 +2053,7 @@ class GlacierDirectory(object):
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
     def get_ref_length_data(self):
-        """Get the glacier lenght data from P. Leclercq's data base.
+        """Get the glacier length data from P. Leclercq's data base.
 
          https://folk.uio.no/paulwl/data.php
 
