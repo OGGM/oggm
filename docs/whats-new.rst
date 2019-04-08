@@ -4,14 +4,22 @@
 Version history
 ===============
 
-v1.1.x (unreleased)
--------------------
+v1.2 (unreleased)
+-----------------
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
 Enhancements
 ~~~~~~~~~~~~
+
+- Adapted `graphics.plot_domain`, `graphics.plot_centerlines` and
+  `graphics_plot_modeloutput_map` to work with merged glaciers (:pull:`726`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- Added (and updated) an official task to find the calving flux based on the
+  mass-conservation inversion (`inversion.find_inversion_calving`). This
+  is still in experimentation phase! (:pull:`720`).
+  By `Beatriz Recinos <https://github.com/bearecinos>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -22,7 +30,7 @@ v1.1 (28.02.2019)
 This is a major new release of the OGGM model, with substantial improvements
 to version 1. We recommend to use this version from now on. It coincides
 with the publication of our publication in
-`Geoscientific Model Development <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_.
+`Geoscientific Model Development <https://www.geosci-model-dev.net/12/909/2019/>`_.
 
 New contributors to the project:
 

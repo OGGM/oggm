@@ -1,47 +1,73 @@
 import subprocess
-import glob
+import requests
+import tempfile
 import os
+import logging
 
-from asv.plugins.virtualenv import Virtualenv
+from asv.plugins.conda import _find_conda, Conda
+from asv.console import log
+from asv import util
 
+logging.getLogger("requests").setLevel(logging.WARNING)
 
-class OggmVirtualenv(Virtualenv):
-    tool_name = "oggm_virtualenv"
+OGGM_CONDA_ENV_URL = ("https://raw.githubusercontent.com/OGGM/"
+                      "OGGM-dependency-list/master/linux-64/{0}")
+OGGM_CONDA_ENVS = {
+    "36": "oggmdev-1.1.0.201903261531_20190326_py36.yml",
+    "37": "oggmdev-1.1.0.201903261531_20190326_py37.yml",
+}
 
-    def _install_requirements(self):
-        env_key = "OGGM_ASV_WHEEL_DIR_" + self._python.replace(".", "_")
-        if env_key not in os.environ:
-            env_key = "OGGM_ASV_WHEEL_DIR"
+class OggmVirtualenv(Conda):
+    tool_name = "oggm_conda"
 
-        # check if there are global wheels available somewhere
-        if env_key in os.environ:
-            wheel_dir = os.path.expanduser(os.environ[env_key])
-            wheel_dir = os.path.join(wheel_dir, "*.whl")
-            wheels = glob.glob(wheel_dir)
-            self.run_executable("pip", ["install", "-v"] + wheels)
-        else:
-            # some packages(rasterio...) need numpy during setup.py.
-            # So install it and some other similar stuff individually.
-            self.run_executable("pip", ["install", "-v", "numpy", "six",
-                                        "cython"])
+    def _has_requirement(self, line):
+        for key, _ in self._requirements.items():
+            key += "="
+            if key in line:
+                return True
+        return False
 
-            # handle odd cases of GDAL/Fiona
-            out_str = subprocess.check_output(["gdal-config", "--version"])
-            gdal_version = out_str.strip().decode("utf-8")
-            out_str = subprocess.check_output(["gdal-config", "--cflags"])
-            gdal_flags = out_str.strip().decode("utf-8")
-            gdal_flags = gdal_flags.replace("-I", "--include-dirs=")
-            self.run_executable("pip", ["install", "-v", "--upgrade",
-                                        "gdal==" + gdal_version,
-                                        "--install-option=build_ext",
-                                        "--install-option=" + gdal_flags])
-            self.run_executable("pip", ["install", "-v", "--upgrade", "fiona",
-                                        "--install-option=build_ext",
-                                        "--install-option=" + gdal_flags])
+    def _setup(self):
+        log.info("Creating oggm conda environment for {0}".format(self.name))
 
-        # install latest salem
-        self.run_executable("pip",
-                            ["install", "-v", "--upgrade",
-                             "git+https://github.com/fmaussion/salem.git"])
+        try:
+            conda = _find_conda()
+        except IOError as e:
+            raise util.UserError(str(e))
 
-        super(OggmVirtualenv, self)._install_requirements()
+        env_file = tempfile.NamedTemporaryFile(mode="w", delete=False,
+                                               suffix=".yml")
+        try:
+            pyver = str(self._python).replace(".", "")[:2]
+            oggm_env = OGGM_CONDA_ENVS[pyver]
+            req = requests.get(OGGM_CONDA_ENV_URL.format(oggm_env))
+            req.raise_for_status()
+            env_text = req.text
+
+            for line in env_text.splitlines():
+                if line.startswith("prefix:") or self._has_requirement(line):
+                    continue
+                elif line.startswith("name:"):
+                    env_file.write("name: {0}\n".format(self.name))
+                else:
+                    env_file.write(line + "\n")
+
+            conda_args, pip_args = self._get_requirements(conda)
+            env_file.writelines(('  - %s\n' % s for s in conda_args))
+            if pip_args:
+                env_file.write('  - pip:\n')
+                env_file.writelines(('    - %s\n' % s for s in pip_args))
+
+            env_file.close()
+
+            util.check_output([conda] + ['env', 'create', '-f', env_file.name,
+                                         '-p', self._path, '--force'])
+        except Exception as exc:
+            if os.path.isfile(env_file.name):
+                with open(env_file.name, "r") as f:
+                    text = f.read()
+                log.info("oggm conda env create failed: in {} with:\n{}"
+                         .format(self._path, text))
+            raise
+        finally:
+            os.unlink(env_file.name)

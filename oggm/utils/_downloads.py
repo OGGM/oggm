@@ -6,7 +6,7 @@ import os
 import gzip
 import lzma
 import bz2
-import zlib
+import hashlib
 import shutil
 import zipfile
 import sys
@@ -15,6 +15,8 @@ import logging
 from functools import partial
 import time
 import fnmatch
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
 
 # External libs
@@ -41,6 +43,7 @@ except NameError:
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
+                             DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError)
 from oggm import utils
 
@@ -51,7 +54,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'cd3dc3df73d16dc734a50e72363115760153b644'
+SAMPLE_DATA_COMMIT = 'cbf9361bd1cd76d5c44e1b733ca746147bebcde7'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -62,6 +65,9 @@ GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
+
+CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.xz'
+CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 
 _RGI_METADATA = dict()
 
@@ -140,22 +146,67 @@ def get_dl_verify_data():
     """Returns a dictionary with all known download object hashes.
 
     The returned dictionary resolves str: cache_obj_name
-    to a tuple (int: size, int: crc32).
+    to a tuple (int: size, bytes: sha256).
     """
     global _dl_verify_data
 
-    if _dl_verify_data is None:
-        data = dict()
-        path = os.path.join(os.path.dirname(__file__), '_downloads.crc32.xz')
-        with lzma.open(path, 'rb') as f:
-            for line in f:
-                line = line.decode('utf-8').strip()
-                if not line:
-                    continue
-                elems = line.split(' ', 2)
-                assert len(elems[0]) == 8
-                data[elems[2]] = (int(elems[1]), int(elems[0], 16))
-        _dl_verify_data = data
+    if _dl_verify_data is not None:
+        return _dl_verify_data
+
+    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
+
+    try:
+        with requests.get(CHECKSUM_VALIDATION_URL) as req:
+            req.raise_for_status()
+            verify_file_sha256 = req.text.split(maxsplit=1)[0]
+            verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+    except Exception as e:
+        verify_file_sha256 = None
+        logger.warning('Failed getting verification checksum: ' + repr(e))
+
+    def do_verify():
+        if os.path.isfile(verify_file_path) and verify_file_sha256:
+            sha256 = hashlib.sha256()
+            with open(verify_file_path, 'rb') as f:
+                for b in iter(lambda: f.read(0xFFFF), b''):
+                    sha256.update(b)
+            if sha256.digest() != verify_file_sha256:
+                logger.warning('%s changed or invalid, deleting.'
+                               % (verify_file_path))
+                os.remove(verify_file_path)
+
+    do_verify()
+
+    if not os.path.isfile(verify_file_path):
+        logger.info('Downloading %s to %s...'
+                    % (CHECKSUM_URL, verify_file_path))
+
+        with requests.get(CHECKSUM_URL, stream=True) as req:
+            if req.status_code == 200:
+                with open(verify_file_path, 'wb') as f:
+                    for b in req.iter_content(chunk_size=0xFFFF):
+                        if b:
+                            f.write(b)
+
+        logger.info('Done downloading.')
+
+        do_verify()
+
+    if not os.path.isfile(verify_file_path):
+        logger.warning('Downloading and verifiying checksums failed.')
+        return dict()
+
+    data = dict()
+    with lzma.open(verify_file_path, 'rb') as f:
+        for line in f:
+            line = line.decode('utf-8').strip()
+            if not line:
+                continue
+            elems = line.split(maxsplit=2)
+            data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
+    _dl_verify_data = data
+
+    logger.info('Successfully loaded verification data.')
 
     return _dl_verify_data
 
@@ -239,44 +290,40 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
 
     if dl_verify:
         data = get_dl_verify_data()
-        crc32 = 0
+        sha256 = hashlib.sha256()
         with open(path, 'rb') as f:
-            while True:
-                b = f.read(0xFFFF)
-                if not b:
-                    break
-                crc32 = zlib.crc32(b, crc32)
+            for b in iter(lambda: f.read(0xFFFF), b''):
+                sha256.update(b)
+        sha256 = sha256.digest()
         size = os.path.getsize(path)
 
         if cache_obj_name not in data:
             logger.warning('No known hash for %s: %s %s' %
-                           (path, size, crc32.to_bytes(4, byteorder='big').hex()))
+                           (path, size, sha256.hex()))
         else:
             data = data[cache_obj_name]
-            if data[0] != size or data[1] != crc32:
+            if data[0] != size or data[1] != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path,
-                    size, crc32.to_bytes(4, byteorder='big').hex(),
-                    data[0], data[1].to_bytes(4, byteorder='big').hex())
+                    path, size, sha256.hex(), data[0], data[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
 
     return path
 
 
-def _requests_urlretrieve(url, path, reporthook):
+def _requests_urlretrieve(url, path, reporthook, auth=None):
     """Implements the required features of urlretrieve on top of requests
     """
 
     chunk_size = 128 * 1024
     chunk_count = 0
 
-    with requests.get(url, stream=True) as r:
+    with requests.get(url, stream=True, auth=auth) as r:
         if r.status_code != 200:
-            raise HttpDownloadError(r.status_code)
+            raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
 
-        size = r.headers.get('content-length') or 0
+        size = r.headers.get('content-length') or -1
         size = int(size)
 
         if reporthook:
@@ -295,26 +342,58 @@ def _requests_urlretrieve(url, path, reporthook):
             raise HttpContentTooShortError()
 
 
-def oggm_urlretrieve(url, cache_obj_name=None, reset=False, reporthook=None):
+def _classic_urlretrieve(url, path, reporthook, auth=None):
+    """Thin wrapper around pythons urllib urlretrieve
+    """
+
+    ourl = url
+    if auth:
+        u = urlparse(url)
+        if '@' not in u.netloc:
+            netloc = auth[0] + ':' + auth[1] + '@' + u.netloc
+            url = u._replace(netloc=netloc).geturl()
+
+    try:
+        urllib.request.urlretrieve(url, cache_path, reporthook)
+    except urllib.error.HTTPError as e:
+        raise HttpDownloadError(e.code, ourl)
+    except urllib.error.ContentTooShortError as e:
+        raise HttpContentTooShortError()
+
+
+def _get_url_cache_name(url):
+    """Returns the cache name for any given url.
+    """
+
+    res = urlparse(url)
+    return res.netloc + res.path
+
+
+def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
+                     reporthook=None, auth=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
     and returns the local path.
+
+    auth is expected to be either a tuple of ('username', 'password') or None.
     """
 
     if cache_obj_name is None:
-        cache_obj_name = urlparse(url)
-        cache_obj_name = cache_obj_name.netloc + cache_obj_name.path
+        cache_obj_name = _get_url_cache_name(url)
 
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
-        _requests_urlretrieve(url, cache_path, reporthook)
+        try:
+            _requests_urlretrieve(url, cache_path, reporthook, auth)
+        except requests.exceptions.InvalidSchema:
+            _classic_urlretrieve(url, cache_path, reporthook, auth)
         return cache_path
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def _progress_urlretrieve(url, cache_name=None, reset=False):
+def _progress_urlretrieve(url, cache_name=None, reset=False, auth=None):
     """Downloads a file, returns its local path, and shows a progressbar."""
 
     try:
@@ -332,14 +411,15 @@ def _progress_urlretrieve(url, cache_name=None, reset=False):
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
         res = oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset,
-                               reporthook=_upd)
+                               reporthook=_upd, auth=auth)
         try:
             pbar[0].finish()
         except BaseException:
             pass
         return res
     except (ImportError, ModuleNotFoundError):
-        return oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset)
+        return oggm_urlretrieve(url, cache_obj_name=cache_name,
+                                reset=reset, auth=auth)
 
 
 def aws_file_download(aws_path, cache_name=None, reset=False):
@@ -382,7 +462,8 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
+def file_downloader(www_path, retry_max=5, cache_name=None,
+                    reset=False, auth=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -392,7 +473,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
         try:
             retry_counter += 1
             local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
-                                               reset=reset)
+                                               reset=reset, auth=auth)
             # if no error, exit
             break
         except HttpDownloadError as err:
@@ -415,15 +496,24 @@ def file_downloader(www_path, retry_max=5, cache_name=None, reset=False):
             time.sleep(10)
             continue
         except DownloadVerificationFailedException as err:
-            try:
-                os.remove(err.path)
-            except FileNotFoundError:
-                pass
-            logger.info("Downloading %s failed with "
-                        "DownloadVerificationFailedException\n %s\n"
-                        "The file might have changed or is corrupted. "
-                        "File deleted. Re-downloading... %s/%s" %
-                        (www_path, err.msg, retry_counter, retry_max))
+            if (cfg.PATHS['dl_cache_dir'] and
+                  err.path.startswith(cfg.PATHS['dl_cache_dir']) and
+                  cfg.PARAMS['dl_cache_readonly']):
+                if not cache_name:
+                    cache_name = _get_url_cache_name(www_path)
+                cache_name = "GLOBAL_CACHE_INVALID/" + cache_name
+                retry_counter -= 1
+                logger.info("Global cache for %s is invalid!")
+            else:
+                try:
+                    os.remove(err.path)
+                except FileNotFoundError:
+                    pass
+                logger.info("Downloading %s failed with "
+                            "DownloadVerificationFailedException\n %s\n"
+                            "The file might have changed or is corrupted. "
+                            "File deleted. Re-downloading... %s/%s" %
+                            (www_path, err.msg, retry_counter, retry_max))
             continue
 
     # See if we managed (fail is allowed)
@@ -527,18 +617,25 @@ def _download_tandem_file_unlocked(zone):
     if os.path.exists(outpath):
         return outpath
 
+    # Grab auth parameters
+    tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
+    if not os.path.isfile(tdmauthfile):
+        raise DownloadCredentialsMissingException(
+            tdmauthfile + ' does not exist. Login using oggm_tdmdem90_login.')
+    with open(tdmauthfile, 'r') as f:
+        tdmuser = f.readline().strip()
+        tdmpass = f.readline().strip()
+    if not tdmuser or not tdmpass:
+        raise DownloadCredentialsMissingException(
+            'Could not read credentials from ' + tdmauthfile)
+
     # Did we download it yet?
-    scpfile = ('/home/data/download/tandemx-90m.dlr.de/90mdem/DEM/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
                '{}.zip'.format(zone))
-    cache_dir = cfg.PATHS['dl_cache_dir']
-    dest_file = os.path.join(cache_dir, 'scp_tandem', zone + '.zip')
-    if not os.path.exists(dest_file):
-        mkdir(os.path.dirname(dest_file))
-        cmd = 'scp bremen:%s %s' % (scpfile, dest_file)
-        os.system(cmd)
+    dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
 
     # That means we tried hard but we couldn't find it
-    if not os.path.exists(dest_file):
+    if not dest_file:
         return None
 
     # ok we have to extract it

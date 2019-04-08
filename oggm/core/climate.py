@@ -1157,8 +1157,15 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
                                           args=(fls, cmb, temp, prcp, widths),
                                           xtol=1e-5)
         except ValueError:
-            raise MassBalanceCalibrationError('{} mu* out of specified '
-                                              'bounds.'.format(gdir.rgi_id))
+            # This happens in very rare cases
+            _mu_lim = _mu_star_per_minimization(cfg.PARAMS['min_mu_star'],
+                                                fls, cmb, temp, prcp, widths)
+            if _mu_lim < 0 and np.allclose(_mu_lim, 0):
+                mu_star = 0.
+            else:
+                raise MassBalanceCalibrationError('{} mu* out of specified '
+                                                  'bounds.'.format(gdir.rgi_id)
+                                                  )
 
         if not np.isfinite(mu_star):
             raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +

@@ -202,7 +202,11 @@ _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
-_doc = 'Calving output'
+_doc = ('A csv file containing the output of each iteration of the '
+        'find_inversion_calving task loop.')
+BASENAMES['calving_loop'] = ('calving_loop.csv', _doc)
+
+_doc = 'Calving output (deprecated).'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
 
