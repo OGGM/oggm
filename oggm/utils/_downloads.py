@@ -342,7 +342,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpContentTooShortError()
 
 
-def _classic_urlretrieve(url, path, reporthook, auth=None):
+def _classic_urlretrieve(url, cache_path, reporthook, auth=None):
     """Thin wrapper around pythons urllib urlretrieve
     """
 
@@ -844,22 +844,25 @@ def _download_aw3d30_file(zone):
         return _download_aw3d30_file_unlocked(zone)
 
 
-def _download_aw3d30_file_unlocked(zone):
+def _download_aw3d30_file_unlocked(fullzone):
     """Checks if the AW3D30 data is in the directory and if not, download it.
     """
 
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
-    outpath = os.path.join(tmpdir, zone + '_AVE_DSM.tif')
+
+    # tarfiles are extracted in directories per each tile
+    tile = fullzone.split('/')[1]
+    demfile = os.path.join(tmpdir, tile, tile + '_AVE_DSM.tif')
 
     # check if extracted file exists already
-    if os.path.exists(outpath):
-        return outpath
+    if os.path.exists(demfile):
+        return demfile
 
     # Did we download it yet?
     ftpfile = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
-               + zone + '.tar.gz')
+               + fullzone + '.tar.gz')
     dest_file = file_downloader(ftpfile)
 
     # None means we tried hard but we couldn't find it
@@ -867,13 +870,17 @@ def _download_aw3d30_file_unlocked(zone):
         return None
 
     # ok we have to extract it
-    if not os.path.exists(outpath):
-        utils.robust_tar_extract(dest_file, tmpdir)
+
+    if not os.path.exists(demfile):
+        dempath = os.path.dirname(demfile)
+        utils.robust_tar_extract(dest_file, dempath)
 
     # See if we're good, don't overfill the tmp directory
-    assert os.path.exists(outpath)
-    cfg.get_lru_handler(tmpdir).append(outpath)
-    return outpath
+    assert os.path.exists(demfile)
+    # this tarfile contains several files
+    for file in os.listdir(dempath):
+        cfg.get_lru_handler(tmpdir).append(os.path.join(dempath, file))
+    return demfile
 
 
 def _get_centerline_lonlat(gdir):
@@ -1019,8 +1026,8 @@ def _aw3d30_path(lon_tile, lat_tile):
     lon = abs(5 * np.floor(lon_tile/5))
     lat = abs(5 * np.floor(lat_tile/5))
 
-    folder = '%s%.3d%s%.3d' % (NS, lon, EW, lat)
-    file = '%s%.3d%s%.3d' % (NS, abs(lon_tile), EW, abs(lat_tile))
+    folder = '%s%.3d%s%.3d' % (NS, lat, EW, lon)
+    file = '%s%.3d%s%.3d' % (NS, abs(lat_tile), EW, abs(lon_tile))
 
     # Final path
     out = folder + '/' + file
