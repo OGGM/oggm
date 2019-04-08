@@ -85,7 +85,7 @@ there is no "optimum" :math:`f_{inv}` parameter in the model. There is a high
 uncertainty in the "true" :math:`A` parameter as well as in all other processes
 affecting the ice thickness. Therefore, we cannot make any recommendation for
 the "best" parameter. Global sensitivity analyses show that the default value
-is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_)
+is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev.net/12/909/2019/>`_)
 
 *Note*: for `ITMIX <https://www.the-cryosphere.net/11/949/2017/>`_, :math:`f_{inv}`
 was set to a value of approximately 3 (which was too high and underestimated

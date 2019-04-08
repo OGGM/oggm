@@ -63,7 +63,7 @@ be simulated by flowlines, very cold climates which don't allow melting to
 occur, or numerical instabilities during the simulation. Altogether, 4218
 glaciers (3.6% of the total area worldwide) could not be modelled by
 OGGM in the
-`standard global simulations <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_.
+`standard global simulations <https://www.geosci-model-dev.net/12/909/2019/>`_.
 Some regions experience more errors than others (see the paper).
 
 When you experience errors, you have to decide if they are due to an error

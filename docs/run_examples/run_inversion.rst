@@ -10,7 +10,7 @@ parameter.
 
 There is currently no "best" set of parameters for the ice thickness
 inversion model. As shown in
-`Maussion et al. (2018) <https://www.geosci-model-dev-discuss.net/gmd-2018-9/>`_,
+`Maussion et al. (2019) <https://www.geosci-model-dev.net/12/909/2019/>`_,
 the default parameter set results in global volume estimates which are a bit
 larger than previous values. For the consensus estimate of
 `Farinotti et al. (2018) <https://www.nature.com/articles/s41561-019-0300-3>`_,
