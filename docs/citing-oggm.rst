@@ -13,11 +13,11 @@ refer to the paper in `Geoscientific Model Development`_.
 BibTeX entry::
 
     @Article{gmd-12-909-2019,
-    AUTHOR = {Maussion, F. and Butenko, A. and Champollion, N. and Dusch, M.
-              and Eis, J. and Fourteau, K. and Gregor, P. and
+    AUTHOR = {Maussion, F. and Butenko, A. and Champollion, N. and
+              Dusch, M. and Eis, J. and Fourteau, K. and Gregor, P. and
               Jarosch, A. H. and Landmann, J. and Oesterle, F. and
-              Recinos, B. and Rothenpieler, T. and Vlug, A. and
-              Wild, C. T. and Marzeion, B.},
+              Recinos, B. and Rothenpieler, T. and Vlug, A. and Wild, C. T. and
+              Marzeion, B.},
     TITLE = {The Open Global Glacier Model (OGGM) v1.1},
     JOURNAL = {Geoscientific Model Development},
     VOLUME = {2019},
@@ -38,11 +38,12 @@ If you want to refer to a specific version of the software you can use
 the `Zenodo citation`_ for this purpose. An example BibTeX entry::
 
     @misc{OGGM_v1.1,
-    author       = {Fabien Maussion and Timo Rothenpieler and Matthias Dusch
-                    and Beatriz Recinos and Anouk Vlug and Ben Marzeion and
-                    Johannes Landmann and Julia Eis and Sadie Bartholomew and
-                    Nicolas Champollion and Philipp Gregor and Anton Butenko
-                    and Schmitty Smith and Moritz Oberrauch},
+    author       = {Fabien Maussion and Timo Rothenpieler and
+                    Matthias Dusch and Beatriz Recinos and Anouk Vlug and
+                    Ben Marzeion and Johannes Landmann and Julia Eis and
+                    Sadie Bartholomew and Nicolas Champollion and
+                    Philipp Gregor and Anton Butenko and Schmitty Smith and
+                    Moritz Oberrauch},
     title        = {OGGM/oggm: v1.1},
     month        = feb,
     year         = 2019,
