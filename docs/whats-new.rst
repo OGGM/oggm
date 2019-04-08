@@ -20,6 +20,8 @@ Enhancements
   mass-conservation inversion (`inversion.find_inversion_calving`). This
   is still in experimentation phase! (:pull:`720`).
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
+- Added a mechanism to add custom MB data to OGGM (:issue:`724`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Bug fixes
 ~~~~~~~~~
