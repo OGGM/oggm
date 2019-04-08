@@ -1966,6 +1966,16 @@ class GlacierDirectory(object):
         return h, w * self.grid.dx
 
     def set_ref_mb_data(self, mb_df=None):
+        """Adds reference mass-balance data to this glacier.
+
+        The format should be a dataframe with the years as index and
+        'ANNUAL_BALANCE' as values in mm yr-1.
+        """
+
+        if self.is_tidewater:
+            log.warning('You are trying to set MB data on a tidewater glacier!'
+                        ' These data will be ignored by the MB model '
+                        'calibration routine.')
 
         if mb_df is None:
 

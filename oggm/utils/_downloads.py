@@ -1733,6 +1733,10 @@ def get_cmip5_file(filename, reset=False):
 
 
 def get_ref_mb_glaciers_candidates(rgi_version=None):
+    """Reads in the WGMS list of glaciers with available MB data.
+
+    Can be found afterwards (and extended) in cdf.DATA['RGIXX_ref_ids'].
+    """
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
