@@ -869,11 +869,10 @@ def _download_aw3d30_file_unlocked(fullzone):
         return None
 
     # ok we have to extract it
-
     if not os.path.exists(demfile):
         from oggm.utils import robust_tar_extract
         dempath = os.path.dirname(demfile)
-        utils.robust_tar_extract(dest_file, dempath)
+        robust_tar_extract(dest_file, dempath)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(demfile)
