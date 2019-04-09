@@ -857,7 +857,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
         glacierwide = cfg.PARAMS['tstar_search_glacierwide']
 
     # Be sure we have no marine terminating glacier
-    assert gdir.terminus_type == 'Land-terminating'
+    assert not gdir.is_tidewater
 
     # Reference time series
     if mbdf is None:

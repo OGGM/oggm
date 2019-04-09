@@ -1493,6 +1493,50 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_scaling_factor'] = _prcp_sf
         cfg.PARAMS['continue_on_error'] = False
 
+    def test_ref_mb_glaciers(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        rids = utils.get_ref_mb_glaciers_candidates()
+        assert len(rids) > 200
+
+        rids = utils.get_ref_mb_glaciers_candidates(gdir.rgi_version)
+        assert len(rids) > 200
+
+        assert len(cfg.DATA) >= 2
+
+        with pytest.raises(RuntimeError):
+            utils.get_ref_mb_glaciers([gdir])
+
+        climate.process_custom_climate_data(gdir)
+        ref_gd = utils.get_ref_mb_glaciers([gdir])
+        assert len(ref_gd) == 1
+
+    def test_fake_ref_mb_glacier(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        climate.process_custom_climate_data(gdir1)
+        entity['RGIId'] = 'RGI50-11.99999'
+        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        climate.process_custom_climate_data(gdir2)
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 0
+
+        gdir2.set_ref_mb_data(gdir1.get_ref_mb_data())
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 0
+
+        cfg.DATA['RGI50_ref_ids'].append('RGI50-11.99999')
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 1
+
     def test_automated_workflow(self):
 
         cfg.PARAMS['run_mb_calibration'] = False
