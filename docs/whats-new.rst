@@ -20,6 +20,8 @@ Enhancements
   mass-conservation inversion (`inversion.find_inversion_calving`). This
   is still in experimentation phase! (:pull:`720`).
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
+- Added a mechanism to add custom MB data to OGGM (:issue:`724`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ALOS Global Digital Surface Model "ALOS World 3D - 30m" DEM from JAXA can
   now be used as alternative DEM within OGGM.
   `See our tutorial <http://edu.oggm.org/en/latest/oggm_tuto.html>`_ on how to

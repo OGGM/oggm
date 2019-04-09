@@ -93,7 +93,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         vfile.write(utils.show_versions(logger=log))
 
     if demo:
-        rgidf = utils.get_rgi_glacier_entities(cfg.DEMO_GLACIERS.index)
+        rgidf = utils.get_rgi_glacier_entities(cfg.DATA['demo_glaciers'].index)
     elif test_rgidf is None:
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,

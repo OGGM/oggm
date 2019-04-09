@@ -1855,11 +1855,35 @@ def get_cmip5_file(filename, reset=False):
     return file_downloader(dfile, reset=reset)
 
 
+def get_ref_mb_glaciers_candidates(rgi_version=None):
+    """Reads in the WGMS list of glaciers with available MB data.
+
+    Can be found afterwards (and extended) in cdf.DATA['RGIXX_ref_ids'].
+    """
+
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS['rgi_version']
+
+    if len(rgi_version) == 2:
+        # We might change this one day
+        rgi_version = rgi_version[:1]
+
+    key = 'RGI{}0_ref_ids'.format(rgi_version)
+
+    if key not in cfg.DATA:
+        flink, _ = get_wgms_files()
+        cfg.DATA[key] = flink['RGI{}0_ID'.format(rgi_version)].to_list()
+
+    return cfg.DATA[key]
+
+
 def get_ref_mb_glaciers(gdirs):
     """Get the list of glaciers we have valid mass balance measurements for.
 
     To be valid glaciers must have more than 5 years of measurements and
-    be land terminating.
+    be land terminating. Therefore, the list depends on the time period of the
+    baseline climate data and this method selects them out of a list
+    of potential candidates (`gdirs` arg).
 
     Parameters
     ----------
@@ -1870,21 +1894,25 @@ def get_ref_mb_glaciers(gdirs):
     -------
     ref_gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         list of those glaciers with valid reference mass balance data
+
+    See Also
+    --------
+    get_ref_mb_glaciers_candidates
     """
 
     # Get the links
-    flink, _ = get_wgms_files()
-    dfids = flink['RGI{}0_ID'.format(gdirs[0].rgi_version[0])].values
+    ref_ids = get_ref_mb_glaciers_candidates(gdirs[0].rgi_version)
 
     # We remove tidewater glaciers and glaciers with < 5 years
     ref_gdirs = []
     for g in gdirs:
-        if g.rgi_id not in dfids or g.is_tidewater:
+        if g.rgi_id not in ref_ids or g.is_tidewater:
             continue
         try:
             mbdf = g.get_ref_mb_data()
             if len(mbdf) >= 5:
                 ref_gdirs.append(g)
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            if 'Please process some climate data before call' in str(e):
+                raise
     return ref_gdirs
