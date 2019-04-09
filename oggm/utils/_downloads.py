@@ -45,7 +45,7 @@ from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError)
-from oggm.utils._workflow import robust_tar_extract
+from oggm import utils
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -873,7 +873,7 @@ def _download_aw3d30_file_unlocked(fullzone):
 
     if not os.path.exists(demfile):
         dempath = os.path.dirname(demfile)
-        robust_tar_extract(dest_file, dempath)
+        utils.robust_tar_extract(dest_file, dempath)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(demfile)
