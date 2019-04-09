@@ -45,7 +45,7 @@ from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError)
-from oggm import utils
+from oggm.utils._workflow import robust_tar_extract
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -873,7 +873,7 @@ def _download_aw3d30_file_unlocked(fullzone):
 
     if not os.path.exists(demfile):
         dempath = os.path.dirname(demfile)
-        utils.robust_tar_extract(dest_file, dempath)
+        robust_tar_extract(dest_file, dempath)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(demfile)
@@ -1019,18 +1019,18 @@ def _aw3d30_path(lon_tile, lat_tile):
     # e.g. W095 contains W091 - W095
 
     # get letters
-    NS = 'S' if lat_tile < 0 else 'N'
-    EW = 'W' if lon_tile < 0 else 'E'
+    ns = 'S' if lat_tile < 0 else 'N'
+    ew = 'W' if lon_tile < 0 else 'E'
 
     # get lat/lon
     lon = abs(5 * np.floor(lon_tile/5))
     lat = abs(5 * np.floor(lat_tile/5))
 
-    folder = '%s%.3d%s%.3d' % (NS, lat, EW, lon)
-    file = '%s%.3d%s%.3d' % (NS, abs(lat_tile), EW, abs(lon_tile))
+    folder = '%s%.3d%s%.3d' % (ns, lat, ew, lon)
+    filename = '%s%.3d%s%.3d' % (ns, abs(lat_tile), ew, abs(lon_tile))
 
     # Final path
-    out = folder + '/' + file
+    out = folder + '/' + filename
     return out
 
 
