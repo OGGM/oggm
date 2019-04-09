@@ -353,7 +353,7 @@ def _classic_urlretrieve(url, path, reporthook, auth=None):
             url = u._replace(netloc=netloc).geturl()
 
     try:
-        urllib.request.urlretrieve(url, cache_path, reporthook)
+        urllib.request.urlretrieve(url, path, reporthook)
     except urllib.error.HTTPError as e:
         raise HttpDownloadError(e.code, ourl)
     except urllib.error.ContentTooShortError as e:
