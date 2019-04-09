@@ -342,7 +342,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpContentTooShortError()
 
 
-def _classic_urlretrieve(url, cache_path, reporthook, auth=None):
+def _classic_urlretrieve(url, path, reporthook, auth=None):
     """Thin wrapper around pythons urllib urlretrieve
     """
 
