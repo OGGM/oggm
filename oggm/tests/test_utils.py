@@ -966,13 +966,13 @@ def touch(path):
     return path
 
 
-def make_fake_zipdir(dir_path, fakefile=None):
+def make_fake_zipdir(dir_path, fakefile=None, archiv='zip', extension='.zip'):
     """Creates a directory with a file in it if asked to, then compresses it"""
     utils.mkdir(dir_path)
     if fakefile:
         touch(os.path.join(dir_path, fakefile))
-    shutil.make_archive(dir_path, 'zip', dir_path)
-    return dir_path + '.zip'
+    shutil.make_archive(dir_path, archiv, dir_path)
+    return dir_path + extension
 
 
 class FakeDownloadManager():
@@ -1254,6 +1254,29 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert os.path.exists(of[0])
         assert source == 'DEM3'
+
+    def test_aw3d30(self):
+
+        # Make a fake topo file
+        deep_path = os.path.join(self.dldir, 'N049W006', 'N049W006')
+        utils.mkdir(deep_path)
+        upper_path = os.path.dirname(deep_path)
+        fakefile = os.path.join(deep_path, 'N049W006_AVE_DSM.tif')
+        tf = make_fake_zipdir(upper_path, fakefile=fakefile,
+                              archiv='gztar', extension='.tar.gz')
+
+        def down_check(url, cache_name=None, reset=False, auth=None):
+            expected = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/' +
+                        'release_v1804/N045W010/N049W006.tar.gz')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-5.3, -5.2], [49.5, 49.6],
+                                             source='AW3D30')
+
+        assert os.path.exists(of[0])
+        assert source == 'AW3D30'
 
     def test_ramp(self):
 
@@ -1720,6 +1743,27 @@ class TestDataFiles(unittest.TestCase):
         zone = 'dummy'
         fp = _download_dem3_viewpano(zone)
         self.assertTrue(fp is None)
+
+    @pytest.mark.download
+    def test_download_aw3d30(self):
+        from oggm.utils._downloads import _download_aw3d30_file
+
+        # this zone does exist and file should be small enough for download
+        zone = 'N000E105/N002E107'
+        fp = _download_aw3d30_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        zone = 'S085W050/S081W048'
+        fp = _download_aw3d30_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_download_aw3d30_fails(self):
+        from oggm.utils._downloads import _download_aw3d30_file
+        from urllib.error import URLError
+
+        # this zone does not exist
+        zone = 'N000E005/N000E005'
+        self.assertRaises(URLError, _download_aw3d30_file, zone)
 
     @pytest.mark.download
     def test_download_cmip5(self):
