@@ -1766,27 +1766,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertRaises(URLError, _download_aw3d30_file, zone)
 
     @pytest.mark.download
-    def test_compare_srtm_to_aw3d30(self):
-        import xarray as xr
-        # Use the HEF area to compare the two DEMs
-        entity = utils.get_rgi_glacier_entities(['RGI60-11.00897'])
-
-        # default DEM: SRTM
-        gdir = workflow.init_glacier_regions(entity)[0]
-        srtm = xr.open_rasterio(gdir.get_filepath('dem'))
-
-        # aw3d30 DEM
-        cfg.PATHS['working_dir'] = os.path.join(self.dldir, 'wd2')
-        entity['DEM_SOURCE'] = 'AW3D30'
-        gdir = workflow.init_glacier_regions(entity)[0]
-        with open(gdir.get_filepath('dem_source'), 'r') as f:
-            self.assertTrue('AW3D30' in f.read())
-        aw3d30 = xr.open_rasterio(gdir.get_filepath('dem'))
-
-        # as of 09.04.2019 the max difference is 86.
-        self.assertTrue(np.abs(srtm - aw3d30).max() == 86)
-
-    @pytest.mark.download
     def test_download_cmip5(self):
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
         fp = utils.get_cmip5_file(fn)
