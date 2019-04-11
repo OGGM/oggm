@@ -887,6 +887,12 @@ class FluxBasedModel(FlowlineModel):
         # This is to guarantee a precise arrival on a specific date if asked
         min_dt = dt if dt < self.min_dt else self.min_dt
 
+        # This is to not cross a mass balance year:
+        max_mb_dt = SEC_IN_YEAR * (np.ceil(self.yr)-self.yr)
+        # for new years (+ some tolerance), max_mb_dt is one full year
+        if max_mb_dt < (self.min_dt / 100):
+            max_mb_dt = SEC_IN_YEAR
+
         # Loop over tributaries to determine the flux rate
         flxs = []
         aflxs = []
@@ -974,13 +980,13 @@ class FluxBasedModel(FlowlineModel):
             if maxu > 0.:
                 _dt = self.cfl_number * dx / maxu
             else:
-                _dt = self.max_dt
+                _dt = min(max_mb_dt, self.max_dt)
             if _dt < dt:
                 dt = _dt
 
         # Time step
         self.dt_warning = dt < min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        dt = np.clip(dt, min_dt, min(max_mb_dt, self.max_dt))
 
         # A second loop for the mass exchange
         for i, (fl, flx_stag, aflx, trib) in enumerate(zip(self.fls, flxs,
