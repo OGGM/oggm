@@ -2216,17 +2216,15 @@ def get_mb_catchment(gdir):
                     # containing all these catchment areas
                     for ix in direct:
                         if inflow_ixs[ix]:
-                            inflow_direct.append(np.array(inflow_ixs[ix]
-                                                          .split('_')
-                                                          ).astype(int))
+                            inflow_direct.extend(inflow_ixs[ix].split('_'))
                     # this contains all the flows of the catchment areas
                     # flowing into a catchment area flowing directly into
                     # the point catchment area
-                    inflow_direct = np.ravel(np.array(inflow_direct))
+                    inflow_direct = np.array(inflow_direct).astype(int)
                     # add the catchment areas flowing directly in the
                     # catchment area of the point
                     ixs = np.concatenate((inflow_direct,
-                                          direct)).astype(int)
+                                          direct), axis=None).astype(int)
                     # eleminate all cathment areas not flowing
                     # into the catchment areas flowing directly
                     # into the point catchment area
