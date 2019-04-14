@@ -798,24 +798,24 @@ class FlowlineModel(object):
         diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
 
         # Variables and attributes
-        diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
-        diag_ds['volume_m3'].attrs['unit'] = 'm 3'
-        diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
-        diag_ds['area_m2'].attrs['unit'] = 'm 2'
-        diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['length_m'].attrs['description'] = 'Glacier length'
-        diag_ds['length_m'].attrs['unit'] = 'm 3'
-        diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
+        diag_ds['volume'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume'].attrs['description'] = 'Total glacier volume'
+        diag_ds['volume'].attrs['unit'] = 'm 3'
+        diag_ds['area'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['area'].attrs['description'] = 'Total glacier area'
+        diag_ds['area'].attrs['unit'] = 'm 2'
+        diag_ds['length'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['length'].attrs['description'] = 'Glacier length'
+        diag_ds['length'].attrs['unit'] = 'm'
+        diag_ds['ela'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['ela'].attrs['description'] = ('Annual Equilibrium Line '
                                                  'Altitude  (ELA)')
-        diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
+        diag_ds['ela'].attrs['unit'] = 'm a.s.l'
         if self.is_tidewater:
-            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
+            diag_ds['calving'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving'].attrs['description'] = ('Total accumulated '
                                                           'calving flux')
-            diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+            diag_ds['calving'].attrs['unit'] = 'm 3'
 
         # Run
         j = 0
@@ -828,12 +828,12 @@ class FlowlineModel(object):
                     w[j, :] = fl.widths_m
                 j += 1
             # Diagnostics
-            diag_ds['volume_m3'].data[i] = self.volume_m3
-            diag_ds['area_m2'].data[i] = self.area_m2
-            diag_ds['length_m'].data[i] = self.length_m
-            diag_ds['ela_m'].data[i] = self.mb_model.get_ela(year=yr)
+            diag_ds['volume'].data[i] = self.volume_m3
+            diag_ds['area'].data[i] = self.area_m2
+            diag_ds['length'].data[i] = self.length_m
+            diag_ds['ela'].data[i] = self.mb_model.get_ela(year=yr)
             if self.is_tidewater:
-                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+                diag_ds['calving'].data[i] = self.calving_m3_since_y0
 
         # to datasets
         run_ds = []
