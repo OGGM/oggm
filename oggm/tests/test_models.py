@@ -1332,10 +1332,10 @@ class TestIO(unittest.TestCase):
         np.testing.assert_allclose(ds.ts_section.isel(time=-1),
                                    secfortest)
 
-        np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
-        np.testing.assert_allclose(ds_diag.area_m2, a_diag)
-        np.testing.assert_allclose(ds_diag.length_m, l_diag)
-        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
+        np.testing.assert_allclose(ds_diag.volume, vol_diag)
+        np.testing.assert_allclose(ds_diag.area, a_diag)
+        np.testing.assert_allclose(ds_diag.length, l_diag)
+        np.testing.assert_allclose(ds_diag.ela, ela_diag)
 
         fls = dummy_constant_bed()
         run_path = os.path.join(self.test_dir, 'ts_ideal.nc')
