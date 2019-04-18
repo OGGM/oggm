@@ -1871,7 +1871,7 @@ def get_ref_mb_glaciers_candidates(rgi_version=None):
 
     if key not in cfg.DATA:
         flink, _ = get_wgms_files()
-        cfg.DATA[key] = flink['RGI{}0_ID'.format(rgi_version)].to_list()
+        cfg.DATA[key] = flink['RGI{}0_ID'.format(rgi_version)].tolist()
 
     return cfg.DATA[key]
 
