@@ -1128,7 +1128,7 @@ class KarthausModel(FlowlineModel):
 
         super(KarthausModel, self).__init__(flowlines, mb_model=mb_model,
                                             y0=y0, glen_a=glen_a, fs=fs,
-                                            inplace=inplace,  **kwargs)
+                                            inplace=inplace, **kwargs)
         self.dt_warning = False,
         if fixed_dt is not None:
             min_dt = fixed_dt

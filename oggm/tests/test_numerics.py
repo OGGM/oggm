@@ -83,6 +83,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -187,6 +188,7 @@ class TestIdealisedCases(unittest.TestCase):
             slope = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 fl = fls[-1]
                 length[i] = fl.length_m
                 vol[i] = fl.volume_km3
@@ -270,6 +272,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -448,8 +451,8 @@ class TestIdealisedCases(unittest.TestCase):
             length = yrs * 0.
             vol = yrs * 0.
             for i, y in enumerate(yrs):
-                assert model.yr == y
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -518,6 +521,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -584,6 +588,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -654,6 +659,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -720,6 +726,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = np.sum([f.volume_km3 for f in fls])
             lens.append(length)
@@ -790,6 +797,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -838,6 +846,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -889,6 +898,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
@@ -962,6 +972,7 @@ class TestSia2d(unittest.TestCase):
         area = yrs * 0
         for i, y in enumerate(yrs):
             flmodel.run_until(y)
+            assert flmodel.yr == y
             length[i] = fls[-1].length_m
             vol[i] = fls[-1].volume_km3
             area[i] = fls[-1].area_km2
@@ -982,6 +993,7 @@ class TestSia2d(unittest.TestCase):
         area = yrs * 0
         for i, y in enumerate(yrs):
             sdmodel.run_until(y)
+            assert sdmodel.yr == y
             surf_1d = sdmodel.ice_thick[:, 1]
             length[i] = np.sum(surf_1d > 0) * sdmodel.dx
             vol[i] = sdmodel.volume_km3 / 3
@@ -1049,6 +1061,7 @@ class TestSia2d(unittest.TestCase):
         area = yrs * 0
         for i, y in enumerate(yrs):
             sdmodel.run_until(y)
+            assert sdmodel.yr == y
             surf_1d = sdmodel.ice_thick[1, :]
             length[i] = np.sum(surf_1d > 0) * sdmodel.dx
             vol[i] = sdmodel.volume_km3 / 3
