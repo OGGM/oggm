@@ -14,6 +14,7 @@ from oggm.core.massbalance import LinearMassBalance
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
+from oggm.exceptions import InvalidParamsError
 
 # Tests
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
@@ -357,6 +358,79 @@ class TestIdealisedCases(unittest.TestCase):
 
         np.testing.assert_allclose(ref_vols, vols, atol=0.01)
 
+    def test_run_until(self):
+
+        # Just check that exotic times are guaranteed to be met
+        yrs = np.array([10.2, 10.2, 10.200001, 10.3, 99.999, 150.])
+
+        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
+        steps = [31 * SEC_IN_DAY, None, None]
+
+        # Annual update
+        lens = []
+        surface_h = []
+        volume = []
+        for model, step in zip(models, steps):
+            fls = dummy_constant_bed()
+            mb = LinearMassBalance(2600.)
+
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step)
+
+            # Codecov
+            with pytest.raises(InvalidParamsError):
+                model.step(0.)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                assert model.yr == y
+                length[i] = fls[-1].length_m
+                vol[i] = fls[-1].volume_km3
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
+
+        # Always update
+        lens = []
+        surface_h = []
+        volume = []
+        for model, step in zip(models, steps):
+            fls = dummy_constant_bed()
+            mb = LinearMassBalance(2600.)
+
+            model = model(fls, mb_model=mb, glen_a=self.glen_a, fixed_dt=step,
+                          mb_elev_feedback='always')
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                assert model.yr == y
+                length[i] = fls[-1].length_m
+                vol[i] = fls[-1].volume_km3
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
+
+        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
+        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
+        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
+        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
+
     def test_adaptive_ts(self):
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
@@ -374,6 +448,7 @@ class TestIdealisedCases(unittest.TestCase):
             length = yrs * 0.
             vol = yrs * 0.
             for i, y in enumerate(yrs):
+                assert model.yr == y
                 model.run_until(y)
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
@@ -413,6 +488,7 @@ class TestIdealisedCases(unittest.TestCase):
             vol = yrs * 0.
             for i, y in enumerate(yrs):
                 model.run_until(y)
+                assert model.yr == y
                 length[i] = fls[-1].length_m
                 vol[i] = fls[-1].volume_km3
             lens.append(length)
