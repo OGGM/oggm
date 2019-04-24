@@ -51,9 +51,8 @@ How to use the model, with concrete python code examples.
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`input-data`
-* :doc:`mpi`
 * :doc:`run`
-* :doc:`cluster`
+* :doc:`practicalities`
 * :doc:`api`
 * :doc:`faq`
 * :doc:`whats-new`
@@ -66,10 +65,9 @@ How to use the model, with concrete python code examples.
     installing-oggm.rst
     getting-started.rst
     input-data.rst
-    mpi.rst
     run.rst
     api.rst
-    cluster.rst
+    practicalities.rst
     faq.rst
     whats-new.rst
 

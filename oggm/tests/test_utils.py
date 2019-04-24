@@ -367,6 +367,30 @@ class TestStartFromTar(unittest.TestCase):
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
 
+    def test_to_and_from_basedir_tar(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf)
+
+        # End - compress all
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        utils.base_dir_to_tar()
+
+        # Test - reopen form tar
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert not os.path.exists(gdir.dir + '.tar.gz')
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('gridded_data')
+            assert os.path.exists(gdir.dir + '.tar.gz')
+
     def test_to_and_from_tar_new_dir(self):
 
         # Go - initialize working directories
