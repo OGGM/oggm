@@ -54,6 +54,7 @@ The ``~/.oggm`` directory should be updated automatically when you update OGGM,
 but if you encounter any problems with it, simply delete the directory (it will
 be re-downloaded automatically at the next import).
 
+.. _oggm-config:
 
 All other data: auto-downloads and the ``~/.oggm_config`` file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

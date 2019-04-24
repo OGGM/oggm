@@ -9,6 +9,7 @@ work to keep everything up-to-date, so don't hesitate to let us know
 (see :ref:`contact`) if something's missing, or help us (see
 :ref:`contributing`) to write a better documentation!
 
+.. _api-workflow:
 
 Workflow
 ========
@@ -34,6 +35,8 @@ Tools to set-up and run OGGM.
     utils.compile_climate_input
     utils.compile_task_log
     utils.copy_to_basedir
+    utils.gdir_to_tar
+    utils.base_dir_to_tar
 
 
 Troubleshooting
