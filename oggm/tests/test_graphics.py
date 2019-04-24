@@ -42,7 +42,7 @@ def teardown_module(module):
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(tolerance=25)
 def test_googlemap():
     fig, ax = plt.subplots()
     gdir = init_hef()
