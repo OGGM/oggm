@@ -7,7 +7,8 @@ This module is simply a shortcut to the core functions
 from oggm.core.gis import define_glacier_region
 from oggm.core.gis import glacier_masks
 from oggm.core.gis import simple_glacier_masks
-from oggm.core.gis import interpolation_masks
+from oggm.core.gis import raster_attributes
+from oggm.core.gis import raster_mb_attributes
 from oggm.core.centerlines import compute_centerlines
 from oggm.core.centerlines import compute_downstream_line
 from oggm.core.centerlines import compute_downstream_bedshape
@@ -39,7 +40,6 @@ from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
-from oggm.core.flowline import get_mb_catchment
 from oggm.utils import copy_to_basedir
 
 # Global tasks

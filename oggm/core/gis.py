@@ -31,6 +31,7 @@ try:
     from rasterio.merge import merge as merge_tool
 except ImportError:
     from rasterio.tools.merge import merge as merge_tool
+from scipy import optimize as optimization
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
@@ -853,11 +854,11 @@ def simple_glacier_masks(gdir):
 
 
 @entity_task(log, writes=['gridded_data'])
-def interpolation_masks(gdir):
-    """Computes the glacier exterior masks taking ice divides into account.
+def raster_attributes(gdir):
+    """Adds attributes to the raster file, useful for thickness interpolation.
 
-    This is useful for distributed ice thickness. The masks are added to the
-    gridded data file. For convenience we also add a slope mask.
+    This is useful for distributed ice thickness. The rasters are added to the
+    gridded data file.
 
     Parameters
     ----------
@@ -906,8 +907,9 @@ def interpolation_masks(gdir):
     glen_n = cfg.PARAMS['glen_n']
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
-    slope = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4), np.pi/2.)
-    slope = 1 / slope**(glen_n / (glen_n+2))
+    slope_factor = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4),
+                           np.pi/2)
+    slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 
     with ncDataset(grids_file, 'a') as nc:
 
@@ -929,6 +931,15 @@ def interpolation_masks(gdir):
         v.long_name = 'Glacier ice divides'
         v[:] = glacier_ext_intersect
 
+        vn = 'slope'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Local slope based on smoothed topography'
+        v[:] = slope
+
         vn = 'slope_factor'
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -936,7 +947,7 @@ def interpolation_masks(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = '-'
         v.long_name = 'Slope factor as defined in Farinotti et al 2009'
-        v[:] = slope
+        v[:] = slope_factor
 
         vn = 'dis_from_border'
         if vn in nc.variables:
@@ -946,6 +957,199 @@ def interpolation_masks(gdir):
         v.units = 'm'
         v.long_name = 'Distance from border'
         v[:] = dis_from_border
+
+
+def _all_inflows(cls, cl):
+    """Find all centerlines flowing into the centerline examined.
+
+    Parameters
+    ----------
+    cls : list
+        all centerlines of the examined glacier
+    cline : Centerline
+        centerline to control
+
+    Returns
+    -------
+    list of strings of centerlines
+    """
+
+    ixs = [str(cls.index(cl.inflows[i])) for i in range(len(cl.inflows))]
+    for cl in cl.inflows:
+        ixs.extend(_all_inflows(cls, cl))
+    return ixs
+
+
+@entity_task(log)
+def raster_mb_attributes(gdir):
+    """Adds mass-balance related attributes to the raster file.
+
+    This is useful for distributed ice thickness. The rasters are added to the
+    gridded data file.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+    from oggm.core.massbalance import LinearMassBalance, ConstantMassBalance
+    from oggm.core.centerlines import line_inflows
+
+    # Get the input data
+    with ncDataset(gdir.get_filepath('gridded_data')) as nc:
+        topo_2d = nc.variables['topo_smoothed'][:]
+        glacier_mask_2d = nc.variables['glacier_mask'][:]
+        glacier_mask_2d = glacier_mask_2d == 1
+        catchment_mask_2d = glacier_mask_2d * np.NaN
+
+    cls = gdir.read_pickle('centerlines')
+
+    # Catchment areas
+    cis = gdir.read_pickle('geometries')['catchment_indices']
+    for j, ci in enumerate(cis):
+        catchment_mask_2d[tuple(ci.T)] = j
+
+    # Make everything we need flat
+    catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
+    topo = topo_2d[glacier_mask_2d]
+
+    # Prepare the distributed mass-balance data
+    # Linear
+    def to_minimize(ela_h):
+        mbmod = LinearMassBalance(ela_h[0])
+        smb = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+        return np.sum(smb)**2
+    ela_h = optimization.minimize(to_minimize, [0.], method='Powell')
+    mbmod = LinearMassBalance(float(ela_h['x']))
+    lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+    if not np.isclose(np.sum(lin_mb_on_z), 0, atol=0.5):
+        raise RuntimeError('Spec mass-balance should be zero.')
+
+    # Normal OGGM (a bit tweaked)
+    df = gdir.read_json('local_mustar')
+    def to_minimize(mu_star):
+        mbmod = ConstantMassBalance(gdir, mu_star=mu_star, bias=0,
+                                    check_calib_params=False,
+                                    y0=df['t_star'])
+        smb = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+        return np.sum(smb)**2
+    mu_star = optimization.minimize(to_minimize, [0.], method='Powell')
+    mbmod = ConstantMassBalance(gdir, mu_star=float(mu_star['x']), bias=0,
+                                    check_calib_params=False,
+                                    y0=df['t_star'])
+    oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+    if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=0.5):
+        raise RuntimeError('Spec mass-balance should be zero.')
+
+    # Altitude based mass balance
+    lin_mb_above_z = topo * np.NaN
+    oggm_mb_above_z = topo * np.NaN
+    for i, h in enumerate(topo):
+        lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h])
+        oggm_mb_above_z[i] = np.sum(oggm_mb_on_z[topo >= h])
+
+    # Hardest part - MB per catchment
+    catchment_area = topo * np.NaN
+    lin_mb_above_z_on_catch = topo * np.NaN
+    oggm_mb_above_z_on_catch = topo * np.NaN
+
+    # First, find all inflows indices and min altitude per catchment
+    inflows = []
+    lowest_h = []
+    for i, cl in enumerate(cls):
+        lowest_h.append(np.min(topo[catchment_mask == i]))
+        inflows.append([cls.index(l) for l in line_inflows(cl, keep=False)])
+
+    for i, (catch_id, h) in enumerate(zip(catchment_mask, topo)):
+
+        if h == np.min(topo):
+            t = 1
+
+        # Find the catchment area of the point itself by eliminating points
+        # below the point altitude. We assume we keep all of them first,
+        # then remove those we don't want
+        sel_catchs = inflows[catch_id].copy()
+        for catch in inflows[catch_id]:
+            if h >= lowest_h[catch]:
+                for cc in np.append(inflows[catch], catch):
+                    try:
+                        sel_catchs.remove(cc)
+                    except ValueError:
+                        pass
+
+        # At the very least we need or own catchment
+        sel_catchs.append(catch_id)
+
+        # Then select all the catchment points
+        sel_points = np.isin(catchment_mask, sel_catchs)
+
+        # And keep the ones above our altitude
+        sel_points = sel_points & (topo >= h)
+
+        # Compute
+        lin_mb_above_z_on_catch[i] = np.sum(lin_mb_on_z[sel_points])
+        oggm_mb_above_z_on_catch[i] = np.sum(oggm_mb_on_z[sel_points])
+        catchment_area[i] = np.sum(sel_points) * gdir.grid.dx**2
+
+    # Make 2D again
+    def _fill_2d_like(data):
+        out = topo_2d * np.NaN
+        out[glacier_mask_2d] = data
+        return out
+
+    catchment_area = _fill_2d_like(catchment_area)
+    lin_mb_above_z = _fill_2d_like(lin_mb_above_z)
+    oggm_mb_above_z = _fill_2d_like(oggm_mb_above_z)
+    lin_mb_above_z_on_catch = _fill_2d_like(lin_mb_above_z_on_catch)
+    oggm_mb_above_z_on_catch = _fill_2d_like(oggm_mb_above_z_on_catch)
+
+    # Save to file
+    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+
+        vn = 'catchment_area'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'm^2'
+        v.long_name = 'Catchment area above point'
+        v[:] = catchment_area
+
+        vn = 'lin_mb_above_z'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'kg m^-2'
+        v.long_name = 'MB above point from linear MB model, without catchments'
+        v[:] = lin_mb_above_z
+
+        vn = 'lin_mb_above_z_on_catch'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'kg m^-2'
+        v.long_name = 'MB above point from linear MB model, with catchments'
+        v[:] = lin_mb_above_z_on_catch
+
+        vn = 'oggm_mb_above_z'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'kg m^-2'
+        v.long_name = 'MB above point from OGGM MB model, without catchments'
+        v[:] = oggm_mb_above_z
+
+        vn = 'oggm_mb_above_z_on_catch'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'kg m^-2'
+        v.long_name = 'MB above point from OGGM MB model, with catchments'
+        v[:] = oggm_mb_above_z_on_catch
 
 
 def merged_glacier_masks(gdir, geometry):

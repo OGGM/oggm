@@ -396,8 +396,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
-        from oggm.core.gis import interpolation_masks
-        interpolation_masks(gdir)
+        from oggm.core.gis import raster_attributes
+        raster_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
         topo_smoothed = nc.variables['topo_smoothed'][:]
@@ -509,8 +509,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
-        from oggm.core.gis import interpolation_masks
-        interpolation_masks(gdir)
+        from oggm.core.gis import raster_attributes
+        raster_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:]
