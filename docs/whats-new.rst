@@ -10,6 +10,13 @@ v1.2.0 (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- ``run_until`` now makes sure that the years (months) are not crossed by
+  the adaptive time-stepping scheme (:issue:`710`). ``run_until`` and
+  ``run_until_and_store`` should now be consistent. The change is unlikely to
+  affect the majority of users (which used ``run_until_and_store``), but
+  the results or ``run_until`` can be affected (:pull:`726`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+
 Enhancements
 ~~~~~~~~~~~~
 
