@@ -18,6 +18,7 @@ import fnmatch
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse
+import socket
 
 # External libs
 import geopandas as gpd
@@ -310,14 +311,14 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     return path
 
 
-def _requests_urlretrieve(url, path, reporthook, auth=None):
+def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
     """Implements the required features of urlretrieve on top of requests
     """
 
     chunk_size = 128 * 1024
     chunk_count = 0
 
-    with requests.get(url, stream=True, auth=auth) as r:
+    with requests.get(url, stream=True, auth=auth, timeout=timeout) as r:
         if r.status_code != 200:
             raise HttpDownloadError(r.status_code, url)
         r.raise_for_status()
@@ -341,7 +342,7 @@ def _requests_urlretrieve(url, path, reporthook, auth=None):
             raise HttpContentTooShortError()
 
 
-def _classic_urlretrieve(url, path, reporthook, auth=None):
+def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
     """Thin wrapper around pythons urllib urlretrieve
     """
 
@@ -352,12 +353,18 @@ def _classic_urlretrieve(url, path, reporthook, auth=None):
             netloc = auth[0] + ':' + auth[1] + '@' + u.netloc
             url = u._replace(netloc=netloc).geturl()
 
+    old_def_timeout = socket.getdefaulttimeout()
+    if timeout is not None:
+        socket.setdefaulttimeout(timeout)
+
     try:
         urllib.request.urlretrieve(url, path, reporthook)
     except urllib.error.HTTPError as e:
         raise HttpDownloadError(e.code, ourl)
     except urllib.error.ContentTooShortError as e:
         raise HttpContentTooShortError()
+    finally:
+        socket.setdefaulttimeout(old_def_timeout)
 
 
 def _get_url_cache_name(url):
@@ -369,7 +376,7 @@ def _get_url_cache_name(url):
 
 
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
-                     reporthook=None, auth=None):
+                     reporthook=None, auth=None, timeout=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
     Instead of accepting a destination path, it decided where to store the file
@@ -384,15 +391,16 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
     def _dlf(cache_path):
         logger.info("Downloading %s to %s..." % (url, cache_path))
         try:
-            _requests_urlretrieve(url, cache_path, reporthook, auth)
+            _requests_urlretrieve(url, cache_path, reporthook, auth, timeout)
         except requests.exceptions.InvalidSchema:
-            _classic_urlretrieve(url, cache_path, reporthook, auth)
+            _classic_urlretrieve(url, cache_path, reporthook, auth, timeout)
         return cache_path
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def _progress_urlretrieve(url, cache_name=None, reset=False, auth=None):
+def _progress_urlretrieve(url, cache_name=None, reset=False,
+                          auth=None, timeout=None):
     """Downloads a file, returns its local path, and shows a progressbar."""
 
     try:
@@ -410,7 +418,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False, auth=None):
             pbar[0].update(min(count * size, total))
             sys.stdout.flush()
         res = oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset,
-                               reporthook=_upd, auth=auth)
+                               reporthook=_upd, auth=auth, timeout=timeout)
         try:
             pbar[0].finish()
         except BaseException:
@@ -418,7 +426,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False, auth=None):
         return res
     except (ImportError, ModuleNotFoundError):
         return oggm_urlretrieve(url, cache_obj_name=cache_name,
-                                reset=reset, auth=auth)
+                                reset=reset, auth=auth, timeout=timeout)
 
 
 def aws_file_download(aws_path, cache_name=None, reset=False):
@@ -462,7 +470,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
 
 
 def file_downloader(www_path, retry_max=5, cache_name=None,
-                    reset=False, auth=None):
+                    reset=False, auth=None, timeout=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
@@ -472,7 +480,8 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
         try:
             retry_counter += 1
             local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
-                                               reset=reset, auth=auth)
+                                               reset=reset, auth=auth,
+                                               timeout=timeout)
             # if no error, exit
             break
         except HttpDownloadError as err:
