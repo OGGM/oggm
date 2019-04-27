@@ -857,8 +857,8 @@ def simple_glacier_masks(gdir):
 def raster_attributes(gdir):
     """Adds attributes to the raster file, useful for thickness interpolation.
 
-    This is useful for distributed ice thickness. The rasters are added to the
-    gridded data file.
+    This could be useful for distributed ice thickness models.
+    The raster data are added to the gridded_data file.
 
     Parameters
     ----------
@@ -911,6 +911,9 @@ def raster_attributes(gdir):
                            np.pi/2)
     slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 
+    aspect = np.arctan2(-sx, sy)
+    aspect[aspect < 0] += 2 * np.pi
+
     with ncDataset(grids_file, 'a') as nc:
 
         vn = 'glacier_ext_erosion'
@@ -936,9 +939,18 @@ def raster_attributes(gdir):
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = '-'
+        v.units = 'rad'
         v.long_name = 'Local slope based on smoothed topography'
         v[:] = slope
+
+        vn = 'aspect'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+        v.units = 'rad'
+        v.long_name = 'Local aspect based on smoothed topography'
+        v[:] = aspect
 
         vn = 'slope_factor'
         if vn in nc.variables:
@@ -955,7 +967,7 @@ def raster_attributes(gdir):
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'm'
-        v.long_name = 'Distance from border'
+        v.long_name = 'Distance from glacier boundaries'
         v[:] = dis_from_border
 
 
@@ -984,8 +996,8 @@ def _all_inflows(cls, cl):
 def raster_mb_attributes(gdir):
     """Adds mass-balance related attributes to the raster file.
 
-    This is useful for distributed ice thickness. The rasters are added to the
-    gridded data file.
+    This could be useful for distributed ice thickness models.
+    The raster data are added to the gridded_data file.
 
     Parameters
     ----------
@@ -1014,39 +1026,42 @@ def raster_mb_attributes(gdir):
     topo = topo_2d[glacier_mask_2d]
 
     # Prepare the distributed mass-balance data
+    rho = cfg.PARAMS['ice_density']
+    dx2 = gdir.grid.dx ** 2
     # Linear
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h[0])
-        smb = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+        smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
     ela_h = optimization.minimize(to_minimize, [0.], method='Powell')
     mbmod = LinearMassBalance(float(ela_h['x']))
-    lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
-    if not np.isclose(np.sum(lin_mb_on_z), 0, atol=0.5):
+    lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
+    if not np.isclose(np.sum(lin_mb_on_z), 0, atol=1):
         raise RuntimeError('Spec mass-balance should be zero.')
 
     # Normal OGGM (a bit tweaked)
     df = gdir.read_json('local_mustar')
+
     def to_minimize(mu_star):
         mbmod = ConstantMassBalance(gdir, mu_star=mu_star, bias=0,
                                     check_calib_params=False,
                                     y0=df['t_star'])
-        smb = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
+        smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
     mu_star = optimization.minimize(to_minimize, [0.], method='Powell')
     mbmod = ConstantMassBalance(gdir, mu_star=float(mu_star['x']), bias=0,
-                                    check_calib_params=False,
-                                    y0=df['t_star'])
-    oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR
-    if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=0.5):
+                                check_calib_params=False,
+                                y0=df['t_star'])
+    oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
+    if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=1):
         raise RuntimeError('Spec mass-balance should be zero.')
 
     # Altitude based mass balance
     lin_mb_above_z = topo * np.NaN
     oggm_mb_above_z = topo * np.NaN
     for i, h in enumerate(topo):
-        lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h])
-        oggm_mb_above_z[i] = np.sum(oggm_mb_on_z[topo >= h])
+        lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h]) * dx2
+        oggm_mb_above_z[i] = np.sum(oggm_mb_on_z[topo >= h]) * dx2
 
     # Hardest part - MB per catchment
     catchment_area = topo * np.NaN
@@ -1087,9 +1102,9 @@ def raster_mb_attributes(gdir):
         sel_points = sel_points & (topo >= h)
 
         # Compute
-        lin_mb_above_z_on_catch[i] = np.sum(lin_mb_on_z[sel_points])
-        oggm_mb_above_z_on_catch[i] = np.sum(oggm_mb_on_z[sel_points])
-        catchment_area[i] = np.sum(sel_points) * gdir.grid.dx**2
+        lin_mb_above_z_on_catch[i] = np.sum(lin_mb_on_z[sel_points]) * dx2
+        oggm_mb_above_z_on_catch[i] = np.sum(oggm_mb_on_z[sel_points]) * dx2
+        catchment_area[i] = np.sum(sel_points) * dx2
 
     # Make 2D again
     def _fill_2d_like(data):
@@ -1113,6 +1128,9 @@ def raster_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'm^2'
         v.long_name = 'Catchment area above point'
+        v.description = ('Uses the catchments masks of the flowlines to '
+                         'compute the area above the altitude of the given '
+                         'point.')
         v[:] = catchment_area
 
         vn = 'lin_mb_above_z'
@@ -1120,8 +1138,13 @@ def raster_mb_attributes(gdir):
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg m^-2'
+        v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, without catchments'
+        v.description = ('Mass-balance cumulated above the altitude of the'
+                         'point, hence in unit of flux. Note that it is '
+                         'a coarse approximation of the real flux. '
+                         'The mass-balance model is a simple linear function'
+                         'of altitude.')
         v[:] = lin_mb_above_z
 
         vn = 'lin_mb_above_z_on_catch'
@@ -1129,8 +1152,13 @@ def raster_mb_attributes(gdir):
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg m^-2'
+        v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, with catchments'
+        v.description = ('Mass-balance cumulated above the altitude of the'
+                         'point in a flowline catchment, hence in unit of '
+                         'flux. Note that it is a coarse approximation of the '
+                         'real flux. The mass-balance model is a simple '
+                         'linear function of altitude.')
         v[:] = lin_mb_above_z_on_catch
 
         vn = 'oggm_mb_above_z'
@@ -1138,8 +1166,13 @@ def raster_mb_attributes(gdir):
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg m^-2'
+        v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, without catchments'
+        v.description = ('Mass-balance cumulated above the altitude of the'
+                         'point, hence in unit of flux. Note that it is '
+                         'a coarse approximation of the real flux. '
+                         'The mass-balance model is a calibrated temperature '
+                         'index model like OGGM.')
         v[:] = oggm_mb_above_z
 
         vn = 'oggm_mb_above_z_on_catch'
@@ -1147,8 +1180,13 @@ def raster_mb_attributes(gdir):
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg m^-2'
+        v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, with catchments'
+        v.description = ('Mass-balance cumulated above the altitude of the'
+                         'point in a flowline catchment, hence in unit of '
+                         'flux. Note that it is a coarse approximation of the '
+                         'real flux. The mass-balance model is a calibrated '
+                         'temperature index model like OGGM.')
         v[:] = oggm_mb_above_z_on_catch
 
 

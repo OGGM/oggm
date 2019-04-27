@@ -184,7 +184,6 @@ class TestSouthGlacier(unittest.TestCase):
         for task in task_list:
             execute_entity_task(task, gdirs)
 
-
         # Check certain things
         gdir = gdirs[0]
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
@@ -204,6 +203,7 @@ class TestSouthGlacier(unittest.TestCase):
         df = self.get_ref_data(gdir)
         vns = ['topo',
                'slope',
+               'aspect',
                'slope_factor',
                'dis_from_border',
                'catchment_area',
