@@ -854,8 +854,8 @@ def simple_glacier_masks(gdir):
 
 
 @entity_task(log, writes=['gridded_data'])
-def raster_attributes(gdir):
-    """Adds attributes to the raster file, useful for thickness interpolation.
+def gridded_attributes(gdir):
+    """Adds attributes to the gridded file, useful for thickness interpolation.
 
     This could be useful for distributed ice thickness models.
     The raster data are added to the gridded_data file.
@@ -993,8 +993,8 @@ def _all_inflows(cls, cl):
 
 
 @entity_task(log)
-def raster_mb_attributes(gdir):
-    """Adds mass-balance related attributes to the raster file.
+def gridded_mb_attributes(gdir):
+    """Adds mass-balance related attributes to the gridded data file.
 
     This could be useful for distributed ice thickness models.
     The raster data are added to the gridded_data file.
@@ -1028,6 +1028,7 @@ def raster_mb_attributes(gdir):
     # Prepare the distributed mass-balance data
     rho = cfg.PARAMS['ice_density']
     dx2 = gdir.grid.dx ** 2
+
     # Linear
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h[0])

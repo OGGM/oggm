@@ -78,7 +78,7 @@ def test_centerlines():
 def test_raster():
     fig, ax = plt.subplots()
     gdir = init_hef()
-    gis.raster_attributes(gdir)
+    gis.gridded_attributes(gdir)
     graphics.plot_raster(gdir, var_name='aspect', cmap='twilight', ax=ax)
     fig.tight_layout()
     return fig

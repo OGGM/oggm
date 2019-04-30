@@ -178,8 +178,8 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Tested tasks
         task_list = [
-            tasks.raster_attributes,
-            tasks.raster_mb_attributes,
+            tasks.gridded_attributes,
+            tasks.gridded_mb_attributes,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)

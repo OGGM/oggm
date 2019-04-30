@@ -209,7 +209,7 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
-        gis.raster_attributes(gdir)
+        gis.gridded_attributes(gdir)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             glacier_mask = nc.variables['glacier_mask'][:]
