@@ -20,6 +20,12 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Added new ``gridded_attributes`` and ``gridded_mb_attributes`` tasks to
+  add raster glacier attributes such as slope, aspect, mass-balance...
+  to the glacier directory (:pull:`725`). This can be useful for statistical
+  modelling of glacier thickness.
+  By `Matteo Castellani <https://github.com/MatCast>`_.
+
 Bug fixes
 ~~~~~~~~~
 
