@@ -446,7 +446,7 @@ class ConstantMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, filename='climate_monthly',
-                 input_filesuffix=''):
+                 input_filesuffix='', **kwargs):
         """Initialize
 
         Parameters
@@ -474,7 +474,8 @@ class ConstantMassBalance(MassBalanceModel):
         super(ConstantMassBalance, self).__init__()
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
                                      filename=filename,
-                                     input_filesuffix=input_filesuffix)
+                                     input_filesuffix=input_filesuffix,
+                                     **kwargs)
 
         if y0 is None:
             df = gdir.read_json('local_mustar')

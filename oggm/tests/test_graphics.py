@@ -72,6 +72,18 @@ def test_centerlines():
     return fig
 
 
+@pytest.mark.xfail
+@pytest.mark.graphic
+@mpl_image_compare(multi=True)
+def test_raster():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    gis.gridded_attributes(gdir)
+    graphics.plot_raster(gdir, var_name='aspect', cmap='twilight', ax=ax)
+    fig.tight_layout()
+    return fig
+
+
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_flowlines():

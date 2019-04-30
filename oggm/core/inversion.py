@@ -396,8 +396,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
-        from oggm.core.gis import interpolation_masks
-        interpolation_masks(gdir)
+        from oggm.core.gis import gridded_attributes
+        gridded_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
         topo_smoothed = nc.variables['topo_smoothed'][:]
@@ -487,6 +487,9 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
                                 varname_suffix=''):
     """Compute a thickness map by interpolating between centerlines and border.
 
+    IMPORTANT: this is NOT what has been used for ITMIX. We used
+    distribute_thickness_per_altitude for ITMIX and global ITMIX.
+
     This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
 
     Parameters
@@ -509,8 +512,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     with utils.ncDataset(grids_file) as nc:
         has_masks = 'glacier_ext_erosion' in nc.variables
     if not has_masks:
-        from oggm.core.gis import interpolation_masks
-        interpolation_masks(gdir)
+        from oggm.core.gis import gridded_attributes
+        gridded_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:]
