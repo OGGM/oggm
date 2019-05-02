@@ -72,7 +72,6 @@ def test_centerlines():
     return fig
 
 
-@pytest.mark.xfail
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_raster():
