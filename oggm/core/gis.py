@@ -350,6 +350,7 @@ def define_glacier_region(gdir, entity=None):
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
                                          rgi_subregion=gdir.rgi_subregion,
+                                         dx_meter=dx,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
     log.debug('(%s) N DEM Files: %s', gdir.rgi_id, len(dem_list))
