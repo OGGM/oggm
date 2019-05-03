@@ -47,8 +47,29 @@ log = logging.getLogger(__name__)
 # Needed later
 label_struct = np.ones((3, 3))
 
-with open(get_demo_file('dem_sources.json'), 'r') as fr:
-    DEM_SOURCE_INFO = json.loads(fr.read())
+
+def _parse_source_text():
+    fp = os.path.join(os.path.abspath(os.path.dirname(cfg.__file__)),
+                      'data', 'dem_sources.txt')
+
+    out = dict()
+    cur_key = None
+    with open(fp, 'r') as fr:
+        this_text = []
+        for l in fr.readlines():
+            l = l.strip()
+            if l and (l[0] == '[' and l[-1] == ']'):
+                if cur_key:
+                    out[cur_key] = '\n'.join(this_text)
+                this_text = []
+                cur_key = l.strip('[]')
+                continue
+            this_text.append(l)
+    out[cur_key] = '\n'.join(this_text)
+    return out
+
+
+DEM_SOURCE_INFO = _parse_source_text()
 
 
 def gaussian_blur(in_array, size):

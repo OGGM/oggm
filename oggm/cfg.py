@@ -407,6 +407,10 @@ def initialize(file=None, logging_level='INFO'):
                         'data', 'demo_glaciers.csv')
     DATA['demo_glaciers'] = pd.read_csv(file, index_col=0)
 
+    # Add other things
+    if 'dem_grids' not in DATA:
+        DATA['dem_grids'] = {}
+
 
 def oggm_static_paths():
     """Initialise the OGGM paths from the config file."""

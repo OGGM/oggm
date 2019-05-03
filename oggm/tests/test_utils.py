@@ -1610,19 +1610,19 @@ class TestDataFiles(unittest.TestCase):
     def test_find_dem_zone(self):
 
         # Somewhere in the Alps: SRTM
-        assert utils.default_dem_source([11, 11], [47, 47]) == 'SRTM'
+        assert utils.default_dem_source(11, 47) == 'SRTM'
         # High Lats: DEM3
-        assert utils.default_dem_source([11, 11], [65, 65]) == 'DEM3'
+        assert utils.default_dem_source(11, 65) == 'DEM3'
         # Eastern russia: DEM3
-        assert utils.default_dem_source([170.1, 170.1], [59.1, 59.1]) == 'DEM3'
+        assert utils.default_dem_source(170.1, 59.1) == 'DEM3'
         # Greenland
-        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='5') == 'GIMP'
+        assert utils.default_dem_source(0, 0, rgi_region='5') == 'GIMP'
         # Antarctica
         with pytest.raises(InvalidParamsError):
-            utils.default_dem_source([0, 0], [0, 0], rgi_region='19')
-        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='19',
+            utils.default_dem_source(0, 0, rgi_region='19')
+        assert utils.default_dem_source(0, 0, rgi_region='19',
                                         rgi_subregion='19-06') == 'RAMP'
-        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='19',
+        assert utils.default_dem_source(0, 0, rgi_region='19',
                                         rgi_subregion='19-01') == 'DEM3'
 
     def test_lrufilecache(self):

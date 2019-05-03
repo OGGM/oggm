@@ -1790,10 +1790,12 @@ def is_dem_source_available(source, lon_ex, lat_ex):
     lat_ex = tolist(lat_ex, length=2)
 
     def _in_grid(grid_json, lon, lat):
-        fp = os.path.join(os.path.abspath(os.path.dirname(cfg.__file__)),
-                         'data', grid_json)
-        grid = salem.Grid.from_json(fp)
-        i, j = grid.transform(lon, lat, maskout=True)
+        grids = cfg.DATA['dem_grids']
+        if grid_json not in grids:
+            fp = os.path.join(os.path.abspath(os.path.dirname(cfg.__file__)),
+                              'data', grid_json)
+            grids[grid_json] = salem.Grid.from_json(fp)
+        i, j = grids[grid_json].transform(lon, lat, maskout=True)
         return np.all(~ (i.mask | j.mask))
 
     if source == 'GIMP':
