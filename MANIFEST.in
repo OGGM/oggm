@@ -1,3 +1,5 @@
 include oggm/params.cfg
 include oggm/data/demo_glaciers.csv
-include oggm/utils/_downloads.crc32.xz
+include oggm/data/AntarcticDEM_wgs84.json
+include oggm/data/arcticdem_mosaic_100m_v3.0.json
+include oggm/data/gimpdem_90m_v01.1.json

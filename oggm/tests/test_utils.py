@@ -1597,23 +1597,33 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
 
+    def test_is_dem_source_available(self):
+        assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
+        assert not utils.is_dem_source_available('GIMP', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('ARCTICDEM', [-25, -25], [71, 71])
+        assert utils.is_dem_source_available('RAMP', [-25, -25], [-71, -71])
+
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER']:
+            assert utils.is_dem_source_available(s, [11, 11], [47, 47])
+
     def test_find_dem_zone(self):
 
         # Somewhere in the Alps: SRTM
-        assert utils.find_dem_source([11, 11], [47, 47]) == 'SRTM'
+        assert utils.default_dem_source([11, 11], [47, 47]) == 'SRTM'
         # High Lats: DEM3
-        assert utils.find_dem_source([11, 11], [65, 65]) == 'DEM3'
+        assert utils.default_dem_source([11, 11], [65, 65]) == 'DEM3'
         # Eastern russia: DEM3
-        assert utils.find_dem_source([170.1, 170.1], [59.1, 59.1]) == 'DEM3'
+        assert utils.default_dem_source([170.1, 170.1], [59.1, 59.1]) == 'DEM3'
         # Greenland
-        assert utils.find_dem_source([0, 0], [0, 0], rgi_region='5') == 'GIMP'
+        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='5') == 'GIMP'
         # Antarctica
         with pytest.raises(InvalidParamsError):
-            utils.find_dem_source([0, 0], [0, 0], rgi_region='19')
-        assert utils.find_dem_source([0, 0], [0, 0], rgi_region='19',
-                                     rgi_subregion='19-06') == 'RAMP'
-        assert utils.find_dem_source([0, 0], [0, 0], rgi_region='19',
-                                     rgi_subregion='19-01') == 'DEM3'
+            utils.default_dem_source([0, 0], [0, 0], rgi_region='19')
+        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='19',
+                                        rgi_subregion='19-06') == 'RAMP'
+        assert utils.default_dem_source([0, 0], [0, 0], rgi_region='19',
+                                        rgi_subregion='19-01') == 'DEM3'
 
     def test_lrufilecache(self):
 

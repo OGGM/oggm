@@ -25,6 +25,7 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
+import salem
 from salem import wgs84
 import rasterio
 try:
@@ -1260,8 +1261,9 @@ def mapzen_zone(lon_ex, lat_ex, dx_meter=None, zoom=None):
     # Code from planetutils
     size = 2 ** zoom
     xt = lambda x: int((x + 180.0) / 360.0 * size)
-    yt = lambda y: int((1.0 - math.log(math.tan(math.radians(y)) + (
-                1 / math.cos(math.radians(y)))) / math.pi) / 2.0 * size)
+    yt = lambda y: int((1.0 - math.log(math.tan(math.radians(y)) +
+                                       (1 / math.cos(math.radians(y))))
+                        / math.pi) / 2.0 * size)
     tiles = []
     for x in range(xt(left), xt(right) + 1):
         for y in range(yt(top), yt(bottom) + 1):
@@ -1764,7 +1766,77 @@ def _get_histalp_file_unlocked(var=None):
     return ofile
 
 
-def find_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
+def is_dem_source_available(source, lon_ex, lat_ex):
+    """Checks if a DEM source is available for your purpose.
+
+    This is only a very rough check! It doesn't mean that the data really is
+    available, but at least it's worth a try.
+
+    Parameters
+    ----------
+    source : str, required
+        the source you want to check for
+    lon_ex : tuple or int, required
+        a (min_lon, max_lon) tuple delimiting the requested area longitudes
+    lat_ex : tuple or int, required
+        a (min_lat, max_lat) tuple delimiting the requested area latitudes
+
+    Returns
+    -------
+    True or False
+    """
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
+
+    def _in_grid(grid_json, lon, lat):
+        fp = os.path.join(os.path.abspath(os.path.dirname(cfg.__file__)),
+                         'data', grid_json)
+        grid = salem.Grid.from_json(fp)
+        i, j = grid.transform(lon, lat, maskout=True)
+        return np.all(~ (i.mask | j.mask))
+
+    if source == 'GIMP':
+        return _in_grid('gimpdem_90m_v01.1.json', lon_ex, lat_ex)
+    elif source == 'ARCTICDEM':
+        return _in_grid('arcticdem_mosaic_100m_v3.0.json', lon_ex, lat_ex)
+    elif source == 'RAMP':
+        return _in_grid('AntarcticDEM_wgs84.json', lon_ex, lat_ex)
+    elif source == 'TANDEM':
+        return True
+    elif source == 'AW3D30':
+        return True
+    elif source == 'MAPZEN':
+        return True
+    elif source == 'DEM3':
+        return True
+    elif source == 'ASTER':
+        return True
+    elif source == 'SRTM':
+        return np.max(np.abs(lat_ex)) < 60
+
+
+def default_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
+    """Current default DEM source at a given location.
+
+    Parameters
+    ----------
+    lon_ex : tuple or int, required
+        a (min_lon, max_lon) tuple delimiting the requested area longitudes
+    lat_ex : tuple or int, required
+        a (min_lat, max_lat) tuple delimiting the requested area latitudes
+    rgi_region : str, optional
+        the RGI region number (required for the GIMP DEM)
+    rgi_subregion : str, optional
+        the RGI subregion str (useful for RGI Reg 19)
+
+    Returns
+    -------
+    the chosen DEM source
+    """
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
 
     # GIMP is in polar stereographic, not easy to test if glacier is on the map
     # It would be possible with a salem grid but this is a bit more expensive
@@ -1779,7 +1851,7 @@ def find_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
     # to_test_on_shape = ['01', '02', '04', '08']
 
     # Antarctica
-    if rgi_region is not None and int(rgi_region)== 19:
+    if rgi_region is not None and int(rgi_region) == 19:
         if rgi_subregion is None:
             raise InvalidParamsError('Must specify subregion for Antarctica')
         if rgi_subregion in ['19-01', '19-02', '19-03', '19-04', '19-05']:
@@ -1811,9 +1883,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     Parameters
     ----------
-    lon_ex : tuple, required
+    lon_ex : tuple or int, required
         a (min_lon, max_lon) tuple delimiting the requested area longitudes
-    lat_ex : tuple, required
+    lat_ex : tuple or int, required
         a (min_lat, max_lat) tuple delimiting the requested area latitudes
     rgi_region : str, optional
         the RGI region number (required for the GIMP DEM)
@@ -1840,6 +1912,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     -------
     tuple: (list with path(s) to the DEM file(s), data source str)
     """
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
 
     if source is not None and not isinstance(source, str):
         # check all user options
@@ -1859,8 +1934,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     # Some logic to decide which source to take if unspecified
     if source is None:
-        source = find_dem_source(lon_ex, lat_ex, rgi_region=rgi_region,
-                                 rgi_subregion=rgi_subregion)
+        source = default_dem_source(lon_ex, lat_ex, rgi_region=rgi_region,
+                                    rgi_subregion=rgi_subregion)
 
     if source not in DEM_SOURCES:
         raise InvalidParamsError('`source` must be one of '
