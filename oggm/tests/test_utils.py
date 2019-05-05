@@ -1279,6 +1279,24 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
+    def test_mapzen(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://s3.amazonaws.com/elevation-tiles-prod/'
+                        'geotiff/10/170/160.tif')
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8],
+                                             source='MAPZEN', dx_meter=100)
+
+        assert os.path.exists(of[0])
+        assert source == 'MAPZEN'
+
     def test_aw3d30(self):
 
         # Make a fake topo file
@@ -1317,6 +1335,40 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert of[0] == 'yo'
         assert source == 'RAMP'
+
+    def test_rema(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/'
+                        'v1.1/100m/REMA_100m_dem.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, -88, source='REMA')
+
+        assert os.path.exists(of[0])
+        assert source == 'REMA'
+
+    def test_arcticdem(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/'
+                        'mosaic/v3.0/100m/arcticdem_mosaic_100m_v3.0.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, 88, source='ARCTICDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'ARCTICDEM'
 
     def test_gimp(self):
 
@@ -1497,6 +1549,38 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
 
+    def test_mapzen_zone(self):
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
+                              zoom=10)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/368.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
+                              dx_meter=110)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/368.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
+                              zoom=10)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/655.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
+                              dx_meter=110)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/655.tif', z[0])
+
+        # Check the minimum zoom level
+        dx = 200
+        for lat in np.arange(10) * 10:
+            z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[lat, lat],
+                                  dx_meter=dx)
+            assert int(z[0].split('/')[0]) > 9
+            z = utils.mapzen_zone(lon_ex=[181, 181], lat_ex=[-lat, -lat],
+                                  dx_meter=dx)
+            assert int(z[0].split('/')[0]) > 9
+
     def test_dem3_viewpano_zone(self):
 
         test_loc = {'ISL': [-25., -12., 63., 67.],  # Iceland
@@ -1546,6 +1630,35 @@ class TestDataFiles(unittest.TestCase):
         z = utils.dem3_viewpano_zone([6, 14], [41, 48])
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
+
+    def test_is_dem_source_available(self):
+        assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
+        assert not utils.is_dem_source_available('GIMP', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('ARCTICDEM', [-25, -25], [71, 71])
+        assert utils.is_dem_source_available('RAMP', [-25, -25], [-71, -71])
+        assert utils.is_dem_source_available('REMA', [-25, -25], [-71, -71])
+
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER']:
+            assert utils.is_dem_source_available(s, [11, 11], [47, 47])
+
+    def test_find_dem_zone(self):
+
+        # Somewhere in the Alps: SRTM
+        assert utils.default_dem_source(11, 47) == 'SRTM'
+        # High Lats: DEM3
+        assert utils.default_dem_source(11, 65) == 'DEM3'
+        # Eastern russia: DEM3
+        assert utils.default_dem_source(170.1, 59.1) == 'DEM3'
+        # Greenland
+        assert utils.default_dem_source(0, 0, rgi_region='5') == 'GIMP'
+        # Antarctica
+        with pytest.raises(InvalidParamsError):
+            utils.default_dem_source(0, 0, rgi_region='19')
+        assert utils.default_dem_source(0, 0, rgi_region='19',
+                                        rgi_subregion='19-06') == 'RAMP'
+        assert utils.default_dem_source(0, 0, rgi_region='19',
+                                        rgi_subregion='19-01') == 'DEM3'
 
     def test_lrufilecache(self):
 
@@ -1639,6 +1752,15 @@ class TestDataFiles(unittest.TestCase):
         zone = 'S73E137'
         unit = 'S75E135'
         fp = _download_aster_file(zone, unit)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_mapzen_download(self):
+        from oggm.utils._downloads import _download_mapzen_file
+
+        # this zone does exist and file should be small enough for download
+        zone = '10/903/368.tif'
+        fp = _download_mapzen_file(zone)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download

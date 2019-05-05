@@ -25,6 +25,13 @@ Enhancements
   to the glacier directory (:pull:`725`). This can be useful for statistical
   modelling of glacier thickness.
   By `Matteo Castellani <https://github.com/MatCast>`_.
+- Added support for a new DEM dataset: Mapzen, found on Amazon cloud
+  (:issue:`748`, :pull:`759`). Also added some utility functions to handle
+  DEMs, to be improved further in the near future.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added support for a new DEM dataset: REMA, (:pull:`759`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 Bug fixes
 ~~~~~~~~~

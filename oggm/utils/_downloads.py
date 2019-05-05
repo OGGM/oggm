@@ -25,6 +25,7 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
+import salem
 from salem import wgs84
 import rasterio
 try:
@@ -68,6 +69,13 @@ CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.xz'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
+
+# Web mercator proj constants
+WEB_N_PIX = 256
+WEB_EARTH_RADUIS = 6378137.
+
+DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
+               'DEM3', 'ASTER', 'SRTM', 'REMA']
 
 _RGI_METADATA = dict()
 
@@ -818,35 +826,6 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
-def _download_arcticdem_from_cluster():
-    with _get_download_lock():
-        return _download_arcticdem_from_cluster_unlocked()
-
-
-def _download_arcticdem_from_cluster_unlocked():
-    """Checks if the special topo data is in the directory and if not,
-    download it from the cluster.
-    """
-
-    # extract directory
-    tmpdir = cfg.PATHS['tmp_dir']
-    # mkdir(tmpdir)
-    fname = 'arcticdem_mosaic_100m_v3.0.tif'
-    outpath = os.path.join(tmpdir, fname)
-
-    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
-    url += fname
-    dfile = file_downloader(url)
-
-    if not os.path.exists(outpath):
-        shutil.copyfile(dfile, outpath)
-
-    # See if we're good, don't overfill the tmp directory
-    assert os.path.exists(outpath)
-    cfg.get_lru_handler(tmpdir).append(outpath)
-    return outpath
-
-
 def _download_aw3d30_file(zone):
     with _get_download_lock():
         return _download_aw3d30_file_unlocked(zone)
@@ -889,6 +868,22 @@ def _download_aw3d30_file_unlocked(fullzone):
     for file in os.listdir(dempath):
         cfg.get_lru_handler(tmpdir).append(os.path.join(dempath, file))
     return demfile
+
+
+def _download_mapzen_file(zone):
+    with _get_download_lock():
+        return _download_mapzen_file_unlocked(zone)
+
+
+def _download_mapzen_file_unlocked(zone):
+    """Checks if the mapzen data is in the directory and if not, download it.
+    """
+    bucket = 'elevation-tiles-prod'
+    prefix = 'geotiff'
+    url = 'http://s3.amazonaws.com/%s/%s/%s' % (bucket, prefix, zone)
+
+    # That's all
+    return file_downloader(url, timeout=180)
 
 
 def _get_centerline_lonlat(gdir):
@@ -1194,6 +1189,57 @@ def aster_zone(lon_ex, lat_ex):
                 units.append(u)
 
     return zones, units
+
+
+def mapzen_zone(lon_ex, lat_ex, dx_meter=None, zoom=None):
+    """Returns a list of AWS mapzen zones covering the desired extent.
+
+    For mapzen one has to specify the level of detail (zoom) one wants. The
+    best way in OGGM is to specify dx_meter of the underlying map and OGGM
+    will decide which zoom level works best.
+    """
+
+    if dx_meter is None and zoom is None:
+        raise InvalidParamsError('Need either zoom level or dx_meter.')
+
+    bottom, top = lat_ex
+    left, right = lon_ex
+    ybound = 85.0511
+    if bottom <= -ybound:
+        bottom = -ybound
+    if top <= -ybound:
+        top = -ybound
+    if bottom > ybound:
+        bottom = ybound
+    if top > ybound:
+        top = ybound
+    if right >= 180:
+        right = 179.999
+    if left >= 180:
+        left = 179.999
+
+    if dx_meter:
+        # Find out the zoom so that we are close to the desired accuracy
+        lat = np.max(np.abs([bottom, top]))
+        zoom = int(np.ceil(math.log2((math.cos(lat * math.pi / 180) *
+                                      2 * math.pi * WEB_EARTH_RADUIS) /
+                                     (WEB_N_PIX * dx_meter))))
+
+        # According to this we should just always stay above 10 (sorry)
+        # https://github.com/tilezen/joerd/blob/master/docs/data-sources.md
+        zoom = 10 if zoom < 10 else zoom
+
+    # Code from planetutils
+    size = 2 ** zoom
+    xt = lambda x: int((x + 180.0) / 360.0 * size)
+    yt = lambda y: int((1.0 - math.log(math.tan(math.radians(y)) +
+                                       (1 / math.cos(math.radians(y))))
+                        / math.pi) / 2.0 * size)
+    tiles = []
+    for x in range(xt(left), xt(right) + 1):
+        for y in range(yt(top), yt(bottom) + 1):
+            tiles.append('/'.join(map(str, [zoom, x, str(y) + '.tif'])))
+    return tiles
 
 
 def get_demo_file(fname):
@@ -1691,10 +1737,112 @@ def _get_histalp_file_unlocked(var=None):
     return ofile
 
 
-def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
-                  source=None):
+def is_dem_source_available(source, lon_ex, lat_ex):
+    """Checks if a DEM source is available for your purpose.
+
+    This is only a very rough check! It doesn't mean that the data really is
+    available, but at least it's worth a try.
+
+    Parameters
+    ----------
+    source : str, required
+        the source you want to check for
+    lon_ex : tuple or int, required
+        a (min_lon, max_lon) tuple delimiting the requested area longitudes
+    lat_ex : tuple or int, required
+        a (min_lat, max_lat) tuple delimiting the requested area latitudes
+
+    Returns
+    -------
+    True or False
     """
-    Returns a list with path(s) to the DEM file(s) covering the desired extent.
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
+
+    def _in_grid(grid_json, lon, lat):
+        i, j = cfg.DATA['dem_grids'][grid_json].transform(lon, lat,
+                                                          maskout=True)
+        return np.all(~ (i.mask | j.mask))
+
+    if source == 'GIMP':
+        return _in_grid('gimpdem_90m_v01.1.json', lon_ex, lat_ex)
+    elif source == 'ARCTICDEM':
+        return _in_grid('arcticdem_mosaic_100m_v3.0.json', lon_ex, lat_ex)
+    elif source == 'RAMP':
+        return _in_grid('AntarcticDEM_wgs84.json', lon_ex, lat_ex)
+    elif source == 'REMA':
+        return _in_grid('REMA_100m_dem.json', lon_ex, lat_ex)
+    elif source == 'TANDEM':
+        return True
+    elif source == 'AW3D30':
+        return True
+    elif source == 'MAPZEN':
+        return True
+    elif source == 'DEM3':
+        return True
+    elif source == 'ASTER':
+        return True
+    elif source == 'SRTM':
+        return np.max(np.abs(lat_ex)) < 60
+
+
+def default_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
+    """Current default DEM source at a given location.
+
+    Parameters
+    ----------
+    lon_ex : tuple or int, required
+        a (min_lon, max_lon) tuple delimiting the requested area longitudes
+    lat_ex : tuple or int, required
+        a (min_lat, max_lat) tuple delimiting the requested area latitudes
+    rgi_region : str, optional
+        the RGI region number (required for the GIMP DEM)
+    rgi_subregion : str, optional
+        the RGI subregion str (useful for RGI Reg 19)
+
+    Returns
+    -------
+    the chosen DEM source
+    """
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
+
+    # GIMP is in polar stereographic, not easy to test if glacier is on the map
+    # It would be possible with a salem grid but this is a bit more expensive
+    # Instead, we are just asking RGI for the region
+    if rgi_region is not None and int(rgi_region) == 5:
+        return 'GIMP'
+
+    # ARCTIC DEM is not yet automatized
+    # If we have to automatise this one day, we should use the shapefile
+    # of the tiles, and then check for RGI region:
+    # use_without_check = ['03', '05', '06', '07', '09']
+    # to_test_on_shape = ['01', '02', '04', '08']
+
+    # Antarctica
+    if rgi_region is not None and int(rgi_region) == 19:
+        if rgi_subregion is None:
+            raise InvalidParamsError('Must specify subregion for Antarctica')
+        if rgi_subregion in ['19-01', '19-02', '19-03', '19-04', '19-05']:
+            # special case for some distant islands
+            return 'DEM3'
+        return 'RAMP'
+
+    # In high latitudes and an exceptional region in Eastern Russia, DEM3
+    # exceptional test for eastern russia:
+    if ((np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or
+            (np.min(lat_ex) > 59 and np.min(lon_ex) > 170)):
+        return 'DEM3'
+
+    # Everywhere else SRTM
+    return 'SRTM'
+
+
+def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
+                  dx_meter=None, zoom=None, source=None):
+    """Path(s) to the DEM file(s) covering the desired extent.
 
     If the needed files for covering the extent are not present, download them.
 
@@ -1706,30 +1854,39 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     Parameters
     ----------
-    lon_ex : tuple, required
+    lon_ex : tuple or int, required
         a (min_lon, max_lon) tuple delimiting the requested area longitudes
-    lat_ex : tuple, required
+    lat_ex : tuple or int, required
         a (min_lat, max_lat) tuple delimiting the requested area latitudes
     rgi_region : str, optional
         the RGI region number (required for the GIMP DEM)
     rgi_subregion : str, optional
         the RGI subregion str (useful for RGI Reg 19)
+    dx_meter : float, required for source='MAPZEN'
+        the resolution of the glacier map (to decide the zoom level of mapzen)
+    zoom : int, optional
+        if you know the zoom already (for MAPZEN only)
     source : str or list of str, optional
         If you want to force the use of a certain DEM source. Available are:
           - 'USER' : file set in cfg.PATHS['dem_file']
-          - 'SRTM' : SRTM v4.1
+          - 'SRTM' : http://srtm.csi.cgiar.org/
           - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'REMA' : https://www.pgc.umn.edu/data/rema/
           - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : ASTER data
+          - 'ASTER' : https://asterweb.jpl.nasa.gov/gdem.asp
           - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
+          - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
 
     Returns
     -------
-    tuple: (list with path(s) to the DEM file, data source)
+    tuple: (list with path(s) to the DEM file(s), data source str)
     """
+    from oggm.utils import tolist
+    lon_ex = tolist(lon_ex, length=2)
+    lat_ex = tolist(lat_ex, length=2)
 
     if source is not None and not isinstance(source, str):
         # check all user options
@@ -1747,94 +1904,73 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         if source == 'USER':
             return [cfg.PATHS['dem_file']], source
 
-    # GIMP is in polar stereographic, not easy to test if glacier is on the map
-    # It would be possible with a salem grid but this is a bit more expensive
-    # Instead, we are just asking RGI for the region
-    if source == 'GIMP' or (rgi_region is not None and int(rgi_region) == 5):
-        source = 'GIMP' if source is None else source
-        if source == 'GIMP':
-            _file = _download_topo_file_from_cluster('gimpdem_90m_v01.1.tif')
-            return [_file], source
+    # Some logic to decide which source to take if unspecified
+    if source is None:
+        source = default_dem_source(lon_ex, lat_ex, rgi_region=rgi_region,
+                                    rgi_subregion=rgi_subregion)
 
-    # ArcticDEM also has a polar projection, but here we have a shape
+    if source not in DEM_SOURCES:
+        raise InvalidParamsError('`source` must be one of '
+                                 '{}'.format(DEM_SOURCES))
+
+    # OK go
+    files = []
+    if source == 'GIMP':
+        _file = _download_topo_file_from_cluster('gimpdem_90m_v01.1.tif')
+        files.append(_file)
+
     if source == 'ARCTICDEM':
-        source = 'ARCTICDEM' if source is None else source
-        # If we have to automatise this one day, we should use the shapefile
-        # of the tiles, and then check for RGI region:
-        # use_without_check = ['03', '05', '06', '07', '09']
-        # to_test_on_shape = ['01', '02', '04', '08']
-        if source == 'ARCTICDEM':
-            _file = _download_arcticdem_from_cluster()
-            return [_file], source
+        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/v3.0/'
+              '100m/arcticdem_mosaic_100m_v3.0.tif')
+        with _get_download_lock():
+            _file = file_downloader(fp)
+        files.append(_file)
 
-    # Same for Antarctica
-    if source == 'RAMP' or (rgi_region is not None and int(rgi_region) == 19):
-        if rgi_subregion is None:
-            raise InvalidParamsError('Must specify subregion for Antarctica')
-        else:
-            dem3_regs = ['19-01', '19-02', '19-03', '19-04', '19-05']
-            should_dem3 = rgi_subregion in dem3_regs
-        if should_dem3:
-            # special case for some distant islands
-            source = 'DEM3' if source is None else source
-        else:
-            source = 'RAMP' if source is None else source
-        if source == 'RAMP':
-            _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
-            return [_file], source
+    if source == 'RAMP':
+        _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
+        files.append(_file)
 
-    # TANDEM
+    if source == 'REMA':
+        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/v1.1/100m/'
+              'REMA_100m_dem.tif')
+        with _get_download_lock():
+            _file = file_downloader(fp)
+        files.append(_file)
+
     if source == 'TANDEM':
         zones = tandem_zone(lon_ex, lat_ex)
-        sources = []
         for z in zones:
-            sources.append(_download_tandem_file(z))
-        source_str = source
+            files.append(_download_tandem_file(z))
 
-    # AW3D30 - ALOS Global Digital Surface Model 3D 30m from JAXA
     if source == 'AW3D30':
         zones = aw3d30_zone(lon_ex, lat_ex)
-        sources = []
         for z in zones:
-            sources.append(_download_aw3d30_file(z))
-        source_str = source
+            files.append(_download_aw3d30_file(z))
 
-    # Anywhere else on Earth we check for DEM3, ASTER, or SRTM
-    # exceptional test for eastern russia:
-    east_max = np.min(lat_ex) > 59 and np.min(lon_ex) > 170
-    if (np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or \
-            (source == 'DEM3') or (source == 'ASTER') or east_max:
-        # default is DEM3
-        source = 'DEM3' if source is None else source
-        if source == 'DEM3':
-            # use corrected viewpanoramas.org DEM
-            zones = dem3_viewpano_zone(lon_ex, lat_ex)
-            sources = []
-            for z in zones:
-                sources.append(_download_dem3_viewpano(z))
-            source_str = source
-        if source == 'ASTER':
-            # use ASTER
-            zones, units = aster_zone(lon_ex, lat_ex)
-            sources = []
-            for z, u in zip(zones, units):
-                sf = _download_aster_file(z, u)
-                if sf is not None:
-                    sources.append(sf)
-            source_str = source
-    else:
-        source = 'SRTM' if source is None else source
-        if source == 'SRTM':
-            zones = srtm_zone(lon_ex, lat_ex)
-            sources = []
-            for z in zones:
-                sources.append(_download_srtm_file(z))
-            source_str = source
+    if source == 'MAPZEN':
+        zones = mapzen_zone(lon_ex, lat_ex, dx_meter=dx_meter, zoom=zoom)
+        for z in zones:
+            files.append(_download_mapzen_file(z))
+
+    if source == 'ASTER':
+        zones, units = aster_zone(lon_ex, lat_ex)
+        for z, u in zip(zones, units):
+            files.append(_download_aster_file(z, u))
+
+    if source == 'DEM3':
+        zones = dem3_viewpano_zone(lon_ex, lat_ex)
+        for z in zones:
+            files.append(_download_dem3_viewpano(z))
+
+    if source == 'SRTM':
+        zones = srtm_zone(lon_ex, lat_ex)
+        for z in zones:
+            files.append(_download_srtm_file(z))
 
     # filter for None (e.g. oceans)
-    sources = [s for s in sources if s]
-    if sources:
-        return sources, source_str
+    files = [s for s in files if s]
+    if files:
+        return files, source
     else:
         raise RuntimeError('No topography file available for extent lat:{0},'
                            'lon:{1}!'.format(lat_ex, lon_ex))

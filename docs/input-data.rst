@@ -306,30 +306,10 @@ respectively). If the chosen spatial resolution is larger than 200 m
     #   print(v)
 
 **Important:** when using these data sources for your OGGM runs, please refer
-to the original data provider of the data! OGGM will add a ``dem_source.txt``
+to the original data provider of the data! OGGM adds a ``dem_source.txt``
 file in each glacier directory specifying how to cite these data. We
-reproduce this information here:
-
-
-SRTM V4
-    Jarvis A., H.I. Reuter, A.  Nelson, E. Guevara, 2008, Hole-filled seamless SRTM data V4,
-    International  Centre for Tropical  Agriculture (CIAT),
-    available  from http://srtm.csi.cgiar.org.
-
-RAMP V2
-    Liu, H., K. C. Jezek, B. Li, and Z. Zhao. 2015.
-    Radarsat Antarctic Mapping Project Digital Elevation Model, Version 2.
-    Boulder, Colorado USA. NASA National Snow and Ice Data Center Distributed Active Archive Center.
-    doi: https://doi.org/10.5067/8JKNEW6BFRVD.
-
-GIMP V1.1
-    Howat, I., A. Negrete, and B. Smith. 2014.
-    The Greenland Ice Mapping Project (GIMP) land classification and surface
-    elevation data sets, The Cryosphere. 8. 1509-1518.
-    https://doi.org/10.5194/tc-8-1509-2014
-
-VIEWFINDER PANORAMAS DEMs
-    There is no recommended citation for these data. Please refer to the website above in case of doubt.
+reproduce this information
+`here <https://github.com/OGGM/oggm/blob/master/oggm/data/dem_sources.txt>`_.
 
 .. warning::
 
@@ -338,6 +318,8 @@ VIEWFINDER PANORAMAS DEMs
     or they are left unnoticed. The importance of reliable topographic data for
     global glacier modelling cannot be emphasized enough, and it is a pity
     that no consistent, global DEM is yet available for scientific use.
+    Visit `rgitools <https://rgitools.readthedocs.io/en/latest/dems.html>`_
+    for a discussion about our current efforts to find "the best" DEMs.
 
 
 Climate data

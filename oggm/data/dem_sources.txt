@@ -1,0 +1,91 @@
+[SRTM]
+SRTM V4
+
+Original resolution: 3 arcsec (~90m)
+
+# Data Citation
+
+We kindly ask  any users to  cite this data  in any published  material
+produced using this data, and if possible link web pages to the CIAT-CSI
+SRTM website (http://srtm.csi.cgiar.org).
+
+Citations should be made as follows: 
+
+Jarvis A., H.I. Reuter, A.  Nelson, E. Guevara, 2008, Hole-filled seamless SRTM
+data V4, International  Centre for Tropical  Agriculture (CIAT), available
+from http://srtm.csi.cgiar.org,
+  
+[DEM3]
+VIEWFINDER PANORAMAS DEMs
+
+Original resolution: 3 arcsec (~90m)
+
+These data are downloaded from Jonathan de Ferranti's webpage:
+http://viewfinderpanoramas.org/dem3.html
+
+# Data Citation
+
+There is no recommended citation for these data. Please refer to the website
+above in case of doubt.
+
+[RAMP]
+RAMP V2
+
+Original resolution: 200m
+
+Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0082 on 28.03.2018
+
+# Data Citation
+
+As a condition of using these data, you must cite the use of this data set
+using the following citation:
+
+Liu, H., K. C. Jezek, B. Li, and Z. Zhao. 2015. Radarsat Antarctic Mapping
+Project Digital Elevation Model, Version 2. Boulder, Colorado USA.
+NASA National Snow and Ice Data Center Distributed Active Archive Center.
+doi: https://doi.org/10.5067/8JKNEW6BFRVD. [28.03.2018].
+
+[GIMP]
+GIMP V1.1
+
+Original resolution: 90 m
+
+Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0645/ on 28.03.2018
+
+# Data Citation
+
+As a condition of using these data, you must cite the use of this data set
+using the following citation:
+
+Howat, I., A. Negrete, and B. Smith. 2015. MEaSUREs Greenland Ice Mapping
+Project (GIMP) Digital Elevation Model, Version 1.1. Boulder, Colorado USA.
+NASA National Snow and Ice Data Center Distributed Active Archive Center.
+doi: https://doi.org/10.5067/NV34YUIXLP9W. [28.03.2018].
+
+# Literature Citation
+
+As a condition of using these data, we request that you acknowledge the
+author(s) of this data set by referencing the following peer-reviewed
+publication:
+
+Howat, I., A. Negrete, and B. Smith. 2014. The Greenland Ice Mapping Project
+(GIMP) land classification and surface elevation data sets, The Cryosphere.
+8. 1509-1518. https://doi.org/10.5194/tc-8-1509-2014
+
+[ARCTICDEM]
+# TODO: citation missing
+
+[AW3D30]
+# TODO: citation missing
+
+[MAPZEN]
+# TODO: citation missing
+
+[ASTER]
+# TODO: citation missing
+
+[TANDEM]
+# TODO: citation missing
+
+[REMA]
+# TODO: citation missing

@@ -1,0 +1,1 @@
+{"proj": "+lat_0=90 +datum=WGS84 +lat_ts=70 +lon_0=-45 +x_0=1 +units=m +y_0=1 +proj=stere +no_defs=True +k=1 ", "pixel_ref": "corner", "dxdy": [90.0, -90.0], "nxny": [16620, 30000], "x0y0": [-640000.0, -655550.0]}

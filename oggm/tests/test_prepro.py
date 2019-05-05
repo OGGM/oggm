@@ -324,6 +324,12 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         self.assertTrue(gdir.has_file('intersects'))
 
+    def test_dem_source_text(self):
+
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'SRTM',
+                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
+            assert s in gis.DEM_SOURCE_INFO.keys()
+
 
 class TestCenterlines(unittest.TestCase):
 
