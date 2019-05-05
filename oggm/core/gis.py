@@ -1080,9 +1080,11 @@ def gridded_mb_attributes(gdir):
         raise RuntimeError('Spec mass-balance should be zero.')
 
     # Altitude based mass balance
+    catch_area_above_z = topo * np.NaN
     lin_mb_above_z = topo * np.NaN
     oggm_mb_above_z = topo * np.NaN
     for i, h in enumerate(topo):
+        catch_area_above_z[i] = np.sum(topo >= h) * dx2
         lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h]) * dx2
         oggm_mb_above_z[i] = np.sum(oggm_mb_on_z[topo >= h]) * dx2
 
@@ -1136,6 +1138,7 @@ def gridded_mb_attributes(gdir):
         return out
 
     catchment_area = _fill_2d_like(catchment_area)
+    catch_area_above_z = _fill_2d_like(catch_area_above_z)
     lin_mb_above_z = _fill_2d_like(lin_mb_above_z)
     oggm_mb_above_z = _fill_2d_like(oggm_mb_above_z)
     lin_mb_above_z_on_catch = _fill_2d_like(lin_mb_above_z_on_catch)
@@ -1151,6 +1154,17 @@ def gridded_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'm^2'
         v.long_name = 'Catchment area above point'
+        v.description = ('This is a very crude method: just the area above '
+                         'the points elevation on glacier.')
+        v[:] = catch_area_above_z
+
+        vn = 'catchment_area_on_catch'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+        v.units = 'm^2'
+        v.long_name = 'Catchment area above point on flowline catchments'
         v.description = ('Uses the catchments masks of the flowlines to '
                          'compute the area above the altitude of the given '
                          'point.')

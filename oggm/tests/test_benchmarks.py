@@ -191,6 +191,8 @@ class TestSouthGlacier(unittest.TestCase):
             # The max catchment area should be area of glacier
             assert (ds['catchment_area'].max() ==
                     ds['glacier_mask'].sum() * gdir.grid.dx**2)
+            assert (ds['catchment_area_on_catch'].max() ==
+                    ds['glacier_mask'].sum() * gdir.grid.dx**2)
 
             # In the lowest parts of the glaciers the data should be equivalent
             ds_low = ds.isel(y=ds.y < 6741500)
@@ -207,6 +209,7 @@ class TestSouthGlacier(unittest.TestCase):
                'slope_factor',
                'dis_from_border',
                'catchment_area',
+               'catchment_area_on_catch',
                'lin_mb_above_z',
                'lin_mb_above_z_on_catch',
                'oggm_mb_above_z',
