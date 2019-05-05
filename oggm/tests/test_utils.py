@@ -1336,6 +1336,40 @@ class TestFakeDownloads(unittest.TestCase):
         assert of[0] == 'yo'
         assert source == 'RAMP'
 
+    def test_rema(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/'
+                        'v1.1/100m/REMA_100m_dem.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, -88, source='REMA')
+
+        assert os.path.exists(of[0])
+        assert source == 'REMA'
+
+    def test_arcticdem(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/'
+                        'mosaic/v3.0/100m/arcticdem_mosaic_100m_v3.0.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, 88, source='ARCTICDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'ARCTICDEM'
+
     def test_gimp(self):
 
         def down_check(url, *args, **kwargs):
@@ -1603,6 +1637,7 @@ class TestDataFiles(unittest.TestCase):
         assert not utils.is_dem_source_available('GIMP', [11, 11], [47, 47])
         assert utils.is_dem_source_available('ARCTICDEM', [-25, -25], [71, 71])
         assert utils.is_dem_source_available('RAMP', [-25, -25], [-71, -71])
+        assert utils.is_dem_source_available('REMA', [-25, -25], [-71, -71])
 
         for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER']:
             assert utils.is_dem_source_available(s, [11, 11], [47, 47])

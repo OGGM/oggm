@@ -75,7 +75,7 @@ WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
 
 DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
-               'DEM3', 'ASTER', 'SRTM']
+               'DEM3', 'ASTER', 'SRTM', 'REMA']
 
 _RGI_METADATA = dict()
 
@@ -819,35 +819,6 @@ def _download_topo_file_from_cluster_unlocked(fname):
         logger.info('Extracting ' + fname + '.zip to ' + outpath + '...')
         with zipfile.ZipFile(dfile) as zf:
             zf.extractall(tmpdir)
-
-    # See if we're good, don't overfill the tmp directory
-    assert os.path.exists(outpath)
-    cfg.get_lru_handler(tmpdir).append(outpath)
-    return outpath
-
-
-def _download_arcticdem_from_cluster():
-    with _get_download_lock():
-        return _download_arcticdem_from_cluster_unlocked()
-
-
-def _download_arcticdem_from_cluster_unlocked():
-    """Checks if the special topo data is in the directory and if not,
-    download it from the cluster.
-    """
-
-    # extract directory
-    tmpdir = cfg.PATHS['tmp_dir']
-    # mkdir(tmpdir)
-    fname = 'arcticdem_mosaic_100m_v3.0.tif'
-    outpath = os.path.join(tmpdir, fname)
-
-    url = 'https://cluster.klima.uni-bremen.de/data/dems/'
-    url += fname
-    dfile = file_downloader(url)
-
-    if not os.path.exists(outpath):
-        shutil.copyfile(dfile, outpath)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(outpath)
@@ -1790,12 +1761,8 @@ def is_dem_source_available(source, lon_ex, lat_ex):
     lat_ex = tolist(lat_ex, length=2)
 
     def _in_grid(grid_json, lon, lat):
-        grids = cfg.DATA['dem_grids']
-        if grid_json not in grids:
-            fp = os.path.join(os.path.abspath(os.path.dirname(cfg.__file__)),
-                              'data', grid_json)
-            grids[grid_json] = salem.Grid.from_json(fp)
-        i, j = grids[grid_json].transform(lon, lat, maskout=True)
+        i, j = cfg.DATA['dem_grids'][grid_json].transform(lon, lat,
+                                                          maskout=True)
         return np.all(~ (i.mask | j.mask))
 
     if source == 'GIMP':
@@ -1804,6 +1771,8 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return _in_grid('arcticdem_mosaic_100m_v3.0.json', lon_ex, lat_ex)
     elif source == 'RAMP':
         return _in_grid('AntarcticDEM_wgs84.json', lon_ex, lat_ex)
+    elif source == 'REMA':
+        return _in_grid('REMA_100m_dem.json', lon_ex, lat_ex)
     elif source == 'TANDEM':
         return True
     elif source == 'AW3D30':
@@ -1900,11 +1869,12 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     source : str or list of str, optional
         If you want to force the use of a certain DEM source. Available are:
           - 'USER' : file set in cfg.PATHS['dem_file']
-          - 'SRTM' : SRTM v4.1
+          - 'SRTM' : http://srtm.csi.cgiar.org/
           - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'REMA' : https://www.pgc.umn.edu/data/rema/
           - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : ASTER data
+          - 'ASTER' : https://asterweb.jpl.nasa.gov/gdem.asp
           - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
@@ -1950,11 +1920,21 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         files.append(_file)
 
     if source == 'ARCTICDEM':
-        _file = _download_arcticdem_from_cluster()
+        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/v3.0/'
+              '100m/arcticdem_mosaic_100m_v3.0.tif')
+        with _get_download_lock():
+            _file = file_downloader(fp)
         files.append(_file)
 
     if source == 'RAMP':
         _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
+        files.append(_file)
+
+    if source == 'REMA':
+        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/v1.1/100m/'
+              'REMA_100m_dem.tif')
+        with _get_download_lock():
+            _file = file_downloader(fp)
         files.append(_file)
 
     if source == 'TANDEM':

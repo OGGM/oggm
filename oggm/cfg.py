@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
+import salem
 from configobj import ConfigObj, ConfigObjError
 
 # Local logger
@@ -409,8 +410,16 @@ def initialize(file=None, logging_level='INFO'):
 
     # Add other things
     if 'dem_grids' not in DATA:
-        DATA['dem_grids'] = {}
-
+        grids = {}
+        for grid_json in ['gimpdem_90m_v01.1.json',
+                          'arcticdem_mosaic_100m_v3.0.json',
+                          'AntarcticDEM_wgs84.json',
+                          'REMA_100m_dem.json']:
+            if grid_json not in grids:
+                fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                  'data', grid_json)
+                grids[grid_json] = salem.Grid.from_json(fp)
+        DATA['dem_grids'] = grids
 
 def oggm_static_paths():
     """Initialise the OGGM paths from the config file."""

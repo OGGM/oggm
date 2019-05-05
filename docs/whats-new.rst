@@ -29,6 +29,8 @@ Enhancements
   (:issue:`748`, :pull:`759`). Also added some utility functions to handle
   DEMs, to be improved further in the near future.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added support for a new DEM dataset: REMA, (:pull:`759`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes

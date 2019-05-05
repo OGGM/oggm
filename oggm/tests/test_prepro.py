@@ -327,7 +327,7 @@ class TestGIS(unittest.TestCase):
     def test_dem_source_text(self):
 
         for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'SRTM',
-                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3']:
+                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
             assert s in gis.DEM_SOURCE_INFO.keys()
 
 

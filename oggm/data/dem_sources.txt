@@ -86,3 +86,6 @@ Howat, I., A. Negrete, and B. Smith. 2014. The Greenland Ice Mapping Project
 
 [TANDEM]
 # TODO: citation missing
+
+[REMA]
+# TODO: citation missing
