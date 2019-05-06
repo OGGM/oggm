@@ -264,8 +264,9 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
                 # TODO: this is a quick and dirty fix. Has to be changes in
                 # analogy to the climate.local_tstar() searching all provided
                 # prepared ref_tstars.csv files
-                fp = '/Users/oberrauch/oggm-fork/oggm/data/' \
-                     'ref_tstars_vas_rgi6_histalp.csv'
+                baseline = cfg.PARAMS['baseline_climate'].lower()
+                fp = ('/Users/oberrauch/oggm-fork/oggm/data/'
+                      + 'ref_tstars_vas_rgi6_{:s}.csv'.format(baseline))
                 ref_df = pd.read_csv(fp)
             else:
                 # Use the the local calibration
@@ -500,7 +501,7 @@ def find_start_area(gdir):
                                    max_hgt=ref.max_hgt,
                                    mb_model=ref.mb_model)
         # scale to desired starting size
-        model_tmp.create_start_glacier(area_m2_start)
+        model_tmp.create_start_glacier(area_m2_start, year_start=1851)
         # run and compare, return relative error
         return np.abs(model_tmp.run_and_compare(ref))
 
@@ -1095,11 +1096,12 @@ class VAScalingModel(object):
                                                      self.max_hgt,
                                                      self.year)
 
-    def _compute_time_scales(self):
+    def _compute_time_scales(self, instant=False): #@DEBUG: delete instant argument
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
-        self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
-        self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
+        if not instant:
+            self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
+            self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
 
     def reset(self):
         """ Set model attributes back to starting values. """
@@ -1283,6 +1285,12 @@ class VAScalingModel(object):
         diag_ds['min_hgt'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['min_hgt'].attrs['description'] = 'Terminus elevation'
         diag_ds['min_hgt'].attrs['unit'] = 'm asl.'
+        diag_ds['tau_l'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['tau_l'].attrs['description'] = 'Length change response time'
+        diag_ds['tau_l'].attrs['unit'] = 'years'
+        diag_ds['tau_a'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['tau_a'].attrs['description'] = 'Area change response time'
+        diag_ds['tau_a'].attrs['unit'] = 'years'
         # TODO: handel tidewater glaciers
 
         # run the model
@@ -1294,6 +1302,8 @@ class VAScalingModel(object):
             diag_ds['length_m'].data[i] = self.length_m
             diag_ds['spec_mb'].data[i] = self.spec_mb
             diag_ds['min_hgt'].data[i] = self.min_hgt
+            diag_ds['tau_l'].data[i] = self.tau_l
+            diag_ds['tau_a'].data[i] = self.tau_a
 
         if diag_path is not None:
             # write to file
@@ -1301,25 +1311,26 @@ class VAScalingModel(object):
 
         return diag_ds
 
-    def create_start_glacier(self, area_m2_start, year_start=1851):
+    def create_start_glacier(self, area_m2_start, year_start,
+                             adjust_term_elev=False): #@DEBUG: delete adjust...
         """ Instance model with given starting glacier area, for the iterative
         process of seeking the glacier’s surface area at the beginning of the
-        model integration. Default starting year is 1851.
+        model integration.
 
         The corresponding terminus elevation is scaled given the most recent
         (measured) outline, which must not be representative.
 
         :param area_m2_start: (float) starting surface area guess [m2]
-        :param year_start: (float, optional) corresponding starting year,
-            1851 per default
+        :param year_start: (float) corresponding starting year
         """
         # compute volume (m3) and length (m) from area (using scaling parameters)
         volume_m3_start = self.ca * area_m2_start ** self.gamma
         length_m_start = (volume_m3_start / self.cl) ** (1 / self.ql)
         # compute corresponding terminus elevation
-        min_hgt_start = self.max_hgt + (length_m_start / self.length_m_0
-                                        * (self.min_hgt_0 - self.max_hgt))
-        self.__init__(year_start, area_m2_start, min_hgt_start,
+        if adjust_term_elev:
+            min_hgt_start = self.max_hgt + (length_m_start / self.length_m_0
+                                             * (self.min_hgt_0 - self.max_hgt))
+        self.__init__(year_start, area_m2_start, self.min_hgt_0,
                       self.max_hgt, self.mb_model)
 
     def run_and_compare(self, model_ref):
@@ -1331,7 +1342,6 @@ class VAScalingModel(object):
         # run model and store area
         year, _, area, _, _, _ = self.run_until(year_end=model_ref.year,
                                                 reset=True)
-
         assert year == model_ref.year
         # compute relative difference to reference area
         rel_error = 1 - area/model_ref.area_m2

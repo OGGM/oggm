@@ -7,7 +7,7 @@
 __pycache__/
 
 # Packages
-*.egg
+*.eggs
 *.egg-info
 eggs
 
