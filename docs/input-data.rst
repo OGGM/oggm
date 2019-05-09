@@ -51,9 +51,10 @@ For example:
 .. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
 
 The ``~/.oggm`` directory should be updated automatically when you update OGGM,
-but if you encounter any problems with is, simply delete the directory (it will
+but if you encounter any problems with it, simply delete the directory (it will
 be re-downloaded automatically at the next import).
 
+.. _oggm-config:
 
 All other data: auto-downloads and the ``~/.oggm_config`` file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -80,7 +81,7 @@ Some explanations:
   downloaded will be cached for later use. Most of the users won't need to
   explore this folder (it is organized as a list of urls) but you have to make
   sure to set this path to a folder with sufficient disk space available. This
-  folder can be shared across computers if needed. Once an url is stored
+  folder can be shared across computers if needed. Once a file is stored
   in this cache folder, OGGM won't download it again.
 - ``dl_cache_readonly`` indicates if writing is allowed in this folder (this is
   the default). Setting this to ``True`` will prevent any further download in
@@ -288,10 +289,10 @@ default in OGGM is to use the following rule:
 
     \Delta x = d_1 \sqrt{S} + d_2
 
-where :math:`\Delta x` is the grid spatial resolution (in m),  :math:`S` the
-glacier area (in km) and :math:`d_1`, :math:`d_2` some parameters (set to 14 and 10,
+where :math:`\Delta x` is the grid spatial resolution (in m), :math:`S` the
+glacier area (in km\ :math:`^{2}`) and :math:`d_1`, :math:`d_2` some parameters (set to 14 and 10,
 respectively). If the chosen spatial resolution is larger than 200 m
-(:math:`S \ge` 185 km :math:`^{2}`) we clip it to this value.
+(:math:`S \ge` 185 km\ :math:`^{2}`) we clip it to this value.
 
 
 .. ipython:: python
@@ -305,30 +306,10 @@ respectively). If the chosen spatial resolution is larger than 200 m
     #   print(v)
 
 **Important:** when using these data sources for your OGGM runs, please refer
-to the original data provider of the data! OGGM will add a ``dem_source.txt``
+to the original data provider of the data! OGGM adds a ``dem_source.txt``
 file in each glacier directory specifying how to cite these data. We
-reproduce this information here:
-
-
-SRTM V4
-    Jarvis A., H.I. Reuter, A.  Nelson, E. Guevara, 2008, Hole-filled seamless SRTM data V4,
-    International  Centre for Tropical  Agriculture (CIAT),
-    available  from http://srtm.csi.cgiar.org.
-
-RAMP V2
-    Liu, H., K. C. Jezek, B. Li, and Z. Zhao. 2015.
-    Radarsat Antarctic Mapping Project Digital Elevation Model, Version 2.
-    Boulder, Colorado USA. NASA National Snow and Ice Data Center Distributed Active Archive Center.
-    doi: https://doi.org/10.5067/8JKNEW6BFRVD.
-
-GIMP V1.1
-    Howat, I., A. Negrete, and B. Smith. 2014.
-    The Greenland Ice Mapping Project (GIMP) land classification and surface
-    elevation data sets, The Cryosphere. 8. 1509-1518.
-    https://doi.org/10.5194/tc-8-1509-2014
-
-VIEWFINDER PANORAMAS DEMs
-    There is no recommended citation for these data. Please refer to the website above in case of doubt.
+reproduce this information
+`here <https://github.com/OGGM/oggm/blob/master/oggm/data/dem_sources.txt>`_.
 
 .. warning::
 
@@ -337,6 +318,8 @@ VIEWFINDER PANORAMAS DEMs
     or they are left unnoticed. The importance of reliable topographic data for
     global glacier modelling cannot be emphasized enough, and it is a pity
     that no consistent, global DEM is yet available for scientific use.
+    Visit `rgitools <https://rgitools.readthedocs.io/en/latest/dems.html>`_
+    for a discussion about our current efforts to find "the best" DEMs.
 
 
 Climate data
@@ -445,4 +428,4 @@ have access to the timeseries through the glacier directory:
 
 .. _WGMS: https://wgms.ch
 .. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
-.. _GMD Paper: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+.. _GMD Paper: https://www.geosci-model-dev.net/12/909/2019/

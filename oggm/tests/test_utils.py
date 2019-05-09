@@ -7,7 +7,7 @@ import shutil
 import time
 import gzip
 import bz2
-import zlib
+import hashlib
 import pytest
 from unittest import mock
 
@@ -367,6 +367,30 @@ class TestStartFromTar(unittest.TestCase):
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
 
+    def test_to_and_from_basedir_tar(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(self.rgidf)
+
+        # End - compress all
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        utils.base_dir_to_tar()
+
+        # Test - reopen form tar
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert not os.path.exists(gdir.dir + '.tar.gz')
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+
+        gdirs = workflow.init_glacier_regions(self.rgidf, from_tar=True)
+        for gdir in gdirs:
+            assert gdir.has_file('gridded_data')
+            assert os.path.exists(gdir.dir + '.tar.gz')
+
     def test_to_and_from_tar_new_dir(self):
 
         # Go - initialize working directories
@@ -549,6 +573,31 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_regions(['kwf', 'hef'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10)
+        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
+                                     nyears=10)
+
+    def test_corrupted_file(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(['hef'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=10)
+
+        cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 10, 4,
+                                      demo_url=True)
+        assert 'cluster.klima.uni-bremen.de/~fmaussion/' in cfile
+
+        # Replace with a dummy file
+        os.remove(cfile)
+        with open(cfile, 'w') as f:
+            f.write('ups')
+
+        # This should retrigger a download and just work
+        gdirs = workflow.init_glacier_regions(['hef'],
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
                                               prepro_border=10)
@@ -941,13 +990,13 @@ def touch(path):
     return path
 
 
-def make_fake_zipdir(dir_path, fakefile=None):
+def make_fake_zipdir(dir_path, fakefile=None, archiv='zip', extension='.zip'):
     """Creates a directory with a file in it if asked to, then compresses it"""
     utils.mkdir(dir_path)
     if fakefile:
         touch(os.path.join(dir_path, fakefile))
-    shutil.make_archive(dir_path, 'zip', dir_path)
-    return dir_path + '.zip'
+    shutil.make_archive(dir_path, archiv, dir_path)
+    return dir_path + extension
 
 
 class FakeDownloadManager():
@@ -1007,7 +1056,8 @@ class TestFakeDownloads(unittest.TestCase):
 
         file_size = 1024
         file_data = os.urandom(file_size)
-        file_crc32 = zlib.crc32(file_data)
+        file_sha256 = hashlib.sha256()
+        file_sha256.update(file_data)
 
         utils.mkdir(os.path.dirname(tgt_path))
         with open(tgt_path, 'wb') as f:
@@ -1016,10 +1066,12 @@ class TestFakeDownloads(unittest.TestCase):
         if not valid_size:
             file_size += 1
         if not valid_crc32:
-            file_crc32 += 1
+            file_sha256.update(b'1234ABCD')
+
+        file_sha256 = file_sha256.digest()
 
         data = utils.get_dl_verify_data()
-        data['test.com/test.txt'] = (file_size, file_crc32)
+        data['test.com/test.txt'] = (file_size, file_sha256)
 
         return 'https://test.com/test.txt'
 
@@ -1073,7 +1125,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='test.txt')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
             self.assertEqual(url, expected)
             return rgi_f
@@ -1092,7 +1144,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='01_rgi60_Region.shp')
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi60_manifest.txt')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
             self.assertEqual(url, expected)
             return rgi_f
@@ -1124,7 +1176,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='intersects_rgi50_AllRegs.shp')
         rgi_f = make_fake_zipdir(rgi_dir)
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V50_Intersects.zip')
             self.assertEqual(url, expected)
@@ -1146,7 +1198,7 @@ class TestFakeDownloads(unittest.TestCase):
                          fakefile='Intersects_OGGM_Manifest.txt')
         rgi_f = make_fake_zipdir(rgi_dir)
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
                         'RGI_V60_Intersects.zip')
             self.assertEqual(url, expected)
@@ -1166,7 +1218,7 @@ class TestFakeDownloads(unittest.TestCase):
         with gzip.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
                         'cruts.1709081022.v4.01/tmp/'
                         'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
@@ -1185,7 +1237,7 @@ class TestFakeDownloads(unittest.TestCase):
         with bz2.open(cf, 'wb') as gz:
             gz.write(b'dummy')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('http://www.zamg.ac.at/histalp/download/grid5m/'
                         'HISTALP_temperature_1780-2014.nc.bz2')
             self.assertEqual(url, expected)
@@ -1202,7 +1254,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = make_fake_zipdir(os.path.join(self.dldir, 'srtm_39_03'),
                               fakefile='srtm_39_03.tif')
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/'
                         'srtm_5x5/TIFF/srtm_39_03.zip')
             self.assertEqual(url, expected)
@@ -1216,7 +1268,7 @@ class TestFakeDownloads(unittest.TestCase):
 
     def test_dem3(self):
 
-        def down_check(url, cache_name=None, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = 'http://viewfinderpanoramas.org/dem3/T10.zip'
             self.assertEqual(url, expected)
             return self.dem3_testfile
@@ -1227,9 +1279,50 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
+    def test_mapzen(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://s3.amazonaws.com/elevation-tiles-prod/'
+                        'geotiff/10/170/160.tif')
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8],
+                                             source='MAPZEN', dx_meter=100)
+
+        assert os.path.exists(of[0])
+        assert source == 'MAPZEN'
+
+    def test_aw3d30(self):
+
+        # Make a fake topo file
+        deep_path = os.path.join(self.dldir, 'N049W006', 'N049W006')
+        utils.mkdir(deep_path)
+        upper_path = os.path.dirname(deep_path)
+        fakefile = os.path.join(deep_path, 'N049W006_AVE_DSM.tif')
+        tf = make_fake_zipdir(upper_path, fakefile=fakefile,
+                              archiv='gztar', extension='.tar.gz')
+
+        def down_check(url, *args, **kwargs):
+            expected = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/' +
+                        'release_v1804/N045W010/N049W006.tar.gz')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-5.3, -5.2], [49.5, 49.6],
+                                             source='AW3D30')
+
+        assert os.path.exists(of[0])
+        assert source == 'AW3D30'
+
     def test_ramp(self):
 
-        def down_check(url):
+        def down_check(url, *args, **kwargs):
             expected = 'AntarcticDEM_wgs84.tif'
             self.assertEqual(url, expected)
             return 'yo'
@@ -1243,9 +1336,43 @@ class TestFakeDownloads(unittest.TestCase):
         assert of[0] == 'yo'
         assert source == 'RAMP'
 
+    def test_rema(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/'
+                        'v1.1/100m/REMA_100m_dem.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, -88, source='REMA')
+
+        assert os.path.exists(of[0])
+        assert source == 'REMA'
+
+    def test_arcticdem(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/'
+                        'mosaic/v3.0/100m/arcticdem_mosaic_100m_v3.0.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(0, 88, source='ARCTICDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'ARCTICDEM'
+
     def test_gimp(self):
 
-        def down_check(url):
+        def down_check(url, *args, **kwargs):
             expected = 'gimpdem_90m_v01.1.tif'
             self.assertEqual(url, expected)
             return 'yo'
@@ -1264,7 +1391,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTM2_S88W121'),
                               fakefile='ASTGTM2_S88W121_dem.tif')
 
-        def down_check(url):
+        def down_check(url, *args, **kwargs):
             expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
             self.assertEqual(url, expected)
             return tf
@@ -1280,7 +1407,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
 
-        def down_check(url, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
                         '/pr/pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)
@@ -1291,7 +1418,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         fn = 'tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc'
 
-        def down_check(url, reset=False):
+        def down_check(url, *args, **kwargs):
             expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
                         '/tas/tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)
@@ -1422,6 +1549,38 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('N30W097', z[0])
         self.assertEqual('N30W100', u[0])
 
+    def test_mapzen_zone(self):
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
+                              zoom=10)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/368.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
+                              dx_meter=110)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/368.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
+                              zoom=10)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/655.tif', z[0])
+
+        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
+                              dx_meter=110)
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('10/903/655.tif', z[0])
+
+        # Check the minimum zoom level
+        dx = 200
+        for lat in np.arange(10) * 10:
+            z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[lat, lat],
+                                  dx_meter=dx)
+            assert int(z[0].split('/')[0]) > 9
+            z = utils.mapzen_zone(lon_ex=[181, 181], lat_ex=[-lat, -lat],
+                                  dx_meter=dx)
+            assert int(z[0].split('/')[0]) > 9
+
     def test_dem3_viewpano_zone(self):
 
         test_loc = {'ISL': [-25., -12., 63., 67.],  # Iceland
@@ -1471,6 +1630,35 @@ class TestDataFiles(unittest.TestCase):
         z = utils.dem3_viewpano_zone([6, 14], [41, 48])
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
+
+    def test_is_dem_source_available(self):
+        assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
+        assert not utils.is_dem_source_available('GIMP', [11, 11], [47, 47])
+        assert utils.is_dem_source_available('ARCTICDEM', [-25, -25], [71, 71])
+        assert utils.is_dem_source_available('RAMP', [-25, -25], [-71, -71])
+        assert utils.is_dem_source_available('REMA', [-25, -25], [-71, -71])
+
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER']:
+            assert utils.is_dem_source_available(s, [11, 11], [47, 47])
+
+    def test_find_dem_zone(self):
+
+        # Somewhere in the Alps: SRTM
+        assert utils.default_dem_source(11, 47) == 'SRTM'
+        # High Lats: DEM3
+        assert utils.default_dem_source(11, 65) == 'DEM3'
+        # Eastern russia: DEM3
+        assert utils.default_dem_source(170.1, 59.1) == 'DEM3'
+        # Greenland
+        assert utils.default_dem_source(0, 0, rgi_region='5') == 'GIMP'
+        # Antarctica
+        with pytest.raises(InvalidParamsError):
+            utils.default_dem_source(0, 0, rgi_region='19')
+        assert utils.default_dem_source(0, 0, rgi_region='19',
+                                        rgi_subregion='19-06') == 'RAMP'
+        assert utils.default_dem_source(0, 0, rgi_region='19',
+                                        rgi_subregion='19-01') == 'DEM3'
 
     def test_lrufilecache(self):
 
@@ -1564,6 +1752,15 @@ class TestDataFiles(unittest.TestCase):
         zone = 'S73E137'
         unit = 'S75E135'
         fp = _download_aster_file(zone, unit)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_mapzen_download(self):
+        from oggm.utils._downloads import _download_mapzen_file
+
+        # this zone does exist and file should be small enough for download
+        zone = '10/903/368.tif'
+        fp = _download_mapzen_file(zone)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
@@ -1692,6 +1889,27 @@ class TestDataFiles(unittest.TestCase):
         zone = 'dummy'
         fp = _download_dem3_viewpano(zone)
         self.assertTrue(fp is None)
+
+    @pytest.mark.download
+    def test_download_aw3d30(self):
+        from oggm.utils._downloads import _download_aw3d30_file
+
+        # this zone does exist and file should be small enough for download
+        zone = 'N000E105/N002E107'
+        fp = _download_aw3d30_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        zone = 'S085W050/S081W048'
+        fp = _download_aw3d30_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_download_aw3d30_fails(self):
+        from oggm.utils._downloads import _download_aw3d30_file
+        from urllib.error import URLError
+
+        # this zone does not exist
+        zone = 'N000E005/N000E005'
+        self.assertRaises(URLError, _download_aw3d30_file, zone)
 
     @pytest.mark.download
     def test_download_cmip5(self):

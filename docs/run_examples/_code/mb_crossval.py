@@ -51,7 +51,8 @@ for i, gdir in enumerate(gdirs):
     tasks.mu_star_calibration(gdir)
 
     # Mass-balance model with cross-validated parameters instead
-    mb_mod = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance)
+    mb_mod = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                         use_inversion_flowlines=True)
 
     # Mass-balance timeseries, observed and simulated
     refmb = gdir.get_ref_mb_data().copy()
@@ -92,8 +93,7 @@ ax.set_ylabel('N Glaciers')
 ax.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
 ax.legend(loc='best')
 plt.tight_layout()
-fn = os.path.join(WORKING_DIR, 'mb_crossval_rgi{}.png'.format(rgi_version))
-plt.savefig(fn, dpi=150)
+plt.show()
 
 scores = 'Median bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].median())
 scores += 'Mean bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].mean())

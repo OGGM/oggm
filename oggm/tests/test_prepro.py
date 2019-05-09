@@ -209,7 +209,7 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
-        gis.interpolation_masks(gdir)
+        gis.gridded_attributes(gdir)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             glacier_mask = nc.variables['glacier_mask'][:]
@@ -323,6 +323,12 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
         self.assertTrue(gdir.has_file('intersects'))
+
+    def test_dem_source_text(self):
+
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'SRTM',
+                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
+            assert s in gis.DEM_SOURCE_INFO.keys()
 
 
 class TestCenterlines(unittest.TestCase):
@@ -1493,6 +1499,50 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_scaling_factor'] = _prcp_sf
         cfg.PARAMS['continue_on_error'] = False
 
+    def test_ref_mb_glaciers(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+
+        rids = utils.get_ref_mb_glaciers_candidates()
+        assert len(rids) > 200
+
+        rids = utils.get_ref_mb_glaciers_candidates(gdir.rgi_version)
+        assert len(rids) > 200
+
+        assert len(cfg.DATA) >= 2
+
+        with pytest.raises(RuntimeError):
+            utils.get_ref_mb_glaciers([gdir])
+
+        climate.process_custom_climate_data(gdir)
+        ref_gd = utils.get_ref_mb_glaciers([gdir])
+        assert len(ref_gd) == 1
+
+    def test_fake_ref_mb_glacier(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        climate.process_custom_climate_data(gdir1)
+        entity['RGIId'] = 'RGI50-11.99999'
+        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        climate.process_custom_climate_data(gdir2)
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 0
+
+        gdir2.set_ref_mb_data(gdir1.get_ref_mb_data())
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 0
+
+        cfg.DATA['RGI50_ref_ids'].append('RGI50-11.99999')
+
+        ref_gd = utils.get_ref_mb_glaciers([gdir2])
+        assert len(ref_gd) == 1
+
     def test_automated_workflow(self):
 
         cfg.PARAMS['run_mb_calibration'] = False
@@ -2200,6 +2250,21 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
         cfg.PARAMS['border'] = 10
 
+        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_dummy_cru_file(gdir, seed=0)
+        self.gdir = gdir
+
     def tearDown(self):
         self.rm_dir()
 
@@ -2210,23 +2275,10 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
     @pytest.mark.slow
     def test_calving_loop(self):
 
-        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        centerlines.compute_centerlines(gdir)
-        centerlines.initialize_flowlines(gdir)
-        centerlines.compute_downstream_line(gdir)
-        centerlines.compute_downstream_bedshape(gdir)
-        centerlines.catchment_area(gdir)
-        centerlines.catchment_intersections(gdir)
-        centerlines.catchment_width_geom(gdir)
-        centerlines.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
+        gdir = self.gdir
 
         # Test default k (it overshoots)
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 8
         assert max(df.index) > 3
@@ -2246,8 +2298,9 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
+        default_calving = cfg.PARAMS['k_calving']
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir)
+        df = inversion.find_inversion_calving(gdir)
 
         assert max(df.index) < 14
         assert max(df.index) > 8
@@ -2256,9 +2309,9 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
 
-        # Test with smaller k and large water depth
+        # Test with smaller k and large starting water depth
         cfg.PARAMS['k_calving'] = 0.2
-        df = utils.find_inversion_calving(gdir, water_depth=1200)
+        df = inversion.find_inversion_calving(gdir, initial_water_depth=1200)
 
         assert max(df.index) < 14
         assert max(df.index) > 6
@@ -2266,6 +2319,41 @@ class TestColumbiaCalvingLoop(unittest.TestCase):
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
         assert df.mu_star.iloc[-1] > 0
+
+        # Test with fixed water depth
+        water_depth = 275.282
+        cfg.PARAMS['k_calving'] = default_calving
+
+        # Test with fixed water depth (it still overshoots, quickly)
+        df = inversion.find_inversion_calving(gdir,
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
+
+        assert max(df.index) < 10
+        assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 2
+        assert df.mu_star.iloc[-1] == 0
+        assert df.water_depth.iloc[-1] == water_depth
+
+        # Test with smaller k (it doesn't overshoot)
+        cfg.PARAMS['k_calving'] = 0.2
+        df = inversion.find_inversion_calving(gdir,
+                                              initial_water_depth=water_depth,
+                                              fixed_water_depth=True)
+
+        assert max(df.index) < 10
+        assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
+        assert df.calving_flux.iloc[-1] > 0.1
+        assert df.calving_flux.iloc[-1] < 1
+        assert df.mu_star.iloc[-1] > 0
+        assert df.water_depth.iloc[-1] == water_depth
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        assert odf.calving_n_iterations < 10
+        np.testing.assert_allclose(odf.calving_flux, np.max(df.calving_flux))
+        np.testing.assert_allclose(odf.calving_front_water_depth,
+                                   df.water_depth.iloc[-1])
 
 
 class TestGrindelInvert(unittest.TestCase):

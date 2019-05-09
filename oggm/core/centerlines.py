@@ -571,12 +571,14 @@ def line_order(line):
         return np.max(levels) + 1
 
 
-def line_inflows(line):
+def line_inflows(line, keep=True):
     """Recursive search for all inflows of the given line.
 
     Parameters
     ----------
     line: a Centerline instance
+    keep : bool
+        whether or not the line itself should be kept
 
     Returns
     -------
@@ -588,7 +590,10 @@ def line_inflows(line):
         out = out.union(line_inflows(l))
 
     out = np.array(list(out))
-    return list(out[np.argsort([o.order for o in out])])
+    out = list(out[np.argsort([o.order for o in out])])
+    if not keep:
+        out.remove(line)
+    return out
 
 
 def _make_costgrid(mask, ext, z):

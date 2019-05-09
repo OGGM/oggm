@@ -23,13 +23,20 @@ class NoInternetException(Exception):
     pass
 
 
-class DownloadVerificationFailedException(Exception):
+class DownloadCredentialsMissingException(Exception):
     pass
 
 
+class DownloadVerificationFailedException(Exception):
+    def __init__(self, msg=None, path=None):
+        self.msg = msg
+        self.path = path
+
+
 class HttpDownloadError(Exception):
-    def __init__(self, code):
+    def __init__(self, code, url):
         self.code = code
+        self.url = url
 
 
 class HttpContentTooShortError(Exception):

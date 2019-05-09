@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from scipy.signal import gaussian
+import salem
 from configobj import ConfigObj, ConfigObjError
 
 # Local logger
@@ -85,7 +86,7 @@ PARAMS = ResettingOrderedDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 LRUHANDLERS = ResettingOrderedDict()
-DEMO_GLACIERS = None
+DATA = ResettingOrderedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -202,7 +203,11 @@ _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
-_doc = 'Calving output'
+_doc = ('A csv file containing the output of each iteration of the '
+        'find_inversion_calving task loop.')
+BASENAMES['calving_loop'] = ('calving_loop.csv', _doc)
+
+_doc = 'Calving output (deprecated).'
 BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
 
 _doc = "A dict containing the glacier's t*, bias, mu*. Analogous " \
@@ -289,7 +294,7 @@ def initialize(file=None, logging_level='INFO'):
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global DEMO_GLACIERS
+    global DATA
 
     set_logging_config(logging_level=logging_level)
 
@@ -405,8 +410,20 @@ def initialize(file=None, logging_level='INFO'):
     # Read in the demo glaciers
     file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                         'data', 'demo_glaciers.csv')
-    DEMO_GLACIERS = pd.read_csv(file, index_col=0)
+    DATA['demo_glaciers'] = pd.read_csv(file, index_col=0)
 
+    # Add other things
+    if 'dem_grids' not in DATA:
+        grids = {}
+        for grid_json in ['gimpdem_90m_v01.1.json',
+                          'arcticdem_mosaic_100m_v3.0.json',
+                          'AntarcticDEM_wgs84.json',
+                          'REMA_100m_dem.json']:
+            if grid_json not in grids:
+                fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                  'data', grid_json)
+                grids[grid_json] = salem.Grid.from_json(fp)
+        DATA['dem_grids'] = grids
 
 def oggm_static_paths():
     """Initialise the OGGM paths from the config file."""
@@ -561,7 +578,7 @@ def pack_config():
         'PARAMS': PARAMS,
         'PATHS': PATHS,
         'LRUHANDLERS': LRUHANDLERS,
-        'DEMO_GLACIERS': DEMO_GLACIERS,
+        'DATA': DATA,
         'BASENAMES': dict(BASENAMES)
     }
 
@@ -569,13 +586,13 @@ def pack_config():
 def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
-    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS, DEMO_GLACIERS
+    global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS, DATA
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
     PARAMS = cfg_dict['PARAMS']
     PATHS = cfg_dict['PATHS']
     LRUHANDLERS = cfg_dict['LRUHANDLERS']
-    DEMO_GLACIERS = cfg_dict['DEMO_GLACIERS']
+    DATA = cfg_dict['DATA']
 
     # BASENAMES is a DocumentedDict, which cannot be pickled because
     # set intentionally mismatches with get

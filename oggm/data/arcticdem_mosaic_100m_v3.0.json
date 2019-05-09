@@ -1,0 +1,1 @@
+{"dxdy": [100.0, -100.0], "nxny": [74000, 75000], "pixel_ref": "corner", "proj": "+units=m +lat_0=90 +y_0=0 +k=1 +no_defs=True +lon_0=-45 +proj=stere +lat_ts=70 +datum=WGS84 +x_0=0 ", "x0y0": [-4000000.0, 4100000.0]}

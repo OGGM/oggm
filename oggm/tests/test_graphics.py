@@ -42,7 +42,7 @@ def teardown_module(module):
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(tolerance=25)
 def test_googlemap():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -53,7 +53,7 @@ def test_googlemap():
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_domain():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -63,7 +63,7 @@ def test_domain():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_centerlines():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -73,7 +73,18 @@ def test_centerlines():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
+def test_raster():
+    fig, ax = plt.subplots()
+    gdir = init_hef()
+    gis.gridded_attributes(gdir)
+    graphics.plot_raster(gdir, var_name='aspect', cmap='twilight', ax=ax)
+    fig.tight_layout()
+    return fig
+
+
+@pytest.mark.graphic
+@mpl_image_compare(multi=True)
 def test_flowlines():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -83,7 +94,7 @@ def test_flowlines():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_downstream():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -94,7 +105,7 @@ def test_downstream():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_width():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -104,7 +115,7 @@ def test_width():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_width_corrected():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -116,7 +127,7 @@ def test_width_corrected():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_inversion():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -126,7 +137,7 @@ def test_inversion():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_multiple_inversion():
 
     # test directory
@@ -176,7 +187,7 @@ def test_modelsection():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_modelsection_withtrib():
 
     gdir = init_hef()
@@ -190,7 +201,7 @@ def test_modelsection_withtrib():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_modeloutput_map():
 
     gdir = init_hef()
@@ -205,7 +216,7 @@ def test_modeloutput_map():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_multiple_models():
 
     # test directory
@@ -246,7 +257,7 @@ def test_multiple_models():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_thick_alt():
     fig, ax = plt.subplots()
     gdir = init_hef()
@@ -268,7 +279,7 @@ def test_thick_interp():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_catch_areas():
     fig, ax = plt.subplots()
     gdir = init_hef()

@@ -514,7 +514,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
 def demo_glacier_id(key):
     """Get the RGI id of a glacier by name or key: None if not found."""
 
-    df = cfg.DEMO_GLACIERS
+    df = cfg.DATA['demo_glaciers']
 
     # Is the name in key?
     s = df.loc[df.Key.str.lower() == key.lower()]
@@ -884,14 +884,16 @@ def glacier_statistics(gdir, inversion_only=False):
 
     try:
         # Calving
-        all_calving_data = []
-        all_width = []
-        cl = gdir.read_pickle('calving_output')
-        for c in cl:
-            all_calving_data = c['calving_fluxes'][-1]
-            all_width = c['t_width']
-        d['calving_flux'] = all_calving_data
-        d['calving_front_width'] = all_width
+        df = pd.read_csv(gdir.get_filepath('calving_loop'), index_col=0)
+        df = df.iloc[-1]
+        d['calving_n_iterations'] = df.name
+        d['calving_flux'] = df.calving_flux
+        d['calving_mu_star'] = df.mu_star
+        d['calving_calving_law_flux'] = df.calving_law_flux
+        d['calving_front_width'] = df.width
+        d['calving_front_thick'] = df.thick
+        d['calving_front_water_depth'] = df.water_depth
+        d['calving_front_free_board'] = df.free_board
     except BaseException:
         pass
 
@@ -1963,13 +1965,20 @@ class GlacierDirectory(object):
             h = np.append(h, fl.surface_h)
         return h, w * self.grid.dx
 
-    def get_ref_mb_data(self):
-        """Get the reference mb data from WGMS (for some glaciers only!).
+    def set_ref_mb_data(self, mb_df=None):
+        """Adds reference mass-balance data to this glacier.
 
-        Raises an Error if it isn't a reference glacier at all.
+        The format should be a dataframe with the years as index and
+        'ANNUAL_BALANCE' as values in mm yr-1.
         """
 
-        if self._mbdf is None:
+        if self.is_tidewater:
+            log.warning('You are trying to set MB data on a tidewater glacier!'
+                        ' These data will be ignored by the MB model '
+                        'calibration routine.')
+
+        if mb_df is None:
+
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
@@ -1981,7 +1990,26 @@ class GlacierDirectory(object):
             reff = os.path.join(mbdatadir,
                                 'mbdata_WGMS-{:05d}.csv'.format(wid))
             # list of years
-            self._mbdf = pd.read_csv(reff).set_index('YEAR')
+            mb_df = pd.read_csv(reff).set_index('YEAR')
+
+        # Quality checks
+        if 'ANNUAL_BALANCE' not in mb_df:
+            raise InvalidParamsError('Need an "ANNUAL_BALANCE" column in the '
+                                     'dataframe.')
+        if not mb_df.index.is_integer():
+            raise InvalidParamsError('The index needs to be integer years')
+
+        mb_df.index.name = 'YEAR'
+        self._mbdf = mb_df
+
+    def get_ref_mb_data(self):
+        """Get the reference mb data from WGMS (for some glaciers only!).
+
+        Raises an Error if it isn't a reference glacier at all.
+        """
+
+        if self._mbdf is None:
+            self.set_ref_mb_data()
 
         # logic for period
         if not self.has_file('climate_info'):
@@ -2035,7 +2063,7 @@ class GlacierDirectory(object):
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
     def get_ref_length_data(self):
-        """Get the glacier lenght data from P. Leclercq's data base.
+        """Get the glacier length data from P. Leclercq's data base.
 
          https://folk.uio.no/paulwl/data.php
 

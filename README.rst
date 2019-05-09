@@ -51,7 +51,7 @@ About
 
 :Citation:
     .. image:: https://img.shields.io/badge/Citation-GMD%20paper-orange.svg
-        :target: https://www.geosci-model-dev-discuss.net/gmd-2018-9/
+        :target: https://www.geosci-model-dev.net/12/909/2019/
         :alt: GMD Paper
 
     .. image:: https://zenodo.org/badge/43965645.svg

@@ -55,6 +55,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
+        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
@@ -149,6 +150,84 @@ class TestSouthGlacier(unittest.TestCase):
             plt.ylabel('Altidude (m)')
             plt.legend()
             plt.show()
+
+    def test_inversion_attributes(self):
+
+        # Download the RGI file for the run
+        # Make a new dataframe of those
+        rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_regions(rgidf)
+
+        # Preprocessing tasks
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+            tasks.process_cru_data,
+            tasks.local_t_star,
+            tasks.mu_star_calibration,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Tested tasks
+        task_list = [
+            tasks.gridded_attributes,
+            tasks.gridded_mb_attributes,
+        ]
+        for task in task_list:
+            execute_entity_task(task, gdirs)
+
+        # Check certain things
+        gdir = gdirs[0]
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+
+            # The max catchment area should be area of glacier
+            assert (ds['catchment_area'].max() ==
+                    ds['glacier_mask'].sum() * gdir.grid.dx**2)
+            assert (ds['catchment_area_on_catch'].max() ==
+                    ds['glacier_mask'].sum() * gdir.grid.dx**2)
+
+            # In the lowest parts of the glaciers the data should be equivalent
+            ds_low = ds.isel(y=ds.y < 6741500)
+            np.testing.assert_allclose(ds_low['lin_mb_above_z'],
+                                       ds_low['lin_mb_above_z_on_catch'])
+            np.testing.assert_allclose(ds_low['oggm_mb_above_z'],
+                                       ds_low['oggm_mb_above_z_on_catch'])
+
+        # Build some loose tests based on correlation
+        df = self.get_ref_data(gdir)
+        vns = ['topo',
+               'slope',
+               'aspect',
+               'slope_factor',
+               'dis_from_border',
+               'catchment_area',
+               'catchment_area_on_catch',
+               'lin_mb_above_z',
+               'lin_mb_above_z_on_catch',
+               'oggm_mb_above_z',
+               'oggm_mb_above_z_on_catch',
+               ]
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            for vn in vns:
+                df[vn] = ds[vn].isel(x=('z', df['i']), y=('z', df['j']))
+
+        # Loose tests based on correlations
+        cf = df.corr()
+        assert cf.loc['slope', 'slope_factor'] < -0.9
+        assert cf.loc['slope', 'thick'] < -0.4
+        assert cf.loc['dis_from_border', 'thick'] > 0.2
+        assert cf.loc['oggm_mb_above_z', 'thick'] > 0.5
+        assert cf.loc['lin_mb_above_z', 'thick'] > 0.5
+        assert cf.loc['lin_mb_above_z', 'oggm_mb_above_z'] > 0.95
 
     def test_inversion(self):
 
