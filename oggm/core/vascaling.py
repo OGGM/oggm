@@ -462,7 +462,7 @@ def compute_ref_t_stars(gdirs):
     df.sort_index().to_csv(file)
 
 
-def find_start_area(gdir):
+def find_start_area(gdir, year_start=1851):
     """ The following preprocessing tasks are needed: @TODO
 
     :param gdir: (oggm.GlacierDirectory)
@@ -484,8 +484,8 @@ def find_start_area(gdir):
                                min_hgt=h_min, max_hgt=h_max,
                                mb_model=mbmod)
 
-    def _to_minimize(area_m2_start, ref):
-        """ Initialize VAS glacier model as copy of the reference model (model_ref)
+    def _to_minimize(area_m2_start, ref, year_start=year_start):
+        """ Initialize VAS glacier model as copy of the reference model (ref)
         and adjust the model to the given starting area (area_m2_start) and
         starting year (1851). Let the model evolve to the same year as the
         reference model. Compute and return the relative absolute area error.
@@ -501,7 +501,7 @@ def find_start_area(gdir):
                                    max_hgt=ref.max_hgt,
                                    mb_model=ref.mb_model)
         # scale to desired starting size
-        model_tmp.create_start_glacier(area_m2_start, year_start=1851)
+        model_tmp.create_start_glacier(area_m2_start, year_start=year_start)
         # run and compare, return relative error
         return np.abs(model_tmp.run_and_compare(ref))
 
@@ -1043,7 +1043,7 @@ class VAScalingModel(object):
         :param area_m2_0: (float) starting area (at year_0) in m2
         :param min_hgt: (float) glacier terminus elevation (at year_0)
         :param max_hgt: (float) maximal glacier surface elevation (at year_0)
-        :param mb_model: (ben.VAScalingMassBalance) instance of mass balance model
+        :param mb_model: (ben.VAScalingMassBalance) instance of mb model
         """
 
         # get constants from cfg.PARAMS
@@ -1068,7 +1068,7 @@ class VAScalingModel(object):
         self.min_hgt_0 = min_hgt
         self.max_hgt = max_hgt
 
-        # compute volume (m3) and length (m) from area (using scaling parameters)
+        # compute volume (m3) and length (m) from area (using scaling laws)
         self.volume_m3_0 = self.ca * self.area_m2_0 ** self.gamma
         self.volume_m3 = self.volume_m3_0
         # self.length = self.cl * area_0**self.ql
@@ -1096,12 +1096,11 @@ class VAScalingModel(object):
                                                      self.max_hgt,
                                                      self.year)
 
-    def _compute_time_scales(self, instant=False): #@DEBUG: delete instant argument
+    def _compute_time_scales(self):
         """ Compute the time scales for glacier length `tau_l`
         and glacier surface area `tau_a` for current time step. """
-        if not instant:
-            self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
-            self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
+        self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
+        self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
 
     def reset(self):
         """ Set model attributes back to starting values. """
@@ -1312,25 +1311,34 @@ class VAScalingModel(object):
         return diag_ds
 
     def create_start_glacier(self, area_m2_start, year_start,
-                             adjust_term_elev=False): #@DEBUG: delete adjust...
+                             adjust_term_elev=False):
         """ Instance model with given starting glacier area, for the iterative
         process of seeking the glacier’s surface area at the beginning of the
         model integration.
 
-        The corresponding terminus elevation is scaled given the most recent
-        (measured) outline, which must not be representative.
+        Per default, the terminus elevation is not scaled (i.e. is the same as
+        for the initial glacier (probably RGI values)). This corresponds to
+        the code of Marzeion et. al. (2012), but is physically not consistent.
+
+        It is possible to scale the corresponding terminus elevation given the
+        most recent (measured) outline. However, this is not recommended since
+        the results may be strange. TODO: this should be fixed sometime...
+
 
         :param area_m2_start: (float) starting surface area guess [m2]
         :param year_start: (float) corresponding starting year
+        :param adjust_term_elev: (bool, default False)
         """
-        # compute volume (m3) and length (m) from area (using scaling parameters)
+        # compute volume (m3) and length (m) from area (using scaling laws)
         volume_m3_start = self.ca * area_m2_start ** self.gamma
         length_m_start = (volume_m3_start / self.cl) ** (1 / self.ql)
+        min_hgt_start = self.min_hgt_0
         # compute corresponding terminus elevation
         if adjust_term_elev:
             min_hgt_start = self.max_hgt + (length_m_start / self.length_m_0
-                                             * (self.min_hgt_0 - self.max_hgt))
-        self.__init__(year_start, area_m2_start, self.min_hgt_0,
+                                            * (self.min_hgt_0 - self.max_hgt))
+
+        self.__init__(year_start, area_m2_start, min_hgt_start,
                       self.max_hgt, self.mb_model)
 
     def run_and_compare(self, model_ref):

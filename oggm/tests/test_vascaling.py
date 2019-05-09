@@ -111,16 +111,20 @@ class TestVAScalingModel(unittest.TestCase):
         temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
                                                          ref_hgt=ref_h,
                                                          terminus_hgt=ref_h,
-                                                         temp_anomaly=temp_anomaly)
+                                                         temp_anomaly=
+                                                         temp_anomaly)
         np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # the terminus temperature must equal the input terperature
         # if the gradient is zero
         for term_h in np.array([-100, 0, 100]) + ref_h:
-            temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad=0,
+            temp_terminus = vascaling._compute_temp_terminus(ref_t,
+                                                             temp_grad=0,
                                                              ref_hgt=ref_h,
-                                                             terminus_hgt=term_h,
-                                                             temp_anomaly=temp_anomaly)
+                                                             terminus_hgt=
+                                                             term_h,
+                                                             temp_anomaly=
+                                                             temp_anomaly)
             np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # now test the routine with actual elevation differences
@@ -130,8 +134,10 @@ class TestVAScalingModel(unittest.TestCase):
             temp_diff = temp_grad * h_diff
             temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
                                                              ref_hgt=ref_h,
-                                                             terminus_hgt=term_h,
-                                                             temp_anomaly=temp_anomaly)
+                                                             terminus_hgt=
+                                                             term_h,
+                                                             temp_anomaly=
+                                                             temp_anomaly)
             np.testing.assert_allclose(temp_terminus,
                                        ref_t + temp_anomaly + temp_diff)
 
@@ -176,8 +182,8 @@ class TestVAScalingModel(unittest.TestCase):
         temp_terminus = ref_t * 0 + temp_all_solid
         solid_prcp = vascaling._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
                                                    min_hgt, max_hgt,
-                                                   temp_terminus, temp_all_solid,
-                                                   temp_grad,
+                                                   temp_terminus,
+                                                   temp_all_solid, temp_grad,
                                                    prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, ref_p)
 
@@ -186,8 +192,8 @@ class TestVAScalingModel(unittest.TestCase):
         temp_terminus = ref_t + 100
         solid_prcp = vascaling._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
                                                    min_hgt, max_hgt,
-                                                   temp_terminus, temp_all_solid,
-                                                   temp_grad,
+                                                   temp_terminus,
+                                                   temp_all_solid, temp_grad,
                                                    prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, 0)
 
@@ -275,7 +281,8 @@ class TestVAScalingModel(unittest.TestCase):
         # both time series must be equal
         np.testing.assert_array_equal(temp, temp_height)
 
-        # get solid precipitation averaged over the glacier (not weighted with widths)
+        # get solid precipitation averaged over the glacier
+        # (not weighted with widths)
         fls = gdir.read_pickle('inversion_flowlines')
         heights = np.array([])
         for fl in fls:
@@ -314,7 +321,6 @@ class TestVAScalingModel(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()
         # compute the reference t* for the glacier
         # given the reference of mass balance measurements
-        #res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         res = vascaling.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
 
@@ -483,7 +489,8 @@ class TestVAScalingModel(unittest.TestCase):
         years = np.array([year, year])
 
         # get mass balance relevant climate data
-        _, temp, prcp = vascaling.get_yearly_mb_temp_prcp(gdir, year_range=years)
+        _, temp, prcp = vascaling.get_yearly_mb_temp_prcp(gdir,
+                                                          year_range=years)
         temp = temp[0]
         prcp = prcp[0]
 
@@ -798,5 +805,5 @@ class TestVAScalingModel(unittest.TestCase):
             # correlation coefficient
             assert corrcoef(oggm_ds[param].values, vas_ds[param].values) >= cc
             # rmsd
-            assert rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values) <= rmsd
-
+            assert rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values)\
+                   <= rmsd
