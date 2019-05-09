@@ -108,23 +108,20 @@ class TestVAScalingModel(unittest.TestCase):
 
         # the terminus temperature must equal the input temperature
         # if terminus elevation equals reference elevation
-        temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
-                                                         ref_hgt=ref_h,
-                                                         terminus_hgt=ref_h,
-                                                         temp_anomaly=
-                                                         temp_anomaly)
+        temp_terminus =\
+            vascaling._compute_temp_terminus(ref_t, temp_grad, ref_hgt=ref_h,
+                                             terminus_hgt=ref_h,
+                                             temp_anomaly=temp_anomaly)
         np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # the terminus temperature must equal the input terperature
         # if the gradient is zero
         for term_h in np.array([-100, 0, 100]) + ref_h:
-            temp_terminus = vascaling._compute_temp_terminus(ref_t,
-                                                             temp_grad=0,
-                                                             ref_hgt=ref_h,
-                                                             terminus_hgt=
-                                                             term_h,
-                                                             temp_anomaly=
-                                                             temp_anomaly)
+            temp_terminus =\
+                vascaling._compute_temp_terminus(ref_t, temp_grad=0,
+                                                 ref_hgt=ref_h,
+                                                 terminus_hgt=term_h,
+                                                 temp_anomaly=temp_anomaly)
             np.testing.assert_allclose(temp_terminus, ref_t + temp_anomaly)
 
         # now test the routine with actual elevation differences
@@ -132,12 +129,11 @@ class TestVAScalingModel(unittest.TestCase):
         for h_diff in np.array([-100, 0, 100]):
             term_h = ref_h + h_diff
             temp_diff = temp_grad * h_diff
-            temp_terminus = vascaling._compute_temp_terminus(ref_t, temp_grad,
-                                                             ref_hgt=ref_h,
-                                                             terminus_hgt=
-                                                             term_h,
-                                                             temp_anomaly=
-                                                             temp_anomaly)
+            temp_terminus =\
+                vascaling._compute_temp_terminus(ref_t, temp_grad,
+                                                 ref_hgt=ref_h,
+                                                 terminus_hgt=term_h,
+                                                 temp_anomaly=temp_anomaly)
             np.testing.assert_allclose(temp_terminus,
                                        ref_t + temp_anomaly + temp_diff)
 
@@ -804,6 +800,6 @@ class TestVAScalingModel(unittest.TestCase):
             print(param)
             # correlation coefficient
             assert corrcoef(oggm_ds[param].values, vas_ds[param].values) >= cc
-            # rmsd
-            assert rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values)\
-                   <= rmsd
+            # root mean squared deviation
+            rmsd_an = rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values)
+            assert rmsd_an <= rmsd
