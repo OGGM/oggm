@@ -261,13 +261,30 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
         # Do our own interpolation of t_start for given glacier
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
-                # TODO: this is a quick and dirty fix. Has to be changes in
-                # analogy to the climate.local_tstar() searching all provided
-                # prepared ref_tstars.csv files
-                baseline = cfg.PARAMS['baseline_climate'].lower()
-                fp = ('/Users/oberrauch/oggm-fork/oggm/data/'
-                      + 'ref_tstars_vas_rgi6_{:s}.csv'.format(baseline))
-                ref_df = pd.read_csv(fp)
+                # Make some checks and use the default one
+                climate_info = gdir.read_pickle('climate_info')
+                source = climate_info['baseline_climate_source']
+                ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
+                if not np.any(s in source.upper() for s in ok_source):
+                    msg = ('If you are using a custom climate file you should '
+                           'run your own MB calibration.')
+                    raise MassBalanceCalibrationError(msg)
+
+                # major RGI version relevant
+                v = gdir.rgi_version[0]
+                # baseline climate
+                str_s = 'cru4' if 'CRU' in source else 'histalp'
+                # TODO: Check that the params are fine
+                # vn = 'ref_tstars_vas_rgi{}_{}_calib_params'.format(v, str_s)
+                # for k in params:
+                #     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
+                #         msg = ('The reference t* you are trying to use was '
+                #                'calibrated with different MB parameters. You '
+                #                'might have to run the calibration manually.')
+                #         raise MassBalanceCalibrationError(msg)
+
+                ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
+
             else:
                 # Use the the local calibration
                 fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')

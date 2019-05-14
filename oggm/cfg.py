@@ -5,6 +5,7 @@ A number of globals are defined here to be available everywhere.
 import logging
 import os
 import shutil
+import inspect
 import sys
 import glob
 import json
@@ -398,6 +399,22 @@ def initialize(file=None, logging_level='INFO'):
         with open(fpath, 'r') as fp:
             mbpar = json.load(fp)
         PARAMS[fn+'_calib_params'] = mbpar
+
+    # Read-in the reference t* data for the VAS model
+    fns = ['ref_tstars_vas_rgi6_cru4', 'ref_tstars_vas_rgi6_histalp']
+    for fn in fns:
+        f_dir = os.path.dirname(os.path.abspath(
+            inspect.getfile(inspect.currentframe())))
+        PARAMS[fn] = pd.read_csv(os.path.join(f_dir, 'data', fn + '.csv'))
+        # TODO: add files to OGGM demo data
+        # PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
+        # TODO: create and add mb calibration files
+        # fpath = os.path.join(f_dir, 'data', fn + '_calib_params.json')
+        # fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
+        # with open(fpath, 'r') as fp:
+        #     mbpar = json.load(fp)
+        # PARAMS[fn + '_calib_params'] = mbpar
+
 
     # Empty defaults
     set_intersects_db()

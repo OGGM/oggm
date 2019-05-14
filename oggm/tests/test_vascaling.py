@@ -3,6 +3,7 @@
 # External libs
 import numpy as np
 import pandas as pd
+import datetime
 import os
 import shutil
 import copy
@@ -193,6 +194,14 @@ class TestVAScalingModel(unittest.TestCase):
                                                    prcp_grad=0, prcp_anomaly=0)
         np.testing.assert_allclose(solid_prcp, 0)
 
+        # test extreme case if max_hgt equals min_hgt
+        test_p = ref_p * (ref_t <= temp_all_solid).astype(int)
+        solid_prcp = vascaling._compute_solid_prcp(ref_p, prcp_factor, ref_hgt,
+                                                   ref_hgt, ref_hgt, ref_t,
+                                                   temp_all_solid, temp_grad,
+                                                   prcp_grad=0, prcp_anomaly=0)
+        np.testing.assert_allclose(solid_prcp, test_p)
+
     def test_min_max_elevation(self):
         """ Test the helper method which computes the minimal and maximal
         glacier surface elevation in meters asl, from the given DEM and glacier
@@ -289,6 +298,28 @@ class TestVAScalingModel(unittest.TestCase):
         assert corrcoef(prcp, prcp_height) >= 0.99
 
         # TODO: assert absolute values (or differences) of precipitation @ASK
+
+        # test exception handling of out of bounds time/year range
+        with self.assertRaises(climate.MassBalanceCalibrationError):
+            # start year out of bounds
+            year_range = [1500, 1980]
+            _, _, _ = vascaling.get_yearly_mb_temp_prcp(gdir,
+                                                        year_range=year_range)
+        with self.assertRaises(climate.MassBalanceCalibrationError):
+            # end year oud of bounds
+            year_range = [1980, 3000]
+            _, _, _ = vascaling.get_yearly_mb_temp_prcp(gdir,
+                                                        year_range=year_range)
+        with self.assertRaises(climate.MassBalanceCalibrationError):
+            # get not N full years
+            t0 = datetime.datetime(1980, 1, 1)
+            t1 = datetime.datetime(1980, 3, 1)
+            time_range = [t0, t1]
+            _, _, _ = vascaling.get_yearly_mb_temp_prcp(gdir,
+                                                        time_range=time_range)
+
+        # TODO: assert gradient in climate file
+
         pass
 
     def test_local_t_star(self):
@@ -344,6 +375,17 @@ class TestVAScalingModel(unittest.TestCase):
         mb_sum = np.sum(mb_yearly)
         # check for apparent mb to be zero (to the third decimal digit)
         np.testing.assert_allclose(mb_sum, 0, atol=2e-3)
+
+        # compute local t* from default reference table
+        cfg.PARAMS['run_mb_calibration'] = False
+        vascaling.local_t_star(gdir)
+        vascaling_mustar_ref = gdir.read_json('vascaling_mustar')
+        # compute local t* from local reference table
+        cfg.PARAMS['run_mb_calibration'] = True
+        vascaling.local_t_star(gdir)
+        vascaling_mustar_local = gdir.read_json('vascaling_mustar')
+
+        print('some')
 
     def test_ref_t_stars(self):
         # TODO
