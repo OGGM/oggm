@@ -33,6 +33,72 @@ class TestVAScalingModel(unittest.TestCase):
     """ Unittest TestCase testing the implementation of the volume/area scaling
     model, based on Marzeion et. al., 2012. """
 
+    def test_tmp(self):
+        """ For debugging only. TODO: delete before final release.
+
+        Testing the MB calibration and the prepared ref_tstar.csv lists.
+        """
+
+        # set parameters for climate file and mass balance calibration
+        cfg.PARAMS['baseline_climate'] = 'HISTALP'
+        cfg.PATHS['climate_file'] = ''
+        cfg.PARAMS['run_mb_calibration'] = False
+
+        rgi_version = '5'
+        cfg.PARAMS['rgi_version'] = int(rgi_version)
+        rgi_region = '11'
+
+        # We use intersects
+        path = utils.get_rgi_intersects_region_file(rgi_region, version=rgi_version)
+        cfg.set_intersects_db(path)
+
+        # RGI file
+        rgi_id = 'RGI{}0-11.00897'.format(rgi_version)
+        rgi_df = utils.get_rgi_glacier_entities([rgi_id], version=rgi_version)
+
+        # get RGI entity
+        entity = rgi_df.iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and the glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        # run centerline prepro tasks
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        # process the given climate file
+        if cfg.PARAMS['baseline_climate'] == 'CRU':
+            cfg.PARAMS['prcp_scaling_factor'] = 2.5
+            cfg.PARAMS['temp_melt'] = -1
+            climate.process_cru_data(gdir)
+        elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
+            cfg.PARAMS['baseline_y0'] = 1850
+            cfg.PARAMS['prcp_scaling_factor'] = 1.75
+            cfg.PARAMS['temp_melt'] = -1.75
+            climate.process_histalp_data(gdir)
+        else:
+            climate.process_custom_climate_data(gdir)
+
+        # read reference glacier mass balance data
+        mbdf = gdir.get_ref_mb_data()
+        # compute the reference t* for the glacier
+        # given the reference of mass balance measurements
+        res = vascaling.t_star_from_refmb(gdir)
+        t_star, bias = res['t_star'], res['bias']
+        print(t_star, bias)
+
+        # compute local t* and the corresponding mu*
+        cfg.PARAMS['run_mb_calibration'] = False
+        vascaling.local_t_star(gdir, tstar=t_star, bias=bias)
+        # read calibration results
+        vascaling_mustar = gdir.read_json('vascaling_mustar')
+        print(vascaling_mustar)
+
     def setUp(self):
         """ Instance the TestCase, create the test directory,
         OGGM initialisation and setting paths and parameters. """
@@ -47,7 +113,7 @@ class TestVAScalingModel(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         # set path to GIS files
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        # cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         # set parameters for climate file and mass balance calibration
         cfg.PARAMS['baseline_climate'] = 'CUSTOM'
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -384,8 +450,6 @@ class TestVAScalingModel(unittest.TestCase):
         cfg.PARAMS['run_mb_calibration'] = True
         vascaling.local_t_star(gdir)
         vascaling_mustar_local = gdir.read_json('vascaling_mustar')
-
-        print('some')
 
     def test_ref_t_stars(self):
         # TODO

@@ -401,19 +401,21 @@ def initialize(file=None, logging_level='INFO'):
         PARAMS[fn+'_calib_params'] = mbpar
 
     # Read-in the reference t* data for the VAS model
-    fns = ['ref_tstars_vas_rgi6_cru4', 'ref_tstars_vas_rgi6_histalp']
+    fns = ['ref_tstars_vas_rgi6_cru4', 'ref_tstars_vas_rgi6_histalp',
+           'ref_tstars_vas_rgi5_cru4', 'ref_tstars_vas_rgi5_histalp']
     for fn in fns:
+        # get oggm base directory (without importing oggm)
         f_dir = os.path.dirname(os.path.abspath(
             inspect.getfile(inspect.currentframe())))
         PARAMS[fn] = pd.read_csv(os.path.join(f_dir, 'data', fn + '.csv'))
         # TODO: add files to OGGM demo data
         # PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
         # TODO: create and add mb calibration files
-        # fpath = os.path.join(f_dir, 'data', fn + '_calib_params.json')
+        fpath = os.path.join(f_dir, 'data', fn + '_calib_params.json')
         # fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
-        # with open(fpath, 'r') as fp:
-        #     mbpar = json.load(fp)
-        # PARAMS[fn + '_calib_params'] = mbpar
+        with open(fpath, 'r') as fp:
+            mbpar = json.load(fp)
+        PARAMS[fn + '_calib_params'] = mbpar
 
 
     # Empty defaults
