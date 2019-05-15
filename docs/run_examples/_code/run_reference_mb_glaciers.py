@@ -83,7 +83,6 @@ elif baseline == 'HISTALP':
     execute_entity_task(tasks.process_histalp_data, gdirs, print_log=False)
     cfg.PARAMS['continue_on_error'] = False
 
-
 gdirs = utils.get_ref_mb_glaciers(gdirs)
 
 # Keep only these
