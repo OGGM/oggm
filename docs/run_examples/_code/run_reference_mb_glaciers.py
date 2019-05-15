@@ -79,9 +79,7 @@ if baseline == 'CRU':
 elif baseline == 'HISTALP':
     # exclude glaciers outside of the Alps
     gdirs = [gdir for gdir in gdirs if gdir.rgi_subregion == '11-01']
-    cfg.PARAMS['continue_on_error'] = True  # Some glaciers are not in Alps
     execute_entity_task(tasks.process_histalp_data, gdirs, print_log=False)
-    cfg.PARAMS['continue_on_error'] = False
 
 gdirs = utils.get_ref_mb_glaciers(gdirs)
 
