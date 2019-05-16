@@ -327,7 +327,7 @@ def parse_args(args):
                              '$OGGM_WORKDIR.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
-                             'output. Defaults to current directory or =='
+                             'output. Defaults to current directory or '
                              '$OGGM_OUTDIR.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
