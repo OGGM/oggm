@@ -78,7 +78,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      test_crudir=None):
+                      test_crudir=None, disable_mp=False, max_level=4):
     """Does the actual job.
 
     Parameters
@@ -107,14 +107,29 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     test_crudir : str
         for testing purposes only
+    disable_mp : bool
+        disable multiprocessing
+    max_level : int
+        the maximum pre-processing level before stopping
     """
 
     # TODO: temporarily silence Fiona deprecation warnings
     import warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+    # Input check
+    if max_level not in [1, 2, 3, 4]:
+        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4]')
+
     # Time
     start = time.time()
+
+    def _time_log():
+        # Log util
+        m, s = divmod(time.time() - start, 60)
+        h, m = divmod(m, 60)
+        log.workflow('OGGM prepro_levels is done! Time needed: '
+                     '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
     # Initialize OGGM and set up the run parameters
     cfg.initialize(logging_level='WORKFLOW')
@@ -124,7 +139,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     cfg.PATHS['working_dir'] = working_dir
 
     # Use multiprocessing?
-    cfg.PARAMS['use_multiprocessing'] = True
+    cfg.PARAMS['use_multiprocessing'] = not disable_mp
 
     # How many grid points around the glacier?
     # Make it large if you expect your glaciers to grow large
@@ -197,11 +212,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      base_dir=l_base_dir)
         utils.base_dir_to_tar(l_base_dir)
 
-        # Log
-        m, s = divmod(time.time() - start, 60)
-        h, m = divmod(m, 60)
-        log.workflow('OGGM prepro_levels is done! Time needed: '
-                     '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+        _time_log()
         return
 
     if dem_source:
@@ -222,6 +233,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
     utils.base_dir_to_tar(l_base_dir)
+    if max_level == 1:
+        _time_log()
+        return
 
     # L2 - Tasks
     # Pre-download other files just in case
@@ -244,6 +258,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
     utils.base_dir_to_tar(l_base_dir)
+    if max_level == 2:
+        _time_log()
+        return
 
     # L3 - Tasks
     task_list = [
@@ -261,6 +278,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         tasks.prepare_for_inversion,
         tasks.mass_conservation_inversion,
         tasks.filter_inversion_output,
+        tasks.init_present_time_glacier
     ]
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
@@ -279,11 +297,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
     utils.base_dir_to_tar(l_base_dir)
+    if max_level == 3:
+        _time_log()
+        return
 
-    # L4 - Tasks
-    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-
-    # Glacier stats
+    # L4 - No tasks: add some stats for consistency and make the dirs small
     sum_dir = os.path.join(base_dir, 'L4', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
@@ -298,11 +316,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
     utils.base_dir_to_tar(base_dir)
 
-    # Log
-    m, s = divmod(time.time() - start, 60)
-    h, m = divmod(m, 60)
-    log.workflow('OGGM prepro_levels is done! Time needed: '
-                 '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+    _time_log()
 
 
 def parse_args(args):
@@ -321,6 +335,9 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
+    parser.add_argument('--max-level', type=int, default=4,
+                        help='the maximum level you want to run the '
+                             'pre-processing for (1, 2, 3 or 3).')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -338,6 +355,8 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
+    parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
+                        help='if you want to disable multiprocessing.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -380,7 +399,9 @@ def parse_args(args):
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, is_test=args.test,
-                demo=args.demo, dem_source=args.dem_source)
+                demo=args.demo, dem_source=args.dem_source,
+                max_level=args.max_level,
+                disable_mp=args.disable_mp)
 
 
 def main():

@@ -672,6 +672,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert kwargs['demo']
+        assert not kwargs['disable_mp']
+        assert kwargs['max_level'] == 4
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
