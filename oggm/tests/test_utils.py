@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from numpy.testing import assert_array_equal, assert_allclose
+from _pytest.monkeypatch import MonkeyPatch
 
 import oggm
 from oggm import utils, workflow, tasks
@@ -610,6 +611,7 @@ class TestPreproCLI(unittest.TestCase):
     def setUp(self):
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
         self.reset_dir()
+        self.monkeypatch = MonkeyPatch()
 
     def tearDown(self):
         if os.path.exists(self.testdir):
@@ -666,6 +668,7 @@ class TestPreproCLI(unittest.TestCase):
         assert 'local' in kwargs['output_folder']
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '00'
+        assert kwargs['dem_source'] == ''
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert kwargs['demo']
@@ -674,12 +677,14 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--dem-source', 'ALL',
                                            ])
 
         assert 'working_dir' in kwargs
         assert 'output_folder' in kwargs
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
+        assert kwargs['dem_source'] == 'ALL'
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
@@ -830,6 +835,31 @@ class TestPreproCLI(unittest.TestCase):
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
+
+    def test_source_run(self):
+
+        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES',
+                                 ['USER'])
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        # Read in the RGI file
+        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf,
+                          test_topofile=topof, dem_source='ALL')
+
+        rid = rgidf.iloc[0].RGIId
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:8] + '.00.tar')
+        assert os.path.isfile(tarf)
 
 
 class TestBenchmarkCLI(unittest.TestCase):
