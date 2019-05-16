@@ -10,6 +10,8 @@ import sys
 import argparse
 import time
 import logging
+import rasterio
+import numpy as np
 import geopandas as gpd
 
 # Locals
@@ -17,11 +19,66 @@ import oggm.cfg as cfg
 from oggm import utils, workflow, tasks
 from oggm.exceptions import InvalidParamsError
 
+# Module logger
+log = logging.getLogger(__name__)
+
+
+@utils.entity_task(log)
+def _rename_dem_folder(gdir, source=''):
+    """Put the DEM files in a subfolder of the gdir.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+    source : str
+        the DEM source
+    """
+
+    # open tif-file to check if it's worth it
+    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+    dem = dem_dr.read(1).astype(rasterio.float32)
+
+    # Grid
+    nx = dem_dr.width
+    ny = dem_dr.height
+    assert nx == gdir.grid.nx
+    assert ny == gdir.grid.ny
+
+    # Check the DEM
+    min_z = -999.
+    dem[dem <= min_z] = np.NaN
+    isfinite = np.isfinite(dem)
+    if np.all(~isfinite) or (np.min(dem) == np.max(dem)):
+        # Nothing to do, return
+        return
+
+    # Create a source dir and move the files
+    out = os.path.join(gdir.dir, source)
+    utils.mkdir(out)
+    for fname in ['dem', 'dem_source']:
+        f = gdir.get_filepath(fname)
+        os.rename(f, os.path.join(out, os.path.basename(f)))
+
+
+@utils.entity_task(log)
+def _clean_dem_folder(gdir):
+    """Remove all files which are not a folder.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+    """
+    for file in os.listdir(gdir.dir):
+        file = os.path.join(gdir.dir, file)
+        if os.path.isfile(file) and 'log.txt' not in file:
+            os.remove(file)
+
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
-                      output_folder='', working_dir='', is_test=False,
-                      demo=False, test_rgidf=None, test_intersects_file=None,
-                      test_topofile=None, test_crudir=None):
+                      output_folder='', working_dir='', dem_source='',
+                      is_test=False, demo=False, test_rgidf=None,
+                      test_intersects_file=None, test_topofile=None,
+                      test_crudir=None):
     """Does the actual job.
 
     Parameters
@@ -34,6 +91,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the number of pixels at the maps border
     output_folder : str
         path to the output folder (where to put the preprocessed tar files)
+    dem_source : str
+        which DEM source to use: default, SOURCE_NAME or ALL
     working_dir : str
         path to the OGGM working directory
     is_test : bool
@@ -53,9 +112,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # TODO: temporarily silence Fiona deprecation warnings
     import warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-    # Module logger
-    log = logging.getLogger(__name__)
 
     # Time
     start = time.time()
@@ -122,6 +178,37 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         cfg.PATHS['dem_file'] = test_topofile
 
     # L1 - initialize working directories
+    # Which DEM source?
+    if dem_source.upper() == 'ALL':
+        # This is the complex one, just do the job an leave
+        log.workflow('Running prepro on ALL sources')
+        cfg.PARAMS['use_intersects'] = False
+        for i, s in enumerate(utils.DEM_SOURCES):
+            rs = i == 0
+            rgidf['DEM_SOURCE'] = s
+            log.workflow('Running prepro on sources: {}'.format(s))
+            gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
+            workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
+            workflow.execute_entity_task(_clean_dem_folder, gdirs)
+
+        # Compress all in output directory
+        l_base_dir = os.path.join(base_dir, 'L1')
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                     base_dir=l_base_dir)
+        utils.base_dir_to_tar(l_base_dir)
+
+        # Log
+        m, s = divmod(time.time() - start, 60)
+        h, m = divmod(m, 60)
+        log.workflow('OGGM prepro_levels is done! Time needed: '
+                     '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+        return
+
+    if dem_source:
+        # Force a given source
+        rgidf['DEM_SOURCE'] = dem_source.upper()
+
+    # L1 - go
     gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
 
     # Glacier stats
@@ -240,8 +327,17 @@ def parse_args(args):
                              '$OGGM_WORKDIR.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
-                             'output. Defaults to current directory or'
+                             'output. Defaults to current directory or =='
                              '$OGGM_OUTDIR.')
+    parser.add_argument('--dem-source', type=str, default='',
+                        help='which DEM source to use. Possible options are '
+                             'the name of a specific DEM (e.g. RAMP, SRTM...) '
+                             'or ALL, in which case all available DEMs will '
+                             'be processed and adjoined with a suffix at the '
+                             'end of the file name. The ALL option is only '
+                             'compatible with level 1 folders, after which '
+                             'the processing will stop. The default is to use '
+                             'the default OGGM DEM.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -284,7 +380,7 @@ def parse_args(args):
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, is_test=args.test,
-                demo=args.demo)
+                demo=args.demo, dem_source=args.dem_source)
 
 
 def main():

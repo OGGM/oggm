@@ -296,7 +296,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     except KeyError:
         dl_verify = True
 
-    if dl_verify:
+    if dl_verify and path is not None:
         data = get_dl_verify_data()
         sha256 = hashlib.sha256()
         with open(path, 'rb') as f:
@@ -1785,6 +1785,10 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
     elif source == 'SRTM':
         return np.max(np.abs(lat_ex)) < 60
+    elif source == 'USER':
+        return True
+    elif source is None:
+        return True
 
 
 def default_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):

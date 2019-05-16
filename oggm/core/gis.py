@@ -37,7 +37,7 @@ from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError)
-from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
+from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
                         nicenumber, ncDataset, tolist)
 
 
@@ -368,6 +368,11 @@ def define_glacier_region(gdir, entity=None):
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
+    if not is_dem_source_available(source,
+                                   (minlon, maxlon),
+                                   (minlat, maxlat)):
+        raise InvalidDEMError('Source: {} not available for glacier {}'
+                              .format(source, gdir.rgi_id))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
                                          rgi_subregion=gdir.rgi_subregion,
