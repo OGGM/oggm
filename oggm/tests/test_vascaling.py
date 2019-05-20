@@ -310,7 +310,7 @@ class TestVAScalingModel(unittest.TestCase):
             year_range = [1980, 3000]
             _, _, _ = vascaling.get_yearly_mb_temp_prcp(gdir,
                                                         year_range=year_range)
-        with self.assertRaises(climate.MassBalanceCalibrationError):
+        with self.assertRaises(ValueError):
             # get not N full years
             t0 = datetime.datetime(1980, 1, 1)
             t1 = datetime.datetime(1980, 3, 1)
@@ -318,7 +318,7 @@ class TestVAScalingModel(unittest.TestCase):
             _, _, _ = vascaling.get_yearly_mb_temp_prcp(gdir,
                                                         time_range=time_range)
 
-        # TODO: assert gradient in climate file
+        # TODO: assert gradient in climate file?!
 
         pass
 
@@ -638,11 +638,11 @@ class TestVAScalingModel(unittest.TestCase):
         assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.36
 
         # check correlation of positive and negative mb years
-        assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.77
+        assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.72
 
         # compare to reference mb measurements
         mbs = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        assert corrcoef(vas_mb[np.in1d(years, mbs.index)], mbs) >= 0.8
+        assert corrcoef(vas_mb[np.in1d(years, mbs.index)], mbs) >= 0.79
 
     # -------------------
     # Test scaling model
@@ -713,8 +713,8 @@ class TestVAScalingModel(unittest.TestCase):
         # compute time scales
         model._compute_time_scales()
         # compare to given values
-        np.testing.assert_allclose(model.tau_l, 52.6, atol=0.1)
-        np.testing.assert_allclose(model.tau_a, 17.6, atol=0.1)
+        np.testing.assert_allclose(model.tau_l, 53.1, atol=0.1)
+        np.testing.assert_allclose(model.tau_a, 17.8, atol=0.1)
 
     def test_reset(self):
         """ Test the method which sets the model back to its initial state. """
@@ -843,12 +843,11 @@ class TestVAScalingModel(unittest.TestCase):
         # specify which parameters to compare and their respective correlation
         # coefficients and rmsd values
         params = ['length_m', 'area_m2', 'volume_m3']
-        corr_coeffs = np.array([0.94, 0.92, 0.95])
-        rmsds = np.array([0.38e3, 0.12e6, 0.03e9])
+        corr_coeffs = np.array([0.96, 0.90, 0.93])
+        rmsds = np.array([0.43e3, 0.14e6, 0.03e9])
 
         # compare given parameters
         for param, cc, rmsd in zip(params, corr_coeffs, rmsds):
-            print(param)
             # correlation coefficient
             assert corrcoef(oggm_ds[param].values, vas_ds[param].values) >= cc
             # root mean squared deviation
