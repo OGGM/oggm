@@ -60,7 +60,6 @@ Testing:
     - pytest
 
 Other libraries:
-    - boto3
     - `salem <https://github.com/fmaussion/salem>`_
     - `motionless <https://github.com/ryancox/motionless/>`_
 
@@ -346,7 +345,7 @@ Fiona also builds upon GDAL, so let's compile it the same way::
 
 Now install further dependencies::
 
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray boto3 progressbar2 pytest motionless dask bottleneck
+    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2 pytest motionless dask bottleneck
 
 Finally, install the salem and python-colorspace libraries::
 

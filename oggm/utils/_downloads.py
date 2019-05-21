@@ -461,18 +461,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
         cache_obj_name = 'astgtmv2/' + aws_path
 
     def _dlf(cache_path):
-        import boto3
-        import botocore
-        client = boto3.client('s3')
-        logger.info("Downloading %s from s3 to %s..." % (aws_path, cache_path))
-        try:
-            client.download_file('astgtmv2', aws_path, cache_path)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                return None
-            else:
-                raise
-        return cache_path
+        raise NotImplementedError("Downloads from AWS are no longer supported")
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 

@@ -60,7 +60,6 @@ req_packages = ['numpy',
                 'pytest',
                 'xarray',
                 'progressbar2',
-                'boto3',
                 'requests',
                 'salem']
 
