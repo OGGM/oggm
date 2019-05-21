@@ -58,6 +58,7 @@ GIS tools:
 
 Testing:
     - pytest
+    - pytest-mpl ([OGGM fork][https://github.com/OGGM/pytest-mpl] required)
 
 Other libraries:
     - `salem <https://github.com/fmaussion/salem>`_
@@ -347,8 +348,9 @@ Now install further dependencies::
 
     $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2 pytest motionless dask bottleneck
 
-Finally, install the salem and python-colorspace libraries::
+Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries::
 
+    $ pip install git+https://github.com/OGGM/pytest-mpl.git
     $ pip install git+https://github.com/fmaussion/salem.git
     $ pip install git+https://github.com/retostauffer/python-colorspace.git
 
