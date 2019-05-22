@@ -1357,6 +1357,8 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
     elif version == '61':
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
+    elif version == '62':
+        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi62.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1486,6 +1488,9 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
 
     dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
+    if version == '62':
+        dfile = ('https://cluster.klima.uni-bremen.de/~fmaussion/misc/'
+                 'rgi62_Intersects.zip')
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
