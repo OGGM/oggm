@@ -35,8 +35,12 @@ def _rename_dem_folder(gdir, source=''):
     """
 
     # open tif-file to check if it's worth it
-    dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
-    dem = dem_dr.read(1).astype(rasterio.float32)
+    try:
+        dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+        dem = dem_dr.read(1).astype(rasterio.float32)
+    except IOError:
+        # No file, no problem
+        return
 
     # Grid
     nx = dem_dr.width
@@ -58,20 +62,6 @@ def _rename_dem_folder(gdir, source=''):
     for fname in ['dem', 'dem_source']:
         f = gdir.get_filepath(fname)
         os.rename(f, os.path.join(out, os.path.basename(f)))
-
-
-@utils.entity_task(log)
-def _clean_dem_folder(gdir):
-    """Remove all files which are not a folder.
-
-    Parameters
-    ----------
-    gdir : GlacierDirectory
-    """
-    for file in os.listdir(gdir.dir):
-        file = os.path.join(gdir.dir, file)
-        if os.path.isfile(file) and 'log.txt' not in file:
-            os.remove(file)
 
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
@@ -204,7 +194,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('Running prepro on sources: {}'.format(s))
             gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
             workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
-            workflow.execute_entity_task(_clean_dem_folder, gdirs)
 
         # Compress all in output directory
         l_base_dir = os.path.join(base_dir, 'L1')

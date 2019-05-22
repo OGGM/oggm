@@ -848,6 +848,7 @@ class TestPreproCLI(unittest.TestCase):
         # Read in the RGI file
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
         rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        rgidf = rgidf.iloc[:4]
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -862,6 +863,14 @@ class TestPreproCLI(unittest.TestCase):
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
                             rid[:8], rid[:8] + '.00.tar')
         assert os.path.isfile(tarf)
+
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+
+        entity = rgidf.iloc[0]
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
 
 
 class TestBenchmarkCLI(unittest.TestCase):
