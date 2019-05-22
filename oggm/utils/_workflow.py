@@ -113,6 +113,10 @@ def gettempdir(dirname='', reset=False, home=False):
     return mkdir(os.path.join(basedir, 'OGGM', dirname), reset=reset)
 
 
+# alias
+get_temp_dir = gettempdir
+
+
 def get_sys_info():
     """Returns system information as a dict"""
 
