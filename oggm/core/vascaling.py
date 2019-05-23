@@ -479,9 +479,16 @@ def compute_ref_t_stars(gdirs):
 
 
 def find_start_area(gdir, year_start=1851):
-    """ The following preprocessing tasks are needed: @TODO
+    """ This task find the start area for the given glacier, which results in
+    the best results after the model integration (i.e., modeled glacier surface
+    closest to measured RGI surface in 2003).
+
+    All necessary prepro task (gis, centerline, climate) must be executed
+    beforehand, as well as the local_t_star() task.
 
     :param gdir: (oggm.GlacierDirectory)
+    :param year_start: (int, optional) year at the beginning of the model
+        integration, default = 1851 (best if working with HISTALP)
     :return: (scipy.optimize.OptimizeResult)
     """
 
