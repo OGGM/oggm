@@ -389,14 +389,14 @@ class TestVAScalingModel(unittest.TestCase):
         vas_mustar = gdir.read_json('vascaling_mustar')
 
         # compare with each other
-        assert vas_mustar_refmb == vas_mustar
+        assert vas_mustar_refdf == vas_mustar
         # TODO: problems with Travis... this is a workaround
         np.testing.assert_allclose(vas_mustar_refmb['bias'],
                                    vas_mustar_refdf['bias'], atol=1)
         vas_mustar_refdf.pop('bias')
         vas_mustar_refmb.pop('bias')
         # end of workaround
-        assert vas_mustar_refmb == vas_mustar_refdf
+        assert vas_mustar_refdf == vas_mustar_refmb
         # compare with know values
         assert vas_mustar['t_star'] == 1905
         assert abs(vas_mustar['mu_star'] - 47.76) <= 0.1
