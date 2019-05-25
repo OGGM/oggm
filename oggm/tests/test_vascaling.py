@@ -26,7 +26,7 @@ from oggm.core import (gis, vascaling, climate, centerlines,
 from oggm.tests.funcs import get_test_dir
 
 
-pytestmark = pytest.mark.test_env("utils")
+pytestmark = pytest.mark.test_env("vascaling")
 
 
 class TestVAScalingModel(unittest.TestCase):
@@ -37,7 +37,7 @@ class TestVAScalingModel(unittest.TestCase):
         """ Instance the TestCase, create the test directory,
         OGGM initialisation and setting paths and parameters. """
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_vas')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
         self.clean_dir()

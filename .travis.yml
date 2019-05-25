@@ -29,6 +29,7 @@ matrix:
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=models MPL=
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=benchmark MPL=
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=utils MPL=
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=vascaling MPL=
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=False
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=graphics MPL=--mpl
@@ -42,6 +43,8 @@ matrix:
     - env: TEST_CONTAINER=20190409 OGGM_TEST_ENV=benchmark MPL=
       os: linux
     - env: TEST_CONTAINER=20190409 OGGM_TEST_ENV=utils MPL=
+      os: linux
+    - env: TEST_CONTAINER=20190409 OGGM_TEST_ENV=vascaling MPL=
       os: linux
     - env: TEST_CONTAINER=20190409 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
       os: linux
@@ -58,6 +61,8 @@ matrix:
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=benchmark MPL=
       os: linux
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=utils MPL=
+      os: linux
+    - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=vascaling MPL=
       os: linux
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=workflow MPL=--mpl OGGM_TEST_MULTIPROC=True
       os: linux
