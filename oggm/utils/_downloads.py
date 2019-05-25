@@ -25,6 +25,7 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
+import shapely.geometry as shpg
 import salem
 from salem import wgs84
 import rasterio
@@ -55,7 +56,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '1e67ee089d58a8171342b948a68b4cf09a8d948c'
+SAMPLE_DATA_COMMIT = '6c8c90e84832dfb1f592a2393693a7fa7ab50102'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1042,21 +1043,37 @@ def aw3d30_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
+def _extent_to_polygon(lon_ex, lat_ex, to_crs=None):
+
+    if lon_ex[0] == lon_ex[1] and lat_ex[0] == lat_ex[1]:
+        out = shpg.Point(lon_ex[0], lat_ex[0])
+    else:
+        x = [lon_ex[0], lon_ex[1], lon_ex[1], lon_ex[0], lon_ex[0]]
+        y = [lat_ex[0], lat_ex[0], lat_ex[1], lat_ex[1], lat_ex[0]]
+        out = shpg.Polygon(np.array((x, y)).T)
+    if to_crs is not None:
+        out = salem.transform_geometry(out, to_crs=to_crs)
+    return out
+
+
 def arcticdem_zone(lon_ex, lat_ex):
     """Returns a list of Arctic-DEM zones covering the desired extent.
     """
 
-    # Files are one by one tiles, so lets loop over them
+    gdf = gpd.read_file(get_demo_file('ArcticDEM_Tile_Index_Rel7_by_tile.shp'))
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+    return gdf.tile.values if len(gdf) > 0 else []
 
-    lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
-                          dtype=np.int)
-    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
-                          dtype=np.int)
-    zones = []
-    for lon in lon_tiles:
-        for lat in lat_tiles:
-            zones.append(_tandem_path(lon, lat))
-    return list(sorted(set(zones)))
+
+def rema_zone(lon_ex, lat_ex):
+    """Returns a list of REMA-DEM zones covering the desired extent.
+    """
+
+    gdf = gpd.read_file(get_demo_file('REMA_Tile_Index_Rel1.1.shp'))
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+    return gdf.tile.values if len(gdf) > 0 else []
 
 
 def dem3_viewpano_zone(lon_ex, lat_ex):
@@ -1918,22 +1935,26 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         files.append(_file)
 
     if source == 'ARCTICDEM':
-        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/v3.0/'
-              '100m/arcticdem_mosaic_100m_v3.0.tif')
-        with _get_download_lock():
-            _file = file_downloader(fp)
-        files.append(_file)
+        zones = arcticdem_zone(lon_ex, lat_ex)
+        for z in zones:
+            with _get_download_lock():
+                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url += 'DEM/ArcticDEM_100m_v3.0/'
+                url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
+                files.append(file_downloader(url))
 
     if source == 'RAMP':
         _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
         files.append(_file)
 
     if source == 'REMA':
-        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/v1.1/100m/'
-              'REMA_100m_dem.tif')
-        with _get_download_lock():
-            _file = file_downloader(fp)
-        files.append(_file)
+        zones = rema_zone(lon_ex, lat_ex)
+        for z in zones:
+            with _get_download_lock():
+                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url += 'DEM/REMA_100m_v1.1/'
+                url += '{}_100m_v3.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
+                files.append(file_downloader(url))
 
     if source == 'TANDEM':
         zones = tandem_zone(lon_ex, lat_ex)

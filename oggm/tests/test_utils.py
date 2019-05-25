@@ -1383,13 +1383,22 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/'
-                        'v1.1/100m/REMA_100m_dem.tif')
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'REMA_100m_v1.1/'
+                        '40_10_100m_v3.1/40_10_100m_v1.1_reg_dem.tif')
             self.assertEqual(expected, url)
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file(0, -88, source='REMA')
+            of, source = utils.get_topo_file(-65., -69., source='REMA')
+
+        assert os.path.exists(of[0])
+        assert source == 'REMA'
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-65.1, -65.],
+                                             [-69.1, -69.],
+                                             source='REMA')
 
         assert os.path.exists(of[0])
         assert source == 'REMA'
@@ -1400,13 +1409,22 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/'
-                        'mosaic/v3.0/100m/arcticdem_mosaic_100m_v3.0.tif')
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'ArcticDEM_100m_v3.0/'
+                        '14_52_100m_v3.0/14_52_100m_v3.0_reg_dem.tif')
             self.assertEqual(expected, url)
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file(0, 88, source='ARCTICDEM')
+            of, source = utils.get_topo_file(-21.93, 64.13, source='ARCTICDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'ARCTICDEM'
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-21.93, -21.92],
+                                             [64.13, 64.14],
+                                             source='ARCTICDEM')
 
         assert os.path.exists(of[0])
         assert source == 'ARCTICDEM'
