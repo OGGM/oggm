@@ -34,20 +34,30 @@ from oggm.core.massbalance import MassBalanceModel
 
 def _compute_temp_terminus(temp, temp_grad, ref_hgt,
                            terminus_hgt, temp_anomaly=0):
-    """ Computes the (monthly) mean temperature at the glacier terminus,
+    """Computes the (monthly) mean temperature at the glacier terminus,
     following section 2.1.2 of Marzeion et. al., 2012. The input temperature
     is scaled by the given temperature gradient and the elevation difference
     between reference altitude and the glacier terminus elevation.
 
-    :param temp: (netCDF4 variable) monthly mean climatological temperature
-    :param temp_grad: (netCDF4 variable or float) temperature lapse rate
-    :param ref_hgt: (float) reference elevation for climatological temperature
-    :param terminus_hgt: (float) elevation of the glacier terminus
-    :param temp_anomaly: (netCDF4 variable or float) monthly mean
-        temperature anomaly, default 0
+    Parameters
+    ----------
+    temp : netCDF4 variable
+        monthly mean climatological temperature (degC)
+    temp_grad : netCDF4 variable or float
+        temperature lapse rate [degC per m of elevation change]
+    ref_hgt : float
+        reference elevation for climatological temperature [m asl.]
+    terminus_hgt : float
+        elevation of the glacier terminus (m asl.)
+    temp_anomaly : netCDF4 variable or float, optional
+        monthly mean temperature anomaly, default 0
 
-    :return: (netCDF4 variable) monthly mean temperature
-        at the glacier terminus
+    Returns
+    -------
+    netCDF4 variable
+        monthly mean temperature at the glacier terminus [degC]
+
+    
     """
     temp_terminus = temp + temp_grad * (terminus_hgt - ref_hgt) + temp_anomaly
     return temp_terminus
@@ -56,31 +66,41 @@ def _compute_temp_terminus(temp, temp_grad, ref_hgt,
 def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
                         temp_terminus, temp_all_solid, temp_grad,
                         prcp_grad=0, prcp_anomaly=0):
-    """ Compute the (monthly) amount of solid precipitation onto the glacier
+    """Compute the (monthly) amount of solid precipitation onto the glacier
     surface, following section 2.1.1 of Marzeion et. al., 2012. The fraction of
     solid precipitation depends mainly on the terminus temperature and the
     temperature thresholds for solid and liquid precipitation. It is possible
     to scale the precipitation amount from the reference elevation to the
     average glacier surface elevation given a gradient (zero per default).
 
+    Parameters
+    ----------
+    prcp : netCDF4 variable
+        monthly mean climatological precipitation [kg/m2]
+    prcp_factor : float
+        precipitation scaling factor []
+    ref_hgt : float
+        reference elevation for climatological precipitation [m asl.]
+    min_hgt : float
+        minimum glacier elevation [m asl.]
+    max_hgt : float
+        maximum glacier elevation [m asl.]
+    temp_terminus : netCDF4 variable
+        monthly mean temperature at the glacier terminus [degC]
+    temp_all_solid : float
+        temperature threshold below which all precipitation is solid [degC]
+    temp_grad : netCDF4 variable or float
+        temperature lapse rate [degC per m of elevation change]
+    prcp_grad : netCDF4 variable or float, optional
+        precipitation lapse rate [kg/m2 per m of elevation change], default = 0
+    prcp_anomaly : netCDF4 variable or float, optional
+        monthly mean precipitation anomaly [kg/m2], default = 0
 
-    :param prcp: (netCDF4 variable) monthly mean climatological precipitation
-    :param prcp_factor: (float) precipitation scaling factor
-    :param ref_hgt: (float) reference elevation for
-        climatological precipitation
-    :param min_hgt: (float) minimum glacier elevation
-    :param max_hgt: (float) maximum glacier elevation
-    :param temp_terminus: (netCDF4 variable) monthly mean temperature
-        at the glacier terminus
-    :param temp_all_solid: (float) temperature threshold for
-        solid precipitation
-    :param temp_grad: (netCDF4 variable or float) temperature lapse rate
-    :param prcp_grad: (netCDF4 variable or float, optional) precipitation
-        lapse rate, default=0
-    :param prcp_anomaly: (netCDF4 variable or float, optional) monthly mean
-        precipitation anomaly, default=0
+    Returns
+    -------
+    netCDF4 variable
+        monthly mean solid precipitation [kg/m2]
 
-    :return: (netCDF4 variable) monthly mean solid precipitation
     """
     # compute fraction of solid precipitation
     if max_hgt == min_hgt:
@@ -103,11 +123,18 @@ def _compute_solid_prcp(prcp, prcp_factor, ref_hgt, min_hgt, max_hgt,
 
 
 def get_min_max_elevation(gdir):
-    """ Reads the DEM and computes the minimal and maximal glacier surface
+    """Reads the DEM and computes the minimal and maximal glacier surface
      elevation in meters asl, from the given (RGI) glacier outline.
 
-    :param gdir: (oggm.GlacierDirectory)
-    :return: ([float, float]) minimal and maximal glacier surface elevation
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+
+    Returns
+    -------
+    [float, float]
+        minimal and maximal glacier surface elevation [m asl.]
+
     """
     # open DEM file and mask the glacier surface area
     fpath = gdir.get_filepath('gridded_data')
@@ -122,20 +149,29 @@ def get_min_max_elevation(gdir):
 
 
 def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
-    """ Read climate file and compute mass balance relevant climate parameters.
+    """Read climate file and compute mass balance relevant climate parameters.
     Those are the positive melting temperature at glacier terminus elevation
     as energy input and the amount of solid precipitation onto the glacier
     surface as mass input. Both parameters are computes as yearly sums.
-
+    
     Default is to read all data, but it is possible to specify a time range by
     giving two (included) datetime bounds. Similarly, the year range limits the
     returned data to the given bounds of (hydrological) years.
 
-    :param gdir: (oggm.GlacierDirectory)
-    :param time_range: (datetime tuple, optional) [t0, t1] time bounds
-    :param year_range: (float tuple, optional) [y0, y1] year range
-    :return: (float array, float array, float array)
-        hydrological years as index, melting temperature, solid precipitation
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+    time_range : datetime tuple, optional
+        [t0, t1] time bounds, default = None
+    year_range : float tuple, optional
+        [y0, y1] year range, default = None
+
+    Returns
+    -------
+    [float array, float array, float array]
+        hydrological years (index), melting temperature [degC],
+        solid precipitation [kg/m2]
+
     """
     # convert hydrological year range into time range
     if year_range is not None:
@@ -235,22 +271,26 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
 def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
-
+    
     If `tstar` and `bias` are not provided, they will be interpolated from the
     reference t* list.
     The mass balance calibration parameters (i.e. temperature lapse rate,
     temperature thresholds for melting, solid and liquid precipitation,
     precipitation scaling factor) are written to the climate_info.pkl file.
-
+    
     The results of the calibration process (i.e. t*, mu*, bias) are stored in
     the `vascaling_mustar.json` file, to be used later by other tasks.
 
-    :param gdir: (oggm.GlacierDirectory)
-    :param ref_df: (pd.Dataframe, optional) replace the default calibration
-        list with a costum one
-    :param tstar: (int, optional) the year when the glacier should be in
-        equilibrium
-    :param bias: (float, optional) the associated reference bias
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+    ref_df : :py:class:`pandas.Dataframe`, optional
+        replace the default calibration list with a custom one
+    tstar : int, optional
+        the year when the glacier should be in equilibrium, default = None
+    bias : float, optional
+        the associated reference bias, default = None
+
     """
 
     # specify relevant mass balance parameters
@@ -345,17 +385,26 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
 
 
 def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
-    """ Computes the reference year t* for the given glacier and mass balance
+    """Computes the reference year t* for the given glacier and mass balance
     measurements.
 
-    :param gdir: (oggm.GlacierDirectory)
-    :param mbdf: (pandas.Series) observed MB data indexed by year. If None,
-        read automatically from the reference data
-    :param write_diagnostics: (bool) whether to write additional information to
-        the `climate_info.pkl` file or not, default=False
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+    mbdf : :py:class:`pd.Series`
+        observed MB data indexed by year. If None, read automatically from the
+        reference data, default = None
+    write_diagnostics : bool, optional
+        whether to write additional information to the `climate_info.pkl` file
+        or not, default=False
 
-    :return: A dictionary containing t* and the corresponding mass balance bias
-        beta*, {t_star:[], bias:[]}
+    Returns
+    -------
+    dict
+        A dictionary {'t_star': [], 'bias': []} containing t* and the
+        corresponding mass balance bias
+
+
     """
     # make sure we have no marine terminating glacier
     assert gdir.terminus_type == 'Land-terminating'
@@ -435,16 +484,17 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
 
 
 def compute_ref_t_stars(gdirs):
-    """ Detects the best t* for the reference glaciers and writes them to disk
-
+    """Detects the best t* for the reference glaciers and writes them to disk
+    
     This task will be needed for mass balance calibration of custom climate
-    data. For CRU and HISTALP baseline climate a precalibrated list is
+    data. For CRU and HISTALP baseline climate a pre-calibrated list is
     available and should be used instead.
 
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         will be filtered for reference glaciers
+
     """
 
     if not cfg.PARAMS['run_mb_calibration']:
@@ -479,17 +529,24 @@ def compute_ref_t_stars(gdirs):
 
 
 def find_start_area(gdir, year_start=1851):
-    """ This task find the start area for the given glacier, which results in
+    """This task find the start area for the given glacier, which results in
     the best results after the model integration (i.e., modeled glacier surface
     closest to measured RGI surface in 2003).
-
+    
     All necessary prepro task (gis, centerline, climate) must be executed
     beforehand, as well as the local_t_star() task.
 
-    :param gdir: (oggm.GlacierDirectory)
-    :param year_start: (int, optional) year at the beginning of the model
-        integration, default = 1851 (best if working with HISTALP)
-    :return: (scipy.optimize.OptimizeResult)
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`)
+    year_start : int, optional
+        year at the beginning of the model integration, default = 1851
+        (best choice for working with HISTALP data)
+
+    Returns
+    -------
+    :py:class:`scipy.optimize.OptimizeResult`
+
     """
 
     # instance the mass balance models
@@ -508,14 +565,23 @@ def find_start_area(gdir, year_start=1851):
                                mb_model=mbmod)
 
     def _to_minimize(area_m2_start, ref, year_start=year_start):
-        """ Initialize VAS glacier model as copy of the reference model (ref)
+        """Initialize VAS glacier model as copy of the reference model (ref)
         and adjust the model to the given starting area (area_m2_start) and
         starting year (1851). Let the model evolve to the same year as the
         reference model. Compute and return the relative absolute area error.
 
-        :param area_m2_start: (float)
-        :param ref: (oggm.VAScalingModel)
-        :return: (float) relative absolute area error
+        Parameters
+        ----------
+        area_m2_start : float
+        ref : :py:class:`oggm.VAScalingModel`
+        year_start : float, optional
+             the default value is inherited from the surrounding task
+
+        Returns
+        -------
+        float
+            relative absolute area estimate error
+
         """
         # define model
         model_tmp = VAScalingModel(year_0=ref.year_0,
@@ -539,7 +605,7 @@ def find_start_area(gdir, year_start=1851):
 
 
 class VAScalingMassBalance(MassBalanceModel):
-    """ Original mass balance model, used in Marzeion et. al., 2012.
+    """Original mass balance model, used in Marzeion et. al., 2012.
     The general concept is similar to the oggm.PastMassBalance model.
     Thereby the main difference is that the Volume/Area Scaling mass balance
     model returns only one glacier wide mass balance value per month or year.
@@ -552,30 +618,30 @@ class VAScalingMassBalance(MassBalanceModel):
 
         Parameters
         ----------
-        :param gdir : (oggm.GlacierDirectory) the glacier directory
-        :param mu_star : (float, optional)
+        gdir : :py:class:`oggm.GlacierDirectory`
+        mu_star : float, optional
             set to the alternative value of mu* you want to use, while
             the default is to use the calibrated value
-        :param bias : (float, optional)
+        bias : float, optional
             set to the alternative value of the calibration bias [mm we yr-1]
             you want to use (the default is to use the calibrated value)
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB
-        :param filename : (str, optional)
+        filename : str, optional
             set to a different BASENAME if you want to use alternative climate
             data
-        input_filesuffix : (str, optional)
+        input_filesuffix : str, optional
             the file suffix of the input climate file, no suffix as default
-        repeat : (bool)
+        repeat : bool
             Whether the climate period given by [ys, ye] should be repeated
             indefinitely in a circular way, default=False
-        ys : (int)
+        ys : int
             The start of the climate period where the MB model is valid
             (default: the period with available data)
-        ye : (int)
+        ye : int
             The end of the climate period where the MB model is valid
             (default: the period with available data)
-        check_calib_params : (bool)
+        check_calib_params : bool
             OGGM will try hard not to use wrongly calibrated mu* by checking
             the parameters used during calibration and the ones you are
             using at run time. If they don't match, it will raise an error.
@@ -663,16 +729,24 @@ class VAScalingMassBalance(MassBalanceModel):
         self.prcp_clim = np.mean(prcp_clim)
 
     def get_monthly_climate(self, min_hgt, max_hgt, year):
-        """ Compute and return monthly positive terminus temperature
+        """Compute and return monthly positive terminus temperature
         and solid precipitation amount for given month.
 
-        :param min_hgt: (float) glacier terminus elevation [m asl.]
-        :param max_hgt: (float) maximal glacier surface elevation [m asl.]
-        :param year: (float) floating year, following the
-            hydrological year convention
-        :return:
-            temp_for_melt: (float) positive terminus temperature [°C]
-            prcp_solid: (float) solid precipitation amount [kg/m^2]
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation [m asl.]
+        max_hgt : float
+            maximal glacier surface elevation [m asl.]
+        year : float
+            floating year, following the hydrological year convention
+
+        Returns
+        -------
+        [float, float]
+            (temp_for_melt) positive terminus temperature [degC] and
+            (prcp_solid) solid precipitation amount [kg/m^2]
+
         """
         # process given time index
         y, m = floatyear_to_date(year)
@@ -702,16 +776,24 @@ class VAScalingMassBalance(MassBalanceModel):
         return temp_for_melt, prcp_solid
 
     def get_monthly_mb(self, min_hgt, max_hgt, year):
-        """ Compute and return the glacier wide mass balance
+        """Compute and return the glacier wide mass balance
         for the given year/month combination.
         Possible mb bias is applied...
 
-        :param min_hgt: (float) glacier terminus elevation
-        :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float year and month, using the
-            hydrological year convention
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation [m asl.]
+        max_hgt : float
+            maximal glacier (surface) elevation [m asl.]
+        year : float
+            floating year and month, following the hydrological year convention
 
-        :return: (float) average glacier wide mass balance [m/s]
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
         """
         # get melting temperature and solid precipitation
         temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt,
@@ -725,18 +807,25 @@ class VAScalingMassBalance(MassBalanceModel):
         return mb_month / SEC_IN_MONTH / self.rho
 
     def get_annual_climate(self, min_hgt, max_hgt, year):
-        """ Compute and return monthly positive terminus temperature
+        """Compute and return monthly positive terminus temperature
         and solid precipitation amount for all months
         of the given (hydrological) year.
 
-        :param min_hgt: (float) glacier terminus elevation [m asl.]
-        :param max_hgt: (float) maximal glacier surface elevation [m asl.]
-        :param year: (float) year, following the hydrological year convention
-        :return:
-            temp_for_melt: (float array, size 12)
-                monthly positive terminus temperature [°C]
-            prcp_solid: (float array, size 12)
-                monthly solid precipitation amount [kg/m^2]
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation [m asl.]
+        max_hgt : float
+            maximal glacier (surface) elevation [m asl.]
+        year : float
+            floating year, following the hydrological year convention
+
+        Returns
+        -------
+        [float array, float array]
+            (temp_for_melt) monthly positive terminus temperature [degC] and
+            (prcp_solid) monthly solid precipitation amount [kg/m2]
+
         """
         # process given time index
         year = np.floor(year)
@@ -769,14 +858,23 @@ class VAScalingMassBalance(MassBalanceModel):
         return temp_for_melt, prcp_solid
 
     def get_annual_mb(self, min_hgt, max_hgt, year):
-        """ Compute and return the annual glacier wide mass balance for the
-        given year. Possible mb bias is applied...
+        """Compute and return the annual glacier wide mass balance for the
+        given year. Possible mb bias is applied.
 
-        :param min_hgt: (float) glacier terminus elevation
-        :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float year, using the hydrological year convention
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            floating year, following the hydrological year convention
 
-        :return: (float) average glacier wide mass balance [m/s]
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
         """
         # get annual mass balance climate
         temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt,
@@ -788,15 +886,24 @@ class VAScalingMassBalance(MassBalanceModel):
         return (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
 
     def get_specific_mb(self, min_hgt, max_hgt, year):
-        """ Compute and return the annual specific mass balance
-        for the given year. Possible mb bias is applied...
+        """Compute and return the annual specific mass balance
+        for the given year. Possible mb bias is applied.
 
-        :param min_hgt: (float) glacier terminus elevation
-        :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float year, using the hydrological year convention
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            float year, using the hydrological year convention
 
-        :return: (float) glacier wide average mass balance, units of
-            millimeter water equivalent per year [mm w.e. yr-1]
+        Returns
+        -------
+        float
+            glacier wide average mass balance, units of millimeter water
+            equivalent per year [mm w.e./yr]
+
         """
         # get annual mass balance climate
         temp_for_melt, prcp_solid = self.get_annual_climate(min_hgt,
@@ -808,16 +915,25 @@ class VAScalingMassBalance(MassBalanceModel):
         return mb_annual - self.bias
 
     def get_monthly_specific_mb(self, min_hgt=None, max_hgt=None, year=None):
-        """ Compute and return the monthly specific mass balance
-        for the given month. Possible mb bias is applied...
+        """Compute and return the monthly specific mass balance
+        for the given month. Possible mb bias is applied.
 
-        :param min_hgt: (float) glacier terminus elevation
-        :param max_hgt: (float) maximal glacier (surface) elevation
-        :param year: (float) float month, using the
-            hydrological year convention
+        Parameters
+        ----------
+        min_hgt : float, optional
+            glacier terminus elevation [m asl.], default = None
+        max_hgt : float, optional
+            maximal glacier (surface) elevation [m asl.], default = None
+        year : float, optional
+            float year and month, using the hydrological year convention,
+            default = None
 
-        :return: (float) glacier wide average mass balance, units of
-            millimeter water equivalent per months [mm w.e. yr-1]
+        Returns
+        -------
+        float
+            glacier wide average mass balance, units of millimeter water
+            equivalent per months [mm w.e./yr]
+
         """
         # get annual mass balance climate
         temp_for_melt, prcp_solid = self.get_monthly_climate(min_hgt,
@@ -829,7 +945,17 @@ class VAScalingMassBalance(MassBalanceModel):
         return mb_monthly - (self.bias / SEC_IN_YEAR * SEC_IN_MONTH)
 
     def get_ela(self, year=None):
-        """ The ELA can not be calculated using this mass balance model. """
+        """The ELA can not be calculated using this mass balance model.
+
+        Parameters
+        ----------
+        year : float, optional
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
         raise NotImplementedError('The equilibrium line altitude can not be ' +
                                   'computed for the `VAScalingMassBalance` ' +
                                   'model.')
@@ -837,13 +963,17 @@ class VAScalingMassBalance(MassBalanceModel):
 
 class RandomVASMassBalance(MassBalanceModel):
     """Random shuffle of all MB years within a given time period.
-
+    
     This is useful for finding a possible past glacier state or for sensitivity
     experiments.
-
+    
     Note that this is going to be sensitive to extreme years in certain
     periods, but it is by far more physically reasonable than other
     approaches based on gaussian assumptions.
+
+    Parameters
+    ----------
+
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
@@ -982,30 +1112,144 @@ class RandomVASMassBalance(MassBalanceModel):
         return self._state_yr[year]
 
     def get_monthly_mb(self, min_hgt, max_hgt, year=None):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the glacier wide mass balance
+        for the given year/month combination.
+        Possible mb bias is applied...
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation [m asl.]
+        max_hgt : float
+            maximal glacier (surface) elevation [m asl.]
+        year : float
+            floating year and month, following the hydrological year convention
+
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
+        """
         ryr, m = floatyear_to_date(year)
         ryr = utils.date_to_floatyear(self.get_state_yr(ryr), m)
         return self.mbmod.get_monthly_mb(min_hgt, max_hgt, year=ryr)
 
     def get_annual_mb(self, min_hgt, max_hgt, year=None):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the annual glacier wide mass balance for the given
+        year. Possible mb bias is applied.
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            floating year, following the hydrological year convention
+
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
+        """
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(min_hgt, max_hgt, year=ryr)
 
     def get_specific_mb(self, min_hgt, max_hgt, year):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the annual specific mass balance for the given year.
+        Possible mb bias is applied.
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            float year, using the hydrological year convention
+
+        Returns
+        -------
+        float
+            glacier wide average mass balance, units of millimeter water
+            equivalent per year [mm w.e./yr]
+
+        """
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_specific_mb(min_hgt, max_hgt, year=ryr)
 
     def get_ela(self, year=None):
-        """ The ELA can not be calculated using this mass balance model. """
-        raise NotImplementedError('The equilibrium line altitude can not be ' +
-                                  'computed for the `VAScalingMassBalance` ' +
-                                  'model.')
+        """The ELA can not be calculated using this mass balance model.
+
+        Parameters
+        ----------
+        year : float, optional
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
+        ryr = self.get_state_yr(int(year))
+        return self.mbmod.get_ela(year=ryr)
 
 
 def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
                            bias=None, seed=None, temperature_bias=None,
-                           output_filesuffix='',
                            climate_filename='climate_monthly',
-                           climate_input_filesuffix='', unique_samples=False):
+                           climate_input_filesuffix='', output_filesuffix='',
+                           unique_samples=False):
+    """Runs the random mass balance model for a given number of years.
+
+    This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
+    and runs and stores said model.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    nyears : int, optional
+        length of the simulation, default = 1000
+    y0 : int, optional
+        central year of the random climate period. The default is to be
+        centred on t*. Default = None
+    halfsize : int, optional
+        the half-size of the time window (window size = 2 * halfsize + 1),
+        default = 15
+    bias : float, optional
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero. Default = None
+    seed : int
+        seed for the random generator. If you ignore this, the runs will be
+        different each time. Setting it to a fixed seed accross glaciers can
+        be usefull if you want to have the same climate years for all of them
+    temperature_bias : float, optional
+        add a bias to the temperature timeseries, default = None
+    climate_filename : str, optional
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'gcm_data'
+    climate_input_filesuffix: str, optional
+        filesuffix for the input climate file
+    output_filesuffix : str, optional
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    unique_samples: bool, optional
+        if true, chosen random mass-balance years will only be available once
+        per random climate period-length
+        if false, every model year will be chosen from the random climate
+        period with the same probability (default)
+
+    Returns
+    -------
+    :py:class:`oggm.core.vascaling.VAScalingModel`
+
+    """
 
     # instance mass balance model
     mb_mod = RandomVASMassBalance(gdir, y0=y0, halfsize=halfsize, bias=bias,
@@ -1037,21 +1281,25 @@ def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 
 class VAScalingModel(object):
-    """ The volume area scaling glacier model following Marzeion et. al., 2012.
-
-    @TODO
-
+    """The volume area scaling glacier model following Marzeion et. al., 2012.
+    
+    @TODO: finish DocString
+    
     All used parameters are in SI units (even the climatological precipitation
     (attribute of the mass balance model) is given in [m. we yr-1]).
+
+    Parameters
+    ----------
+
     """
 
     def __repr__(self):
-        """ Object representation. """
+        """Object representation."""
         return "{}: {}".format(self.__class__, self.__dict__)
 
     def __str__(self):
-        """ String representation of the dynamic model, includes current
-        year, area, volume, length and terminus elevation. """
+        """String representation of the dynamic model, includes current
+        year, area, volume, length and terminus elevation."""
         return "{}\nyear: {}\n".format(self.__class__, self.year) \
             + "area [km2]: {:.2f}\n".format(self.area_m2 / 1e6) \
             + "volume [km3]: {:.3f}\n".format(self.volume_m3 / 1e9) \
@@ -1060,13 +1308,18 @@ class VAScalingModel(object):
             + "spec mb [mm w.e. yr-1]: {:.2f}".format(self.spec_mb)
 
     def __init__(self, year_0, area_m2_0, min_hgt, max_hgt, mb_model):
-        """ Instance new glacier model.
+        """Instance new glacier model.
 
-        :param year_0: (float) year when the simulation starts
-        :param area_m2_0: (float) starting area (at year_0) in m2
-        :param min_hgt: (float) glacier terminus elevation (at year_0)
-        :param max_hgt: (float) maximal glacier surface elevation (at year_0)
-        :param mb_model: (ben.VAScalingMassBalance) instance of mb model
+        year_0: float
+            year when the simulation starts
+        area_m2_0: float
+            starting area at year_0 [m2]
+        min_hgt: float
+            glacier terminus elevation at year_0 [m asl.]
+        max_hgt: float
+            maximal glacier surface elevation at year_0 [m asl.]
+        mb_model: :py:class:òggm.core.vascaling.VAScalingMassBalance`
+            instance of mass balance model
         """
 
         # get constants from cfg.PARAMS
@@ -1113,20 +1366,20 @@ class VAScalingModel(object):
         self.tau_l = 1
 
     def _get_specific_mb(self):
-        """ Invoke `get_specific_mb()` from mass balance model for current year
-        and glacier terminus elevation. """
+        """Invoke `get_specific_mb()` from mass balance model for current year
+        and glacier terminus elevation."""
         self.spec_mb = self.mb_model.get_specific_mb(self.min_hgt,
                                                      self.max_hgt,
                                                      self.year)
 
     def _compute_time_scales(self):
-        """ Compute the time scales for glacier length `tau_l`
-        and glacier surface area `tau_a` for current time step. """
+        """Compute the time scales for glacier length `tau_l`
+        and glacier surface area `tau_a` for current time step."""
         self.tau_l = self.volume_m3 / (self.mb_model.prcp_clim * self.area_m2)
         self.tau_a = self.tau_l * self.area_m2 / self.length_m ** 2
 
     def reset(self):
-        """ Set model attributes back to starting values. """
+        """Set model attributes back to starting values."""
         self.year = self.year_0
         self.length_m = self.length_m_0
         self.area_m2 = self.area_m2_0
@@ -1147,7 +1400,7 @@ class VAScalingModel(object):
         pass
 
     def step(self):
-        """ Advance model glacier by one year. This includes the following:
+        """Advance model glacier by one year. This includes the following:
             - computing time scales
             - computing the specific mass balance
             - computing volume change and new volume
@@ -1184,16 +1437,25 @@ class VAScalingModel(object):
         self.year += 1
 
     def run_until(self, year_end, reset=False):
-        """ Runs the model till the specified year.
+        """Runs the model till the specified year.
         Returns all geometric parameters (i.e. length, area, volume, terminus
         elevation and specific mass balance) at the end of the model evolution.
 
-        :param year_end: (float) end of modeling period
-        :param reset: (bool, optional) If `True`, the model will start from
-            `year_0`, otherwise from its current position in time (default).
-        :return: the geometric glacier parameters at the end of the
-            model evolution (all float): year, length [m], area [m2], volume
-            [m3], terminus elevation [m asl.], specific mass balance [mm we.]
+        Parameters
+        ----------
+        year_end : float
+            end of modeling period
+        reset : bool, optional)
+            If `True`, the model will start from `year_0`, otherwise from its
+            current position in time (default).
+
+        Returns
+        -------
+        [float, float, float, float, float, float]
+            the geometric glacier parameters at the end of the model evolution:
+            year, length [m], area [m2], volume [m3], terminus elevation
+            [m asl.], specific mass balance [mm w.e.]
+
         """
 
         # reset parameters to starting values
@@ -1217,16 +1479,26 @@ class VAScalingModel(object):
                 self.volume_m3, self.min_hgt, self.spec_mb)
 
     def run_until_and_store(self, year_end, diag_path=None, reset=False):
-        """ Runs the model till the specified year. Returns all relevant
+        """Runs the model till the specified year. Returns all relevant
         parameters (i.e. length, area, volume, terminus elevation and specific
         mass balance) for each time step as a xarray.Dataset. If a file path is
         give the dataset is written to file.
 
-        :param year_end: (float) end of modeling period
-        :param diag_path: (str) path where to store glacier diagnostics
-        :param reset: (bool, optional) If `True`, the model will start from
-            `year_0`, otherwise from its current position in time (default).
-        :return: (xarray.Dataset) model parameters for each time step.
+        Parameters
+        ----------
+        year_end : float
+            end of modeling period
+        diag_path : str, optional
+            path where to store glacier diagnostics, default = None
+        reset : bool, optional
+            If `True`, the model will start from `year_0`, otherwise from its
+            current position in time (default).
+
+        Returns
+        -------
+        :py:class:`xarray.Dataset`
+            model parameters for each time step (year)
+
         """
         # reset parameters to starting values
         # TODO: is this OGGM compatible
@@ -1335,22 +1607,26 @@ class VAScalingModel(object):
 
     def create_start_glacier(self, area_m2_start, year_start,
                              adjust_term_elev=False):
-        """ Instance model with given starting glacier area, for the iterative
+        """Instance model with given starting glacier area, for the iterative
         process of seeking the glacier’s surface area at the beginning of the
         model integration.
-
+        
         Per default, the terminus elevation is not scaled (i.e. is the same as
         for the initial glacier (probably RGI values)). This corresponds to
         the code of Marzeion et. al. (2012), but is physically not consistent.
-
+        
         It is possible to scale the corresponding terminus elevation given the
         most recent (measured) outline. However, this is not recommended since
         the results may be strange. TODO: this should be fixed sometime...
 
+        Parameters
+        ----------
+        area_m2_start : float
+            starting surface area guess [m2]
+        year_start : flaot
+            corresponding starting year
+        adjust_term_elev : bool, optional, default = False
 
-        :param area_m2_start: (float) starting surface area guess [m2]
-        :param year_start: (float) corresponding starting year
-        :param adjust_term_elev: (bool, default False)
         """
         # compute volume (m3) and length (m) from area (using scaling laws)
         volume_m3_start = self.ca * area_m2_start ** self.gamma
@@ -1365,10 +1641,18 @@ class VAScalingModel(object):
                       self.max_hgt, self.mb_model)
 
     def run_and_compare(self, model_ref):
-        """ Let the model glacier evolve to the same year as the reference
+        """Let the model glacier evolve to the same year as the reference
         model (`model_ref`). Compute and return the relative error in area.
 
-        :param model_ref: (oggm.vascaling.VAScalingModel) reference model
+        Parameters
+        ----------
+        model_ref : :py:class:`oggm.vascaling.VAScalingModel`
+
+        Returns
+        -------
+        float
+            relative surface area error
+
         """
         # run model and store area
         year, _, area, _, _, _ = self.run_until(year_end=model_ref.year,
@@ -1380,9 +1664,8 @@ class VAScalingModel(object):
         return rel_error
 
     def start_area_minimization(self):
-        """ Find the start area which results in a best fitting area after
-        model integration
+        """Find the start area which results in a best fitting area after
+        model integration. TODO:
 
-        :return:
         """
-        pass
+        raise NotImplementedError

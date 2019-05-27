@@ -417,7 +417,6 @@ def initialize(file=None, logging_level='INFO'):
             mbpar = json.load(fp)
         PARAMS[fn + '_calib_params'] = mbpar
 
-
     # Empty defaults
     set_intersects_db()
     IS_INITIALIZED = True
