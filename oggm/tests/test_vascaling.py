@@ -1,4 +1,4 @@
-""" Tests for the volume/area scaling model in `vascaling.py`. """
+"""Tests for the volume/area scaling model in `vascaling.py`."""
 
 # External libs
 import numpy as np
@@ -30,12 +30,15 @@ pytestmark = pytest.mark.test_env("vascaling")
 
 
 class TestVAScalingModel(unittest.TestCase):
-    """ Unittest TestCase testing the implementation of the volume/area scaling
-    model, based on Marzeion et. al., 2012. """
+    """Unittest TestCase testing the implementation of the volume/area scaling
+    model, based on Marzeion et. al., 2012.
+    """
 
     def setUp(self):
-        """ Instance the TestCase, create the test directory,
-        OGGM initialisation and setting paths and parameters. """
+        """Instance the TestCase, create the test directory,
+        OGGM initialisation and setting paths and parameters.
+        """
+
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_vas')
         if not os.path.exists(self.testdir):
@@ -63,22 +66,23 @@ class TestVAScalingModel(unittest.TestCase):
         cfg.PARAMS['use_multiprocessing'] = False
 
     def tearDown(self):
-        """ Removes the test directories. """
+        """Removes the test directories."""
         self.rm_dir()
 
     def rm_dir(self):
-        """ Removes the test directories. """
+        """Removes the test directories."""
         shutil.rmtree(self.testdir)
 
     def clean_dir(self):
-        """ Cleans the test directories. """
+        """Cleans the test directories."""
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
     def test_terminus_temp(self):
-        """ Testing the subroutine which computes the terminus temperature
+        """Testing the subroutine which computes the terminus temperature
         from the given climate file and glacier DEM. Pretty straight forward
-        and somewhat useless, but nice finger exercise. """
+        and somewhat useless, but nice finger exercise.
+        """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -139,8 +143,9 @@ class TestVAScalingModel(unittest.TestCase):
                                        ref_t + temp_anomaly + temp_diff)
 
     def test_solid_prcp(self):
-        """ Tests the subroutine which computes solid precipitation amount from
-        given total precipitation and temperature. """
+        """Tests the subroutine which computes solid precipitation amount from
+        given total precipitation and temperature.
+        """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -203,9 +208,11 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_allclose(solid_prcp, test_p)
 
     def test_min_max_elevation(self):
-        """ Test the helper method which computes the minimal and maximal
+        """Test the helper method which computes the minimal and maximal
         glacier surface elevation in meters asl, from the given DEM and glacier
-        outline. """
+        outline.
+        """
+
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -227,10 +234,11 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_allclose(max_hgt, max_target, rtol=1e-2)
 
     def test_yearly_mb_temp_prcp(self):
-        """ Test the routine which returns the yearly mass balance relevant
+        """Test the routine which returns the yearly mass balance relevant
         climate parameters, i.e. positive melting temperature and solid
         precipitation. The testing target is the output of the corresponding
-        OGGM routine `get_yearly_mb_climate_on_glacier(gdir)`. """
+        OGGM routine `get_yearly_mb_climate_on_glacier(gdir)`.
+        """
 
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -323,10 +331,8 @@ class TestVAScalingModel(unittest.TestCase):
         pass
 
     def test_local_t_star(self):
-        """
-
-        :return:
-        """
+       """TODO: write docstring"""
+       
         # set parameters for climate file and mass balance calibration
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
         cfg.PARAMS['baseline_y0'] = 1850
@@ -403,7 +409,7 @@ class TestVAScalingModel(unittest.TestCase):
         assert abs(vas_mustar['bias'] - 66.12) <= 0.1
 
     def test_ref_t_stars(self):
-        # TODO: now
+        """TODO: write docstring and test"""
         pass
 
     # -------------------------
@@ -411,8 +417,10 @@ class TestVAScalingModel(unittest.TestCase):
     # -------------------------
 
     def _setup_mb_test(self):
-        """ Avoiding a chunk of code duplicate. Performs needed prepo tasks and
-         returns the oggm.GlacierDirectory. """
+        """Avoiding a chunk of code duplicate. Performs needed prepo tasks and
+        returns the oggm.GlacierDirectory.
+        """
+
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -451,8 +459,10 @@ class TestVAScalingModel(unittest.TestCase):
         return gdir
 
     def test_monthly_climate(self):
-        """ Test the routine getting the monthly climate against
-        the routine getting annual climate. """
+        """Test the routine getting the monthly climate against
+        the routine getting annual climate.
+        """
+        
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -488,8 +498,10 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_array_almost_equal(prcp_month, prcp_year, decimal=2)
 
     def test_annual_climate(self):
-        """ Test my routine against the corresponding OGGM routine from
-        the `PastMassBalance()` model. """
+        """Test my routine against the corresponding OGGM routine from
+        the `PastMassBalance()` model.
+        """
+        
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -530,7 +542,7 @@ class TestVAScalingModel(unittest.TestCase):
         assert md(prcp_solid_oggm[2], prcp_solid_vas) <= 0
 
     def test_annual_mb(self):
-        """ Test the routine computing the annual mass balance. """
+        """Test the routine computing the annual mass balance."""
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -573,11 +585,14 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_allclose(mb_ref, mb_mod, rtol=1e-3)
 
     def test_monthly_mb(self):
+        """TODO: write test and docstring"""
         pass
 
     def test_monthly_specific_mb(self):
-        """ Test the monthly specific mass balance against the
-        corresponding yearly mass balance. """
+        """Test the monthly specific mass balance against the
+        corresponding yearly mass balance.
+        """
+        
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -608,8 +623,10 @@ class TestVAScalingModel(unittest.TestCase):
                                    rtol=1e-3)
 
     def test_specific_mb(self):
-        """ Compare the specific mass balance to the one computed
-        using the OGGM function of the PastMassBalance model. """
+        """Compare the specific mass balance to the one computed
+        using the OGGM function of the PastMassBalance model.
+        """
+        
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -655,8 +672,10 @@ class TestVAScalingModel(unittest.TestCase):
     # -------------------
 
     def _set_up_VAS_model(self):
-        """ Avoiding a chunk of code duplicate. Set's up a running volume/area
-        scaling model, including all needed prepo tasks. """
+        """Avoiding a chunk of code duplicate. Set's up a running volume/area
+        scaling model, including all needed prepo tasks.
+        """
+        
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -711,9 +730,11 @@ class TestVAScalingModel(unittest.TestCase):
         return gdir, model
 
     def test_time_scales(self):
-        """ Test the internal method which computes the glaciers time scales
+        """Test the internal method which computes the glaciers time scales
         for length change and area change.
-        TODO: come up with some more sophisticated tests """
+        TODO: come up with some more sophisticated tests...
+        """
+        
         # get glacier directory and set up VAS model
         _, model = self._set_up_VAS_model()
         # compute time scales
@@ -723,7 +744,8 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_allclose(model.tau_a, 17.8, atol=0.1)
 
     def test_reset(self):
-        """ Test the method which sets the model back to its initial state. """
+        """Test the method which sets the model back to its initial state."""
+        
         # get glacier directory and set up VAS model
         _, model = self._set_up_VAS_model()
         # run for some number of years
@@ -739,6 +761,8 @@ class TestVAScalingModel(unittest.TestCase):
         assert model.min_hgt == model.min_hgt_0
 
     def test_step(self):
+        """Test the advance of the model glacier after one time step."""
+
         # get glacier directory and set up VAS model
         _, model = self._set_up_VAS_model()
         # copy initial state of the model
@@ -750,7 +774,7 @@ class TestVAScalingModel(unittest.TestCase):
         np.testing.assert_allclose(model.volume_m3 - m0.volume_m3, dV)
 
     def test_run_until_and_store(self):
-        """ Test the volume/area scaling model against the oggm.FluxBasedModel.
+        """Test the volume/area scaling model against the oggm.FluxBasedModel.
 
         Both models run the Hintereisferner over the entire HistAlp climate
         period, initialized with the 2003 RGI outline without spin up.
@@ -760,8 +784,8 @@ class TestVAScalingModel(unittest.TestCase):
             - relative RMSE, i.e. RMSE/mean(OGGM). Whereby the results from the
                 VAS model are offset with the average differences to the OGGM
                 results.
+       """
 
-        """
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
