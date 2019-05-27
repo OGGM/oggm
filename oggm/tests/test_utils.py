@@ -846,8 +846,14 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
+        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
         rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
         rgidf = rgidf.iloc[:4]
 
         wdir = os.path.join(self.testdir, 'wd')
@@ -856,7 +862,7 @@ class TestPreproCLI(unittest.TestCase):
         topof = utils.get_demo_file('srtm_oetztal.tif')
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf,
+                          test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
