@@ -617,28 +617,36 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+               '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
     # check if extracted file exists already
     if os.path.exists(outpath):
         return outpath
 
-    # Grab auth parameters
-    tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
-    if not os.path.isfile(tdmauthfile):
-        raise DownloadCredentialsMissingException(
-            tdmauthfile + ' does not exist. Login using oggm_tdmdem90_login.')
-    with open(tdmauthfile, 'r') as f:
-        tdmuser = f.readline().strip()
-        tdmpass = f.readline().strip()
-    if not tdmuser or not tdmpass:
-        raise DownloadCredentialsMissingException(
-            'Could not read credentials from ' + tdmauthfile)
+    # Attempt to download without credentials first to hit the cache
+    try:
+        dest_file = file_downloader(wwwfile)
+    except HttpDownloadError:
+        dest_file = None
 
-    # Did we download it yet?
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
-               '{}.zip'.format(zone))
-    dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
+    # Grab auth parameters
+    if not dest_file:
+        tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
+        if not os.path.isfile(tdmauthfile):
+            raise DownloadCredentialsMissingException(tdmauthfile +
+                                                      ' does not exist.' +
+                                                      ' Login using' +
+                                                      ' oggm_tdmdem90_login.')
+        with open(tdmauthfile, 'r') as f:
+            tdmuser = f.readline().strip()
+            tdmpass = f.readline().strip()
+        if not tdmuser or not tdmpass:
+            raise DownloadCredentialsMissingException(
+                'Could not read credentials from ' + tdmauthfile)
+
+        dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
