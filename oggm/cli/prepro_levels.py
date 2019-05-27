@@ -35,11 +35,14 @@ def _rename_dem_folder(gdir, source=''):
     """
 
     # open tif-file to check if it's worth it
+    dem_f = gdir.get_filepath('dem')
     try:
-        dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')
+        dem_dr = rasterio.open(dem_f, 'r', driver='GTiff')
         dem = dem_dr.read(1).astype(rasterio.float32)
     except IOError:
-        # No file, no problem
+        # No file, no problem - still, delete the file if needed
+        if os.path.exists(dem_f):
+            os.remove(dem_f)
         return
 
     # Grid
@@ -53,7 +56,9 @@ def _rename_dem_folder(gdir, source=''):
     dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
     if np.all(~isfinite) or (np.min(dem) == np.max(dem)):
-        # Nothing to do, return
+        # Remove the file and return
+        if os.path.exists(dem_f):
+            os.remove(dem_f)
         return
 
     # Create a source dir and move the files
@@ -68,7 +73,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      test_crudir=None, disable_mp=False, max_level=4):
+                      test_crudir=None, disable_mp=False, timeout=0,
+                      max_level=4):
     """Does the actual job.
 
     Parameters
@@ -138,6 +144,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Set to True for operational runs
     cfg.PARAMS['continue_on_error'] = True
 
+    # Timeout
+    cfg.PARAMS['task_timeout'] = timeout
+
     # For statistics
     climate_periods = [1920, 1960, 2000]
 
@@ -187,7 +196,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if dem_source.upper() == 'ALL':
         # This is the complex one, just do the job an leave
         log.workflow('Running prepro on ALL sources')
-        cfg.PARAMS['use_intersects'] = False
         for i, s in enumerate(utils.DEM_SOURCES):
             rs = i == 0
             rgidf['DEM_SOURCE'] = s
@@ -346,6 +354,9 @@ def parse_args(args):
                              'the default OGGM DEM.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
+    parser.add_argument('--timeout', type=int, default=0,
+                        help='apply a timeout to the entity tasks '
+                             '(in seconds).')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -389,7 +400,7 @@ def parse_args(args):
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, is_test=args.test,
                 demo=args.demo, dem_source=args.dem_source,
-                max_level=args.max_level,
+                max_level=args.max_level, timeout=args.timeout,
                 disable_mp=args.disable_mp)
 
 

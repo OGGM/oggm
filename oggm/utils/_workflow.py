@@ -11,6 +11,7 @@ import random
 import shutil
 import tarfile
 import sys
+import signal
 import datetime
 import logging
 import pickle
@@ -347,6 +348,10 @@ class DisableLogger():
         logging.disable(logging.NOTSET)
 
 
+def _timeout_handler(signum, frame):
+    raise TimeoutError('This task was killed because of timeout')
+
+
 class entity_task(object):
     """Decorator for common job-controlling logic.
 
@@ -411,7 +416,12 @@ class entity_task(object):
 
             # Run the task
             try:
+                if cfg.PARAMS['task_timeout'] > 0:
+                    signal.signal(signal.SIGALRM, _timeout_handler)
+                    signal.alarm(cfg.PARAMS['task_timeout'])
                 out = task_func(gdir, **kwargs)
+                if cfg.PARAMS['task_timeout'] > 0:
+                    signal.alarm(0)
                 if task_name != 'gdir_to_tar':
                     gdir.log(task_name)
             except Exception as err:
