@@ -421,6 +421,7 @@ def initialize(file=None, logging_level='INFO'):
                 grids[grid_json] = salem.Grid.from_json(fp)
         DATA['dem_grids'] = grids
 
+
 def oggm_static_paths():
     """Initialise the OGGM paths from the config file."""
 
