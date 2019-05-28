@@ -81,7 +81,7 @@ DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
 _RGI_METADATA = dict()
 
 DEM3REG = {
-    'ISL': [-25., -12., 63., 67.],  # Iceland
+    'ISL': [-25., -13., 63., 67.],  # Iceland
     'SVALBARD': [9., 35.99, 75., 84.],
     'JANMAYEN': [-10., -7., 70., 72.],
     'FJ': [36., 68., 79., 90.],  # Franz Josef Land
@@ -94,11 +94,10 @@ DEM3REG = {
     '31-45': [-1., 89., -90., -60.],
     '46-60': [89., 189., -90., -60.],
     # Greenland tiles
-    # These are creating problems!
-    # 'GL-North': [-78., -11., 75., 84.],
-    # 'GL-West': [-68., -42., 64., 76.],
-    # 'GL-South': [-52., -40., 59., 64.],
-    # 'GL-East': [-42., -17., 64., 76.]
+    'GL-North': [-72., -11., 76., 84.],
+    'GL-West': [-62., -42., 64., 76.],
+    'GL-South': [-52., -40., 59., 64.],
+    'GL-East': [-42., -17., 64., 76.]
 }
 
 # Function
@@ -320,17 +319,18 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
 
     if dl_verify and path is not None:
         data = get_dl_verify_data()
-        sha256 = hashlib.sha256()
-        with open(path, 'rb') as f:
-            for b in iter(lambda: f.read(0xFFFF), b''):
-                sha256.update(b)
-        sha256 = sha256.digest()
-        size = os.path.getsize(path)
-
         if cache_obj_name not in data:
-            logger.warning('No known hash for %s: %s %s' %
-                           (path, size, sha256.hex()))
+            logger.warning('No known hash for %s' % cache_obj_name)
         else:
+            # compute the hash
+            sha256 = hashlib.sha256()
+            with open(path, 'rb') as f:
+                for b in iter(lambda: f.read(0xFFFF), b''):
+                    sha256.update(b)
+            sha256 = sha256.digest()
+            size = os.path.getsize(path)
+
+            # check
             data = data[cache_obj_name]
             if data[0] != size or data[1] != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
@@ -714,8 +714,11 @@ def _download_dem3_viewpano_unlocked(zone):
                 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
                 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
-    elif zone in ['01-15', '16-30', '31-45', '46-60']:
-        ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
+    elif zone in DEM3REG.keys():
+        # We prepared these files as tif already
+        ifile = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                 'DEM3_MERGED/{}.tif'.format(zone))
+        return file_downloader(ifile)
     else:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
 
@@ -1137,7 +1140,15 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
                  (np.min(lat_ex) >= -68.) and (np.max(lat_ex) <= -66.):
                 return ['SQ58']
 
-            # test some Greenland tiles as GL-North is not rectangular
+            # test some rogue Greenland tiles as well
+            elif (np.min(lon_ex) >= -72.) and (np.max(lon_ex) <= -66.) and \
+                 (np.min(lat_ex) >= 76.) and (np.max(lat_ex) <= 80.):
+                return ['T19']
+
+            elif (np.min(lon_ex) >= -72.) and (np.max(lon_ex) <= -66.) and \
+                 (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
+                return ['U19']
+
             elif (np.min(lon_ex) >= -66.) and (np.max(lon_ex) <= -60.) and \
                  (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
                 return ['U20']
@@ -1149,6 +1160,10 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
             elif (np.min(lon_ex) >= -54.) and (np.max(lon_ex) <= -48.) and \
                  (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
                 return ['U22']
+
+            elif (np.min(lon_ex) >= -25.) and (np.max(lon_ex) <= -13.) and \
+                 (np.min(lat_ex) >= 63.) and (np.max(lat_ex) <= 67.):
+                return ['ISL']
 
             else:
                 return [_f]
