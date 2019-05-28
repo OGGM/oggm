@@ -147,6 +147,27 @@ def del_empty_dirs(s_dir):
     return b_empty
 
 
+def findfiles(root_dir, endswith):
+    """Finds all files with a specific ending in a directory
+
+    Parameters
+    ----------
+    root_dir : str
+       The directory to search fo
+    endswith : str
+       The file ending (e.g. '.hgt'
+
+    Returns
+    -------
+    the list of files
+    """
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        for filename in [f for f in filenames if f.endswith(endswith)]:
+            out.append(os.path.join(dirpath, filename))
+    return out
+
+
 def _get_download_lock():
     return lock
 
@@ -680,6 +701,8 @@ def _download_dem3_viewpano_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, zone + '.tif')
+    extract_dir = os.path.join(tmpdir, 'tmp_' + zone)
+    mkdir(extract_dir, reset=True)
 
     # check if extracted file exists already
     if os.path.exists(outpath):
@@ -704,7 +727,7 @@ def _download_dem3_viewpano_unlocked(zone):
 
     # ok we have to extract it
     with zipfile.ZipFile(dfile) as zf:
-        zf.extractall(tmpdir)
+        zf.extractall(extract_dir)
 
     # Serious issue: sometimes, if a southern hemisphere URL is queried for
     # download and there is none, a NH zip file is downloaded.
@@ -713,17 +736,21 @@ def _download_dem3_viewpano_unlocked(zone):
     # the unzipped folder has the file name of
     # the northern hemisphere file. Some checks if correct file exists:
     if len(zone) == 4 and zone.startswith('S'):
-        zonedir = os.path.join(tmpdir, zone[1:])
+        zonedir = os.path.join(extract_dir, zone[1:])
     else:
-        zonedir = os.path.join(tmpdir, zone)
+        zonedir = os.path.join(extract_dir, zone)
     globlist = glob.glob(os.path.join(zonedir, '*.hgt'))
 
     # take care of the special file naming cases
     if zone in DEM3REG.keys():
-        globlist = glob.glob(os.path.join(tmpdir, '*', '*.hgt'))
+        globlist = glob.glob(os.path.join(extract_dir, '*', '*.hgt'))
 
     if not globlist:
-        raise RuntimeError("We should have some files here, but we don't")
+        # Final resort
+        globlist = (findfiles(extract_dir, '.hgt') or
+                    findfiles(extract_dir, '.HGT'))
+        if not globlist:
+            raise RuntimeError("We should have some files here, but we don't")
 
     # merge the single HGT files (can be a bit ineffective, because not every
     # single file might be exactly within extent...)
