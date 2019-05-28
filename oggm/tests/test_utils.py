@@ -1688,8 +1688,6 @@ class TestDataFiles(unittest.TestCase):
         lat_ex = 60.5
         assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['SHL']
 
-        ### GRN
-
         lon_ex = -30.733021
         lat_ex = 82.930238
         assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-North']
@@ -1709,8 +1707,6 @@ class TestDataFiles(unittest.TestCase):
         lon_ex = -22.26
         lat_ex = 66.16
         assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['ISL']
-
-        ### AA
 
         lon_ex = -127.592802
         lat_ex = -74.479523
