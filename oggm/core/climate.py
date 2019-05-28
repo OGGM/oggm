@@ -1039,6 +1039,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
                 # Check that the params are fine
                 str_s = 'cru4' if 'CRU' in source else 'histalp'
+                # vn = 'oggm_ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
+                # TODO: delete following line & uncomment line above after
+                # TODO: oggm-sample-data PR#4 is merged
                 vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
@@ -1046,6 +1049,10 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                                'calibrated with different MB parameters. You '
                                'might have to run the calibration manually.')
                         raise MassBalanceCalibrationError(msg)
+                # ref_df = cfg.PARAMS['oggm_ref_tstars_rgi{}_{}'.format(v,
+                #                                                      str_s)]
+                # TODO: delete following line & uncomment line above after
+                # TODO: oggm-sample-data PR#4 is merged
                 ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
             else:
                 # Use the the local calibration

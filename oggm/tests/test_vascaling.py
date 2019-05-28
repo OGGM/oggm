@@ -331,7 +331,7 @@ class TestVAScalingModel(unittest.TestCase):
         pass
 
     def test_local_t_star(self):
-       """TODO: write docstring"""
+        """TODO: write docstring"""
        
         # set parameters for climate file and mass balance calibration
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
@@ -381,6 +381,7 @@ class TestVAScalingModel(unittest.TestCase):
         vas_mustar_refmb = gdir.read_json('vascaling_mustar')
 
         # get reference t* list
+        # TODO: adjust after oggm-sample-data PR#4 is merged
         ref_df_path = os.path.join(oggm.__path__[0], 'data',
                                    'ref_tstars_vas_rgi5_histalp.csv')
         ref_df = pd.read_csv(ref_df_path)

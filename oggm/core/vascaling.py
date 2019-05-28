@@ -8,11 +8,12 @@ Author: Moritz Oberrauch
 """
 
 # External libs
+import os
+import logging
 import numpy as np
 import pandas as pd
 import xarray as xr
 import netCDF4
-import os
 import datetime
 from time import gmtime, strftime
 from scipy.optimize import minimize_scalar
@@ -23,7 +24,7 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 
 from oggm import __version__
 
-from oggm import utils
+from oggm import utils, entity_task, global_task
 from oggm.utils import floatyear_to_date, ncDataset
 from oggm.workflow import execute_entity_task
 from oggm.exceptions import InvalidParamsError, MassBalanceCalibrationError
@@ -31,6 +32,8 @@ from oggm.exceptions import InvalidParamsError, MassBalanceCalibrationError
 from oggm.core import climate
 from oggm.core.massbalance import MassBalanceModel
 
+# Module logger
+log = logging.getLogger(__name__)
 
 def _compute_temp_terminus(temp, temp_grad, ref_hgt,
                            terminus_hgt, temp_anomaly=0):
@@ -268,7 +271,28 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
     return years, temp_yr, prcp_yr
 
+def _fallback_local_t_star(gdir):
+    """A Fallback function if vascaling.local_t_star raises an Error.
 
+    This function will still write a `vascaling_mustar.json`, filled with NANs,
+    if vascaling.local_t_star fails and cfg.PARAMS['continue_on_error'] = True.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+
+    """
+    # Scalars in a small dict for later
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = np.nan
+    df['bias'] = np.nan
+    df['mu_star_glacierwide'] = np.nan
+    gdir.write_json(df, 'vascaling_mustar')
+
+
+@entity_task(log, writes=['vascaling_mustar'], fallback=_fallback_local_t_star)
 def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
     
@@ -314,6 +338,8 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
                 v = gdir.rgi_version[0]
                 # baseline climate
                 str_s = 'cru4' if 'CRU' in source else 'histalp'
+                # TODO: oggm-sample-data PR#4
+                # vn = 'vas_ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
                 vn = 'ref_tstars_vas_rgi{}_{}_calib_params'.format(v, str_s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
@@ -322,6 +348,8 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
                                'might have to run the calibration manually.')
                         raise MassBalanceCalibrationError(msg)
 
+                # TODO: oggm-sample-data PR#4
+                # ref_df = cfg.PARAMS['vas_ref_tstars_rgi{}_{}'.format(v, str_s)]
                 ref_df = cfg.PARAMS['ref_tstars_vas_rgi{}_{}'.format(v, str_s)]
 
             else:
@@ -384,6 +412,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     gdir.write_json(df, 'vascaling_mustar')
 
 
+@entity_task(log, writes=['climate_info'])
 def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
     """Computes the reference year t* for the given glacier and mass balance
     measurements.
@@ -482,7 +511,7 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
 
     return {'t_star': amin, 'bias': diff[amin]}
 
-
+@global_task
 def compute_ref_t_stars(gdirs):
     """Detects the best t* for the reference glaciers and writes them to disk
     
@@ -528,6 +557,7 @@ def compute_ref_t_stars(gdirs):
     df.sort_index().to_csv(file)
 
 
+@entity_task(log)
 def find_start_area(gdir, year_start=1851):
     """This task find the start area for the given glacier, which results in
     the best results after the model integration (i.e., modeled glacier surface
@@ -538,7 +568,7 @@ def find_start_area(gdir, year_start=1851):
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`)
+    gdir : :py:class:`oggm.GlacierDirectory`
     year_start : int, optional
         year at the beginning of the model integration, default = 1851
         (best choice for working with HISTALP data)
@@ -1199,6 +1229,7 @@ class RandomVASMassBalance(MassBalanceModel):
         return self.mbmod.get_ela(year=ryr)
 
 
+@entity_task(log)
 def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
                            bias=None, seed=None, temperature_bias=None,
                            climate_filename='climate_monthly',
