@@ -309,9 +309,10 @@ def rmsd(ref, data, axis=None):
     return np.sqrt(np.mean((np.asarray(ref) - data)**2, axis=axis))
 
 
-def rmsd_anomaly(ref, data):
-    """Root Mean Squared Deviation of anomalies to mean,
-    i.e. rmsd(ref - mean(ref), data - mean(data)).
+def rmsd_bc(ref, data):
+    """Root Mean Squared Deviation of bias-corrected time series.
+
+    I.e: rmsd(ref - mean(ref), data - mean(data)).
     """
     return rmsd(ref - np.mean(ref), data - np.mean(data))
 

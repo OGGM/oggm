@@ -435,8 +435,7 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
     # get reference time series of mass balance measurements
     if mbdf is None:
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-    # get list of years with mass balance measurements
-    ref_years = mbdf.index.values
+
     # compute average observed mass-balance
     ref_mb = np.mean(mbdf)
 
@@ -1227,11 +1226,11 @@ class RandomVASMassBalance(MassBalanceModel):
 
 
 @entity_task(log)
-def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
-                           bias=None, seed=None, temperature_bias=None,
-                           climate_filename='climate_monthly',
-                           climate_input_filesuffix='', output_filesuffix='',
-                           unique_samples=False):
+def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                       bias=None, seed=None, temperature_bias=None,
+                       climate_filename='climate_monthly',
+                       climate_input_filesuffix='', output_filesuffix='',
+                       unique_samples=False):
     """Runs the random mass balance model for a given number of years.
 
     This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
@@ -1276,7 +1275,6 @@ def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
     Returns
     -------
     :py:class:`oggm.core.vascaling.VAScalingModel`
-
     """
 
     # instance mass balance model
@@ -1354,12 +1352,12 @@ class VAScalingModel(object):
         self.rho = cfg.PARAMS['ice_density']
 
         # get scaling constants
-        self.cl = cfg.PARAMS['c_length_m']
-        self.ca = cfg.PARAMS['c_area_m2']
+        self.cl = cfg.PARAMS['vas_c_length_m']
+        self.ca = cfg.PARAMS['vas_c_area_m2']
 
         # get scaling exponents
-        self.ql = cfg.PARAMS['q_length']
-        self.gamma = cfg.PARAMS['gamma_area']
+        self.ql = cfg.PARAMS['vas_q_length']
+        self.gamma = cfg.PARAMS['vas_gamma_area']
 
         # define temporal index
         self.year_0 = year_0

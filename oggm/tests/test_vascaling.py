@@ -2,7 +2,6 @@
 
 # External libs
 import numpy as np
-import pandas as pd
 import datetime
 import os
 import shutil
@@ -19,8 +18,8 @@ import geopandas as gpd
 import oggm
 import oggm.cfg as cfg
 from oggm import utils
-from oggm.utils import (get_demo_file, ncDataset,
-                        md, rmsd_anomaly, rel_err, corrcoef)
+from oggm.utils import (get_demo_file, ncDataset, md, rmsd_bc, rel_err,
+                        corrcoef)
 from oggm.core import (gis, vascaling, climate, centerlines,
                        massbalance, flowline, inversion)
 from oggm.tests.funcs import get_test_dir
@@ -879,5 +878,5 @@ class TestVAScalingModel(unittest.TestCase):
             # correlation coefficient
             assert corrcoef(oggm_ds[param].values, vas_ds[param].values) >= cc
             # root mean squared deviation
-            rmsd_an = rmsd_anomaly(oggm_ds[param].values, vas_ds[param].values)
+            rmsd_an = rmsd_bc(oggm_ds[param].values, vas_ds[param].values)
             assert rmsd_an <= rmsd
