@@ -26,7 +26,6 @@ from oggm import __version__
 
 from oggm import utils, entity_task, global_task
 from oggm.utils import floatyear_to_date, ncDataset
-from oggm.workflow import execute_entity_task
 from oggm.exceptions import InvalidParamsError, MassBalanceCalibrationError
 
 from oggm.core import climate
@@ -338,9 +337,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
                 v = gdir.rgi_version[0]
                 # baseline climate
                 str_s = 'cru4' if 'CRU' in source else 'histalp'
-                # TODO: oggm-sample-data PR#4
-                # vn = 'vas_ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
-                vn = 'ref_tstars_vas_rgi{}_{}_calib_params'.format(v, str_s)
+                vn = 'vas_ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
                         msg = ('The reference t* you are trying to use was '
@@ -348,10 +345,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
                                'might have to run the calibration manually.')
                         raise MassBalanceCalibrationError(msg)
 
-                # TODO: oggm-sample-data PR#4
-                # ref_df = cfg.PARAMS['vas_ref_tstars_rgi{}_{}'.format(v, str_s)]
-                ref_df = cfg.PARAMS['ref_tstars_vas_rgi{}_{}'.format(v, str_s)]
-
+                ref_df = cfg.PARAMS['vas_ref_tstars_rgi{}_{}'.format(v, str_s)]
             else:
                 # Use the the local calibration
                 fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
@@ -537,6 +531,7 @@ def compute_ref_t_stars(gdirs):
     ref_gdirs = utils.get_ref_mb_glaciers(gdirs)
 
     # Run
+    from oggm.workflow import execute_entity_task
     out = execute_entity_task(t_star_from_refmb, ref_gdirs)
 
     # Loop write

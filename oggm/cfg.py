@@ -390,43 +390,17 @@ def initialize(file=None, logging_level='INFO'):
     for k in cp:
         PARAMS[k] = cp.as_float(k)
 
-    # Read-in the reference t* data - maybe it will be used, maybe not
-    # TODO: delete the following once the oggm-sample-data PR#4 is merged
-    fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
-           'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
-    for fn in fns:
-        PARAMS[fn] = pd.read_csv(get_demo_file('oggm_' + fn + '.csv'))
-        fpath = get_demo_file('oggm_' + fn + '_calib_params.json')
-        with open(fpath, 'r') as fp:
-            mbpar = json.load(fp)
-        PARAMS[fn + '_calib_params'] = mbpar
-
-    # Read-in the reference t* data for the VAS model
-    # TODO: delete the following once the oggm-sample-data PR#4 is merged
-    fns = ['ref_tstars_vas_rgi6_cru4', 'ref_tstars_vas_rgi6_histalp',
-           'ref_tstars_vas_rgi5_cru4', 'ref_tstars_vas_rgi5_histalp']
-    for fn in fns:
-        # get oggm base directory (without importing oggm)
-        f_dir = os.path.dirname(os.path.abspath(
-            inspect.getfile(inspect.currentframe())))
-        PARAMS[fn] = pd.read_csv(os.path.join(f_dir, 'data', fn + '.csv'))
-        fpath = os.path.join(f_dir, 'data', fn + '_calib_params.json')
-        with open(fpath, 'r') as fp:
-            mbpar = json.load(fp)
-        PARAMS[fn + '_calib_params'] = mbpar
-
-    # Read-in the reference t* data for all available models
-    # TODO: uncomment the following once the oggm-sample-data PR#4 is merged
-    # model_prefixes = ['oggm_', 'vas_']
-    # for prefix in model_prefixes:
-    #     fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
-    #            'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
-    #     for fn in fns:
-    #         PARAMS[prefix + fn] = pd.read_csv(get_demo_file(prefix + fn + '.csv'))
-    #         fpath = get_demo_file(prefix + fn + '_calib_params.json')
-    #         with open(fpath, 'r') as fp:
-    #             mbpar = json.load(fp)
-    #         PARAMS[prefix + fn + '_calib_params'] = mbpar
+    # Read-in the reference t* data for all available models types (oggm, vas)
+    model_prefixes = ['oggm_', 'vas_']
+    for prefix in model_prefixes:
+        fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
+               'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
+        for fn in fns:
+            PARAMS[prefix + fn] = pd.read_csv(get_demo_file(prefix + fn + '.csv'))
+            fpath = get_demo_file(prefix + fn + '_calib_params.json')
+            with open(fpath, 'r') as fp:
+                mbpar = json.load(fp)
+            PARAMS[prefix + fn + '_calib_params'] = mbpar
 
     # Empty defaults
     set_intersects_db()

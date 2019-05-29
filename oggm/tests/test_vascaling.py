@@ -381,10 +381,7 @@ class TestVAScalingModel(unittest.TestCase):
         vas_mustar_refmb = gdir.read_json('vascaling_mustar')
 
         # get reference t* list
-        # TODO: adjust after oggm-sample-data PR#4 is merged
-        ref_df_path = os.path.join(oggm.__path__[0], 'data',
-                                   'ref_tstars_vas_rgi5_histalp.csv')
-        ref_df = pd.read_csv(ref_df_path)
+        ref_df = cfg.PARAMS['vas_ref_tstars_rgi5_histalp']
         # compute local t* and the corresponding mu*
         vascaling.local_t_star(gdir, ref_df=ref_df)
         # read calibration results
