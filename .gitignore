@@ -1,17 +1,44 @@
+*.py[cod]
+__pycache__
+
+# asv stuff
+.asv/
+
+# PyCharm stuffs
+.idea/
+
+# coverage stuffs
+.coverage
+
 # OS generated files
 .DS_Store
 
-# PyCharm generated file
-.idea
-.pytest_cache/
-__pycache__/
+# Notebook stuffs
+examples/*checkpoints
+.ipynb_checkpoints
+*.nbgrader.log
+
+# Tests stuffs
+oggm/tests/result_images
+result_images
+.pytest_cache
 
 # Packages
-*.eggs
+*.egg
 *.egg-info
 eggs
+*.eggs
 
-# ignore local  directory
-oggm/scaling/
-oggm/grindel/
-
+# specific
+*.cache
+baseline/
+*.lock
+oggm/tests/tmp_*
+docs/_build
+docs/_build_html
+docs/generated
+docs/_generated
+docs/_sources
+docs/_images
+docs/.doctrees
+oggm/version.py
