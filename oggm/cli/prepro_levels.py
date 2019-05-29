@@ -74,7 +74,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       test_crudir=None, disable_mp=False, timeout=0,
-                      max_level=4):
+                      max_level=4, logging_level='WORKFLOW'):
     """Does the actual job.
 
     Parameters
@@ -107,6 +107,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         disable multiprocessing
     max_level : int
         the maximum pre-processing level before stopping
+    logging_level : str
+        the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
     """
 
     # TODO: temporarily silence Fiona deprecation warnings
@@ -128,7 +130,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level='WORKFLOW')
+    cfg.initialize(logging_level=logging_level)
 
     # Local paths
     utils.mkdir(working_dir)
@@ -363,6 +365,9 @@ def parse_args(args):
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
+    parser.add_argument('--logging-level', type=str, default='WORKFLOW',
+                        help='the logging level to use (DEBUG, INFO, WARNING, '
+                             'WORKFLOW).')
     args = parser.parse_args(args)
 
     # Check input
@@ -401,7 +406,7 @@ def parse_args(args):
                 working_dir=working_dir, is_test=args.test,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
-                disable_mp=args.disable_mp)
+                disable_mp=args.disable_mp, logging_level=args.logging_level)
 
 
 def main():
