@@ -399,7 +399,7 @@ class FlowlineModel(object):
         mb_model : MassBalanceModel
             the MB model to use
         y0 : int
-            the starting year of the simultation
+            the starting year of the simulation
         glen_a : float
             glen's parameter A
         fs: float

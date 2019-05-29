@@ -309,6 +309,14 @@ def rmsd(ref, data, axis=None):
     return np.sqrt(np.mean((np.asarray(ref) - data)**2, axis=axis))
 
 
+def rmsd_bc(ref, data):
+    """Root Mean Squared Deviation of bias-corrected time series.
+
+    I.e: rmsd(ref - mean(ref), data - mean(data)).
+    """
+    return rmsd(ref - np.mean(ref), data - np.mean(data))
+
+
 def rel_err(ref, data):
     """Relative error. Ref should be non-zero"""
     return (np.asarray(data) - ref) / ref

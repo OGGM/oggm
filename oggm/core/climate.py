@@ -1038,15 +1038,15 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                 v = gdir.rgi_version[0]  # major version relevant
 
                 # Check that the params are fine
-                str_s = 'cru4' if 'CRU' in source else 'histalp'
-                vn = 'ref_tstars_rgi{}_{}_calib_params'.format(v, str_s)
+                s = 'cru4' if 'CRU' in source else 'histalp'
+                vn = 'oggm_ref_tstars_rgi{}_{}_calib_params'.format(v, s)
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
                         msg = ('The reference t* you are trying to use was '
                                'calibrated with different MB parameters. You '
                                'might have to run the calibration manually.')
                         raise MassBalanceCalibrationError(msg)
-                ref_df = cfg.PARAMS['ref_tstars_rgi{}_{}'.format(v, str_s)]
+                ref_df = cfg.PARAMS['oggm_ref_tstars_rgi{}_{}'.format(v, s)]
             else:
                 # Use the the local calibration
                 fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')

@@ -40,10 +40,15 @@ from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
+from oggm.core.vascaling import local_t_star as vas_local_t_star
+from oggm.core.vascaling import t_star_from_refmb as vas_t_star_from_refmb
+from oggm.core.vascaling import find_start_area as vas_find_start_area
+from oggm.core.vascaling import run_random_climate as vas_run_random_climate
 from oggm.utils import copy_to_basedir
 
 # Global tasks
 from oggm.core.climate import compute_ref_t_stars
+from oggm.core.vascaling import compute_ref_t_stars as vas_compute_ref_t_stars
 from oggm.utils import compile_glacier_statistics
 from oggm.utils import compile_run_output
 from oggm.utils import compile_climate_input

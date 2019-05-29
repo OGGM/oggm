@@ -10,6 +10,9 @@ __pycache__
 # coverage stuffs
 .coverage
 
+# OS generated files
+.DS_Store
+
 # Notebook stuffs
 examples/*checkpoints
 .ipynb_checkpoints
@@ -24,6 +27,7 @@ result_images
 *.egg
 *.egg-info
 eggs
+*.eggs
 
 # specific
 *.cache
