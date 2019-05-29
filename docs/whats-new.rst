@@ -33,6 +33,11 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Added an option to pre-process all DEMs at once (:pull:`771`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added support for another evolution model: the volume-area-scaling based
+  model of Marzeion et al., 2012 (:pull:`662`). This is a major enhancement
+  to the code base as it increases the number of choices available to users
+  and demonstrates the modularity of the model.
+  By `Moritz Oberrauch <https://github.com/oberrauch>`_.
 
 
 Bug fixes
