@@ -37,19 +37,13 @@ def _rename_dem_folder(gdir, source=''):
     # open tif-file to check if it's worth it
     dem_f = gdir.get_filepath('dem')
     try:
-        dem_dr = rasterio.open(dem_f, 'r', driver='GTiff')
-        dem = dem_dr.read(1).astype(rasterio.float32)
+        with rasterio.open(dem_f, 'r', driver='GTiff') as dem_ds:
+            dem = dem_ds.read(1).astype(rasterio.float32)
     except IOError:
         # No file, no problem - still, delete the file if needed
         if os.path.exists(dem_f):
             os.remove(dem_f)
         return
-
-    # Grid
-    nx = dem_dr.width
-    ny = dem_dr.height
-    assert nx == gdir.grid.nx
-    assert ny == gdir.grid.ny
 
     # Check the DEM
     min_z = -999.
