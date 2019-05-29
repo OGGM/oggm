@@ -34,6 +34,7 @@ from oggm.core.massbalance import MassBalanceModel
 # Module logger
 log = logging.getLogger(__name__)
 
+
 def _compute_temp_terminus(temp, temp_grad, ref_hgt,
                            terminus_hgt, temp_anomaly=0):
     """Computes the (monthly) mean temperature at the glacier terminus,
@@ -59,7 +60,6 @@ def _compute_temp_terminus(temp, temp_grad, ref_hgt,
     netCDF4 variable
         monthly mean temperature at the glacier terminus [degC]
 
-    
     """
     temp_terminus = temp + temp_grad * (terminus_hgt - ref_hgt) + temp_anomaly
     return temp_terminus
@@ -155,7 +155,7 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
     Those are the positive melting temperature at glacier terminus elevation
     as energy input and the amount of solid precipitation onto the glacier
     surface as mass input. Both parameters are computes as yearly sums.
-    
+
     Default is to read all data, but it is possible to specify a time range by
     giving two (included) datetime bounds. Similarly, the year range limits the
     returned data to the given bounds of (hydrological) years.
@@ -270,6 +270,7 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
     return years, temp_yr, prcp_yr
 
+
 def _fallback_local_t_star(gdir):
     """A Fallback function if vascaling.local_t_star raises an Error.
 
@@ -294,13 +295,13 @@ def _fallback_local_t_star(gdir):
 @entity_task(log, writes=['vascaling_mustar'], fallback=_fallback_local_t_star)
 def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
-    
+
     If `tstar` and `bias` are not provided, they will be interpolated from the
     reference t* list.
     The mass balance calibration parameters (i.e. temperature lapse rate,
     temperature thresholds for melting, solid and liquid precipitation,
     precipitation scaling factor) are written to the climate_info.pkl file.
-    
+
     The results of the calibration process (i.e. t*, mu*, bias) are stored in
     the `vascaling_mustar.json` file, to be used later by other tasks.
 
@@ -505,10 +506,11 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
 
     return {'t_star': amin, 'bias': diff[amin]}
 
+
 @global_task
 def compute_ref_t_stars(gdirs):
     """Detects the best t* for the reference glaciers and writes them to disk
-    
+
     This task will be needed for mass balance calibration of custom climate
     data. For CRU and HISTALP baseline climate a pre-calibrated list is
     available and should be used instead.
@@ -557,7 +559,7 @@ def find_start_area(gdir, year_start=1851):
     """This task find the start area for the given glacier, which results in
     the best results after the model integration (i.e., modeled glacier surface
     closest to measured RGI surface in 2003).
-    
+
     All necessary prepro task (gis, centerline, climate) must be executed
     beforehand, as well as the local_t_star() task.
 
@@ -988,10 +990,10 @@ class VAScalingMassBalance(MassBalanceModel):
 
 class RandomVASMassBalance(MassBalanceModel):
     """Random shuffle of all MB years within a given time period.
-    
+
     This is useful for finding a possible past glacier state or for sensitivity
     experiments.
-    
+
     Note that this is going to be sensitive to extreme years in certain
     periods, but it is by far more physically reasonable than other
     approaches based on gaussian assumptions.
@@ -1308,9 +1310,9 @@ def run_random_vas_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 class VAScalingModel(object):
     """The volume area scaling glacier model following Marzeion et. al., 2012.
-    
+
     @TODO: finish DocString
-    
+
     All used parameters are in SI units (even the climatological precipitation
     (attribute of the mass balance model) is given in [m. we yr-1]).
 
@@ -1636,11 +1638,9 @@ class VAScalingModel(object):
         """Instance model with given starting glacier area, for the iterative
         process of seeking the glacier’s surface area at the beginning of the
         model integration.
-        
         Per default, the terminus elevation is not scaled (i.e. is the same as
         for the initial glacier (probably RGI values)). This corresponds to
         the code of Marzeion et. al. (2012), but is physically not consistent.
-        
         It is possible to scale the corresponding terminus elevation given the
         most recent (measured) outline. However, this is not recommended since
         the results may be strange. TODO: this should be fixed sometime...

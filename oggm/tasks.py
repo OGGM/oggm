@@ -43,7 +43,8 @@ from oggm.core.flowline import run_constant_climate
 from oggm.core.vascaling import local_t_star as vas_local_t_star
 from oggm.core.vascaling import t_star_from_refmb as vas_t_star_from_refmb
 from oggm.core.vascaling import find_start_area as vas_find_start_area
-from oggm.core.vascaling import run_random_vas_climate as vas_run_random_vas_climate
+from oggm.core.vascaling import run_random_vas_climate as \
+    vas_run_random_vas_climate
 from oggm.utils import copy_to_basedir
 
 # Global tasks

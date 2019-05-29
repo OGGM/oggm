@@ -396,7 +396,8 @@ def initialize(file=None, logging_level='INFO'):
         fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
                'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
         for fn in fns:
-            PARAMS[prefix + fn] = pd.read_csv(get_demo_file(prefix + fn + '.csv'))
+            PARAMS[prefix + fn] = pd.read_csv(
+                get_demo_file(prefix + fn + '.csv'))
             fpath = get_demo_file(prefix + fn + '_calib_params.json')
             with open(fpath, 'r') as fp:
                 mbpar = json.load(fp)

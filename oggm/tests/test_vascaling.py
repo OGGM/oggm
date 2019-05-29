@@ -332,7 +332,7 @@ class TestVAScalingModel(unittest.TestCase):
 
     def test_local_t_star(self):
         """TODO: write docstring"""
-       
+
         # set parameters for climate file and mass balance calibration
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
         cfg.PARAMS['baseline_y0'] = 1850
@@ -460,7 +460,7 @@ class TestVAScalingModel(unittest.TestCase):
         """Test the routine getting the monthly climate against
         the routine getting annual climate.
         """
-        
+
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -499,7 +499,7 @@ class TestVAScalingModel(unittest.TestCase):
         """Test my routine against the corresponding OGGM routine from
         the `PastMassBalance()` model.
         """
-        
+
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -590,7 +590,7 @@ class TestVAScalingModel(unittest.TestCase):
         """Test the monthly specific mass balance against the
         corresponding yearly mass balance.
         """
-        
+
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -624,7 +624,7 @@ class TestVAScalingModel(unittest.TestCase):
         """Compare the specific mass balance to the one computed
         using the OGGM function of the PastMassBalance model.
         """
-        
+
         # run all needed prepro tasks
         gdir = self._setup_mb_test()
 
@@ -673,7 +673,7 @@ class TestVAScalingModel(unittest.TestCase):
         """Avoiding a chunk of code duplicate. Set's up a running volume/area
         scaling model, including all needed prepo tasks.
         """
-        
+
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -732,7 +732,7 @@ class TestVAScalingModel(unittest.TestCase):
         for length change and area change.
         TODO: come up with some more sophisticated tests...
         """
-        
+
         # get glacier directory and set up VAS model
         _, model = self._set_up_VAS_model()
         # compute time scales
@@ -743,7 +743,7 @@ class TestVAScalingModel(unittest.TestCase):
 
     def test_reset(self):
         """Test the method which sets the model back to its initial state."""
-        
+
         # get glacier directory and set up VAS model
         _, model = self._set_up_VAS_model()
         # run for some number of years
