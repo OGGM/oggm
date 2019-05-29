@@ -25,6 +25,7 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
+import shapely.geometry as shpg
 import salem
 from salem import wgs84
 import rasterio
@@ -80,7 +81,7 @@ DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
 _RGI_METADATA = dict()
 
 DEM3REG = {
-    'ISL': [-25., -12., 63., 67.],  # Iceland
+    'ISL': [-25., -13., 63., 67.],  # Iceland
     'SVALBARD': [9., 35.99, 75., 84.],
     'JANMAYEN': [-10., -7., 70., 72.],
     'FJ': [36., 68., 79., 90.],  # Franz Josef Land
@@ -93,11 +94,10 @@ DEM3REG = {
     '31-45': [-1., 89., -90., -60.],
     '46-60': [89., 189., -90., -60.],
     # Greenland tiles
-    # These are creating problems!
-    # 'GL-North': [-78., -11., 75., 84.],
-    # 'GL-West': [-68., -42., 64., 76.],
-    # 'GL-South': [-52., -40., 59., 64.],
-    # 'GL-East': [-42., -17., 64., 76.]
+    'GL-North': [-72., -11., 76., 84.],
+    'GL-West': [-62., -42., 64., 76.],
+    'GL-South': [-52., -40., 59., 64.],
+    'GL-East': [-42., -17., 64., 76.]
 }
 
 # Function
@@ -144,6 +144,27 @@ def del_empty_dirs(s_dir):
     if b_empty:
         os.rmdir(s_dir)
     return b_empty
+
+
+def findfiles(root_dir, endswith):
+    """Finds all files with a specific ending in a directory
+
+    Parameters
+    ----------
+    root_dir : str
+       The directory to search fo
+    endswith : str
+       The file ending (e.g. '.hgt'
+
+    Returns
+    -------
+    the list of files
+    """
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        for filename in [f for f in filenames if f.endswith(endswith)]:
+            out.append(os.path.join(dirpath, filename))
+    return out
 
 
 def _get_download_lock():
@@ -296,19 +317,20 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     except KeyError:
         dl_verify = True
 
-    if dl_verify:
+    if dl_verify and path is not None:
         data = get_dl_verify_data()
-        sha256 = hashlib.sha256()
-        with open(path, 'rb') as f:
-            for b in iter(lambda: f.read(0xFFFF), b''):
-                sha256.update(b)
-        sha256 = sha256.digest()
-        size = os.path.getsize(path)
-
         if cache_obj_name not in data:
-            logger.warning('No known hash for %s: %s %s' %
-                           (path, size, sha256.hex()))
+            logger.warning('No known hash for %s' % cache_obj_name)
         else:
+            # compute the hash
+            sha256 = hashlib.sha256()
+            with open(path, 'rb') as f:
+                for b in iter(lambda: f.read(0xFFFF), b''):
+                    sha256.update(b)
+            sha256 = sha256.digest()
+            size = os.path.getsize(path)
+
+            # check
             data = data[cache_obj_name]
             if data[0] != size or data[1] != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
@@ -461,18 +483,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
         cache_obj_name = 'astgtmv2/' + aws_path
 
     def _dlf(cache_path):
-        import boto3
-        import botocore
-        client = boto3.client('s3')
-        logger.info("Downloading %s from s3 to %s..." % (aws_path, cache_path))
-        try:
-            client.download_file('astgtmv2', aws_path, cache_path)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                return None
-            else:
-                raise
-        return cache_path
+        raise NotImplementedError("Downloads from AWS are no longer supported")
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
@@ -627,28 +638,36 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+               '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
     # check if extracted file exists already
     if os.path.exists(outpath):
         return outpath
 
-    # Grab auth parameters
-    tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
-    if not os.path.isfile(tdmauthfile):
-        raise DownloadCredentialsMissingException(
-            tdmauthfile + ' does not exist. Login using oggm_tdmdem90_login.')
-    with open(tdmauthfile, 'r') as f:
-        tdmuser = f.readline().strip()
-        tdmpass = f.readline().strip()
-    if not tdmuser or not tdmpass:
-        raise DownloadCredentialsMissingException(
-            'Could not read credentials from ' + tdmauthfile)
+    # Attempt to download without credentials first to hit the cache
+    try:
+        dest_file = file_downloader(wwwfile)
+    except HttpDownloadError:
+        dest_file = None
 
-    # Did we download it yet?
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
-               '{}.zip'.format(zone))
-    dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
+    # Grab auth parameters
+    if not dest_file:
+        tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
+        if not os.path.isfile(tdmauthfile):
+            raise DownloadCredentialsMissingException(tdmauthfile +
+                                                      ' does not exist.' +
+                                                      ' Login using' +
+                                                      ' oggm_tdmdem90_login.')
+        with open(tdmauthfile, 'r') as f:
+            tdmuser = f.readline().strip()
+            tdmpass = f.readline().strip()
+        if not tdmuser or not tdmpass:
+            raise DownloadCredentialsMissingException(
+                'Could not read credentials from ' + tdmauthfile)
+
+        dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -682,6 +701,8 @@ def _download_dem3_viewpano_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     outpath = os.path.join(tmpdir, zone + '.tif')
+    extract_dir = os.path.join(tmpdir, 'tmp_' + zone)
+    mkdir(extract_dir, reset=True)
 
     # check if extracted file exists already
     if os.path.exists(outpath):
@@ -693,8 +714,11 @@ def _download_dem3_viewpano_unlocked(zone):
                 'Q35', 'Q36', 'Q37', 'Q38', 'Q39', 'Q40', 'P31', 'P32', 'P33',
                 'P34', 'P35', 'P36', 'P37', 'P38', 'P39', 'P40']:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
-    elif zone in ['01-15', '16-30', '31-45', '46-60']:
-        ifile = 'http://viewfinderpanoramas.org/ANTDEM3/' + zone + '.zip'
+    elif zone in DEM3REG.keys():
+        # We prepared these files as tif already
+        ifile = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                 'DEM3_MERGED/{}.tif'.format(zone))
+        return file_downloader(ifile)
     else:
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + '.zip'
 
@@ -706,7 +730,7 @@ def _download_dem3_viewpano_unlocked(zone):
 
     # ok we have to extract it
     with zipfile.ZipFile(dfile) as zf:
-        zf.extractall(tmpdir)
+        zf.extractall(extract_dir)
 
     # Serious issue: sometimes, if a southern hemisphere URL is queried for
     # download and there is none, a NH zip file is downloaded.
@@ -715,17 +739,21 @@ def _download_dem3_viewpano_unlocked(zone):
     # the unzipped folder has the file name of
     # the northern hemisphere file. Some checks if correct file exists:
     if len(zone) == 4 and zone.startswith('S'):
-        zonedir = os.path.join(tmpdir, zone[1:])
+        zonedir = os.path.join(extract_dir, zone[1:])
     else:
-        zonedir = os.path.join(tmpdir, zone)
+        zonedir = os.path.join(extract_dir, zone)
     globlist = glob.glob(os.path.join(zonedir, '*.hgt'))
 
     # take care of the special file naming cases
     if zone in DEM3REG.keys():
-        globlist = glob.glob(os.path.join(tmpdir, '*', '*.hgt'))
+        globlist = glob.glob(os.path.join(extract_dir, '*', '*.hgt'))
 
     if not globlist:
-        raise RuntimeError("We should have some files here, but we don't")
+        # Final resort
+        globlist = (findfiles(extract_dir, '.hgt') or
+                    findfiles(extract_dir, '.HGT'))
+        if not globlist:
+            raise RuntimeError("We should have some files here, but we don't")
 
     # merge the single HGT files (can be a bit ineffective, because not every
     # single file might be exactly within extent...)
@@ -1053,21 +1081,37 @@ def aw3d30_zone(lon_ex, lat_ex):
     return list(sorted(set(zones)))
 
 
+def _extent_to_polygon(lon_ex, lat_ex, to_crs=None):
+
+    if lon_ex[0] == lon_ex[1] and lat_ex[0] == lat_ex[1]:
+        out = shpg.Point(lon_ex[0], lat_ex[0])
+    else:
+        x = [lon_ex[0], lon_ex[1], lon_ex[1], lon_ex[0], lon_ex[0]]
+        y = [lat_ex[0], lat_ex[0], lat_ex[1], lat_ex[1], lat_ex[0]]
+        out = shpg.Polygon(np.array((x, y)).T)
+    if to_crs is not None:
+        out = salem.transform_geometry(out, to_crs=to_crs)
+    return out
+
+
 def arcticdem_zone(lon_ex, lat_ex):
     """Returns a list of Arctic-DEM zones covering the desired extent.
     """
 
-    # Files are one by one tiles, so lets loop over them
+    gdf = gpd.read_file(get_demo_file('ArcticDEM_Tile_Index_Rel7_by_tile.shp'))
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+    return gdf.tile.values if len(gdf) > 0 else []
 
-    lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
-                          dtype=np.int)
-    lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
-                          dtype=np.int)
-    zones = []
-    for lon in lon_tiles:
-        for lat in lat_tiles:
-            zones.append(_tandem_path(lon, lat))
-    return list(sorted(set(zones)))
+
+def rema_zone(lon_ex, lat_ex):
+    """Returns a list of REMA-DEM zones covering the desired extent.
+    """
+
+    gdf = gpd.read_file(get_demo_file('REMA_Tile_Index_Rel1.1.shp'))
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+    return gdf.tile.values if len(gdf) > 0 else []
 
 
 def dem3_viewpano_zone(lon_ex, lat_ex):
@@ -1096,7 +1140,15 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
                  (np.min(lat_ex) >= -68.) and (np.max(lat_ex) <= -66.):
                 return ['SQ58']
 
-            # test some Greenland tiles as GL-North is not rectangular
+            # test some rogue Greenland tiles as well
+            elif (np.min(lon_ex) >= -72.) and (np.max(lon_ex) <= -66.) and \
+                 (np.min(lat_ex) >= 76.) and (np.max(lat_ex) <= 80.):
+                return ['T19']
+
+            elif (np.min(lon_ex) >= -72.) and (np.max(lon_ex) <= -66.) and \
+                 (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
+                return ['U19']
+
             elif (np.min(lon_ex) >= -66.) and (np.max(lon_ex) <= -60.) and \
                  (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
                 return ['U20']
@@ -1108,6 +1160,10 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
             elif (np.min(lon_ex) >= -54.) and (np.max(lon_ex) <= -48.) and \
                  (np.min(lat_ex) >= 80.) and (np.max(lat_ex) <= 83.):
                 return ['U22']
+
+            elif (np.min(lon_ex) >= -25.) and (np.max(lon_ex) <= -13.) and \
+                 (np.min(lat_ex) >= 63.) and (np.max(lat_ex) <= 67.):
+                return ['ISL']
 
             else:
                 return [_f]
@@ -1368,6 +1424,8 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
     elif version == '61':
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
+    elif version == '62':
+        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi62.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1497,6 +1555,9 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
 
     dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
+    if version == '62':
+        dfile = ('https://cluster.klima.uni-bremen.de/~fmaussion/misc/'
+                 'rgi62_Intersects.zip')
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
@@ -1785,6 +1846,10 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
     elif source == 'SRTM':
         return np.max(np.abs(lat_ex)) < 60
+    elif source == 'USER':
+        return True
+    elif source is None:
+        return True
 
 
 def default_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
@@ -1920,22 +1985,26 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         files.append(_file)
 
     if source == 'ARCTICDEM':
-        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/v3.0/'
-              '100m/arcticdem_mosaic_100m_v3.0.tif')
-        with _get_download_lock():
-            _file = file_downloader(fp)
-        files.append(_file)
+        zones = arcticdem_zone(lon_ex, lat_ex)
+        for z in zones:
+            with _get_download_lock():
+                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url += 'DEM/ArcticDEM_100m_v3.0/'
+                url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
+                files.append(file_downloader(url))
 
     if source == 'RAMP':
         _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
         files.append(_file)
 
     if source == 'REMA':
-        fp = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/v1.1/100m/'
-              'REMA_100m_dem.tif')
-        with _get_download_lock():
-            _file = file_downloader(fp)
-        files.append(_file)
+        zones = rema_zone(lon_ex, lat_ex)
+        for z in zones:
+            with _get_download_lock():
+                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url += 'DEM/REMA_100m_v1.1/'
+                url += '{}_100m_v3.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
+                files.append(file_downloader(url))
 
     if source == 'TANDEM':
         zones = tandem_zone(lon_ex, lat_ex)

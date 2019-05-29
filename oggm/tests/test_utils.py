@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from numpy.testing import assert_array_equal, assert_allclose
+from _pytest.monkeypatch import MonkeyPatch
 
 import oggm
 from oggm import utils, workflow, tasks
@@ -610,6 +611,7 @@ class TestPreproCLI(unittest.TestCase):
     def setUp(self):
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
         self.reset_dir()
+        self.monkeypatch = MonkeyPatch()
 
     def tearDown(self):
         if os.path.exists(self.testdir):
@@ -666,20 +668,25 @@ class TestPreproCLI(unittest.TestCase):
         assert 'local' in kwargs['output_folder']
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '00'
+        assert kwargs['dem_source'] == ''
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert kwargs['demo']
+        assert not kwargs['disable_mp']
+        assert kwargs['max_level'] == 4
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--dem-source', 'ALL',
                                            ])
 
         assert 'working_dir' in kwargs
         assert 'output_folder' in kwargs
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
+        assert kwargs['dem_source'] == 'ALL'
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
@@ -830,6 +837,46 @@ class TestPreproCLI(unittest.TestCase):
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
+
+    def test_source_run(self):
+
+        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES',
+                                 ['USER'])
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        # Read in the RGI file
+        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
+        rgidf = rgidf.iloc[:4]
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf, test_intersects_file=inter,
+                          test_topofile=topof, dem_source='ALL')
+
+        rid = rgidf.iloc[0].RGIId
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:8] + '.00.tar')
+        assert os.path.isfile(tarf)
+
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+
+        entity = rgidf.iloc[0]
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
 
 
 class TestBenchmarkCLI(unittest.TestCase):
@@ -1279,6 +1326,18 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
+        def down_check(url, *args, **kwargs):
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'DEM3_MERGED/ISL.tif')
+            self.assertEqual(url, expected)
+            return self.dem3_testfile
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file(-22.26, 66.16, source='DEM3')
+
+        assert os.path.exists(of[0])
+        assert source == 'DEM3'
+
     def test_mapzen(self):
 
         # Make a fake topo file
@@ -1342,13 +1401,22 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/REMA/mosaic/'
-                        'v1.1/100m/REMA_100m_dem.tif')
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'REMA_100m_v1.1/'
+                        '40_10_100m_v3.1/40_10_100m_v1.1_reg_dem.tif')
             self.assertEqual(expected, url)
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file(0, -88, source='REMA')
+            of, source = utils.get_topo_file(-65., -69., source='REMA')
+
+        assert os.path.exists(of[0])
+        assert source == 'REMA'
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-65.1, -65.],
+                                             [-69.1, -69.],
+                                             source='REMA')
 
         assert os.path.exists(of[0])
         assert source == 'REMA'
@@ -1359,13 +1427,22 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/'
-                        'mosaic/v3.0/100m/arcticdem_mosaic_100m_v3.0.tif')
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'ArcticDEM_100m_v3.0/'
+                        '14_52_100m_v3.0/14_52_100m_v3.0_reg_dem.tif')
             self.assertEqual(expected, url)
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file(0, 88, source='ARCTICDEM')
+            of, source = utils.get_topo_file(-21.93, 64.13, source='ARCTICDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'ARCTICDEM'
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-21.93, -21.92],
+                                             [64.13, 64.14],
+                                             source='ARCTICDEM')
 
         assert os.path.exists(of[0])
         assert source == 'ARCTICDEM'
@@ -1583,36 +1660,69 @@ class TestDataFiles(unittest.TestCase):
 
     def test_dem3_viewpano_zone(self):
 
-        test_loc = {'ISL': [-25., -12., 63., 67.],  # Iceland
-                    'SVALBARD': [10., 34., 76., 81.],
-                    'JANMAYEN': [-10., -7., 70., 72.],
-                    'FJ': [36., 66., 79., 82.],  # Franz Josef Land
-                    'FAR': [-8., -6., 61., 63.],  # Faroer
-                    'BEAR': [18., 20., 74., 75.],  # Bear Island
-                    'SHL': [-3., 0., 60., 61.],  # Shetland
-                    # Antarctica tiles as UTM zones, FILES ARE LARGE!!!!!
-                    # '01-15': [-180., -91., -90, -60.],
-                    # '16-30': [-91., -1., -90., -60.],
-                    # '31-45': [-1., 89., -90., -60.],
-                    # '46-60': [89., 189., -90., -60.],
-                    # Greenland tiles
-                    # 'GL-North': [-78., -11., 75., 84.],
-                    # 'GL-West': [-68., -42., 64., 76.],
-                    # 'GL-South': [-52., -40., 59., 64.],
-                    # 'GL-East': [-42., -17., 64., 76.]
-                    }
-        # special names
-        for key in test_loc:
-            z = utils.dem3_viewpano_zone([test_loc[key][0], test_loc[key][1]],
-                                         [test_loc[key][2], test_loc[key][3]])
-            self.assertTrue(len(z) == 1)
+        lon_ex = -22.26
+        lat_ex = 66.16
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['ISL']
 
-            self.assertEqual(key, z[0])
+        lon_ex = 17
+        lat_ex = 80
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['SVALBARD']
 
-        # weird Antarctica tile
-        # z = utils.dem3_viewpano_zone([-91., -90.], [-72., -68.])
-        # self.assertTrue(len(z) == 1)
-        # self.assertEqual('SR15', z[0])
+        lon_ex = -8
+        lat_ex = 71
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['JANMAYEN']
+
+        lon_ex = 60
+        lat_ex = 80
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['FJ']
+
+        lon_ex = -7
+        lat_ex = 62
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['FAR']
+
+        lon_ex = 19
+        lat_ex = 74.5
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['BEAR']
+
+        lon_ex = -1
+        lat_ex = 60.5
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['SHL']
+
+        lon_ex = -30.733021
+        lat_ex = 82.930238
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-North']
+
+        lon_ex = -52
+        lat_ex = 70
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-West']
+
+        lon_ex = -43
+        lat_ex = 60
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-South']
+
+        lon_ex = -24.7
+        lat_ex = 69.8
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-East']
+
+        lon_ex = -22.26
+        lat_ex = 66.16
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['ISL']
+
+        lon_ex = -127.592802
+        lat_ex = -74.479523
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['01-15']
+
+        lat_ex = -72.383226
+        lon_ex = -60.648126
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['16-30']
+
+        lat_ex = -67.993527
+        lon_ex = 65.482151
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['31-45']
+
+        lat_ex = -71.670896
+        lon_ex = 166.878916
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['46-60']
 
         # normal tile
         z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.])

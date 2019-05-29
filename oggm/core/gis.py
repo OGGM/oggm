@@ -37,7 +37,7 @@ from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError)
-from oggm.utils import (tuple2int, get_topo_file, get_demo_file,
+from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
                         nicenumber, ncDataset, tolist)
 
 
@@ -368,6 +368,11 @@ def define_glacier_region(gdir, entity=None):
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
+    if not is_dem_source_available(source,
+                                   (minlon, maxlon),
+                                   (minlat, maxlat)):
+        raise InvalidDEMError('Source: {} not available for glacier {}'
+                              .format(source, gdir.rgi_id))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_region=gdir.rgi_region,
                                          rgi_subregion=gdir.rgi_subregion,
@@ -1059,8 +1064,9 @@ def gridded_mb_attributes(gdir):
     ela_h = optimization.minimize(to_minimize, [0.], method='Powell')
     mbmod = LinearMassBalance(float(ela_h['x']))
     lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
-    if not np.isclose(np.sum(lin_mb_on_z), 0, atol=1):
-        raise RuntimeError('Spec mass-balance should be zero.')
+    if not np.isclose(np.sum(lin_mb_on_z), 0, atol=10):
+        raise RuntimeError('Spec mass-balance should be zero but is: {}'
+                           .format(np.sum(lin_mb_on_z)))
 
     # Normal OGGM (a bit tweaked)
     df = gdir.read_json('local_mustar')
@@ -1076,8 +1082,9 @@ def gridded_mb_attributes(gdir):
                                 check_calib_params=False,
                                 y0=df['t_star'])
     oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
-    if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=1):
-        raise RuntimeError('Spec mass-balance should be zero.')
+    if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=10):
+        raise RuntimeError('Spec mass-balance should be zero but is: {}'
+                           .format(np.sum(oggm_mb_on_z)))
 
     # Altitude based mass balance
     catch_area_above_z = topo * np.NaN

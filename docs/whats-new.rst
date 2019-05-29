@@ -29,12 +29,18 @@ Enhancements
   (:issue:`748`, :pull:`759`). Also added some utility functions to handle
   DEMs, to be improved further in the near future.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- Added support for a new DEM dataset: REMA, (:pull:`759`).
+- Added support for a new DEM dataset: REMA (:pull:`759`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added an option to pre-process all DEMs at once (:pull:`771`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes
 ~~~~~~~~~
+
+- Preprocessed directories at the level 3 now also have the glacier flowlines
+  ready for the run (:issue:`736`, :pull:`771`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 v1.1.1 (24.04.2019)
 -------------------
