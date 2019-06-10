@@ -118,23 +118,23 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
 
 def _inversion_poly(a3, a0):
-    """Solve for degree 5 polynom with coefs a5=1, a3, a0."""
+    """Solve for degree 5 polynomial with coefficients a5=1, a3, a0."""
     sols = np.roots([1., 0., a3, 0., 0., a0])
     test = (np.isreal(sols)*np.greater(sols, [0]*len(sols)))
     return sols[test][0].real
 
 
 def _inversion_simple(a3, a0):
-    """Solve for degree 5 polynom with coefs a5=1, a3=0., a0."""
+    """Solve for degree 5 polynomial with coefficients a5=1, a3=0., a0."""
 
     return (-a0)**(1./5.)
 
 
 def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
-    """
-    TODO: Documentation
-    Content of the original inner loop of the mass-conservation inversion.
-    Extracted to avoid code duplication
+    """Content of the original inner loop of the mass-conservation inversion.
+
+    Put here to avoid code duplication.
+
     Parameters
     ----------
     gdir
@@ -146,22 +146,24 @@ def _compute_thick(gdir, a0s, a3, flux_a0, shape_factor, _inv_function):
 
     Returns
     -------
-
+    the thickness
     """
 
     a0s = a0s / (shape_factor ** 3)
-    if np.any(~np.isfinite(a0s)):
-        raise RuntimeError('({}) something went wrong with the '
-                           'inversion'.format(gdir.rgi_id))
 
-    # GO
+    if np.any(~np.isfinite(a0s)):
+        raise RuntimeError('({}) non-finite coefficients in the inversion '
+                           'polynomial.'.format(gdir.rgi_id))
+
+    # Solve the polynomials
     out_thick = np.zeros(len(a0s))
     for i, (a0, Q) in enumerate(zip(a0s, flux_a0)):
-        if Q > 0.:
-            out_thick[i] = _inv_function(a3, a0)
-        else:
-            out_thick[i] = 0.
-    assert np.all(np.isfinite(out_thick))
+        out_thick[i] = _inv_function(a3, a0) if Q > 0 else 0
+
+    if np.any(~np.isfinite(out_thick)):
+        raise RuntimeError('({}) non-finite coefficients in the inverted '
+                           'thickness.'.format(gdir.rgi_id))
+
     return out_thick
 
 
@@ -195,28 +197,20 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         fs = cfg.PARAMS['inversion_fs']
 
     # Check input
-    if fs == 0.:
-        _inv_function = _inversion_simple
-    else:
-        _inv_function = _inversion_poly
+    _inv_function = _inversion_simple if fs == 0 else _inversion_poly
 
     # Ice flow params
     fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     a3 = fs / fd
     rho = cfg.PARAMS['ice_density']
 
-    # Shape factor params
+    # Inversion with shape factors?
     sf_func = None
-    # Use .get to obatin default None for non-existing key
-    # necessary to pass some tests
-    # TODO: remove after tests are adapted
-    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion')
+    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion', None)
     if use_sf == 'Adhikari' or use_sf == 'Nye':
         sf_func = utils.shape_factor_adhikari
     elif use_sf == 'Huss':
         sf_func = utils.shape_factor_huss
-    sf_tol = 1e-2  # TODO: better as params in cfg?
-    max_sf_iter = 20
 
     # Clip the slope, in degrees
     clip_angle = cfg.PARAMS['min_slope']
@@ -229,19 +223,21 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         slope = cl['slope_angle']
         slope = np.clip(slope, np.deg2rad(clip_angle), np.pi/2.)
 
-        # Parabolic bed rock
+        # Glacier width
         w = cl['width']
 
         a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
 
         sf = np.ones(slope.shape)  # Default shape factor is 1
-        # TODO: maybe take height update as criterion for iteration end instead
-        # of sf_diff?
         if sf_func is not None:
 
-            # Start iteration for shape factor with guess of 1
+            # Start iteration for shape factor with first guess of 1
             i = 0
             sf_diff = np.ones(slope.shape)
+
+            # Some hard-coded factors here
+            sf_tol = 1e-2
+            max_sf_iter = 20
 
             while i < max_sf_iter and np.any(sf_diff > sf_tol):
                 out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
@@ -251,11 +247,13 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 sf = sf_func(w, out_thick, cl['is_rectangular'])
                 sf_diff = sf_diff - sf
                 i += 1
-            # TODO: Iteration at the moment for all grid points,
-            # even if some already converged. Change?
 
             log.info('Shape factor {:s} used, took {:d} iterations for '
                      'convergence.'.format(use_sf, i))
+
+            # TODO: possible shape factor optimisations
+            # thick update could be used as iteration end criterion instead
+            # we iterate for all grid points, even if some already converged
 
         out_thick = _compute_thick(gdir, a0s, a3, cl['flux_a0'],
                                    sf, _inv_function)
