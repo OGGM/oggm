@@ -897,6 +897,14 @@ def glacier_statistics(gdir, inversion_only=False):
         pass
 
     try:
+        # Diagnostics
+        diags = gdir.get_diagnostics()
+        for k, v in diags.items():
+            d[k] = v
+    except BaseException:
+        pass
+
+    try:
         # Calving
         df = pd.read_csv(gdir.get_filepath('calving_loop'), index_col=0)
         df = df.iloc[-1]
@@ -913,14 +921,6 @@ def glacier_statistics(gdir, inversion_only=False):
 
     if inversion_only:
         return d
-
-    try:
-        # Diagnostics
-        diags = gdir.get_diagnostics()
-        for k, v in diags.items():
-            d[k] = v
-    except BaseException:
-        pass
 
     try:
         # Error log
