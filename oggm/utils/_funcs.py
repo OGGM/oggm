@@ -589,11 +589,9 @@ def filter_rgi_name(name):
 
 
 def shape_factor_huss(widths, heights, is_rectangular):
-    """Compute shape factor for inclusion of lateral drag
-    according to Huss and Farinotti (2012). The shape factor is only applied
-    for parabolic sections.
+    """Shape factor for lateral drag according to Huss and Farinotti (2012).
 
-    Not yet tested
+    The shape factor is only applied for parabolic sections.
 
     Parameters
     ----------
@@ -613,22 +611,19 @@ def shape_factor_huss(widths, heights, is_rectangular):
     is_rect = is_rectangular.astype(bool)
     shape_factors = np.ones(widths.shape)
 
-    # TODO: could check for division by 0, but at the moment
-    # this is covered by interpolation and clip, resulting in a factor of 1
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         shape_factors[~is_rect] = (widths / (2 * heights + widths))[~is_rect]
+
     shape_factors[heights <= 0.] = 1.
 
     return shape_factors
 
 
 def shape_factor_adhikari(widths, heights, is_rectangular):
-    """Compute shape factor for inclusion of lateral drag according to
-    Adhikari (2012)
+    """Shape factor for lateral drag according to Adhikari (2012).
 
-    TODO: should we expand this here to also include
-    the factors suggested for sliding?
+    TODO: other factors could be used when sliding is included
 
     Parameters
     ----------
@@ -647,10 +642,9 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     # Ensure bool (for masking)
     is_rectangular = is_rectangular.astype(bool)
 
-    # TODO: could check for division by 0, but at the moment
-    # this is covered by interpolation and clip, resulting in a factor of 1
+    # Catch for division by 0 (corrected later)
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
         zetas = widths / 2. / heights
 
     shape_factors = np.ones(widths.shape)

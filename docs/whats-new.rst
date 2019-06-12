@@ -16,6 +16,10 @@ Breaking changes
   affect the majority of users (which used ``run_until_and_store``), but
   the results or ``run_until`` can be affected (:pull:`726`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- ``find_inversion_calving`` has been renamed to
+  ``find_inversion_calving_loop`` and will probably be deprecated soon
+  (:pull:`794`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -38,6 +42,11 @@ Enhancements
   to the code base as it increases the number of choices available to users
   and demonstrates the modularity of the model.
   By `Moritz Oberrauch <https://github.com/oberrauch>`_.
+- Changed the way the calving flux is computed during the ice thickness
+  inversion. This no longer relies on an iteration over mu*, but solves
+  for `h` instead. The new function is likely to replace the "old"
+  calving loop(:pull:`794`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes

@@ -1332,7 +1332,7 @@ def mu_star_calibration(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
-def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
+def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     """Compute apparent mb from a linear mass-balance assumption (for testing).
 
     This is for testing currently, but could be used as alternative method
@@ -1358,8 +1358,10 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3.):
         smb = mbmod.get_specific_mb(heights=h, widths=w)
         return (smb - cmb)**2
 
-    ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
-    ela_h = ela_h['x'][0]
+    if ela_h is None:
+        ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
+        ela_h = ela_h['x'][0]
+
     mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
 
     # For each flowline compute the apparent MB

@@ -36,6 +36,7 @@ from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import distribute_thickness_per_altitude
 from oggm.core.inversion import distribute_thickness_interp
 from oggm.core.inversion import find_inversion_calving
+from oggm.core.inversion import find_inversion_calving_loop
 from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
