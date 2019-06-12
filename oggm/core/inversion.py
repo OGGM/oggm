@@ -917,10 +917,11 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
         sia_thick = sia_thickness(slope, width, flux)
         return fl['thick'] - sia_thick
 
-    abs_min = optimize.minimize(to_minimize, [1], bounds=((1e-4, 1e4), ))
+    abs_min = optimize.minimize(to_minimize, [1], bounds=((1e-4, 1e4), ),
+                                tol=1e-1)
     if not abs_min['success']:
         raise RuntimeError('Could not find the absolute minimum in calving '
-                           'flux optimization.')
+                           'flux optimization: {}'.format(abs_min))
     if abs_min['fun'] > 0:
         # This happens, and means that this glacier simply can't calve
         # See e.g. RGI60-01.23642
