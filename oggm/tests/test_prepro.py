@@ -23,7 +23,8 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm.exceptions import MassBalanceCalibrationError
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
+                              init_columbia)
 from oggm import workflow
 
 pytestmark = pytest.mark.test_env("prepro")
@@ -2239,38 +2240,7 @@ class TestCoxeCalvingInvert(unittest.TestCase):
 class TestColumbiaCalving(unittest.TestCase):
 
     def setUp(self):
-
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_columbia')
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = self.testdir
-        cfg.PARAMS['use_intersects'] = False
-        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
-        cfg.PARAMS['border'] = 10
-
-        entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
-
-        gis.define_glacier_region(gdir, entity=entity)
-        gis.glacier_masks(gdir)
-        centerlines.compute_centerlines(gdir)
-        centerlines.initialize_flowlines(gdir)
-        centerlines.compute_downstream_line(gdir)
-        centerlines.catchment_area(gdir)
-        centerlines.catchment_intersections(gdir)
-        centerlines.catchment_width_geom(gdir)
-        centerlines.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
-        self.gdir = gdir
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
+        self.gdir = init_columbia()
 
     @pytest.mark.slow
     def test_find_calving(self):
