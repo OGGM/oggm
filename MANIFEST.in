@@ -1,3 +1,4 @@
+include pytest.ini
 include oggm/params.cfg
 include oggm/data/demo_glaciers.csv
 include oggm/data/AntarcticDEM_wgs84.json
