@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def pytest_configure(config):
+    for marker in ["slow", "download", "creds", "internet", "test_env",
+                   "graphic "]:
+        config.addinivalue_line("markers", marker)
     if config.pluginmanager.hasplugin('xdist'):
         try:
             from ilock import ILock
