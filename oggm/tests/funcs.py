@@ -334,6 +334,39 @@ def init_hef(reset=False, border=40):
     return gdir
 
 
+def init_columbia(reset=False):
+
+    # test directory
+    testdir = os.path.join(get_test_dir(), 'tmp_columbia')
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+        reset = True
+
+    # Init
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = testdir
+    cfg.PARAMS['use_intersects'] = False
+    cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+    cfg.PARAMS['border'] = 10
+
+    entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, reset=reset)
+    if gdir.has_file('climate_monthly'):
+        return gdir
+
+    gis.define_glacier_region(gdir, entity=entity)
+    gis.glacier_masks(gdir)
+    centerlines.compute_centerlines(gdir)
+    centerlines.initialize_flowlines(gdir)
+    centerlines.compute_downstream_line(gdir)
+    centerlines.catchment_area(gdir)
+    centerlines.catchment_intersections(gdir)
+    centerlines.catchment_width_geom(gdir)
+    centerlines.catchment_width_correction(gdir)
+    climate.process_dummy_cru_file(gdir, seed=0)
+    return gdir
+
+
 class TempEnvironmentVariable:
     """Context manager for environment variables
 
