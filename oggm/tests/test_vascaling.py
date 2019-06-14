@@ -22,10 +22,20 @@ from oggm.utils import (get_demo_file, ncDataset, md, rmsd_bc, rel_err,
                         corrcoef)
 from oggm.core import (gis, vascaling, climate, centerlines,
                        massbalance, flowline, inversion)
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 
 
 pytestmark = pytest.mark.test_env("vascaling")
+_url_retrieve = None
+
+
+def setup_module(module):
+    module._url_retrieve = utils.oggm_urlretrieve
+    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
+
+
+def teardown_module(module):
+    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 class TestVAScalingModel(unittest.TestCase):
@@ -330,7 +340,6 @@ class TestVAScalingModel(unittest.TestCase):
         pass
 
     def test_local_t_star(self):
-        """TODO: write docstring"""
 
         # set parameters for climate file and mass balance calibration
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
@@ -338,22 +347,9 @@ class TestVAScalingModel(unittest.TestCase):
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['run_mb_calibration'] = False
 
-        # use Hintereisferner from RGI v5
-        rgi_version = '5'
-        cfg.PARAMS['rgi_version'] = int(rgi_version[0])
-        rgi_region = '11'
-
-        # we use intersects
-        path = utils.get_rgi_intersects_region_file(rgi_region,
-                                                    version=rgi_version)
-        cfg.set_intersects_db(path)
-
-        # RGI file
-        rgi_id = 'RGI{}0-11.00897'.format(rgi_version)
-        rgi_df = utils.get_rgi_glacier_entities([rgi_id], version=rgi_version)
-
-        # get and return RGI entity
-        entity = rgi_df.iloc[0]
+        # read the Hintereisferner
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
 
         # initialize the GlacierDirectory
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
