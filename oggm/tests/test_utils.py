@@ -12,6 +12,7 @@ import pytest
 from unittest import mock
 
 import salem
+from salem.gis import transform_proj
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -2084,5 +2085,5 @@ class TestSkyIsFalling(unittest.TestCase):
         proj_out = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
         proj_in = pyproj.Proj(srs, preserve_units=True)
 
-        lon, lat = pyproj.transform(proj_in, proj_out, -2235000, -2235000)
+        lon, lat = transform_proj(proj_in, proj_out, -2235000, -2235000)
         np.testing.assert_allclose(lon, 70.75731, atol=1e-5)
