@@ -342,9 +342,9 @@ class TestVAScalingModel(unittest.TestCase):
     def test_local_t_star(self):
 
         # set parameters for climate file and mass balance calibration
-        cfg.PARAMS['baseline_climate'] = 'HISTALP'
+        cfg.PARAMS['baseline_climate'] = 'CUSTOM'
         cfg.PARAMS['baseline_y0'] = 1850
-        cfg.PATHS['climate_file'] = ''
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['run_mb_calibration'] = False
 
         # read the Hintereisferner
@@ -364,7 +364,7 @@ class TestVAScalingModel(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         # process the given climate file
-        climate.process_histalp_data(gdir)
+        climate.process_custom_climate_data(gdir)
 
         # compute the reference t* for the glacier
         # given the reference of mass balance measurements
