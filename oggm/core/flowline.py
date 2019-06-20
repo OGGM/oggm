@@ -1880,8 +1880,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                           climate_filename='climate_monthly',
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
-                          init_model_fls=None, zero_initial_glacier=False,bias=None,
-                          **kwargs):
+                          init_model_fls=None, zero_initial_glacier=False, 
+                          bias=None, **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
