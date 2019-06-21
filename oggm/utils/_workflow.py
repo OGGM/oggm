@@ -23,6 +23,7 @@ import fnmatch
 import platform
 import struct
 import importlib
+import math
 
 # External libs
 import geopandas as gpd
@@ -43,7 +44,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                haversine)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
-from oggm import cfg
+from oggm import cfg, utils
 from oggm.exceptions import InvalidParamsError
 
 
@@ -551,7 +552,8 @@ def demo_glacier_id(key):
     return None
 
 
-def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
+def compile_run_output(gdirs, path=True, filesuffix='',
+                       output_filesuffix=False, use_compression=True):
     """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
@@ -562,7 +564,11 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
         where to store (default is on the working dir).
         Set to `False` to disable disk storage.
     filesuffix : str
-        the filesuffix of the run
+        the filesuffix of the files to be compiled and on default the
+        filesuffix od the compiled file
+    output_filesuffix: str
+        the filesuffix of the compiled file on default the same as for the
+        input file
     use_compression : bool
         use zlib compression on the output netCDF files
 
@@ -653,10 +659,13 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
     ds['ela'].attrs['units'] = 'm a.s.l'
 
+    if output_filesuffix==False:
+        output_filesuffix=filesuffix
+
     if path:
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
-                                'run_output' + filesuffix + '.nc')
+                                'run_output' + output_filesuffix + '.nc')
 
         enc_var = {'dtype': 'float32'}
         if use_compression:
@@ -668,9 +677,77 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
 
     return ds
 
+def compile_fast(gdirs, path=True, filename='climate_monthly',
+                 input_filesuffix='', output_filesuffix=''):
+
+    """For large numbers of glaciers this function can be used to speed up the
+    compiling process for either the climate files or the run_output
+
+    Merge the output of the model runs of several gdirs into one file.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    path : str
+        where to store (default is on the working dir).
+    filename: str
+        BASENAME of the file to be compiled. Options: climate_monthly(default),
+        gcm_data, model_dianostics.
+    input_filesuffix : str
+        filesuffix of the files to be compiled
+    output_filesuffix: str
+         filesuffix of the compiled file
+    """
+
+    lsubfiles= 1000
+
+    gdir_len = len(gdirs)
+
+    for i in np.arange(math.ceil(gdir_len/lsubfiles)):
+        sel_gdirs = gdirs[i*lsubfiles:(i+1)*lsubfiles]
+        if filename == 'climate_monthly':
+            compile_climate_input(sel_gdirs, path=path,
+                                filename=filename, filesuffix=input_filesuffix,
+                                output_filesuffix=input_filesuffix + '_tmp_'
+                                + str(i))
+        elif filename == 'gcm_data':
+            compile_climate_input(sel_gdirs, path=path, filename=filename,
+                                  filesuffix=input_filesuffix,
+                                  output_filesuffix=input_filesuffix + '_tmp_'
+                                  + str(i))
+        elif filename == 'model_diagnostics':
+            compile_run_output(sel_gdirs, path=path,
+                               filesuffix=input_filesuffix,
+                               output_filesuffix=input_filesuffix + '_tmp_'
+                               + str(i))
+
+
+    if filename == 'climate_monthly' or filename == 'gcm_data':
+        tmp_paths = sorted(glob.glob(cfg.PATHS[
+                                     'working_dir'] + 'climate_input'
+                                     + input_filesuffix + '_tmp_*.nc'))
+    elif filename == 'model_diagnostics':
+        tmp_paths = sorted(glob.glob(cfg.PATHS[
+                                    'working_dir'] + 'run_output'
+                                   + input_filesuffix + '_tmp_*.nc'))
+
+    ds = xr.open_mfdataset(tmp_paths)
+
+
+    if filename == 'climate_monthly' or filename == 'gcm_data':
+        ds.to_netcdf(cfg.PATHS['working_dir'] + 'climate_input'
+                     + output_filesuffix + '.nc')
+    elif filename == 'model_diagnostics':
+        ds.to_netcdf(cfg.PATHS['working_dir'] + 'run_output'
+                     + output_filesuffix + '.nc')
+
+    for i in tmp_paths:
+        os.remove(i)
 
 def compile_climate_input(gdirs, path=True, filename='climate_monthly',
-                          filesuffix='', use_compression=True):
+                          filesuffix='', output_filesuffix=False,
+                          use_compression=True):
     """Merge the climate input files in the glacier directories into one file.
 
     Parameters
@@ -683,7 +760,11 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     filename : str
         BASENAME of the climate input files
     filesuffix : str
-        the filesuffix of the compiled file
+        the filesuffix of the files to be compiled and on default the
+        filesuffix od the compiled file
+    output_filesuffix: str
+        the filesuffix of the compiled file on default the same as for the
+        input file
     use_compression : bool
         use zlib compression on the output netCDF files
 
@@ -783,10 +864,13 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds['ref_pix_lat'] = ('rgi_id', ref_pix_lat)
     ds['ref_pix_lat'].attrs['description'] = 'latitude'
 
+    if output_filesuffix==False:
+        output_filesuffix=filesuffix
+
     if path:
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
-                                'climate_input' + filesuffix + '.nc')
+                                'climate_input' + output_filesuffix + '.nc')
 
         enc_var = {'dtype': 'float32'}
         if use_compression:
