@@ -278,3 +278,93 @@ Models
     RandomMassBalance
     UncertainMassBalance
     MultipleFlowlineMassBalance
+
+Model Flowlines
+===============
+
+Different flowline types are found in the ``core.flowline`` module.
+
+.. currentmodule:: oggm.core.flowline
+
+They follow the :py:class:`Flowline` interface. Here is a quick summary of their
+hierarchy, attributes, units and converntions:
+
+Hierarchy
+---------
+
+OGGM knows three different kinds of flow- or centerlines:
+
+.. currentmodule:: oggm.core.centerlines
+
+geometrical centerlines
+   These lines are calculated following the algorithm of
+   `Kienholz et al., (2014)`_. They determine where the subsequent flowlines
+   are situated and how many of them are needed for one glacier. The main task
+   for this calculation is :py:func:`compute_centerlines`. These lines are not
+   stored within a specific OGGM class but are stored within the
+   GlacierDirectory as shapely objects.
+
+inversion flowlines
+   To use the geometrical lines within the model they are transformed to
+   :py:class:`Centerline` objects. This is done within
+   :py:func:`initialize_flowlines` where the lines are projected onto a xy-grid
+   with regular spaced line-points. This step also takes care of tributary
+   junctions. These lines are then also used for the bed inversion, hence their
+   name.
+
+.. currentmodule:: oggm.core.flowline
+
+model flowlines
+   The dynamical OGGM model finally uses lines of the class
+   :py:class:`Flowline` for all simulations. These flowlines are created by
+   :py:func:`init_present_time_glacier`, which combines information from
+   several preprocessing steps and the bed inversion. From a user prespective,
+   especially if preprocessed directories are used, these model flowlines are
+   the most importent ones and further informations on the class interface and
+   attributes are given below.
+
+.. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
+
+
+Attributes
+----------
+surface_h, length, width, etc.
+
+
+
+Interface
+---------
+
+.. currentmodule:: oggm.core.centerlines
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    Centerline
+    initialize_flowlines
+    compute_centerlines
+
+.. currentmodule:: oggm.core.flowline
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    Flowline
+    init_present_time_glacier
+
+
+Models
+------
+
+.. currentmodule:: oggm.core.flowline
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    ParabolicBedFlowline
+    RectangularBedFlowline
+    TrapezoidalBedFlowline
+    MixedBedFlowline
