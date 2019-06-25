@@ -1230,7 +1230,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
                        climate_filename='climate_monthly',
                        climate_input_filesuffix='', output_filesuffix='',
-                       unique_samples=False):
+                       init_area_m2=None, unique_samples=False):
     """Runs the random mass balance model for a given number of years.
 
     This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
@@ -1266,6 +1266,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     output_filesuffix : str, optional
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    init_area_m2: float, optional
+        glacier area with which the model is initialized, default is RGI value
     unique_samples: bool, optional
         if true, chosen random mass-balance years will only be available once
         per random climate period-length
@@ -1293,7 +1295,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     # instance the model
     min_hgt, max_hgt = get_min_max_elevation(gdir)
-    model = VAScalingModel(year_0=0, area_m2_0=gdir.rgi_area_m2,
+    if init_area_m2 is None:
+        init_area_m2 = gdir.rgi_area_m2
+    model = VAScalingModel(year_0=0, area_m2_0=init_area_m2,
                            min_hgt=min_hgt, max_hgt=max_hgt,
                            mb_model=mb_mod)
     # specify path where to store model diagnostics
