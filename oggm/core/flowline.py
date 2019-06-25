@@ -1948,7 +1948,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
             fmod.run_until(init_model_yr)
             init_model_fls = fmod.fls
 
-    mb = MulitpleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
 
