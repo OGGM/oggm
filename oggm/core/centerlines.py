@@ -38,7 +38,7 @@ import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from salem import lazy_property
 from oggm import utils
-from oggm.utils import tuple2int, line_interpol, interp_nans
+from oggm.utils import tuple2int, line_interpol, interp_nans, SuperclassMeta
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError)
@@ -52,7 +52,7 @@ LABEL_STRUCT = np.array([[0, 1, 0],
                          [0, 1, 0]])
 
 
-class Centerline(object):
+class Centerline(object, metaclass=SuperclassMeta):
     """A Centerline has geometrical and flow rooting properties.
 
     It is instanciated and updated by _join_lines() exclusively
@@ -60,7 +60,16 @@ class Centerline(object):
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None,
                  rgi_id=None):
-        """ Instantiate."""
+        """ Initialize a Centerline
+
+        Parameters
+        ----------
+        line
+        dx
+        surface_h
+        orig_head
+        rgi_id
+        """
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point

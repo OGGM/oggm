@@ -38,13 +38,26 @@ log = logging.getLogger(__name__)
 
 
 class Flowline(Centerline):
-    """The is the input flowline for the model."""
+    """Common logic for the different types of model flowlines
+
+
+    """
 
     def __init__(self, line=None, dx=1, map_dx=None,
                  surface_h=None, bed_h=None, rgi_id=None):
-        """ Instanciate.
+        """ Initialize a Flowline
 
-        #TODO: documentation
+        Parameters
+        ----------
+        line
+        dx
+        map_dx: float
+
+        surface_h: :py:class:`numpy.ndarray`
+            elevation [m] of the flowline grid points
+        bed_h: :py:class:`numpy.ndarray`
+            elevation[m] of the bedrock at the flowline grid points
+        rgi_id
         """
 
         # This is do add flexibility for testing. I have no time for fancier
