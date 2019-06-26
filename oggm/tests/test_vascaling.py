@@ -886,6 +886,10 @@ class TestVAScalingModel(unittest.TestCase):
         -------
 
         """
+        # let's not use the mass balance bias since we want to reproduce
+        # results from mass balance calibration
+        cfg.PARAMS['use_bias_for_run'] = False
+
         # read the Hintereisferner DEM
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -928,7 +932,7 @@ class TestVAScalingModel(unittest.TestCase):
 
         # the glacier should not change much under a random climate
         # based on the equilibirum period centered around t*
-        assert abs(1 - ds.volume.mean() / ds.volume[0]) < 0.01
+        assert abs(1 - ds.volume.mean() / ds.volume[0]) < 0.015
         # higher temperatures should result in a smaller glacier
         assert ds.volume.mean() > ds_p.volume.mean()
         # lower temperatures should result in a larger glacier
