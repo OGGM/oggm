@@ -371,10 +371,11 @@ Type of flowlines
     :toctree: generated/
     :nosignatures:
 
+    Flowline
+    MixedBedFlowline
     ParabolicBedFlowline
     RectangularBedFlowline
     TrapezoidalBedFlowline
-    MixedBedFlowline
 
 
 Interface
