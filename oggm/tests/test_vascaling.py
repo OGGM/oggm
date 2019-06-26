@@ -876,3 +876,60 @@ class TestVAScalingModel(unittest.TestCase):
             # root mean squared deviation
             rmsd_an = rmsd_bc(oggm_ds[param].values, vas_ds[param].values)
             assert rmsd_an <= rmsd
+
+    def test_run_random_climate(self):
+        """ Test the run_random_climate task for a climate based on the
+        equilibrium period centred around t*. Additionally a positive and a
+        negative temperature bias are tested.
+
+        Returns
+        -------
+
+        """
+        # read the Hintereisferner DEM
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        # process the given climate file
+        climate.process_custom_climate_data(gdir)
+        # compute mass balance parameters
+        vascaling.local_t_star(gdir,
+                               ref_df=cfg.PARAMS['vas_ref_tstars_rgi5_histalp'])
+
+        # define some parameters for the random climate model
+        nyears = 300
+        seed = 1
+        temp_bias = 0.5
+        # read the equilibirum year used for the mass balance calibration
+        t_star = gdir.read_json('vascaling_mustar')['t_star']
+        # run model with random climate
+        _ = vascaling.run_random_climate(gdir, nyears=nyears, y0=t_star,
+                                         seed=seed)
+        # run model with positive temperature bias
+        _ = vascaling.run_random_climate(gdir, nyears=nyears, y0=t_star,
+                                         seed=seed, temperature_bias=temp_bias,
+                                         output_filesuffix='_bias_p')
+        # run model with negative temperature bias
+        _ = vascaling.run_random_climate(gdir, nyears=nyears, y0=t_star,
+                                         seed=seed,
+                                         temperature_bias=-temp_bias,
+                                         output_filesuffix='_bias_n')
+
+        # compile run outputs
+        ds = utils.compile_run_output([gdir], filesuffix='')
+        ds_p = utils.compile_run_output([gdir], filesuffix='_bias_p')
+        ds_n = utils.compile_run_output([gdir], filesuffix='_bias_n')
+
+        # the glacier should not change much under a random climate
+        # based on the equilibirum period centered around t*
+        assert abs(1 - ds.volume.mean() / ds.volume[0]) < 0.01
+        # higher temperatures should result in a smaller glacier
+        assert ds.volume.mean() > ds_p.volume.mean()
+        # lower temperatures should result in a larger glacier
+        assert ds.volume.mean() < ds_n.volume.mean()
