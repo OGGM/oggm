@@ -1881,7 +1881,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
-                          **kwargs):
+                          bias=None, **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
@@ -1922,6 +1922,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         Ignored if `init_model_filesuffix` is set
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
+    bias : float
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -1945,7 +1949,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
             init_model_fls = fmod.fls
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                     filename=climate_filename,
+                                     filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
