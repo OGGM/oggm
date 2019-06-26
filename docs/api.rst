@@ -282,17 +282,18 @@ Models
 Model Flowlines
 ===============
 
-Different flowline types are found in the ``core.flowline`` module.
+Flowlines are what represent a glacier in OGGM.
+During the preprocessing stage of a glacier simulation these lines evolve from
+simple topography following lines to more abstract objects within the model.
 
-.. currentmodule:: oggm.core.flowline
-
-They follow the :py:class:`Flowline` interface. Here is a quick summary of their
-hierarchy, attributes, units and converntions:
+This chapter provides an overview on the different line types, how to access
+the model flowlines and their attributes.
 
 Hierarchy
 ---------
 
-OGGM knows three different kinds of flow- or centerlines:
+First a short summary of the evolution or the hierarchy of these different
+flowline stages:
 
 .. currentmodule:: oggm.core.centerlines
 
@@ -309,8 +310,14 @@ inversion flowlines
    :py:class:`Centerline` objects. This is done within
    :py:func:`initialize_flowlines` where the lines are projected onto a xy-grid
    with regular spaced line-points. This step also takes care of tributary
-   junctions. These lines are then also used for the bed inversion, hence their
-   name.
+   junctions. These lines are then in a later step also used for the bed
+   inversion, hence their name.
+
+downstream line
+    This line extends the glacier's centerline along the unglaciated glacier
+    bed which is necessary for advancing glaciers. This line is calculated
+    along the valley floor to the end of the domain boundary within
+    :py:func:`compute_downstream_line`.
 
 .. currentmodule:: oggm.core.flowline
 
@@ -318,18 +325,56 @@ model flowlines
    The dynamical OGGM model finally uses lines of the class
    :py:class:`Flowline` for all simulations. These flowlines are created by
    :py:func:`init_present_time_glacier`, which combines information from
-   several preprocessing steps and the bed inversion. From a user prespective,
-   especially if preprocessed directories are used, these model flowlines are
-   the most importent ones and further informations on the class interface and
-   attributes are given below.
+   several preprocessing steps, the downstream line and the bed inversion.
+   From a user prespective, especially if preprocessed directories are used,
+   these model flowlines are the most importent ones and further informations
+   on the class interface and attributes are given below.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
 
+Access
+------
 
-Attributes
-----------
-surface_h, length, width, etc.
+The easiest and most common way to access the model flowlines of a glacier is
+with its GlacierDirectory. For this we initialize a minimal working example
+including the model flowlines. This is achieved by choosing preprocessing level
+4.
 
+.. ipython:: python
+
+    import os
+    import oggm
+    from oggm import cfg, workflow
+    from oggm.utils import gettempdir
+    cfg.initialize()  # always initialize before an OGGM task
+    # The working directory is where OGGM will store the run's data
+    cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
+    gdirs = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=4,
+                                          prepro_border=10)
+    gdir = gdirs[0]  # init_glacier_regions always returns a list
+
+    fls = gdir.read_pickle('model_flowlines')
+    fls
+    [fl.order for fl in fls]
+
+This glacier has three flowlines of type `MixedBedFlowline` provided as a list.
+And the flowlines are orderd by ascending Strahler numbers, where the last entry
+in the list is always the longest and very often most relevant flowline of
+that glacier.
+
+Type of flowlines
+-----------------
+
+.. currentmodule:: oggm.core.flowline
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    ParabolicBedFlowline
+    RectangularBedFlowline
+    TrapezoidalBedFlowline
+    MixedBedFlowline
 
 
 Interface
@@ -344,6 +389,7 @@ Interface
     Centerline
     initialize_flowlines
     compute_centerlines
+    compute_downstream_line
 
 .. currentmodule:: oggm.core.flowline
 
@@ -351,20 +397,4 @@ Interface
     :toctree: generated/
     :nosignatures:
 
-    Flowline
     init_present_time_glacier
-
-
-Models
-------
-
-.. currentmodule:: oggm.core.flowline
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    ParabolicBedFlowline
-    RectangularBedFlowline
-    TrapezoidalBedFlowline
-    MixedBedFlowline
