@@ -899,8 +899,8 @@ class TestVAScalingModel(unittest.TestCase):
         # process the given climate file
         climate.process_custom_climate_data(gdir)
         # compute mass balance parameters
-        vascaling.local_t_star(gdir,
-                               ref_df=cfg.PARAMS['vas_ref_tstars_rgi5_histalp'])
+        ref_df = cfg.PARAMS['vas_ref_tstars_rgi5_histalp']
+        vascaling.local_t_star(gdir, ref_df=ref_df)
 
         # define some parameters for the random climate model
         nyears = 300
