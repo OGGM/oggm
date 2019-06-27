@@ -1225,6 +1225,92 @@ class RandomVASMassBalance(MassBalanceModel):
         return self.mbmod.get_ela(year=ryr)
 
 
+@entity_task(log)
+def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                       bias=None, seed=None, temperature_bias=None,
+                       climate_filename='climate_monthly',
+                       climate_input_filesuffix='', output_filesuffix='',
+                       init_area_m2=None, unique_samples=False):
+    """Runs the random mass balance model for a given number of years.
+
+    This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
+    and runs and stores a :py:class:`oggm.core.vascaling.VAScalingModel` with
+    the given mass balance model.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    nyears : int, optional
+        length of the simulation, default = 1000
+    y0 : int, optional
+        central year of the random climate period. The default is to be
+        centred on t*. Default = None
+    halfsize : int, optional
+        the half-size of the time window (window size = 2 * halfsize + 1),
+        default = 15
+    bias : float, optional
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero. Default = None
+    seed : int
+        seed for the random generator. If you ignore this, the runs will be
+        different each time. Setting it to a fixed seed accross glaciers can
+        be usefull if you want to have the same climate years for all of them
+    temperature_bias : float, optional
+        add a bias to the temperature timeseries, default = None
+    climate_filename : str, optional
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'gcm_data'
+    climate_input_filesuffix: str, optional
+        filesuffix for the input climate file
+    output_filesuffix : str, optional
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    init_area_m2: float, optional
+        glacier area with which the model is initialized, default is RGI value
+    unique_samples: bool, optional
+        if true, chosen random mass-balance years will only be available once
+        per random climate period-length
+        if false, every model year will be chosen from the random climate
+        period with the same probability (default)
+
+    Returns
+    -------
+    :py:class:`oggm.core.vascaling.VAScalingModel`
+    """
+
+    # instance mass balance model
+    mb_mod = RandomVASMassBalance(gdir, y0=y0, halfsize=halfsize, bias=bias,
+                                  seed=seed, filename=climate_filename,
+                                  input_filesuffix=climate_input_filesuffix,
+                                  unique_samples=unique_samples)
+
+    if temperature_bias is not None:
+        # add given temperature bias to mass balance model
+        mb_mod.temp_bias = temperature_bias
+
+    # where to store the model output
+    diag_path = gdir.get_filepath('model_diagnostics', filesuffix='vas',
+                                  delete=True)
+
+    # instance the model
+    min_hgt, max_hgt = get_min_max_elevation(gdir)
+    if init_area_m2 is None:
+        init_area_m2 = gdir.rgi_area_m2
+    model = VAScalingModel(year_0=0, area_m2_0=init_area_m2,
+                           min_hgt=min_hgt, max_hgt=max_hgt,
+                           mb_model=mb_mod)
+    # specify path where to store model diagnostics
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+    # run model
+    model.run_until_and_store(year_end=nyears, diag_path=diag_path)
+
+    return model
+
+
 class ConstantVASMassBalance(MassBalanceModel):
     """Constant mass-balance during a chosen period.
 
@@ -1438,93 +1524,6 @@ class ConstantVASMassBalance(MassBalanceModel):
 
         """
         return self.mbmod.get_ela(year=self.y0)
-
-
-@entity_task(log)
-def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
-                       bias=None, seed=None, temperature_bias=None,
-                       climate_filename='climate_monthly',
-                       climate_input_filesuffix='', output_filesuffix='',
-                       init_area_m2=None, unique_samples=False):
-    """Runs the random mass balance model for a given number of years.
-
-    This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
-    and runs and stores a :py:class:`oggm.core.vascaling.VAScalingModel` with
-    the given mass balance model.
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    nyears : int, optional
-        length of the simulation, default = 1000
-    y0 : int, optional
-        central year of the random climate period. The default is to be
-        centred on t*. Default = None
-    halfsize : int, optional
-        the half-size of the time window (window size = 2 * halfsize + 1),
-        default = 15
-    bias : float, optional
-        bias of the mb model. Default is to use the calibrated one, which
-        is often a better idea. For t* experiments it can be useful to set it
-        to zero. Default = None
-    seed : int
-        seed for the random generator. If you ignore this, the runs will be
-        different each time. Setting it to a fixed seed accross glaciers can
-        be usefull if you want to have the same climate years for all of them
-    temperature_bias : float, optional
-        add a bias to the temperature timeseries, default = None
-    climate_filename : str, optional
-        name of the climate file, e.g. 'climate_monthly' (default) or
-        'gcm_data'
-    climate_input_filesuffix: str, optional
-        filesuffix for the input climate file
-    output_filesuffix : str, optional
-        this add a suffix to the output file (useful to avoid overwriting
-        previous experiments)
-    init_area_m2: float, optional
-        glacier area with which the model is initialized, default is RGI value
-    unique_samples: bool, optional
-        if true, chosen random mass-balance years will only be available once
-        per random climate period-length
-        if false, every model year will be chosen from the random climate
-        period with the same probability (default)
-
-    Returns
-    -------
-    :py:class:`oggm.core.vascaling.VAScalingModel`
-    """
-
-    # instance mass balance model
-    mb_mod = RandomVASMassBalance(gdir, y0=y0, halfsize=halfsize, bias=bias,
-                                  seed=seed, filename=climate_filename,
-                                  input_filesuffix=climate_input_filesuffix,
-                                  unique_samples=unique_samples)
-
-    if temperature_bias is not None:
-        # add given temperature bias to mass balance model
-        mb_mod.temp_bias = temperature_bias
-
-    # where to store the model output
-    diag_path = gdir.get_filepath('model_diagnostics', filesuffix='vas',
-                                  delete=True)
-
-    # instance the model
-    min_hgt, max_hgt = get_min_max_elevation(gdir)
-    if init_area_m2 is None:
-        init_area_m2 = gdir.rgi_area_m2
-    model = VAScalingModel(year_0=0, area_m2_0=init_area_m2,
-                           min_hgt=min_hgt, max_hgt=max_hgt,
-                           mb_model=mb_mod)
-    # specify path where to store model diagnostics
-    diag_path = gdir.get_filepath('model_diagnostics',
-                                  filesuffix=output_filesuffix,
-                                  delete=True)
-    # run model
-    model.run_until_and_store(year_end=nyears, diag_path=diag_path)
-
-    return model
-
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
