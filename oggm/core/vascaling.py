@@ -1234,7 +1234,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """Runs the random mass balance model for a given number of years.
 
     This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
-    and runs and stores said model.
+    and runs and stores a :py:class:`oggm.core.vascaling.VAScalingModel` with
+    the given mass balance model.
 
     Parameters
     ----------
