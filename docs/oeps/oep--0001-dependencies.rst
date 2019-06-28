@@ -1,62 +1,72 @@
-# Package dependencies and reproducibility in OGGM: a roadmap
+==========================================================
+OEP-0001: Package dependencies and reproducibility in OGGM
+==========================================================
 
+:Authors: Fabien Maussion, Timo Rothenpieler, Alex Jarosch
+:Status: Largely implemented
+:Created: 11.11.2018
+
+
+Abstract
+--------
 
 OGGM relies on a large number of external python packages (dependencies).
 Many of them have complex dependencies themselves, often compiled binaries
 (for example `rasterio`, which relies on a C package: `GDAL`).
 
-The complexity of this dependency tree as well as the permanent updates of 
+The complexity of this dependency tree as well as the permanent updates of
 both OGGM and its dependencies has lead to several unfortunate situations
-in the past: this involved a lot of maintenance work for the OGGM 
+in the past: this involved a lot of maintenance work for the OGGM
 developers that had little or nothing to do with the model itself.
 
-Furthermore, while the vast majority of the dependency updates are 
+Furthermore, while the vast majority of the dependency updates are
 without consequences, some might change the model results. As an example,
-updates in the interpolation routines of GDAL/rasterio can change the 
+updates in the interpolation routines of GDAL/rasterio can change the
 glacier topography in a non-traceable way for OGGM. This is an obstacle
-to [reproducible science](https://en.wikipedia.org/wiki/Reproducibility), 
+to `reproducible science <https://en.wikipedia.org/wiki/Reproducibility>`_,
 and we should try to avoid these situations.
 
 OGGM, as a high level "top of the dependency pyramid" software, does not have
 the same requirements in terms of being always up-to-date as, say, general
-purpose libraries like pandas or matplotlib. With this document, the OGGM 
+purpose libraries like pandas or matplotlib. With this document, the OGGM
 developers attempt to define a clear policy for handling package dependencies
-in the OGGM project. This policy can be seen as a set of "rules" or 
+in the OGGM project. This policy can be seen as a set of "rules" or
 "guidelines" that we will try to follow as much as possible.
 
 
-## Example situations
+Example situations
+------------------
 
 Here are some example of situations that happened in the past or might happen
 in the future:
 
-**Situation 1.**
+**Situation 1**
    A new user installs OGGM with `conda install oggm-deps` and the installation 
    fails because one of one of the dependencies. This 
    is a problem in conda (or conda-forge) and has nothing to do with OGGM.
    
-**Situation 2.**
+**Situation 2**
    A new user installs OGGM with `conda install oggm-deps`: the installation 
    succeeds, but the OGGM tests fail to pass. One of our dependencies 
    renamed a functionality or deprecated it, and we didn't update OGGM in time.
    This requires action in OGGM itself, but we don't always have time to 
    fix it quickly enough, leading to an overall bad user experience.
    
-**Situation 3.**
+**Situation 3**
    A developer writes a new feature and sends a pull-request: the tests pass
    on her machine but not on Travis. The failing tests are unrelated to the PR:
    it is one of our dependency update that broke something in OGGM. 
    This a bad experience for new developers, and it is the job of an OGGM core 
    developer to solve the problem. 
    
-**Situation 4.**
+**Situation 4**
    A developer writes a quantitative test of the type:
    "the model simulation should yield a volume of xx.xxx km3 ice": the test
    passes locally but fails on Travis. Indeed, the glacier topography is 
    slightly different on Travis because of difference in the installed GDAL
    version, yielding non-negligible differences in model results.
    
-**Situation 5.**
+**Situation 5**
    Worst case scenario: someone tries to replicate the results of a simulation
    published in a paper, and her results are off by 10% to the published 
    ones. A reason could be that the system and/or 
@@ -70,7 +80,8 @@ issues and provide guidelines for how to handle software dependencies
 within the OGGM framework.
 
 
-## Goals
+Goals
+-----
 
 Here is a set of goals that we should always try to follow:
 
@@ -109,42 +120,45 @@ Here is a set of goals that we should always try to follow:
     (Mac OSX, Windows).
 
 
-## Standard dependency list and updates (goals 1, 2, 3)
+Standard dependency list and updates (goals 1, 2, 3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The latest and all previous standard dependency lists can be found on the
-github repository: https://github.com/OGGM/OGGM-dependency-list
+github repository: `<https://github.com/OGGM/OGGM-dependency-list>`_
 
 Discussions about whether the standard dependency list should be updated or not
 will take place on this repository or the main OGGM repository.
 
 
-## Docker and Singularity containers (goal 4)
+Docker and Singularity containers (goal 4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The easiest way to guarantee consistency accross platforms and over longer
-periods of time are [containers](https://www.docker.com/resources/what-container).
+periods of time are `containers <https://www.docker.com/resources/what-container>`_.
 A container image is a lightweight, standalone, executable package of software 
 that includes everything needed to run an application: code, runtime, system 
 tools, system libraries and settings.
 
-The most widely used container platform is [Docker](https://www.docker.com/).
+The most widely used container platform is `Docker <https://www.docker.com>`_.
 For security and preformance reasons, HPC centers prefer to use 
-[Singularity](https://www.sylabs.io/). Fortunately, Singularity containers 
+`Singularity <https://www.sylabs.io>`_. Fortunately, Singularity containers
 can be built from Docker images.
 
 OGGM maintains an Ubuntu container image that users can download and use 
 for free, and convert it to a singularity image for use on HPC.
 
-The images can be found at: https://hub.docker.com/r/oggm/oggm/
+The images can be found at: `<https://hub.docker.com/r/oggm/oggm>`_
 
-The build scripts can be found at https://github.com/OGGM/OGGM-Docker
+The build scripts can be found at `<https://github.com/OGGM/OGGM-Docker>`_
 
 **OGGM releases will point to a specific version of the Docker image
 for reproducible results over time**.
 
 
-## Travis CI (goals 5, 6 and 11)
+Travis CI (goals 5, 6 and 11)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-[Travis CI](https://travis-ci.org/OGGM/oggm) is the tool we use for continuous
+`Travis CI <https://travis-ci.org/OGGM/oggm>`_ is the tool we use for continuous
 testing of the OGGM software. **The tests should run on the stable
 Docker image built with the standard dependency list**. Optionally,
 we will monitor the tests on the latest image as well, but the tests are 
@@ -153,10 +167,11 @@ not guaranteed to pass ("allowed failures").
 **The main OGGM reporistory will not test on other platforms than Linux**. 
 We might run the tests for other platforms as well, but this is without 
 guarantee and should happen on a separate repository (e.g. on 
-https://github.com/OGGM/OGGM-dependency-list).
+`<https://github.com/OGGM/OGGM-dependency-list>`_).
 
 
-## pip and conda (goals 7 and 8)
+pip and conda (goals 7 and 8)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Docker and Singularity containers are the most secure and consistent way to 
 run OGGM. However, they require some knowledge about containers and the 
@@ -171,10 +186,12 @@ make no guarantee for the problems generated upstream, i.e. problems which are
 unrelated to OGGM itself.
 
 
-## Check install (goal 10)
+Check install (goal 10)
+~~~~~~~~~~~~~~~~~~~~~~~
 
 The user will have two complementary ways to test the correct installation
 of OGGM:
+
 - `pytest --pyargs oggm --run-slow --mpl` will run the test suite. This test
   suite does not contain quantitative tests, i.e. it does not guarantee
   consistency of model results accross platforms
