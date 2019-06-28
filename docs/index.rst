@@ -78,6 +78,7 @@ Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`
+* :doc:`oeps`
 * :doc:`contributing`
 
 .. toctree::
@@ -87,6 +88,7 @@ Do you want to contribute to the model? This is the right place to start.
 
     citing-oggm.rst
     add-module.rst
+    oeps.rst
     contributing.rst
 
 .. _contact:
