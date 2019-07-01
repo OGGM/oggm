@@ -659,8 +659,8 @@ def compile_run_output(gdirs, path=True, filesuffix='',
     ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
     ds['ela'].attrs['units'] = 'm a.s.l'
 
-    if output_filesuffix==False:
-        output_filesuffix=filesuffix
+    if output_filesuffix == False:
+        output_filesuffix = filesuffix
 
     if path:
         if path is True:
@@ -679,6 +679,7 @@ def compile_run_output(gdirs, path=True, filesuffix='',
 
 def compile_fast(gdirs, path=True, filename='climate_monthly',
                  input_filesuffix='', output_filesuffix=''):
+
 
     """For large numbers of glaciers this function can be used to speed up the
     compiling process for either the climate files or the run_output
@@ -700,17 +701,17 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
          filesuffix of the compiled file
     """
 
-    lsubfiles= 1000
+    lsubfiles = 1000
 
     gdir_len = len(gdirs)
 
     for i in np.arange(math.ceil(gdir_len/lsubfiles)):
         sel_gdirs = gdirs[i*lsubfiles:(i+1)*lsubfiles]
         if filename == 'climate_monthly':
-            compile_climate_input(sel_gdirs, path=path,
-                                filename=filename, filesuffix=input_filesuffix,
-                                output_filesuffix=input_filesuffix + '_tmp_'
-                                + str(i))
+            compile_climate_input(sel_gdirs, path=path, filename=filename,
+                                  filesuffix=input_filesuffix,
+                                  output_filesuffix=input_filesuffix +
+                                                    '_tmp_' + str(i))
         elif filename == 'gcm_data':
             compile_climate_input(sel_gdirs, path=path, filename=filename,
                                   filesuffix=input_filesuffix,
@@ -721,7 +722,6 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
                                filesuffix=input_filesuffix,
                                output_filesuffix=input_filesuffix + '_tmp_'
                                + str(i))
-
 
     if filename == 'climate_monthly' or filename == 'gcm_data':
         tmp_paths = sorted(glob.glob(cfg.PATHS[
@@ -734,13 +734,12 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
 
     ds = xr.open_mfdataset(tmp_paths)
 
-
     if filename == 'climate_monthly' or filename == 'gcm_data':
         ds.to_netcdf(cfg.PATHS['working_dir'] + 'climate_input'
                      + output_filesuffix + '.nc')
     elif filename == 'model_diagnostics':
-        ds.to_netcdf(cfg.PATHS['working_dir'] + 'run_output'
-                     + output_filesuffix + '.nc')
+        ds.to_netcdf(cfg.PATHS['working_dir'] + 'run_output' +
+                     output_filesuffix + '.nc')
 
     for i in tmp_paths:
         os.remove(i)
@@ -864,8 +863,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds['ref_pix_lat'] = ('rgi_id', ref_pix_lat)
     ds['ref_pix_lat'].attrs['description'] = 'latitude'
 
-    if output_filesuffix==False:
-        output_filesuffix=filesuffix
+    if output_filesuffix == False:
+        output_filesuffix = filesuffix
 
     if path:
         if path is True:
