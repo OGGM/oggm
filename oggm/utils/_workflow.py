@@ -565,7 +565,7 @@ def compile_run_output(gdirs, path=True, filesuffix='',
         Set to `False` to disable disk storage.
     filesuffix : str
         the filesuffix of the files to be compiled and on default the
-        filesuffix od the compiled file
+        filesuffix of the compiled file
     output_filesuffix: str
         the filesuffix of the compiled file (on default equal to the
         filesuffix)
@@ -694,7 +694,7 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
         where to store (default is on the working dir).
     filename: str
         BASENAME of the file to be compiled. Options: climate_monthly(default),
-        gcm_data, model_dianostics.
+        gcm_data, model_diagnostics.
     input_filesuffix : str
         filesuffix of the files to be compiled
     output_filesuffix: str
