@@ -567,8 +567,8 @@ def compile_run_output(gdirs, path=True, filesuffix='',
         the filesuffix of the files to be compiled and on default the
         filesuffix od the compiled file
     output_filesuffix: str
-        the filesuffix of the compiled file on default the same as for the
-        input file
+        the filesuffix of the compiled file (on default equal to the
+        filesuffix)
     use_compression : bool
         use zlib compression on the output netCDF files
 
@@ -682,7 +682,7 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
                  input_filesuffix='', output_filesuffix=''):
 
     """For large numbers of glaciers this function can be used to speed up the
-    compiling process for either the climate files or the run_output
+    compiling process for either the climate input or the run output files.
 
     Merge the output of the model runs of several gdirs into one file.
 
@@ -759,7 +759,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         BASENAME of the climate input files
     filesuffix : str
         the filesuffix of the files to be compiled and on default the
-        filesuffix od the compiled file
+        filesuffix of the compiled file
     output_filesuffix: str
         the filesuffix of the compiled file on default the same as for the
         input file
