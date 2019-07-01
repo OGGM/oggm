@@ -677,9 +677,9 @@ def compile_run_output(gdirs, path=True, filesuffix='',
 
     return ds
 
+
 def compile_fast(gdirs, path=True, filename='climate_monthly',
                  input_filesuffix='', output_filesuffix=''):
-
 
     """For large numbers of glaciers this function can be used to speed up the
     compiling process for either the climate files or the run_output
@@ -710,8 +710,8 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
         if filename == 'climate_monthly':
             compile_climate_input(sel_gdirs, path=path, filename=filename,
                                   filesuffix=input_filesuffix,
-                                  output_filesuffix=input_filesuffix +
-                                                    '_tmp_' + str(i))
+                                  output_filesuffix=input_filesuffix + '_tmp_'
+                                  + str(i))
         elif filename == 'gcm_data':
             compile_climate_input(sel_gdirs, path=path, filename=filename,
                                   filesuffix=input_filesuffix,
@@ -728,9 +728,8 @@ def compile_fast(gdirs, path=True, filename='climate_monthly',
                                      'working_dir'] + 'climate_input'
                                      + input_filesuffix + '_tmp_*.nc'))
     elif filename == 'model_diagnostics':
-        tmp_paths = sorted(glob.glob(cfg.PATHS[
-                                    'working_dir'] + 'run_output'
-                                   + input_filesuffix + '_tmp_*.nc'))
+        tmp_paths = sorted(glob.glob(cfg.PATHS['working_dir'] + 'run_output' +
+                                     input_filesuffix + '_tmp_*.nc'))
 
     ds = xr.open_mfdataset(tmp_paths)
 
