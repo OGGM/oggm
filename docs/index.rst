@@ -8,10 +8,8 @@ future mass-balance, volume and geometry of (almost) any glacier in the world
 in a fully automated and extensible workflow. We rely exclusively on publicly
 available data for calibration and validation.
 
-.. note::
-
-    **This is the software documentation: for general information about the
-    OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+**This is the software documentation: for general information about the
+OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 
 
 .. include:: _generated/version_text.txt
@@ -48,6 +46,7 @@ Using OGGM
 
 How to use the model, with concrete python code examples.
 
+* :doc:`cloud`
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`input-data`
@@ -62,6 +61,7 @@ How to use the model, with concrete python code examples.
     :hidden:
     :caption: Using OGGM
 
+    cloud.rst
     installing-oggm.rst
     getting-started.rst
     input-data.rst

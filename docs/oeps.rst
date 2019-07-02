@@ -11,3 +11,4 @@ OGGM Enhancement Proposals (OEPS) are design documents...
     :maxdepth: 1
 
     oeps/oep--0001-dependencies.rst
+    oeps/oep--0002-cloud.rst
