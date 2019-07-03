@@ -967,10 +967,13 @@ class TestVAScalingModel(unittest.TestCase):
         # define some parameters for the constant climate model
         nyears = 500
         temp_bias = 0.5
-        _ = vascaling.run_constant_climate(gdir, nyears=nyears, output_filesuffix='')
-        _ = vascaling.run_constant_climate(gdir, nyears=nyears, temperature_bias=+temp_bias,
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears,
+                                           output_filesuffix='')
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears,
+                                           temperature_bias=+temp_bias,
                                            output_filesuffix='_bias_p')
-        _ = vascaling.run_constant_climate(gdir, nyears=nyears, temperature_bias=-temp_bias,
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears,
+                                           temperature_bias=-temp_bias,
                                            output_filesuffix='_bias_n')
 
         # compile run outputs
