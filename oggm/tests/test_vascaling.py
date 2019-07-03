@@ -995,3 +995,50 @@ class TestVAScalingModel(unittest.TestCase):
         # the glacier should be in a new equilibirum for last 300 years
         assert max(rate_p[-300:]) < 0.001
         assert max(rate_n[-300:]) < 0.001
+
+    def test_run_until_equilibrium(self):
+        """"""
+        # let's not use the mass balance bias since we want to reproduce
+        # results from mass balance calibration
+        cfg.PARAMS['use_bias_for_run'] = False
+
+        # read the Hintereisferner DEM
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        # process the given climate file
+        climate.process_custom_climate_data(gdir)
+        # compute mass balance parameters
+        ref_df = cfg.PARAMS['vas_ref_tstars_rgi5_histalp']
+        vascaling.local_t_star(gdir, ref_df=ref_df)
+
+        # instance a constant mass balance model, centred around t*
+        mb_model = vascaling.ConstantVASMassBalance(gdir)
+        # add a positive temperature bias
+        mb_model.temp_bias = 0.5
+
+        # create a VAS model: start with year 0  since we are using a constant
+        # massbalance model, other values are read from RGI
+        min_hgt, max_hgt = vascaling.get_min_max_elevation(gdir)
+        model = vascaling.VAScalingModel(year_0=0, area_m2_0=gdir.rgi_area_m2,
+                                         min_hgt=min_hgt, max_hgt=max_hgt,
+                                         mb_model=mb_model)
+
+        # run glacier with new mass balance model
+        model.run_until_equilibrium(rate=1e-4)
+
+        # equilibrium should be reached after a couple of 100 years
+        assert model.year <= 300
+        # new equilibrium glacier should be smaller (positive temperature bias)
+        assert model.volume_m3 < model.volume_m3_0
+
+        # run glacier for another 100 years and check volume again
+        v_eq = model.volume_m3
+        model.run_until(model.year + 100)
+        assert abs(1 - (model.volume_m3/v_eq)) < 0.01
