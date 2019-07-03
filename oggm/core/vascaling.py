@@ -19,6 +19,7 @@ from time import gmtime, strftime
 from scipy.optimize import minimize_scalar
 
 # import OGGM modules
+import oggm
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 
@@ -1765,7 +1766,7 @@ class VAScalingModel(object):
         ----------
         year_end : float
             end of modeling period
-        reset : bool, optional)
+        reset : bool, optional
             If `True`, the model will start from `year_0`, otherwise from its
             current position in time (default).
 
@@ -1924,6 +1925,55 @@ class VAScalingModel(object):
             diag_ds.to_netcdf(diag_path)
 
         return diag_ds
+
+    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
+        """ Try to run the glacier model until an equilibirum is reached.
+        Works only with a constant mass balance model.
+
+        Parameters
+        ----------
+        rate: float, optional
+            rate of volume change for which the glacier is considered to be in
+            equilibrium, whereby rate = |V0 - V1| / V0. default is 0.1 percent
+        ystep: int, optional
+            number of years per iteration step, default is 5
+        max_ite: int, optional
+            maximum number of iterations, default is 200
+
+        """
+        # TODO: isinstance is not working...
+        # if not isinstance(self.mb_model, ConstantVASMassBalance):
+        #     raise TypeError('The mass balance model must be of type ' +
+        #                     'ConstantVASMassBalance.')
+        # initialize the iteration counters and the volume change parameter
+        ite = 0
+        was_close_zero = 0
+        t_rate = 1
+
+        # model runs for a maximum fixed number of iterations
+        # loop breaks if an equilibrium is reached (t_rate small enough)
+        # or the glacier volume is below 1 for a defined number of times
+        while (t_rate > rate) and (ite <= max_ite) and (was_close_zero < 5):
+            # increment the iteration counter
+            ite += 1
+            #  store current volume ('before')
+            v_bef = self.volume_m3
+            # run for the given number of years
+            self.run_until(self.year + ystep)
+            # store new volume ('after')
+            v_af = self.volume_m3
+            #
+            if np.isclose(v_bef, 0., atol=1):
+                # avoid division by (values close to) zero
+                t_rate = 1
+                was_close_zero += 1
+            else:
+                # compute rate of volume change
+                t_rate = np.abs(v_af - v_bef) / v_bef
+
+        # raise RuntimeError if maximum number of iterations is reached
+        if ite > max_ite:
+            raise RuntimeError('Did not find equilibrium.')
 
     def create_start_glacier(self, area_m2_start, year_start,
                              adjust_term_elev=False):
