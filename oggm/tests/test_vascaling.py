@@ -937,3 +937,61 @@ class TestVAScalingModel(unittest.TestCase):
         assert ds.volume.mean() > ds_p.volume.mean()
         # lower temperatures should result in a larger glacier
         assert ds.volume.mean() < ds_n.volume.mean()
+
+    def test_run_constant_climate(self):
+        """ Test the run_constant_climate task for a climate based on the
+        equilibrium period centred around t*. Additionally a positive and a
+        negative temperature bias are tested.
+
+        """
+        # let's not use the mass balance bias since we want to reproduce
+        # results from mass balance calibration
+        cfg.PARAMS['use_bias_for_run'] = False
+
+        # read the Hintereisferner DEM
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # initialize the GlacierDirectory
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        # define the local grid and glacier mask
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+
+        # process the given climate file
+        climate.process_custom_climate_data(gdir)
+        # compute mass balance parameters
+        ref_df = cfg.PARAMS['vas_ref_tstars_rgi5_histalp']
+        vascaling.local_t_star(gdir, ref_df=ref_df)
+
+        # define some parameters for the constant climate model
+        nyears = 500
+        temp_bias = 0.5
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears, output_filesuffix='')
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears, temperature_bias=+temp_bias,
+                                           output_filesuffix='_bias_p')
+        _ = vascaling.run_constant_climate(gdir, nyears=nyears, temperature_bias=-temp_bias,
+                                           output_filesuffix='_bias_n')
+
+        # compile run outputs
+        ds = utils.compile_run_output([gdir], filesuffix='')
+        ds_p = utils.compile_run_output([gdir], filesuffix='_bias_p')
+        ds_n = utils.compile_run_output([gdir], filesuffix='_bias_n')
+
+        # the glacier should not change under a constant climate
+        # based on the equilibirum period centered around t*
+        assert abs(1 - ds.volume.mean() / ds.volume[0]) < 1e-7
+        # higher temperatures should result in a smaller glacier
+        assert ds.volume.mean() > ds_p.volume.mean()
+        # lower temperatures should result in a larger glacier
+        assert ds.volume.mean() < ds_n.volume.mean()
+
+        # compute volume change from one year to the next
+        dV_p = (ds_p.volume[1:].values - ds_p.volume[:-1].values).flatten()
+        dV_n = (ds_n.volume[1:].values - ds_n.volume[:-1].values).flatten()
+        # compute relative volume change, with respect to the final volume
+        rate_p = abs(dV_p / float(ds_p.volume.values[-1]))
+        rate_n = abs(dV_n / float(ds_n.volume.values[-1]))
+        # the glacier should be in a new equilibirum for last 300 years
+        assert max(rate_p[-300:]) < 0.001
+        assert max(rate_n[-300:]) < 0.001
