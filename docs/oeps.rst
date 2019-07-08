@@ -1,11 +1,14 @@
 .. _oeps:
 
-OGGM Enhancement Proposals (OEPS)
+OGGM Enhancement Proposals (OEPs)
 =================================
 
-OGGM Enhancement Proposals (OEPS) are design documents...
+OGGM Enhancement Proposals (OEPs) are design documents describing mid- to long
+term goals of OGGM. Anyone can write or edit OEPs - and anyone is welcome to
+tackle the implementation of these goals!
 
-**TODO:** add text here based on `<https://github.com/OGGM/oggm/issues/805>`_
+See `this github issue <https://github.com/OGGM/oggm/issues/805>`_ for a
+discussion about OEPs.
 
 .. toctree::
     :maxdepth: 1
