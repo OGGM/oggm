@@ -19,6 +19,7 @@ from time import gmtime, strftime
 from scipy.optimize import minimize_scalar
 
 # import OGGM modules
+import oggm
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 
@@ -1234,7 +1235,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """Runs the random mass balance model for a given number of years.
 
     This initializes a :py:class:`oggm.core.vascaling.RandomVASMassBalance`,
-    and runs and stores said model.
+    and runs and stores a :py:class:`oggm.core.vascaling.VAScalingModel` with
+    the given mass balance model.
 
     Parameters
     ----------
@@ -1292,6 +1294,295 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     # where to store the model output
     diag_path = gdir.get_filepath('model_diagnostics', filesuffix='vas',
                                   delete=True)
+
+    # instance the model
+    min_hgt, max_hgt = get_min_max_elevation(gdir)
+    if init_area_m2 is None:
+        init_area_m2 = gdir.rgi_area_m2
+    model = VAScalingModel(year_0=0, area_m2_0=init_area_m2,
+                           min_hgt=min_hgt, max_hgt=max_hgt,
+                           mb_model=mb_mod)
+    # specify path where to store model diagnostics
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+    # run model
+    model.run_until_and_store(year_end=nyears, diag_path=diag_path)
+
+    return model
+
+
+class ConstantVASMassBalance(MassBalanceModel):
+    """Constant mass-balance during a chosen period.
+
+    This is useful for equilibrium experiments.
+
+    """
+
+    def __init__(self, gdir, mu_star=None, bias=None,
+                 y0=None, halfsize=15, filename='climate_monthly',
+                 input_filesuffix=''):
+        """Initialize.
+
+        Parameters
+        ----------
+        gdir : GlacierDirectory
+            the glacier directory
+        mu_star : float, optional
+            set to the alternative value of mu* you want to use
+            (the default is to use the calibrated value)
+        bias : float, optional
+            set to the alternative value of the calibration bias [mm we yr-1]
+            you want to use (the default is to use the calibrated value)
+            Note that this bias is *substracted* from the computed MB. Indeed:
+            BIAS = MODEL_MB - REFERENCE_MB.
+        y0 : int, optional, default: tstar
+            the year at the center of the period of interest. The default
+            is to use tstar as center.
+        halfsize : int, optional
+            the half-size of the time window (window size = 2 * halfsize + 1)
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
+        input_filesuffix : str
+            the file suffix of the input climate file
+        """
+
+        super(ConstantVASMassBalance, self).__init__()
+        # initialize the VAS equivalent of the PastMassBalance model over the
+        # whole available climate period
+        self.mbmod = VAScalingMassBalance(gdir, mu_star=mu_star, bias=bias,
+                                          filename=filename,
+                                          input_filesuffix=input_filesuffix)
+
+        # use t* as the center of the climatological period if not given
+        if y0 is None:
+            df = gdir.read_json('vascaling_mustar')
+            y0 = df['t_star']
+
+        # set model properties
+        self.prcp_clim = self.mbmod.prcp_clim
+        self.y0 = y0
+        self.halfsize = halfsize
+        self.years = np.arange(y0 - halfsize, y0 + halfsize + 1)
+
+    @property
+    def temp_bias(self):
+        """Temperature bias to add to the original series."""
+        return self.mbmod.temp_bias
+
+    @temp_bias.setter
+    def temp_bias(self, value):
+        """Temperature bias to add to the original series."""
+        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
+        self.mbmod.temp_bias = value
+
+    @property
+    def prcp_bias(self):
+        """Precipitation factor to apply to the original series."""
+        return self.mbmod.prcp_bias
+
+    @prcp_bias.setter
+    def prcp_bias(self, value):
+        """Precipitation factor to apply to the original series."""
+        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
+        self.mbmod.prcp_bias = value
+
+    @property
+    def bias(self):
+        """Residual bias to apply to the original series."""
+        return self.mbmod.bias
+
+    @bias.setter
+    def bias(self, value):
+        """Residual bias to apply to the original series."""
+        self.mbmod.bias = value
+
+    def get_climate(self, min_hgt, max_hgt, year=None):
+        """Average mass balance climate information for given glacier.
+
+        Note that prcp is corrected with the precipitation factor and that
+        all other biases (precipitation, temp) are applied.
+
+        Returns
+        -------
+        [float, float]
+            (temp_for_melt) positive terminus temperature [degC] and
+            (prcp_solid) solid precipitation amount [kg/m^2]
+        """
+        # create monthly timeseries over whole climate period
+        yrs = utils.monthly_timeseries(self.years[0], self.years[-1],
+                                       include_last_year=True)
+        # create empty containers
+        temp = list()
+        prcp = list()
+        # iterate over all months
+        for i, yr in enumerate(yrs):
+            # get positive melting temperature and solid precipitaion
+            t, p = self.mbmod.get_monthly_climate(min_hgt, max_hgt, year=yr)
+            temp.append(t)
+            prcp.append(p)
+        # Note that we do not weight for number of days per month - bad
+        return (np.mean(temp, axis=0),
+                np.mean(prcp, axis=0))
+
+    def get_monthly_mb(self, min_hgt, max_hgt, year=None):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the glacier wide mass balance
+        for the given year/month combination.
+        Possible mb bias is applied...
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation [m asl.]
+        max_hgt : float
+            maximal glacier (surface) elevation [m asl.]
+        year : float
+            floating year and month, following the hydrological year convention
+
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
+        """
+        # extract month from year
+        _, m = utils.floatyear_to_date()
+        # sum up the mass balance over all years in climate period
+        years = [utils.date_to_floatyear(yr, m) for yr in self.years]
+        mb = [self.mbmod.get_annual_mb(min_hgt, max_hgt, year=yr)
+              for yr in years]
+        # return average value
+        return np.average(mb)
+
+    def get_annual_mb(self, min_hgt, max_hgt, year=None):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the annual glacier wide mass balance for the given
+        year. Possible mb bias is applied.
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            floating year, following the hydrological year convention
+
+        Returns
+        -------
+        float
+            average glacier wide mass balance [m/s]
+
+        """
+        # sum up the mass balance over all years in climate period
+        mb = [self.mbmod.get_annual_mb(min_hgt, max_hgt, year=yr)
+              for yr in self.years]
+        # return average value
+        return np.average(mb)
+
+    def get_specific_mb(self, min_hgt, max_hgt, year=None):
+        """ Wrapper around the class intern mass balance model function.
+        Compute and return the annual specific mass balance for the given year.
+        Possible mb bias is applied.
+
+        Parameters
+        ----------
+        min_hgt : float
+            glacier terminus elevation
+        max_hgt : float
+            maximal glacier (surface) elevation
+        year : float
+            float year, using the hydrological year convention
+
+        Returns
+        -------
+        float
+            glacier wide average mass balance, units of millimeter water
+            equivalent per year [mm w.e./yr]
+
+        """
+        mb = [self.mbmod.get_specific_mb(min_hgt, max_hgt, year=yr)
+              for yr in self.years]
+        # return average value
+        return np.average(mb)
+
+    def get_ela(self, year=None):
+        """The ELA can not be calculated using this mass balance model.
+
+        Parameters
+        ----------
+        year : float, optional
+
+        Raises
+        -------
+        NotImplementedError
+
+        """
+        return self.mbmod.get_ela(year=self.y0)
+
+
+@entity_task(log)
+def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                         bias=None, temperature_bias=None,
+                         climate_filename='climate_monthly',
+                         climate_input_filesuffix='', output_filesuffix='',
+                         init_area_m2=None):
+    """
+    Runs the constant mass balance model for a given number of years.
+
+    This initializes a :py:class:`oggm.core.vascaling.ConstantVASMassBalance`,
+    and runs and stores a :py:class:`oggm.core.vascaling.VAScalingModel` with
+    the given mass balance model.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    nyears : int, optional
+        length of the simulation, default = 1000
+    y0 : int, optional
+        central year of the random climate period. The default is to be
+        centred on t*. Default = None
+    halfsize : int, optional
+        the half-size of the time window (window size = 2 * halfsize + 1),
+        default = 15
+    bias : float, optional
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero. Default = None
+    temperature_bias : float, optional
+        add a bias to the temperature timeseries, default = None
+    climate_filename : str, optional
+        name of the climate file, e.g. 'climate_monthly' (default) or
+        'gcm_data'
+    climate_input_filesuffix: str, optional
+        filesuffix for the input climate file
+    output_filesuffix : str, optional
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    init_area_m2: float, optional
+        glacier area with which the model is initialized, default is RGI value
+
+    Returns
+    -------
+    :py:class:`oggm.core.vascaling.VAScalingModel`
+    """
+
+    # instance mass balance model
+    mb_mod = ConstantVASMassBalance(gdir, mu_star=None, bias=bias, y0=y0,
+                                    halfsize=halfsize,
+                                    filename=climate_filename,
+                                    input_filesuffix=climate_input_filesuffix)
+
+    if temperature_bias is not None:
+        # add given temperature bias to mass balance model
+        mb_mod.temp_bias = temperature_bias
 
     # instance the model
     min_hgt, max_hgt = get_min_max_elevation(gdir)
@@ -1475,7 +1766,7 @@ class VAScalingModel(object):
         ----------
         year_end : float
             end of modeling period
-        reset : bool, optional)
+        reset : bool, optional
             If `True`, the model will start from `year_0`, otherwise from its
             current position in time (default).
 
@@ -1634,6 +1925,55 @@ class VAScalingModel(object):
             diag_ds.to_netcdf(diag_path)
 
         return diag_ds
+
+    def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
+        """ Try to run the glacier model until an equilibirum is reached.
+        Works only with a constant mass balance model.
+
+        Parameters
+        ----------
+        rate: float, optional
+            rate of volume change for which the glacier is considered to be in
+            equilibrium, whereby rate = |V0 - V1| / V0. default is 0.1 percent
+        ystep: int, optional
+            number of years per iteration step, default is 5
+        max_ite: int, optional
+            maximum number of iterations, default is 200
+
+        """
+        # TODO: isinstance is not working...
+        # if not isinstance(self.mb_model, ConstantVASMassBalance):
+        #     raise TypeError('The mass balance model must be of type ' +
+        #                     'ConstantVASMassBalance.')
+        # initialize the iteration counters and the volume change parameter
+        ite = 0
+        was_close_zero = 0
+        t_rate = 1
+
+        # model runs for a maximum fixed number of iterations
+        # loop breaks if an equilibrium is reached (t_rate small enough)
+        # or the glacier volume is below 1 for a defined number of times
+        while (t_rate > rate) and (ite <= max_ite) and (was_close_zero < 5):
+            # increment the iteration counter
+            ite += 1
+            #  store current volume ('before')
+            v_bef = self.volume_m3
+            # run for the given number of years
+            self.run_until(self.year + ystep)
+            # store new volume ('after')
+            v_af = self.volume_m3
+            #
+            if np.isclose(v_bef, 0., atol=1):
+                # avoid division by (values close to) zero
+                t_rate = 1
+                was_close_zero += 1
+            else:
+                # compute rate of volume change
+                t_rate = np.abs(v_af - v_bef) / v_bef
+
+        # raise RuntimeError if maximum number of iterations is reached
+        if ite > max_ite:
+            raise RuntimeError('Did not find equilibrium.')
 
     def create_start_glacier(self, area_m2_start, year_start,
                              adjust_term_elev=False):
