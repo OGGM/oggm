@@ -1978,8 +1978,6 @@ def merge_to_one_glacier(main, tribs, filename='climate_monthly',
         Baseline climate file
     input_filesuffix: str
         Filesuffix to the climate file
-    buffer: float
-        Buffer in pixels where to cut merging centerlines
     """
 
     # read flowlines of the Main glacier
@@ -2114,7 +2112,12 @@ def clean_merged_flowlines(gdir, buffer=None):
             oix = 9999
             if _overlap.length > 0 and fl1 != fl2 and fl2.flows_to != fl1:
                 if isinstance(_overlap, shpg.MultiLineString):
-                    _ov1 = _overlap[0].coords[1]
+                    if _overlap[0].coords[0] == fl1.line.coords[0]:
+                        # if the head of overlap is same as the first line,
+                        # best guess is, that the heads are close topgether!
+                        _ov1 = _overlap[1].coords[1]
+                    else:
+                        _ov1 = _overlap[0].coords[1]
                 else:
                     _ov1 = _overlap.coords[1]
                 for _i, _p in enumerate(fl1.line.coords):
@@ -2135,14 +2138,12 @@ def clean_merged_flowlines(gdir, buffer=None):
             continue
 
         # make this based on first overlap, but consider order and or length
-        # i = np.argmin(ol_index)
         minx = ol_index[ol_index <= ol_index.min()+0][-1]
         i = np.where(ol_index == minx)[0][-1]
+        _olline = (mfls + [mainfl])[i]
 
         # 1. cut line to size
         _line = fl1.line
-
-        _olline = (mfls + [mainfl])[i]
 
         bufferuse = buffer
         while bufferuse > 0:

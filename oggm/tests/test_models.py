@@ -2886,7 +2886,7 @@ class TestMergedHEF(unittest.TestCase):
                                              path=False, filesuffix='_entity')
 
         # merge HEF and KWF, include Gepatschferner but should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, ['RGI50-11.00897'],
+        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
                                                    glcdf=glcdf)
 
         # and run the merged glacier
@@ -2895,7 +2895,7 @@ class TestMergedHEF(unittest.TestCase):
                                      nyears=years,
                                      temperature_bias=tbias)
 
-        ds_merged = utils.compile_run_output(gdir_merged,
+        ds_merged = utils.compile_run_output([gdir_merged],
                                              path=False, filesuffix='_merged')
 
         # with this setting, both runs should still be quite close after 50yrs

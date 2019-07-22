@@ -419,11 +419,9 @@ def inversion_tasks(gdirs):
     execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def merge_glacier_tasks(gdirs, main_rgi_id=None, buffer=None, **kwargs):
+def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
+                        **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
-
-    TODO - Automatic search for tributary glaciers
-    TODO - Every tributary should only be used once
 
     Parameters
     ----------
@@ -432,6 +430,16 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, buffer=None, **kwargs):
     main_rgi_id: str
         RGI ID of the main glacier of interest. If None is provided merging
         will start based uppon the largest glacier
+    return_all : bool
+        if main_rgi_id is given and return_all = False: only the main glaicer
+        is returned
+        if main_rgi_is given and return_all = True, the main glacier and every
+        remaining glacier from the initial gdirs list is returned, possible
+        merged as well.
+    buffer : float
+        buffer around a flowline to first better find an overlap with another
+        flowline. And second assure some distance between the lines at a
+        junction. Will default to `cfg.PARAMS['kbuffer'].
     kwargs: keyword argument for the recursive merging
 
     Returns
@@ -465,6 +473,9 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, buffer=None, **kwargs):
     for gdir in merged_gdirs:
         flowline.clean_merged_flowlines(gdir, buffer=buffer)
 
+    if main_rgi_id is not None and return_all is False:
+        return [gd for gd in merged_gdirs if main_rgi_id in gd.rgi_id][0]
+
     # add the remaining glacier to the final list
     merged_gdirs = merged_gdirs + gdirs
 
@@ -473,7 +484,10 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, buffer=None, **kwargs):
 
 def _recursive_merging(gdirs, gdir_main, glcdf=None,
                        filename='climate_monthly', input_filesuffix=''):
-    """
+    """ Recursive function to merge all tributary glaciers.
+
+    This function should start with the largest glacier and then be called
+    upon all smaller glaciers.
 
     Parameters
     ----------
@@ -487,8 +501,6 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None,
         Baseline climate file
     input_filesuffix: str
         Filesuffix to the climate file
-    buffer: float
-        Buffer in pixels where to cut merging centerlines
 
     Returns
     -------
@@ -496,8 +508,6 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None,
         the mergeed current main glacier
     gdirs : list of :py:class:`oggm.GlacierDirectory`
         updated list of glaciers, removed the already merged ones
-
-
     """
     # find glaciers which intersect with the main
     tributaries = centerlines.intersect_downstream_lines(gdir_main,
@@ -506,18 +516,19 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None,
         # if no tributaries: nothing to do
         return gdir_main, gdirs
 
+    # seperate those glaciers which are not already found to be a tributary
     gdirs = [gd for gd in gdirs if gd not in tributaries]
 
     gdirs_to_merge = []
 
     for trib in tributaries:
-
+        # for each tributary: check if we can merge additional glaciers to it
         merged, gdirs = _recursive_merging(gdirs, trib, glcdf=glcdf,
                                            filename=filename,
                                            input_filesuffix=input_filesuffix)
         gdirs_to_merge.append(merged)
 
-    # create merged glacier directories
+    # create merged glacier directory
     gdir_merged = utils.initialize_merged_gdir(gdir_main, tribs=gdirs_to_merge,
                                                glcdf=glcdf, filename=filename,
                                                input_filesuffix=
