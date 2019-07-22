@@ -529,10 +529,9 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None,
         gdirs_to_merge.append(merged)
 
     # create merged glacier directory
-    gdir_merged = utils.initialize_merged_gdir(gdir_main, tribs=gdirs_to_merge,
-                                               glcdf=glcdf, filename=filename,
-                                               input_filesuffix=
-                                               input_filesuffix)
+    gdir_merged = utils.initialize_merged_gdir(
+        gdir_main, tribs=gdirs_to_merge, glcdf=glcdf, filename=filename,
+        input_filesuffix=input_filesuffix)
 
     flowline.merge_to_one_glacier(gdir_merged, gdirs_to_merge,
                                   filename=filename,
