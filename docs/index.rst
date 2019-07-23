@@ -173,7 +173,7 @@ copy or modify its code at your wish, under certain conditions:
 See the `wikipedia page about GPL`_ and the `OGGM license`_ for more
 information.
 
-.. _paper in Geoscientific Model Development: https://www.www.geosci-model-dev.net/12/909/2019/
+.. _paper in Geoscientific Model Development: https://www.geosci-model-dev.net/12/909/2019/
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
 
@@ -195,7 +195,7 @@ About
 
 :Citation:
     .. image:: https://img.shields.io/badge/Citation-GMD%20paper-orange.svg
-        :target: https://www.www.geosci-model-dev.net/12/909/2019/
+        :target: https://www.geosci-model-dev.net/12/909/2019/
         :alt: GMD Paper
 
     .. image:: https://zenodo.org/badge/43965645.svg
