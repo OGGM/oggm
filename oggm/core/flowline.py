@@ -1960,17 +1960,17 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                             **kwargs)
 
 
-@entity_task(log)
-def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
-                              input_filesuffix=''):
-    """Merge multiple tributary glaciers to a main glacier
+def merge_to_one_glacier(main, tribs, filename='climate_monthly',
+                         input_filesuffix=''):
+    """Merge multiple tributary glacier flowlines to a main glacier
 
     This function will merge multiple tributary glaciers to a main glacier
     and write modified `model_flowlines` to the main GlacierDirectory.
-    Afterwards only the main GlacierDirectory must be processed and the results
-    will cover the main and the tributary glaciers.
     The provided tributaries must have an intersecting downstream line.
     To be sure about this, use `intersect_downstream_lines` first.
+    This function is mainly responsible to reporject the flowlines, set
+    flowline attributes and to copy additional files, like the necessary climat
+    files.
 
     Parameters
     ----------
@@ -1984,114 +1984,263 @@ def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
         Filesuffix to the climate file
     """
 
-    # If its a dict, select the relevant ones
-    if isinstance(tribs, dict):
-        tribs = tribs[main.rgi_id.split('_merged')[0]]
-    # make sure tributaries are iteratable
-    tribs = utils.tolist(tribs)
-
-    # Buffer in pixels where to cut the incoming centerlines
-    buffer = cfg.PARAMS['kbuffer']
-    # Number of pixels to arbitrarily remove at junctions
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
-
     # read flowlines of the Main glacier
-    mfls = main.read_pickle('model_flowlines')
-    mfl = mfls.pop(-1)  # remove main line from list and treat seperately
+    fls = main.read_pickle('model_flowlines')
+    mfl = fls.pop(-1)  # remove main line from list and treat seperately
 
     for trib in tribs:
 
+        # read tributary flowlines and append to list
         tfls = trib.read_pickle('model_flowlines')
 
-        # order flowlines in ascending way
+        # copy climate file and local_mustar to new gdir
+        # if we have a merge-merge situation we need to copy multiple files
+        rgiids = set([fl.rgi_id for fl in tfls])
+
+        for uid in rgiids:
+            if len(rgiids) == 1:
+                # we do not have a merge-merge situation
+                in_id = ''
+                out_id = trib.rgi_id
+            else:
+                in_id = '_' + uid
+                out_id = uid
+
+            climfile_in = filename + in_id + input_filesuffix + '.nc'
+            climfile_out = filename + '_' + out_id + input_filesuffix + '.nc'
+            shutil.copyfile(os.path.join(trib.dir, climfile_in),
+                            os.path.join(main.dir, climfile_out))
+
+            _m = os.path.basename(trib.get_filepath('local_mustar')).split('.')
+            muin = _m[0] + in_id + '.' + _m[1]
+            muout = _m[0] + '_' + out_id + '.' + _m[1]
+
+            shutil.copyfile(os.path.join(trib.dir, muin),
+                            os.path.join(main.dir, muout))
+
+        # sort flowlines descending
         tfls.sort(key=lambda x: x.order, reverse=True)
 
-        # check if flowlines are in correct order
-        order = [o.order for i, o in enumerate(tfls)]
-        if not (np.all(np.diff(order) <= 0)) & \
-               (tfls[0].order == np.max(order)):
-            raise RuntimeError('Flowline order is not correct')
-
+        # loop over tributaries and reproject to main glacier
         for nr, tfl in enumerate(tfls):
 
             # 1. Step: Change projection to the main glaciers grid
             _line = salem.transform_geometry(tfl.line,
                                              crs=trib.grid, to_crs=main.grid)
 
-            if nr == 0:
-                # cut tributary main line to size
-                # find area where lines overlap within a given buffer
-                _overlap = _line.intersection(mfl.line.buffer(buffer))
-                _line = _line.difference(_overlap)  # cut to new line
-
-                # if the tributary flowline is longer than the main line,
-                # _line will contain multiple LineStrings: only keep the first
-                try:
-                    _line = _line[0]
-                except TypeError:
-                    pass
-
-                # remove cfg.PARAMS['flowline_junction_pix'] from the _line
-                # gives a bigger gap at the junction and makes sure the last
-                # point is not corrupted in terms of spacing
-                _line = shpg.LineString(_line.coords[:-lid])
-
             # 2. set new line
             tfl.set_line(_line)
 
-            # 3. set flow to attributes
-            if nr == 0:
-                # this one flows to the main glacier
-                tfl.set_flows_to(mfl)  # set flows_to also changes mfl!
-            else:
-                # reset to the existing link, neccessary to set attributes
-                tfl.set_flows_to(tfl.flows_to)
-            # remove inflow points, will be set by other flowlines if need be
-            tfl.inflow_points = []
-
-            # 5. set grid size attributes
+            # 3. set map attributes
             dx = [shpg.Point(tfl.line.coords[i]).distance(
                 shpg.Point(tfl.line.coords[i+1]))
                 for i, pt in enumerate(tfl.line.coords[:-1])]  # get distance
             # and check if equally spaced
             if not np.allclose(dx, np.mean(dx), atol=1e-2):
                 raise RuntimeError('Flowline is not evenly spaced.')
+
             tfl.dx = np.mean(dx).round(2)
             tfl.map_dx = mfl.map_dx
             tfl.dx_meter = tfl.map_dx * tfl.dx
 
-            if nr == 0:
-                # change the array size of tributary main flowline attributs
-                for atr, value in tfl.__dict__.items():
-                    try:
-                        if len(value) > tfl.nx:
-                            tfl.__setattr__(atr, value[:tfl.nx])
-                    except TypeError:
-                        pass
+            # 3. remove attributes, they will be set again later
+            tfl.inflow_points = []
+            tfl.inflows = []
 
-            # replace tributary flowline within the list
-            tfls[nr] = tfl
+            # 4. set flows to, mainly to update flows_to_point coordinates
+            if tfl.flows_to is not None:
+                tfl.set_flows_to(tfl.flows_to)
 
-        # copy climate file and local_mustar to new gdir
-        climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
-        climfile = os.path.join(main.dir, climfilename)
-        shutil.copyfile(trib.get_filepath(filename,
-                                          filesuffix=input_filesuffix),
-                        climfile)
-        _mu = os.path.basename(trib.get_filepath('local_mustar')).split('.')
-        mufile = _mu[0] + '_' + trib.rgi_id + '.' + _mu[1]
-        shutil.copyfile(trib.get_filepath('local_mustar'),
-                        os.path.join(main.dir, mufile))
+        # append tributary flowlines to list
+        fls += tfls
 
-        mfls = tfls + mfls  # add all tributary flowlines to the main glacier
-    mfls = mfls + [mfl]  # add the main glacier flowline back to the list
-
-    # Set the new flowline levels
-    for fl in mfls:
-        fl.order = line_order(fl)
-
-    # order flowlines in descending way, important for downstream tasks
-    mfls.sort(key=lambda x: x.order, reverse=False)
+    # add main flowline to the end
+    fls = fls + [mfl]
 
     # Finally write the flowlines
-    main.write_pickle(mfls, 'model_flowlines')
+    main.write_pickle(fls, 'model_flowlines')
+
+
+def clean_merged_flowlines(gdir, buffer=None):
+    """Order and cut merged flowlines to size.
+
+    After matching flowlines were found and merged to one glacier directory
+    this function makes them nice:
+    There should only be one flowline per bed, so overlapping lines have to be
+    cut, attributed to a another flowline and orderd.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+        The GDir of the glacier of interest
+    buffer: float
+        Buffer around the flowlines to find overlaps
+    """
+
+    # No buffer does not work
+    if buffer is None:
+        buffer = cfg.PARAMS['kbuffer']
+
+    # Number of pixels to arbitrarily remove at junctions
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
+
+    fls = gdir.read_pickle('model_flowlines')
+
+    # seperate the main main flowline
+    mainfl = fls.pop(-1)
+
+    # split fls in main and tribs
+    mfls = [fl for fl in fls if fl.flows_to is None]
+    tfls = [fl for fl in fls if fl not in mfls]
+
+    # --- first treat the main flowlines ---
+    # sort by order and length as a second choice
+    mfls.sort(key=lambda x: (x.order, len(x.inflows), x.length_m),
+              reverse=False)
+
+    merged = []
+
+    # for fl1 in mfls:
+    while len(mfls) > 0:
+        fl1 = mfls.pop(0)
+
+        ol_index = []  # list of index from first overlap
+
+        # loop over other main lines and main main line
+        for fl2 in mfls + [mainfl]:
+
+            # calculate overlap, maybe use larger buffer here only to find it
+            _overlap = fl1.line.intersection(fl2.line.buffer(buffer*2))
+
+            # calculate indice of first overlap if overlap length > 0
+            oix = 9999
+            if _overlap.length > 0 and fl1 != fl2 and fl2.flows_to != fl1:
+                if isinstance(_overlap, shpg.MultiLineString):
+                    if _overlap[0].coords[0] == fl1.line.coords[0]:
+                        # if the head of overlap is same as the first line,
+                        # best guess is, that the heads are close topgether!
+                        _ov1 = _overlap[1].coords[1]
+                    else:
+                        _ov1 = _overlap[0].coords[1]
+                else:
+                    _ov1 = _overlap.coords[1]
+                for _i, _p in enumerate(fl1.line.coords):
+                    if _p == _ov1:
+                        oix = _i
+                # low indices are more likely due to an wrong overlap
+                if oix < 10:
+                    oix = 9999
+            ol_index.append(oix)
+
+        ol_index = np.array(ol_index)
+        if np.all(ol_index == 9999):
+            log.warning('Glacier %s could not be merged, removed!' %
+                        fl1.rgi_id)
+            # remove possible tributary flowlines
+            tfls = [fl for fl in tfls if fl.rgi_id != fl1.rgi_id]
+            # skip rest of this while loop
+            continue
+
+        # make this based on first overlap, but consider order and or length
+        minx = ol_index[ol_index <= ol_index.min()+0][-1]
+        i = np.where(ol_index == minx)[0][-1]
+        _olline = (mfls + [mainfl])[i]
+
+        # 1. cut line to size
+        _line = fl1.line
+
+        bufferuse = buffer
+        while bufferuse > 0:
+            _overlap = _line.intersection(_olline.line.buffer(bufferuse))
+            _linediff = _line.difference(_overlap)  # cut to new line
+
+            # if the tributary flowline is longer than the main line,
+            # _line will contain multiple LineStrings: only keep the first
+            if isinstance(_linediff, shpg.MultiLineString):
+                _linediff = _linediff[0]
+
+            if len(_linediff.coords) < 10:
+                bufferuse -= 1
+            else:
+                break
+
+        if bufferuse <= 0:
+            log.warning('Glacier %s would be to short after merge, removed!' %
+                        fl1.rgi_id)
+            # remove possible tributary flowlines
+            tfls = [fl for fl in tfls if fl.rgi_id != fl1.rgi_id]
+            # skip rest of this while loop
+            continue
+
+        # remove cfg.PARAMS['flowline_junction_pix'] from the _line
+        # gives a bigger gap at the junction and makes sure the last
+        # point is not corrupted in terms of spacing
+        _line = shpg.LineString(_linediff.coords[:-lid])
+
+        # 2. set new line
+        fl1.set_line(_line)
+
+        # 3. set flow to attributes. This also adds inflow values to other
+        fl1.set_flows_to(_olline)
+
+        # change the array size of tributary flowline attributs
+        for atr, value in fl1.__dict__.items():
+            try:
+                if (len(value) > fl1.nx) and (
+                        isinstance(value, np.ndarray)):
+                    fl1.__setattr__(atr, value[:fl1.nx])
+            except TypeError:
+                pass
+
+        merged.append(fl1)
+    allfls = merged + tfls
+
+    # now check all lines for possible cut offs
+    for fl in allfls:
+        try:
+            fl.flows_to_indice
+        except UnboundLocalError:
+            mfl = fl.flows_to
+            # remove it from original
+            mfl.inflow_points.remove(fl.flows_to_point)
+            mfl.inflows.remove(fl)
+
+            prdis = mfl.line.project(fl.tail)
+            mfl_keep = mfl
+
+            while mfl.flows_to is not None:
+                prdis2 = mfl.flows_to.line.project(fl.tail)
+                if prdis2 < prdis:
+                    mfl_keep = mfl
+                    prdis = prdis2
+                    print('does this happen?')
+                mfl = mfl.flows_to
+
+            # we should be good to add this line here
+            fl.set_flows_to(mfl_keep.flows_to)
+
+    allfls = allfls + [mainfl]
+
+    for fl in allfls:
+        fl.inflows = []
+        fl.inflow_points = []
+        if hasattr(fl, '_lazy_flows_to_indice'):
+            delattr(fl, '_lazy_flows_to_indice')
+        if hasattr(fl, '_lazy_inflow_indices'):
+            delattr(fl, '_lazy_inflow_indices')
+
+    for fl in allfls:
+        if fl.flows_to is not None:
+            fl.set_flows_to(fl.flows_to)
+
+    for fl in allfls:
+        fl.order = line_order(fl)
+
+    # order flowlines in descending way
+    allfls.sort(key=lambda x: x.order, reverse=False)
+
+    # assert last flowline is main flowline
+    assert allfls[-1] == mainfl
+
+    # Finally write the flowlines
+    gdir.write_pickle(allfls, 'model_flowlines')
