@@ -253,6 +253,42 @@ determine which bed shape should be used (rectangular or parabolic). See the
 `rgi tools <https://rgitools.readthedocs.io/en/latest/tools.html#glacier-intersects>`_
 documentation for more information about the intersects.
 
+The following table summarizes the attributes from the RGI used by OGGM.
+
+====================  ===========================
+OGGM variable         RGI attribute
+====================  ===========================
+``rgi_id``  		RGIId
+``glims_id``  	        GLIMSId
+``cenlon``  	        CenLon
+``cenlat``  	        CenLat
+``rgi_region``          O1Region
+``rgi_subregion``       O2Region
+``name``                Name
+``rgi_date``            BgnDate
+``gtype``               TermType, (RGIv6)
+                        GlacType, (RGIv5)
+``gstatus``             Status,   (RGIv6)
+                        RGIFlag,  (RGIv5)
+``rgi_area_km2``        Area
+replace by DEM info     Zmin
+replace by DEM info     Zmax
+replace by DEM info     Zmed
+replace by DEM info     Slope
+replace by DEM info     Aspect
+computed by OGGM        Lmax
+not included in OGGM    Connect
+not included in OGGM    Form
+not included in OGGM    Surging
+not included in OGGM    Linkages
+not included in OGGM    EndDate
+====================  ===========================
+
+For Greenland and Antartica, OGGM does not take into account the
+connectivity level between the Glaciers and the Ice sheets.
+We recommend to the users to think about this before they
+run the task: ``workflow.init_glacier_regions()``.
+
 .. _Randolph Glacier Inventory (RGI): https://www.glims.org/RGI/
 
 
