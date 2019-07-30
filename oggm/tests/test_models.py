@@ -2948,7 +2948,7 @@ class TestMergedHEF(unittest.TestCase):
         # areas should be quite similar after 10yrs
         assert_allclose(ds_entity.area.isel(time=10).sum(),
                         ds_merged.area.isel(time=10),
-                        rtol=1e-5)
+                        rtol=1e-4)
 
         # After 100yrs, merged one should be smaller as Vernagt1 is slightly
         # flowing into Vernagt2
