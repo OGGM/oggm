@@ -448,7 +448,7 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     """
 
     if len(gdirs) > 100:
-        raise RuntimeError('this could take time! I will include an optinal '
+        raise RuntimeError('this could take time! I should include an optinal '
                            'parameter to ignore this.')
 
     # sort all glaciers descending by area
@@ -461,7 +461,6 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
         gdirs = [gdir_main] + gdirs
 
     merged_gdirs = []
-
     while len(gdirs) > 1:
         # main glacier is always the first: either given or the largest one
         gdir_main = gdirs.pop(0)
