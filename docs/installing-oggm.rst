@@ -3,6 +3,11 @@
 Installing OGGM
 ===============
 
+.. important::
+
+   Did you know that you can try OGGM in your browser before installing it
+   on your computer? Visit :ref:`cloud` for more information.
+
 OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 detail and should work on any platform.

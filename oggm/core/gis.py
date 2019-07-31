@@ -11,6 +11,7 @@ from functools import partial
 from distutils.version import LooseVersion
 # External libs
 import salem
+from salem.gis import transform_proj
 import pyproj
 import numpy as np
 import shapely.ops
@@ -271,7 +272,7 @@ def define_glacier_region(gdir, entity=None):
                 "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
     proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
-    project = partial(pyproj.transform, proj_in, proj_out)
+    project = partial(transform_proj, proj_in, proj_out)
     # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
     geometry = multi_to_poly(geometry, gdir=gdir)
