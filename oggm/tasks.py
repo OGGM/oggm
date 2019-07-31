@@ -54,4 +54,3 @@ from oggm.utils import compile_glacier_statistics
 from oggm.utils import compile_run_output
 from oggm.utils import compile_climate_input
 from oggm.utils import compile_task_log
-from oggm.utils import compile_fast

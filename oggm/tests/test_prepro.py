@@ -2784,7 +2784,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cesm_precl_file'] = f
         gcm_climate.process_cesm_data(gdir, filesuffix=filesuffix)
         utils.compile_climate_input([gdir], filename=filename,
-                                    filesuffix=filesuffix)
+                                    input_filesuffix=filesuffix)
 
         # CRU
         f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
