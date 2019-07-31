@@ -2142,7 +2142,7 @@ def clean_merged_flowlines(gdir, buffer=None):
             continue
 
         # make this based on first overlap, but consider order and or length
-        minx = ol_index[ol_index <= ol_index.min()+0][-1]
+        minx = ol_index[ol_index <= ol_index.min()+10][-1]
         i = np.where(ol_index == minx)[0][-1]
         _olline = (mfls + [mainfl])[i]
 
