@@ -23,7 +23,6 @@ import fnmatch
 import platform
 import struct
 import importlib
-import math
 
 # External libs
 import geopandas as gpd
@@ -44,7 +43,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                haversine)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
-from oggm import cfg, utils
+from oggm import cfg
 from oggm.exceptions import InvalidParamsError
 
 
@@ -579,7 +578,7 @@ class compile_to_netcdf(object):
         @wraps(task_func)
         def _compile_to_netcdf(gdirs, filesuffix='', input_filesuffix='',
                                output_filesuffix='', path=True,
-                               tmp_file_size=1000,
+                               tmp_file_size=100,
                                **kwargs):
 
             # Check input
@@ -593,6 +592,8 @@ class compile_to_netcdf(object):
             if not output_filesuffix:
                 output_filesuffix = input_filesuffix
 
+            gdirs = tolist(gdirs)
+
             task_name = task_func.__name__
             output_base = task_name.replace('compile_', '')
 
@@ -604,7 +605,6 @@ class compile_to_netcdf(object):
                           task_name, len(gdirs))
 
             # Run the task
-
             # If small gdir size, no need for temporary files
             if len(gdirs) < tmp_file_size or not path:
                 return task_func(gdirs, input_filesuffix=input_filesuffix,
@@ -614,15 +614,15 @@ class compile_to_netcdf(object):
             sub_gdirs = [gdirs[i: i + tmp_file_size] for i in
                          range(0, len(gdirs), tmp_file_size)]
 
-            tmp_paths = []
+            tmp_paths = [os.path.join(cfg.PATHS['working_dir'],
+                                      'compile_tmp_{:06d}.nc'.format(i))
+                         for i in range(len(sub_gdirs))]
+
             try:
-                for i, sgdirs in enumerate(sub_gdirs):
-                    spath = os.path.join(cfg.PATHS['working_dir'],
-                                         'compile_tmp_{:05d}.nc'.format(i))
-                    tmp_paths.append(spath)
+                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
-            except:
+            except BaseException:
                 # If something wrong, delete the tmp files
                 for f in tmp_paths:
                     try:
@@ -669,6 +669,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     ds : :py:class:`xarray.Dataset`
         compiled output
     """
+
+    # Dirty workaround for multiproc
+    if isinstance(gdirs, tuple) and len(gdirs) == 2:
+        gdirs, path = gdirs
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
@@ -786,6 +790,10 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds : :py:class:`xarray.Dataset`
         compiled climate data
     """
+
+    # Dirty workaround for multiproc
+    if isinstance(gdirs, tuple) and len(gdirs) == 2:
+        gdirs, path = gdirs
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
