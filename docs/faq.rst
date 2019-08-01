@@ -111,11 +111,12 @@ Can I use my own Glacier inventory and outlines in OGGM?
 You will be able to include your own inventory and outlines in OGGM,
 as long as the format of your `shapefile <https://en.wikipedia.org/wiki/Shapefile>`_
 is the same as the RGI file (v5 and v6 are supported). The attribute table should match
-the RGI format with the same amount of columns and variable names. See the data Input
-`documentation <https://oggm.readthedocs.io/en/latest/input-data.html#glacier-outlines-and-intersects>`_,
-for more information on the list of Glacier attributes needed by OGGM.
-If you decide to use your own inventory (e.g. maybe it has a better glacier outline) we
+the RGI format with the same amount of columns and variable names. See
+:ref:`outlines` for more information about the list of glacier attributes
+needed by OGGM.
+If you decide to use your own inventory (e.g. maybe because it has a better glacier outline) we
 encourage you to contact the `GLIMPS core team <https://www.glims.org/maps/contact_info.html>`_
 to let them know how your inventory improves the glacier digitalization compared to the
-current RGI version. If you want to see an example on how to give OGGM a different shapefile,
-see the following tutorial [Insert link].
+current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
+have a look at our
+`online tutorial <https://mybinder.org/v2/gh/OGGM/oggm-edu-r2d/master?urlpath=git-pull?repo=https://github.com/OGGM/oggm-edu-notebooks%26amp%3Bbranch=master%26amp%3Burlpath=lab/tree/oggm-edu-notebooks/oggm-tuto/welcome.ipynb%3Fautodecode>`_!
