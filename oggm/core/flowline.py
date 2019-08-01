@@ -2199,7 +2199,7 @@ def clean_merged_flowlines(gdir, buffer=None):
     for fl in allfls:
         try:
             fl.flows_to_indice
-        except UnboundLocalError:
+        except AssertionError:
             mfl = fl.flows_to
             # remove it from original
             mfl.inflow_points.remove(fl.flows_to_point)
@@ -2213,7 +2213,6 @@ def clean_merged_flowlines(gdir, buffer=None):
                 if prdis2 < prdis:
                     mfl_keep = mfl
                     prdis = prdis2
-                    print('does this happen?')
                 mfl = mfl.flows_to
 
             # we should be good to add this line here
