@@ -229,6 +229,8 @@ These data are used to create the pre-processed directories explained above.
 If you want to run your own workflow from A to Z, or if you would like
 to know which data are used in OGGM, read further!
 
+.. _outlines:
+
 Glacier outlines and intersects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -253,7 +255,69 @@ determine which bed shape should be used (rectangular or parabolic). See the
 `rgi tools <https://rgitools.readthedocs.io/en/latest/tools.html#glacier-intersects>`_
 documentation for more information about the intersects.
 
+The following table summarizes the attributes from the RGI used by OGGM. It
+can be useful to refer to this list if you use your own glacier outlines
+with OGGM.
+
+==================  ===========================  ======================
+RGI attribute       Equivalent OGGM variable     Comments
+==================  ===========================  ======================
+RGIId               ``gdir.rgi_id``              [#f1]_
+GLIMSId             ``gdir.glims_id``            not used
+CenLon              ``gdir.cenlon``              [#f2]_
+CenLat              ``gdir.cenlat``              [#f2]_
+O1Region            ``gdir.rgi_region``          not used
+O2Region            ``gdir.rgi_subregion``       not used
+Name                ``gdir.name``                used for graphics only
+BgnDate             ``gdir.rgi_date``            [#f3]_
+Form                ``gdir.glacier_type``        [#f4]_
+TermType            ``gdir.terminus_type``       [#f5]_
+Status              ``gdir.status``              [#f6]_
+Area                ``gdir.rgi_area_km2``        [#f7]_
+Zmin                ``glacier_statistics.csv``   recomputed by OGGM
+Zmax                ``glacier_statistics.csv``   recomputed by OGGM
+Zmed                ``glacier_statistics.csv``   recomputed by OGGM
+Slope               ``glacier_statistics.csv``   recomputed by OGGM
+Aspect              ``glacier_statistics.csv``   recomputed by OGGM
+Lmax                ``glacier_statistics.csv``   recomputed by OGGM
+Connect             not included
+Surging             not included
+Linkages            not included
+EndDate             not included
+==================  ===========================  ======================
+
+For Greenland and Antarctica, OGGM does not take into account the
+connectivity level between the Glaciers and the Ice sheets.
+We recommend to the users to think about this before they
+run the task: ``workflow.init_glacier_regions()``.
+
 .. _Randolph Glacier Inventory (RGI): https://www.glims.org/RGI/
+
+.. rubric:: Comments
+
+.. [#f1] The RGI id needs to be unique for each entity. It should resemble the
+         RGI, but can have longer ids. Here are example of valid IDs:
+         ``RGI60-11.00897``, ``RGI60-11.00897a``, ``RGI60-11.00897_d01``.
+.. [#f2] ``CenLon`` and ``CenLat`` are used to center the glacier local map and DEM.
+.. [#f3] The date is the acquisition year, stored as an integer.
+.. [#f4] Glacier type: ``'Glacier'``, ``'Ice cap'``, ``'Perennial snowfield'``,
+         ``'Seasonal snowfield'``, ``'Not assigned'``. Ice caps are treated
+         differently than glaciers in OGGM: we force use a single flowline
+         instead of multiple ones.
+.. [#f5] Terminus type: ``'Land-terminating'``, ``'Marine-terminating'``,
+         ``'Lake-terminating'``, ``'Dry calving'``, ``'Regenerated'``,
+         ``'Shelf-terminating'``, ``'Not assigned'``. Marine and Lake
+         terminating are classified as "tidewater" in OGGM and cannot advance
+         - they "calve" instead, using a very simple parameterisation.
+.. [#f6] Glacier status: ``'Glacier or ice cap'``, ``'Glacier complex'``,
+         ``'Nominal glacier'``, ``'Not assigned'``. Nominal glaciers fail at
+         the "Glacier Mask" processing step in OGGM.
+.. [#f7] The area of OGGM's flowline glaciers is corrected to the one provided
+         by the RGI, for area conservation and inter-comparison reasons. If
+         you do not want to use the RGI area but the one computed from the
+         shape geometry in the local OGGM map projection instead, set
+         ``cfg.PARAMS['use_rgi_area']`` to ``False``. This is useful when
+         using homemade inventories.
 
 
 Topography data
