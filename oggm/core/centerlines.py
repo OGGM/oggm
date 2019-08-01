@@ -149,7 +149,7 @@ class Centerline(object):
         for i, p in enumerate(self.flows_to.line.coords):
             if p == tofind:
                 ind.append(i)
-        assert len(ind) == 1
+        assert len(ind) == 1, 'We expect exactly one point to be found here.'
         return ind[0]
 
     @lazy_property
@@ -161,7 +161,8 @@ class Centerline(object):
             ind = [i for (i, pi) in enumerate(self.line.coords)
                    if (p.coords[0] == pi)]
             inds.append(ind[0])
-        assert len(inds) == len(self.inflow_points)
+        assert (len(inds) == len(self.inflow_points),
+                'For every inflow point should be exactly one inflow indice')
         return inds
 
     @lazy_property
