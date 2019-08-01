@@ -237,7 +237,7 @@ class TrapezoidalBedFlowline(Flowline):
         if np.any(self._w0_m <= 0):
             raise ValueError('Trapezoid beds need to have origin widths > 0.')
 
-        self._prec = np.where(lambdas == 0)
+        self._prec = np.where(lambdas == 0)[0]
 
         self._lambdas = lambdas
 
@@ -334,7 +334,7 @@ class MixedBedFlowline(Flowline):
 
         assert np.all(self.bed_shape[~is_trapezoid] > 0)
 
-        self._prec = np.where(is_trapezoid & (lambdas == 0))
+        self._prec = np.where(is_trapezoid & (lambdas == 0))[0]
 
         assert np.allclose(section, self.section)
 
@@ -2185,12 +2185,12 @@ def clean_merged_flowlines(gdir, buffer=None):
 
         # change the array size of tributary flowline attributs
         for atr, value in fl1.__dict__.items():
-            try:
-                if (len(value) > fl1.nx) and (
-                        isinstance(value, np.ndarray)):
-                    fl1.__setattr__(atr, value[:fl1.nx])
-            except TypeError:
-                pass
+            if atr in ['_ptrap', '_prec']:
+                # those are indices, remove those above nx
+                fl1.__setattr__(atr, value[value <= fl1.nx])
+            elif isinstance(value, np.ndarray) and (len(value) > fl1.nx):
+                # those are actual parameters on the grid
+                fl1.__setattr__(atr, value[:fl1.nx])
 
         merged.append(fl1)
     allfls = merged + tfls
