@@ -144,12 +144,13 @@ class Centerline(object):
     def flows_to_indice(self):
         """Indices instead of geometry"""
 
+        ind = []
         tofind = self.flows_to_point.coords[0]
         for i, p in enumerate(self.flows_to.line.coords):
             if p == tofind:
-                ind = i
-        assert ind is not None
-        return ind
+                ind.append(i)
+        assert len(ind) == 1, 'We expect exactly one point to be found here.'
+        return ind[0]
 
     @lazy_property
     def inflow_indices(self):
@@ -160,7 +161,8 @@ class Centerline(object):
             ind = [i for (i, pi) in enumerate(self.line.coords)
                    if (p.coords[0] == pi)]
             inds.append(ind[0])
-        assert len(inds) == len(self.inflow_points)
+        assert (len(inds) == len(self.inflow_points),
+                'For every inflow point should be exactly one inflow indice')
         return inds
 
     @lazy_property
