@@ -109,12 +109,20 @@ class TestGIS(unittest.TestCase):
 
         # Change area
         prev_area = gdir.rgi_area_km2
+        prev_lon = gdir.cenlon
+        prev_lat = gdir.cenlat
         cfg.PARAMS['use_rgi_area'] = False
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
                                      reset=True)
         gis.define_glacier_region(gdir, entity=entity)
+        # Close but not same
+        assert gdir.rgi_area_km2 != prev_area
+        assert gdir.cenlon != prev_lon
+        assert gdir.cenlat != prev_lat
         np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
+        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-4)
+        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-4)
 
         assert gdir.status == 'Glacier or ice cap'
 

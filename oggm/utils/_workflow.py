@@ -1410,11 +1410,18 @@ class GlacierDirectory(object):
         except AttributeError:
             pass
 
-        # Should be V5
         self.rgi_id = rgi_entity.RGIId
         self.glims_id = rgi_entity.GLIMSId
-        self.cenlon = float(rgi_entity.CenLon)
-        self.cenlat = float(rgi_entity.CenLat)
+
+        # Do we want to use the RGI center point or ours?
+        if cfg.PARAMS['use_rgi_area']:
+            self.cenlon = float(rgi_entity.CenLon)
+            self.cenlat = float(rgi_entity.CenLat)
+        else:
+            cenlon, cenlat = rgi_entity.geometry.centroid.xy
+            self.cenlon = float(cenlon[0])
+            self.cenlat = float(cenlat[0])
+
         self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
         self.rgi_subregion = (self.rgi_region + '-' +
                               '{:02d}'.format(int(rgi_entity.O2Region)))
