@@ -134,7 +134,7 @@ Status (03 Jul 2019)
   docker image generated from scratch using ``pip install``. These images
   are ligweight and well tested, we use
   them on HPC with `Singularity <https://sylabs.io/docs/>`_. (2)
-  `repo2docker images <https://github.com/OGGM/oggm-edu-r2d>`_,
+  `repo2docker images <https://github.com/OGGM/r2d>`_,
   which we generate for MyBinder and JupyterHub (both need a certain user
   set-up which is best generated from repo2doker). They are not lightweight
   at all (because of conda).

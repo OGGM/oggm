@@ -119,4 +119,4 @@ encourage you to contact the `GLIMPS core team <https://www.glims.org/maps/conta
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
 have a look at our
-`online tutorial <https://mybinder.org/v2/gh/OGGM/oggm-edu-r2d/master?urlpath=git-pull?repo=https://github.com/OGGM/oggm-edu-notebooks%26amp%3Bbranch=master%26amp%3Burlpath=lab/tree/oggm-edu-notebooks/oggm-tuto/welcome.ipynb%3Fautodecode>`_!
+`online tutorial <https://mybinder.org/v2/gh/OGGM/binder/master?urlpath=git-pull?repo=https://github.com/OGGM/oggm-edu-notebooks%26amp%3Bbranch=master%26amp%3Burlpath=lab/tree/oggm-edu-notebooks/oggm-tuto/welcome.ipynb%3Fautodecode>`_!
