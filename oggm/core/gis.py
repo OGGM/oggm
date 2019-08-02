@@ -296,6 +296,7 @@ def define_glacier_region(gdir, entity=None):
 
     # Do we want to use the RGI area or ours?
     if not cfg.PARAMS['use_rgi_area']:
+        # Update Area
         area = geometry.area * 1e-6
         entity['Area'] = area
         towrite['Area'] = area

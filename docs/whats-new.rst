@@ -20,6 +20,9 @@ Breaking changes
   ``find_inversion_calving_loop`` and will probably be deprecated soon
   (:pull:`794`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- ``use_rgi_area=False`` now also recomputes CenLon and CenLat on the fly.
+  (:issue:`838`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
 ~~~~~~~~~~~~
