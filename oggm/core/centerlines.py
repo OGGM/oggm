@@ -161,8 +161,10 @@ class Centerline(object):
             ind = [i for (i, pi) in enumerate(self.line.coords)
                    if (p.coords[0] == pi)]
             inds.append(ind[0])
-        assert (len(inds) == len(self.inflow_points),
-                'For every inflow point should be exactly one inflow indice')
+        assert len(inds) == len(self.inflow_points), ('For every inflow point '
+                                                      'there should be '
+                                                      'exactly one inflow '
+                                                      'indice')
         return inds
 
     @lazy_property
@@ -1099,7 +1101,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # We forbid super small shapes (important! This can lead to huge volumes)
     # Sometimes the parabola fits in flat areas are very good, implying very
     # flat parabolas.
-    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'])
+    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'], None)
 
     # Smoothing
     bed_ma = pd.Series(bed_int)
@@ -1790,7 +1792,7 @@ def catchment_width_correction(gdir):
 
         # Interpolate widths
         widths = utils.interp_nans(fl.widths)
-        widths = np.clip(widths, 0.1, np.max(widths))
+        widths = np.clip(widths, 0.1, None)
 
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
@@ -1801,11 +1803,11 @@ def catchment_width_correction(gdir):
 
         # Sometimes, the centerline does not reach as high as each pix on the
         # glacier. (e.g. RGI40-11.00006)
-        catch_h = np.clip(catch_h, np.min(catch_h), maxh)
+        catch_h = np.clip(catch_h, None, maxh)
         # Same for min
         if fl.flows_to is None:
             # We clip only for main flowline (this has reasons)
-            catch_h = np.clip(catch_h, minh, np.max(catch_h))
+            catch_h = np.clip(catch_h, minh, None)
 
         # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']

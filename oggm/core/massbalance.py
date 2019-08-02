@@ -364,7 +364,7 @@ class PastMassBalance(MassBalanceModel):
         npix = len(heights)
         temp = np.ones(npix) * itemp + igrad * (heights - self.ref_hgt)
         tempformelt = temp - self.t_melt
-        tempformelt[:] = np.clip(tempformelt, 0, tempformelt.max())
+        tempformelt[:] = np.clip(tempformelt, 0., None)
 
         # Compute solid precipitation from total precipitation
         prcp = np.ones(npix) * iprcp
@@ -399,7 +399,7 @@ class PastMassBalance(MassBalanceModel):
                       self.ref_hgt)
         temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
         temp2dformelt = temp2d - self.t_melt
-        temp2dformelt[:] = np.clip(temp2dformelt, 0, temp2dformelt.max())
+        temp2dformelt[:] = np.clip(temp2dformelt, 0, None)
 
         # Compute solid precipitation from total precipitation
         prcp = np.atleast_2d(iprcp).repeat(npix, 0)

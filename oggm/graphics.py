@@ -13,12 +13,14 @@ import salem
 import shapely.geometry as shpg
 from matplotlib import cm as colormap
 
+OGGM_CMAPS = dict()
+
 try:
     # optional python-colorspace dependency for better (HCL-based) colormaps
     from colorspace import sequential_hcl
-    USE_HCL_CMAP = True
+    HAS_HCL_CMAP = True
 except ImportError:
-    USE_HCL_CMAP = False
+    HAS_HCL_CMAP = False
 
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
@@ -26,17 +28,26 @@ from oggm import cfg, utils
 # Module logger
 log = logging.getLogger(__name__)
 
-# Set global colormaps
-ALTITUDE_CMAP = colormap.terrain
-if USE_HCL_CMAP:
-    CMAP_DIVS = 100  # number of discrete colours from continuous colormaps
-    THICKNESS_CMAP = sequential_hcl("Blue-Yellow", rev=True).cmap(CMAP_DIVS)
-    SECTION_THICKNESS_CMAP = THICKNESS_CMAP
-    GLACIER_THICKNESS_CMAP = THICKNESS_CMAP
-else:
-    SECTION_THICKNESS_CMAP = plt.cm.get_cmap('YlOrRd')
-    GLACIER_THICKNESS_CMAP = plt.get_cmap('viridis')
 
+def set_oggm_cmaps(use_hcl=None):
+    # Set global colormaps
+    global OGGM_CMAPS
+
+    if use_hcl is None:
+        use_hcl = HAS_HCL_CMAP
+
+    OGGM_CMAPS['terrain'] = colormap.terrain
+    if HAS_HCL_CMAP and use_hcl:
+        cm_divs = 100  # number of discrete colours from continuous colormaps
+        tcmap = sequential_hcl("Blue-Yellow", rev=True).cmap(cm_divs)
+        OGGM_CMAPS['section_thickness'] = tcmap
+        OGGM_CMAPS['glacier_thickness'] = tcmap
+    else:
+        OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlOrRd')
+        OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
+
+
+set_oggm_cmaps()
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     """Remove extreme colors from a colormap."""
@@ -274,7 +285,7 @@ def plot_domain(gdirs, ax=None, smap=None):
     except ValueError:
         pass
 
-    cm = truncate_colormap(ALTITUDE_CMAP, minval=0.25, maxval=1.0, n=256)
+    cm = truncate_colormap(OGGM_CMAPS['terrain'], minval=0.25, maxval=1.0)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
 
@@ -320,7 +331,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
-    cm = truncate_colormap(ALTITUDE_CMAP, minval=0.25, maxval=1.0, n=256)
+    cm = truncate_colormap(OGGM_CMAPS['terrain'], minval=0.25, maxval=1.0)
     smap.set_cmap(cm)
     smap.set_plot_params(nlevels=256)
     smap.set_data(topo)
@@ -529,7 +540,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    dl = salem.DataLevels(cmap=SECTION_THICKNESS_CMAP, nlevels=256,
+    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'], nlevels=256,
                           data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
@@ -580,7 +591,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     for l in poly_pix.interiors:
         smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
-    smap.set_cmap(GLACIER_THICKNESS_CMAP)
+    smap.set_cmap(OGGM_CMAPS['glacier_thickness'])
     smap.set_plot_params(nlevels=256)
     smap.set_data(thick)
 
@@ -644,7 +655,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                 toplot_lines.append(line)
                 toplot_crs.append(crs)
 
-    dl = salem.DataLevels(cmap=SECTION_THICKNESS_CMAP, nlevels=256,
+    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'], nlevels=256,
                           data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):

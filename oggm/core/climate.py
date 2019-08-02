@@ -673,7 +673,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     grad_temp *= (heights.repeat(len(time)).reshape(grad_temp.shape) - ref_hgt)
     temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
     temp2dformelt = temp2d - temp_melt
-    temp2dformelt = np.clip(temp2dformelt, 0, temp2dformelt.max())
+    temp2dformelt = np.clip(temp2dformelt, 0, None)
     # Compute solid precipitation from total precipitation
     prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
     fac = 1 - (temp2d - temp_all_solid) / (temp_all_liq - temp_all_solid)
