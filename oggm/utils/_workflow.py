@@ -578,7 +578,7 @@ class compile_to_netcdf(object):
         @wraps(task_func)
         def _compile_to_netcdf(gdirs, filesuffix='', input_filesuffix='',
                                output_filesuffix='', path=True,
-                               tmp_file_size=100,
+                               tmp_file_size=1000,
                                **kwargs):
 
             # Check input
