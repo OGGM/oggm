@@ -58,6 +58,9 @@ Bug fixes
 - Preprocessed directories at the level 3 now also have the glacier flowlines
   ready for the run (:issue:`736`, :pull:`771`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Nominal glaciers now error early in the processing chain (:issue:`832`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 v1.1.1 (24.04.2019)
 -------------------
