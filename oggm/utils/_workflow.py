@@ -360,10 +360,12 @@ class entity_task(object):
     """
 
     def __init__(self, log, writes=[], fallback=None):
-        """Decorator syntax: ``@oggm_task(writes=['dem', 'outlines'])``
+        """Decorator syntax: ``@oggm_task(log, writes=['dem', 'outlines'])``
 
         Parameters
         ----------
+        log: logger
+            module logger
         writes: list
             list of files that the task will write down to disk (must be
             available in ``cfg.BASENAMES``)
@@ -551,7 +553,103 @@ def demo_glacier_id(key):
     return None
 
 
-def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
+class compile_to_netcdf(object):
+    """Decorator for common compiling NetCDF files logic.
+
+    All compile_* tasks can be optimized the same way, by using temporary
+    files and merging them afterwards.
+    """
+
+    def __init__(self, log):
+        """Decorator syntax: ``@compile_to_netcdf(log, n_tmp_files=1000)``
+
+        Parameters
+        ----------
+        log: logger
+            module logger
+        tmp_file_size: int
+            number of glacier directories per temporary files
+        """
+        self.log = log
+
+    def __call__(self, task_func):
+        """Decorate."""
+
+        @wraps(task_func)
+        def _compile_to_netcdf(gdirs, filesuffix='', input_filesuffix='',
+                               output_filesuffix='', path=True,
+                               tmp_file_size=1000,
+                               **kwargs):
+
+            # Check input
+            if filesuffix:
+                warnings.warn('The `filesuffix` kwarg is deprecated for '
+                              'compile_* tasks. Use input_filesuffix from '
+                              'now on.',
+                              DeprecationWarning)
+                input_filesuffix = filesuffix
+
+            if not output_filesuffix:
+                output_filesuffix = input_filesuffix
+
+            gdirs = tolist(gdirs)
+
+            task_name = task_func.__name__
+            output_base = task_name.replace('compile_', '')
+
+            if path is True:
+                path = os.path.join(cfg.PATHS['working_dir'],
+                                    output_base + output_filesuffix + '.nc')
+
+            self.log.info('Applying %s on %d gdirs.',
+                          task_name, len(gdirs))
+
+            # Run the task
+            # If small gdir size, no need for temporary files
+            if len(gdirs) < tmp_file_size or not path:
+                return task_func(gdirs, input_filesuffix=input_filesuffix,
+                                 path=path, **kwargs)
+
+            # Otherwise, divide and conquer
+            sub_gdirs = [gdirs[i: i + tmp_file_size] for i in
+                         range(0, len(gdirs), tmp_file_size)]
+
+            tmp_paths = [os.path.join(cfg.PATHS['working_dir'],
+                                      'compile_tmp_{:06d}.nc'.format(i))
+                         for i in range(len(sub_gdirs))]
+
+            try:
+                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+                    task_func(sgdirs, input_filesuffix=input_filesuffix,
+                              path=spath, **kwargs)
+            except BaseException:
+                # If something wrong, delete the tmp files
+                for f in tmp_paths:
+                    try:
+                        os.remove(f)
+                    except FileNotFoundError:
+                        pass
+                raise
+
+            # Ok, now merge and return
+            try:
+                with xr.open_mfdataset(tmp_paths, combine='nested',
+                                       concat_dim='rgi_id') as ds:
+                    ds.to_netcdf(path)
+            except TypeError:
+                # xr < v 0.13
+                with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
+                    ds.to_netcdf(path)
+
+            # We can't return the dataset without loading it, so we don't
+            return None
+
+        return _compile_to_netcdf
+
+
+@compile_to_netcdf(log)
+def compile_run_output(gdirs, path=True, input_filesuffix='',
+                       use_compression=True):
     """Merge the output of the model runs of several gdirs into one file.
 
     Parameters
@@ -561,8 +659,8 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     path : str
         where to store (default is on the working dir).
         Set to `False` to disable disk storage.
-    filesuffix : str
-        the filesuffix of the run
+    input_filesuffix : str
+        the filesuffix of the files to be compiled
     use_compression : bool
         use zlib compression on the output netCDF files
 
@@ -582,7 +680,7 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
             raise RuntimeError('Found no valid glaciers!')
         try:
             ppath = gdirs[i].get_filepath('model_diagnostics',
-                                          filesuffix=filesuffix)
+                                          filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
                 ds_diag.time.values
             break
@@ -628,7 +726,7 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
-                                      filesuffix=filesuffix)
+                                      filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
                 vol[:, i] = ds_diag.volume_m3.values
                 area[:, i] = ds_diag.area_m2.values
@@ -654,23 +752,19 @@ def compile_run_output(gdirs, path=True, filesuffix='', use_compression=True):
     ds['ela'].attrs['units'] = 'm a.s.l'
 
     if path:
-        if path is True:
-            path = os.path.join(cfg.PATHS['working_dir'],
-                                'run_output' + filesuffix + '.nc')
-
         enc_var = {'dtype': 'float32'}
         if use_compression:
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
         encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
-
         ds.to_netcdf(path, encoding=encoding)
 
     return ds
 
 
+@compile_to_netcdf(log)
 def compile_climate_input(gdirs, path=True, filename='climate_monthly',
-                          filesuffix='', use_compression=True):
+                          input_filesuffix='', use_compression=True):
     """Merge the climate input files in the glacier directories into one file.
 
     Parameters
@@ -682,8 +776,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         Set to `False` to disable disk storage.
     filename : str
         BASENAME of the climate input files
-    filesuffix : str
-        the filesuffix of the compiled file
+    input_filesuffix : str
+        the filesuffix of the files to be compiled
     use_compression : bool
         use zlib compression on the output netCDF files
 
@@ -703,7 +797,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
             raise RuntimeError('Found no valid glaciers!')
         try:
             ppath = gdirs[i].get_filepath(filename=filename,
-                                          filesuffix=filesuffix)
+                                          filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_clim:
                 ds_clim.time.values
             break
@@ -753,7 +847,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath(filename=filename,
-                                      filesuffix=filesuffix)
+                                      filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
@@ -784,10 +878,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds['ref_pix_lat'].attrs['description'] = 'latitude'
 
     if path:
-        if path is True:
-            path = os.path.join(cfg.PATHS['working_dir'],
-                                'climate_input' + filesuffix + '.nc')
-
         enc_var = {'dtype': 'float32'}
         if use_compression:
             enc_var['complevel'] = 5
@@ -796,7 +886,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         if has_grad:
             vars += ['grad']
         encoding = {v: enc_var for v in vars}
-
         ds.to_netcdf(path, encoding=encoding)
     return ds
 

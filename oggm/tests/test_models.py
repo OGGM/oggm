@@ -2765,8 +2765,8 @@ class TestHEF(unittest.TestCase):
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
-        ds1 = utils.compile_run_output([gdir], filesuffix='_hist')
-        ds2 = utils.compile_run_output([gdir], filesuffix='_cesm')
+        ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
+        ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
 
         assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
                         ds2.volume.isel(rgi_id=0, time=-1),
@@ -2781,10 +2781,20 @@ class TestHEF(unittest.TestCase):
                               init_model_filesuffix='_spinup',
                               output_filesuffix='_afterspinup')
         ds3 = utils.compile_run_output([gdir], path=False,
-                                       filesuffix='_afterspinup')
+                                       input_filesuffix='_afterspinup')
         assert (ds1.volume.isel(rgi_id=0, time=-1) <
                 0.7*ds3.volume.isel(rgi_id=0, time=-1))
         ds3.close()
+
+        # Try the compile optimisation
+        out = utils.compile_run_output([gdir, gdir, gdir],
+                                       tmp_file_size=2,
+                                       input_filesuffix='_hist',
+                                       output_filesuffix='_rehist')
+        assert out is None
+        path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
+        with xr.open_dataset(path) as ds:
+            assert len(ds.rgi_id) == 3
 
     @pytest.mark.slow
     def test_elevation_feedback(self):
@@ -2804,7 +2814,7 @@ class TestHEF(unittest.TestCase):
         out = []
         for feedback in feedbacks:
             out.append(utils.compile_run_output([self.gdir], path=False,
-                                                filesuffix=feedback))
+                                                input_filesuffix=feedback))
 
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
@@ -2934,7 +2944,8 @@ class TestMergedHEF(unittest.TestCase):
                                      temperature_bias=tbias)
 
         ds_entity = utils.compile_run_output(gdirs_entity,
-                                             path=False, filesuffix='_entity')
+                                             path=False,
+                                             input_filesuffix='_entity')
 
         # and run the merged glacier
         workflow.execute_entity_task(tasks.run_constant_climate,
@@ -2942,8 +2953,9 @@ class TestMergedHEF(unittest.TestCase):
                                      nyears=years,
                                      temperature_bias=tbias)
 
-        ds_merged = utils.compile_run_output([gdir_merged],
-                                             path=False, filesuffix='_merged')
+        ds_merged = utils.compile_run_output(gdir_merged,
+                                             path=False,
+                                             input_filesuffix='_merged')
 
         # areas should be quite similar after 10yrs
         assert_allclose(ds_entity.area.isel(time=10).sum(),

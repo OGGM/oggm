@@ -72,9 +72,9 @@ workflow.execute_entity_task(tasks.run_random_climate, gdirs,
 
 # Write the compiled output
 utils.compile_glacier_statistics(gdirs)
-utils.compile_run_output(gdirs, filesuffix='_commitment')
-utils.compile_run_output(gdirs, filesuffix='_bias_p')
-utils.compile_run_output(gdirs, filesuffix='_bias_m')
+utils.compile_run_output(gdirs, input_filesuffix='_commitment')
+utils.compile_run_output(gdirs, input_filesuffix='_bias_p')
+utils.compile_run_output(gdirs, input_filesuffix='_bias_m')
 
 # Log
 m, s = divmod(time.time() - start, 60)

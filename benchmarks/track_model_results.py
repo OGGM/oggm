@@ -216,8 +216,8 @@ class full_workflow:
 
         # Compile output
         utils.compile_glacier_statistics(gdirs)
-        utils.compile_run_output(gdirs, filesuffix='_tstar')
-        utils.compile_run_output(gdirs, filesuffix='_pd')
+        utils.compile_run_output(gdirs, input_filesuffix='_tstar')
+        utils.compile_run_output(gdirs, input_filesuffix='_pd')
         utils.compile_climate_input(gdirs)
 
         return gdirs

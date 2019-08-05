@@ -50,6 +50,10 @@ Enhancements
   for `h` instead. The new function is likely to replace the "old"
   calving loop(:pull:`794`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- ``compile_climate_input`` and ``compile_run_output`` are now faster for
+  larger numbers of glaciers thanks to temporary files (:pull:`814`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_. Could be made faster with
+  multiprocessing one day.
 
 
 Bug fixes
