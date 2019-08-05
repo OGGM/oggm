@@ -670,10 +670,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         compiled output
     """
 
-    # Dirty workaround for multiproc
-    if isinstance(gdirs, tuple) and len(gdirs) == 2:
-        gdirs, path = gdirs
-
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
 
@@ -790,10 +786,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
     ds : :py:class:`xarray.Dataset`
         compiled climate data
     """
-
-    # Dirty workaround for multiproc
-    if isinstance(gdirs, tuple) and len(gdirs) == 2:
-        gdirs, path = gdirs
 
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
