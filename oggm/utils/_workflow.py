@@ -632,14 +632,14 @@ class compile_to_netcdf(object):
                 raise
 
             # Ok, now merge and return
-            with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
-                ds.to_netcdf(path)
-
-            for f in tmp_paths:
-                try:
-                    os.remove(f)
-                except FileNotFoundError:
-                    pass
+            try:
+                with xr.open_mfdataset(tmp_paths, combine='nested',
+                                       concat_dim='rgi_id') as ds:
+                    ds.to_netcdf(path)
+            except TypeError:
+                # xr < v 0.13
+                with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
+                    ds.to_netcdf(path)
 
             # We can't return the dataset without loading it, so we don't
             return None

@@ -2814,7 +2814,7 @@ class TestHEF(unittest.TestCase):
         out = []
         for feedback in feedbacks:
             out.append(utils.compile_run_output([self.gdir], path=False,
-                                                filesuffix=feedback))
+                                                input_filesuffix=feedback))
 
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
