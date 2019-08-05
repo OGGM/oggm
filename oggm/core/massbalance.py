@@ -116,7 +116,13 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             mbs = []
             widths = []
             for i, fl in enumerate(fls):
-                widths = np.append(widths, fl.widths)
+                _widths = fl.widths
+                try:
+                    # For rect and parabola don't compute spec mb
+                    _widths = np.where(fl.thick > 0, _widths, 0)
+                except AttributeError:
+                    pass
+                widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
                                                         year=year, fl_id=i))
         else:
