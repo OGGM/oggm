@@ -37,7 +37,7 @@ from scipy import optimize as optimization
 from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             InvalidDEMError)
+                             InvalidDEMError, GeometryError)
 from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
                         nicenumber, ncDataset, tolist)
 
@@ -477,6 +477,10 @@ def glacier_masks(gdir):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     """
+
+    # In case nominal, just raise
+    if gdir.is_nominal:
+        raise GeometryError('{} is a nominal glacier.'.format(gdir.rgi_id))
 
     # open srtm tif-file:
     dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')

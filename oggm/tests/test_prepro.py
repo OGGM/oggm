@@ -236,6 +236,12 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(np.std(glacier_ext_erosion - glacier_ext),
                                    0, atol=0.1)
 
+        entity['RGIFlag'] = '2909'
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+        with pytest.raises(RuntimeError):
+            gis.glacier_masks(gdir)
+
+
     @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
                          LooseVersion('1.0')),
                         reason='requires rasterio >= 1.0')
