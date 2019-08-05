@@ -1,4 +1,4 @@
-.. currentmodule:: oggm
+W.. currentmodule:: oggm
 .. _whats-new:
 
 Version history
@@ -59,6 +59,10 @@ Bug fixes
   ready for the run (:issue:`736`, :pull:`771`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Nominal glaciers now error early in the processing chain (:issue:`832`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Specific MB (not used operationaly) was wrongly computer for zero ice
+  thickness rectangular or parabolic sections. This is now corrected
+  (:issue:`828`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 

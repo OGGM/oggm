@@ -90,6 +90,9 @@ class TestIdealisedCases(unittest.TestCase):
             volume.append(vol)
             surface_h.append(fls[-1].surface_h.copy())
 
+            # We are almost at equilibrium. Spec MB should be close to 0
+            assert_allclose(mb.get_specific_mb(fls=fls), 0, atol=10)
+
         if do_plot:
             plt.figure()
             plt.plot(yrs, lens[0], 'r')
@@ -124,12 +127,12 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=3e-3)
         np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=3e-3)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[2]) < 50.)
-        self.assertTrue(utils.rmsd(lens[1], lens[2]) < 50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 2e-3)
-        self.assertTrue(utils.rmsd(volume[1], volume[2]) < 2e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 1.0)
-        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 1.0)
+        assert utils.rmsd(lens[0], lens[2]) < 50.
+        assert utils.rmsd(lens[1], lens[2]) < 50.
+        assert utils.rmsd(volume[0], volume[2]) < 2e-3
+        assert utils.rmsd(volume[1], volume[2]) < 2e-3
+        assert utils.rmsd(surface_h[0], surface_h[2]) < 1.0
+        assert utils.rmsd(surface_h[1], surface_h[2]) < 1.0
 
     @pytest.mark.slow
     def test_mass_conservation(self):
@@ -206,8 +209,8 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
         np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=5e-3)
 
-        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-2)
-        self.assertTrue(utils.rmsd(volume[1], volume[2]) < 1e-2)
+        assert utils.rmsd(volume[0], volume[2]) < 1e-2
+        assert utils.rmsd(volume[1], volume[2]) < 1e-2
 
         if do_plot:  # pragma: no cover
             plt.figure()
@@ -316,9 +319,9 @@ class TestIdealisedCases(unittest.TestCase):
 
         # Unit-testing perspective:
         # "verify" that indeed the models are wrong of more than 50%
-        self.assertTrue(volume[1][-1] > volume[2][-1] * 1.5)
+        assert volume[1][-1] > volume[2][-1] * 1.5
         # Karthaus is even worse
-        self.assertTrue(volume[0][-1] > volume[1][-1])
+        assert volume[0][-1] > volume[1][-1]
 
         if False:
             # TODO: this will always fail so ignore it for now
@@ -326,12 +329,12 @@ class TestIdealisedCases(unittest.TestCase):
             np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
             np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
 
-            self.assertTrue(utils.rmsd(lens[0], lens[2]) < 50.)
-            self.assertTrue(utils.rmsd(lens[1], lens[2]) < 50.)
-            self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-3)
-            self.assertTrue(utils.rmsd(volume[1], volume[2]) < 1e-3)
-            self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 1.0)
-            self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 1.0)
+            assert utils.rmsd(lens[0], lens[2]) < 50.
+            assert utils.rmsd(lens[1], lens[2]) < 50.
+            assert utils.rmsd(volume[0], volume[2]) < 1e-3
+            assert utils.rmsd(volume[1], volume[2]) < 1e-3
+            assert utils.rmsd(surface_h[0], surface_h[2]) < 1.0
+            assert utils.rmsd(surface_h[1], surface_h[2]) < 1.0
 
     @pytest.mark.slow
     def test_equilibrium(self):
@@ -398,10 +401,10 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[2], volume[1]) < 1e-3
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 5
+        assert utils.rmsd(surface_h[1], surface_h[2]) < 5
 
         # Always update
         lens = []
@@ -429,10 +432,10 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[2], volume[1]) < 1e-3
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 5
+        assert utils.rmsd(surface_h[1], surface_h[2]) < 5
 
     def test_adaptive_ts(self):
 
@@ -463,10 +466,10 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[2], volume[1]) < 1e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[1], surface_h[2]) < 5)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[2], volume[1]) < 1e-3
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 5
+        assert utils.rmsd(surface_h[1], surface_h[2]) < 5
 
     @pytest.mark.slow
     def test_timestepping(self):
@@ -562,11 +565,11 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 1e-2)
-        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-2)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 5)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 5)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[0], volume[1]) < 1e-2
+        assert utils.rmsd(volume[0], volume[2]) < 1e-2
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 5
+        assert utils.rmsd(surface_h[0], surface_h[2]) < 5
 
     @pytest.mark.slow
     def test_noisy_bed(self):
@@ -629,11 +632,11 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
         np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 100.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 1e-1)
-        self.assertTrue(utils.rmsd(volume[0], volume[2]) < 1e-1)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 10)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[2]) < 10)
+        assert utils.rmsd(lens[0], lens[1]) < 100.
+        assert utils.rmsd(volume[0], volume[1]) < 1e-1
+        assert utils.rmsd(volume[0], volume[2]) < 1e-1
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 10
+        assert utils.rmsd(surface_h[0], surface_h[2]) < 10
 
     @pytest.mark.slow
     def test_varying_width(self):
@@ -1034,10 +1037,10 @@ class TestSia2d(unittest.TestCase):
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=3e-3)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 2e-3)
-        self.assertTrue(utils.rmsd(areas[0], areas[1]) < 2e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 1.0)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[0], volume[1]) < 2e-3
+        assert utils.rmsd(areas[0], areas[1]) < 2e-3
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 1.0
 
         # Equilibrium
         sdmodel.run_until_equilibrium()
@@ -1075,10 +1078,10 @@ class TestSia2d(unittest.TestCase):
         np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=3e-3)
 
-        self.assertTrue(utils.rmsd(lens[0], lens[1]) < 50.)
-        self.assertTrue(utils.rmsd(volume[0], volume[1]) < 2e-3)
-        self.assertTrue(utils.rmsd(areas[0], areas[1]) < 2e-3)
-        self.assertTrue(utils.rmsd(surface_h[0], surface_h[1]) < 1.0)
+        assert utils.rmsd(lens[0], lens[1]) < 50.
+        assert utils.rmsd(volume[0], volume[1]) < 2e-3
+        assert utils.rmsd(areas[0], areas[1]) < 2e-3
+        assert utils.rmsd(surface_h[0], surface_h[1]) < 1.0
 
         # Equilibrium
         sdmodel.run_until_equilibrium()
