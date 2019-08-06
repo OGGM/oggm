@@ -1,4 +1,4 @@
-W.. currentmodule:: oggm
+.. currentmodule:: oggm
 .. _whats-new:
 
 Version history

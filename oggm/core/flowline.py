@@ -708,6 +708,11 @@ class FlowlineModel(object):
                                      'integer year dates.')
 
         # time
+        try:
+            hemisphere = self.mb_model.hemisphere
+        except AttributeError:
+            hemisphere = 'nh'
+
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
 
         if store_monthly_step is None:
@@ -717,8 +722,12 @@ class FlowlineModel(object):
             monthly_time = utils.monthly_timeseries(self.yr, y1)
         else:
             monthly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+
+        sm = cfg.PARAMS['hydro_month_' + hemisphere]
+
         yrs, months = utils.floatyear_to_date(monthly_time)
-        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months,
+                                                        start_month=sm)
 
         # init output
         if run_path is not None:

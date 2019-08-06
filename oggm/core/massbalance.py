@@ -307,6 +307,7 @@ class PastMassBalance(MassBalanceModel):
                                        'to ignore this warning.')
 
         # Public attrs
+        self.hemisphere = gdir.hemisphere
         self.temp_bias = 0.
         self.prcp_bias = 1.
         self.repeat = repeat
