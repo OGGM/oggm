@@ -68,6 +68,9 @@ Bug fixes
   thickness rectangular or parabolic sections. This is now corrected
   (:issue:`828`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a bug in model output files where SH glaciers were wrongly attributed
+  with NH calendar dates (:issue:`824`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 v1.1.1 (24.04.2019)
