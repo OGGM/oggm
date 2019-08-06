@@ -594,6 +594,30 @@ class compile_to_netcdf(object):
 
             gdirs = tolist(gdirs)
 
+            hemisphere = [gd.hemisphere for gd in gdirs]
+            if len(np.unique(hemisphere)) == 2:
+                if path is not True:
+                    raise InvalidParamsError('With glaciers from both '
+                                             'hemispheres, set `path=True`.')
+                warnings.warn('You gave me a list of gdirs from both '
+                              'hemispheres. I am going to write two files '
+                              'out of it.', RuntimeWarning)
+                _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
+                _compile_to_netcdf(_gdirs,
+                                   input_filesuffix=input_filesuffix,
+                                   output_filesuffix=output_filesuffix + '_sh',
+                                   path=True,
+                                   tmp_file_size=tmp_file_size,
+                                   **kwargs)
+                _gdirs = [gd for gd in gdirs if gd.hemisphere == 'nh']
+                _compile_to_netcdf(_gdirs,
+                                   input_filesuffix=input_filesuffix,
+                                   output_filesuffix=output_filesuffix + '_nh',
+                                   path=True,
+                                   tmp_file_size=tmp_file_size,
+                                   **kwargs)
+                return
+
             task_name = task_func.__name__
             output_base = task_name.replace('compile_', '')
 
@@ -796,10 +820,12 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         if i >= len(gdirs):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath(filename=filename,
-                                          filesuffix=input_filesuffix)
+            pgdir = gdirs[i]
+            ppath = pgdir.get_filepath(filename=filename,
+                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_clim:
                 ds_clim.time.values
+            # If this worked, we have a valid gdir
             break
         except BaseException:
             i += 1
@@ -808,9 +834,10 @@ def compile_climate_input(gdirs, path=True, filename='climate_monthly',
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
         has_grad = 'gradient' in ds_clim.variables
-
-    yrs, months = calendardate_to_hydrodate(cyrs, cmonths)
-    time = date_to_floatyear(yrs, months)
+        sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
+        yrs, months = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
+        assert months[0] == 1, 'Expected the first hydro month to be 1'
+        time = date_to_floatyear(yrs, months)
 
     # Prepare output
     ds = xr.Dataset()

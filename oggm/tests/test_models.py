@@ -2414,17 +2414,31 @@ class TestHEF(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
                                           setup='all')
+        self.prev_wd = cfg.PATHS['working_dir']
+        cfg.PATHS['working_dir'] = os.path.join(get_test_dir(),
+                                                type(self).__name__ + '_wd')
+        utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+
+        self.testdir_sh = os.path.join(get_test_dir(),
+                                       type(self).__name__ + '_sh')
+        utils.mkdir(self.testdir_sh, reset=True)
+        self.gdir_sh = tasks.copy_to_basedir(gdir, base_dir=self.testdir_sh,
+                                             setup='all')
+        self.gdir_sh.hemisphere = 'sh'
 
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
 
     def tearDown(self):
+        cfg.PATHS['working_dir'] = self.prev_wd
         self.rm_dir()
 
     def rm_dir(self):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
+        if os.path.exists(self.testdir_sh):
+            shutil.rmtree(self.testdir_sh)
 
     @pytest.mark.slow
     def test_equilibrium(self):
@@ -2581,25 +2595,32 @@ class TestHEF(unittest.TestCase):
     @pytest.mark.slow
     def test_random_sh(self):
 
-        init_present_time_glacier(self.gdir)
+        gdir = self.gdir_sh
+        init_present_time_glacier(gdir)
 
-        self.gdir.hemisphere = 'sh'
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['run_mb_calibration'] = True
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        climate.process_cru_data(self.gdir)
-        climate.compute_ref_t_stars([self.gdir])
-        climate.local_t_star(self.gdir)
+        climate.process_cru_data(gdir)
+        climate.compute_ref_t_stars([gdir])
+        climate.local_t_star(gdir)
 
-        run_random_climate(self.gdir, nyears=20, seed=4,
+        run_random_climate(gdir, nyears=20, seed=4,
                            bias=0, output_filesuffix='_rdn')
-        run_constant_climate(self.gdir, nyears=20,
+        run_constant_climate(gdir, nyears=20,
                              bias=0, output_filesuffix='_ct')
 
-        paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
-                 self.gdir.get_filepath('model_run', filesuffix='_ct'),
+        paths = [gdir.get_filepath('model_diagnostics', filesuffix='_rdn'),
+                 gdir.get_filepath('model_diagnostics', filesuffix='_ct'),
+                 ]
+        for path in paths:
+            with xr.open_dataset(path) as ds:
+                assert ds.calendar_month[0] == 4
+
+        paths = [gdir.get_filepath('model_run', filesuffix='_rdn'),
+                 gdir.get_filepath('model_run', filesuffix='_ct'),
                  ]
         for path in paths:
             with FileModel(path) as model:
@@ -2621,7 +2642,29 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-        self.gdir.hemisphere = 'nh'
+        # Test a SH/NH mix
+        init_present_time_glacier(self.gdir)
+        run_constant_climate(self.gdir, nyears=20,
+                             bias=0, output_filesuffix='_ct')
+
+        with pytest.warns(RuntimeWarning):
+            utils.compile_climate_input([self.gdir_sh, self.gdir])
+        with pytest.warns(RuntimeWarning):
+            utils.compile_run_output([self.gdir_sh, self.gdir],
+                                     input_filesuffix='_ct')
+
+        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 4
+        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_nh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 10
+        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_sh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 4
+        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 10
 
     def test_start_from_spinup(self):
 

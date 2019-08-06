@@ -175,32 +175,35 @@ class TestFuncs(unittest.TestCase):
     def test_hydro_convertion(self):
 
         # October
-        y, m = utils.hydrodate_to_calendardate(1, 1)
+        y, m = utils.hydrodate_to_calendardate(1, 1, start_month=10)
         assert (y, m) == (0, 10)
-        y, m = utils.hydrodate_to_calendardate(1, 4)
+        y, m = utils.hydrodate_to_calendardate(1, 4, start_month=10)
         assert (y, m) == (1, 1)
-        y, m = utils.hydrodate_to_calendardate(1, 12)
+        y, m = utils.hydrodate_to_calendardate(1, 12, start_month=10)
         assert (y, m) == (1, 9)
 
-        y, m = utils.hydrodate_to_calendardate([1, 1, 1], [1, 4, 12])
+        y, m = utils.hydrodate_to_calendardate([1, 1, 1], [1, 4, 12],
+                                               start_month=10)
         np.testing.assert_array_equal(y, [0, 1, 1])
         np.testing.assert_array_equal(m, [10, 1, 9])
 
-        y, m = utils.calendardate_to_hydrodate(1, 1)
+        y, m = utils.calendardate_to_hydrodate(1, 1, start_month=10)
         assert (y, m) == (1, 4)
-        y, m = utils.calendardate_to_hydrodate(1, 9)
+        y, m = utils.calendardate_to_hydrodate(1, 9, start_month=10)
         assert (y, m) == (1, 12)
-        y, m = utils.calendardate_to_hydrodate(1, 10)
+        y, m = utils.calendardate_to_hydrodate(1, 10, start_month=10)
         assert (y, m) == (2, 1)
 
-        y, m = utils.calendardate_to_hydrodate([1, 1, 1], [1, 9, 10])
+        y, m = utils.calendardate_to_hydrodate([1, 1, 1], [1, 9, 10],
+                                               start_month=10)
         np.testing.assert_array_equal(y, [1, 1, 2])
         np.testing.assert_array_equal(m, [4, 12, 1])
 
         # Roundtrip
         time = pd.period_range('0001-01', '1000-12', freq='M')
-        y, m = utils.calendardate_to_hydrodate(time.year, time.month)
-        y, m = utils.hydrodate_to_calendardate(y, m)
+        y, m = utils.calendardate_to_hydrodate(time.year, time.month,
+                                               start_month=10)
+        y, m = utils.hydrodate_to_calendardate(y, m, start_month=10)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
