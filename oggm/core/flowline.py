@@ -707,6 +707,10 @@ class FlowlineModel(object):
             raise InvalidParamsError('run_until_and_store only accepts '
                                      'integer year dates.')
 
+        if not self.mb_model.hemisphere:
+            raise InvalidParamsError('run_until_and_store needs a '
+                                     'mass-balance model with an unambiguous '
+                                     'hemisphere.')
         # time
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
 
@@ -717,8 +721,12 @@ class FlowlineModel(object):
             monthly_time = utils.monthly_timeseries(self.yr, y1)
         else:
             monthly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+
+        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
+
         yrs, months = utils.floatyear_to_date(monthly_time)
-        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months,
+                                                        start_month=sm)
 
         # init output
         if run_path is not None:
@@ -740,6 +748,7 @@ class FlowlineModel(object):
         diag_ds.attrs['calendar'] = '365-day no leap'
         diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                   gmtime())
+        diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)

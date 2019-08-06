@@ -926,9 +926,9 @@ class TestVAScalingModel(unittest.TestCase):
                                          output_filesuffix='_bias_n')
 
         # compile run outputs
-        ds = utils.compile_run_output([gdir], filesuffix='')
-        ds_p = utils.compile_run_output([gdir], filesuffix='_bias_p')
-        ds_n = utils.compile_run_output([gdir], filesuffix='_bias_n')
+        ds = utils.compile_run_output([gdir], input_filesuffix='')
+        ds_p = utils.compile_run_output([gdir], input_filesuffix='_bias_p')
+        ds_n = utils.compile_run_output([gdir], input_filesuffix='_bias_n')
 
         # the glacier should not change much under a random climate
         # based on the equilibirum period centered around t*
@@ -977,9 +977,9 @@ class TestVAScalingModel(unittest.TestCase):
                                            output_filesuffix='_bias_n')
 
         # compile run outputs
-        ds = utils.compile_run_output([gdir], filesuffix='')
-        ds_p = utils.compile_run_output([gdir], filesuffix='_bias_p')
-        ds_n = utils.compile_run_output([gdir], filesuffix='_bias_n')
+        ds = utils.compile_run_output([gdir], input_filesuffix='')
+        ds_p = utils.compile_run_output([gdir], input_filesuffix='_bias_p')
+        ds_n = utils.compile_run_output([gdir], input_filesuffix='_bias_n')
 
         # the glacier should not change under a constant climate
         # based on the equilibirum period centered around t*

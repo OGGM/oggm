@@ -714,6 +714,7 @@ class VAScalingMassBalance(MassBalanceModel):
         self.temp_bias = 0.
         self.prcp_bias = 1.
         self.repeat = repeat
+        self.hemisphere = gdir.hemisphere
 
         # read climate file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
@@ -1070,6 +1071,7 @@ class RandomVASMassBalance(MassBalanceModel):
         # define year range and number of years
         self.yr_range = (self.years[0], self.years[-1]+1)
         self.ny = len(self.years)
+        self.hemisphere = gdir.hemisphere
 
         # define random state
         self.rng = np.random.RandomState(seed)
@@ -1365,6 +1367,7 @@ class ConstantVASMassBalance(MassBalanceModel):
         self.y0 = y0
         self.halfsize = halfsize
         self.years = np.arange(y0 - halfsize, y0 + halfsize + 1)
+        self.hemisphere = gdir.hemisphere
 
     @property
     def temp_bias(self):
@@ -1832,6 +1835,11 @@ class VAScalingModel(object):
             raise ValueError('Cannot run until {}, already at year {}'.format(
                 year_end, self.year))
 
+        if not self.mb_model.hemisphere:
+            raise InvalidParamsError('run_until_and_store needs a '
+                                     'mass-balance model with an unambiguous '
+                                     'hemisphere.')
+
         # define different temporal indices
         yearly_time = np.arange(np.floor(self.year), np.floor(year_end) + 1)
 
@@ -1845,7 +1853,9 @@ class VAScalingModel(object):
             monthly_time = yearly_time.copy()
         # get years and month for hydrological year and calender year
         yrs, months = utils.floatyear_to_date(monthly_time)
-        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
+        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months,
+                                                        start_month=sm)
 
         # get number of temporal indices
         ny = len(yearly_time)
@@ -1866,6 +1876,7 @@ class VAScalingModel(object):
         diag_ds.attrs['calendar'] = '365-day no leap'
         diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                   gmtime())
+        diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)

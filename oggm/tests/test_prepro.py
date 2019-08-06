@@ -1271,7 +1271,8 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.glacier_mu_candidates(gdir)
+        with pytest.warns(DeprecationWarning):
+            climate.glacier_mu_candidates(gdir)
 
         se = gdir.read_pickle('climate_info')['mu_candidates_glacierwide']
         self.assertTrue(se.index[0] == 1802)
@@ -1304,7 +1305,8 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.glacier_mu_candidates(gdir)
+        with pytest.warns(DeprecationWarning):
+            climate.glacier_mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
@@ -1417,7 +1419,8 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.glacier_mu_candidates(gdir)
+        with pytest.warns(DeprecationWarning):
+            climate.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
@@ -1490,7 +1493,8 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        climate.glacier_mu_candidates(gdir)
+        with pytest.warns(DeprecationWarning):
+            climate.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
