@@ -12,8 +12,8 @@ OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 detail and should work on any platform.
 
-OGGM is fully `tested`_ with Python version 3.6 on Linux, and all versions
-above 3.4 should work as well. OGGM doesn't work with Python 2.7.
+OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux, and all
+versions above 3.4 should work as well. OGGM doesn't work with Python 2.
 
 OGGM itself should also work on Mac OS and Windows platforms, but we make no
 guarantee that our dependencies do.
@@ -46,6 +46,7 @@ Standard SciPy stack:
     - matplotlib
     - pandas
     - xarray
+    - dask
     - joblib
 
 Configuration file parsing tool:
@@ -72,7 +73,6 @@ Other libraries:
 Optional:
     - progressbar2 (displays the download progress)
     - bottleneck (speeds up xarray operations)
-    - dask (works nicely with xarray)
     - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
       (applies HCL-based color palettes to some graphics)
 
@@ -266,9 +266,9 @@ Install with virtualenv (Linux/Debian)
 
 .. note::
 
-   The installation with virtualenv and pip requires a few more steps than with
-   conda. Unless you have a good reason to install by this route,
-   :ref:`installing with conda <conda-install>` is probably what you want to do.
+   We used to recommend our users to use `conda` instead of `pip`, because
+   of the ease of installation with `conda`. As of August 2019, a `pip`
+   installation is also possible without major issue on Debian.
 
 
 The instructions below have been tested on Debian / Ubuntu / Mint systems only!
@@ -276,11 +276,13 @@ The instructions below have been tested on Debian / Ubuntu / Mint systems only!
 Linux packages
 ~~~~~~~~~~~~~~
 
-Run the following commands to install required packages.
+Run the following commands to install required packages. **We are not sure
+this is strictly necessary, but you never know**.
 
 For the build::
 
-    $ sudo apt-get install build-essential python-pip liblapack-dev gfortran libproj-dev python-setuptools
+    $ sudo apt-get install build-essential python-pip liblapack-dev \
+        gfortran libproj-dev python-setuptools
 
 For matplolib::
 
@@ -329,7 +331,34 @@ Update pip (important!)::
 
 Install some packages one by one::
 
-   $ pip install numpy scipy pandas shapely matplotlib
+   $ pip install numpy==1.16.4 scipy pandas shapely matplotlib pyproj \
+       rasterio Pillow geopandas netcdf4==1.3.1 scikit-image configobj joblib \
+       xarray progressbar2 pytest motionless dask bottleneck toolz descartes
+
+The pinning of the NetCDF4 package was necessary for us, but your system
+might differ
+(`related issue <https://github.com/Unidata/netcdf4-python/issues/962>`_).
+
+Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries::
+
+    $ pip install git+https://github.com/OGGM/pytest-mpl.git
+    $ pip install git+https://github.com/fmaussion/salem.git
+    $ pip install git+https://github.com/retostauffer/python-colorspace.git
+
+OGGM and tests
+~~~~~~~~~~~~~~
+
+Refer to `Install OGGM itself`_ above.
+
+
+Legacy: install GDAL with link to the system libraries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+.. note::
+
+    The steps below used to be necessary before pip wheels. We document them
+    here just in case.
 
 Installing **GDAL** is not so straightforward. First, check which version of
 GDAL is installed on your Linux system::
@@ -348,18 +377,3 @@ Fiona also builds upon GDAL, so let's compile it the same way::
     $ pip install fiona --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
 (Details can be found in `this blog post <http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html>`_.)
-
-Now install further dependencies::
-
-    $ pip install pyproj rasterio Pillow geopandas netcdf4 scikit-image configobj joblib xarray progressbar2 pytest motionless dask bottleneck
-
-Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries::
-
-    $ pip install git+https://github.com/OGGM/pytest-mpl.git
-    $ pip install git+https://github.com/fmaussion/salem.git
-    $ pip install git+https://github.com/retostauffer/python-colorspace.git
-
-OGGM and tests
-~~~~~~~~~~~~~~
-
-Refer to `Install OGGM itself`_ above.
