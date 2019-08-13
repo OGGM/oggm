@@ -10,10 +10,11 @@ import pytest
 import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-import salem
 import xarray as xr
-import rasterio
+
+salem = pytest.importorskip('salem')
+rasterio = pytest.importorskip('rasterio')
+gpd = pytest.importorskip('geopandas')
 
 # Local imports
 import oggm
@@ -21,7 +22,6 @@ from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
                        flowline, massbalance)
 import oggm.cfg as cfg
 from oggm import utils
-from oggm.exceptions import MassBalanceCalibrationError
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
                               init_columbia)

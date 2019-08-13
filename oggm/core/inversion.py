@@ -31,11 +31,13 @@ Adhikari, S., Marshall, J. S.: Parameterization of lateral drag in flowline
 # Built ins
 import logging
 import warnings
+
 # External libs
 import numpy as np
 import pandas as pd
 from scipy.interpolate import griddata
 from scipy import optimize
+
 # Locals
 from oggm import utils, cfg
 from oggm import entity_task

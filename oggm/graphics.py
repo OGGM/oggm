@@ -9,9 +9,13 @@ import textwrap
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
-import salem
 import shapely.geometry as shpg
 from matplotlib import cm as colormap
+
+try:
+    import salem
+except ImportError:
+    pass
 
 OGGM_CMAPS = dict()
 

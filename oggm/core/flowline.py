@@ -9,13 +9,18 @@ import copy
 from collections import OrderedDict
 from time import gmtime, strftime
 import os
+import shutil
 
 # External libs
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
-import salem
-import shutil
+
+# Optional libs
+try:
+    import salem
+except ImportError:
+    pass
 
 # Locals
 from oggm import __version__

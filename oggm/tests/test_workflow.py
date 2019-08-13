@@ -6,13 +6,14 @@ import shutil
 import unittest
 import pickle
 import pytest
-import geopandas as gpd
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
-import salem
 from oggm import graphics
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 # Locals
 import oggm

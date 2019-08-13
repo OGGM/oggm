@@ -4,8 +4,10 @@ import pytest
 import shutil
 
 import os
-import geopandas as gpd
 import matplotlib.pyplot as plt
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 # Local imports
 import oggm.utils

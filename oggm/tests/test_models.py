@@ -44,6 +44,9 @@ FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
 _url_retrieve = None
 
+pytest.importorskip('geopandas')
+pytest.importorskip('rasterio')
+pytest.importorskip('salem')
 
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve

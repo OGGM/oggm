@@ -2,7 +2,6 @@ import os
 import shutil
 from distutils.util import strtobool
 
-import geopandas as gpd
 import numpy as np
 import shapely.geometry as shpg
 from scipy import optimize as optimization
@@ -10,10 +9,10 @@ from scipy import optimize as optimization
 # Local imports
 import oggm
 import oggm.cfg as cfg
-from oggm.core import gis, inversion, climate, centerlines, flowline
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
 from oggm.utils import oggm_urlretrieve
+from oggm.core import flowline
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -251,6 +250,9 @@ def get_test_dir():
 
 def init_hef(reset=False, border=40):
 
+    from oggm.core import gis, inversion, climate, centerlines, flowline
+    import geopandas as gpd
+
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
     if not os.path.exists(testdir):
@@ -335,6 +337,9 @@ def init_hef(reset=False, border=40):
 
 
 def init_columbia(reset=False):
+
+    from oggm.core import gis, climate, centerlines
+    import geopandas as gpd
 
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_columbia')

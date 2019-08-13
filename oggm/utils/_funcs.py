@@ -9,7 +9,6 @@ import logging
 import warnings
 
 # External libs
-import geopandas as gpd
 import pandas as pd
 import numpy as np
 from scipy.ndimage import filters
@@ -17,6 +16,12 @@ from scipy.signal import gaussian
 from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
+
+# Optional libs
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
 
 # Locals
 import oggm.cfg as cfg

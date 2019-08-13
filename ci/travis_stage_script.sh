@@ -8,7 +8,15 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
     test -n "$TEST_CONTAINER" && IMAGE_TAG="$TEST_CONTAINER" || IMAGE_TAG=latest
     export IMAGE_TAG
 
-    docker pull oggm/untested_base:$IMAGE_TAG
+    FULL_IMAGE="oggm/untested_base:$IMAGE_TAG"
+    TEST_SCRIPT="/root/oggm/ci/travis_script.sh"
+
+    if [[ "$OGGM_TEST_ENV" == "minimal" ]]; then
+        FULL_IMAGE="python:$IMAGE_TAG"
+        TEST_SCRIPT="/root/oggm/ci/travis_script_minimal.sh"
+    fi
+
+    docker pull "$FULL_IMAGE"
 
     mkdir -p $HOME/dl_cache
     export OGGM_DOWNLOAD_CACHE=/dl_cache
@@ -28,8 +36,8 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
         -e TRAVIS_JOB_ID \
         -e TRAVIS_BRANCH \
         -e TRAVIS_PULL_REQUEST \
-        oggm/untested_base:$IMAGE_TAG \
-        /bin/bash /root/oggm/ci/travis_script.sh
+        "$FULL_IMAGE" \
+        /bin/bash "$TEST_SCRIPT"
 
     docker cp $PWD oggm_travis:/root/oggm
 

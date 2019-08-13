@@ -3,10 +3,12 @@
 import logging
 from distutils.version import LooseVersion
 from datetime import datetime
+
 # External libs
 import numpy as np
 import netCDF4
 import xarray as xr
+
 # Locals
 from oggm import cfg
 from oggm import utils

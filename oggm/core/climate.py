@@ -4,14 +4,21 @@ import logging
 import os
 import datetime
 import warnings
+
 # External libs
 import numpy as np
 import netCDF4
 import pandas as pd
 import xarray as xr
 from scipy import stats
-import salem
 from scipy import optimize as optimization
+
+# Optional libs
+try:
+    import salem
+except ImportError:
+    pass
+
 # Locals
 from oggm import cfg
 from oggm import utils

@@ -1,14 +1,15 @@
 # Python imports
 import unittest
-import geopandas as gpd
 import numpy as np
 import os
 import shutil
-import salem
 import xarray as xr
 import pytest
 import oggm
 from scipy import optimize as optimization
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 # Locals
 import oggm.cfg as cfg

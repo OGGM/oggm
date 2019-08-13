@@ -52,6 +52,8 @@ matrix:
       os: linux
     - env: TEST_CONTAINER=20190805 OGGM_TEST_ENV=graphics MPL=--mpl
       os: linux
+    - env: TEST_CONTAINER=3.7-slim OGGM_TEST_ENV=minimal
+      os: linux
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=prepro MPL=
       os: linux
     - env: TEST_CONTAINER=py37 OGGM_TEST_ENV=numerics MPL=

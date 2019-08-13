@@ -19,24 +19,34 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse
 import socket
+import multiprocessing as mp
 
 # External libs
-import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
 import shapely.geometry as shpg
-import salem
-from salem import wgs84
-import rasterio
-try:
-    # rasterio V > 1.0
-    from rasterio.merge import merge as merge_tool
-except ImportError:
-    from rasterio.tools.merge import merge as merge_tool
-import multiprocessing as mp
 import requests
 
+# Optional libs
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    import salem
+    from salem import wgs84
+except ImportError:
+    pass
+try:
+    import rasterio
+    try:
+        # rasterio V > 1.0
+        from rasterio.merge import merge as merge_tool
+    except ImportError:
+        from rasterio.tools.merge import merge as merge_tool
+except ImportError:
+    pass
 try:
     ModuleNotFoundError
 except NameError:

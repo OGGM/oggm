@@ -19,26 +19,38 @@ import logging
 import copy
 from itertools import groupby
 from collections import Counter
+
 # External libs
 import numpy as np
 import pandas as pd
-import salem
 import shapely.ops
-import geopandas as gpd
 import scipy.signal
 import shapely.geometry as shpg
-from skimage import measure
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.ndimage.measurements import label, find_objects
-from skimage.graph import route_through_array
+
+# Optional libs
+try:
+    import salem
+except ImportError:
+    pass
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    from skimage import measure
+    from skimage.graph import route_through_array
+except ImportError:
+    pass
+
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
-from salem import lazy_property
 from oggm import utils
-from oggm.utils import tuple2int, line_interpol, interp_nans
+from oggm.utils import tuple2int, line_interpol, interp_nans, lazy_property
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError)
