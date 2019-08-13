@@ -38,6 +38,10 @@ with virtualenv.
 Dependencies
 ------------
 
+Here is a list of *all* dependencies of the OGGM model. If you want to use
+the numerical models and nothing else, refer to
+`Install a minimal OGGM environment`_ below.
+
 Standard SciPy stack:
     - numpy
     - scipy
@@ -377,3 +381,29 @@ Fiona also builds upon GDAL, so let's compile it the same way::
     $ pip install fiona --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
 
 (Details can be found in `this blog post <http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html>`_.)
+
+
+Install a minimal OGGM environment
+----------------------------------
+
+If you plan to use only the numerical core of OGGM (that is, for idealized
+simulations or teaching), you can skip many dependencies and only
+install this shorter list:
+- numpy
+- scipy
+- pandas
+- matplotlib
+- shapely
+- requests
+- configobj
+- netcdf4
+- xarray
+
+Installing them with pip or conda should be much easier.
+
+Running the tests in this minimal environment works the same. Simply run
+from a terminal::
+
+    pytest --pyargs oggm
+
+The number of tests will be much smaller!
