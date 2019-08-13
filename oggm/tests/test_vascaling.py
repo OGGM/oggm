@@ -12,7 +12,7 @@ import unittest
 import pytest
 
 # import gis libs
-import geopandas as gpd
+gpd = pytest.importorskip('geopandas')
 
 # import OGGM modules
 import oggm

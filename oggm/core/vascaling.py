@@ -6,16 +6,17 @@ and length/volume scaling instead.
 
 Author: Moritz Oberrauch
 """
-
-# External libs
+# Built ins
 import os
 import logging
+import datetime
+from time import gmtime, strftime
+
+# External libs
 import numpy as np
 import pandas as pd
 import xarray as xr
 import netCDF4
-import datetime
-from time import gmtime, strftime
 from scipy.optimize import minimize_scalar
 
 # import OGGM modules

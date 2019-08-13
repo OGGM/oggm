@@ -39,6 +39,9 @@ pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
 _url_retrieve = None
 
+pytest.importorskip('geopandas')
+pytest.importorskip('rasterio')
+pytest.importorskip('salem')
 
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve

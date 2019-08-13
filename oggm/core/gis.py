@@ -5,34 +5,52 @@ to be realized by any OGGM pre-processing workflow.
 # Built ins
 import os
 import logging
-import json
 import warnings
 from functools import partial
 from distutils.version import LooseVersion
+
 # External libs
-import salem
-from salem.gis import transform_proj
-import pyproj
 import numpy as np
 import shapely.ops
 import pandas as pd
-import geopandas as gpd
-import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
 from scipy.ndimage import binary_erosion
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
-import rasterio
-from rasterio.warp import reproject, Resampling
-from rasterio.mask import mask as riomask
-try:
-    # rasterio V > 1.0
-    from rasterio.merge import merge as merge_tool
-except ImportError:
-    from rasterio.tools.merge import merge as merge_tool
 from scipy import optimize as optimization
+
+# Optional libs
+try:
+    import salem
+    from salem.gis import transform_proj
+except ImportError:
+    pass
+try:
+    import pyproj
+except ImportError:
+    pass
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    import skimage.draw as skdraw
+except ImportError:
+    pass
+try:
+    import rasterio
+    from rasterio.warp import reproject, Resampling
+    from rasterio.mask import mask as riomask
+    try:
+        # rasterio V > 1.0
+        from rasterio.merge import merge as merge_tool
+    except ImportError:
+        from rasterio.tools.merge import merge as merge_tool
+except ImportError:
+    pass
+
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg

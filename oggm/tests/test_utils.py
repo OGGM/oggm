@@ -11,13 +11,13 @@ import hashlib
 import pytest
 from unittest import mock
 
-import salem
-from salem.gis import transform_proj
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 from numpy.testing import assert_array_equal, assert_allclose
 from _pytest.monkeypatch import MonkeyPatch
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 import oggm
 from oggm import utils, workflow, tasks
@@ -2088,5 +2088,6 @@ class TestSkyIsFalling(unittest.TestCase):
         proj_out = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
         proj_in = pyproj.Proj(srs, preserve_units=True)
 
+        from salem.gis import transform_proj
         lon, lat = transform_proj(proj_in, proj_out, -2235000, -2235000)
         np.testing.assert_allclose(lon, 70.75731, atol=1e-5)

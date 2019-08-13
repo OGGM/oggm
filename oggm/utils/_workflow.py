@@ -25,16 +25,24 @@ import struct
 import importlib
 
 # External libs
-import geopandas as gpd
 import pandas as pd
-import salem
-from salem import lazy_property, wgs84
 import numpy as np
-import netCDF4
 from scipy import stats
 import xarray as xr
 import shapely.geometry as shpg
 from shapely.ops import transform as shp_trafo
+import netCDF4
+
+# Optional libs
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    import salem
+    from salem import wgs84
+except ImportError:
+    pass
 
 # Locals
 from oggm import __version__
@@ -246,6 +254,21 @@ class LRUFileCache():
         if fpath not in self.files:
             self.files.append(fpath)
         self.purge()
+
+
+def lazy_property(fn):
+    """Decorator that makes a property lazy-evaluated."""
+
+    attr_name = '_lazy_' + fn.__name__
+
+    @property
+    @wraps(fn)
+    def _lazy_property(self):
+        if not hasattr(self, attr_name):
+            setattr(self, attr_name, fn(self))
+        return getattr(self, attr_name)
+
+    return _lazy_property
 
 
 def mkdir(path, reset=False):
