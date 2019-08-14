@@ -1049,7 +1049,7 @@ class FluxBasedModel(FlowlineModel):
         for fl_id, fl in enumerate(self.fls):
 
             flx_stag = self.flux_stag[fl_id]
-            trib_flux= self.trib_flux[fl_id]
+            trib_flux = self.trib_flux[fl_id]
             tr = self._tributary_indices[fl_id]
 
             dx = fl.dx_meter
@@ -1088,9 +1088,56 @@ class FluxBasedModel(FlowlineModel):
         self.t += dt
         return dt
 
+    def get_diagnostics(self, fl_id=-1):
+        """Obtain model diagnostics in a pandas DataFrame.
+
+        Parameters
+        ----------
+        fl_id : int
+            the index of the flowline of interest, from 0 to n_flowline-1.
+            Default is to take the last (main) one
+
+        Returns
+        -------
+        a pandas DataFrame, which index is distance along flowline (m). Units:
+            - surface_h, bed_h, ice_tick, section_width: m
+            - section_area: m2
+            - slope: -
+            - ice_flux, tributary_flux: m3 of *ice* per year
+            - u: m per year
+        """
+
+        import pandas as pd
+
+        fl = self.fls[fl_id]
+        nx = fl.nx
+
+        df = pd.DataFrame(index=fl.dx_meter * np.arange(nx))
+        df.index.name = 'distance_along_flowline'
+        df['surface_h'] = fl.surface_h
+        df['bed_h'] = fl.bed_h
+        df['ice_thick'] = fl.thick
+        df['section_width'] = fl.widths_m
+        df['section_area'] = fl.section
+
+        # Staggered
+        var = self.slope_stag[fl_id]
+        df['slope'] = (var[1:nx+1] + var[:nx])/2
+        var = self.flux_stag[fl_id]
+        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2 * cfg.SEC_IN_YEAR
+        var = self.u_stag[fl_id]
+        df['u'] = (var[1:nx+1] + var[:nx])/2 * cfg.SEC_IN_YEAR
+        var = self.shapefac_stag[fl_id]
+        df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
+
+        # Not Staggered
+        df['tributary_flux'] = self.trib_flux[fl_id] * cfg.SEC_IN_YEAR
+
+        return df
+
 
 class MassConservationChecker(FluxBasedModel):
-    """This checks if the FluzBasedmodel is conserving mass."""
+    """This checks if the FluxBasedModel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
         """ Instanciate.

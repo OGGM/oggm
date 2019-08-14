@@ -171,6 +171,42 @@ class TestIdealisedCases(unittest.TestCase):
         assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
 
     @pytest.mark.slow
+    def test_staggered_diagnostics(self):
+
+        mb = LinearMassBalance(2600.)
+        fls = dummy_constant_bed()
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until(700)
+        assert_allclose(mb.get_specific_mb(fls=fls), 0, atol=10)
+
+        df = model.get_diagnostics()
+
+        fl = model.fls[0]
+        df['my_flux'] = np.cumsum(mb.get_annual_mb(fl.surface_h) *
+                                  fl.widths_m * fl.dx_meter *
+                                  cfg.SEC_IN_YEAR).clip(0)
+
+        df = df.loc[df['ice_thick'] > 0]
+
+        assert_allclose(np.abs(df['ice_flux'] - df['my_flux']), 0, atol=35e3)
+        assert df['u'].max() > 25
+        assert df['tributary_flux'].max() == 0
+
+        fls = dummy_width_bed_tributary()
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until(500)
+
+        df = model.get_diagnostics()
+        df = df.loc[df['ice_thick'] > 0]
+        assert df['u'].max() > 50
+        assert df['tributary_flux'].max() > 30e4
+
+        df = model.get_diagnostics(fl_id=0)
+        df = df.loc[df['ice_thick'] > 0]
+        assert df['u'].max() > 10
+        assert df['tributary_flux'].max() == 0
+
+    @pytest.mark.slow
     def test_min_slope(self):
         """ Check what is the min slope a flowline model can produce
         """
