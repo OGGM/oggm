@@ -937,9 +937,7 @@ class FluxBasedModel(FlowlineModel):
             # This is not staggered
             self.trib_flux.append(np.zeros(nx))
             # We add an additional fake grid point at the end of these
-            if trib[0] is not None:
-                nx = fl.nx + 1
-            elif self.is_tidewater:
+            if (trib[0] is not None) ^ self.is_tidewater:  # xor operator
                 nx = fl.nx + 1
             # +1 is for the staggered grid
             self.slope_stag.append(np.zeros(nx+1))
@@ -960,20 +958,26 @@ class FluxBasedModel(FlowlineModel):
         min_dt = dt if dt < self.min_dt else self.min_dt
 
         # Loop over tributaries to determine the flux rate
-        for (fl, trib, slope_stag,
-             thick_stag, section_stag, sf_stag,
-             flux_stag, trib_flux, u_stag) in \
-                zip(self.fls, self._tributary_indices, self.slope_stag,
-                    self.thick_stag, self.section_stag, self.shapefac_stag,
-                    self.flux_stag, self.trib_flux, self.u_stag):
+        for fl_id, fl in enumerate(self.fls):
 
+            # This is possibly less efficient than zip() but much clearer
+            trib = self._tributary_indices[fl_id]
+            slope_stag = self.slope_stag[fl_id]
+            thick_stag = self.thick_stag[fl_id]
+            section_stag = self.section_stag[fl_id]
+            sf_stag = self.shapefac_stag[fl_id]
+            flux_stag = self.flux_stag[fl_id]
+            trib_flux = self.trib_flux[fl_id]
+            u_stag = self.u_stag[fl_id]
+
+            # Flowline state
             surface_h = fl.surface_h
             thick = fl.thick
             section = fl.section
             dx = fl.dx_meter
 
             # If it is a tributary, we use the branch it flows into to compute
-            # the slope of the last grid points
+            # the slope of the last grid point
             is_trib = trib[0] is not None
             if is_trib:
                 fl_to = self.fls[trib[0]]
@@ -1042,42 +1046,42 @@ class FluxBasedModel(FlowlineModel):
         dt = np.clip(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
-        for fl_id, (fl, flx_stag, trib_flux, trib) in enumerate(
-                zip(self.fls, self.flux_stag, self.trib_flux,
-                    self._tributary_indices)):
+        for fl_id, fl in enumerate(self.fls):
+
+            flx_stag = self.flux_stag[fl_id]
+            trib_flux= self.trib_flux[fl_id]
+            tr = self._tributary_indices[fl_id]
 
             dx = fl.dx_meter
 
+            is_trib = tr[0] is not None
             # For these we had an additional grid point
-            if trib[0] is not None:
-                flx_stag = flx_stag[:-1]
-            elif self.is_tidewater:
+            if is_trib ^ self.is_tidewater:
                 flx_stag = flx_stag[:-1]
 
             # Mass balance
             widths = fl.widths_m
             mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id)
             # Allow parabolic beds to grow
-            widths = np.where((mb > 0.) & (widths == 0), 10., widths)
-            mb = dt * mb * widths
+            mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 
             # Update section with ice flow and mass balance
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
-                           trib_flux*dt + mb)
+                           trib_flux*dt/dx + mb)
 
             # Keep positive values only and store
             fl.section = new_section.clip(0)
 
             # Add the last flux to the tributary
             # this works because the lines are sorted in order
-            if trib[0] is not None:
-                # trib: line index, start, stop, gaussian kernel
-                self.trib_flux[trib[0]][trib[1]:trib[2]] += (flx_stag[-1].clip(0)/dx *
-                                                             trib[3])
+            if is_trib:
+                # tr tuple: line_index, start, stop, gaussian_kernel
+                self.trib_flux[tr[0]][tr[1]:tr[2]] += (flx_stag[-1].clip(0) *
+                                                       tr[3])
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
-                # TODO: not sure at all if this is the way to go
-                # but mass conservation is OK
+                # not sure at all if this is the way to go but mass
+                # conservation is OK
                 self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt
 
         # Next step

@@ -763,6 +763,56 @@ class TestIdealisedCases(unittest.TestCase):
             plt.show()
 
     @pytest.mark.slow
+    def test_multiple_tributary(self):
+
+        models = [FluxBasedModel, FluxBasedModel]
+        flss = [dummy_width_bed(),
+                dummy_width_bed_tributary(n_trib=5)]
+        lens = []
+        surface_h = []
+        volume = []
+        yrs = np.arange(1, 300, 2)
+        for model, fls in zip(models, flss):
+            mb = LinearMassBalance(2600.)
+
+            model = model(fls, mb_model=mb, fs=self.fs_old,
+                          glen_a=self.aglen_old)
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                assert model.yr == y
+                length[i] = fls[-1].length_m
+                vol[i] = np.sum([f.volume_km3 for f in fls])
+            lens.append(length)
+            volume.append(vol)
+            surface_h.append(fls[-1].surface_h.copy())
+
+        np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
+        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=2e-2)
+
+        np.testing.assert_allclose(utils.rmsd(lens[0], lens[1]), 0., atol=70)
+        np.testing.assert_allclose(utils.rmsd(volume[0], volume[1]), 0.,
+                                   atol=6e-3)
+        np.testing.assert_allclose(utils.rmsd(surface_h[0], surface_h[1]), 0.,
+                                   atol=5)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(lens[0], 'r')
+            plt.plot(lens[1], 'b')
+            plt.show()
+
+            plt.plot(volume[0], 'r')
+            plt.plot(volume[1], 'b')
+            plt.show()
+
+            plt.plot(fls[-1].bed_h, 'k')
+            plt.plot(surface_h[0], 'r')
+            plt.plot(surface_h[1], 'b')
+            plt.show()
+
+    @pytest.mark.slow
     def test_trapezoidal_bed(self):
 
         tb = dummy_trapezoidal_bed()[0]
