@@ -273,6 +273,7 @@ def set_logging_config(logging_level='INFO'):
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
     logging.getLogger("matplotlib").setLevel(logging.CRITICAL)
+    logging.getLogger("numexpr").setLevel(logging.CRITICAL)
 
     # Basic config
     if logging_level is None:
