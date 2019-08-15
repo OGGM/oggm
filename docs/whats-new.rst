@@ -58,6 +58,10 @@ Enhancements
   dependencies (:issue:`420`). This is useful for teaching or idealized
   simulations, but won't work in production.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- the flowline model gives access to new diagnostics such as ice velocity and
+  flux along the flowline. The numerical core code changed in the process,
+  and we will monitor performance after this change (:pull:`853`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 Bug fixes

@@ -19,10 +19,6 @@ from oggm.core.sia2d import Upstream2D
 
 # Tests
 from oggm.tests.funcs import dummy_constant_bed
-
-# after oggm.test
-import matplotlib.pyplot as plt
-
 from oggm.core.flowline import (KarthausModel, FluxBasedModel,
                                 MUSCLSuperBeeModel)
 
@@ -84,8 +80,11 @@ class TestIdealisedCases(unittest.TestCase):
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb)
-        ds_f, ds_d = model.run_until_and_store(40)
-        print(ds_d['length_m'][-1])
+        ds_f, ds_d = model.run_until_and_store(150)
+        assert ds_d['length_m'][-1] > 1e3
+
+        df = model.get_diagnostics()
+        assert (df['ice_velocity'].max() * cfg.SEC_IN_YEAR) > 10
 
 
 class TestSia2d(unittest.TestCase):

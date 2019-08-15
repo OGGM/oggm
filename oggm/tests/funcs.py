@@ -188,7 +188,7 @@ def dummy_width_bed():
                                             bed_h, widths)]
 
 
-def dummy_width_bed_tributary(map_dx=100.):
+def dummy_width_bed_tributary(map_dx=100., n_trib=1):
     # bed with tributary glacier
     dx = 1.
     nx = 200
@@ -196,6 +196,8 @@ def dummy_width_bed_tributary(map_dx=100.):
     surface_h = np.linspace(3000, 1000, nx)
     bed_h = surface_h
     widths = surface_h * 0. + 3.
+    widths[0:20] = 6 / (n_trib + 1)
+
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
@@ -203,10 +205,17 @@ def dummy_width_bed_tributary(map_dx=100.):
                                            widths)
     coords = np.arange(0, 19.1, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0. + 1]).T)
-    fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx, surface_h[0:20],
-                                           bed_h[0:20], widths[0:20])
-    fl_1.set_flows_to(fl_0)
-    return [fl_1, fl_0]
+
+    out = [fl_0]
+    for i in range(n_trib):
+        fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx,
+                                               surface_h[0:20],
+                                               bed_h[0:20],
+                                               widths[0:20])
+        fl_1.set_flows_to(fl_0)
+        out.append(fl_1)
+
+    return out[::-1]
 
 
 def patch_url_retrieve_github(url, *args, **kwargs):
