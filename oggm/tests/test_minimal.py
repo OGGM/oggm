@@ -84,7 +84,7 @@ class TestIdealisedCases(unittest.TestCase):
         assert ds_d['length_m'][-1] > 1e3
 
         df = model.get_diagnostics()
-        assert df['u'].max() > 10
+        assert (df['ice_velocity'].max() * cfg.SEC_IN_YEAR) > 10
 
 
 class TestSia2d(unittest.TestCase):

@@ -668,7 +668,8 @@ class FlowlineModel(object):
         # Check for domain bounds
         if self.check_for_boundaries:
             if self.fls[-1].thick[-1] > 10:
-                raise RuntimeError('Glacier exceeds domain boundaries.')
+                raise RuntimeError('Glacier exceeds domain boundaries, '
+                                   'at year: {}'.format(self.yr))
 
         # Check for NaNs
         for fl in self.fls:
@@ -865,20 +866,70 @@ class FlowlineModel(object):
 
 
 class FluxBasedModel(FlowlineModel):
-    """The actual model"""
+    """The flowline model used by OGGM in production.
+
+    It solves for the SIA along the flowline(s) using a staggered grid. It
+    computes the *ice flux* between grid points and transports the mass
+    accordingly (also between flowlines).
+
+    This model is numerically less stable than fancier schemes, but it
+    is fast and works with multiple flowlines of any bed shape (rectangular,
+    parabolic, trapeze, and any combination of them).
+
+    We test that it conserves mass in most cases, but not on very stiff cliffs.
+    """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
                  time_stepping='user', **kwargs):
-        """ Instanciate.
+        """Instanciate the model.
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
+        flowlines : list
+            the glacier flowlines
+        mb_model : MassBakanceModel
+            the mass-balance model
+        y0 : int
+            initial year of the simulation
+        glen_a : float
+            Glen's creep parameter
+        fs : float
+            Oerlemans sliding parameter
+        inplace : bool
+            whether or not to make a copy of the flowline objects for the run
+            setting to True implies that your objects will be modified at run
+            time by the model (can help to spare memory)
+        fixed_dt : float
+            set to a value (in seconds) to prevent adaptive time-stepping.
+        cfl_number : float
+            for adaptive time stepping (the default), dt is chosen from the
+            CFL criterion (dt = cfl_number * dx / max_u).
+            Schoolbook theory says that the scheme is stable
+            with CFL=1, but practice does not. There is no "best" CFL number:
+            small values are more robust but also slowier...
+        min_dt : float
+            with high velocities, time steps can become very small and your
+            model might run very slowly. In production we just take the risk
+            of becoming unstable and prevent very small time steps.
+        max_dt : float
+            just to make sure that the adaptive time step is not going to
+            choose too high values either. We could make this higher I think
+        time_stepping : str
+            let OGGM choose default values for the parameters above for you.
+            Possible settings are: 'ambitious', 'default', 'conservative',
+            'ultra-conservative'.
+        is_tidewater: bool, default: False
+            use the very basic parameterization for tidewater glaciers
+        mb_elev_feedback : str, default: 'annual'
+            'never', 'always', 'annual', or 'monthly': how often the
+            mass-balance should be recomputed from the mass balance model.
+            'Never' is equivalent to 'annual' but without elevation feedback
+            at all (the heights are taken from the first call).
+        check_for_boundaries: bool, default: True
+            raise an error when the glacier grows bigger than the domain
+            boundaries
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -1103,8 +1154,8 @@ class FluxBasedModel(FlowlineModel):
             - surface_h, bed_h, ice_tick, section_width: m
             - section_area: m2
             - slope: -
-            - ice_flux, tributary_flux: m3 of *ice* per year
-            - u: m per year
+            - ice_flux, tributary_flux: m3 of *ice* per second
+            - ice_velocity: m per second (depth-section integrated)
         """
 
         import pandas as pd
@@ -1124,14 +1175,14 @@ class FluxBasedModel(FlowlineModel):
         var = self.slope_stag[fl_id]
         df['slope'] = (var[1:nx+1] + var[:nx])/2
         var = self.flux_stag[fl_id]
-        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2 * cfg.SEC_IN_YEAR
+        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
         var = self.u_stag[fl_id]
-        df['u'] = (var[1:nx+1] + var[:nx])/2 * cfg.SEC_IN_YEAR
+        df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
         var = self.shapefac_stag[fl_id]
         df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
 
         # Not Staggered
-        df['tributary_flux'] = self.trib_flux[fl_id] * cfg.SEC_IN_YEAR
+        df['tributary_flux'] = self.trib_flux[fl_id]
 
         return df
 

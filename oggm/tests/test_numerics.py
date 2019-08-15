@@ -179,8 +179,12 @@ class TestIdealisedCases(unittest.TestCase):
         model.run_until(700)
         assert_allclose(mb.get_specific_mb(fls=fls), 0, atol=10)
 
-        df = model.get_diagnostics()
+        # Check the flux just for fun
+        fl = model.flux_stag[0]
+        assert fl[0] == 0
 
+        # Now check the diags
+        df = model.get_diagnostics()
         fl = model.fls[0]
         df['my_flux'] = np.cumsum(mb.get_annual_mb(fl.surface_h) *
                                   fl.widths_m * fl.dx_meter *
@@ -188,8 +192,13 @@ class TestIdealisedCases(unittest.TestCase):
 
         df = df.loc[df['ice_thick'] > 0]
 
+        # Also convert ours
+        df['ice_flux'] *= cfg.SEC_IN_YEAR
+        df['ice_velocity'] *= cfg.SEC_IN_YEAR
+        df['tributary_flux'] *= cfg.SEC_IN_YEAR
+
         assert_allclose(np.abs(df['ice_flux'] - df['my_flux']), 0, atol=35e3)
-        assert df['u'].max() > 25
+        assert df['ice_velocity'].max() > 25
         assert df['tributary_flux'].max() == 0
 
         fls = dummy_width_bed_tributary()
@@ -197,13 +206,17 @@ class TestIdealisedCases(unittest.TestCase):
         model.run_until(500)
 
         df = model.get_diagnostics()
+        df['ice_velocity'] *= cfg.SEC_IN_YEAR
+        df['tributary_flux'] *= cfg.SEC_IN_YEAR
         df = df.loc[df['ice_thick'] > 0]
-        assert df['u'].max() > 50
+        assert df['ice_velocity'].max() > 50
         assert df['tributary_flux'].max() > 30e4
 
         df = model.get_diagnostics(fl_id=0)
         df = df.loc[df['ice_thick'] > 0]
-        assert df['u'].max() > 10
+        df['ice_velocity'] *= cfg.SEC_IN_YEAR
+        df['tributary_flux'] *= cfg.SEC_IN_YEAR
+        assert df['ice_velocity'].max() > 10
         assert df['tributary_flux'].max() == 0
 
     @pytest.mark.slow
