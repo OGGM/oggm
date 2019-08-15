@@ -1056,7 +1056,7 @@ class TestSia2d(unittest.TestCase):
         pass
 
     @pytest.mark.slow
-    def test_constant_bed(self):
+    def test_flat_2d_bed(self):
 
         map_dx = 100.
         yrs = np.arange(1, 400, 5)
