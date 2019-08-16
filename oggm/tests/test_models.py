@@ -2650,11 +2650,9 @@ class TestHEF(unittest.TestCase):
         run_constant_climate(self.gdir, nyears=20,
                              bias=0, output_filesuffix='_ct')
 
-        with pytest.warns(RuntimeWarning):
-            utils.compile_climate_input([self.gdir_sh, self.gdir])
-        with pytest.warns(RuntimeWarning):
-            utils.compile_run_output([self.gdir_sh, self.gdir],
-                                     input_filesuffix='_ct')
+        utils.compile_climate_input([self.gdir_sh, self.gdir])
+        utils.compile_run_output([self.gdir_sh, self.gdir],
+                                 input_filesuffix='_ct')
 
         f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
         with xr.open_dataset(f) as ds:

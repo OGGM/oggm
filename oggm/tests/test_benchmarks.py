@@ -504,3 +504,38 @@ class TestCoxeGlacier(unittest.TestCase):
         assert utils.rmsd(h1, h2) < 0.02  # less than 2% error
         new_area = np.sum(widths * fls[-1].dx * gdir.grid.dx)
         np.testing.assert_allclose(new_area, gdir.rgi_area_m2)
+
+    def test_run(self):
+
+        entity = gpd.read_file(self.rgi_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # Climate tasks -- only data IO and tstar interpolation!
+        tasks.process_dummy_cru_file(gdir, seed=0)
+        tasks.local_t_star(gdir)
+        tasks.mu_star_calibration(gdir)
+
+        # Inversion tasks
+        tasks.prepare_for_inversion(gdir)
+        # We use the default parameters for this run
+        tasks.mass_conservation_inversion(gdir)
+        tasks.filter_inversion_output(gdir)
+
+        # Final preparation for the run
+        tasks.init_present_time_glacier(gdir)
+
+        # check that calving happens in the real context as well
+        tasks.run_constant_climate(gdir, bias=0, nyears=100)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            assert ds.calving_m3.max() > 10

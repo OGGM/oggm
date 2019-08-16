@@ -988,7 +988,7 @@ class FluxBasedModel(FlowlineModel):
             # This is not staggered
             self.trib_flux.append(np.zeros(nx))
             # We add an additional fake grid point at the end of these
-            if (trib[0] is not None) ^ self.is_tidewater:  # xor operator
+            if (trib[0] is not None) or self.is_tidewater:
                 nx = fl.nx + 1
             # +1 is for the staggered grid
             self.slope_stag.append(np.zeros(nx+1))
@@ -1107,7 +1107,7 @@ class FluxBasedModel(FlowlineModel):
 
             is_trib = tr[0] is not None
             # For these we had an additional grid point
-            if is_trib ^ self.is_tidewater:
+            if is_trib or self.is_tidewater:
                 flx_stag = flx_stag[:-1]
 
             # Mass balance

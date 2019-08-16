@@ -257,7 +257,7 @@ def get_test_dir():
     return out
 
 
-def init_hef(reset=False, border=40):
+def init_hef(reset=False, border=40, logging_level='INFO'):
 
     from oggm.core import gis, inversion, climate, centerlines, flowline
     import geopandas as gpd
@@ -269,7 +269,7 @@ def init_hef(reset=False, border=40):
         reset = True
 
     # Init
-    cfg.initialize()
+    cfg.initialize(logging_level=logging_level)
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
