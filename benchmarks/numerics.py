@@ -3,7 +3,8 @@ import numpy as np
 from oggm import cfg
 from oggm.core import massbalance, flowline
 from oggm.core.sia2d import Upstream2D
-from oggm.tests.funcs import dummy_constant_bed
+from oggm.tests.funcs import (dummy_constant_bed, dummy_width_bed_tributary,
+                              dummy_mixed_bed)
 
 cfg.initialize()
 
@@ -32,6 +33,44 @@ def time_1d_flux_simple_bed_fixed_dt():
 def time_1d_flux_simple_bed_adaptive_dt():
 
         fls = dummy_constant_bed()
+        mb = massbalance.LinearMassBalance(2600.)
+
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until(800)
+
+
+def time_1d_flux_mixed_bed_fixed_dt():
+
+        fls = dummy_mixed_bed()
+        mb = massbalance.LinearMassBalance(2600.)
+
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        fixed_dt=10 * cfg.SEC_IN_DAY)
+        model.run_until(800)
+
+
+def time_1d_flux_mixed_bed_adaptive_dt():
+
+        fls = dummy_mixed_bed()
+        mb = massbalance.LinearMassBalance(2600.)
+
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until(800)
+
+
+def time_1d_flux_multiple_flow_fixed_dt():
+
+        fls = dummy_width_bed_tributary(n_trib=5)
+        mb = massbalance.LinearMassBalance(2600.)
+
+        model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.,
+                                        fixed_dt=5 * cfg.SEC_IN_DAY)
+        model.run_until(800)
+
+
+def time_1d_flux_multiple_flow_adaptive_dt():
+
+        fls = dummy_width_bed_tributary(n_trib=5)
         mb = massbalance.LinearMassBalance(2600.)
 
         model = flowline.FluxBasedModel(fls, mb_model=mb, y0=0.)
