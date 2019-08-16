@@ -522,7 +522,7 @@ class TestCoxeGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # Climate tasks -- only data IO and tstar interpolation!
-        tasks.process_cru_data(gdir)
+        tasks.process_dummy_cru_file(gdir, seed=0)
         tasks.local_t_star(gdir)
         tasks.mu_star_calibration(gdir)
 
