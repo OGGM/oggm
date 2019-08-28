@@ -2297,7 +2297,7 @@ class TestColumbiaCalving(unittest.TestCase):
         accu_ice = prcpsol * 1e-9 / rho
         # Finally, chech that this is equal to our calving flux
         # units: mk3 ice yr-1
-        np.testing.assert_allclose(flux_mb, df['calving_flux'],
+        np.testing.assert_allclose(accu_ice, df['calving_flux'],
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
