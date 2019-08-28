@@ -439,7 +439,7 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     buffer : float
         buffer around a flowline to first better find an overlap with another
         flowline. And second assure some distance between the lines at a
-        junction. Will default to `cfg.PARAMS['kbuffer'].
+        junction. Will default to `cfg.PARAMS['kbuffer']`.
     kwargs: keyword argument for the recursive merging
 
     Returns

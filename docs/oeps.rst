@@ -15,3 +15,4 @@ discussion about OEPs.
 
     oeps/oep--0001-dependencies.rst
     oeps/oep--0002-cloud.rst
+    oeps/oep--0003-smb.rst
