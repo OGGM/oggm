@@ -2282,6 +2282,24 @@ class TestColumbiaCalving(unittest.TestCase):
         np.testing.assert_allclose(flux_mb, df['calving_flux'],
                                    atol=0.001)
 
+        # Test that accumulation equal flux (for Bea)
+        # We use a simple MB model
+        mbmod = massbalance.ConstantMassBalance(gdir)
+        heights, widths = gdir.get_inversion_flowline_hw()  # width is in m
+        temp, tempformelt, prcp, prcpsol = mbmod.get_climate(heights)
+        # prcpsol is in units mm w.e per year - let's convert
+        # compute the area of each section
+        fls = gdir.read_pickle('inversion_flowlines')
+        area_sec = widths * fls[0].dx * gdir.grid.dx
+        # Sum integral over the glacier
+        prcpsol = np.sum(prcpsol * area_sec)
+        # Convert to ice and km3
+        accu_ice = prcpsol * 1e-9 / rho
+        # Finally, chech that this is equal to our calving flux
+        # units: mk3 ice yr-1
+        np.testing.assert_allclose(accu_ice, df['calving_flux'],
+                                   atol=0.001)
+
         # Test with smaller k (it doesn't overshoot)
         default_calving = cfg.PARAMS['k_calving']
         cfg.PARAMS['k_calving'] = 0.2
