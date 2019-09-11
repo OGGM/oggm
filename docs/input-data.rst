@@ -60,7 +60,7 @@ All other data: auto-downloads and the ``~/.oggm_config`` file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Unlike runtime parameters (such as physical constants or working directories),
-the input data is shared accross runs and even accross computers if you want
+the input data is shared across runs and even across computers if you want
 to. Therefore, the paths to previously downloaded data are stored in a
 configuration file that you'll find in your ``$HOME`` folder:
 the ``~/.oggm_config`` file.
