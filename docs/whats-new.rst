@@ -4,8 +4,17 @@
 Version history
 ===============
 
-v1.2.0 (unreleased)
+v1.1.2 (12.09.2019)
 -------------------
+
+Minor release of the OGGM model, with several substancial improvements, most
+notably:
+
+- update in the inversion procedure for calving glaciers (Recinos et al., 2019)
+- new glacier evolution model based on Marzeion et al., 2012
+
+We don't expect major changes in the model results due to this release.
+
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
