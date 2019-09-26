@@ -345,6 +345,19 @@ class TestGIS(unittest.TestCase):
                   'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
             assert s in gis.DEM_SOURCE_INFO.keys()
 
+    def test_custom_basename(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        cfg.add_to_basenames('mybn', 'testfb.pkl', docstr='Some docs')
+
+        out = {'foo': 1.5}
+        gdir.write_pickle(out, 'mybn')
+        assert gdir.read_pickle('mybn') == out
+
 
 class TestCenterlines(unittest.TestCase):
 

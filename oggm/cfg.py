@@ -106,7 +106,6 @@ G = 9.81  # gravity
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:
     kernel = gaussian(ks, 1)
-    GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
 _doc = ('A geotiff file containing the DEM (reprojected into the local grid).'
         'This DEM is not smoothed or gap filles, and is the closest to the '
@@ -613,3 +612,23 @@ def unpack_config(cfg_dict):
     BASENAMES = DocumentedDict()
     for k in cfg_dict['BASENAMES']:
         BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')
+
+
+def add_to_basenames(basename, filename, docstr=''):
+    """Add an entry to the list of BASENAMES.
+
+    BASENAMES are access keys to files available at the gdir level.
+
+    Parameters
+    ----------
+    basename : str
+        the key (e.g. 'dem', 'model_flowlines')
+    filename : str
+        the associated filename (e.g. 'dem.tif', 'model_flowlines.pkl')
+    docstr : str
+        the associated docstring (for documentation)
+    """
+    global BASENAMES
+    if '.' not in filename:
+        raise ValueError('The filename needs a proper file suffix!')
+    BASENAMES[basename] = (filename, docstr)
