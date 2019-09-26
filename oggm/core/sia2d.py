@@ -421,10 +421,12 @@ class Upstream2D(Model2D):
 
         div_q, dt_cfl = self.diffusion_upstream_2d()
 
-        dt_use = np.clip(np.min([dt_cfl, dt]), 0, self.max_dt)
+        dt_use = utils.clip_scalar(np.min([dt_cfl, dt]), 0, self.max_dt)
 
-        self.ice_thick = (self.surface_h + (self.get_mb() + div_q) * dt_use -
-                          self.bed_topo).clip(0)
+        self.ice_thick = utils.clip_min(self.surface_h +
+                                        (self.get_mb() + div_q) * dt_use -
+                                        self.bed_topo,
+                                        0)
 
         # Next step
         self.t += dt_use

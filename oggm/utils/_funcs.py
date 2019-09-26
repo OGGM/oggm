@@ -333,6 +333,21 @@ def corrcoef(ref, data):
     return np.corrcoef(ref, data)[0, 1]
 
 
+def clip_scalar(value, vmin, vmax):
+    """A faster numpy.clip ON SCALARS ONLY.
+
+    See https://github.com/numpy/numpy/issues/14281
+    """
+    return np.core.umath.maximum(np.core.umath.minimum(value, vmax), vmin)
+
+
+# A faster numpy.clip when only one value is clipped (here: min).
+clip_min = np.core.umath.maximum
+
+# A faster numpy.clip when only one value is clipped (here: max).
+clip_max = np.core.umath.minimum
+
+
 def nicenumber(number, binsize, lower=False):
     """Returns the next higher or lower "nice number", given by binsize.
 

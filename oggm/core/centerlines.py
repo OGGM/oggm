@@ -121,11 +121,11 @@ class Centerline(object):
             ind_closest = np.argmin(np.abs(other.dis_on_line - prdis)).item()
             n = len(other.dis_on_line)
             if n >= 9:
-                ind_closest = np.clip(ind_closest, 4, n-5)
+                ind_closest = utils.clip_scalar(ind_closest, 4, n-5)
             elif n >= 7:
-                ind_closest = np.clip(ind_closest, 3, n-4)
+                ind_closest = utils.clip_scalar(ind_closest, 3, n-4)
             elif n >= 5:
-                ind_closest = np.clip(ind_closest, 2, n-3)
+                ind_closest = utils.clip_scalar(ind_closest, 2, n-3)
             p = shpg.Point(other.line.coords[int(ind_closest)])
             self.flows_to_point = p
         elif last_point:
@@ -708,7 +708,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
 
     # Size of the half window to use to look for local maximas
     maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
-    maxorder = np.clip(maxorder, 5., np.rint((len(zoutline) / 5.)))
+    maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=maxorder.astype(np.int64))
     if single_fl or len(heads_idx[0]) <= 1:
@@ -731,7 +731,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
 
     # get radius of the buffer according to Kienholz eq. (1)
     radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
-    radius = np.clip(radius, 0, cfg.PARAMS['rmax'])
+    radius = utils.clip_scalar(radius, 0, cfg.PARAMS['rmax'])
     radius /= gdir.grid.dx  # in raster coordinates
     # Plus our criteria, quite useful to remove short lines:
     radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
@@ -1113,7 +1113,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # We forbid super small shapes (important! This can lead to huge volumes)
     # Sometimes the parabola fits in flat areas are very good, implying very
     # flat parabolas.
-    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'], None)
+    bed_int = utils.clip_min(bed_int, cfg.PARAMS['downstream_min_shape'])
 
     # Smoothing
     bed_ma = pd.Series(bed_int)
@@ -1804,7 +1804,7 @@ def catchment_width_correction(gdir):
 
         # Interpolate widths
         widths = utils.interp_nans(fl.widths)
-        widths = np.clip(widths, 0.1, None)
+        widths = utils.clip_min(widths, 0.1)
 
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
@@ -1815,11 +1815,11 @@ def catchment_width_correction(gdir):
 
         # Sometimes, the centerline does not reach as high as each pix on the
         # glacier. (e.g. RGI40-11.00006)
-        catch_h = np.clip(catch_h, None, maxh)
+        catch_h = utils.clip_max(catch_h, maxh)
         # Same for min
         if fl.flows_to is None:
             # We clip only for main flowline (this has reasons)
-            catch_h = np.clip(catch_h, minh, None)
+            catch_h = utils.clip_min(catch_h, minh)
 
         # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']

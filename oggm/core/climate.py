@@ -311,7 +311,7 @@ def process_cru_data(gdir):
                              ts_pre.values,
                              ts_pre_ano.values)
     # The last step might create negative values (unlikely). Clip them
-    ts_pre.values = ts_pre.values.clip(0)
+    ts_pre.values = utils.clip_min(ts_pre.values, 0)
 
     # done
     loc_hgt = loc_hgt[1, 1]
@@ -449,7 +449,7 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
 
     loc_pre = xr.DataArray(loc_pre[:, 1, 1], dims=['month'],
                            coords={'month': np.arange(1, 13)})
-    ts_pre = (rng.randn(len(time)) * sigma_prcp + 1).clip(0)
+    ts_pre = utils.clip_min(rng.randn(len(time)) * sigma_prcp + 1, 0)
     ts_pre = xr.DataArray(ts_pre, dims=['time'],
                           coords={'time': time})
 
@@ -680,7 +680,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     grad_temp *= (heights.repeat(len(time)).reshape(grad_temp.shape) - ref_hgt)
     temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
     temp2dformelt = temp2d - temp_melt
-    temp2dformelt = np.clip(temp2dformelt, 0, None)
+    temp2dformelt = utils.clip_min(temp2dformelt, 0)
     # Compute solid precipitation from total precipitation
     prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
     fac = 1 - (temp2d - temp_all_solid) / (temp_all_liq - temp_all_solid)
@@ -1104,7 +1104,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # Clip it?
     if cfg.PARAMS['clip_mu_star']:
-        mustar = np.clip(mustar, 0, None)
+        mustar = utils.clip_min(mustar, 0)
 
     # If mu out of bounds, raise
     if not (cfg.PARAMS['min_mu_star'] <= mustar <= cfg.PARAMS['max_mu_star']):
