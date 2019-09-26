@@ -106,6 +106,7 @@ G = 9.81  # gravity
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:
     kernel = gaussian(ks, 1)
+    GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
 _doc = ('A geotiff file containing the DEM (reprojected into the local grid).'
         'This DEM is not smoothed or gap filles, and is the closest to the '

@@ -13,7 +13,7 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
-- Ne function ``cfg.add_to_basenames`` now allows users to define their own
+- New function ``cfg.add_to_basenames`` now allows users to define their own
   entries in glacier directories (:issue:`731`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
