@@ -86,7 +86,7 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.warning('(%s) has negative flux somewhere', gdir.rgi_id)
-        flux = flux.clip(0)
+        utils.clip_min(flux, 0, out=flux)
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
@@ -535,7 +535,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         thick = np.where(glacier_mask, thick, 0.)
 
     # Re-mask
-    thick = thick.clip(0)
+    utils.clip_min(thick, 0, out=thick)
     thick[glacier_mask == 0] = np.NaN
     assert np.all(np.isfinite(thick[glacier_mask == 1]))
 
@@ -625,7 +625,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
     inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
     thick[pnan] = griddata(points, np.ravel(thick[pok]), inter, method='cubic')
-    thick = thick.clip(0)
+    utils.clip_min(thick, 0, out=thick)
 
     # Slope
     thick *= slope_factor
@@ -704,7 +704,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
     fl = gdir.read_pickle('inversion_flowlines')[-1]
 
     # Altitude at the terminus and frontal width
-    t_altitude = np.clip(fl.surface_h[-1], 0, None)
+    t_altitude = utils.clip_min(fl.surface_h[-1], 0)
     width = fl.widths[-1] * gdir.grid.dx
 
     # Calving formula
@@ -723,7 +723,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
         # Recompute free board before returning
         t_altitude = thick - water_depth
 
-    return {'flux': np.clip(flux, 0, None),
+    return {'flux': utils.clip_min(flux, 0),
             'width': width,
             'thick': thick,
             'water_depth': water_depth,
@@ -769,7 +769,7 @@ def find_inversion_calving_loop(gdir, initial_water_depth=None, max_ite=30,
     # Input
     if initial_water_depth is None:
         fl = gdir.read_pickle('inversion_flowlines')[-1]
-        initial_water_depth = np.clip(fl.surface_h[-1] / 3, 10, None)
+        initial_water_depth = utils.clip_min(fl.surface_h[-1] / 3, 10)
 
     rho = cfg.PARAMS['ice_density']
 

@@ -133,7 +133,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                              ts_pre.values,
                              ts_pre_ano.values)
     # The previous step might create negative values (unlikely). Clip them
-    ts_pre.values = ts_pre.values.clip(0)
+    ts_pre.values = utils.clip_min(ts_pre.values, 0)
 
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))

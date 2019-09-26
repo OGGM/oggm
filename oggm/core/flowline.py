@@ -62,7 +62,7 @@ class Flowline(Centerline):
 
         super(Flowline, self).__init__(line, dx, surface_h)
 
-        self._thick = (surface_h - bed_h).clip(0.)
+        self._thick = utils.clip_min(surface_h - bed_h, 0.)
         self.map_dx = map_dx
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
@@ -80,7 +80,7 @@ class Flowline(Centerline):
 
     @thick.setter
     def thick(self, value):
-        self._thick = value.clip(0)
+        self._thick = utils.clip_min(value, 0)
 
     @Centerline.surface_h.getter
     def surface_h(self):
@@ -1094,7 +1094,7 @@ class FluxBasedModel(FlowlineModel):
 
         # Time step
         self.dt_warning = dt < min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        dt = utils.clip_scalar(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
         for fl_id, fl in enumerate(self.fls):
@@ -1121,19 +1121,19 @@ class FluxBasedModel(FlowlineModel):
                            trib_flux*dt/dx + mb)
 
             # Keep positive values only and store
-            fl.section = new_section.clip(0)
+            fl.section = utils.clip_min(new_section, 0)
 
             # Add the last flux to the tributary
             # this works because the lines are sorted in order
             if is_trib:
                 # tr tuple: line_index, start, stop, gaussian_kernel
-                self.trib_flux[tr[0]][tr[1]:tr[2]] += (flx_stag[-1].clip(0) *
-                                                       tr[3])
+                self.trib_flux[tr[0]][tr[1]:tr[2]] += \
+                    utils.clip_min(flx_stag[-1], 0) * tr[3]
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
                 # not sure at all if this is the way to go but mass
                 # conservation is OK
-                self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt
+                self.calving_m3_since_y0 += utils.clip_min(flx_stag[-2], 0)*dt
 
         # Next step
         self.t += dt
@@ -1222,7 +1222,7 @@ class MassConservationChecker(FluxBasedModel):
             # there can't be more negative mb than there is section
             # this isn't an exact solution unfortunately
             # TODO: exact solution for mass conservation
-            mb = mb.clip(-sec)
+            mb = utils.clip_min(mb, -sec)
             self.total_mass += np.sum(mb * dx)
 
 
@@ -1265,7 +1265,7 @@ class KarthausModel(FlowlineModel):
 
         # This is to guarantee a precise arrival on a specific date if asked
         min_dt = dt if dt < self.min_dt else self.min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        dt = utils.clip_scalar(dt, min_dt, self.max_dt)
 
         fl = self.fls[0]
         dx = fl.dx_meter
@@ -1309,7 +1309,7 @@ class KarthausModel(FlowlineModel):
 
         NewIceThickness[-1] = thick[fl.nx-2]
 
-        fl.thick = NewIceThickness.clip(0)
+        fl.thick = utils.clip_min(NewIceThickness, 0)
 
         # Next step
         self.t += dt
@@ -1368,7 +1368,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
         # Guarantee a precise arrival on a specific date if asked
         min_dt = dt if dt < self.min_dt else self.min_dt
-        dt = np.clip(dt, min_dt, self.max_dt)
+        dt = utils.clip_scalar(dt, min_dt, self.max_dt)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -1705,7 +1705,7 @@ def init_present_time_glacier(gdir):
             # Interpolate
             bed_shape = utils.interp_nans(np.append(bed_shape,
                                                     dic_ds['bedshapes'][0]))
-            bed_shape = bed_shape[:-1].clip(min_shape)
+            bed_shape = utils.clip_min(bed_shape[:-1], min_shape)
 
             # Correct the section volume
             h = inv['thick']

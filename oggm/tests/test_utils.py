@@ -251,6 +251,57 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_equal(shape_factor_adhikari(w, h, is_rect*0.),
                                 factors_parabolic)
 
+    def test_clips(self):
+
+        a = np.arange(50) - 5
+        assert_array_equal(np.clip(a, 0, 10), utils.clip_scalar(a, 0, 10))
+        assert_array_equal(np.clip(a, None, 10), utils.clip_max(a, 10))
+        assert_array_equal(np.clip(a, 0, None), utils.clip_min(a, 0))
+
+        for a in [-1, 2, 12]:
+            assert_array_equal(np.clip(a, 0, 10), utils.clip_scalar(a, 0, 10))
+            assert_array_equal(np.clip(a, None, 10), utils.clip_max(a, 10))
+            assert_array_equal(np.clip(a, 0, None), utils.clip_min(a, 0))
+
+    def test_clips_performance(self):
+        import timeit
+
+        n = int(1e5)
+
+        # Scalar
+        s1 = 'import numpy as np'
+        s2 = 'from oggm import utils'
+
+        t1 = timeit.timeit('np.clip(1, 0, 10)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_scalar(1, 0, 10)', number=n, setup=s2)
+        assert t2 < t1
+
+        t1 = timeit.timeit('np.clip(12, None, 10)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_max(12, 10)', number=n, setup=s2)
+        assert t2 < t1
+
+        t1 = timeit.timeit('np.clip(12, 15, None)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_min(12, 15)', number=n, setup=s2)
+        assert t2 < t1
+
+        # Array
+        s1 = 'import numpy as np; a = np.arange(50) - 5'
+        s2 = 'from oggm import utils; import numpy as np; a = np.arange(50)-5'
+
+        t1 = timeit.timeit('np.clip(a, 0, 10)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_scalar(a, 0, 10)', number=n, setup=s2)
+        # This usually fails as advertised by numpy
+        # (although with np 1.17 I'm not sure)
+        # assert t2 < t1
+
+        t1 = timeit.timeit('np.clip(a, None, 10)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_max(a, 10)', number=n, setup=s2)
+        assert t2 < t1
+
+        t1 = timeit.timeit('np.clip(a, 15, None)', number=n, setup=s1)
+        t2 = timeit.timeit('utils.clip_min(a, 15)', number=n, setup=s2)
+        assert t2 < t1
+
 
 class TestInitialize(unittest.TestCase):
 

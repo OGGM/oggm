@@ -52,7 +52,7 @@ except ImportError:
     pass
 
 # Locals
-from oggm import entity_task
+from oggm import entity_task, utils
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError, GeometryError)
@@ -356,7 +356,7 @@ def define_glacier_region(gdir, entity=None):
                                  .format(dxmethod))
     # Additional trick for varying dx
     if dxmethod in ['linear', 'square']:
-        dx = np.clip(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
+        dx = utils.clip_scalar(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
 
     log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
@@ -573,7 +573,7 @@ def glacier_masks(gdir):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = dem.clip(0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
@@ -774,7 +774,7 @@ def simple_glacier_masks(gdir):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = dem.clip(0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
@@ -958,8 +958,9 @@ def gridded_attributes(gdir):
     glen_n = cfg.PARAMS['glen_n']
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
-    slope_factor = np.clip(slope, np.deg2rad(cfg.PARAMS['min_slope']*4),
-                           np.pi/2)
+    slope_factor = utils.clip_scalar(slope,
+                                     np.deg2rad(cfg.PARAMS['min_slope']*4),
+                                     np.pi/2)
     slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 
     aspect = np.arctan2(-sx, sy)
@@ -1306,7 +1307,7 @@ def merged_glacier_masks(gdir, geometry):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = dem.clip(0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Interpolate shape to a regular path
     glacier_poly_hr = tolist(geometry)
