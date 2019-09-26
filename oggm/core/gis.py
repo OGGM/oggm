@@ -573,7 +573,7 @@ def glacier_masks(gdir):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = utils.clip_min(dem, 0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
@@ -774,7 +774,7 @@ def simple_glacier_masks(gdir):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = utils.clip_min(dem, 0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
@@ -1307,7 +1307,7 @@ def merged_glacier_masks(gdir, geometry):
     dem_dr.close()
 
     # Clip topography to 0 m a.s.l.
-    dem = utils.clip_min(dem, 0)
+    utils.clip_min(dem, 0, out=dem)
 
     # Interpolate shape to a regular path
     glacier_poly_hr = tolist(geometry)

@@ -86,7 +86,7 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.warning('(%s) has negative flux somewhere', gdir.rgi_id)
-        flux = utils.clip_min(flux, 0)
+        utils.clip_min(flux, 0, out=flux)
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
@@ -535,7 +535,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         thick = np.where(glacier_mask, thick, 0.)
 
     # Re-mask
-    thick = utils.clip_min(thick, 0)
+    utils.clip_min(thick, 0, out=thick)
     thick[glacier_mask == 0] = np.NaN
     assert np.all(np.isfinite(thick[glacier_mask == 1]))
 
@@ -625,7 +625,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
     inter = np.array((np.ravel(yy[pnan]), np.ravel(xx[pnan]))).T
     thick[pnan] = griddata(points, np.ravel(thick[pok]), inter, method='cubic')
-    thick = utils.clip_min(thick, 0)
+    utils.clip_min(thick, 0, out=thick)
 
     # Slope
     thick *= slope_factor

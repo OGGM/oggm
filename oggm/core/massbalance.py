@@ -210,7 +210,7 @@ class LinearMassBalance(MassBalanceModel):
     def get_monthly_mb(self, heights, year=None, fl_id=None):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
         if self.max_mb is not None:
-            mb = clip_max(mb, self.max_mb)
+            clip_max(mb, self.max_mb, out=mb)
         return mb / SEC_IN_YEAR / self.rho
 
     def get_annual_mb(self, heights, year=None, fl_id=None):
@@ -373,7 +373,7 @@ class PastMassBalance(MassBalanceModel):
         npix = len(heights)
         temp = np.ones(npix) * itemp + igrad * (heights - self.ref_hgt)
         tempformelt = temp - self.t_melt
-        tempformelt[:] = clip_min(tempformelt, 0.)
+        clip_min(tempformelt, 0, out=tempformelt)
 
         # Compute solid precipitation from total precipitation
         prcp = np.ones(npix) * iprcp
@@ -408,7 +408,7 @@ class PastMassBalance(MassBalanceModel):
                       self.ref_hgt)
         temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
         temp2dformelt = temp2d - self.t_melt
-        temp2dformelt[:] = clip_min(temp2dformelt, 0)
+        clip_min(temp2dformelt, 0, out=temp2dformelt)
 
         # Compute solid precipitation from total precipitation
         prcp = np.atleast_2d(iprcp).repeat(npix, 0)
