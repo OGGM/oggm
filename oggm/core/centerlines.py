@@ -50,7 +50,8 @@ except ImportError:
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from oggm import utils
-from oggm.utils import tuple2int, line_interpol, interp_nans, lazy_property
+from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
+                        SuperclassMeta)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError)
@@ -64,7 +65,7 @@ LABEL_STRUCT = np.array([[0, 1, 0],
                          [0, 1, 0]])
 
 
-class Centerline(object):
+class Centerline(object, metaclass=SuperclassMeta):
     """A Centerline has geometrical and flow rooting properties.
 
     It is instanciated and updated by _join_lines() exclusively
@@ -72,7 +73,21 @@ class Centerline(object):
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None,
                  rgi_id=None):
-        """ Instantiate."""
+        """ Initialize a Centerline
+
+        Parameters
+        ----------
+        line : :py:class:`shapely.geometry.LineString`
+            The geometrically calculated centerline
+        dx : float
+            Grid spacing of the initialised flowline in pixel coordinates
+        surface_h :  :py:class:`numpy.ndarray`
+            elevation [m] of the points on ``line``
+        orig_head : :py:class:`shapely.geometry.Point`
+            geometric point of the lines head
+        rgi_id : str
+            The glacier's RGI identifier
+        """
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
@@ -110,7 +125,8 @@ class Centerline(object):
 
         Parameters
         ----------
-        other: an other centerline
+        other : :py:class:`oggm.Centerline`
+            another flowline where self should flow to
         """
 
         self.flows_to = other
@@ -141,7 +157,7 @@ class Centerline(object):
 
         Parameters
         ----------
-        line: a shapely.geometry.LineString
+        line : :py:class`shapely.geometry.LineString`
         """
 
         self.nx = len(line.coords)
