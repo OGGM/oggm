@@ -4,8 +4,30 @@
 Version history
 ===============
 
-v1.2.0 (unreleased)
+v1.2 (unreleased)
+-----------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
+
+v1.1.2 (12.09.2019)
 -------------------
+
+Minor release of the OGGM model, with several substancial improvements, most
+notably:
+
+- update in the inversion procedure for calving glaciers (Recinos et al., 2019)
+- new glacier evolution model based on Marzeion et al., 2012
+
+We don't expect major changes in the model results due to this release.
+
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -19,6 +41,9 @@ Breaking changes
 - ``find_inversion_calving`` has been renamed to
   ``find_inversion_calving_loop`` and will probably be deprecated soon
   (:pull:`794`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- ``use_rgi_area=False`` now also recomputes CenLon and CenLat on the fly.
+  (:issue:`838`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Enhancements
@@ -45,7 +70,19 @@ Enhancements
 - Changed the way the calving flux is computed during the ice thickness
   inversion. This no longer relies on an iteration over mu*, but solves
   for `h` instead. The new function is likely to replace the "old"
-  calving loop(:pull:`794`).
+  calving loop (:pull:`794`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- ``compile_climate_input`` and ``compile_run_output`` are now faster for
+  larger numbers of glaciers thanks to temporary files (:pull:`814`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_. Could be made faster with
+  multiprocessing one day.
+- OGGM can now run in "minimal mode", i.e. without many of the hard
+  dependencies (:issue:`420`). This is useful for teaching or idealized
+  simulations, but won't work in production.
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- the flowline model gives access to new diagnostics such as ice velocity and
+  flux along the flowline. The numerical core code changed in the process,
+  and we will monitor performance after this change (:pull:`853`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
@@ -55,6 +92,16 @@ Bug fixes
 - Preprocessed directories at the level 3 now also have the glacier flowlines
   ready for the run (:issue:`736`, :pull:`771`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Nominal glaciers now error early in the processing chain (:issue:`832`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Specific MB (not used operationaly) was wrongly computer for zero ice
+  thickness rectangular or parabolic sections. This is now corrected
+  (:issue:`828`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed a bug in model output files where SH glaciers were wrongly attributed
+  with NH calendar dates (:issue:`824`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 v1.1.1 (24.04.2019)
 -------------------

@@ -5,38 +5,57 @@ to be realized by any OGGM pre-processing workflow.
 # Built ins
 import os
 import logging
-import json
 import warnings
 from functools import partial
 from distutils.version import LooseVersion
+
 # External libs
-import salem
-import pyproj
 import numpy as np
 import shapely.ops
 import pandas as pd
-import geopandas as gpd
-import skimage.draw as skdraw
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
 from scipy.ndimage import binary_erosion
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import griddata
-import rasterio
-from rasterio.warp import reproject, Resampling
-from rasterio.mask import mask as riomask
-try:
-    # rasterio V > 1.0
-    from rasterio.merge import merge as merge_tool
-except ImportError:
-    from rasterio.tools.merge import merge as merge_tool
 from scipy import optimize as optimization
+
+# Optional libs
+try:
+    import salem
+    from salem.gis import transform_proj
+except ImportError:
+    pass
+try:
+    import pyproj
+except ImportError:
+    pass
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    import skimage.draw as skdraw
+except ImportError:
+    pass
+try:
+    import rasterio
+    from rasterio.warp import reproject, Resampling
+    from rasterio.mask import mask as riomask
+    try:
+        # rasterio V > 1.0
+        from rasterio.merge import merge as merge_tool
+    except ImportError:
+        from rasterio.tools.merge import merge as merge_tool
+except ImportError:
+    pass
+
 # Locals
 from oggm import entity_task
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             InvalidDEMError)
+                             InvalidDEMError, GeometryError)
 from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
                         nicenumber, ncDataset, tolist)
 
@@ -271,7 +290,7 @@ def define_glacier_region(gdir, entity=None):
                 "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
     proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
-    project = partial(pyproj.transform, proj_in, proj_out)
+    project = partial(transform_proj, proj_in, proj_out)
     # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
     geometry = multi_to_poly(geometry, gdir=gdir)
@@ -295,6 +314,7 @@ def define_glacier_region(gdir, entity=None):
 
     # Do we want to use the RGI area or ours?
     if not cfg.PARAMS['use_rgi_area']:
+        # Update Area
         area = geometry.area * 1e-6
         entity['Area'] = area
         towrite['Area'] = area
@@ -475,6 +495,10 @@ def glacier_masks(gdir):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     """
+
+    # In case nominal, just raise
+    if gdir.is_nominal:
+        raise GeometryError('{} is a nominal glacier.'.format(gdir.rgi_id))
 
     # open srtm tif-file:
     dem_dr = rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff')

@@ -9,7 +9,6 @@ import logging
 import warnings
 
 # External libs
-import geopandas as gpd
 import pandas as pd
 import numpy as np
 from scipy.ndimage import filters
@@ -18,10 +17,17 @@ from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 
+# Optional libs
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils._downloads import get_demo_file
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -487,7 +493,7 @@ def date_to_floatyear(y, m):
             SEC_IN_MONTH / SEC_IN_YEAR)
 
 
-def hydrodate_to_calendardate(y, m, start_month=10):
+def hydrodate_to_calendardate(y, m, start_month=None):
     """Converts a hydrological (year, month) pair to a calendar date.
 
     Parameters
@@ -499,6 +505,11 @@ def hydrodate_to_calendardate(y, m, start_month=10):
     start_month : int
         the first month of the hydrological year
     """
+
+    if start_month is None:
+        raise InvalidParamsError('In order to avoid confusion, we now force '
+                                 'callers of this function to specify the '
+                                 'hydrological convention they are using.')
 
     e = 13 - start_month
     try:
@@ -519,7 +530,7 @@ def hydrodate_to_calendardate(y, m, start_month=10):
     return out_y, out_m
 
 
-def calendardate_to_hydrodate(y, m, start_month=10):
+def calendardate_to_hydrodate(y, m, start_month=None):
     """Converts a calendar (year, month) pair to a hydrological date.
 
     Parameters
@@ -531,6 +542,11 @@ def calendardate_to_hydrodate(y, m, start_month=10):
     start_month : int
         the first month of the hydrological year
     """
+
+    if start_month is None:
+        raise InvalidParamsError('In order to avoid confusion, we now force '
+                                 'callers of this function to specify the '
+                                 'hydrological convention they are using.')
 
     try:
         if m >= start_month:

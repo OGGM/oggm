@@ -19,26 +19,38 @@ import logging
 import copy
 from itertools import groupby
 from collections import Counter
+
 # External libs
 import numpy as np
 import pandas as pd
-import salem
 import shapely.ops
-import geopandas as gpd
 import scipy.signal
 import shapely.geometry as shpg
-from skimage import measure
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.ndimage.measurements import label, find_objects
-from skimage.graph import route_through_array
+
+# Optional libs
+try:
+    import salem
+except ImportError:
+    pass
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    from skimage import measure
+    from skimage.graph import route_through_array
+except ImportError:
+    pass
+
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
-from salem import lazy_property
 from oggm import utils
-from oggm.utils import tuple2int, line_interpol, interp_nans, SuperclassMeta
+from oggm.utils import tuple2int, line_interpol, interp_nans, lazy_property, SuperclassMeta
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError)
@@ -153,12 +165,13 @@ class Centerline(object, metaclass=SuperclassMeta):
     def flows_to_indice(self):
         """Indices instead of geometry"""
 
+        ind = []
         tofind = self.flows_to_point.coords[0]
         for i, p in enumerate(self.flows_to.line.coords):
             if p == tofind:
-                ind = i
-        assert ind is not None
-        return ind
+                ind.append(i)
+        assert len(ind) == 1, 'We expect exactly one point to be found here.'
+        return ind[0]
 
     @lazy_property
     def inflow_indices(self):
@@ -169,7 +182,10 @@ class Centerline(object, metaclass=SuperclassMeta):
             ind = [i for (i, pi) in enumerate(self.line.coords)
                    if (p.coords[0] == pi)]
             inds.append(ind[0])
-        assert len(inds) == len(self.inflow_points)
+        assert len(inds) == len(self.inflow_points), ('For every inflow point '
+                                                      'there should be '
+                                                      'exactly one inflow '
+                                                      'indice')
         return inds
 
     @lazy_property
@@ -1106,7 +1122,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # We forbid super small shapes (important! This can lead to huge volumes)
     # Sometimes the parabola fits in flat areas are very good, implying very
     # flat parabolas.
-    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'])
+    bed_int = bed_int.clip(cfg.PARAMS['downstream_min_shape'], None)
 
     # Smoothing
     bed_ma = pd.Series(bed_int)
@@ -1797,7 +1813,7 @@ def catchment_width_correction(gdir):
 
         # Interpolate widths
         widths = utils.interp_nans(fl.widths)
-        widths = np.clip(widths, 0.1, np.max(widths))
+        widths = np.clip(widths, 0.1, None)
 
         # Get topo per catchment and per flowline point
         fhgt = fl.surface_h
@@ -1808,11 +1824,11 @@ def catchment_width_correction(gdir):
 
         # Sometimes, the centerline does not reach as high as each pix on the
         # glacier. (e.g. RGI40-11.00006)
-        catch_h = np.clip(catch_h, np.min(catch_h), maxh)
+        catch_h = np.clip(catch_h, None, maxh)
         # Same for min
         if fl.flows_to is None:
             # We clip only for main flowline (this has reasons)
-            catch_h = np.clip(catch_h, minh, np.max(catch_h))
+            catch_h = np.clip(catch_h, minh, None)
 
         # Now decide on a binsize which ensures at least N element per bin
         bsize = cfg.PARAMS['base_binsize']
@@ -1946,7 +1962,6 @@ def terminus_width_correction(gdir, new_width=None):
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
-@entity_task(log)
 def intersect_downstream_lines(gdir, candidates=None):
     """Find tributaries to a main glacier by intersecting downstream lines
 
@@ -1964,8 +1979,8 @@ def intersect_downstream_lines(gdir, candidates=None):
 
     Returns
     -------
-    tributaries: dict
-        Key is the main glacier rgi_id, values is a list of tributary rgi_ids
+    tributaries: list
+        list of tributary rgi_ids
     """
 
     # make sure tributaries are iteratable
@@ -1998,4 +2013,4 @@ def intersect_downstream_lines(gdir, candidates=None):
         if dline.intersects(_trans_dline.buffer(buffer)):
             tributaries.append(trib)
 
-    return {gdir.rgi_id: tributaries}
+    return tributaries

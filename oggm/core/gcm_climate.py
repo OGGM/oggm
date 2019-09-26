@@ -3,10 +3,12 @@
 import logging
 from distutils.version import LooseVersion
 from datetime import datetime
+
 # External libs
 import numpy as np
 import netCDF4
 import xarray as xr
+
 # Locals
 from oggm import cfg
 from oggm import utils
@@ -91,7 +93,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         ts_tmp_sel = temp.sel(time=slice(*year_range))
         ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
         std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
-        std_fac = std_fac.roll(month=13-sm)
+        std_fac = std_fac.roll(month=13-sm, roll_coords=True)
         std_fac = np.tile(std_fac.data, len(temp) // 12)
         win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) + 1
 

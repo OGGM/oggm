@@ -9,13 +9,18 @@ import copy
 from collections import OrderedDict
 from time import gmtime, strftime
 import os
+import shutil
 
 # External libs
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
-import salem
-import shutil
+
+# Optional libs
+try:
+    import salem
+except ImportError:
+    pass
 
 # Locals
 from oggm import __version__
@@ -250,7 +255,7 @@ class TrapezoidalBedFlowline(Flowline):
         if np.any(self._w0_m <= 0):
             raise ValueError('Trapezoid beds need to have origin widths > 0.')
 
-        self._prec = np.where(lambdas == 0)
+        self._prec = np.where(lambdas == 0)[0]
 
         self._lambdas = lambdas
 
@@ -347,7 +352,7 @@ class MixedBedFlowline(Flowline):
 
         assert np.all(self.bed_shape[~is_trapezoid] > 0)
 
-        self._prec = np.where(is_trapezoid & (lambdas == 0))
+        self._prec = np.where(is_trapezoid & (lambdas == 0))[0]
 
         assert np.allclose(section, self.section)
 
@@ -463,7 +468,7 @@ class FlowlineModel(object):
         self.reset_y0(y0)
 
         self.fls = None
-        self._trib = None
+        self._tributary_indices = None
         self.reset_flowlines(flowlines, inplace=inplace)
 
     @property
@@ -526,7 +531,7 @@ class FlowlineModel(object):
                 id0 = ide-2
                 id1 = ide+3
             trib_ind.append((idl, id0, id1, gk))
-        self._trib = trib_ind
+        self._tributary_indices = trib_ind
 
     @property
     def yr(self):
@@ -597,7 +602,7 @@ class FlowlineModel(object):
         """Creates a netcdf group file storing the state of the model."""
 
         flows_to_id = []
-        for trib in self._trib:
+        for trib in self._tributary_indices:
             flows_to_id.append(trib[0] if trib[0] is not None else -1)
 
         ds = xr.Dataset()
@@ -676,7 +681,8 @@ class FlowlineModel(object):
         # Check for domain bounds
         if self.check_for_boundaries:
             if self.fls[-1].thick[-1] > 10:
-                raise RuntimeError('Glacier exceeds domain boundaries.')
+                raise RuntimeError('Glacier exceeds domain boundaries, '
+                                   'at year: {}'.format(self.yr))
 
         # Check for NaNs
         for fl in self.fls:
@@ -720,6 +726,10 @@ class FlowlineModel(object):
             raise InvalidParamsError('run_until_and_store only accepts '
                                      'integer year dates.')
 
+        if not self.mb_model.hemisphere:
+            raise InvalidParamsError('run_until_and_store needs a '
+                                     'mass-balance model with an unambiguous '
+                                     'hemisphere.')
         # time
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
 
@@ -730,8 +740,12 @@ class FlowlineModel(object):
             monthly_time = utils.monthly_timeseries(self.yr, y1)
         else:
             monthly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+
+        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
+
         yrs, months = utils.floatyear_to_date(monthly_time)
-        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months)
+        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months,
+                                                        start_month=sm)
 
         # init output
         if run_path is not None:
@@ -753,6 +767,7 @@ class FlowlineModel(object):
         diag_ds.attrs['calendar'] = '365-day no leap'
         diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                   gmtime())
+        diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)
@@ -864,20 +879,70 @@ class FlowlineModel(object):
 
 
 class FluxBasedModel(FlowlineModel):
-    """The actual model"""
+    """The flowline model used by OGGM in production.
+
+    It solves for the SIA along the flowline(s) using a staggered grid. It
+    computes the *ice flux* between grid points and transports the mass
+    accordingly (also between flowlines).
+
+    This model is numerically less stable than fancier schemes, but it
+    is fast and works with multiple flowlines of any bed shape (rectangular,
+    parabolic, trapeze, and any combination of them).
+
+    We test that it conserves mass in most cases, but not on very stiff cliffs.
+    """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
                  time_stepping='user', **kwargs):
-        """ Instanciate.
+        """Instanciate the model.
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
+        flowlines : list
+            the glacier flowlines
+        mb_model : MassBakanceModel
+            the mass-balance model
+        y0 : int
+            initial year of the simulation
+        glen_a : float
+            Glen's creep parameter
+        fs : float
+            Oerlemans sliding parameter
+        inplace : bool
+            whether or not to make a copy of the flowline objects for the run
+            setting to True implies that your objects will be modified at run
+            time by the model (can help to spare memory)
+        fixed_dt : float
+            set to a value (in seconds) to prevent adaptive time-stepping.
+        cfl_number : float
+            for adaptive time stepping (the default), dt is chosen from the
+            CFL criterion (dt = cfl_number * dx / max_u).
+            Schoolbook theory says that the scheme is stable
+            with CFL=1, but practice does not. There is no "best" CFL number:
+            small values are more robust but also slowier...
+        min_dt : float
+            with high velocities, time steps can become very small and your
+            model might run very slowly. In production we just take the risk
+            of becoming unstable and prevent very small time steps.
+        max_dt : float
+            just to make sure that the adaptive time step is not going to
+            choose too high values either. We could make this higher I think
+        time_stepping : str
+            let OGGM choose default values for the parameters above for you.
+            Possible settings are: 'ambitious', 'default', 'conservative',
+            'ultra-conservative'.
+        is_tidewater: bool, default: False
+            use the very basic parameterization for tidewater glaciers
+        mb_elev_feedback : str, default: 'annual'
+            'never', 'always', 'annual', or 'monthly': how often the
+            mass-balance should be recomputed from the mass balance model.
+            'Never' is equivalent to 'annual' but without elevation feedback
+            at all (the heights are taken from the first call).
+        check_for_boundaries: bool, default: True
+            raise an error when the glacier grows bigger than the domain
+            boundaries
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -924,20 +989,27 @@ class FluxBasedModel(FlowlineModel):
             self.sf_func = utils.shape_factor_huss
 
         # Optim
-        self._stags = []
-        for fl, trib in zip(self.fls, self._trib):
+        self.slope_stag = []
+        self.thick_stag = []
+        self.section_stag = []
+        self.u_stag = []
+        self.shapefac_stag = []
+        self.flux_stag = []
+        self.trib_flux = []
+        for fl, trib in zip(self.fls, self._tributary_indices):
             nx = fl.nx
-            if trib[0] is not None:
+            # This is not staggered
+            self.trib_flux.append(np.zeros(nx))
+            # We add an additional fake grid point at the end of these
+            if (trib[0] is not None) or self.is_tidewater:
                 nx = fl.nx + 1
-            elif self.is_tidewater:
-                nx = fl.nx + 1
-            a = np.zeros(nx+1)
-            b = np.zeros(nx+1)
-            c = np.zeros(nx+1)
-            d = np.ones(nx+1)  # shape factor default is 1
-            e = np.zeros(nx-1)
-            f = np.zeros(nx)
-            self._stags.append((a, b, c, d, e, f))
+            # +1 is for the staggered grid
+            self.slope_stag.append(np.zeros(nx+1))
+            self.thick_stag.append(np.zeros(nx+1))
+            self.section_stag.append(np.zeros(nx+1))
+            self.u_stag.append(np.zeros(nx+1))
+            self.shapefac_stag.append(np.ones(nx+1))  # beware the ones!
+            self.flux_stag.append(np.zeros(nx+1))
 
     def step(self, dt):
         """Advance one step."""
@@ -950,23 +1022,26 @@ class FluxBasedModel(FlowlineModel):
         min_dt = dt if dt < self.min_dt else self.min_dt
 
         # Loop over tributaries to determine the flux rate
-        flxs = []
-        aflxs = []
+        for fl_id, fl in enumerate(self.fls):
 
-        for fl, trib, (slope_stag, thick_stag, section_stag, sf_stag,
-                       znxm1, znx) in zip(self.fls, self._trib, self._stags):
+            # This is possibly less efficient than zip() but much clearer
+            trib = self._tributary_indices[fl_id]
+            slope_stag = self.slope_stag[fl_id]
+            thick_stag = self.thick_stag[fl_id]
+            section_stag = self.section_stag[fl_id]
+            sf_stag = self.shapefac_stag[fl_id]
+            flux_stag = self.flux_stag[fl_id]
+            trib_flux = self.trib_flux[fl_id]
+            u_stag = self.u_stag[fl_id]
 
+            # Flowline state
             surface_h = fl.surface_h
             thick = fl.thick
             section = fl.section
             dx = fl.dx_meter
 
-            # Reset
-            znxm1[:] = 0
-            znx[:] = 0
-
             # If it is a tributary, we use the branch it flows into to compute
-            # the slope of the last grid points
+            # the slope of the last grid point
             is_trib = trib[0] is not None
             if is_trib:
                 fl_to = self.fls[trib[0]]
@@ -1008,28 +1083,15 @@ class FluxBasedModel(FlowlineModel):
             # _fd = 2/(N+2) * self.glen_a
             N = self.glen_n
             rhogh = (self.rho*G*slope_stag)**N
-            u_stag = (thick_stag**(N+1)) * self._fd * rhogh * sf_stag**N + \
-                     (thick_stag**(N-1)) * self.fs * rhogh
+            u_stag[:] = (thick_stag**(N+1)) * self._fd * rhogh * sf_stag**N + \
+                        (thick_stag**(N-1)) * self.fs * rhogh
 
             # Staggered section
             section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
             section_stag[[0, -1]] = section[[0, -1]]
 
             # Staggered flux rate
-            flx_stag = u_stag * section_stag / dx
-
-            # Store the results
-            if is_trib:
-                flxs.append(flx_stag[:-1])
-                aflxs.append(znxm1)
-                u_stag = u_stag[:-1]
-            elif self.is_tidewater:
-                flxs.append(flx_stag[:-1])
-                aflxs.append(znxm1)
-                u_stag = u_stag[:-1]
-            else:
-                flxs.append(flx_stag)
-                aflxs.append(znx)
+            flux_stag[:] = u_stag * section_stag
 
             # CFL condition
             maxu = np.max(np.abs(u_stag))
@@ -1040,48 +1102,106 @@ class FluxBasedModel(FlowlineModel):
             if _dt < dt:
                 dt = _dt
 
+            # Since we are in this loop, reset the tributary flux
+            trib_flux[:] = 0
+
         # Time step
         self.dt_warning = dt < min_dt
         dt = np.clip(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
-        for i, (fl, flx_stag, aflx, trib) in enumerate(zip(self.fls, flxs,
-                                                           aflxs, self._trib)):
+        for fl_id, fl in enumerate(self.fls):
+
+            flx_stag = self.flux_stag[fl_id]
+            trib_flux = self.trib_flux[fl_id]
+            tr = self._tributary_indices[fl_id]
 
             dx = fl.dx_meter
 
+            is_trib = tr[0] is not None
+            # For these we had an additional grid point
+            if is_trib or self.is_tidewater:
+                flx_stag = flx_stag[:-1]
+
             # Mass balance
             widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=i)
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id)
             # Allow parabolic beds to grow
-            widths = np.where((mb > 0.) & (widths == 0), 10., widths)
-            mb = dt * mb * widths
+            mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 
-            # Update section with flowing and mass balance
-            new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt +
-                           aflx*dt + mb)
+            # Update section with ice flow and mass balance
+            new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
+                           trib_flux*dt/dx + mb)
 
             # Keep positive values only and store
             fl.section = new_section.clip(0)
 
             # Add the last flux to the tributary
-            # this is ok because the lines are sorted in order
-            if trib[0] is not None:
-                aflxs[trib[0]][trib[1]:trib[2]] += (flx_stag[-1].clip(0) *
-                                                    trib[3])
+            # this works because the lines are sorted in order
+            if is_trib:
+                # tr tuple: line_index, start, stop, gaussian_kernel
+                self.trib_flux[tr[0]][tr[1]:tr[2]] += (flx_stag[-1].clip(0) *
+                                                       tr[3])
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
-                # TODO: not sure if this is the way to go yet,
-                # but mass conservation is OK
-                self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt*dx
+                # not sure at all if this is the way to go but mass
+                # conservation is OK
+                self.calving_m3_since_y0 += flx_stag[-2].clip(0)*dt
 
         # Next step
         self.t += dt
         return dt
 
+    def get_diagnostics(self, fl_id=-1):
+        """Obtain model diagnostics in a pandas DataFrame.
+
+        Parameters
+        ----------
+        fl_id : int
+            the index of the flowline of interest, from 0 to n_flowline-1.
+            Default is to take the last (main) one
+
+        Returns
+        -------
+        a pandas DataFrame, which index is distance along flowline (m). Units:
+            - surface_h, bed_h, ice_tick, section_width: m
+            - section_area: m2
+            - slope: -
+            - ice_flux, tributary_flux: m3 of *ice* per second
+            - ice_velocity: m per second (depth-section integrated)
+        """
+
+        import pandas as pd
+
+        fl = self.fls[fl_id]
+        nx = fl.nx
+
+        df = pd.DataFrame(index=fl.dx_meter * np.arange(nx))
+        df.index.name = 'distance_along_flowline'
+        df['surface_h'] = fl.surface_h
+        df['bed_h'] = fl.bed_h
+        df['ice_thick'] = fl.thick
+        df['section_width'] = fl.widths_m
+        df['section_area'] = fl.section
+
+        # Staggered
+        var = self.slope_stag[fl_id]
+        df['slope'] = (var[1:nx+1] + var[:nx])/2
+        var = self.flux_stag[fl_id]
+        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
+        var = self.u_stag[fl_id]
+        df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
+        var = self.shapefac_stag[fl_id]
+        df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
+
+        # Not Staggered
+        df['tributary_flux'] = self.trib_flux[fl_id]
+
+        return df
+
 
 class MassConservationChecker(FluxBasedModel):
-    """This checks if the FluzBasedmodel is conserving mass."""
+    """This checks if the FluxBasedModel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
         """ Instanciate.
@@ -1894,7 +2014,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
-                          **kwargs):
+                          bias=None, **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
@@ -1935,6 +2055,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         Ignored if `init_model_filesuffix` is set
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
+    bias : float
+        bias of the mb model. Default is to use the calibrated one, which
+        is often a better idea. For t* experiments it can be useful to set it
+        to zero
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -1958,7 +2082,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
             init_model_fls = fmod.fls
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                     filename=climate_filename,
+                                     filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
 
     return robust_model_run(gdir, output_filesuffix=output_filesuffix,
@@ -1969,17 +2093,17 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                             **kwargs)
 
 
-@entity_task(log)
-def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
-                              input_filesuffix=''):
-    """Merge multiple tributary glaciers to a main glacier
+def merge_to_one_glacier(main, tribs, filename='climate_monthly',
+                         input_filesuffix=''):
+    """Merge multiple tributary glacier flowlines to a main glacier
 
     This function will merge multiple tributary glaciers to a main glacier
     and write modified `model_flowlines` to the main GlacierDirectory.
-    Afterwards only the main GlacierDirectory must be processed and the results
-    will cover the main and the tributary glaciers.
     The provided tributaries must have an intersecting downstream line.
     To be sure about this, use `intersect_downstream_lines` first.
+    This function is mainly responsible to reporject the flowlines, set
+    flowline attributes and to copy additional files, like the necessary climat
+    files.
 
     Parameters
     ----------
@@ -1993,114 +2117,262 @@ def merge_tributary_flowlines(main, tribs=[], filename='climate_monthly',
         Filesuffix to the climate file
     """
 
-    # If its a dict, select the relevant ones
-    if isinstance(tribs, dict):
-        tribs = tribs[main.rgi_id.split('_merged')[0]]
-    # make sure tributaries are iteratable
-    tribs = utils.tolist(tribs)
-
-    # Buffer in pixels where to cut the incoming centerlines
-    buffer = cfg.PARAMS['kbuffer']
-    # Number of pixels to arbitrarily remove at junctions
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
-
     # read flowlines of the Main glacier
-    mfls = main.read_pickle('model_flowlines')
-    mfl = mfls.pop(-1)  # remove main line from list and treat seperately
+    fls = main.read_pickle('model_flowlines')
+    mfl = fls.pop(-1)  # remove main line from list and treat seperately
 
     for trib in tribs:
 
+        # read tributary flowlines and append to list
         tfls = trib.read_pickle('model_flowlines')
 
-        # order flowlines in ascending way
+        # copy climate file and local_mustar to new gdir
+        # if we have a merge-merge situation we need to copy multiple files
+        rgiids = set([fl.rgi_id for fl in tfls])
+
+        for uid in rgiids:
+            if len(rgiids) == 1:
+                # we do not have a merge-merge situation
+                in_id = ''
+                out_id = trib.rgi_id
+            else:
+                in_id = '_' + uid
+                out_id = uid
+
+            climfile_in = filename + in_id + input_filesuffix + '.nc'
+            climfile_out = filename + '_' + out_id + input_filesuffix + '.nc'
+            shutil.copyfile(os.path.join(trib.dir, climfile_in),
+                            os.path.join(main.dir, climfile_out))
+
+            _m = os.path.basename(trib.get_filepath('local_mustar')).split('.')
+            muin = _m[0] + in_id + '.' + _m[1]
+            muout = _m[0] + '_' + out_id + '.' + _m[1]
+
+            shutil.copyfile(os.path.join(trib.dir, muin),
+                            os.path.join(main.dir, muout))
+
+        # sort flowlines descending
         tfls.sort(key=lambda x: x.order, reverse=True)
 
-        # check if flowlines are in correct order
-        order = [o.order for i, o in enumerate(tfls)]
-        if not (np.all(np.diff(order) <= 0)) & \
-               (tfls[0].order == np.max(order)):
-            raise RuntimeError('Flowline order is not correct')
-
+        # loop over tributaries and reproject to main glacier
         for nr, tfl in enumerate(tfls):
 
             # 1. Step: Change projection to the main glaciers grid
             _line = salem.transform_geometry(tfl.line,
                                              crs=trib.grid, to_crs=main.grid)
 
-            if nr == 0:
-                # cut tributary main line to size
-                # find area where lines overlap within a given buffer
-                _overlap = _line.intersection(mfl.line.buffer(buffer))
-                _line = _line.difference(_overlap)  # cut to new line
-
-                # if the tributary flowline is longer than the main line,
-                # _line will contain multiple LineStrings: only keep the first
-                try:
-                    _line = _line[0]
-                except TypeError:
-                    pass
-
-                # remove cfg.PARAMS['flowline_junction_pix'] from the _line
-                # gives a bigger gap at the junction and makes sure the last
-                # point is not corrupted in terms of spacing
-                _line = shpg.LineString(_line.coords[:-lid])
-
             # 2. set new line
             tfl.set_line(_line)
 
-            # 3. set flow to attributes
-            if nr == 0:
-                # this one flows to the main glacier
-                tfl.set_flows_to(mfl)  # set flows_to also changes mfl!
-            else:
-                # reset to the existing link, neccessary to set attributes
-                tfl.set_flows_to(tfl.flows_to)
-            # remove inflow points, will be set by other flowlines if need be
-            tfl.inflow_points = []
-
-            # 5. set grid size attributes
+            # 3. set map attributes
             dx = [shpg.Point(tfl.line.coords[i]).distance(
                 shpg.Point(tfl.line.coords[i+1]))
                 for i, pt in enumerate(tfl.line.coords[:-1])]  # get distance
             # and check if equally spaced
             if not np.allclose(dx, np.mean(dx), atol=1e-2):
                 raise RuntimeError('Flowline is not evenly spaced.')
+
             tfl.dx = np.mean(dx).round(2)
             tfl.map_dx = mfl.map_dx
             tfl.dx_meter = tfl.map_dx * tfl.dx
 
-            if nr == 0:
-                # change the array size of tributary main flowline attributs
-                for atr, value in tfl.__dict__.items():
-                    try:
-                        if len(value) > tfl.nx:
-                            tfl.__setattr__(atr, value[:tfl.nx])
-                    except TypeError:
-                        pass
+            # 3. remove attributes, they will be set again later
+            tfl.inflow_points = []
+            tfl.inflows = []
 
-            # replace tributary flowline within the list
-            tfls[nr] = tfl
+            # 4. set flows to, mainly to update flows_to_point coordinates
+            if tfl.flows_to is not None:
+                tfl.set_flows_to(tfl.flows_to)
 
-        # copy climate file and local_mustar to new gdir
-        climfilename = filename + '_' + trib.rgi_id + input_filesuffix + '.nc'
-        climfile = os.path.join(main.dir, climfilename)
-        shutil.copyfile(trib.get_filepath(filename,
-                                          filesuffix=input_filesuffix),
-                        climfile)
-        _mu = os.path.basename(trib.get_filepath('local_mustar')).split('.')
-        mufile = _mu[0] + '_' + trib.rgi_id + '.' + _mu[1]
-        shutil.copyfile(trib.get_filepath('local_mustar'),
-                        os.path.join(main.dir, mufile))
+        # append tributary flowlines to list
+        fls += tfls
 
-        mfls = tfls + mfls  # add all tributary flowlines to the main glacier
-    mfls = mfls + [mfl]  # add the main glacier flowline back to the list
-
-    # Set the new flowline levels
-    for fl in mfls:
-        fl.order = line_order(fl)
-
-    # order flowlines in descending way, important for downstream tasks
-    mfls.sort(key=lambda x: x.order, reverse=False)
+    # add main flowline to the end
+    fls = fls + [mfl]
 
     # Finally write the flowlines
-    main.write_pickle(mfls, 'model_flowlines')
+    main.write_pickle(fls, 'model_flowlines')
+
+
+def clean_merged_flowlines(gdir, buffer=None):
+    """Order and cut merged flowlines to size.
+
+    After matching flowlines were found and merged to one glacier directory
+    this function makes them nice:
+    There should only be one flowline per bed, so overlapping lines have to be
+    cut, attributed to a another flowline and orderd.
+
+    Parameters
+    ----------
+    gdir : oggm.GlacierDirectory
+        The GDir of the glacier of interest
+    buffer: float
+        Buffer around the flowlines to find overlaps
+    """
+
+    # No buffer does not work
+    if buffer is None:
+        buffer = cfg.PARAMS['kbuffer']
+
+    # Number of pixels to arbitrarily remove at junctions
+    lid = int(cfg.PARAMS['flowline_junction_pix'])
+
+    fls = gdir.read_pickle('model_flowlines')
+
+    # seperate the main main flowline
+    mainfl = fls.pop(-1)
+
+    # split fls in main and tribs
+    mfls = [fl for fl in fls if fl.flows_to is None]
+    tfls = [fl for fl in fls if fl not in mfls]
+
+    # --- first treat the main flowlines ---
+    # sort by order and length as a second choice
+    mfls.sort(key=lambda x: (x.order, len(x.inflows), x.length_m),
+              reverse=False)
+
+    merged = []
+
+    # for fl1 in mfls:
+    while len(mfls) > 0:
+        fl1 = mfls.pop(0)
+
+        ol_index = []  # list of index from first overlap
+
+        # loop over other main lines and main main line
+        for fl2 in mfls + [mainfl]:
+
+            # calculate overlap, maybe use larger buffer here only to find it
+            _overlap = fl1.line.intersection(fl2.line.buffer(buffer*2))
+
+            # calculate indice of first overlap if overlap length > 0
+            oix = 9999
+            if _overlap.length > 0 and fl1 != fl2 and fl2.flows_to != fl1:
+                if isinstance(_overlap, shpg.MultiLineString):
+                    if _overlap[0].coords[0] == fl1.line.coords[0]:
+                        # if the head of overlap is same as the first line,
+                        # best guess is, that the heads are close topgether!
+                        _ov1 = _overlap[1].coords[1]
+                    else:
+                        _ov1 = _overlap[0].coords[1]
+                else:
+                    _ov1 = _overlap.coords[1]
+                for _i, _p in enumerate(fl1.line.coords):
+                    if _p == _ov1:
+                        oix = _i
+                # low indices are more likely due to an wrong overlap
+                if oix < 10:
+                    oix = 9999
+            ol_index.append(oix)
+
+        ol_index = np.array(ol_index)
+        if np.all(ol_index == 9999):
+            log.warning('Glacier %s could not be merged, removed!' %
+                        fl1.rgi_id)
+            # remove possible tributary flowlines
+            tfls = [fl for fl in tfls if fl.rgi_id != fl1.rgi_id]
+            # skip rest of this while loop
+            continue
+
+        # make this based on first overlap, but consider order and or length
+        minx = ol_index[ol_index <= ol_index.min()+10][-1]
+        i = np.where(ol_index == minx)[0][-1]
+        _olline = (mfls + [mainfl])[i]
+
+        # 1. cut line to size
+        _line = fl1.line
+
+        bufferuse = buffer
+        while bufferuse > 0:
+            _overlap = _line.intersection(_olline.line.buffer(bufferuse))
+            _linediff = _line.difference(_overlap)  # cut to new line
+
+            # if the tributary flowline is longer than the main line,
+            # _line will contain multiple LineStrings: only keep the first
+            if isinstance(_linediff, shpg.MultiLineString):
+                _linediff = _linediff[0]
+
+            if len(_linediff.coords) < 10:
+                bufferuse -= 1
+            else:
+                break
+
+        if bufferuse <= 0:
+            log.warning('Glacier %s would be to short after merge, removed!' %
+                        fl1.rgi_id)
+            # remove possible tributary flowlines
+            tfls = [fl for fl in tfls if fl.rgi_id != fl1.rgi_id]
+            # skip rest of this while loop
+            continue
+
+        # remove cfg.PARAMS['flowline_junction_pix'] from the _line
+        # gives a bigger gap at the junction and makes sure the last
+        # point is not corrupted in terms of spacing
+        _line = shpg.LineString(_linediff.coords[:-lid])
+
+        # 2. set new line
+        fl1.set_line(_line)
+
+        # 3. set flow to attributes. This also adds inflow values to other
+        fl1.set_flows_to(_olline)
+
+        # change the array size of tributary flowline attributs
+        for atr, value in fl1.__dict__.items():
+            if atr in ['_ptrap', '_prec']:
+                # those are indices, remove those above nx
+                fl1.__setattr__(atr, value[value <= fl1.nx])
+            elif isinstance(value, np.ndarray) and (len(value) > fl1.nx):
+                # those are actual parameters on the grid
+                fl1.__setattr__(atr, value[:fl1.nx])
+
+        merged.append(fl1)
+    allfls = merged + tfls
+
+    # now check all lines for possible cut offs
+    for fl in allfls:
+        try:
+            fl.flows_to_indice
+        except AssertionError:
+            mfl = fl.flows_to
+            # remove it from original
+            mfl.inflow_points.remove(fl.flows_to_point)
+            mfl.inflows.remove(fl)
+
+            prdis = mfl.line.project(fl.tail)
+            mfl_keep = mfl
+
+            while mfl.flows_to is not None:
+                prdis2 = mfl.flows_to.line.project(fl.tail)
+                if prdis2 < prdis:
+                    mfl_keep = mfl
+                    prdis = prdis2
+                mfl = mfl.flows_to
+
+            # we should be good to add this line here
+            fl.set_flows_to(mfl_keep.flows_to)
+
+    allfls = allfls + [mainfl]
+
+    for fl in allfls:
+        fl.inflows = []
+        fl.inflow_points = []
+        if hasattr(fl, '_lazy_flows_to_indice'):
+            delattr(fl, '_lazy_flows_to_indice')
+        if hasattr(fl, '_lazy_inflow_indices'):
+            delattr(fl, '_lazy_inflow_indices')
+
+    for fl in allfls:
+        if fl.flows_to is not None:
+            fl.set_flows_to(fl.flows_to)
+
+    for fl in allfls:
+        fl.order = line_order(fl)
+
+    # order flowlines in descending way
+    allfls.sort(key=lambda x: x.order, reverse=False)
+
+    # assert last flowline is main flowline
+    assert allfls[-1] == mainfl
+
+    # Finally write the flowlines
+    gdir.write_pickle(allfls, 'model_flowlines')

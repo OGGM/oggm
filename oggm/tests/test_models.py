@@ -44,6 +44,9 @@ FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
 _url_retrieve = None
 
+pytest.importorskip('geopandas')
+pytest.importorskip('rasterio')
+pytest.importorskip('salem')
 
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
@@ -2414,17 +2417,31 @@ class TestHEF(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         self.gdir = tasks.copy_to_basedir(gdir, base_dir=self.testdir,
                                           setup='all')
+        self.prev_wd = cfg.PATHS['working_dir']
+        cfg.PATHS['working_dir'] = os.path.join(get_test_dir(),
+                                                type(self).__name__ + '_wd')
+        utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+
+        self.testdir_sh = os.path.join(get_test_dir(),
+                                       type(self).__name__ + '_sh')
+        utils.mkdir(self.testdir_sh, reset=True)
+        self.gdir_sh = tasks.copy_to_basedir(gdir, base_dir=self.testdir_sh,
+                                             setup='all')
+        self.gdir_sh.hemisphere = 'sh'
 
         d = self.gdir.read_pickle('inversion_params')
         self.fs = d['fs']
         self.glen_a = d['glen_a']
 
     def tearDown(self):
+        cfg.PATHS['working_dir'] = self.prev_wd
         self.rm_dir()
 
     def rm_dir(self):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
+        if os.path.exists(self.testdir_sh):
+            shutil.rmtree(self.testdir_sh)
 
     @pytest.mark.slow
     def test_equilibrium(self):
@@ -2581,25 +2598,32 @@ class TestHEF(unittest.TestCase):
     @pytest.mark.slow
     def test_random_sh(self):
 
-        init_present_time_glacier(self.gdir)
+        gdir = self.gdir_sh
+        init_present_time_glacier(gdir)
 
-        self.gdir.hemisphere = 'sh'
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['run_mb_calibration'] = True
         cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        climate.process_cru_data(self.gdir)
-        climate.compute_ref_t_stars([self.gdir])
-        climate.local_t_star(self.gdir)
+        climate.process_cru_data(gdir)
+        climate.compute_ref_t_stars([gdir])
+        climate.local_t_star(gdir)
 
-        run_random_climate(self.gdir, nyears=20, seed=4,
+        run_random_climate(gdir, nyears=20, seed=4,
                            bias=0, output_filesuffix='_rdn')
-        run_constant_climate(self.gdir, nyears=20,
+        run_constant_climate(gdir, nyears=20,
                              bias=0, output_filesuffix='_ct')
 
-        paths = [self.gdir.get_filepath('model_run', filesuffix='_rdn'),
-                 self.gdir.get_filepath('model_run', filesuffix='_ct'),
+        paths = [gdir.get_filepath('model_diagnostics', filesuffix='_rdn'),
+                 gdir.get_filepath('model_diagnostics', filesuffix='_ct'),
+                 ]
+        for path in paths:
+            with xr.open_dataset(path) as ds:
+                assert ds.calendar_month[0] == 4
+
+        paths = [gdir.get_filepath('model_run', filesuffix='_rdn'),
+                 gdir.get_filepath('model_run', filesuffix='_ct'),
                  ]
         for path in paths:
             with FileModel(path) as model:
@@ -2621,7 +2645,27 @@ class TestHEF(unittest.TestCase):
                     plt.tight_layout()
                     plt.show()
 
-        self.gdir.hemisphere = 'nh'
+        # Test a SH/NH mix
+        init_present_time_glacier(self.gdir)
+        run_constant_climate(self.gdir, nyears=20,
+                             bias=0, output_filesuffix='_ct')
+
+        utils.compile_climate_input([self.gdir_sh, self.gdir])
+        utils.compile_run_output([self.gdir_sh, self.gdir],
+                                 input_filesuffix='_ct')
+
+        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 4
+        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_nh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 10
+        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_sh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 4
+        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
+        with xr.open_dataset(f) as ds:
+            assert ds.calendar_month[0] == 10
 
     def test_start_from_spinup(self):
 
@@ -2765,8 +2809,8 @@ class TestHEF(unittest.TestCase):
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
-        ds1 = utils.compile_run_output([gdir], filesuffix='_hist')
-        ds2 = utils.compile_run_output([gdir], filesuffix='_cesm')
+        ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
+        ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
 
         assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
                         ds2.volume.isel(rgi_id=0, time=-1),
@@ -2781,10 +2825,20 @@ class TestHEF(unittest.TestCase):
                               init_model_filesuffix='_spinup',
                               output_filesuffix='_afterspinup')
         ds3 = utils.compile_run_output([gdir], path=False,
-                                       filesuffix='_afterspinup')
+                                       input_filesuffix='_afterspinup')
         assert (ds1.volume.isel(rgi_id=0, time=-1) <
                 0.7*ds3.volume.isel(rgi_id=0, time=-1))
         ds3.close()
+
+        # Try the compile optimisation
+        out = utils.compile_run_output([gdir, gdir, gdir],
+                                       tmp_file_size=2,
+                                       input_filesuffix='_hist',
+                                       output_filesuffix='_rehist')
+        assert out is None
+        path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
+        with xr.open_dataset(path) as ds:
+            assert len(ds.rgi_id) == 3
 
     @pytest.mark.slow
     def test_elevation_feedback(self):
@@ -2804,7 +2858,7 @@ class TestHEF(unittest.TestCase):
         out = []
         for feedback in feedbacks:
             out.append(utils.compile_run_output([self.gdir], path=False,
-                                                filesuffix=feedback))
+                                                input_filesuffix=feedback))
 
         # Check that volume isn't so different
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
@@ -2825,6 +2879,10 @@ class TestHEF(unittest.TestCase):
 class TestMergedHEF(unittest.TestCase):
 
     def setUp(self):
+        # setup logging
+        import logging
+        log = logging.getLogger(__name__)
+
         # test directory
         self.testdir = os.path.join(get_test_dir(), 'tmp_merged')
         if not os.path.exists(self.testdir):
@@ -2860,9 +2918,10 @@ class TestMergedHEF(unittest.TestCase):
         hef_file = utils.get_demo_file('rgi_oetztal.shp')
         rgidf = gpd.read_file(hef_file)
 
-        # Get HEF Kesselwand and Gepatschferner
+        # Get HEF, Vernagt1/2 and Gepatschferner
         glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
-                          (rgidf.RGIId == 'RGI50-11.00787') |
+                          (rgidf.RGIId == 'RGI50-11.00719_d01') |
+                          (rgidf.RGIId == 'RGI50-11.00779') |
                           (rgidf.RGIId == 'RGI50-11.00746')].copy()
         gdirs = workflow.init_glacier_regions(glcdf)
         workflow.gis_prepro_tasks(gdirs)
@@ -2870,11 +2929,57 @@ class TestMergedHEF(unittest.TestCase):
         workflow.inversion_tasks(gdirs)
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
+        # store HEF
+        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
+
+        # merge, but with 0 buffer, should not do anything
+        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                              glcdf=glcdf, buffer=0)
+        assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
+                                              merge0.read_pickle(
+                                                  'model_flowlines')])[0]
+        gdirs += hef
+
+        # merge, but with 50 buffer. overlapping glaciers should be excluded
+        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                              glcdf=glcdf, buffer=50)
+        assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
+                                        merge1.read_pickle('model_flowlines')]
+        assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
+                                        merge1.read_pickle('model_flowlines')]
+
+        gdirs += hef
+
+        # merge HEF and Vernagt, include Gepatsch but it should not be merged
+        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                                   glcdf=glcdf)
+
+        # test flowlines
+        fls = gdir_merged.read_pickle('model_flowlines')
+
+        # check for gepatsch, should not be there
+        assert 'RGI50-11.00746' not in [fl.rgi_id for fl in fls]
+
+        # ascending order
+        assert np.all(np.diff([fl.order for fl in fls]) >= 0)
+        # last flowline has max order
+        assert np.max([fl.order for fl in fls]) == fls[-1].order
+        # first flowline hast 0 order
+        assert fls[0].order == 0
+
+        # test flows to order
+        fls1 = [fl for fl in fls if fl.rgi_id == 'RGI50-11.00779']
+        assert fls1[0].flows_to == fls1[-1]
+        assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
+        assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
+
+        gdirs += hef
+
         # run parameters
         years = 200  # arbitrary
         tbias = -1.0  # arbitrary
 
-        # run HEF and Kesselwandferner as entities
+        # run HEF and the two Vernagts as entities
         gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
         workflow.execute_entity_task(tasks.run_constant_climate,
                                      gdirs_entity,
@@ -2883,11 +2988,8 @@ class TestMergedHEF(unittest.TestCase):
                                      temperature_bias=tbias)
 
         ds_entity = utils.compile_run_output(gdirs_entity,
-                                             path=False, filesuffix='_entity')
-
-        # merge HEF and KWF, include Gepatschferner but should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, ['RGI50-11.00897'],
-                                                   glcdf=glcdf)
+                                             path=False,
+                                             input_filesuffix='_entity')
 
         # and run the merged glacier
         workflow.execute_entity_task(tasks.run_constant_climate,
@@ -2896,18 +2998,19 @@ class TestMergedHEF(unittest.TestCase):
                                      temperature_bias=tbias)
 
         ds_merged = utils.compile_run_output(gdir_merged,
-                                             path=False, filesuffix='_merged')
+                                             path=False,
+                                             input_filesuffix='_merged')
 
-        # with this setting, both runs should still be quite close after 50yrs
-        assert_allclose(ds_entity.volume.isel(time=50).sum(),
-                        ds_merged.volume.isel(time=50),
-                        rtol=1e-2)
+        # areas should be quite similar after 10yrs
+        assert_allclose(ds_entity.area.isel(time=10).sum(),
+                        ds_merged.area.isel(time=10),
+                        rtol=1e-4)
 
-        # After 100yrs a difference will be present but should still be small
-        assert_allclose(ds_entity.volume.isel(time=100).sum(),
-                        ds_merged.volume.isel(time=100),
-                        rtol=1e-1)
+        # After 100yrs, merged one should be smaller as Vernagt1 is slightly
+        # flowing into Vernagt2
+        assert (ds_entity.area.isel(time=100).sum() >
+                ds_merged.area.isel(time=100))
 
-        # After 200yrs the merged glacier should have a larger volume
-        assert (ds_entity.volume.isel(time=200).sum() <
-                ds_merged.volume.isel(time=200))
+        # Merged glacier should have a larger area after 200yrs from advancing
+        assert (ds_entity.area.isel(time=200).sum() <
+                ds_merged.area.isel(time=200))

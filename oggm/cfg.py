@@ -13,10 +13,16 @@ from distutils.util import strtobool
 
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 from scipy.signal import gaussian
-import salem
 from configobj import ConfigObj, ConfigObjError
+try:
+    import geopandas as gpd
+except ImportError:
+    pass
+try:
+    import salem
+except ImportError:
+    pass
 
 # Local logger
 log = logging.getLogger(__name__)
@@ -267,6 +273,7 @@ def set_logging_config(logging_level='INFO'):
     logging.getLogger("shapely").setLevel(logging.CRITICAL)
     logging.getLogger("rasterio").setLevel(logging.CRITICAL)
     logging.getLogger("matplotlib").setLevel(logging.CRITICAL)
+    logging.getLogger("numexpr").setLevel(logging.CRITICAL)
 
     # Basic config
     if logging_level is None:
@@ -425,7 +432,10 @@ def initialize(file=None, logging_level='INFO'):
             if grid_json not in grids:
                 fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                   'data', grid_json)
-                grids[grid_json] = salem.Grid.from_json(fp)
+                try:
+                    grids[grid_json] = salem.Grid.from_json(fp)
+                except NameError:
+                    pass
         DATA['dem_grids'] = grids
 
 
@@ -562,7 +572,7 @@ def set_intersects_db(path_or_gdf=None):
         else:
             PARAMS['intersects_gdf'] = path_or_gdf
     else:
-        PARAMS['intersects_gdf'] = gpd.GeoDataFrame()
+        PARAMS['intersects_gdf'] = pd.DataFrame()
 
 
 def reset_working_dir():

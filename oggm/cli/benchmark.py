@@ -185,11 +185,11 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     _add_time_to_df(odf, 'compile_climate_statistics', time.time()-start)
 
     start = time.time()
-    utils.compile_run_output(gdirs, filesuffix='_tstar')
+    utils.compile_run_output(gdirs, input_filesuffix='_tstar')
     _add_time_to_df(odf, 'compile_run_output_tstar', time.time()-start)
 
     start = time.time()
-    utils.compile_run_output(gdirs, filesuffix='_commit')
+    utils.compile_run_output(gdirs, input_filesuffix='_commit')
     _add_time_to_df(odf, 'compile_run_output_commit', time.time()-start)
 
     # Log

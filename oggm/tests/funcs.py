@@ -2,7 +2,6 @@ import os
 import shutil
 from distutils.util import strtobool
 
-import geopandas as gpd
 import numpy as np
 import shapely.geometry as shpg
 from scipy import optimize as optimization
@@ -10,10 +9,10 @@ from scipy import optimize as optimization
 # Local imports
 import oggm
 import oggm.cfg as cfg
-from oggm.core import gis, inversion, climate, centerlines, flowline
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
 from oggm.utils import oggm_urlretrieve
+from oggm.core import flowline
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -189,7 +188,7 @@ def dummy_width_bed():
                                             bed_h, widths)]
 
 
-def dummy_width_bed_tributary(map_dx=100.):
+def dummy_width_bed_tributary(map_dx=100., n_trib=1):
     # bed with tributary glacier
     dx = 1.
     nx = 200
@@ -197,6 +196,8 @@ def dummy_width_bed_tributary(map_dx=100.):
     surface_h = np.linspace(3000, 1000, nx)
     bed_h = surface_h
     widths = surface_h * 0. + 3.
+    widths[0:20] = 6 / (n_trib + 1)
+
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
@@ -204,10 +205,17 @@ def dummy_width_bed_tributary(map_dx=100.):
                                            widths)
     coords = np.arange(0, 19.1, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0. + 1]).T)
-    fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx, surface_h[0:20],
-                                           bed_h[0:20], widths[0:20])
-    fl_1.set_flows_to(fl_0)
-    return [fl_1, fl_0]
+
+    out = [fl_0]
+    for i in range(n_trib):
+        fl_1 = flowline.RectangularBedFlowline(line, dx, map_dx,
+                                               surface_h[0:20],
+                                               bed_h[0:20],
+                                               widths[0:20])
+        fl_1.set_flows_to(fl_0)
+        out.append(fl_1)
+
+    return out[::-1]
 
 
 def patch_url_retrieve_github(url, *args, **kwargs):
@@ -249,7 +257,10 @@ def get_test_dir():
     return out
 
 
-def init_hef(reset=False, border=40):
+def init_hef(reset=False, border=40, logging_level='INFO'):
+
+    from oggm.core import gis, inversion, climate, centerlines, flowline
+    import geopandas as gpd
 
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
@@ -258,7 +269,7 @@ def init_hef(reset=False, border=40):
         reset = True
 
     # Init
-    cfg.initialize()
+    cfg.initialize(logging_level=logging_level)
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -335,6 +346,9 @@ def init_hef(reset=False, border=40):
 
 
 def init_columbia(reset=False):
+
+    from oggm.core import gis, climate, centerlines
+    import geopandas as gpd
 
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_columbia')

@@ -6,13 +6,14 @@ import shutil
 import unittest
 import pickle
 import pytest
-import geopandas as gpd
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
-import salem
 from oggm import graphics
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 # Locals
 import oggm
@@ -37,10 +38,12 @@ _url_retrieve = None
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
     oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
+    graphics.set_oggm_cmaps(use_hcl=False)
 
 
 def teardown_module(module):
     oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
+    graphics.set_oggm_cmaps()
 
 
 def clean_dir(testdir):
@@ -257,12 +260,12 @@ class TestFullRun(unittest.TestCase):
             assert_allclose(df.RUN, df.DIAG)
 
         # Test output
-        ds = utils.compile_run_output(gdirs, filesuffix='_test')
+        ds = utils.compile_run_output(gdirs, input_filesuffix='_test')
         assert_allclose(ds_diag.volume_m3, ds.volume.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.area_m2, ds.area.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.length_m, ds.length.sel(rgi_id=gd.rgi_id))
         # Test output
-        ds = utils.compile_run_output(gdirs, filesuffix='_test')
+        ds = utils.compile_run_output(gdirs, input_filesuffix='_test')
         df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)

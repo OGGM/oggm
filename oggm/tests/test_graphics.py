@@ -4,8 +4,10 @@ import pytest
 import shutil
 
 import os
-import geopandas as gpd
 import matplotlib.pyplot as plt
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 
 # Local imports
 import oggm.utils
@@ -31,10 +33,12 @@ _url_retrieve = None
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
     oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
+    graphics.set_oggm_cmaps(use_hcl=False)
 
 
 def teardown_module(module):
     oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
+    graphics.set_oggm_cmaps()
 
 # ----------------------------------------------------------
 # Lets go

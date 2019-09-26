@@ -8,10 +8,8 @@ future mass-balance, volume and geometry of (almost) any glacier in the world
 in a fully automated and extensible workflow. We rely exclusively on publicly
 available data for calibration and validation.
 
-.. note::
-
-    **This is the software documentation: for general information about the
-    OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+**This is the software documentation: for general information about the
+OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 
 
 .. include:: _generated/version_text.txt
@@ -48,6 +46,7 @@ Using OGGM
 
 How to use the model, with concrete python code examples.
 
+* :doc:`cloud`
 * :doc:`installing-oggm`
 * :doc:`getting-started`
 * :doc:`input-data`
@@ -62,6 +61,7 @@ How to use the model, with concrete python code examples.
     :hidden:
     :caption: Using OGGM
 
+    cloud.rst
     installing-oggm.rst
     getting-started.rst
     input-data.rst
@@ -78,6 +78,7 @@ Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`
+* :doc:`oeps`
 * :doc:`contributing`
 
 .. toctree::
@@ -87,6 +88,7 @@ Do you want to contribute to the model? This is the right place to start.
 
     citing-oggm.rst
     add-module.rst
+    oeps.rst
     contributing.rst
 
 .. _contact:
@@ -171,7 +173,7 @@ copy or modify its code at your wish, under certain conditions:
 See the `wikipedia page about GPL`_ and the `OGGM license`_ for more
 information.
 
-.. _paper in Geoscientific Model Development: https://www.www.geosci-model-dev.net/12/909/2019/
+.. _paper in Geoscientific Model Development: https://www.geosci-model-dev.net/12/909/2019/
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
 
@@ -193,7 +195,7 @@ About
 
 :Citation:
     .. image:: https://img.shields.io/badge/Citation-GMD%20paper-orange.svg
-        :target: https://www.www.geosci-model-dev.net/12/909/2019/
+        :target: https://www.geosci-model-dev.net/12/909/2019/
         :alt: GMD Paper
 
     .. image:: https://zenodo.org/badge/43965645.svg

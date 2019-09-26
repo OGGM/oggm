@@ -44,24 +44,14 @@ Links
 
 req_packages = ['numpy',
                 'scipy',
-                'pyproj',
                 'pandas',
-                'GDAL',
-                'geopandas',
-                'fiona',
                 'matplotlib>=2.0.0',
-                'scikit-image',
-                'Pillow',
-                'joblib',
-                'netCDF4',
                 'shapely',
-                'rasterio',
-                'configobj',
-                'pytest',
-                'xarray',
-                'progressbar2',
                 'requests',
-                'salem']
+                'configobj',
+                'netcdf4',
+                'xarray',
+                ]
 
 
 setup(

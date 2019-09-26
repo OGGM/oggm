@@ -19,7 +19,7 @@ def teardown():
 
 def setup():
     global gdir
-    gdir = init_hef(border=80)
+    gdir = init_hef(border=80, logging_level='ERROR')
     teardown()
     gdir = tasks.copy_to_basedir(gdir, base_dir=testdir, setup='all')
     flowline.init_present_time_glacier(gdir)

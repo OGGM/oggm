@@ -28,6 +28,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
     def __init__(self):
         """ Initialize."""
         self.valid_bounds = None
+        self.hemisphere = None
         self.rho = cfg.PARAMS['ice_density']
 
     def get_monthly_mb(self, heights, year=None, fl_id=None):
@@ -116,7 +117,13 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             mbs = []
             widths = []
             for i, fl in enumerate(fls):
-                widths = np.append(widths, fl.widths)
+                _widths = fl.widths
+                try:
+                    # For rect and parabola don't compute spec mb
+                    _widths = np.where(fl.thick > 0, _widths, 0)
+                except AttributeError:
+                    pass
+                widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
                                                         year=year, fl_id=i))
         else:
@@ -181,6 +188,7 @@ class LinearMassBalance(MassBalanceModel):
             + 1K -> ELA + 150 m
         """
         super(LinearMassBalance, self).__init__()
+        self.hemisphere = 'nh'
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.orig_ela_h = ela_h
         self.ela_h = ela_h
@@ -301,6 +309,7 @@ class PastMassBalance(MassBalanceModel):
                                        'to ignore this warning.')
 
         # Public attrs
+        self.hemisphere = gdir.hemisphere
         self.temp_bias = 0.
         self.prcp_bias = 1.
         self.repeat = repeat
@@ -364,7 +373,7 @@ class PastMassBalance(MassBalanceModel):
         npix = len(heights)
         temp = np.ones(npix) * itemp + igrad * (heights - self.ref_hgt)
         tempformelt = temp - self.t_melt
-        tempformelt[:] = np.clip(tempformelt, 0, tempformelt.max())
+        tempformelt[:] = np.clip(tempformelt, 0., None)
 
         # Compute solid precipitation from total precipitation
         prcp = np.ones(npix) * iprcp
@@ -399,7 +408,7 @@ class PastMassBalance(MassBalanceModel):
                       self.ref_hgt)
         temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
         temp2dformelt = temp2d - self.t_melt
-        temp2dformelt[:] = np.clip(temp2dformelt, 0, temp2dformelt.max())
+        temp2dformelt[:] = np.clip(temp2dformelt, 0, None)
 
         # Compute solid precipitation from total precipitation
         prcp = np.atleast_2d(iprcp).repeat(npix, 0)
@@ -499,6 +508,7 @@ class ConstantMassBalance(MassBalanceModel):
         self.y0 = y0
         self.halfsize = halfsize
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
+        self.hemisphere = gdir.hemisphere
 
     @property
     def temp_bias(self):
@@ -663,6 +673,7 @@ class RandomMassBalance(MassBalanceModel):
             self.years = np.arange(y0-halfsize, y0+halfsize+1)
         self.yr_range = (self.years[0], self.years[-1]+1)
         self.ny = len(self.years)
+        self.hemisphere = gdir.hemisphere
 
         # RandomState
         self.rng = np.random.RandomState(seed)
@@ -775,6 +786,7 @@ class UncertainMassBalance(MassBalanceModel):
         """
         super(UncertainMassBalance, self).__init__()
         self.mbmod = basis_model
+        self.hemisphere = basis_model.hemisphere
         self.valid_bounds = self.mbmod.valid_bounds
         self.rng_temp = np.random.RandomState(rdn_temp_bias_seed)
         self.rng_prcp = np.random.RandomState(rdn_prcp_bias_seed)
@@ -954,6 +966,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                input_filesuffix=rgi_filesuffix, **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
+        self.hemisphere = gdir.hemisphere
 
     @property
     def temp_bias(self):
