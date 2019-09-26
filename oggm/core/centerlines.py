@@ -50,7 +50,8 @@ except ImportError:
 import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from oggm import utils
-from oggm.utils import tuple2int, line_interpol, interp_nans, lazy_property, SuperclassMeta
+from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
+                        SuperclassMeta)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError)
@@ -76,11 +77,16 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        line
-        dx
-        surface_h
-        orig_head
-        rgi_id
+        line : :py:class:`shapely.geometry.LineString`
+            The geometrically calculated centerline
+        dx : float
+            Grid spacing of the initialised flowline in pixel coordinates
+        surface_h :  :py:class:`numpy.ndarray`
+            elevation [m] of the points on ``line``
+        orig_head : :py:class:`shapely.geometry.Point`
+            geometric point of the lines head
+        rgi_id : str
+            The glacier's RGI identifier
         """
 
         self.line = None  # Shapely LineString
@@ -119,7 +125,8 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        other: an other centerline
+        other : :py:class:`oggm.Centerline`
+            another flowline where self should flow to
         """
 
         self.flows_to = other
@@ -150,7 +157,7 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        line: a shapely.geometry.LineString
+        line : :py:class`shapely.geometry.LineString`
         """
 
         self.nx = len(line.coords)

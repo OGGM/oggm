@@ -222,7 +222,7 @@ Mass-balance models found in the ``core.massbalance`` module.
 
 .. currentmodule:: oggm.core.massbalance
 
-They follow the :py:func:`MassBalanceModel` interface. Here is a quick summary
+They follow the :py:class:`MassBalanceModel` interface. Here is a quick summary
 of the units and conventions used by all models:
 
 Units
@@ -307,8 +307,8 @@ geometrical centerlines
 
 inversion flowlines
    To use the geometrical lines within the model they are transformed to
-   :py:class:`Centerline` objects. This is done within
-   :py:func:`initialize_flowlines` where the lines are projected onto a xy-grid
+   :py:class:`~oggm.Centerline` objects. This is done within
+   :py:func:`~oggm.core.centerlines.initialize_flowlines` where the lines are projected onto a xy-grid
    with regular spaced line-points. This step also takes care of tributary
    junctions. These lines are then in a later step also used for the bed
    inversion, hence their name.
@@ -362,8 +362,8 @@ And the flowlines are orderd by ascending Strahler numbers, where the last entry
 in the list is always the longest and very often most relevant flowline of
 that glacier.
 
-Type of flowlines
------------------
+Type of model flowlines
+-----------------------
 
 .. currentmodule:: oggm.core.flowline
 
@@ -378,24 +378,16 @@ Type of flowlines
     TrapezoidalBedFlowline
 
 
-Interface
----------
+Important flowline functions
+----------------------------
 
-.. currentmodule:: oggm.core.centerlines
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    Centerline
-    initialize_flowlines
-    compute_centerlines
-    compute_downstream_line
-
-.. currentmodule:: oggm.core.flowline
+.. currentmodule:: oggm.core
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
-    init_present_time_glacier
+    centerlines.initialize_flowlines
+    centerlines.compute_centerlines
+    centerlines.compute_downstream_line
+    flowline.init_present_time_glacier

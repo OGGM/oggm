@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 
 class Flowline(Centerline):
-    """Common logic for the different types of model flowlines
+    """Common logic for different types of flowlines used as input to the model
 
 
     """
@@ -54,15 +54,18 @@ class Flowline(Centerline):
 
         Parameters
         ----------
-        line
-        dx
-        map_dx: float
-
+        line : :py:class:`shapely.geometry.LineString`
+            the geometrical line of a :py:class:`oggm.Centerline`
+        dx : float
+            Grid spacing in pixel coordinates
+        map_dx : float
+            DEM grid spacing in meters
         surface_h: :py:class:`numpy.ndarray`
             elevation [m] of the flowline grid points
         bed_h: :py:class:`numpy.ndarray`
             elevation[m] of the bedrock at the flowline grid points
-        rgi_id
+        rgi_id : str
+            The glacier's RGI identifier
         """
 
         # This is do add flexibility for testing. I have no time for fancier
@@ -148,7 +151,8 @@ class Flowline(Centerline):
 
 
 class ParabolicBedFlowline(Flowline):
-    """A more advanced Flowline."""
+    """A parabolic shaped Flowline with one degree of freedom
+    """
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, bed_shape=None, rgi_id=None):
@@ -156,7 +160,8 @@ class ParabolicBedFlowline(Flowline):
 
         Parameters
         ----------
-        line: Shapely LineString
+        line : :py:class:`shapely.geometry.LineString`
+            the geometrical line of a :py:class:`oggm.Centerline`
 
         Properties
         ----------
@@ -188,7 +193,9 @@ class ParabolicBedFlowline(Flowline):
 
 
 class RectangularBedFlowline(Flowline):
-    """A more advanced Flowline."""
+    """Simple shaped Flowline, glacier width does not change with ice thickness
+
+    """
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, widths=None, rgi_id=None):
@@ -196,7 +203,8 @@ class RectangularBedFlowline(Flowline):
 
         Parameters
         ----------
-        line: Shapely LineString
+        line : :py:class:`shapely.geometry.LineString`
+            the geometrical line of a :py:class:`oggm.Centerline`
 
         Properties
         ----------
@@ -232,7 +240,8 @@ class RectangularBedFlowline(Flowline):
 
 
 class TrapezoidalBedFlowline(Flowline):
-    """A more advanced Flowline."""
+    """A Flowline with trapezoidal shape and two degrees of freedom
+    """
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, widths=None, lambdas=None, rgi_id=None):
@@ -240,7 +249,8 @@ class TrapezoidalBedFlowline(Flowline):
 
         Parameters
         ----------
-        line: Shapely LineString
+        line : :py:class:`shapely.geometry.LineString`
+            the geometrical line of a :py:class:`oggm.Centerline`
 
         Properties
         ----------
@@ -289,7 +299,11 @@ class TrapezoidalBedFlowline(Flowline):
 
 
 class MixedBedFlowline(Flowline):
-    """A more advanced Flowline."""
+    """A Flowline which can take a combination of different shapes (default)
+
+    The default shape is parabolic. At ice divides a rectangular shape is used.
+    And if the parabola gets to flat a trapezoidal shape is used.
+    """
 
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
@@ -298,7 +312,8 @@ class MixedBedFlowline(Flowline):
 
         Parameters
         ----------
-        line: Shapely LineString
+        line : :py:class:`shapely.geometry.LineString`
+            the geometrical line of a :py:class:`oggm.Centerline`
 
         Properties
         ----------
@@ -413,8 +428,8 @@ class FlowlineModel(object):
         Parameters
         ----------
         flowlines : list
-            a list of Flowlines instances, sorted by order
-        mb_model : MassBalanceModel
+            a list of :py:class:`oggm.Flowline` instances, sorted by order
+        mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
             the MB model to use
         y0 : int
             the starting year of the simulation
