@@ -439,6 +439,74 @@ def filter_inversion_output(gdir):
 
     gdir.write_pickle(cls, 'inversion_output')
 
+@entity_task(log, writes=['inversion_output'])
+def calculate_velocity(gdir, with_sliding=True, filesuffix=''):
+    """Computes surface velocities along the flowlines from ice thickness
+       in m/yr.
+
+    Following the methods described in Cuffey and Paterson, (2010);
+    for parallel flowlines of velocity (laminar flow). Eq. 8.35, pp 310.
+
+    u_s = u_basal + (2A/n+1)* tau^n * H
+
+    In the case of no sliding:
+        u_z/u_s = [n+1]/[n+2] = 0.8 if n = 3.
+
+    Parameters
+    ----------
+    gdir : Glacier directory
+    with_sliding : bool
+        default is True, if set to False will not add the sliding component.
+    filesuffix : str
+        add a suffix to the output file
+    """
+
+    # Getting the constants
+    fs = cfg.PARAMS['inversion_fs']
+    rho = cfg.PARAMS['ice_density']
+    glen_a = cfg.PARAMS['inversion_glen_a']
+    glen_n = cfg.PARAMS['glen_n']
+
+    # Getting the data for the main flowline
+    cls = gdir.read_pickle('inversion_input')
+    invs = gdir.read_pickle('inversion_output')
+
+    towrite = []
+
+    for cl, inv in zip(cls, invs):
+        # vol in m3 and dx in m
+        section = inv['volume'] / inv['dx']
+
+        # this flux is in m3 per second
+        flux = inv['flux_a0']
+
+        angle = cl['slope_angle']
+
+        if with_sliding:
+            tau = rho * cfg.G * angle * inv['thick']
+            u_basal = fs * tau ** glen_n / inv['thick']
+            if ZeroDivisionError:
+                u_basal = 0.0
+
+            extra_term = (2 * glen_a / (glen_n + 1)) * (tau ** glen_n) * inv[
+                'thick']
+
+            u_surface = u_basal + extra_term
+            u_surface *= cfg.SEC_IN_YEAR
+
+            velocity = flux / section
+            velocity *= cfg.SEC_IN_YEAR
+        else:
+            # velocity in cross section
+            velocity = flux / section
+            velocity *= cfg.SEC_IN_YEAR
+            u_surface = velocity / 0.8
+
+        # output
+        cl['v_integrated'] = velocity
+        cl['v_surface'] = u_surface
+
+    gdir.write_pickle(cls, 'inversion_output')
 
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_per_altitude(gdir, add_slope=True,
