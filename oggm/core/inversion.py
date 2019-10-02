@@ -938,6 +938,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
         odf['calving_thick'] = out['thick']
         odf['calving_water_depth'] = out['water_depth']
         odf['calving_free_board'] = out['free_board']
+        odf['calving_front_width'] = out['width']
         for k, v in odf.items():
             gdir.add_to_diagnostics(k, v)
         return
@@ -1000,6 +1001,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
     odf['calving_thick'] = out['thick']
     odf['calving_water_depth'] = out['water_depth']
     odf['calving_free_board'] = out['free_board']
+    odf['calving_front_width'] = out['width']
     for k, v in odf.items():
         gdir.add_to_diagnostics(k, v)
 
