@@ -439,6 +439,7 @@ def filter_inversion_output(gdir):
 
     gdir.write_pickle(cls, 'inversion_output')
 
+
 @entity_task(log, writes=['inversion_output'])
 def calculate_velocity(gdir, with_sliding=True, filesuffix=''):
     """Computes surface velocities along the flowlines from ice thickness
