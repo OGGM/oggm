@@ -1923,6 +1923,18 @@ class TestInversion(unittest.TestCase):
         # Some reference value I just computed - see if other computers agree
         np.testing.assert_allclose(np.mean(velocity), 37, atol=5)
 
+        inversion.compute_velocities(gdir, fs=fs, glen_a=glen_a)
+
+        inv = gdir.read_pickle('inversion_output')[-1]
+
+        np.testing.assert_allclose(velocity, inv['u_integrated'])
+
+        # In the middle section the velocities look OK and should be close
+        # to the no sliding assumption
+        np.testing.assert_allclose(inv['u_surface'][20:60],
+                                   inv['u_integrated'][20:60] / 0.8,
+                                   rtol=0.16)
+
     def test_invert_hef_from_linear_mb(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2154,7 +2166,7 @@ class TestInversion(unittest.TestCase):
         t_star, bias = res['t_star'], res['bias']
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
         climate.mu_star_calibration(gdir)
-        inversion.prepare_for_inversion(gdir)
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
         v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a,
                                                      write=True)
@@ -2170,6 +2182,15 @@ class TestInversion(unittest.TestCase):
 
         np.testing.assert_allclose(242, maxs, atol=41)
         cfg.PARAMS['filter_for_neg_flux'] = True
+
+        inversion.compute_velocities(gdir, fs=0, glen_a=glen_a)
+
+        inv = gdir.read_pickle('inversion_output')[-1]
+
+        # In the middle section the velocities look OK and should be close
+        # to the no sliding assumption
+        np.testing.assert_allclose(inv['u_surface'][20:60],
+                                   inv['u_integrated'][20:60] / 0.8)
 
     def test_continue_on_error(self):
 
@@ -2333,6 +2354,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] > 2
         assert df['calving_mu_star'] == 0
         assert df['calving_water_depth'] == water_depth
+        assert df['calving_front_width'] > 100  # just to check its here
 
         # Test with smaller k (it doesn't overshoot)
         cfg.PARAMS['k_calving'] = 0.2
