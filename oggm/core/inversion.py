@@ -440,6 +440,88 @@ def filter_inversion_output(gdir):
     gdir.write_pickle(cls, 'inversion_output')
 
 
+@entity_task(log, writes=['inversion_output'])
+def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
+    """Surface velocities along the flowlines from inverted ice thickness.
+
+    Computed dollowing the methods described in Cuffey and Paterson, (2010);
+    for parallel flowlines of velocity (laminar flow). Eq. 8.35, pp 310.
+
+    u_s = u_basal + (2A/n+1)* tau^n * H
+
+    In the case of no sliding:
+        u_z/u_s = [n+1]/[n+2] = 0.8 if n = 3.
+
+    The output is written in 'inversion_output.pkl' in m yr-1
+
+    You'll need to call prepare_for_inversion with the `add_debug_var=True`
+    kwarg for this to work!
+
+    Parameters
+    ----------
+    gdir : Glacier directory
+    with_sliding : bool
+        default is True, if set to False will not add the sliding component.
+    filesuffix : str
+        add a suffix to the output file
+    """
+
+    # Defaults
+    if glen_a is None:
+        glen_a = cfg.PARAMS['inversion_glen_a']
+    if fs is None:
+        fs = cfg.PARAMS['inversion_fs']
+
+    rho = cfg.PARAMS['ice_density']
+    glen_n = cfg.PARAMS['glen_n']
+
+    # Getting the data for the main flowline
+    cls = gdir.read_pickle('inversion_output')
+
+    for cl in cls:
+        # vol in m3 and dx in m
+        section = cl['volume'] / cl['dx']
+
+        # this flux is in m3 per second
+        flux = cl['flux']
+        angle = cl['slope_angle']
+        thick = cl['thick']
+
+        if fs > 0:
+            tau = rho * cfg.G * angle * thick
+
+            with warnings.catch_warnings():
+                # This can trigger a divide by zero Warning
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                u_basal = fs * tau ** glen_n / thick
+
+            u_basal[~np.isfinite(u_basal)] = 0
+
+            u_deformation = (2 * glen_a / (glen_n + 1)) * (tau**glen_n) * thick
+
+            u_basal *= cfg.SEC_IN_YEAR
+            u_deformation *= cfg.SEC_IN_YEAR
+            u_surface = u_basal + u_deformation
+
+            velocity = flux / section
+            velocity *= cfg.SEC_IN_YEAR
+        else:
+            # velocity in cross section
+            velocity = flux / section
+            velocity *= cfg.SEC_IN_YEAR
+            u_surface = velocity / 0.8
+            u_basal = velocity * 0
+            u_deformation = velocity * 0
+
+        # output
+        cl['u_integrated'] = velocity
+        cl['u_surface'] = u_surface
+        cl['u_basal'] = u_basal
+        cl['u_deformation'] = u_deformation
+
+    gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
+
+
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_per_altitude(gdir, add_slope=True,
                                       smooth_radius=None,
@@ -938,6 +1020,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
         odf['calving_thick'] = out['thick']
         odf['calving_water_depth'] = out['water_depth']
         odf['calving_free_board'] = out['free_board']
+        odf['calving_front_width'] = out['width']
         for k, v in odf.items():
             gdir.add_to_diagnostics(k, v)
         return
@@ -1000,6 +1083,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
     odf['calving_thick'] = out['thick']
     odf['calving_water_depth'] = out['water_depth']
     odf['calving_free_board'] = out['free_board']
+    odf['calving_front_width'] = out['width']
     for k, v in odf.items():
         gdir.add_to_diagnostics(k, v)
 
