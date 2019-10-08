@@ -13,8 +13,8 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 OGGM_CONDA_ENV_URL = ("https://raw.githubusercontent.com/OGGM/"
                       "OGGM-dependency-list/master/linux-64/{0}")
 OGGM_CONDA_ENVS = {
-    "36": "oggmdev-1.2.0.201908021451_20190802_py36.yml",
-    "37": "oggmdev-1.2.0.201908021451_20190802_py37.yml",
+    "36": "oggmdev-1.2.0.201909261530_20191003_py36.yml",
+    "37": "oggmdev-1.2.0.201909261530_20191003_py37.yml",
 }
 
 class OggmVirtualenv(Conda):
