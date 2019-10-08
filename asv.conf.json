@@ -24,6 +24,7 @@
     // installed.
 
     "matrix": {
+        "numpy": ["1.16", ""]
     },
 
     "benchmark_dir": "benchmarks",
