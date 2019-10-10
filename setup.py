@@ -88,7 +88,8 @@ setup(
         'console_scripts': [
             'oggm_prepro = oggm.cli.prepro_levels:main',
             'oggm_benchmark = oggm.cli.benchmark:main',
-            'oggm_tdmdem90_login = oggm.cli.tdmdem90_login:main',
+            'oggm_tdmdem90_login = oggm.cli.netrc_credentials:tandemx',
+            'oggm_nasa_earthdata_login = oggm.cli.netrc_credentials:earthdata',
         ],
     },
 )

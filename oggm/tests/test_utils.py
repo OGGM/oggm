@@ -1520,15 +1520,16 @@ class TestFakeDownloads(unittest.TestCase):
     def test_aster(self):
 
         # Make a fake topo file
-        tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTM2_S88W121'),
-                              fakefile='ASTGTM2_S88W121_dem.tif')
+        tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTMV003_S88W121'),
+                              fakefile='ASTGTMV003_S88W121_dem.tif')
 
         def down_check(url, *args, **kwargs):
-            expected = 'ASTGTM_V2/UNIT_S90W125/ASTGTM2_S88W121.zip'
-            self.assertEqual(url, expected)
+            expect = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
+                      '2000.03.01/ASTGTMV003_S88W121.zip')
+            self.assertEqual(url, expect)
             return tf
 
-        with FakeDownloadManager('_aws_file_download_unlocked', down_check):
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
                                              source='ASTER')
 
@@ -1658,28 +1659,21 @@ class TestDataFiles(unittest.TestCase):
 
     def test_asterzone(self):
 
-        z, u = utils.aster_zone(lon_ex=[137.5, 137.5],
-                                lat_ex=[-72.5, -72.5])
+        z = utils.aster_zone(lon_ex=[137.5, 137.5],
+                             lat_ex=[-72.5, -72.5])
         self.assertTrue(len(z) == 1)
-        self.assertTrue(len(u) == 1)
-        self.assertEqual('S73E137', z[0])
-        self.assertEqual('S75E135', u[0])
+        self.assertEqual('ASTGTMV003_S73E137', z[0])
 
-        z, u = utils.aster_zone(lon_ex=[-95.5, -95.5],
-                                lat_ex=[30.5, 30.5])
+        z = utils.aster_zone(lon_ex=[-95.5, -95.5],
+                             lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 1)
-        self.assertTrue(len(u) == 1)
-        self.assertEqual('N30W096', z[0])
-        self.assertEqual('N30W100', u[0])
+        self.assertEqual('ASTGTMV003_N30W096', z[0])
 
-        z, u = utils.aster_zone(lon_ex=[-96.5, -95.5],
-                                lat_ex=[30.5, 30.5])
+        z = utils.aster_zone(lon_ex=[-96.5, -95.5],
+                             lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 2)
-        self.assertTrue(len(u) == 2)
-        self.assertEqual('N30W096', z[1])
-        self.assertEqual('N30W100', u[1])
-        self.assertEqual('N30W097', z[0])
-        self.assertEqual('N30W100', u[0])
+        self.assertEqual('ASTGTMV003_N30W096', z[0])
+        self.assertEqual('ASTGTMV003_N30W097', z[1])
 
     def test_mapzen_zone(self):
 
@@ -1914,9 +1908,8 @@ class TestDataFiles(unittest.TestCase):
         from oggm.utils._downloads import _download_aster_file
 
         # this zone does exist and file should be small enough for download
-        zone = 'S73E137'
-        unit = 'S75E135'
-        fp = _download_aster_file(zone, unit)
+        zone = 'ASTGTMV003_S73E137'
+        fp = _download_aster_file(zone)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
@@ -1944,9 +1937,8 @@ class TestDataFiles(unittest.TestCase):
         from oggm.utils._downloads import _download_aster_file
 
         # this zone does not exist
-        zone = 'bli'
-        unit = 'S75E135'
-        self.assertTrue(_download_aster_file(zone, unit) is None)
+        zone = 'ASTGTMV003_S99E010'
+        self.assertTrue(_download_aster_file(zone) is None)
 
     @pytest.mark.download
     def test_download_cru(self):
