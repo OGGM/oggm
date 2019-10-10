@@ -2,6 +2,8 @@
 set -x
 set -e
 
+export COVERALLS_PARALLEL=true
+
 $PIP install --upgrade git+https://github.com/fmaussion/salem.git
 $PIP install --upgrade coveralls coverage
 
