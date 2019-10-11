@@ -2,6 +2,7 @@
 SRTM V4
 
 Original resolution: 3 arcsec (~90m)
+Date of acquisition: February 2000
 
 # Data Citation
 
@@ -19,6 +20,7 @@ from http://srtm.csi.cgiar.org,
 VIEWFINDER PANORAMAS DEMs
 
 Original resolution: 3 arcsec (~90m)
+Date of acquisition: Depending on original source
 
 These data are downloaded from Jonathan de Ferranti's webpage:
 http://viewfinderpanoramas.org/dem3.html
@@ -32,6 +34,7 @@ above in case of doubt.
 RAMP V2
 
 Original resolution: 200m
+Date of acquisition: 1940-1999 (mostly 1980s and 1990s)
 
 Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0082 on 28.03.2018
 
@@ -49,6 +52,7 @@ doi: https://doi.org/10.5067/8JKNEW6BFRVD. [28.03.2018].
 GIMP V1.1
 
 Original resolution: 90 m
+Date of acquisition: February 2003 - October 2009
 
 Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0645/ on 28.03.2018
 
@@ -76,6 +80,7 @@ Howat, I., A. Negrete, and B. Smith. 2014. The Greenland Ice Mapping Project
 ARCTICDEM V3
 
 Original resolution: 100m
+Date of acquisition: Mostly 2007-2018
 
 Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM
 on 24.05.2019 and split into 1 degree tiles.
@@ -107,6 +112,7 @@ https://doi.org/10.7910/DVN/OHHUKH, Harvard Dataverse, V1, [Date Accessed]
 AW3D30 V1804
 
 Original resolution: 30m
+Date of acquisition: 2006-2011
 
 # Terms of Use for ALOS Global Digital Surface Model (AW3D30)
 
@@ -125,6 +131,7 @@ dataset.
 MAPZEN TERRAIN TILES
 
 Original resolution: variable
+Date of acquisition: Depending on original source
 
 A collection of DEMs from various sources hosted on Amazons Webs Service.
 https://github.com/tilezen/joerd/tree/master/docs
@@ -139,6 +146,7 @@ https://github.com/tilezen/joerd/blob/master/docs/attribution.md
 ASTGTMV3
 
 Original Resolution: 1 arc second (~30m at the equator)
+Date of acquisition: 2000 - 2013
 
 # Literature Citation
 
@@ -150,6 +158,7 @@ Processes DAAC. Accessed 20xx-x-x from https://doi.org/10.5067/ASTER/ASTGTM.003
 TanDEM-X 90m
 
 Original resolution: 90m
+Date of acquisition: December 2010 - January 2016
 
 To access TanDEM-X data self-registration is necessary. Read and follow:
 https://geoservice.dlr.de/web/dataguide/tdm90/#access
@@ -182,6 +191,7 @@ Photogrammetry and Remote Sensing, Vol 132, pp. 119-139.
 REMA V1.1
 
 Original resolution: 100m
+Date of acquisition: 2009 - 2017 (mostly 2015-2016)
 
 Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/REMA
 on 24.05.2019 and split into 1 degree tiles.
