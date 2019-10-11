@@ -78,8 +78,8 @@ ARCTICDEM V3
 Original resolution: 100m
 
 Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM
-on 24.05.2019 and split into 1 degree tiles. See
-# TODO for more information.
+on 24.05.2019 and split into 1 degree tiles.
+See https://oggm.org/2019/10/08/dems/ for more information.
 
 # Acknowledgements
 
@@ -135,10 +135,16 @@ Attribution is required for most original data sources. Please refer to the
 Mazen attribution page for more information:
 https://github.com/tilezen/joerd/blob/master/docs/attribution.md
 
-
 [ASTER]
- Advanced Spaceborne Thermal Emission and Reflection Radiometer (ASTER)
-# TODO: citation missing
+ASTGTMV3
+
+Original Resolution: 1 arc second (~30m at the equator)
+
+# Literature Citation
+
+NASA/METI/AIST/Japan Spacesystems, and U.S./Japan ASTER Science Team (2019).
+ASTER Global Digital Elevation Model V003 [Data set]. NASA EOSDIS Land
+Processes DAAC. Accessed 20xx-x-x from https://doi.org/10.5067/ASTER/ASTGTM.003
 
 [TANDEM]
 TanDEM-X 90m
@@ -177,10 +183,9 @@ REMA V1.1
 
 Original resolution: 100m
 
-
 Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/REMA
-on 24.05.2019 and split into 1 degree tiles. See
-# TODO for more information.
+on 24.05.2019 and split into 1 degree tiles.
+See https://oggm.org/2019/10/08/dems/ for more information.
 
 # Acknowledgements
 
