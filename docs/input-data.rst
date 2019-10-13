@@ -240,7 +240,8 @@ and type:
 
 .. code-block:: python
 
-    from oggm import utils
+    from oggm import cfg, utils
+    cfg.initialize()
     utils.get_rgi_intersects_dir()
     utils.get_rgi_dir()
 
