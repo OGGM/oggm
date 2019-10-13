@@ -173,19 +173,24 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
 
 def sia_thickness(slope, width, flux, shape='rectangular',
                   glen_a=None, fs=None, shape_factor=None):
-    """
+    """Computes the ice thickness from mass-conservation.
+
+    This is a utility function tested against the true OGGM inversion
+    function. Useful for teaching and inversion with calving.
 
     Parameters
     ----------
-    slope : in rad, -np.gradient(hgt, dx)
-    width : m
-    flux : [m3 s-1]
-    glen_a
-    fs
+    slope : -np.gradient(hgt, dx)
+    width : section width in m
+    flux : mass flux in m3 s-1
+    shape : 'rectangular' or 'parabolic'
+    glen_a : Glen A, defaults to PARAMS
+    fs : sliding, defaults to PARAMS
+    shape_factor: for lateral drag
 
     Returns
     -------
-
+    the ice thickness (in m)
     """
 
     if glen_a is None:
@@ -444,12 +449,13 @@ def filter_inversion_output(gdir):
 def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
     """Surface velocities along the flowlines from inverted ice thickness.
 
-    Computed dollowing the methods described in Cuffey and Paterson, (2010);
-    for parallel flowlines of velocity (laminar flow). Eq. 8.35, pp 310.
+    Computed following the methods described in
+    Cuffey and Paterson (2010) Eq. 8.35, pp 310:
 
-    u_s = u_basal + (2A/n+1)* tau^n * H
+        u_s = u_basal + (2A/n+1)* tau^n * H
 
     In the case of no sliding:
+
         u_z/u_s = [n+1]/[n+2] = 0.8 if n = 3.
 
     The output is written in 'inversion_output.pkl' in m yr-1
@@ -507,9 +513,10 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
             velocity *= cfg.SEC_IN_YEAR
         else:
             # velocity in cross section
+            fac = (glen_n + 1) / (glen_n + 2)
             velocity = flux / section
             velocity *= cfg.SEC_IN_YEAR
-            u_surface = velocity / 0.8
+            u_surface = velocity / fac
             u_basal = velocity * 0
             u_deformation = velocity * 0
 
