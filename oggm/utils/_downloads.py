@@ -20,6 +20,7 @@ import urllib.error
 from urllib.parse import urlparse
 import socket
 import multiprocessing as mp
+from netrc import netrc
 
 # External libs
 import pandas as pd
@@ -560,6 +561,53 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
     return local_path
 
 
+def download_with_authentification(wwwfile, key):
+    """ Uses credentials from a local .netrc file to download files
+
+    This is function is currently used for TanDEM-X and ASTER
+
+    Parameters
+    ----------
+    wwwfile : str
+        path to the file to download
+    key : str
+        the machine to to look at in the .netrc file
+
+    Returns
+    -------
+
+    """
+    # Attempt to download without credentials first to hit the cache
+    try:
+        dest_file = file_downloader(wwwfile)
+    except HttpDownloadError:
+        dest_file = None
+
+    # Grab auth parameters
+    if not dest_file:
+        authfile = os.path.expanduser('~/.netrc')
+
+        if not os.path.isfile(authfile):
+            raise DownloadCredentialsMissingException(
+                (authfile, ' does not exist. Create and add credentials for ',
+                 'TanDEM-X with `oggm_tdmdem90_login`. And use ',
+                 '`oggm_nasa_earthdata_login` for ASTER data.'))
+
+        try:
+            netrc(authfile).authenticators(key)[0]
+        except TypeError:
+            raise DownloadCredentialsMissingException(
+                ('Credentials for ', key, ' are not in ', authfile, '. Add ',
+                 'credentials for TanDEM-X with `oggm_tdmdem90_login`. ',
+                 'And use `oggm_nasa_earthdata_login` for ASTER data.'))
+
+        dest_file = file_downloader(
+            wwwfile, auth=(netrc(authfile).authenticators(key)[0],
+                           netrc(authfile).authenticators(key)[2]))
+
+    return dest_file
+
+
 def download_oggm_files():
     with _get_download_lock():
         return _download_oggm_files_unlocked()
@@ -656,28 +704,7 @@ def _download_tandem_file_unlocked(zone):
     if os.path.exists(outpath):
         return outpath
 
-    # Attempt to download without credentials first to hit the cache
-    try:
-        dest_file = file_downloader(wwwfile)
-    except HttpDownloadError:
-        dest_file = None
-
-    # Grab auth parameters
-    if not dest_file:
-        tdmauthfile = os.path.expanduser('~/.tdmdem90.creds')
-        if not os.path.isfile(tdmauthfile):
-            raise DownloadCredentialsMissingException(tdmauthfile +
-                                                      ' does not exist.' +
-                                                      ' Login using' +
-                                                      ' oggm_tdmdem90_login.')
-        with open(tdmauthfile, 'r') as f:
-            tdmuser = f.readline().strip()
-            tdmpass = f.readline().strip()
-        if not tdmuser or not tdmpass:
-            raise DownloadCredentialsMissingException(
-                'Could not read credentials from ' + tdmauthfile)
-
-        dest_file = file_downloader(wwwfile, auth=(tdmuser, tdmpass))
+    dest_file = download_with_authentification(wwwfile, 'geoservice.dlr.de')
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -792,41 +819,38 @@ def _download_dem3_viewpano_unlocked(zone):
     return outpath
 
 
-def _download_aster_file(zone, unit):
+def _download_aster_file(zone):
     with _get_download_lock():
-        return _download_aster_file_unlocked(zone, unit)
+        return _download_aster_file_unlocked(zone)
 
 
-def _download_aster_file_unlocked(zone, unit):
-    """Checks if the aster data is in the directory and if not, download it.
-
-    You need AWS cli and AWS credentials for this. Quoting Timo:
-
-    $ aws configure
-
-    Key ID und Secret you should have
-    Region is eu-west-1 and Output Format is json.
+def _download_aster_file_unlocked(zone):
+    """Checks if the tandem data is in the directory and if not, download it.
     """
 
-    fbname = 'ASTGTM2_' + zone + '.zip'
-    dirbname = 'UNIT_' + unit
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
-    obname = 'ASTGTM2_' + zone + '_dem.tif'
-    outpath = os.path.join(tmpdir, obname)
+    wwwfile = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/'
+               '2000.03.01/{}.zip'.format(zone))
+    outpath = os.path.join(tmpdir, zone + '_dem.tif')
 
-    aws_path = 'ASTGTM_V2/' + dirbname + '/' + fbname
-    dfile = _aws_file_download_unlocked(aws_path)
+    # check if extracted file exists already
+    if os.path.exists(outpath):
+        return outpath
 
-    if dfile is None:
-        # Ok so this *should* be an ocean tile
+    # download from NASA Earthdata with credentials
+    dest_file = download_with_authentification(wwwfile,
+                                               'urs.earthdata.nasa.gov')
+
+    # That means we tried hard but we couldn't find it
+    if not dest_file:
         return None
 
+    # ok we have to extract it
     if not os.path.exists(outpath):
-        # Extract
-        with zipfile.ZipFile(dfile) as zf:
-            zf.extract(obname, tmpdir)
+        with zipfile.ZipFile(dest_file) as zf:
+            zf.extractall(tmpdir)
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(outpath)
@@ -1211,50 +1235,30 @@ def dem3_viewpano_zone(lon_ex, lat_ex):
 
 
 def aster_zone(lon_ex, lat_ex):
-    """Returns a list of ASTER V2 zones and units covering the desired extent.
+    """Returns a list of ASTGTMV3 zones covering the desired extent.
+
+    ASTER v3 tiles are 1 degree x 1 degree
+    N50 contains 50 to 50.9
+    E10 contains 10 to 10.9
+    S70 contains -69.99 to -69.0
+    W20 contains -19.99 to -19.0
     """
 
-    # ASTER is a bit more work. The units are directories of 5 by 5,
-    # tiles are 1 by 1. The letter in the filename depends on the sign
-    units_dx = 5.
-
-    # quick n dirty solution to be sure that we will cover the whole range
-    mi, ma = np.min(lon_ex), np.max(lon_ex)
-    # int() to avoid Deprec warning:
-    lon_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
-    mi, ma = np.min(lat_ex), np.max(lat_ex)
-    # int() to avoid Deprec warning:
-    lat_ex = np.linspace(mi, ma, int(np.ceil((ma - mi) + 3)))
+    # this means flooring should do the job for all points
+    lons = np.unique(np.floor(lon_ex))
+    lats = np.unique(np.floor(lat_ex))
 
     zones = []
-    units = []
-    for lon in lon_ex:
-        for lat in lat_ex:
-            dx = np.floor(lon)
-            zx = np.floor(lon / units_dx) * units_dx
-            if math.copysign(1, dx) == -1:
-                dx = -dx
-                zx = -zx
-                lon_let = 'W'
-            else:
-                lon_let = 'E'
-
-            dy = np.floor(lat)
-            zy = np.floor(lat / units_dx) * units_dx
-            if math.copysign(1, dy) == -1:
-                dy = -dy
-                zy = -zy
-                lat_let = 'S'
-            else:
-                lat_let = 'N'
-
-            z = '{}{:02.0f}{}{:03.0f}'.format(lat_let, dy, lon_let, dx)
-            u = '{}{:02.0f}{}{:03.0f}'.format(lat_let, zy, lon_let, zx)
-            if z not in zones:
-                zones.append(z)
-                units.append(u)
-
-    return zones, units
+    for lat in lats:
+        # north or south?
+        ns = 'S' if lat < 0 else 'N'
+        for lon in lons:
+            # east or west?
+            ew = 'W' if lon < 0 else 'E'
+            filename = 'ASTGTMV003_{}{:02.0f}{}{:03.0f}'.format(ns, abs(lat),
+                                                                ew, abs(lon))
+            zones.append(filename)
+    return list(sorted(set(zones)))
 
 
 def mapzen_zone(lon_ex, lat_ex, dx_meter=None, zoom=None):
@@ -1949,7 +1953,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
           - 'REMA' : https://www.pgc.umn.edu/data/rema/
           - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : https://asterweb.jpl.nasa.gov/gdem.asp
+          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
           - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
@@ -2032,9 +2036,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             files.append(_download_mapzen_file(z))
 
     if source == 'ASTER':
-        zones, units = aster_zone(lon_ex, lat_ex)
-        for z, u in zip(zones, units):
-            files.append(_download_aster_file(z, u))
+        zones = aster_zone(lon_ex, lat_ex)
+        for z in zones:
+            files.append(_download_aster_file(z))
 
     if source == 'DEM3':
         zones = dem3_viewpano_zone(lon_ex, lat_ex)

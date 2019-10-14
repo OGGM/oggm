@@ -19,6 +19,11 @@ Enhancements
 - New function ``inversion.compute_velocities`` writes the section and
   surface veloicites in the inversion output (:issue:`876`).
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
+- Added ASTER v3 as optional DEM. Requires credentials to
+  ``urs.earthdata.nasa.gov`` stored in a local ``.netrc`` file. Credentials
+  can be added on the command line via ``$ oggm_nasa_earthdata_login``
+  (:pull:`884`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 Bug fixes
 ~~~~~~~~~
