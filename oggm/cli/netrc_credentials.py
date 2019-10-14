@@ -16,12 +16,14 @@ def _test_credentials(authfile, key, testurl):
     r = requests.get(testurl, headers=header,
                      auth=(netrc(authfile).authenticators(key)[0],
                            netrc(authfile).authenticators(key)[2]))
-    if r.status_code != 200:
-        print("Authentication failed! ")
-        return -1
-    else:
+    if (r.status_code == 206) or (r.status_code == 200):
+        # code 200 is "OK", code 206 is "partial content" which is ok here
         print("Authentication successful!")
         return 0
+    else:
+        print("Authentication failed with HTML status code {}!".
+              format(r.status_code))
+        return -1
 
 
 def read_credentials(key, testurl):
@@ -50,7 +52,8 @@ def read_credentials(key, testurl):
 
     except (FileNotFoundError, TypeError, ValueError) as err:
         # no credentials, so we read them from the user
-        print('Enter your credentials for {}'.format(key))
+        print('Enter your credentials for {0} (this might override existing '
+              'credentials for {0}!)'.format(key))
         username = input("Username: ")
         password = getpass.getpass("Password: ")
 
@@ -58,8 +61,9 @@ def read_credentials(key, testurl):
 
         # if .netrc does not exist we create it first and set permissions
         if isinstance(err, FileNotFoundError):
-            Popen('touch {}.netrc | chmod 0600 {}.netrc'.
+            Popen('touch {0}.netrc | chmod 0600 {0}.netrc'.
                   format(homedir + os.sep), shell=True)
+            print('Created credential file: {}.netrc'.format(homedir + os.sep))
 
         # if the existing credentials are wrong we delete them
         if isinstance(err, ValueError):
@@ -103,6 +107,6 @@ def tandemx():
     """
     key = 'geoservice.dlr.de'
     testurl = ("https://download.geoservice.dlr.de" +
-               "/TDM90/files/N51/E000/TDM1_DEM__30_N57E006.zip")
+               "/TDM90/files/N57/E000/TDM1_DEM__30_N57E006.zip")
 
     read_credentials(key, testurl)
