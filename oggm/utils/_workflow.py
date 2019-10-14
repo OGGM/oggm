@@ -1697,6 +1697,28 @@ class GlacierDirectory(object):
             raise RuntimeError('Please run `define_glacier_region` before '
                                'using this property.')
 
+    @lazy_property
+    def dem_daterange(self):
+        """Years in which most of the DEM data was acquired"""
+        from oggm.core.gis import DEM_SOURCE_INFO
+        dem_source = self.get_diagnostics()['dem_source']
+        source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
+        for line in source_txt.split('\n'):
+            if 'Date range:' in line:
+                daterange = tuple(map(float, line.split(':')[1].split('-')))
+                break
+        return daterange
+
+    @lazy_property
+    def dem_dateinfo(self):
+        """More detailed information on the acquisition of the DEM data"""
+        from oggm.core.gis import DEM_SOURCE_INFO
+        dem_source = self.get_diagnostics()['dem_source']
+        source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
+        for line in source_txt.split('\n'):
+            if 'Date of acquisition:' in line:
+                return line
+
     @property
     def rgi_area_m2(self):
         """The glacier's RGI area (m2)."""
