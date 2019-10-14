@@ -106,4 +106,3 @@ def tandemx():
                "/TDM90/files/N51/E000/TDM1_DEM__30_N57E006.zip")
 
     read_credentials(key, testurl)
-
