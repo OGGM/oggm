@@ -138,6 +138,7 @@ MAPZEN TERRAIN TILES
 
 Original resolution: variable
 Date of acquisition: Depending on original source
+Date range: nan-nan
 
 A collection of DEMs from various sources hosted on Amazons Webs Service.
 https://github.com/tilezen/joerd/tree/master/docs
