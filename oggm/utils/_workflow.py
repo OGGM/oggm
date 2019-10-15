@@ -1705,7 +1705,7 @@ class GlacierDirectory(object):
             with open(source_txt, 'r') as f:
                 for line in f.readlines():
                     if 'Date range:' in line:
-                        return tuple(map(float, line.split(':')[1].split('-')))
+                        return tuple(map(int, line.split(':')[1].split('-')))
         # we did not find the information in the dem_source file
         log.warning('No DEM date range specified in `dem_source.txt`')
         return None

@@ -366,7 +366,7 @@ class TestGIS(unittest.TestCase):
         # now call again and check return type
         self.assertIsInstance(gdir.dem_dateinfo, str)
         self.assertIsInstance(gdir.dem_daterange, tuple)
-        self.assertTrue(all(isinstance(year, float)
+        self.assertTrue(all(isinstance(year, int)
                             for year in gdir.dem_daterange))
 
     def test_custom_basename(self):

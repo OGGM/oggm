@@ -22,7 +22,6 @@ VIEWFINDER PANORAMAS DEMs
 
 Original resolution: 3 arcsec (~90m)
 Date of acquisition: Depending on original source
-Date range: nan-nan
 
 These data are downloaded from Jonathan de Ferranti's webpage:
 http://viewfinderpanoramas.org/dem3.html
@@ -138,7 +137,6 @@ MAPZEN TERRAIN TILES
 
 Original resolution: variable
 Date of acquisition: Depending on original source
-Date range: nan-nan
 
 A collection of DEMs from various sources hosted on Amazons Webs Service.
 https://github.com/tilezen/joerd/tree/master/docs
