@@ -165,8 +165,8 @@ Processes DAAC. Accessed 20xx-x-x from https://doi.org/10.5067/ASTER/ASTGTM.003
 TanDEM-X 90m
 
 Original resolution: 90m
-Date of acquisition: December 2010 - January 2016
-Date range: 2011-2015
+Date of acquisition: December 2010 - January 2015
+Date range: 2011-2014
 
 To access TanDEM-X data self-registration is necessary. Read and follow:
 https://geoservice.dlr.de/web/dataguide/tdm90/#access
