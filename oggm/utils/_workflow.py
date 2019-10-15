@@ -1700,12 +1700,12 @@ class GlacierDirectory(object):
     @lazy_property
     def dem_daterange(self):
         """Years in which most of the DEM data was acquired"""
-        from oggm.core.gis import DEM_SOURCE_INFO
-        dem_source = self.get_diagnostics()['dem_source']
-        source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
-        for line in source_txt.split('\n'):
-            if 'Date range:' in line:
-                return tuple(map(float, line.split(':')[1].split('-')))
+        source_txt = self.get_filepath('dem_source')
+        if os.path.isfile(source_txt):
+            with open(source_txt, 'r') as f:
+                for line in f.readlines():
+                    if 'Date range:' in line:
+                        return tuple(map(float, line.split(':')[1].split('-')))
         # we did not find the information in the dem_source file
         log.warning('No DEM date range specified in `dem_source.txt`')
         return None
@@ -1713,12 +1713,12 @@ class GlacierDirectory(object):
     @lazy_property
     def dem_dateinfo(self):
         """More detailed information on the acquisition of the DEM data"""
-        from oggm.core.gis import DEM_SOURCE_INFO
-        dem_source = self.get_diagnostics()['dem_source']
-        source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
-        for line in source_txt.split('\n'):
-            if 'Date of acquisition:' in line:
-                return line
+        source_txt = self.get_filepath('dem_source')
+        if os.path.isfile(source_txt):
+            with open(source_txt, 'r') as f:
+                for line in f.readlines():
+                    if 'Date of acquisition:' in line:
+                        return line
         # we did not find the information in the dem_source file
         log.warning('No DEM date information found in `dem_source.txt`')
         return None

@@ -355,6 +355,20 @@ class TestGIS(unittest.TestCase):
         self.assertIsNone(gdir.dem_daterange)
         self.assertIsNone(gdir.dem_dateinfo)
 
+        # but we can make some
+        with open(os.path.join(gdir.dir, 'dem_source.txt'), 'a') as f:
+            f.write('Date of acquisition: February 2000\n')
+            f.write('Date range: 2000-2000')
+        # delete lazy properties
+        delattr(gdir, '_lazy_dem_daterange')
+        delattr(gdir, '_lazy_dem_dateinfo')
+
+        # now call again and check return type
+        self.assertIsInstance(gdir.dem_dateinfo, str)
+        self.assertIsInstance(gdir.dem_daterange, tuple)
+        self.assertTrue(all(isinstance(year, float)
+                            for year in gdir.dem_daterange))
+
     def test_custom_basename(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
