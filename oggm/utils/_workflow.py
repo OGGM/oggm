@@ -1705,9 +1705,10 @@ class GlacierDirectory(object):
         source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
         for line in source_txt.split('\n'):
             if 'Date range:' in line:
-                daterange = tuple(map(float, line.split(':')[1].split('-')))
-                break
-        return daterange
+                return tuple(map(float, line.split(':')[1].split('-')))
+        # we did not find the information in the dem_source file
+        log.warning('No DEM date range specified in `dem_source.txt`')
+        return None
 
     @lazy_property
     def dem_dateinfo(self):
@@ -1718,6 +1719,9 @@ class GlacierDirectory(object):
         for line in source_txt.split('\n'):
             if 'Date of acquisition:' in line:
                 return line
+        # we did not find the information in the dem_source file
+        log.warning('No DEM date information found in `dem_source.txt`')
+        return None
 
     @property
     def rgi_area_m2(self):

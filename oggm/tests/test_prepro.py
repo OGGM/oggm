@@ -345,6 +345,16 @@ class TestGIS(unittest.TestCase):
                   'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
             assert s in gis.DEM_SOURCE_INFO.keys()
 
+    def test_dem_daterange_dateinfo(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        # there is no daterange/info for demo/custom data
+        self.assertIsNone(gdir.dem_daterange)
+        self.assertIsNone(gdir.dem_dateinfo)
+
     def test_custom_basename(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
