@@ -58,7 +58,8 @@ import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
-                             HttpDownloadError, HttpContentTooShortError)
+                             HttpDownloadError, HttpContentTooShortError,
+                             InvalidDEMError)
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -912,7 +913,14 @@ def _download_aw3d30_file_unlocked(fullzone):
     # Did we download it yet?
     ftpfile = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
                + fullzone + '.tar.gz')
-    dest_file = file_downloader(ftpfile, timeout=180)
+    try:
+        dest_file = file_downloader(ftpfile, timeout=180)
+    except urllib.error.URLError as err:
+        if 'No such file' in err.args[0]:
+            raise InvalidDEMError('Source: AW3D30 not available for ' +
+                                  'tile {}'.format(tile))
+        else:
+            raise err
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
