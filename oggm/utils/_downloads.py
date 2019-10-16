@@ -2025,7 +2025,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             with _get_download_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
                 url += 'DEM/REMA_100m_v1.1/'
-                url += '{}_100m_v3.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
+                url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
 
     if source == 'TANDEM':
