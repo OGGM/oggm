@@ -62,6 +62,9 @@ def _rename_dem_folder(gdir, source=''):
         f = gdir.get_filepath(fname)
         os.rename(f, os.path.join(out, os.path.basename(f)))
 
+    # log SUCCESS for this DEM source
+    gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source))
+
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',

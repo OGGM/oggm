@@ -915,12 +915,9 @@ def _download_aw3d30_file_unlocked(fullzone):
                + fullzone + '.tar.gz')
     try:
         dest_file = file_downloader(ftpfile, timeout=180)
-    except urllib.error.URLError as err:
-        if 'No such file' in err.args[0]:
-            raise InvalidDEMError('Source: AW3D30 not available for ' +
-                                  'tile {}'.format(tile))
-        else:
-            raise err
+    except urllib.error.URLError:
+        # This error is raised if file is not available, could be water
+        return None
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
@@ -1859,7 +1856,7 @@ def is_dem_source_available(source, lon_ex, lat_ex):
     elif source == 'TANDEM':
         return True
     elif source == 'AW3D30':
-        return True
+        return np.min(lat_ex) > -60
     elif source == 'MAPZEN':
         return True
     elif source == 'DEM3':
@@ -2063,8 +2060,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if files:
         return files, source
     else:
-        raise RuntimeError('No topography file available for extent lat:{0},'
-                           'lon:{1}!'.format(lat_ex, lon_ex))
+        raise InvalidDEMError('Source: {2} no topography file available for '
+                              'extent lat:{0}, lon:{1}!'.
+                              format(lat_ex, lon_ex, source))
 
 
 def get_cmip5_file(filename, reset=False):
