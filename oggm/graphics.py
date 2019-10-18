@@ -277,13 +277,35 @@ def plot_raster(gdirs, var_name=None, cmap='viridis', ax=None, smap=None):
 
 
 @_plot_map
-def plot_domain(gdirs, ax=None, smap=None):
-    """Plot the glacier directory."""
+def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
+    """Plot the glacier directory.
+
+    Parameters
+    ----------
+    gdirs
+    ax
+    smap
+    use_netcdf : book
+        use output of
+
+    Returns
+    -------
+
+    """
 
     # Files
     gdir = gdirs[0]
-
-    topo = salem.GeoTiff(gdir.get_filepath('dem')).get_vardata()
+    if use_netcdf:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+            topo = nc.variables['topo'][:]
+    else:
+        import rasterio as rio
+        with rio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as dem_dr:
+            topo = dem_dr.read(1).astype(rio.float32)
+            min_z = -999.
+            topo[topo <= min_z] = np.NaN
+            mask = dem_dr.read_masks(1)
+            topo[mask == 0] = np.NaN
     try:
         smap.set_data(topo)
     except ValueError:

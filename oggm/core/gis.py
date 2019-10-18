@@ -401,6 +401,14 @@ def define_glacier_region(gdir, entity=None):
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
     log.debug('(%s) N DEM Files: %s', gdir.rgi_id, len(dem_list))
 
+    # Decide how to tag nodata
+    def _get_nodata(rio_ds):
+        nodata = rio_ds[0].meta.get('nodata', None)
+        if nodata is None:
+            # badly tagged geotiffs, let's do it ourselves
+            nodata = -32767 if source == 'TANDEM' else -9999
+        return nodata
+
     # A glacier area can cover more than one tile:
     if len(dem_list) == 1:
         dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
@@ -409,9 +417,11 @@ def define_glacier_region(gdir, entity=None):
             src_transform = dem_dss[0].transform
         else:
             src_transform = dem_dss[0].affine
+        nodata = _get_nodata(dem_dss)
     else:
         dem_dss = [rasterio.open(s) for s in dem_list]  # list of rasters
-        dem_data, src_transform = merge_tool(dem_dss)  # merged rasters
+        nodata = _get_nodata(dem_dss)
+        dem_data, src_transform = merge_tool(dem_dss, nodata=nodata)  # merge
 
     # Use Grid properties to create a transform (see rasterio cookbook)
     dst_transform = rasterio.transform.from_origin(
@@ -423,6 +433,7 @@ def define_glacier_region(gdir, entity=None):
     profile.update({
         'crs': proj4_str,
         'transform': dst_transform,
+        'nodata': nodata,
         'width': nx,
         'height': ny
     })
@@ -440,10 +451,6 @@ def define_glacier_region(gdir, entity=None):
     profile.pop('blockxsize', None)
     profile.pop('blockysize', None)
     profile.pop('compress', None)
-    nodata = dem_dss[0].meta.get('nodata', None)
-    if source == 'TANDEM' and nodata is None:
-        # badly tagged geotiffs, let's do it ourselves
-        nodata = -32767
     with rasterio.open(dem_reproj, 'w', **profile) as dest:
         dst_array = np.empty((ny, nx), dtype=dem_dss[0].dtypes[0])
         reproject(
@@ -511,13 +518,16 @@ def glacier_masks(gdir):
     assert ny == gdir.grid.ny
 
     # Correct the DEM
-    # Currently we just do a linear interp -- filling is totally shit anyway
     min_z = -999.
     dem[dem <= min_z] = np.NaN
+    mask = dem_dr.read_masks(1)
+    dem[mask == 0] = np.NaN
     isfinite = np.isfinite(dem)
     if np.all(~isfinite):
         raise InvalidDEMError('Not a single valid grid point in DEM')
     if np.any(~isfinite):
+        if np.sum(~isfinite) > (0.25 * nx * ny):
+            log.warning('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
         xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
@@ -536,8 +546,8 @@ def glacier_masks(gdir):
     if np.any(~isfinite):
         # this happens when extrapolation is needed
         # see how many percent of the dem
-        if np.sum(~isfinite) > (0.5 * nx * ny):
-            log.warning('({}) many NaNs in DEM'.format(gdir.rgi_id))
+        if np.sum(~isfinite) > (0.25 * nx * ny):
+            log.warning('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
         xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
