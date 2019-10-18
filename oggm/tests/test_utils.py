@@ -1458,7 +1458,7 @@ class TestFakeDownloads(unittest.TestCase):
         def down_check(url, *args, **kwargs):
             expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
                         'REMA_100m_v1.1/'
-                        '40_10_100m_v3.1/40_10_100m_v1.1_reg_dem.tif')
+                        '40_10_100m_v1.1/40_10_100m_v1.1_reg_dem.tif')
             self.assertEqual(expected, url)
             return tf
 
@@ -1797,8 +1797,9 @@ class TestDataFiles(unittest.TestCase):
         assert utils.is_dem_source_available('ARCTICDEM', [-25, -25], [71, 71])
         assert utils.is_dem_source_available('RAMP', [-25, -25], [-71, -71])
         assert utils.is_dem_source_available('REMA', [-25, -25], [-71, -71])
+        assert not utils.is_dem_source_available('AW3D30', [5, 5], [-60, -60])
 
-        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER']:
+        for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'AW3D30']:
             assert utils.is_dem_source_available(s, [11, 11], [47, 47])
 
     def test_find_dem_zone(self):

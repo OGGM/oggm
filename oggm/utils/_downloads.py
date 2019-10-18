@@ -58,7 +58,8 @@ import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
-                             HttpDownloadError, HttpContentTooShortError)
+                             HttpDownloadError, HttpContentTooShortError,
+                             InvalidDEMError)
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -912,7 +913,11 @@ def _download_aw3d30_file_unlocked(fullzone):
     # Did we download it yet?
     ftpfile = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/release_v1804/'
                + fullzone + '.tar.gz')
-    dest_file = file_downloader(ftpfile, timeout=180)
+    try:
+        dest_file = file_downloader(ftpfile, timeout=180)
+    except urllib.error.URLError:
+        # This error is raised if file is not available, could be water
+        return None
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
@@ -1851,7 +1856,7 @@ def is_dem_source_available(source, lon_ex, lat_ex):
     elif source == 'TANDEM':
         return True
     elif source == 'AW3D30':
-        return True
+        return np.min(lat_ex) > -60
     elif source == 'MAPZEN':
         return True
     elif source == 'DEM3':
@@ -2017,7 +2022,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
             with _get_download_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
                 url += 'DEM/REMA_100m_v1.1/'
-                url += '{}_100m_v3.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
+                url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
 
     if source == 'TANDEM':
@@ -2055,8 +2060,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if files:
         return files, source
     else:
-        raise RuntimeError('No topography file available for extent lat:{0},'
-                           'lon:{1}!'.format(lat_ex, lon_ex))
+        raise InvalidDEMError('Source: {2} no topography file available for '
+                              'extent lat:{0}, lon:{1}!'.
+                              format(lat_ex, lon_ex, source))
 
 
 def get_cmip5_file(filename, reset=False):
