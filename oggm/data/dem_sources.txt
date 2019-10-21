@@ -2,6 +2,8 @@
 SRTM V4
 
 Original resolution: 3 arcsec (~90m)
+Date of acquisition: February 2000
+Date range: 2000-2000
 
 # Data Citation
 
@@ -19,6 +21,7 @@ from http://srtm.csi.cgiar.org,
 VIEWFINDER PANORAMAS DEMs
 
 Original resolution: 3 arcsec (~90m)
+Date of acquisition: Depending on original source
 
 These data are downloaded from Jonathan de Ferranti's webpage:
 http://viewfinderpanoramas.org/dem3.html
@@ -32,6 +35,8 @@ above in case of doubt.
 RAMP V2
 
 Original resolution: 200m
+Date of acquisition: 1940-1999 (mostly 1980s and 1990s)
+Date range: 1980-1990
 
 Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0082 on 28.03.2018
 
@@ -49,6 +54,8 @@ doi: https://doi.org/10.5067/8JKNEW6BFRVD. [28.03.2018].
 GIMP V1.1
 
 Original resolution: 90 m
+Date of acquisition: February 2003 - October 2009
+Date range: 2003-2009
 
 Downloaded by F. Maussion from http://nsidc.org/data/nsidc-0645/ on 28.03.2018
 
@@ -73,19 +80,147 @@ Howat, I., A. Negrete, and B. Smith. 2014. The Greenland Ice Mapping Project
 8. 1509-1518. https://doi.org/10.5194/tc-8-1509-2014
 
 [ARCTICDEM]
-# TODO: citation missing
+ARCTICDEM V3
+
+Original resolution: 100m
+Date of acquisition: 2007-2018
+Date range: 2007-2018
+
+Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM
+on 24.05.2019 and split into 1 degree tiles.
+See https://oggm.org/2019/10/08/dems/ for more information.
+
+# Acknowledgements
+
+These remarks should be included in the acknowledgements section of any
+published work, presentation, poster, or document:
+
+DEMs provided by the Polar Geospatial Center under NSF-OPP awards 1043681,
+1559691, and 1542736.
+
+# Data citation
+
+As a condition of using these data, you must cite the use of this data set
+using the following citation:
+
+Porter, Claire; Morin, Paul; Howat, Ian; Noh, Myoung-Jon; Bates, Brian;
+Peterman, Kenneth; Keesey, Scott; Schlenk, Matthew; Gardiner, Judith;
+Tomko, Karen; Willis, Michael; Kelleher, Cole; Cloutier, Michael; Husby, Eric;
+Foga, Steven; Nakamura, Hitomi; Platson, Melisa; Wethington, Michael, Jr.;
+Williamson, Cathleen; Bauer, Gregory; Enos, Jeremy; Arnold, Galen;
+Kramer, William; Becker, Peter; Doshi, Abhijit; D’Souza, Cristelle;
+Cummens, Pat; Laurier, Fabien; Bojesen, Mikkel, 2018, “ArcticDEM”,
+https://doi.org/10.7910/DVN/OHHUKH, Harvard Dataverse, V1, [Date Accessed]
 
 [AW3D30]
-# TODO: citation missing
+AW3D30 V1804
+
+Original resolution: 30m
+Date of acquisition: 2006-2011
+Date range: 2006-2011
+
+# Terms of Use for ALOS Global Digital Surface Model (AW3D30)
+
+- When you provide or publish any products and services to a third party using
+this dataset, you are kindly requested to display that the original data is
+provided by JAXA.
+- When you publish the product(s) using this dataset, you are kindly requested
+to show the copyright (©JAXA) and the source of data.
+- JAXA does not guarantee the quality and reliability of this dataset and JAXA
+assume no responsibility whatsoever for any direct or indirect damage and loss
+caused by use of this dataset. Also, JAXA will not be responsible for any
+damages of users due to changing, deleting or terminating the provision of this
+dataset.
 
 [MAPZEN]
-# TODO: citation missing
+MAPZEN TERRAIN TILES
+
+Original resolution: variable
+Date of acquisition: Depending on original source
+
+A collection of DEMs from various sources hosted on Amazons Webs Service.
+https://github.com/tilezen/joerd/tree/master/docs
+
+# Attribution
+
+Attribution is required for most original data sources. Please refer to the
+Mazen attribution page for more information:
+https://github.com/tilezen/joerd/blob/master/docs/attribution.md
 
 [ASTER]
-# TODO: citation missing
+ASTGTMV3
+
+Original Resolution: 1 arc second (~30m at the equator)
+Date of acquisition: 2000 - 2013
+Date range: 2000-2013
+
+# Literature Citation
+
+NASA/METI/AIST/Japan Spacesystems, and U.S./Japan ASTER Science Team (2019).
+ASTER Global Digital Elevation Model V003 [Data set]. NASA EOSDIS Land
+Processes DAAC. Accessed 20xx-x-x from https://doi.org/10.5067/ASTER/ASTGTM.003
 
 [TANDEM]
-# TODO: citation missing
+TanDEM-X 90m
+
+Original resolution: 90m
+Date of acquisition: December 2010 - January 2015
+Date range: 2011-2014
+
+To access TanDEM-X data self-registration is necessary. Read and follow:
+https://geoservice.dlr.de/web/dataguide/tdm90/#access
+Afterwards use `oggm_tdmdem90_login` to store your credentials locally.
+
+# Data rights
+
+In publications based on the TanDEM-X 90m DEM the User undertakes to clearly
+mark all data in such a way that the authorship and copyright of DLR is
+comprehensible to all: “© DLR ”. Derived information must include a reference
+to the TanDEM-X 90m DEM as data source, regardless of the form in which it was
+created.
+
+# Data citation
+
+Citation of one of the two listed papers is adequate if you use the TanDEM-X
+
+Wessel, B., Huber, M., Wohlfart, C., Marschalk, U., Kosmann, D., Roth, A.
+(2018): Accuracy Assessment of the Global TanDEM-X Digital Elevation Model with
+GPS Data., ISPRS Journal of Photogrammetry and Remote Sensing. Vol. 139, pp.
+171-182.
+
+Rizzoli, P., Martone, M., Gonzalez, C., Wecklich, C., Borla Tridon, D.,
+Bräutigam, B., Bachmann, M., Schulze, D., Fritz, T., Huber, M., Wessel, B.,
+Krieger, G., Zink, M., and Moreira, A. (2017): Generation and performance
+assessment of the global TanDEM-X digital elevation model. ISPRS Journal of
+Photogrammetry and Remote Sensing, Vol 132, pp. 119-139.
 
 [REMA]
-# TODO: citation missing
+REMA V1.1
+
+Original resolution: 100m
+Date of acquisition: 2009 - 2017 (mostly 2015-2016)
+Date range: 2015-2016
+
+Downloaded by F. Maussion from http://data.pgc.umn.edu/elev/dem/setsm/REMA
+on 24.05.2019 and split into 1 degree tiles.
+See https://oggm.org/2019/10/08/dems/ for more information.
+
+# Acknowledgements
+
+These remarks should be included in the acknowledgements section of any
+published work, presentation, poster, or document:
+
+DEMs provided by the Byrd Polar and Climate Research Center and the Polar
+Geospatial Center under NSF-OPP awards 1543501, 1810976, 1542736, 1559691,
+1043681, 1541332, 0753663, 1548562, 1238993 and NASA award NNX10AN61G. Computer
+time provided through a Blue Waters Innovation Initiative. DEMs produced using
+data from DigitalGlobe, Inc.
+
+# Data citation
+
+As a condition of using these data, you must cite the use of this data set
+using the following citation:
+
+Howat, I. M., Porter, C., Smith, B. E., Noh, M.-J., and Morin, P.:
+The Reference Elevation Model of Antarctica, The Cryosphere, 13, 665-674,
+https://doi.org/10.5194/tc-13-665-2019, 2019.

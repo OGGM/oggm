@@ -386,6 +386,12 @@ reproduce this information
     Visit `rgitools <https://rgitools.readthedocs.io/en/latest/dems.html>`_
     for a discussion about our current efforts to find "the best" DEMs.
 
+.. note::
+
+    `In this blogpost <https://oggm.org/2019/10/08/dems/>`_ we talk about which
+    requirements a DEM must fulfill to be helpful to OGGM. And we also explain
+    why and how we preprocess certain DEMs before we make them available to the
+    OGGM workflow.
 
 Climate data
 ~~~~~~~~~~~~

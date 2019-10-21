@@ -1697,6 +1697,32 @@ class GlacierDirectory(object):
             raise RuntimeError('Please run `define_glacier_region` before '
                                'using this property.')
 
+    @lazy_property
+    def dem_daterange(self):
+        """Years in which most of the DEM data was acquired"""
+        source_txt = self.get_filepath('dem_source')
+        if os.path.isfile(source_txt):
+            with open(source_txt, 'r') as f:
+                for line in f.readlines():
+                    if 'Date range:' in line:
+                        return tuple(map(int, line.split(':')[1].split('-')))
+        # we did not find the information in the dem_source file
+        log.warning('No DEM date range specified in `dem_source.txt`')
+        return None
+
+    @lazy_property
+    def dem_info(self):
+        """More detailed information on the acquisition of the DEM data"""
+        source_file = self.get_filepath('dem_source')
+        source_text = ''
+        if os.path.isfile(source_file):
+            with open(source_file, 'r') as f:
+                for line in f.readlines():
+                    source_text += line
+        else:
+            log.warning('No DEM source file found.')
+        return source_text
+
     @property
     def rgi_area_m2(self):
         """The glacier's RGI area (m2)."""

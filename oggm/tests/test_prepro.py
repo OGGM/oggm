@@ -345,6 +345,29 @@ class TestGIS(unittest.TestCase):
                   'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA']:
             assert s in gis.DEM_SOURCE_INFO.keys()
 
+    def test_dem_daterange_dateinfo(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        # dem_info should return a string
+        self.assertIsInstance(gdir.dem_info, str)
+
+        # there is no daterange for demo/custom data
+        self.assertIsNone(gdir.dem_daterange)
+
+        # but we can make some
+        with open(os.path.join(gdir.dir, 'dem_source.txt'), 'a') as f:
+            f.write('Date range: 2000-2000')
+        # delete lazy properties
+        delattr(gdir, '_lazy_dem_daterange')
+
+        # now call again and check return type
+        self.assertIsInstance(gdir.dem_daterange, tuple)
+        self.assertTrue(all(isinstance(year, int)
+                            for year in gdir.dem_daterange))
+
     def test_custom_basename(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
