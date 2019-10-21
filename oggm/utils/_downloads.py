@@ -1249,9 +1249,9 @@ def aster_zone(lon_ex, lat_ex):
     W20 contains -19.99 to -19.0
     """
 
-    # this means flooring should do the job for all points
-    lons = np.unique(np.floor(lon_ex))
-    lats = np.unique(np.floor(lat_ex))
+    # adding small buffer for unlikely case where one lon/lat_ex == xx.0
+    lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
+    lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
 
     zones = []
     for lat in lats:
