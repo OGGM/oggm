@@ -1521,16 +1521,16 @@ class TestFakeDownloads(unittest.TestCase):
 
         # Make a fake topo file
         tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTMV003_S88W121'),
-                              fakefile='ASTGTMV003_S88W121_dem.tif')
+                              fakefile='ASTGTMV003_S89W121_dem.tif')
 
         def down_check(url, *args, **kwargs):
             expect = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
-                      '2000.03.01/ASTGTMV003_S88W121.zip')
+                      '2000.03.01/ASTGTMV003_S89W121.zip')
             self.assertEqual(url, expect)
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
+            of, source = utils.get_topo_file([-120.2, -120.2], [-88.1, -88.9],
                                              source='ASTER')
 
         assert os.path.exists(of[0])
@@ -1669,11 +1669,12 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 1)
         self.assertEqual('ASTGTMV003_N30W096', z[0])
 
-        z = utils.aster_zone(lon_ex=[-96.5, -95.5],
+        z = utils.aster_zone(lon_ex=[-96.5, -94.5],
                              lat_ex=[30.5, 30.5])
-        self.assertTrue(len(z) == 2)
-        self.assertEqual('ASTGTMV003_N30W096', z[0])
-        self.assertEqual('ASTGTMV003_N30W097', z[1])
+        self.assertTrue(len(z) == 3)
+        self.assertEqual('ASTGTMV003_N30W095', z[0])
+        self.assertEqual('ASTGTMV003_N30W096', z[1])
+        self.assertEqual('ASTGTMV003_N30W097', z[2])
 
     def test_mapzen_zone(self):
 
