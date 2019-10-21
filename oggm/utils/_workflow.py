@@ -1714,12 +1714,14 @@ class GlacierDirectory(object):
     def dem_info(self):
         """More detailed information on the acquisition of the DEM data"""
         source_file = self.get_filepath('dem_source')
+        source_text = ''
         if os.path.isfile(source_file):
             with open(source_file, 'r') as f:
                 for line in f.readlines():
-                    print(line.strip('\n'))
+                    source_text += line
         else:
             log.warning('No DEM source file found.')
+        return source_text
 
     @property
     def rgi_area_m2(self):

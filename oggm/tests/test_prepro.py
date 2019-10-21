@@ -351,20 +351,19 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
 
-        # there is no daterange/info for demo/custom data
+        # dem_info should return a string
+        self.assertIsInstance(gdir.dem_info, str)
+
+        # there is no daterange for demo/custom data
         self.assertIsNone(gdir.dem_daterange)
-        self.assertIsNone(gdir.dem_dateinfo)
 
         # but we can make some
         with open(os.path.join(gdir.dir, 'dem_source.txt'), 'a') as f:
-            f.write('Date of acquisition: February 2000\n')
             f.write('Date range: 2000-2000')
         # delete lazy properties
         delattr(gdir, '_lazy_dem_daterange')
-        delattr(gdir, '_lazy_dem_dateinfo')
 
         # now call again and check return type
-        self.assertIsInstance(gdir.dem_dateinfo, str)
         self.assertIsInstance(gdir.dem_daterange, tuple)
         self.assertTrue(all(isinstance(year, int)
                             for year in gdir.dem_daterange))
