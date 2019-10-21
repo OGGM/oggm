@@ -1711,17 +1711,15 @@ class GlacierDirectory(object):
         return None
 
     @lazy_property
-    def dem_dateinfo(self):
+    def dem_info(self):
         """More detailed information on the acquisition of the DEM data"""
-        source_txt = self.get_filepath('dem_source')
-        if os.path.isfile(source_txt):
-            with open(source_txt, 'r') as f:
+        source_file = self.get_filepath('dem_source')
+        if os.path.isfile(source_file):
+            with open(source_file, 'r') as f:
                 for line in f.readlines():
-                    if 'Date of acquisition:' in line:
-                        return line
-        # we did not find the information in the dem_source file
-        log.warning('No DEM date information found in `dem_source.txt`')
-        return None
+                    print(line.strip('\n'))
+        else:
+            log.warning('No DEM source file found.')
 
     @property
     def rgi_area_m2(self):
