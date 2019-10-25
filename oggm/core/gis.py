@@ -642,9 +642,8 @@ def process_dem(gdir):
 
         v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x',), zlib=True)
         v.units = 'm'
-        v.long_name = ('DEM topography smoothed '
-                       'with radius: {:.1} m'.format(
-            cfg.PARAMS['smooth_window']))
+        v.long_name = ('DEM topography smoothed with radius: '
+                       '{:.1} m'.format(cfg.PARAMS['smooth_window']))
         v[:] = smoothed_dem
 
         # If there was some invalid data store this as well
@@ -915,6 +914,13 @@ def simple_glacier_masks(gdir):
         else:
             v = nc.variables['glacier_ext']
         v[:] = glacier_ext
+
+        # Log DEM that needed processing within the glacier mask
+        valid_mask = nc.variables['topo_valid_mask'][:]
+        if gdir.get_diagnostics().get('dem_needed_interpolation', False):
+            pnan = (valid_mask == 0) & glacier_mask
+            gdir.add_to_diagnostics('dem_invalid_perc_in_mask',
+                                    np.sum(pnan) / np.sum(glacier_mask))
 
         # add some meta stats and close
         nc.max_h_dem = np.max(dem)

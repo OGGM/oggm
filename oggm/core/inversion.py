@@ -508,13 +508,16 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
             u_basal *= cfg.SEC_IN_YEAR
             u_deformation *= cfg.SEC_IN_YEAR
             u_surface = u_basal + u_deformation
-
-            velocity = flux / section
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                velocity = flux / section
             velocity *= cfg.SEC_IN_YEAR
         else:
             # velocity in cross section
             fac = (glen_n + 1) / (glen_n + 2)
-            velocity = flux / section
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                velocity = flux / section
             velocity *= cfg.SEC_IN_YEAR
             u_surface = velocity / fac
             u_basal = velocity * 0

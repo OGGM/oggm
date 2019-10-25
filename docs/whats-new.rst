@@ -28,6 +28,11 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Small bugs in DEM processing fixed - internal refactoring followed,
+  hopefully for the good (:pull:`890` and :pull:`886`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Matthias Dusch <https://github.com/matthiasdusch>`_.
+
 
 v1.1.2 (12.09.2019)
 -------------------
