@@ -28,6 +28,7 @@ except ImportError:
 
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
+from oggm.core import gis
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -285,12 +286,8 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
     gdirs
     ax
     smap
-    use_netcdf : book
-        use output of
-
-    Returns
-    -------
-
+    use_netcdf : bool
+        use output of glacier_masks instead of geotiff DEM
     """
 
     # Files
@@ -299,13 +296,7 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             topo = nc.variables['topo'][:]
     else:
-        import rasterio as rio
-        with rio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as dem_dr:
-            topo = dem_dr.read(1).astype(rio.float32)
-            min_z = -999.
-            topo[topo <= min_z] = np.NaN
-            mask = dem_dr.read_masks(1)
-            topo[mask == 0] = np.NaN
+        topo = gis.read_geotiff_dem(gdir)
     try:
         smap.set_data(topo)
     except ValueError:

@@ -1956,53 +1956,6 @@ class GlacierDirectory(object):
         for ff in fs:
             os.remove(ff)
 
-    def create_gridded_ncdf_file(self, fname):
-        """Makes a gridded netcdf file template.
-
-        The other variables have to be created and filled by the calling
-        routine.
-
-        Parameters
-        ----------
-        filename : str
-            file name (must be listed in cfg.BASENAME)
-
-        Returns
-        -------
-        a ``netCDF4.Dataset`` object.
-        """
-
-        # overwrite as default
-        fpath = self.get_filepath(fname)
-        if os.path.exists(fpath):
-            os.remove(fpath)
-
-        nc = ncDataset(fpath, 'w', format='NETCDF4')
-
-        nc.createDimension('x', self.grid.nx)
-        nc.createDimension('y', self.grid.ny)
-
-        nc.author = 'OGGM'
-        nc.author_info = 'Open Global Glacier Model'
-        nc.proj_srs = self.grid.proj.srs
-
-        x = self.grid.x0 + np.arange(self.grid.nx) * self.grid.dx
-        y = self.grid.y0 + np.arange(self.grid.ny) * self.grid.dy
-
-        v = nc.createVariable('x', 'f4', ('x',), zlib=True)
-        v.units = 'm'
-        v.long_name = 'x coordinate of projection'
-        v.standard_name = 'projection_x_coordinate'
-        v[:] = x
-
-        v = nc.createVariable('y', 'f4', ('y',), zlib=True)
-        v.units = 'm'
-        v.long_name = 'y coordinate of projection'
-        v.standard_name = 'projection_y_coordinate'
-        v[:] = y
-
-        return nc
-
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
                                    gradient=None,
