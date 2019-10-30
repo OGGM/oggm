@@ -28,6 +28,7 @@ except ImportError:
 
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
+from oggm.core import gis
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -277,13 +278,25 @@ def plot_raster(gdirs, var_name=None, cmap='viridis', ax=None, smap=None):
 
 
 @_plot_map
-def plot_domain(gdirs, ax=None, smap=None):
-    """Plot the glacier directory."""
+def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
+    """Plot the glacier directory.
+
+    Parameters
+    ----------
+    gdirs
+    ax
+    smap
+    use_netcdf : bool
+        use output of glacier_masks instead of geotiff DEM
+    """
 
     # Files
     gdir = gdirs[0]
-
-    topo = salem.GeoTiff(gdir.get_filepath('dem')).get_vardata()
+    if use_netcdf:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+            topo = nc.variables['topo'][:]
+    else:
+        topo = gis.read_geotiff_dem(gdir)
     try:
         smap.set_data(topo)
     except ValueError:

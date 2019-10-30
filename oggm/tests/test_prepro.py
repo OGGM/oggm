@@ -217,6 +217,7 @@ class TestGIS(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir, entity=entity)
+        gis.process_dem(gdir)
         gis.glacier_masks(gdir)
         gis.gridded_attributes(gdir)
 
@@ -240,7 +241,6 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
         with pytest.raises(RuntimeError):
             gis.glacier_masks(gdir)
-
 
     @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
                          LooseVersion('1.0')),

@@ -10,13 +10,13 @@ import sys
 import argparse
 import time
 import logging
-import rasterio
 import numpy as np
 import geopandas as gpd
 
 # Locals
 import oggm.cfg as cfg
 from oggm import utils, workflow, tasks
+from oggm.core import gis
 from oggm.exceptions import InvalidParamsError
 
 # Module logger
@@ -37,17 +37,14 @@ def _rename_dem_folder(gdir, source=''):
     # open tif-file to check if it's worth it
     dem_f = gdir.get_filepath('dem')
     try:
-        with rasterio.open(dem_f, 'r', driver='GTiff') as dem_ds:
-            dem = dem_ds.read(1).astype(rasterio.float32)
+        dem = gis.read_geotiff_dem(gdir)
     except IOError:
-        # No file, no problem - still, delete the file if needed
+        # Error reading file, no problem - still, delete the file if needed
         if os.path.exists(dem_f):
             os.remove(dem_f)
         return
 
     # Check the DEM
-    min_z = -999.
-    dem[dem <= min_z] = np.NaN
     isfinite = np.isfinite(dem)
     if np.all(~isfinite) or (np.min(dem) == np.max(dem)):
         # Remove the file and return
