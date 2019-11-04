@@ -1524,7 +1524,7 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='ASTGTMV003_S89W121_dem.tif')
 
         def down_check(url, *args, **kwargs):
-            expect = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
+            expect = ('https://e4ftl01.cr.usgs.gov/ASTER_B/ASTT/ASTGTM.003/' +
                       '2000.03.01/ASTGTMV003_S89W121.zip')
             self.assertEqual(url, expect)
             return tf
