@@ -832,7 +832,7 @@ def _download_aster_file_unlocked(zone):
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
-    wwwfile = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/'
+    wwwfile = ('https://e4ftl01.cr.usgs.gov/ASTER_B/ASTT/ASTGTM.003/'
                '2000.03.01/{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, zone + '_dem.tif')
 
