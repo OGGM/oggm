@@ -554,6 +554,18 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
                             "File deleted. Re-downloading... %s/%s" %
                             (www_path, err.msg, retry_counter, retry_max))
             continue
+        except requests.ConnectionError as err:
+            if err.args[0].__class__.__name__ == 'MaxRetryError':
+                # if request tried often enough we don't have to do this
+                # this error does happen for not existing ASTERv3 files
+                return None
+            else:
+                # in other cases: try again
+                logger.info("Downloading %s failed with ConnectionError, "
+                            "retrying in 10 seconds... %s/%s" %
+                            (www_path, retry_counter, retry_max))
+                time.sleep(10)
+                continue
 
     # See if we managed (fail is allowed)
     if not local_path or not os.path.exists(local_path):
