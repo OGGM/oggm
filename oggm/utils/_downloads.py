@@ -710,6 +710,10 @@ def _download_tandem_file_unlocked(zone):
     # That means we tried hard but we couldn't find it
     if not dest_file:
         return None
+    elif not zipfile.is_zipfile(dest_file):
+        # If the TanDEM-X tile does not exist, a invalid file is created.
+        # See https://github.com/OGGM/oggm/issues/893 for more details
+        return None
 
     # ok we have to extract it
     if not os.path.exists(outpath):
