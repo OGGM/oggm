@@ -1536,6 +1536,66 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'ASTER'
 
+    def test_tandem(self):
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(self.dldir, 'TDM1_DEM__30_N60W146'),
+                              fakefile='TDM1_DEM__30_N60W146.tif')
+
+        def down_check(url, *args, **kwargs):
+            expect = ('https://download.geoservice.dlr.de/TDM90/files/N60/' +
+                      'W140/' + 'TDM1_DEM__30_N60W146.zip')
+            self.assertEqual(url, expect)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-145.2, -145.3], [60.1, 60.9],
+                                             source='TANDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'TANDEM'
+
+    def test_tandem_invalid(self):
+        # If the TanDEM-X tile does not exist, a invalid file is created.
+        # See https://github.com/OGGM/oggm/issues/893 for more details
+
+        # Make a fake topo file
+        tf = {'TDM1_DEM__30_N60W144.zip':
+              make_fake_zipdir(os.path.join(self.dldir,
+                                            'TDM1_DEM__30_N60W144'),
+                               fakefile='TDM1_DEM__30_N60W146.tif'),
+              'TDM1_DEM__30_N60W145.zip':
+              touch(os.path.join(self.dldir, 'TDM1_DEM__30_N60W145.zip')),
+              'TDM1_DEM__30_N60W146.zip':
+              make_fake_zipdir(os.path.join(self.dldir,
+                                            'TDM1_DEM__30_N60W146'),
+                               fakefile='TDM1_DEM__30_N60W146.tif')
+              }
+
+        def down_check(url, *args, **kwargs):
+            file = tf.get(url.split('/')[-1])
+            self.assertIsNotNone(file)
+
+            expect = 'https://download.geoservice.dlr.de/TDM90/files/N60/W140/'
+            expect += file.split('/')[-1].replace('tif', '.zip')
+            self.assertEqual(url, expect)
+
+            return file
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-144.1, -143.9], [60.5, 60.6],
+                                             source='TANDEM')
+
+        self.assertTrue(len(of) == 2)
+        self.assertTrue(os.path.exists(of[0]))
+        self.assertTrue(os.path.exists(of[1]))
+        self.assertTrue(source == 'TANDEM')
+
+        # check files
+        files = [os.path.basename(f) for f in of]
+        self.assertTrue('TDM1_DEM__30_N60W144_DEM.tif' in files)
+        self.assertTrue('TDM1_DEM__30_N60W146_DEM.tif' in files)
+        self.assertFalse('TDM1_DEM__30_N60W145_DEM.tif' in files)
+
     def test_cmip5(self):
 
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
@@ -1656,6 +1716,10 @@ class TestDataFiles(unittest.TestCase):
         z = utils.tandem_zone(lon_ex=[-1.3, 1.4], lat_ex=[-1.3, 1.4])
         self.assertTrue(len(z) == len(ref))
         self.assertEqual(ref, z)
+
+        z = utils.tandem_zone(lon_ex=[-144.1, -143.9], lat_ex=[60.5, 60.6])
+        self.assertTrue(len(z) == 3)
+        self.assertEqual('N60/W140/TDM1_DEM__30_N60W145', z[1])
 
     def test_asterzone(self):
 

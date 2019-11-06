@@ -65,7 +65,7 @@ def _rename_dem_folder(gdir, source=''):
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
-                      is_test=False, demo=False, test_rgidf=None,
+                      is_test=False, test_nr=4, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       test_crudir=None, disable_mp=False, timeout=0,
                       max_level=4, logging_level='WORKFLOW'):
@@ -87,6 +87,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         path to the OGGM working directory
     is_test : bool
         to test on a couple of glaciers only!
+    test_nr : int
+        if is_test = True: Amount of glaciers to test
     demo : bool
         to run the prepro for the list of demo glaciers
     test_rgidf : shapefile
@@ -174,7 +176,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if is_test:
         # Just for fun
-        rgidf = rgidf.sample(4)
+        rgidf = rgidf.sample(test_nr)
 
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
