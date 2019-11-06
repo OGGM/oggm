@@ -361,6 +361,9 @@ def parse_args(args):
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
+    parser.add_argument('--test_nr', type=int, default=4,
+                        help='if --test True, specify how many glaciers to'
+                             'test.')
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
@@ -399,7 +402,8 @@ def parse_args(args):
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
-                working_dir=working_dir, is_test=args.test,
+                working_dir=working_dir,
+                is_test=args.test, test_nr=args.test_nr,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
                 disable_mp=args.disable_mp, logging_level=args.logging_level)
