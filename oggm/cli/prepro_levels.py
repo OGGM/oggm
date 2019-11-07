@@ -42,6 +42,8 @@ def _rename_dem_folder(gdir, source=''):
         # Error reading file, no problem - still, delete the file if needed
         if os.path.exists(dem_f):
             os.remove(dem_f)
+        gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source),
+                 err=InvalidParamsError('File does not exist'))
         return
 
     # Check the DEM
@@ -50,6 +52,9 @@ def _rename_dem_folder(gdir, source=''):
         # Remove the file and return
         if os.path.exists(dem_f):
             os.remove(dem_f)
+        gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source),
+                 err=InvalidParamsError('DEM does not contain more than one '
+                                        'valid values.'))
         return
 
     # Create a source dir and move the files
@@ -200,6 +205,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('Running prepro on sources: {}'.format(s))
             gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
             workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
+
+        # make a GeoTiff mask of the glacier, choose any source
+        workflow.execute_entity_task(gis.rasterio_glacier_mask,
+                                     gdirs, source='ALL')
 
         # Compress all in output directory
         l_base_dir = os.path.join(base_dir, 'L1')

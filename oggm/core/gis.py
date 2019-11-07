@@ -930,6 +930,86 @@ def simple_glacier_masks(gdir):
         nc.min_h_glacier = np.min(dem_on_g)
 
 
+@entity_task(log, writes=['dem_mask'])
+def rasterio_glacier_mask(gdir, source=None):
+    """Writes a 1-0 glacier mask GeoTiff with the same dimensions as dem.tif
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier in question
+    source : str
+
+        - None (default): the task reads `dem.tif` from the GDir root
+        - 'ALL': try to open any folder from `utils.DEM_SOURCE` and use first
+        - any of `utils.DEM_SOURCE`: try only that one
+    """
+
+    if source is None:
+        dempath = gdir.get_filepath('dem')
+    elif source in utils.DEM_SOURCES:
+        dempath = os.path.join(gdir.dir, source, 'dem.tif')
+    else:
+        for src in utils.DEM_SOURCES:
+            dempath = os.path.join(gdir.dir, src, 'dem.tif')
+            if os.path.isfile(dempath):
+                break
+
+    if not os.path.isfile(dempath):
+        raise ValueError('The specified source does not give a valid DEM file')
+
+    # read dem
+    with rasterio.open(dempath, 'r', driver='GTiff') as ds:
+        profile = ds.profile
+        data = ds.read(1).astype(profile['dtype'])
+        crs = ds.crs
+        # data[data <= -999.] = np.NaN
+        # data[ds.read_masks(1) == 0] = np.NaN
+        # dsmasks = ds.read_masks(1)
+
+    # Read RGI outlines
+    geometry = gdir.read_shapefile('outlines').geometry[0]
+
+    # simple trick to correct invalid polys:
+    # http://stackoverflow.com/questions/20833344/
+    # fix-invalid-polygon-python-shapely
+    geometry = geometry.buffer(0)
+    if not geometry.is_valid:
+        raise InvalidDEMError('This glacier geometry is not valid.')
+
+    # Compute the glacier mask using rasterio
+    # Small detour as mask only accepts DataReader objects
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(data.astype(profile['dtype'])[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
+        masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
+                                filled=False)
+    glacier_mask = ~masked_dem[0, ...].mask
+
+    # parameters to for the new tif
+    nodata = -32767
+    dtype = rasterio.int16
+
+    # let's use integer
+    out = glacier_mask.astype(dtype)
+
+    # and check for sanity
+    if not np.all(np.unique(out) == np.array([0, 1])):
+        raise InvalidDEMError('({}) masked DEM does not consist of 0/1 only.'
+                              .format(gdir.rgi_id))
+
+    # Update existing profile for output
+    profile.update({
+        'dtype': dtype,
+        'nodata': nodata,
+    })
+
+    dem_mask = gdir.get_filepath('dem_mask')
+    with rasterio.open(dem_mask, 'w', **profile) as dest:
+        dest.write(out.astype(dtype), 1r
+
+
 @entity_task(log, writes=['gridded_data'])
 def gridded_attributes(gdir):
     """Adds attributes to the gridded file, useful for thickness interpolation.
