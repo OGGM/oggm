@@ -1003,7 +1003,7 @@ def rasterio_glacier_mask(gdir, source=None):
 
     dem_mask = gdir.get_filepath('dem_mask')
     with rasterio.open(dem_mask, 'w', **profile) as dest:
-        dest.write(out.astype(dtype), 1r
+        dest.write(out.astype(dtype), 1)
 
 
 @entity_task(log, writes=['gridded_data'])
