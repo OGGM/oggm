@@ -331,6 +331,51 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
         np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
 
+    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
+                         LooseVersion('1.0')),
+                        reason='requires rasterio >= 1.0')
+    def test_rasterio_glacier_masks(self):
+
+        # The GIS was double checked externally with IDL.
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        # specifying a source will look for a DEN in a respective folder
+        self.assertRaises(ValueError, gis.rasterio_glacier_mask,
+                          gdir, source='SRTM')
+
+        # this should work
+        gis.rasterio_glacier_mask(gdir, source=None)
+
+        # read dem mask
+        with rasterio.open(gdir.get_filepath('dem_mask'),
+                           'r', driver='GTiff') as ds:
+            profile = ds.profile
+            data = ds.read(1).astype(profile['dtype'])
+
+        # compare projections
+        self.assertEqual(ds.width, gdir.grid.nx)
+        self.assertEqual(ds.height, gdir.grid.ny)
+        self.assertEqual(ds.transform[0], gdir.grid.dx)
+        self.assertEqual(ds.transform[4], gdir.grid.dy)
+        # orgin is center for gdir grid but corner for dem_mask, so shift
+        self.assertAlmostEqual(ds.transform[2], gdir.grid.x0 - gdir.grid.dx/2)
+        self.assertAlmostEqual(ds.transform[5], gdir.grid.y0 - gdir.grid.dy/2)
+
+        # compare dem_mask size with RGI area
+        mask_area_km2 = data.sum() * gdir.grid.dx**2 * 1e-6
+        self.assertAlmostEqual(mask_area_km2, gdir.rgi_area_km2, 1)
+
+        # how the mask is derived from the outlines it should always be larger
+        self.assertTrue(mask_area_km2 > gdir.rgi_area_km2)
+
+        # not sure if we want such a hard coded test, but this will fail if the
+        # sample data changes but could also indicate changes in rasterio
+        self.assertTrue(data.sum() == 3218)
+
     def test_intersects(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
