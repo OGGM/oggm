@@ -962,10 +962,6 @@ def rasterio_glacier_mask(gdir, source=None):
     with rasterio.open(dempath, 'r', driver='GTiff') as ds:
         profile = ds.profile
         data = ds.read(1).astype(profile['dtype'])
-        crs = ds.crs
-        # data[data <= -999.] = np.NaN
-        # data[ds.read_masks(1) == 0] = np.NaN
-        # dsmasks = ds.read_masks(1)
 
     # Read RGI outlines
     geometry = gdir.read_shapefile('outlines').geometry[0]
