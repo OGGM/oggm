@@ -17,7 +17,7 @@ import geopandas as gpd
 import oggm.cfg as cfg
 from oggm import utils, workflow, tasks
 from oggm.core import gis
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidDEMError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def _rename_dem_folder(gdir, source=''):
         if os.path.exists(dem_f):
             os.remove(dem_f)
         gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source),
-                 err=InvalidParamsError('File does not exist'))
+                 err=InvalidDEMError('File does not exist'))
         return
 
     # Check the DEM
@@ -53,8 +53,8 @@ def _rename_dem_folder(gdir, source=''):
         if os.path.exists(dem_f):
             os.remove(dem_f)
         gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source),
-                 err=InvalidParamsError('DEM does not contain more than one '
-                                        'valid values.'))
+                 err=InvalidDEMError('DEM does not contain more than one '
+                                     'valid values.'))
         return
 
     # Create a source dir and move the files
