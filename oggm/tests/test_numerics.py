@@ -29,7 +29,8 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
 import matplotlib.pyplot as plt
 
 from oggm.core.flowline import (KarthausModel, FluxBasedModel,
-                                MUSCLSuperBeeModel, MassConservationChecker)
+                                MassConservationChecker)
+from sia_fluxlim import MUSCLSuperBeeModel
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 KarthausModel = partial(KarthausModel, inplace=True)
@@ -694,8 +695,6 @@ class TestIdealisedCases(unittest.TestCase):
     def test_varying_width(self):
         """This test is for a flowline glacier of variying width, i.e with an
          accumulation area twice as wide as the tongue."""
-
-        # TODO: @alexjarosch here we should have a look at MUSCLSuperBeeModel
         # set do_plot = True to see the plots
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
