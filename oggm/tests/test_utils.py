@@ -599,8 +599,12 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
             assert gdir.has_file('dem')
             assert gdir.has_file('gridded_data')
             assert gdir.has_file('climate_monthly')
+            assert gdir.has_file('climate_info')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
+
+        assert gdir.read_json('climate_info')
+        assert gdir.read_pickle('climate_info')
 
         df = utils.compile_glacier_statistics(gdirs)
         assert 'dem_med_elev' in df

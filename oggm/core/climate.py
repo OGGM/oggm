@@ -960,7 +960,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     gdir.write_json(d, 'climate_info')
 
     return {'t_star': amin, 'bias': diff[amin],
-            'avg_mb_per_mu': mb_per_mu, 'avg_ref_mb':ref_mb}
+            'avg_mb_per_mu': mb_per_mu, 'avg_ref_mb': ref_mb}
 
 
 def calving_mb(gdir):
