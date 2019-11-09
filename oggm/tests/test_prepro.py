@@ -925,7 +925,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -950,7 +950,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -971,7 +971,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -1010,7 +1010,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1053,7 +1053,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1104,7 +1104,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1851)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -1151,7 +1151,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         gdirs.append(gdir)
         climate.process_custom_climate_data(gdirs[0])
-        ci = gdirs[0].read_pickle('climate_info')
+        ci = gdirs[0].read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1803)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2002)
 
@@ -1164,7 +1164,7 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['cru_dir'] = ''
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1353,9 +1353,8 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
         with pytest.warns(DeprecationWarning):
-            climate.glacier_mu_candidates(gdir)
+            se = climate.glacier_mu_candidates(gdir)
 
-        se = gdir.read_pickle('climate_info')['mu_candidates_glacierwide']
         self.assertTrue(se.index[0] == 1802)
         self.assertTrue(se.index[-1] == 2003)
 
@@ -1387,12 +1386,11 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
         with pytest.warns(DeprecationWarning):
-            climate.glacier_mu_candidates(gdir)
+            mu_yr_clim = climate.glacier_mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True,
-                                        write_diagnostics=True)
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True)
 
         t_star, bias = res['t_star'], res['bias']
         y, t, p = climate.mb_yearly_climate_on_glacier(gdir)
@@ -1401,9 +1399,6 @@ class TestClimate(unittest.TestCase):
         selind = np.searchsorted(y, mbdf.index)
         t = t[selind]
         p = p[selind]
-
-        ci = gdir.read_pickle('climate_info')
-        mu_yr_clim = ci['mu_candidates_glacierwide']
 
         mb_per_mu = p - mu_yr_clim.loc[t_star] * t
         md = utils.md(mbdf, mb_per_mu)
@@ -1454,12 +1449,10 @@ class TestClimate(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
         # Normal flowlines, i.e should be equivalent
-        res_new = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=False,
-                                            write_diagnostics=True)
-        mb_new = gdir.read_pickle('climate_info')['avg_mb_per_mu']
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True,
-                                        write_diagnostics=True)
-        mb = gdir.read_pickle('climate_info')['avg_mb_per_mu']
+        res_new = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=False)
+        mb_new = res_new['avg_mb_per_mu']
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True)
+        mb = res['avg_mb_per_mu']
 
         np.testing.assert_allclose(res['t_star'], res_new['t_star'])
         np.testing.assert_allclose(res['bias'], res_new['bias'], atol=1e-3)
@@ -1474,12 +1467,10 @@ class TestClimate(unittest.TestCase):
         fls[1].surface_h -= 700
         gdir.write_pickle(fls, 'inversion_flowlines')
 
-        res_new = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=False,
-                                            write_diagnostics=True)
-        mb_new = gdir.read_pickle('climate_info')['avg_mb_per_mu']
-        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True,
-                                        write_diagnostics=True)
-        mb = gdir.read_pickle('climate_info')['avg_mb_per_mu']
+        res_new = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=False)
+        mb_new = res['avg_mb_per_mu']
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf, glacierwide=True)
+        mb = res['avg_mb_per_mu']
 
         np.testing.assert_allclose(res['bias'], res_new['bias'], atol=20)
         np.testing.assert_allclose(mb, mb_new, rtol=2e-1, atol=20)
@@ -1501,7 +1492,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
         with pytest.warns(DeprecationWarning):
-            climate.glacier_mu_candidates(gdir)
+            mu_ref = climate.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
         t_star, bias = res['t_star'], res['bias']
@@ -1509,8 +1500,7 @@ class TestClimate(unittest.TestCase):
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
         climate.mu_star_calibration(gdir)
 
-        ci = gdir.read_pickle('climate_info')
-        mu_ref = ci['mu_candidates_glacierwide'].loc[t_star]
+        mu_ref = mu_ref.loc[t_star]
 
         # Check for apparent mb to be zeros
         fls = gdir.read_pickle('inversion_flowlines')
@@ -2646,7 +2636,7 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         # Trick
-        gdir.write_pickle({'source': 'HISTALP'}, 'climate_info')
+        gdir.write_json({'source': 'HISTALP'}, 'climate_info')
         climate.local_t_star(gdir, tstar=1975, bias=0.)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2728,7 +2718,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_cru_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -2783,7 +2773,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_cru_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -2841,7 +2831,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir, entity=entity)
         climate.process_cru_data(gdir)
 
-        ci = gdir.read_pickle('climate_info')
+        ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 

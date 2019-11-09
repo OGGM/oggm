@@ -124,7 +124,7 @@ def process_custom_climate_data(gdir):
     out = {'baseline_climate_source': fpath,
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
@@ -333,7 +333,7 @@ def process_cru_data(gdir):
     out = {'baseline_climate_source': source,
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
@@ -473,7 +473,7 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     out = {'baseline_climate_source': source,
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
@@ -582,7 +582,7 @@ def process_histalp_data(gdir):
     out = {'baseline_climate_source': source,
            'baseline_hydro_yr_0': y0 + 1,
            'baseline_hydro_yr_1': y1}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
@@ -813,7 +813,7 @@ def glacier_mu_candidates(gdir):
 
     # Only get the years were we consider looking for tstar
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_pickle('climate_info')
+    ci = gdir.read_json('climate_info')
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
 
@@ -838,13 +838,11 @@ def glacier_mu_candidates(gdir):
                                           .format(gdir.rgi_id))
 
     # Write
-    ci['mu_candidates_glacierwide'] = pd.Series(data=mu_yr_clim, index=years)
-    gdir.write_pickle(ci, 'climate_info')
+    return pd.Series(data=mu_yr_clim, index=years)
 
 
 @entity_task(log, writes=['climate_info'])
-def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
-                      write_diagnostics=False):
+def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     """Computes the ref t* for the glacier, given a series of MB measurements.
 
     Parameters
@@ -879,7 +877,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
     # Compute one mu candidate per year and the associated statistics
     # Only get the years were we consider looking for tstar
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_pickle('climate_info')
+    ci = gdir.read_json('climate_info')
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
     years = np.arange(y0, y1+1)
@@ -956,16 +954,13 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
     amin = np.abs(diff).idxmin()
 
     # Write
-    d = gdir.read_pickle('climate_info')
+    d = gdir.read_json('climate_info')
     d['t_star'] = amin
     d['bias'] = diff[amin]
-    if write_diagnostics:
-        d['avg_mb_per_mu'] = mb_per_mu
-        d['avg_ref_mb'] = ref_mb
+    gdir.write_json(d, 'climate_info')
 
-    gdir.write_pickle(d, 'climate_info')
-
-    return {'t_star': amin, 'bias': diff[amin]}
+    return {'t_star': amin, 'bias': diff[amin],
+            'avg_mb_per_mu': mb_per_mu, 'avg_ref_mb': ref_mb}
 
 
 def calving_mb(gdir):
@@ -1035,7 +1030,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # Make some checks and use the default one
-                climate_info = gdir.read_pickle('climate_info')
+                climate_info = gdir.read_json('climate_info')
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
@@ -1078,9 +1073,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    out = gdir.read_pickle('climate_info')
+    out = gdir.read_json('climate_info')
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
     # We compute the overall mu* here but this is mostly for testing
     # Climate period

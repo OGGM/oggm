@@ -182,7 +182,7 @@ BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
 _doc = ('Some information (dictionary) about the climate data and the mass '
         'balance parameters for this glacier.')
-BASENAMES['climate_info'] = ('climate_info.pkl', _doc)
+BASENAMES['climate_info'] = ('climate_info.json', _doc)
 
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['gcm_data'] = ('gcm_data.nc', _doc)

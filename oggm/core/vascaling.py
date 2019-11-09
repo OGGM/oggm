@@ -328,7 +328,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # Make some checks and use the default one
-                climate_info = gdir.read_pickle('climate_info')
+                climate_info = gdir.read_json('climate_info')
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
@@ -373,9 +373,9 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    out = gdir.read_pickle('climate_info')
+    out = gdir.read_json('climate_info')
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
-    gdir.write_pickle(out, 'climate_info')
+    gdir.write_json(out, 'climate_info')
 
     # We compute the overall mu* here but this is mostly for testing
     # Climate period
@@ -410,7 +410,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
 
 
 @entity_task(log, writes=['climate_info'])
-def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
+def t_star_from_refmb(gdir, mbdf=None):
     """Computes the reference year t* for the given glacier and mass balance
     measurements.
 
@@ -420,9 +420,6 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
     mbdf : :py:class:`pd.Series`
         observed MB data indexed by year. If None, read automatically from the
         reference data, default = None
-    write_diagnostics : bool, optional
-        whether to write additional information to the `climate_info.pkl` file
-        or not, default=False
 
     Returns
     -------
@@ -444,7 +441,7 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
     # Compute one mu candidate per year and the associated statistics
     # Only get the years were we consider looking for t*
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_pickle('climate_info')
+    ci = gdir.read_json('climate_info')
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
     years = np.arange(y0, y1+1)
@@ -496,16 +493,13 @@ def t_star_from_refmb(gdir, mbdf=None, write_diagnostics=False):
     amin = np.abs(diff).idxmin()
 
     # write results to the `climate_info.pkl`
-    d = gdir.read_pickle('climate_info')
+    d = gdir.read_json('climate_info')
     d['t_star'] = amin
     d['bias'] = diff[amin]
-    if write_diagnostics:
-        d['avg_mb_per_mu'] = mb_per_mu
-        d['avg_ref_mb'] = ref_mb
+    gdir.write_json(d, 'climate_info')
 
-    gdir.write_pickle(d, 'climate_info')
-
-    return {'t_star': amin, 'bias': diff[amin]}
+    return {'t_star': amin, 'bias': diff[amin],
+            'avg_mb_per_mu': mb_per_mu, 'avg_ref_mb': ref_mb}
 
 
 @global_task
@@ -702,7 +696,7 @@ class VAScalingMassBalance(MassBalanceModel):
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
-            mb_calib = gdir.read_pickle('climate_info')['mb_calib_params']
+            mb_calib = gdir.read_json('climate_info')['mb_calib_params']
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
                     raise RuntimeError('You seem to use different mass-'
