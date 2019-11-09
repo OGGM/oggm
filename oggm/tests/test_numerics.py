@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 
 from oggm.core.flowline import (KarthausModel, FluxBasedModel,
                                 MassConservationChecker)
-from sia_fluxlim import MUSCLSuperBeeModel
+from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 KarthausModel = partial(KarthausModel, inplace=True)

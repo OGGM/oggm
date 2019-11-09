@@ -20,7 +20,7 @@ from oggm.core.sia2d import Upstream2D
 # Tests
 from oggm.tests.funcs import dummy_constant_bed
 from oggm.core.flowline import KarthausModel, FluxBasedModel
-from sia_fluxlim import MUSCLSuperBeeModel
+from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 KarthausModel = partial(KarthausModel, inplace=True)
