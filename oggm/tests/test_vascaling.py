@@ -714,7 +714,7 @@ class TestVAScalingModel(unittest.TestCase):
         # get reference area
         a0 = gdir.rgi_area_m2
         # get reference year
-        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        y0 = gdir.read_json('climate_info')['baseline_hydro_yr_0']
         # get min and max glacier surface elevation
         h0, h1 = vascaling.get_min_max_elevation(gdir)
 
@@ -822,7 +822,7 @@ class TestVAScalingModel(unittest.TestCase):
         # get reference area
         a0 = gdir.rgi_area_m2
         # get reference year
-        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        y0 = gdir.read_json('climate_info')['baseline_hydro_yr_0']
         # get min and max glacier surface elevation
         h0, h1 = vascaling.get_min_max_elevation(gdir)
 
@@ -854,7 +854,7 @@ class TestVAScalingModel(unittest.TestCase):
 
         # instance flowline model
         fls = gdir.read_pickle('model_flowlines')
-        y0 = gdir.read_pickle('climate_info')['baseline_hydro_yr_0']
+        y0 = gdir.read_json('climate_info')['baseline_hydro_yr_0']
         fl_mod = flowline.FluxBasedModel(flowlines=fls, mb_model=mb_mod, y0=y0)
 
         # run model and store output as xarray data set

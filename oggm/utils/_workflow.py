@@ -1773,7 +1773,30 @@ class GlacierDirectory(object):
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:
                 fp += '.gz'
-        return os.path.exists(fp)
+
+        out = os.path.exists(fp)
+
+        # Deprecation cycle
+        if not out and (filename == 'climate_info'):
+            # Try pickle
+            out = os.path.exists(fp.replace('.json', '.pkl'))
+
+        return out
+
+    def _read_deprecated_climate_info(self):
+        """Temporary fix for climate_info file type change."""
+        fp = self.get_filepath('climate_info')
+        if not os.path.exists(fp):
+            fp = fp.replace('.json', '.pkl')
+            if not os.path.exists(fp):
+                raise RuntimeError('No climate info file available!')
+            _open = gzip.open if cfg.PARAMS['use_compression'] else open
+            with _open(fp, 'rb') as f:
+                out = pickle.load(f)
+            return out
+        with open(fp, 'r') as f:
+            out = json.load(f)
+        return out
 
     def add_to_diagnostics(self, key, value):
         """Write a key, value pair to the gdir's runtime diagnostics.
@@ -1825,6 +1848,11 @@ class GlacierDirectory(object):
         -------
         An object read from the pickle
         """
+
+        # Some deprecations
+        if filename == 'climate_info':
+            return self._read_deprecated_climate_info()
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
@@ -1871,6 +1899,10 @@ class GlacierDirectory(object):
         A dictionary read from the JSON file
         """
 
+        # Some deprecations
+        if filename == 'climate_info':
+            return self._read_deprecated_climate_info()
+
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'r') as f:
             out = json.load(f)
@@ -1888,9 +1920,15 @@ class GlacierDirectory(object):
         filesuffix : str
             append a suffix to the filename (useful for experiments).
         """
+
+        def np_convert(o):
+            if isinstance(o, np.int64):
+                return int(o)
+            raise TypeError
+
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'w') as f:
-            json.dump(var, f)
+            json.dump(var, f, default=np_convert)
 
     def read_text(self, filename, filesuffix=''):
         """Reads a text file located in the directory.
@@ -2153,7 +2191,7 @@ class GlacierDirectory(object):
         # logic for period
         if not self.has_file('climate_info'):
             raise RuntimeError('Please process some climate data before call')
-        ci = self.read_pickle('climate_info')
+        ci = self.read_json('climate_info')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbdf) > 1:
@@ -2190,7 +2228,7 @@ class GlacierDirectory(object):
         # logic for period
         if not self.has_file('climate_info'):
             raise RuntimeError('Please process some climate data before call')
-        ci = self.read_pickle('climate_info')
+        ci = self.read_json('climate_info')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbprofdf) > 1:
