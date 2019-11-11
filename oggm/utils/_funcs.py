@@ -7,6 +7,7 @@ import sys
 import math
 import logging
 import warnings
+from distutils.version import LooseVersion
 
 # External libs
 import pandas as pd
@@ -338,7 +339,15 @@ def clip_scalar(value, vmin, vmax):
 
     See https://github.com/numpy/numpy/issues/14281
     """
-    return np.core.umath.maximum(np.core.umath.minimum(value, vmax), vmin)
+    return vmin if value < vmin else vmax if value > vmax else value
+
+
+if LooseVersion(np.__version__) < LooseVersion('1.17'):
+    clip_array = np.clip
+else:
+    # TODO: reassess this when https://github.com/numpy/numpy/issues/14281
+    # is solved
+    clip_array = np.core.umath.clip
 
 
 # A faster numpy.clip when only one value is clipped (here: min).

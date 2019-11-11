@@ -726,7 +726,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
     maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
     maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
-                                       order=maxorder.astype(np.int64))
+                                       order=int(maxorder))
     if single_fl or len(heads_idx[0]) <= 1:
         # small glaciers with one or less heads: take the absolute max
         heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
@@ -1751,8 +1751,8 @@ def catchment_width_geom(gdir):
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
-            i0 = np.clip(fid-jpix, jpix/2, n-jpix/2).astype(np.int64)
-            i1 = np.clip(fid+jpix+1, jpix/2, n-jpix/2).astype(np.int64)
+            i0 = int(utils.clip_scalar(fid-jpix, jpix/2, n-jpix/2))
+            i1 = int(utils.clip_scalar(fid+jpix+1, jpix/2, n-jpix/2))
             fil_widths[i0:i1] = np.NaN
 
         valid = np.where(np.isfinite(fil_widths))

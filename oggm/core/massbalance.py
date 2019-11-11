@@ -10,7 +10,7 @@ import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries, ncDataset,
-                        tolist, clip_min, clip_max)
+                        tolist, clip_min, clip_max, clip_array)
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
@@ -336,7 +336,7 @@ class PastMassBalance(MassBalanceModel):
                 # Security for stuff that can happen with local gradients
                 g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
                 grad = np.where(~np.isfinite(grad), default_grad, grad)
-                grad = np.clip(grad, g_minmax[0], g_minmax[1])
+                grad = clip_array(grad, g_minmax[0], g_minmax[1])
             else:
                 grad = self.prcp * 0 + default_grad
             self.grad = grad
@@ -378,7 +378,7 @@ class PastMassBalance(MassBalanceModel):
         # Compute solid precipitation from total precipitation
         prcp = np.ones(npix) * iprcp
         fac = 1 - (temp - self.t_solid) / (self.t_liq - self.t_solid)
-        prcpsol = prcp * np.clip(fac, 0, 1)
+        prcpsol = prcp * clip_array(fac, 0, 1)
 
         return temp, tempformelt, prcp, prcpsol
 
@@ -413,7 +413,7 @@ class PastMassBalance(MassBalanceModel):
         # Compute solid precipitation from total precipitation
         prcp = np.atleast_2d(iprcp).repeat(npix, 0)
         fac = 1 - (temp2d - self.t_solid) / (self.t_liq - self.t_solid)
-        prcpsol = prcp * np.clip(fac, 0, 1)
+        prcpsol = prcp * clip_array(fac, 0, 1)
 
         return temp2d, temp2dformelt, prcp, prcpsol
 
