@@ -1751,8 +1751,8 @@ def catchment_width_geom(gdir):
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
-            i0 = utils.clip_scalar(fid-jpix, jpix/2, n-jpix/2)
-            i1 = utils.clip_scalar(fid+jpix+1, jpix/2, n-jpix/2)
+            i0 = int(utils.clip_scalar(fid-jpix, jpix/2, n-jpix/2))
+            i1 = int(utils.clip_scalar(fid+jpix+1, jpix/2, n-jpix/2))
             fil_widths[i0:i1] = np.NaN
 
         valid = np.where(np.isfinite(fil_widths))

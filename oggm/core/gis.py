@@ -1060,9 +1060,9 @@ def gridded_attributes(gdir):
     glen_n = cfg.PARAMS['glen_n']
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
-    slope_factor = utils.clip_scalar(slope,
-                                     np.deg2rad(cfg.PARAMS['min_slope']*4),
-                                     np.pi/2)
+    slope_factor = utils.clip_array(slope,
+                                    np.deg2rad(cfg.PARAMS['min_slope']*4),
+                                    np.pi/2)
     slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 
     aspect = np.arctan2(-sx, sy)
