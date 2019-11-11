@@ -958,10 +958,12 @@ def rasterio_glacier_mask(gdir, source=None):
     if not os.path.isfile(dempath):
         raise ValueError('The specified source does not give a valid DEM file')
 
-    # read dem
+    # read dem profile
     with rasterio.open(dempath, 'r', driver='GTiff') as ds:
         profile = ds.profile
-        data = ds.read(1).astype(profile['dtype'])
+
+    # don't even bother reading the actual DEM, just mimic it
+    data = np.zeros((ds.height, ds.width))
 
     # Read RGI outlines
     geometry = gdir.read_shapefile('outlines').geometry[0]
