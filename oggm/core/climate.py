@@ -663,7 +663,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
             igrad = nc.variables['gradient'][p0:p1+1]
             # Security for stuff that can happen with local gradients
             igrad = np.where(~np.isfinite(igrad), default_grad, igrad)
-            igrad = np.clip(igrad, g_minmax[0], g_minmax[1])
+            igrad = utils.clip_array(igrad, g_minmax[0], g_minmax[1])
         ref_hgt = nc.ref_hgt
 
     # Default gradient?
@@ -684,7 +684,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     # Compute solid precipitation from total precipitation
     prcpsol = np.atleast_2d(iprcp).repeat(npix, 0)
     fac = 1 - (temp2d - temp_all_solid) / (temp_all_liq - temp_all_solid)
-    fac = np.clip(fac, 0, 1)
+    fac = utils.clip_array(fac, 0, 1)
     prcpsol = prcpsol * fac
 
     return time, temp2dformelt, prcpsol

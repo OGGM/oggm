@@ -254,9 +254,9 @@ class TestFuncs(unittest.TestCase):
     def test_clips(self):
 
         a = np.arange(50) - 5
-        assert_array_equal(np.clip(a, 0, 10), utils.clip_scalar(a, 0, 10))
         assert_array_equal(np.clip(a, None, 10), utils.clip_max(a, 10))
         assert_array_equal(np.clip(a, 0, None), utils.clip_min(a, 0))
+        assert_array_equal(np.clip(a, 0, 10), utils.clip_array(a, 0, 10))
 
         for a in [-1, 2, 12]:
             assert_array_equal(np.clip(a, 0, 10), utils.clip_scalar(a, 0, 10))
@@ -289,9 +289,9 @@ class TestFuncs(unittest.TestCase):
         s2 = 'from oggm import utils; import numpy as np; a = np.arange(50)-5'
 
         t1 = timeit.timeit('np.clip(a, 0, 10)', number=n, setup=s1)
-        t2 = timeit.timeit('utils.clip_scalar(a, 0, 10)', number=n, setup=s2)
+        t2 = timeit.timeit('utils.clip_array(a, 0, 10)', number=n, setup=s2)
         # This usually fails as advertised by numpy
-        # (although with np 1.17 I'm not sure)
+        # (although with np 1.17 not)
         # assert t2 < t1
 
         t1 = timeit.timeit('np.clip(a, None, 10)', number=n, setup=s1)
