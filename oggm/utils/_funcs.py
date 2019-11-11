@@ -347,12 +347,7 @@ if LooseVersion(np.__version__) < LooseVersion('1.17'):
 else:
     # TODO: reassess this when https://github.com/numpy/numpy/issues/14281
     # is solved
-    def clip_array(value, vmin, vmax):
-        """A faster numpy.clip on arrays for numpy 1.17
-
-        See https://github.com/numpy/numpy/issues/14281
-        """
-        return np.core.umath.maximum(np.core.umath.minimum(value, vmax), vmin)
+    clip_array = np.core.umath.clip
 
 
 # A faster numpy.clip when only one value is clipped (here: min).

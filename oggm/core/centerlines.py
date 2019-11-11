@@ -726,7 +726,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
     maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
     maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
-                                       order=maxorder.astype(np.int64))
+                                       order=int(maxorder))
     if single_fl or len(heads_idx[0]) <= 1:
         # small glaciers with one or less heads: take the absolute max
         heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
