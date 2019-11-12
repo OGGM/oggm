@@ -210,8 +210,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(gis.rasterio_glacier_mask,
                                      gdirs, source='ALL')
 
+        """
         print('before compress:')
         print(os.listdir(gdirs[0].dir))
+
+        # if run with singularity/docker this file is created
+        if os.path.isfile(os.path.join(gdir.dir, 'outlines.tar.gz.properties')):
+        # remove it, cause 200k additional files for a global run..
+        os.remove(os.path.join(gdir.dir, 'outlines.tar.gz.properties'))
+        """
 
         # Compress all in output directory
         l_base_dir = os.path.join(base_dir, 'L1')
