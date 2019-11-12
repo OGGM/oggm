@@ -930,7 +930,7 @@ def simple_glacier_masks(gdir):
         nc.min_h_glacier = np.min(dem_on_g)
 
 
-@entity_task(log, writes=['dem_mask'])
+@entity_task(log, writes=['glacier_mask'])
 def rasterio_glacier_mask(gdir, source=None):
     """Writes a 1-0 glacier mask GeoTiff with the same dimensions as dem.tif
 
@@ -1003,9 +1003,8 @@ def rasterio_glacier_mask(gdir, source=None):
         'nodata': nodata,
     })
 
-    dem_mask = gdir.get_filepath('dem_mask')
-    with rasterio.open(dem_mask, 'w', **profile) as dest:
-        dest.write(out.astype(dtype), 1)
+    with rasterio.open(gdir.get_filepath('glacier_mask'), 'w', **profile) as r:
+        r.write(out.astype(dtype), 1)
 
 
 @entity_task(log, writes=['gridded_data'])
