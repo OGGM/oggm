@@ -945,9 +945,6 @@ def rasterio_glacier_mask(gdir, source=None):
         - any of `utils.DEM_SOURCE`: try only that one
     """
 
-    print('before rasterio_mask:')
-    print(os.listdir(gdir.dir))
-
     if source is None:
         dempath = gdir.get_filepath('dem')
     elif source in utils.DEM_SOURCES:
@@ -968,12 +965,8 @@ def rasterio_glacier_mask(gdir, source=None):
     # don't even bother reading the actual DEM, just mimic it
     data = np.zeros((ds.height, ds.width))
 
-    print('before open outlines')
-    print(os.listdir(gdir.dir))
     # Read RGI outlines
     geometry = gdir.read_shapefile('outlines').geometry[0]
-    print('after open outlines')
-    print(os.listdir(gdir.dir))
 
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
@@ -991,8 +984,6 @@ def rasterio_glacier_mask(gdir, source=None):
         masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
                                 filled=False)
     glacier_mask = ~masked_dem[0, ...].mask
-    print('after mask')
-    print(os.listdir(gdir.dir))
 
     # parameters to for the new tif
     nodata = -32767
@@ -1015,8 +1006,11 @@ def rasterio_glacier_mask(gdir, source=None):
     with rasterio.open(gdir.get_filepath('glacier_mask'), 'w', **profile) as r:
         r.write(out.astype(dtype), 1)
 
-    print('after rasterio')
-    print(os.listdir(gdir.dir))
+    # file is probably created by GeoPandas or Fiona while opening outlines
+    if os.path.isfile(os.path.join(gdir.dir, 'outlines.tar.gz.properties')):
+        # remove it, cause 200k additional files for a global run..
+        os.remove(os.path.join(gdir.dir, 'outlines.tar.gz.properties'))
+
 
 @entity_task(log, writes=['gridded_data'])
 def gridded_attributes(gdir):
