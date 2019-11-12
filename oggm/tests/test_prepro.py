@@ -351,7 +351,7 @@ class TestGIS(unittest.TestCase):
         gis.rasterio_glacier_mask(gdir, source=None)
 
         # read dem mask
-        with rasterio.open(gdir.get_filepath('dem_mask'),
+        with rasterio.open(gdir.get_filepath('glacier_mask'),
                            'r', driver='GTiff') as ds:
             profile = ds.profile
             data = ds.read(1).astype(profile['dtype'])

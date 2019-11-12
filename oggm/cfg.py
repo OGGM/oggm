@@ -116,7 +116,7 @@ BASENAMES['dem'] = ('dem.tif', _doc)
 _doc = ('A glacier mask geotiff file with the same extend and projection as '
         'the `dem.tif`. This geotiff has value 1 at glaciated grid points and '
         ' value 0 at unglaciated points.')
-BASENAMES['dem_mask'] = ('dem_mask.tif', _doc)
+BASENAMES['glacier_mask'] = ('glacier_mask.tif', _doc)
 
 _doc = ('The glacier outlines in the local map projection (Transverse '
         'Mercator).')
