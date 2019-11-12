@@ -210,6 +210,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(gis.rasterio_glacier_mask,
                                      gdirs, source='ALL')
 
+        print('before compress:')
+        print(os.listdir(gdirs[0].dir))
+
         # Compress all in output directory
         l_base_dir = os.path.join(base_dir, 'L1')
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,

@@ -319,13 +319,19 @@ def define_glacier_region(gdir, entity=None):
         entity['Area'] = area
         towrite['Area'] = area
 
+    print('before write shapefile:')
+    print(os.listdir(gdir.dir))
     # Write shapefile
     gdir.write_shapefile(towrite, 'outlines')
 
+    print('after write shapefile:')
+    print(os.listdir(gdir.dir))
     # if run with singularity/docker this file is created
     if os.path.isfile(os.path.join(gdir.dir, 'outlines.tar.gz.properties')):
         # remove it, cause 200k additional files for a global run..
         os.remove(os.path.join(gdir.dir, 'outlines.tar.gz.properties'))
+    print('after remove:')
+    print(os.listdir(gdir.dir))
 
     # Also transform the intersects if necessary
     gdf = cfg.PARAMS['intersects_gdf']
