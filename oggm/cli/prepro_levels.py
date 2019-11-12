@@ -64,11 +64,6 @@ def _rename_dem_folder(gdir, source=''):
         f = gdir.get_filepath(fname)
         os.rename(f, os.path.join(out, os.path.basename(f)))
 
-    # if run with singularity/docker this file is created
-    if os.path.isfile(os.path.join(gdir.dir, 'outlines.tar.gz.properties')):
-        # remove it, cause 200k files less...
-        os.remove(os.path.join(gdir.dir, 'outlines.tar.gz.properties'))
-
     # log SUCCESS for this DEM source
     gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source))
 
