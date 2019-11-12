@@ -1960,7 +1960,15 @@ class GlacierDirectory(object):
             if cfg.PARAMS['use_compression']:
                 fp += '.gz'
 
-        return gpd.read_file(fp)
+        shp = gpd.read_file(fp)
+
+        # .properties file is created for compressed shapefiles. github: #904
+        _properties = fp.replace('tar://', '') + '.properties'
+        if os.path.isfile(_properties):
+            # remove it, to keep GDir slim
+            os.remove(_properties)
+
+        return shp
 
     def read_shapefile(self, filename, filesuffix=''):
         """Reads a shapefile located in the directory.

@@ -1006,11 +1006,6 @@ def rasterio_glacier_mask(gdir, source=None):
     with rasterio.open(gdir.get_filepath('glacier_mask'), 'w', **profile) as r:
         r.write(out.astype(dtype), 1)
 
-    # file is probably created by GeoPandas or Fiona while opening outlines
-    if os.path.isfile(os.path.join(gdir.dir, 'outlines.tar.gz.properties')):
-        # remove it, cause 200k additional files for a global run..
-        os.remove(os.path.join(gdir.dir, 'outlines.tar.gz.properties'))
-
 
 @entity_task(log, writes=['gridded_data'])
 def gridded_attributes(gdir):
