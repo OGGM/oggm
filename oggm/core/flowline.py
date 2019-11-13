@@ -1035,6 +1035,9 @@ class FluxBasedModel(FlowlineModel):
         # This is to guarantee a precise arrival on a specific date if asked
         min_dt = dt if dt < self.min_dt else self.min_dt
 
+        # Imhof limiter
+        r_h = 3
+
         # Loop over tributaries to determine the flux rate
         for fl_id, fl in enumerate(self.fls):
 
@@ -1073,11 +1076,10 @@ class FluxBasedModel(FlowlineModel):
 
             # Staggered gradient
             slope_stag[0] = 0
-            slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
+            slope_stag[1:-1] = np.maximum(
+                np.minimum(surface_h[0:-1] - surface_h[1:], thick[0:-1]*r_h),
+                -thick[1:]*r_h) / dx
             slope_stag[-1] = slope_stag[-2]
-
-            # Convert to angle?
-            # slope_stag = np.sin(np.arctan(slope_stag))
 
             # Staggered thick
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.

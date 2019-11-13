@@ -23,7 +23,8 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
                               dummy_width_bed_tributary,
-                              patch_url_retrieve_github)
+                              patch_url_retrieve_github,
+                              FluxBasedModelOld)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -33,6 +34,7 @@ from oggm.core.flowline import (KarthausModel, FluxBasedModel,
 from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
+FluxBasedModelOld = partial(FluxBasedModelOld, inplace=True)
 KarthausModel = partial(KarthausModel, inplace=True)
 MUSCLSuperBeeModel = partial(MUSCLSuperBeeModel, inplace=True)
 
@@ -43,6 +45,7 @@ _url_retrieve = None
 pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
+
 
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
@@ -311,7 +314,8 @@ class TestIdealisedCases(unittest.TestCase):
             what the models do when the cliff height is changed
         """
 
-        models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
+        models = [KarthausModel, FluxBasedModelOld, FluxBasedModel,
+                  MUSCLSuperBeeModel]
 
         lens = []
         surface_h = []
@@ -337,57 +341,51 @@ class TestIdealisedCases(unittest.TestCase):
 
         if False:  # pragma: no cover
             plt.figure()
-            plt.plot(yrs, lens[0], 'r')
-            plt.plot(yrs, lens[1], 'b')
-            plt.plot(yrs, lens[2], 'g')
+            plt.plot(yrs, lens[0])
+            plt.plot(yrs, lens[1])
+            plt.plot(yrs, lens[2])
+            plt.plot(yrs, lens[3], linestyle=':')
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
+            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof' 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
-            plt.plot(yrs, volume[0], 'r')
-            plt.plot(yrs, volume[1], 'b')
-            plt.plot(yrs, volume[2], 'g')
+            plt.plot(yrs, volume[0])
+            plt.plot(yrs, volume[1])
+            plt.plot(yrs, volume[2])
+            plt.plot(yrs, volume[3], linestyle=':')
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=2)
+            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'], loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
-            plt.plot(surface_h[0], 'r')
-            plt.plot(surface_h[1], 'b')
-            plt.plot(surface_h[2], 'g')
+            plt.plot(surface_h[0])
+            plt.plot(surface_h[1])
+            plt.plot(surface_h[2])
+            plt.plot(surface_h[3], linestyle=':')
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed', 'Karthaus', 'Flux', 'MUSCL-SuperBee'], loc=3)
+            plt.legend(['Bed', 'Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         # OK, so basically, Alex's tests below show that the other models
-        # are wrong and produce too much mass. There is also another more
-        # more trivial issue with the computation of the length, I added a
-        # "to do" in the code.
+        # are wrong and produce too much mass.
 
         # Unit-testing perspective:
         # "verify" that indeed the models are wrong of more than 50%
-        assert volume[1][-1] > volume[2][-1] * 1.5
-        # Karthaus is even worse
+        assert volume[1][-1] > volume[3][-1] * 1.5
+        # Karthaus is even worse than OGGM-Old
         assert volume[0][-1] > volume[1][-1]
-
-        if False:
-            # TODO: this will always fail so ignore it for now
-            np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
-            np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
-            np.testing.assert_allclose(volume[1][-1], volume[2][-1], atol=2e-3)
-
-            assert utils.rmsd(lens[0], lens[2]) < 50.
-            assert utils.rmsd(lens[1], lens[2]) < 50.
-            assert utils.rmsd(volume[0], volume[2]) < 1e-3
-            assert utils.rmsd(volume[1], volume[2]) < 1e-3
-            assert utils.rmsd(surface_h[0], surface_h[2]) < 1.0
-            assert utils.rmsd(surface_h[1], surface_h[2]) < 1.0
+        # OGGM Imhof is good
+        np.testing.assert_almost_equal(lens[2][-1], lens[3][-1])
+        np.testing.assert_allclose(volume[2][-1], volume[3][-1], atol=2e-3)
+        assert utils.rmsd(lens[2], lens[3]) < 50.
+        assert utils.rmsd(volume[2], volume[3]) < 1e-3
+        assert utils.rmsd(surface_h[2], surface_h[3]) < 3.0
 
     @pytest.mark.slow
     def test_equilibrium(self):
