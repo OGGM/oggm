@@ -348,7 +348,8 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Length')
             plt.xlabel('years')
             plt.ylabel('[m]')
-            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof' 'MUSCL-SuperBee'], loc=2)
+            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'],
+                       loc=2)
 
             plt.figure()
             plt.plot(yrs, volume[0])
@@ -358,7 +359,8 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Volume')
             plt.xlabel('years')
             plt.ylabel('[km^3]')
-            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'], loc=2)
+            plt.legend(['Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'],
+                       loc=2)
 
             plt.figure()
             plt.plot(fls[-1].bed_h, 'k')
@@ -369,18 +371,19 @@ class TestIdealisedCases(unittest.TestCase):
             plt.title('Compare Shape')
             plt.xlabel('[m]')
             plt.ylabel('Elevation [m]')
-            plt.legend(['Bed', 'Karthaus', 'OGGM', 'OGGM_Imhof', 'MUSCL-SuperBee'], loc=3)
+            plt.legend(['Bed', 'Karthaus', 'OGGM', 'OGGM_Imhof',
+                        'MUSCL-SuperBee'], loc=3)
             plt.show()
 
         # OK, so basically, Alex's tests below show that the other models
         # are wrong and produce too much mass.
-
         # Unit-testing perspective:
         # "verify" that indeed the models are wrong of more than 50%
         assert volume[1][-1] > volume[3][-1] * 1.5
         # Karthaus is even worse than OGGM-Old
         assert volume[0][-1] > volume[1][-1]
-        # OGGM Imhof is good
+
+        # That said, OGGM Imhof is good
         np.testing.assert_almost_equal(lens[2][-1], lens[3][-1])
         np.testing.assert_allclose(volume[2][-1], volume[3][-1], atol=2e-3)
         assert utils.rmsd(lens[2], lens[3]) < 50.
