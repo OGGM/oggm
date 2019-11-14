@@ -229,7 +229,7 @@ class TestIdealisedCases(unittest.TestCase):
         """
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
-        kwargs = [{'fixed_dt': 3*SEC_IN_DAY}, {}, {}]
+        kwargs = [{'fixed_dt': 3*SEC_IN_DAY}, {'min_dt': 0}, {}]
         lens = []
         surface_h = []
         volume = []
