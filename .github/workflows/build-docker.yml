@@ -1,0 +1,34 @@
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+    name: Build Docker Image
+    steps:
+    - uses: actions/checkout@v1
+    - name: Build image
+      id: build-image
+      uses: OGGM/docker-build-and-push-action@v1
+      with:
+        path: ./deployment/docker
+        name: oggm/oggm
+        force_pull: true
+        no_push: true
+        tmp_tag: oggm:test
+    - name: Test image
+      id: test-image
+      run: docker run --rm oggm:test /root/test.sh
+    - name: Push image
+      id: push-image
+      uses: OGGM/docker-build-and-push-action@v1
+      with:
+        user: ${{ secrets.DockerhubUser }}
+        pass: ${{ secrets.DockerhubPass }}
+        path: ./deployment/docker
+        name: oggm/oggm
+        no_cache: false
+        date_tag: true
+        commit_tag: true

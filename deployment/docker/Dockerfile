@@ -6,7 +6,8 @@
 FROM oggm/base:latest
 MAINTAINER Timo Rothenpieler
 
-ARG SOURCE_COMMIT=master
-RUN pip3 install "git+https://github.com/OGGM/oggm.git@$SOURCE_COMMIT"
+ARG GITHUB_SHA=master
+ARG GITHUB_REPOSITORY=OGGM/oggm
+RUN $PIP install "git+https://github.com/${GITHUB_REPOSITORY}@${GITHUB_SHA}"
 
 ADD test.sh /root/test.sh
