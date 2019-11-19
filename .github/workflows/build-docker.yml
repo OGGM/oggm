@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - master
+  repository_dispatch: []
 
 jobs:
   build-docker-image:
@@ -14,6 +15,7 @@ jobs:
       uses: OGGM/docker-build-and-push-action@v1
       with:
         path: ./deployment/docker
+        build_args: GITHUB_SHA,GITHUB_REPOSITORY
         name: oggm/oggm
         force_pull: true
         no_push: true
@@ -28,6 +30,7 @@ jobs:
         user: ${{ secrets.DockerhubUser }}
         pass: ${{ secrets.DockerhubPass }}
         path: ./deployment/docker
+        build_args: GITHUB_SHA,GITHUB_REPOSITORY
         name: oggm/oggm
         no_cache: false
         date_tag: true
