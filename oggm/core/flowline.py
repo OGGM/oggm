@@ -2163,7 +2163,7 @@ def clean_merged_flowlines(gdir, buffer=None):
         for atr, value in fl1.__dict__.items():
             if atr in ['_ptrap', '_prec']:
                 # those are indices, remove those above nx
-                fl1.__setattr__(atr, value[value <= fl1.nx])
+                fl1.__setattr__(atr, value[value < fl1.nx])
             elif isinstance(value, np.ndarray) and (len(value) > fl1.nx):
                 # those are actual parameters on the grid
                 fl1.__setattr__(atr, value[:fl1.nx])
