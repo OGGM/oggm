@@ -539,3 +539,130 @@ class TestCoxeGlacier(unittest.TestCase):
         tasks.run_constant_climate(gdir, bias=0, nyears=100)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3.max() > 10
+
+
+class TestHEFDynamics(unittest.TestCase):
+
+    # Test case for testing other numerics on HEH
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_hef_nums')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        self.rgi_file = get_demo_file('Hintereisferner_RGI5.shp')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 80
+        cfg.PARAMS['use_multiple_flowlines'] = False
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['baseline_climate'] = ''
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_run(self):
+
+        from oggm.core.climate import t_star_from_refmb
+        from oggm.core.massbalance import RandomMassBalance
+        from oggm.core.flowline import (robust_model_run, simple_model_run,
+                                        FluxBasedModel,
+                                        rect_present_time_glacier)
+        from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
+        from functools import partial
+
+        entity = gpd.read_file(self.rgi_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # Climate tasks
+        tasks.process_custom_climate_data(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+        tasks.local_t_star(gdir, tstar=t_star, bias=bias)
+        tasks.mu_star_calibration(gdir)
+
+        # Inversion tasks
+        tasks.prepare_for_inversion(gdir, invert_all_rectangular=True)
+        tasks.mass_conservation_inversion(gdir)
+
+        # Final preparation for the run
+        rect_present_time_glacier(gdir, constant_width=False)
+
+        # actual run
+        mb = RandomMassBalance(gdir, seed=0)
+        mb.temp_bias = 0
+        nyears = 100
+        robust_model_run(gdir, output_filesuffix='_default',
+                         mb_model=mb, ys=0, ye=nyears)
+
+        robust_model_run(gdir, output_filesuffix='_limited',
+                         mb_model=mb, ys=0, ye=nyears, flux_limiter=True)
+
+        supermodel = partial(FluxBasedModel, min_dt=0)
+        supermodel.__name__ = 'NoMinDtModel'
+        simple_model_run(gdir, output_filesuffix='_nomindt',
+                         mb_model=mb, ys=0, ye=nyears,
+                         numerical_model_class=supermodel)
+
+        supermodel = partial(FluxBasedModel, min_dt=0, cfl_number=0.01)
+        supermodel.__name__ = 'NewCFL'
+        simple_model_run(gdir, output_filesuffix='_cfl',
+                         mb_model=mb, ys=0, ye=nyears,
+                         numerical_model_class=supermodel)
+
+        ds1 = utils.compile_run_output([gdir], input_filesuffix='_default')
+        ds2 = utils.compile_run_output([gdir], input_filesuffix='_limited')
+        ds3 = utils.compile_run_output([gdir], input_filesuffix='_nomindt')
+        ds4 = utils.compile_run_output([gdir], input_filesuffix='_cfl')
+
+        np.testing.assert_allclose(ds1.volume, ds2.volume, rtol=0.01)
+        np.testing.assert_allclose(ds1.volume, ds3.volume, rtol=0.01)
+        # This other model drifts at a certain point
+        np.testing.assert_allclose(ds1.volume, ds4.volume, rtol=0.05)
+
+        # Against SuperBee
+        rect_present_time_glacier(gdir, constant_width=True)
+        robust_model_run(gdir, output_filesuffix='_default',
+                         mb_model=mb, ys=0, ye=nyears)
+        simple_model_run(gdir, output_filesuffix='_super',
+                         mb_model=mb, ys=0, ye=nyears,
+                         numerical_model_class=MUSCLSuperBeeModel)
+        supermodel = partial(FluxBasedModel, min_dt=0, cfl_number=0.01)
+        supermodel.__name__ = 'NewCFL'
+        simple_model_run(gdir, output_filesuffix='_cfl',
+                         mb_model=mb, ys=0, ye=nyears,
+                         numerical_model_class=supermodel)
+
+        ds1 = utils.compile_run_output([gdir], input_filesuffix='_default')
+        ds2 = utils.compile_run_output([gdir], input_filesuffix='_super')
+        ds3 = utils.compile_run_output([gdir], input_filesuffix='_cfl')
+
+        np.testing.assert_allclose(ds1.volume, ds2.volume, rtol=0.05)
+        np.testing.assert_allclose(ds3.volume, ds2.volume, rtol=0.05)
+        np.testing.assert_allclose(ds1.volume, ds3.volume, rtol=0.01)

@@ -909,7 +909,7 @@ class FluxBasedModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
-                 time_stepping='user', **kwargs):
+                 time_stepping='user', flux_limiter=False, **kwargs):
         """Instanciate the model.
 
         Parameters
@@ -947,6 +947,8 @@ class FluxBasedModel(FlowlineModel):
             let OGGM choose default values for the parameters above for you.
             Possible settings are: 'ambitious', 'default', 'conservative',
             'ultra-conservative'.
+        flux_limiter : bool
+            flux limiter after Imhof (https://github.com/OGGM/oggm/pull/905)
         is_tidewater: bool, default: False
             use the very basic parameterization for tidewater glaciers
         mb_elev_feedback : str, default: 'annual'
@@ -990,6 +992,7 @@ class FluxBasedModel(FlowlineModel):
         self.max_dt = max_dt
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
+        self.flux_limiter = flux_limiter
 
         # Do we want to use shape factors?
         self.sf_func = None
@@ -1073,11 +1076,14 @@ class FluxBasedModel(FlowlineModel):
 
             # Staggered gradient
             slope_stag[0] = 0
-            slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
+            if self.flux_limiter:
+                slope_stag[1:-1] = np.maximum(np.minimum(surface_h[0:-1] -
+                                                         surface_h[1:],
+                                                         thick[0:-1] * 3),
+                                              -thick[1:] * 3) / dx
+            else:
+                slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
             slope_stag[-1] = slope_stag[-2]
-
-            # Convert to angle?
-            # slope_stag = np.sin(np.arctan(slope_stag))
 
             # Staggered thick
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
@@ -1607,6 +1613,81 @@ def init_present_time_glacier(gdir):
     gdir.write_pickle(new_fls, 'model_flowlines')
 
 
+@entity_task(log, writes=['model_flowlines'])
+def rect_present_time_glacier(gdir, constant_width=False):
+    """Merges data from preprocessing tasks. First task after inversion!
+
+    This updates the `mode_flowlines` file and creates a stand-alone numerical
+    glacier ready to run.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    """
+
+    # Some vars
+    map_dx = gdir.grid.dx
+    cls = gdir.read_pickle('inversion_flowlines')
+    invs = gdir.read_pickle('inversion_output')
+
+    # Fill the tributaries
+    new_fls = []
+    flows_to_ids = []
+    for cl, inv in zip(cls, invs):
+
+        # Get the data to make the model flowlines
+        line = cl.line
+        surface_h = cl.surface_h
+        bed_h = surface_h - inv['thick']
+        widths = cl.widths
+
+        if constant_width:
+            widths[:] = np.mean(widths)
+
+        if not gdir.is_tidewater and inv['is_last']:
+            dic_ds = gdir.read_pickle('downstream_line')
+
+            # Add the downstream
+            line = dic_ds['full_line']
+            surface_h = np.append(surface_h, dic_ds['surface_h'])
+            bed_h = np.append(bed_h, dic_ds['surface_h'])
+
+            # The only difficulty is the downstrem widths. let just
+            # take the last third and make something out of it
+            widths[-5:] = np.nan
+            avg_width = np.nanmean(widths[int(len(widths) * 2/3)])
+            down_widths = dic_ds['surface_h']*0 + avg_width
+            # Interpolate
+            widths = utils.interp_nans(np.append(widths, down_widths))
+
+        nfl = RectangularBedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     widths=widths, rgi_id=cl.rgi_id)
+
+        # Update attrs
+        nfl.mu_star = cl.mu_star
+
+        if cl.flows_to:
+            flows_to_ids.append(cls.index(cl.flows_to))
+        else:
+            flows_to_ids.append(None)
+
+        new_fls.append(nfl)
+
+    # Finalize the linkages
+    for fl, fid in zip(new_fls, flows_to_ids):
+        if fid:
+            fl.set_flows_to(new_fls[fid])
+
+    # Adds the line level
+    for fl in new_fls:
+        fl.order = line_order(fl)
+
+    # Write the data
+    gdir.write_pickle(new_fls, 'model_flowlines')
+
+
 def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                      ys=None, ye=None, zero_initial_glacier=False,
                      init_model_fls=None, store_monthly_step=False,
@@ -1697,6 +1778,98 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         # If we get here we good
         log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
         break
+    return model
+
+
+def simple_model_run(gdir, output_filesuffix=None, mb_model=None,
+                     ys=None, ye=None, zero_initial_glacier=False,
+                     init_model_fls=None, store_monthly_step=False,
+                     numerical_model_class=None,
+                     **kwargs):
+    """Trial-error-and-retry algorithm to run the flowline model.
+
+     Runs a model simulation with the default time stepping scheme and,
+     if failing, tries a more conservative one.
+     This is a rather clumsy way to deal with numerical instabilities:
+     for most glaciers the default numerical parameters work fine, but for some
+     glaciers numerical instabilities might arise and lead to overfloating
+     errors or NaNs. This catches those, and tries again.
+
+     Pros of the method:
+     - it is cheap, because the "quicker" time stepping is tested first
+     - it is easy
+
+     Cons:
+     - the model might be unstable without necessarily leading to NaN in the
+       solution. These cases will not be caught
+     - it is inelegant
+
+     Possibly a method based on mass-conservation checks would be more robust.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
+    mb_model : :py:class:`core.MassBalanceModel`
+        a MassBalanceModel instance
+    ys : int
+        start year of the model run (default: from the config file)
+    ye : int
+        end year of the model run (default: from the config file)
+    zero_initial_glacier : bool
+        if true, the ice thickness is set to zero before the simulation
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory)
+    store_monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
+    numerical_model_class : class
+        which numerical model to use (default: OGGM's)
+    kwargs : dict
+        kwargs to pass to the FluxBasedModel instance
+     """
+
+    if numerical_model_class is None:
+        numerical_model_class = FluxBasedModel
+
+    log.info('(%s) try simple run with %s', gdir.rgi_id,
+             numerical_model_class.__name__)
+
+    kwargs.setdefault('fs', cfg.PARAMS['fs'])
+    kwargs.setdefault('glen_a', cfg.PARAMS['glen_a'])
+
+    run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
+                                 delete=True)
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+
+    if gdir.is_tidewater:
+        raise NotImplementedError('no tidewater glaciers yet')
+
+    if init_model_fls is None:
+        fls = gdir.read_pickle('model_flowlines')
+    else:
+        fls = copy.deepcopy(init_model_fls)
+    if zero_initial_glacier:
+        for fl in fls:
+            fl.thick = fl.thick * 0.
+    model = numerical_model_class(fls, mb_model=mb_model, y0=ys, inplace=True,
+                                  **kwargs)
+
+    with np.warnings.catch_warnings():
+        # For operational runs we ignore the warnings
+        np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+        model.run_until_and_store(ye, run_path=run_path,
+                                  diag_path=diag_path,
+                                  store_monthly_step=store_monthly_step)
+
+    log.info('(%s) simple run with %s was successful!', gdir.rgi_id,
+             numerical_model_class.__name__)
     return model
 
 
