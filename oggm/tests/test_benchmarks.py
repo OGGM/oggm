@@ -666,3 +666,12 @@ class TestHEFDynamics(unittest.TestCase):
         np.testing.assert_allclose(ds1.volume, ds2.volume, rtol=0.05)
         np.testing.assert_allclose(ds3.volume, ds2.volume, rtol=0.05)
         np.testing.assert_allclose(ds1.volume, ds3.volume, rtol=0.01)
+
+        # Check error
+        supermodel = partial(FluxBasedModel, min_dt=cfg.SEC_IN_MONTH,
+                             cfl_number=0.01, raise_on_cfl=True)
+        supermodel.__name__ = 'Error'
+        with pytest.raises(RuntimeError):
+            simple_model_run(gdir, output_filesuffix='_err',
+                             mb_model=mb, ys=0, ye=nyears,
+                             numerical_model_class=supermodel)

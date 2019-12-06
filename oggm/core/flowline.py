@@ -909,7 +909,8 @@ class FluxBasedModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
                  min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
-                 time_stepping='user', flux_limiter=False, **kwargs):
+                 time_stepping='user', flux_limiter=False,
+                 raise_on_cfl=False, **kwargs):
         """Instanciate the model.
 
         Parameters
@@ -993,6 +994,7 @@ class FluxBasedModel(FlowlineModel):
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.flux_limiter = flux_limiter
+        self.raise_on_cfl = raise_on_cfl
 
         # Do we want to use shape factors?
         self.sf_func = None
@@ -1127,6 +1129,8 @@ class FluxBasedModel(FlowlineModel):
 
         # Time step
         self.dt_warning = dt < min_dt
+        if self.raise_on_cfl and self.dt_warning:
+            raise RuntimeError('CFL error: required time step too small.')
         dt = utils.clip_scalar(dt, min_dt, self.max_dt)
 
         # A second loop for the mass exchange
