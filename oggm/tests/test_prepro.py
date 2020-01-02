@@ -3088,7 +3088,10 @@ class TestCatching(unittest.TestCase):
 
         self.assertEqual(gdir.get_task_status(gis.glacier_masks.__name__),
                          'SUCCESS')
+        assert gdir.get_task_time(gis.glacier_masks.__name__) > 0
         self.assertIsNone(gdir.get_task_status(
+            centerlines.compute_centerlines.__name__))
+        self.assertIsNone(gdir.get_task_time(
             centerlines.compute_centerlines.__name__))
         self.assertIsNone(gdir.get_error_log())
 
@@ -3098,6 +3101,9 @@ class TestCatching(unittest.TestCase):
             centerlines.compute_downstream_bedshape.__name__)
         assert 'FileNotFoundError' in s
         assert 'FileNotFoundError' in gdir.get_error_log()
+        dft = utils.compile_task_time(
+            [gdir], task_names=['compute_downstream_bedshape'])
+        assert dft['compute_downstream_bedshape'].iloc[0] is None
 
         # Try overwrite
         cfg.PARAMS['auto_skip_task'] = True
@@ -3133,13 +3139,16 @@ class TestCatching(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         tn = ['compute_centerlines']
         df = utils.compile_task_log([gdir], task_names=tn)
+        dft = utils.compile_task_time([gdir], task_names=tn)
         assert len(df) == 1
         assert len(df.columns) == 4
+        assert len(dft.columns) == 2
         df = df.iloc[0]
         assert df['glacier_masks'] == 'SUCCESS'
         assert df['compute_centerlines'] == 'SUCCESS'
         assert df['compute_downstream_bedshape'] != 'SUCCESS'
         assert not np.isfinite(df['not_a_task'])
+        assert dft['compute_centerlines'].iloc[0] > 0
 
         # Glacier stats
         df = utils.compile_glacier_statistics([gdir])

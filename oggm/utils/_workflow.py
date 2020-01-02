@@ -444,11 +444,13 @@ class entity_task(object):
                 if cfg.PARAMS['task_timeout'] > 0:
                     signal.signal(signal.SIGALRM, _timeout_handler)
                     signal.alarm(cfg.PARAMS['task_timeout'])
+                ex_t = time.time()
                 out = task_func(gdir, **kwargs)
+                ex_t = time.time() - ex_t
                 if cfg.PARAMS['task_timeout'] > 0:
                     signal.alarm(0)
                 if task_name != 'gdir_to_tar':
-                    gdir.log(task_name)
+                    gdir.log(task_name, task_time=ex_t)
             except Exception as err:
                 # Something happened
                 out = None
@@ -982,6 +984,52 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
         if path is True:
             path = os.path.join(cfg.PATHS['working_dir'],
                                 'task_log' + filesuffix + '.csv')
+        if os.path.exists(path) and append:
+            odf = pd.read_csv(path, index_col=0)
+            out = odf.join(out, rsuffix='_n')
+        out.to_csv(path)
+    return out
+
+
+def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
+                      append=True):
+    """Gathers the time needed for the selected task(s) to run
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    task_names : list of str
+        The tasks to check for
+    filesuffix : str
+        add suffix to output file
+    path:
+        Set to `True` in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+        Set to `False` to omit disk storage
+    append:
+        If a task log file already exists in the working directory, the new
+        logs will be added to the existing file
+
+    Returns
+    -------
+    out : :py:class:`pandas.DataFrame`
+        log output
+    """
+
+    out_df = []
+    for gdir in gdirs:
+        d = OrderedDict()
+        d['rgi_id'] = gdir.rgi_id
+        for task_name in task_names:
+            d[task_name] = gdir.get_task_time(task_name)
+        out_df.append(d)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+    if path:
+        if path is True:
+            path = os.path.join(cfg.PATHS['working_dir'],
+                                'task_time' + filesuffix + '.csv')
         if os.path.exists(path) and append:
             odf = pd.read_csv(path, index_col=0)
             out = odf.join(out, rsuffix='_n')
@@ -2270,7 +2318,7 @@ class GlacierDirectory(object):
             df.name = ds.glacier_name
         return df
 
-    def log(self, task_name, err=None):
+    def log(self, task_name, *, err=None, task_time=None):
         """Logs a message to the glacier directory.
 
         It is usually called by the :py:class:`entity_task` decorator, normally
@@ -2283,11 +2331,17 @@ class GlacierDirectory(object):
         err : Exception
             the exception which has been raised by func (if no exception was
             raised, a success is logged)
+        time : float
+            the time (in seconds) that the task needed to run
         """
 
         # a line per function call
         nowsrt = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
         line = nowsrt + ';' + task_name + ';'
+
+        if task_time is not None:
+            line += 'time:{};'.format(task_time)
+
         if err is None:
             line += 'SUCCESS'
         else:
@@ -2309,10 +2363,7 @@ class GlacierDirectory(object):
             log.warning('Could not write to logfile: ' + line)
 
     def get_task_status(self, task_name):
-        """Opens this directory's log file to see if a task was already run.
-
-        It is usually called by the :py:class:`entity_task` decorator, normally
-        you shouldn't take care about that.
+        """Opens this directory's log file to check for a task's outcome.
 
         Parameters
         ----------
@@ -2335,6 +2386,37 @@ class GlacierDirectory(object):
         if lines:
             # keep only the last log
             return lines[-1].split(';')[-1]
+        else:
+            return None
+
+    def get_task_time(self, task_name):
+        """Opens this directory's log file to check for a task's run time.
+
+        Parameters
+        ----------
+        task_name : str
+            the name of the task which has to be tested for
+
+        Returns
+        -------
+        The timing that the last call of this task needed.
+        None if the task was not run yet, or if it errored
+        """
+
+        if not os.path.isfile(self.logfile):
+            return None
+
+        with open(self.logfile) as logfile:
+            lines = logfile.readlines()
+
+        lines = [l.replace('\n', '') for l in lines if task_name in l]
+        if lines:
+            line = lines[-1]
+            # Last log is message
+            if 'ERROR' in line.split(';')[-1] or 'time:' not in line:
+                return None
+            # Get the time
+            return float(line.split('time:')[-1].split(';')[0])
         else:
             return None
 

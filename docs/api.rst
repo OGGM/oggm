@@ -34,6 +34,7 @@ Tools to set-up and run OGGM.
     utils.compile_run_output
     utils.compile_climate_input
     utils.compile_task_log
+    utils.compile_task_time
     utils.copy_to_basedir
     utils.gdir_to_tar
     utils.base_dir_to_tar
@@ -128,6 +129,7 @@ but might use multiprocessing internally.
     tasks.compile_run_output
     tasks.compile_climate_input
     tasks.compile_task_log
+    tasks.compile_task_time
 
 Classes
 =======

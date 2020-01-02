@@ -24,6 +24,10 @@ Enhancements
   can be added on the command line via ``$ oggm_nasa_earthdata_login``
   (:pull:`884`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- Added a global task (``tasks.compile_task_time`` and the associated method at
+  the GlacierDirectory level ``get_task_time``) to time the execution of
+  entity tasks (:issue:`918`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Bug fixes
 ~~~~~~~~~
