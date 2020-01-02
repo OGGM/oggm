@@ -2413,7 +2413,7 @@ class GlacierDirectory(object):
         if lines:
             line = lines[-1]
             # Last log is message
-            if 'ERROR' in line.split(';')[-1] or not 'time:' in line:
+            if 'ERROR' in line.split(';')[-1] or 'time:' not in line:
                 return None
             # Get the time
             return float(line.split('time:')[-1].split(';')[0])
