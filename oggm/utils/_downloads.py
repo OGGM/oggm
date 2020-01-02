@@ -237,8 +237,6 @@ def get_dl_verify_data():
         logger.warning('Downloading and verifiying checksums failed.')
         return dict()
 
-    import time
-    start = time.time()
     data = dict()
     with lzma.open(verify_file_path, 'rb') as f:
         for line in f:
@@ -248,7 +246,6 @@ def get_dl_verify_data():
             elems = line.split(maxsplit=2)
             data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
     _dl_verify_data = data
-    print(time.time() - start)
 
     logger.info('Successfully loaded verification data.')
 

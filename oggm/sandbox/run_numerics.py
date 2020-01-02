@@ -4,6 +4,7 @@ import os
 
 # Libs
 import geopandas as gpd
+import pandas as pd
 
 # Locals
 import oggm.cfg as cfg
@@ -20,7 +21,8 @@ log = logging.getLogger(__name__)
 # Initialize OGGM and set up the default run parameters
 cfg.initialize()
 rgi_version = '61'
-rgi_region = '11'  # Region Central Europe
+rgi_reg = '11'  # Region Central Europe
+# rgi_reg = '{:02}'.format(int(os.environ.get('RGI_REG')))
 
 # How many grid points around the glacier?
 cfg.PARAMS['border'] = 160
@@ -29,107 +31,72 @@ cfg.PARAMS['border'] = 160
 cfg.PARAMS['continue_on_error'] = True
 
 # Local working directory (where OGGM will write its output)
-# WORKING_DIR = os.environ["WORKDIR"]
 WORKING_DIR = '/home/mowglie/disk/TMP_Data/run_numerics/'
+# WORKING_DIR = os.environ["WORKDIR"]
 utils.mkdir(WORKING_DIR)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
 # RGI file
-path = utils.get_rgi_region_file(rgi_region, version=rgi_version)
+path = utils.get_rgi_region_file(rgi_reg, version=rgi_version)
 rgidf = gpd.read_file(path)
 
 # Sort for more efficient parallel computing
-rgidf = rgidf.sort_values('Area', ascending=False).iloc[:8]
+rgidf = rgidf.sort_values('Area', ascending=False).iloc[:2]
 
 log.workflow('Starting OGGM run')
 log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go - get the pre-processed glacier directories
+cfg.PARAMS['use_multiprocessing'] = False
 gdirs = workflow.init_glacier_regions(rgidf, from_prepro_level=4)
+cfg.PARAMS['use_multiprocessing'] = True
 
-# Tstar runs
-y0=None
+# Runs
+times = pd.DataFrame()
+for y0, temp_bias, exp in zip([None, None, 2000],
+                              [0, -0.5, 0],
+                              ['_ts', '_tsc', '_co']):
+    task_names = []
 
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             output_filesuffix='_ts_default')
-utils.compile_run_output(gdirs, input_filesuffix='_ts_default')
+    tn = exp + '_default'
+    workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
+                                 temp_bias=temp_bias,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('default_run' + tn)
 
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             flux_limiter=True,
-                             output_filesuffix='_ts_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_ts_limited')
+    tn = exp + '_limited'
+    workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
+                                 temp_bias=temp_bias,
+                                 flux_limiter=True,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('default_run' + tn)
 
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             output_filesuffix='_ts_nomindt')
-utils.compile_run_output(gdirs, input_filesuffix='_ts_nomindt')
+    tn = exp + '_nomindt'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
 
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             cfl_number=0.01,
-                             output_filesuffix='_ts_cfl')
-utils.compile_run_output(gdirs, input_filesuffix='_ts_cfl')
+    tn = exp + '_cfl'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.01,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
 
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             cfl_number=0.01, flux_limiter=True,
-                             output_filesuffix='_ts_cfl_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_ts_cfl_limited')
+    tn = exp + '_limited'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.01, flux_limiter=True,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
 
-# Tstar cooling
-y0=None
-temp_bias=-0.2
-
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             temp_bias=temp_bias,
-                             output_filesuffix='_tsc_default')
-utils.compile_run_output(gdirs, input_filesuffix='_tsc_default')
-
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             temp_bias=temp_bias,
-                             flux_limiter=True,
-                             output_filesuffix='_tsc_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_tsc_limited')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             temp_bias=temp_bias,
-                             output_filesuffix='_tsc_nomindt')
-utils.compile_run_output(gdirs, input_filesuffix='_tsc_nomindt')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             temp_bias=temp_bias,
-                             cfl_number=0.01,
-                             output_filesuffix='_tsc_cfl')
-utils.compile_run_output(gdirs, input_filesuffix='_tsc_cfl')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             temp_bias=temp_bias,
-                             cfl_number=0.01, flux_limiter=True,
-                             output_filesuffix='_tsc_cfl_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_tsc_cfl_limited')
-
-# Commit runs
-y0=2000
-
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             output_filesuffix='_co_default')
-utils.compile_run_output(gdirs, input_filesuffix='_co_default')
-
-workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
-                             flux_limiter=True,
-                             output_filesuffix='_co_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_co_limited')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             output_filesuffix='_co_nomindt')
-utils.compile_run_output(gdirs, input_filesuffix='_co_nomindt')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             cfl_number=0.01,
-                             output_filesuffix='_co_cfl')
-utils.compile_run_output(gdirs, input_filesuffix='_co_cfl')
-
-workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                             cfl_number=0.01, flux_limiter=True,
-                             output_filesuffix='_co_cfl_limited')
-utils.compile_run_output(gdirs, input_filesuffix='_co_cfl_limited')
+    utils.compile_task_log(gdirs, task_names=task_names, filesuffix=exp)
 
 # Log
 m, s = divmod(time.time() - start, 60)
