@@ -228,6 +228,12 @@ def patch_url_retrieve_github(url, *args, **kwargs):
     return oggm_urlretrieve(url, *args, **kwargs)
 
 
+def patch_minimal_download_oggm_files(*args, **kwargs):
+    """A simple patch to make sure we don't download."""
+
+    raise RuntimeError('We should not be there in minimal mode')
+
+
 def use_multiprocessing():
     try:
         return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "True"))

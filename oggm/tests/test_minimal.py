@@ -12,13 +12,14 @@ from numpy.testing import assert_allclose
 
 # Local imports
 from oggm.core.massbalance import LinearMassBalance
-from oggm import cfg
+from oggm import cfg, utils
 from oggm.utils import rmsd
 from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
 
 # Tests
-from oggm.tests.funcs import dummy_constant_bed
+from oggm.tests.funcs import (dummy_constant_bed,
+                              patch_minimal_download_oggm_files)
 from oggm.core.flowline import KarthausModel, FluxBasedModel
 from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
 
@@ -26,12 +27,23 @@ FluxBasedModel = partial(FluxBasedModel, inplace=True)
 KarthausModel = partial(KarthausModel, inplace=True)
 MUSCLSuperBeeModel = partial(MUSCLSuperBeeModel, inplace=True)
 
+_patched_download_oggm_files = None
+
+
+def setup_module(module):
+    module._patched_download_oggm_files = utils.download_oggm_files
+    utils._downloads.download_oggm_files = patch_minimal_download_oggm_files
+
+
+def teardown_module(module):
+    utils._downloads.download_oggm_files = module._patched_download_oggm_files
+
 
 class TestIdealisedCases(unittest.TestCase):
 
     def setUp(self):
         N = 3
-        cfg.initialize()
+        cfg.initialize_minimal()
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
         self.aglen_old = (N + 2) * 1.9e-24 / 2.  # outdated value
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
@@ -90,7 +102,7 @@ class TestIdealisedCases(unittest.TestCase):
 class TestSia2d(unittest.TestCase):
 
     def setUp(self):
-        cfg.initialize()
+        cfg.initialize_minimal()
 
     def tearDown(self):
         pass

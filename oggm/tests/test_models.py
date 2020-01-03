@@ -48,6 +48,7 @@ pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
+
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
     oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
