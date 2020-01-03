@@ -1264,14 +1264,12 @@ def climate_statistics(gdir, add_climate_period=1995):
         # Flowline related stuff
         h = np.array([])
         widths = np.array([])
-        slope = np.array([])
         fls = gdir.read_pickle('inversion_flowlines')
         dx = fls[0].dx * gdir.grid.dx
         for fl in fls:
             hgt = fl.surface_h
             h = np.append(h, hgt)
             widths = np.append(widths, fl.widths * dx)
-            slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
         d['flowline_mean_elev'] = np.average(h, weights=widths)
         d['flowline_max_elev'] = np.max(h)
         d['flowline_min_elev'] = np.min(h)

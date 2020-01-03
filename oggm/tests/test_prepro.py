@@ -2602,7 +2602,7 @@ class TestGrindelInvert(unittest.TestCase):
             hgt = hgt[pok]
             flux = flux[pok]
             flux_a0 = 1.5 * flux / widths
-            angle = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+            angle = -np.gradient(hgt, dx)  # beware the minus sign
             # Clip flux to 0
             assert not np.any(flux < -0.1)
             # add to output
