@@ -54,6 +54,7 @@ How to use the model, with concrete python code examples.
 * :doc:`practicalities`
 * :doc:`api`
 * :doc:`faq`
+* :doc:`pitfalls`
 * :doc:`whats-new`
 
 .. toctree::
@@ -69,6 +70,7 @@ How to use the model, with concrete python code examples.
     api.rst
     practicalities.rst
     faq.rst
+    pitfalls.rst
     whats-new.rst
 
 Contributing
@@ -97,8 +99,9 @@ Get in touch
 ------------
 
 - View the source code `on GitHub`_.
-- Report bugs or share your ideas on the `issue tracker`_.
-- Improve the model by submitting a `pull request`_.
+- Report bugs or share your ideas on the `issue tracker`_, and improve
+  the model by submitting a `pull request`_.
+
 - Follow us on `Twitter`_.
 - Or you can always send us an `e-mail`_ the good old way.
 

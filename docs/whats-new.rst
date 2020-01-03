@@ -4,11 +4,14 @@
 Version history
 ===============
 
-v1.2 (unreleased)
------------------
+v1.1.3 (03.01.2020)
+-------------------
 
-Breaking changes
-~~~~~~~~~~~~~~~~
+Minor release of the OGGM model with several small improvements.
+We don't expect major changes in the model results due to this release.
+
+**Important:** this will be the last release under a GPL license. The next
+release (v1.2) will be done without modifications but under a MIT license.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -28,6 +31,12 @@ Enhancements
   the GlacierDirectory level ``get_task_time``) to time the execution of
   entity tasks (:issue:`918`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Improved performance of numerical core thanks to changes in our calls to
+  `np.clip` (:pull:`873` and :pull:`903`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
+- Added a function `cfg.initialize_minimal` to run the flowline model
+  without enforcing a full download of the demo files (:pull:`921`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -41,7 +50,7 @@ Bug fixes
 v1.1.2 (12.09.2019)
 -------------------
 
-Minor release of the OGGM model, with several substancial improvements, most
+Minor release of the OGGM model, with several substantial improvements, most
 notably:
 
 - update in the inversion procedure for calving glaciers (Recinos et al., 2019)

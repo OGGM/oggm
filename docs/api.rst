@@ -21,6 +21,7 @@ Tools to set-up and run OGGM.
     :nosignatures:
 
     cfg.initialize
+    cfg.initialize_minimal
     cfg.set_logging_config
     cfg.set_intersects_db
     cfg.reset_working_dir
@@ -67,6 +68,7 @@ Input/Output
     utils.get_cru_file
     utils.get_histalp_file
     utils.get_ref_mb_glaciers
+    utils.write_centerlines_to_shape
 
 
 .. _apientitytasks:

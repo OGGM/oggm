@@ -169,6 +169,9 @@ In order to increase the stability and speed of the computations, we solve the
 numerical equations on a forward staggered grid and we use an adaptive time
 stepping scheme.
 
+See :ref:`pitfalls.numerics` for an ongoing discussion about the limitations
+of OGGM's numerical scheme!
+
 
 MUSCLSuperBeeModel
 ~~~~~~~~~~~~~~~~~~

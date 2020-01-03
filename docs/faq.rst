@@ -1,5 +1,7 @@
 .. _faq:
 
+.. currentmodule:: oggm
+
 ***********************
 FAQ and Troubleshooting
 ***********************
@@ -36,19 +38,57 @@ dynamics. For these kind of workflows, we created the
 should help OGGM users to implement their own physics in OGGM.
 
 
+Can I use OGGM to simulate <my favourite glacier>?
+--------------------------------------------------
+
+The short answer is: "yes, but..."
+
+The longer answer is that OGGM has been designed to work with *all* the world's
+glaciers, and calibrated only on a few hundreds of them (and that's only
+the mass-balance model...). We are quite confident that OGGM provides
+reasonable global estimates of glacier mass-balance and glacier change: this
+is a result of the law of large numbers, assuming that the uncertainty for
+each single glacier can be large but random and Gaussian.
+
+If you use OGGM for a single or and handful of glaciers, chances are that the
+outcome is disappointing. For these kind of applications, you'll probably
+need to re-calibrate OGGM using local data, for example of mass-balance
+or observations of past glacier change.
+
+
 Can I use OGGM to simulate long term glacier evolution?
 -------------------------------------------------------
 
-It depends what you mean by "long-term": at centenial time scales, yes. At
-millenial time scales, maybe. At glacial time scales, probably not. The major
-issue we have to face with OGGM is that it uses a "glacier-centric" approach:
-it can simulate the mountain glaciers and ice-caps we know from contemporary
-inventories, but it cannot simulate glaciers which existed before but have
-disappeared until today.
+It depends what you mean by "long-term": at centenial time scales, probably,
+yes. At millenial time scales, maybe. At glacial time scales, probably not.
+The major issue we have to face with OGGM is that it uses a "glacier-centric"
+approach: it can simulate the mountain glaciers and ice-caps we know from
+contemporary inventories, but it cannot simulate glaciers which existed before
+but have disappeared today.
+
 Also, if glaciers grow into large ice complexes and ice caps, the
 flowline assumption becomes much less valid than for typical valley glaciers
 found today. For these situations, fully distributed models like PISM
 are more appropriate.
+
+We are currently in the process of testing and tuning OGGM for post-LIA
+simulations in the Alps. Reach out if you would like to know more about our
+progress.
+
+I have a question about OGGM, can we talk about it per email/phone?
+-------------------------------------------------------------------
+
+Thanks for your interest in OGGM!
+
+
+Usage
+=====
+
+Can I export OGGM centerlines to a shapefile?
+---------------------------------------------
+
+Yes! There is a function to do exactly that:
+:py:func:`utils.write_centerlines_to_shape`.
 
 Troubleshooting
 ===============
