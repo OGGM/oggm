@@ -289,11 +289,10 @@ def set_logging_config(logging_level='INFO'):
                         level=getattr(logging, logging_level))
 
 
-def initialize(file=None, logging_level='INFO'):
-    """Read the configuration file containing the run's parameters.
+def initialize_minimal(file=None, logging_level='INFO'):
+    """Same as initialise() but without requiring any download of data.
 
-    This should be the first call, before using any of the other OGGM modules
-    for most (all?) OGGM simulations.
+    This is useful for "flowline only" OGGM applications
 
     Parameters
     ----------
@@ -302,11 +301,9 @@ def initialize(file=None, logging_level='INFO'):
     logging_level : str
         set a logging level. See :func:`set_logging_config` for options.
     """
-
     global IS_INITIALIZED
     global PARAMS
     global PATHS
-    global DATA
 
     set_logging_config(logging_level=logging_level)
 
@@ -376,10 +373,6 @@ def initialize(file=None, logging_level='INFO'):
     k = 'use_shape_factor_for_fluxbasedmodel'
     PARAMS[k] = cp[k]
 
-    # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files, get_demo_file
-    download_oggm_files()
-
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
@@ -401,6 +394,33 @@ def initialize(file=None, logging_level='INFO'):
     for k in cp:
         PARAMS[k] = cp.as_float(k)
 
+    # Empty defaults
+    set_intersects_db()
+    IS_INITIALIZED = True
+
+
+def initialize(file=None, logging_level='INFO'):
+    """Read the configuration file containing the run's parameters.
+
+    This should be the first call, before using any of the other OGGM modules
+    for most (all?) OGGM simulations.
+
+    Parameters
+    ----------
+    file : str
+        path to the configuration file (default: OGGM params.cfg)
+    logging_level : str
+        set a logging level. See :func:`set_logging_config` for options.
+    """
+    global PARAMS
+    global DATA
+
+    initialize_minimal(file=file, logging_level=logging_level)
+
+    # Make sure we have a proper cache dir
+    from oggm.utils import download_oggm_files, get_demo_file
+    download_oggm_files()
+
     # Read-in the reference t* data for all available models types (oggm, vas)
     model_prefixes = ['oggm_', 'vas_']
     for prefix in model_prefixes:
@@ -413,10 +433,6 @@ def initialize(file=None, logging_level='INFO'):
             with open(fpath, 'r') as fp:
                 mbpar = json.load(fp)
             PARAMS[prefix + fn + '_calib_params'] = mbpar
-
-    # Empty defaults
-    set_intersects_db()
-    IS_INITIALIZED = True
 
     # Pre extract cru cl to avoid problems by multiproc
     from oggm.utils import get_cru_cl_file
