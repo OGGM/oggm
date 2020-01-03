@@ -1076,9 +1076,6 @@ class FluxBasedModel(FlowlineModel):
             slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
             slope_stag[-1] = slope_stag[-2]
 
-            # Convert to angle?
-            # slope_stag = np.sin(np.arctan(slope_stag))
-
             # Staggered thick
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
