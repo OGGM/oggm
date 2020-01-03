@@ -74,7 +74,7 @@ for y0, temp_bias, exp in zip([None, None, 2000],
     task_names.append('default_run' + tn)
 
     tn = exp + '_nomindt'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
                                  temp_bias=temp_bias,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
@@ -88,7 +88,7 @@ for y0, temp_bias, exp in zip([None, None, 2000],
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
 
-    tn = exp + '_limited'
+    tn = exp + '_cfl_limited'
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.01, flux_limiter=True,
@@ -97,6 +97,7 @@ for y0, temp_bias, exp in zip([None, None, 2000],
     task_names.append('better_run' + tn)
 
     utils.compile_task_log(gdirs, task_names=task_names, filesuffix=exp)
+    utils.compile_task_time(gdirs, task_names=task_names, filesuffix=exp)
 
 # Log
 m, s = divmod(time.time() - start, 60)
