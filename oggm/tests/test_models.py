@@ -47,6 +47,7 @@ pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
+
 @pytest.fixture(autouse=True, scope='module')
 def init_url_retrieve(request):
     request.module._url_retrieve = utils.oggm_urlretrieve
@@ -60,10 +61,12 @@ do_plot = False
 
 DOM_BORDER = 80
 
+
 @pytest.fixture(scope='module')
 def io_model_factory():
     glen_a = 2.4e-24
     return lambda fls, **kwargs: FluxBasedModel(fls, glen_a=glen_a, **kwargs)
+
 
 @pytest.fixture(scope='module')
 def backwards_idealized_fls(backwards_model_factory):
@@ -73,6 +76,7 @@ def backwards_idealized_fls(backwards_model_factory):
     model = backwards_model_factory(origfls)
     model.run_until(500)
     return copy.deepcopy(model.fls)
+
 
 @pytest.fixture(scope='module')
 def backwards_model_factory():
@@ -84,11 +88,12 @@ def backwards_model_factory():
 
     ela = 2800.
 
-    def _model_factory(*args, ela_delta=0., **kwargs): 
+    def _model_factory(*args, ela_delta=0., **kwargs):
         mb = LinearMassBalance(ela + ela_delta)
         return FluxBasedModel(*args, mb_model=mb, fs=fs, glen_a=glen_a, **kwargs)
 
     return _model_factory
+
 
 @pytest.fixture(scope='module')
 def inversion_gdir(test_dir):
@@ -109,12 +114,13 @@ def inversion_gdir(test_dir):
     define_glacier_region(gdir, entity=entity)
     return gdir
 
+
 @pytest.fixture(scope='module')
 def gdir_sh(request, test_dir, hef_gdir_base):
     dir_sh = os.path.join(test_dir, request.module.__name__ + '_sh')
     utils.mkdir(dir_sh, reset=True)
     gdir_sh = tasks.copy_to_basedir(hef_gdir_base, base_dir=dir_sh,
-                                          setup='all')
+                                    setup='all')
     gdir_sh.hemisphere = 'sh'
     yield gdir_sh
     # teardown
@@ -126,7 +132,8 @@ def gdir_sh(request, test_dir, hef_gdir_base):
 def with_class_wd(request, test_dir, hef_gdir_base):
     # dependency on hef_gdir_base to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
-    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.function.__name__ + '_wd')
+    cfg.PATHS['working_dir'] = os.path.join(
+        test_dir, request.function.__name__ + '_wd')
     utils.mkdir(cfg.PATHS['working_dir'], reset=True)
     yield
     # teardown
@@ -156,13 +163,13 @@ def test_init_present_time_glacier(hef_gdir):
         assert fl.order == refo
         ref = np.arange(len(fl.surface_h)) * fl.dx
         np.testing.assert_allclose(ref, fl.dis_on_line,
-                                    rtol=0.001,
-                                    atol=0.01)
-        assert(len(fl.surface_h) == 
-                len(fl.bed_h) == 
-                len(fl.bed_shape) == 
-                len(fl.dis_on_line) == 
-                len(fl.widths))
+                                   rtol=0.001,
+                                   atol=0.01)
+        assert(len(fl.surface_h) ==
+               len(fl.bed_h) ==
+               len(fl.bed_shape) ==
+               len(fl.dis_on_line) ==
+               len(fl.widths))
 
         assert np.all(fl.widths >= 0)
         vol += fl.volume_km3
@@ -170,7 +177,7 @@ def test_init_present_time_glacier(hef_gdir):
 
         if refo == 1:
             rmsd = utils.rmsd(ofl.widths[:-5] * gdir.grid.dx,
-                                fl.widths_m[0:len(ofl.widths)-5])
+                              fl.widths_m[0:len(ofl.widths)-5])
             assert rmsd < 5.
 
     rtol = 0.02
@@ -182,6 +189,7 @@ def test_init_present_time_glacier(hef_gdir):
         plt.plot(fls[-1].bed_h)
         plt.plot(fls[-1].surface_h)
         plt.show()
+
 
 def test_present_time_glacier_massbalance(hef_gdir):
 
@@ -206,7 +214,7 @@ def test_present_time_glacier_massbalance(hef_gdir):
     for yr, mb in mbdf.iterrows():
         refmb.append(mb['ANNUAL_BALANCE'])
         mbh = (mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR *
-                cfg.PARAMS['ice_density'])
+               cfg.PARAMS['ice_density'])
         grads += mbh
         tot_mb.append(np.average(mbh, weights=widths))
     grads /= len(tot_mb)
@@ -286,13 +294,13 @@ def test_define_divides(case_dir):
     for fl in fls:
         ref = np.arange(len(fl.surface_h)) * fl.dx
         np.testing.assert_allclose(ref, fl.dis_on_line,
-                                    rtol=0.001,
-                                    atol=0.01)
+                                   rtol=0.001,
+                                   atol=0.01)
         assert(len(fl.surface_h) ==
-                len(fl.bed_h) ==
-                len(fl.bed_shape) ==
-                len(fl.dis_on_line) ==
-                len(fl.widths))
+               len(fl.bed_h) ==
+               len(fl.bed_shape) ==
+               len(fl.dis_on_line) ==
+               len(fl.widths))
 
         assert np.all(fl.widths >= 0)
         vol += fl.volume_km3
@@ -322,14 +330,14 @@ def test_past_mb_model(hef_gdir):
     # Flowlines height
     h, w = gdir.get_inversion_flowline_hw()
     _, t, p = climate.mb_yearly_climate_on_height(gdir, h,
-                                                    year_range=yrp)
+                                                  year_range=yrp)
 
     mb_mod = massbalance.PastMassBalance(gdir, bias=0)
     for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
         ref_mb_on_h = p[:, i] - mu_star * t[:, i]
         my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
         np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
-                                    atol=1e-2)
+                                   atol=1e-2)
         ela_z = mb_mod.get_ela(year=yr)
         totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
         assert_allclose(totest[0], 0, atol=1)
@@ -339,7 +347,7 @@ def test_past_mb_model(hef_gdir):
         ref_mb_on_h = p[:, i] - mu_star * t[:, i]
         my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
         np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
-                                    atol=1e-2)
+                                   atol=1e-2)
         ela_z = mb_mod.get_ela(year=yr)
         totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
         assert_allclose(totest[0], 0, atol=1)
@@ -354,8 +362,8 @@ def test_past_mb_model(hef_gdir):
             my_mb_on_h += tmp
 
         np.testing.assert_allclose(ref_mb_on_h,
-                                    my_mb_on_h + bias,
-                                    atol=1e-2)
+                                   my_mb_on_h + bias,
+                                   atol=1e-2)
 
     # real data
     h, w = gdir.get_inversion_flowline_hw()
@@ -367,8 +375,8 @@ def test_past_mb_model(hef_gdir):
         mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
     np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
-                                mbdf['MY_MB'].mean(),
-                                atol=1e-2)
+                               mbdf['MY_MB'].mean(),
+                               atol=1e-2)
     mbdf['MY_ELA'] = mb_mod.get_ela(year=mbdf.index.values)
     assert mbdf[['MY_ELA', 'MY_MB']].corr().values[0, 1] < -0.9
     assert mbdf[['MY_ELA', 'ANNUAL_BALANCE']].corr().values[0, 1] < -0.7
@@ -379,8 +387,8 @@ def test_past_mb_model(hef_gdir):
         mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
     np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean() + bias,
-                                mbdf['MY_MB'].mean(),
-                                atol=1e-2)
+                               mbdf['MY_MB'].mean(),
+                               atol=1e-2)
 
     mb_mod = massbalance.PastMassBalance(gdir)
     for yr in mbdf.index.values:
@@ -392,13 +400,13 @@ def test_past_mb_model(hef_gdir):
         mb_mod.temp_bias = 0
 
     np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
-                                mbdf['MY_MB'].mean(),
-                                atol=1e-2)
+                               mbdf['MY_MB'].mean(),
+                               atol=1e-2)
     assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
 
     # Repeat
     mb_mod = massbalance.PastMassBalance(gdir, repeat=True,
-                                            ys=1901, ye=1950)
+                                         ys=1901, ye=1950)
     yrs = np.arange(100) + 1901
     mb = mb_mod.get_specific_mb(h, w, year=yrs)
     assert_allclose(mb[50], mb[-50])
@@ -427,8 +435,8 @@ def test_glacierwide_mb_model(hef_gdir):
     yrs = np.arange(100) + 1901
 
     classes = [massbalance.PastMassBalance,
-                massbalance.ConstantMassBalance,
-                massbalance.RandomMassBalance]
+               massbalance.ConstantMassBalance,
+               massbalance.RandomMassBalance]
 
     for cl in classes:
 
@@ -489,11 +497,11 @@ def test_glacierwide_mb_model(hef_gdir):
     mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                     mb_model_class=cl)
     mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
-                                            rdn_prcp_bias_seed=2,
-                                            rdn_temp_bias_seed=3)
+                                          rdn_prcp_bias_seed=2,
+                                          rdn_temp_bias_seed=3)
     mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
-                                                rdn_prcp_bias_seed=2,
-                                                rdn_temp_bias_seed=3)
+                                             rdn_prcp_bias_seed=2,
+                                             rdn_temp_bias_seed=3)
 
     assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                     mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
@@ -646,7 +654,7 @@ def test_random_mb(hef_gdir):
     # Compare sigma from real climate and mine
     mb_ref = massbalance.PastMassBalance(gdir)
     mb_mod = massbalance.RandomMassBalance(gdir, y0=2003 - 15,
-                                            seed=10)
+                                           seed=10)
     mb_ts = []
     mb_ts2 = []
     yrs = np.arange(1973, 2004, 1)
@@ -654,7 +662,7 @@ def test_random_mb(hef_gdir):
         mb_ts.append(np.average(mb_ref.get_annual_mb(h, yr) * SEC_IN_YEAR,
                                 weights=w))
         mb_ts2.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
-                                    weights=w))
+                                 weights=w))
     np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
 
     # Monthly
@@ -665,9 +673,9 @@ def test_random_mb(hef_gdir):
     my_mb = np.zeros(12)
     for yr, m in zip(yrs, time.month):
         ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) *
-                                    SEC_IN_MONTH, weights=w)
+                                  SEC_IN_MONTH, weights=w)
         my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) *
-                                    SEC_IN_MONTH, weights=w)
+                                 SEC_IN_MONTH, weights=w)
     my_mb = my_mb / 31
     ref_mb = ref_mb / 31
     assert utils.rmsd(ref_mb, my_mb) < 0.1
@@ -679,10 +687,10 @@ def test_random_mb_unique(hef_gdir):
     init_present_time_glacier(gdir)
 
     ref_mod = massbalance.ConstantMassBalance(gdir,
-                                                halfsize=15)
+                                              halfsize=15)
     mb_mod = massbalance.RandomMassBalance(gdir, seed=10,
-                                            unique_samples=True,
-                                            halfsize=15)
+                                           unique_samples=True,
+                                           halfsize=15)
     mb_mod2 = massbalance.RandomMassBalance(gdir, seed=20,
                                             unique_samples=True,
                                             halfsize=15)
@@ -738,16 +746,16 @@ def test_random_mb_unique(hef_gdir):
     # test uniqueness
     # size
     assert(len(list(mb_mod._state_yr.values())) ==
-                    np.unique(list(mb_mod._state_yr.values())).size)
+           np.unique(list(mb_mod._state_yr.values())).size)
     # size2
     assert(len(list(mb_mod2._state_yr.values())) ==
-                    np.unique(list(mb_mod2._state_yr.values())).size)
+           np.unique(list(mb_mod2._state_yr.values())).size)
     # state years 1 vs 2
     assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                            np.unique(list(mb_mod2._state_yr.values()))))
+                  np.unique(list(mb_mod2._state_yr.values()))))
     # state years 1 vs reference model
     assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                            ref_mod.years))
+                  ref_mod.years))
 
     # test ela vs specific mb
     elats = mb_mod.get_ela(yrs[:200])
@@ -776,9 +784,9 @@ def test_uncertain_mb(hef_gdir):
     assert np.std(unc_mb) > 50
 
     mb_mod = massbalance.UncertainMassBalance(ref_mod,
-                                                rdn_temp_bias_sigma=0.1,
-                                                rdn_prcp_bias_sigma=0,
-                                                rdn_bias_sigma=0)
+                                              rdn_temp_bias_sigma=0.1,
+                                              rdn_prcp_bias_sigma=0,
+                                              rdn_bias_sigma=0)
     ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
     unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
     check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
@@ -786,9 +794,9 @@ def test_uncertain_mb(hef_gdir):
     assert np.std(unc_mb) > 50
 
     mb_mod = massbalance.UncertainMassBalance(ref_mod,
-                                                rdn_temp_bias_sigma=0,
-                                                rdn_prcp_bias_sigma=0.1,
-                                                rdn_bias_sigma=0)
+                                              rdn_temp_bias_sigma=0,
+                                              rdn_prcp_bias_sigma=0.1,
+                                              rdn_bias_sigma=0)
     ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
     unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
     check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
@@ -796,9 +804,9 @@ def test_uncertain_mb(hef_gdir):
     assert np.std(unc_mb) > 50
 
     mb_mod = massbalance.UncertainMassBalance(ref_mod,
-                                                rdn_temp_bias_sigma=0,
-                                                rdn_prcp_bias_sigma=0,
-                                                rdn_bias_sigma=100)
+                                              rdn_temp_bias_sigma=0,
+                                              rdn_prcp_bias_sigma=0,
+                                              rdn_bias_sigma=100)
     ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
     unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
     check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
@@ -882,8 +890,8 @@ def test_rectangular():
     widths[-30:] = 10
 
     rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                    surface_h=surface_h, bed_h=bed_h,
-                                    widths=widths)
+                                 surface_h=surface_h, bed_h=bed_h,
+                                 widths=widths)
     thick = surface_h - bed_h
     widths_m = widths * map_dx
     section = thick * widths_m
@@ -933,6 +941,7 @@ def test_rectangular():
     assert_allclose(rec.area_m2, area_m2.sum())
     assert_allclose(rec.volume_m3, (vol_m3/2).sum())
 
+
 def test_trapeze_mixed_rec():
 
     # Special case of lambda = 0
@@ -963,9 +972,9 @@ def test_trapeze_mixed_rec():
     area_m2[thick == 0] = 0
 
     rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                    surface_h=surface_h,
-                                    bed_h=bed_h, widths=widths,
-                                    lambdas=lambdas)
+                                  surface_h=surface_h,
+                                  bed_h=bed_h, widths=widths,
+                                  lambdas=lambdas)
 
     rec2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
                             surface_h=surface_h, bed_h=bed_h,
@@ -1016,6 +1025,7 @@ def test_trapeze_mixed_rec():
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, (vol_m3/2).sum())
 
+
 def test_trapeze_mixed_lambda1():
 
     # Real lambdas
@@ -1048,9 +1058,9 @@ def test_trapeze_mixed_lambda1():
     is_trap = np.ones(len(lambdas), dtype=np.bool)
 
     rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                    surface_h=surface_h,
-                                    bed_h=bed_h, widths=widths,
-                                    lambdas=lambdas)
+                                  surface_h=surface_h,
+                                  bed_h=bed_h, widths=widths,
+                                  lambdas=lambdas)
 
     rec2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
                             surface_h=surface_h, bed_h=bed_h,
@@ -1091,6 +1101,7 @@ def test_trapeze_mixed_lambda1():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+
 
 def test_parab_mixed():
 
@@ -1157,6 +1168,7 @@ def test_parab_mixed():
         assert_allclose(rec.volume_m3, vol_m3.sum())
         assert_allclose(rec.surface_h, surface_h)
 
+
 def test_mixed():
 
     # Set a section and see if it all matches
@@ -1184,9 +1196,9 @@ def test_mixed():
     section_trap = thick * (widths_0 * map_dx + widths_m) / 2
 
     rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                    surface_h=surface_h,
-                                    bed_h=bed_h, widths=widths,
-                                    lambdas=lambdas)
+                                  surface_h=surface_h,
+                                  bed_h=bed_h, widths=widths,
+                                  lambdas=lambdas)
 
     shapes = bed_h*0. + 0.003
     shapes[-30:] = 0.004
@@ -1207,9 +1219,9 @@ def test_mixed():
     section[~is_trap] = section_para[~is_trap]
 
     rec = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                            surface_h=surface_h, bed_h=bed_h,
-                            section=section, bed_shape=shapes,
-                            is_trapezoid=is_trap, lambdas=lambdas)
+                           surface_h=surface_h, bed_h=bed_h,
+                           section=section, bed_shape=shapes,
+                           is_trapezoid=is_trap, lambdas=lambdas)
 
     thick = rec1.thick
     thick[~is_trap] = rec2.thick[~is_trap]
@@ -1337,7 +1349,7 @@ def test_run(case_dir, hef_gdir, io_model_factory):
                 secfortest = model.fls[0].section
 
     np.testing.assert_allclose(ds.ts_section.isel(time=-1),
-                                secfortest)
+                               secfortest)
 
     np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
     np.testing.assert_allclose(ds_diag.area_m2, a_diag)
@@ -1353,8 +1365,8 @@ def test_run(case_dir, hef_gdir, io_model_factory):
         os.remove(diag_path)
     model = io_model_factory(fls, mb_model=mb)
     model.run_until_and_store(500, run_path=run_path,
-                                diag_path=diag_path,
-                                store_monthly_step=True)
+                              diag_path=diag_path,
+                              store_monthly_step=True)
 
     with xr.open_dataset(diag_path) as ds_:
         # the identical (i.e. attrs + names) doesn't work because of date
@@ -1372,9 +1384,9 @@ def test_run(case_dir, hef_gdir, io_model_factory):
                 # this is sloooooow so we test a little bit only
                 fmodel.run_until(yr)
                 np.testing.assert_allclose(model.fls[0].section,
-                                            fmodel.fls[0].section)
+                                           fmodel.fls[0].section)
                 np.testing.assert_allclose(model.fls[0].widths_m,
-                                            fmodel.fls[0].widths_m)
+                                           fmodel.fls[0].widths_m)
 
         np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
         np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
@@ -1386,7 +1398,7 @@ def test_run(case_dir, hef_gdir, io_model_factory):
         model.run_until(500)
         fmodel.run_until(500)
         np.testing.assert_allclose(model.fls[0].section,
-                                    fmodel.fls[0].section)
+                                   fmodel.fls[0].section)
 
 
 @pytest.mark.slow
@@ -1424,7 +1436,7 @@ def test_run_annual_step(case_dir, hef_gdir, io_model_factory):
             secfortest = model.fls[0].section
 
     np.testing.assert_allclose(ds.ts_section.isel(time=-1),
-                                secfortest)
+                               secfortest)
 
     np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
     np.testing.assert_allclose(ds_diag.area_m2, a_diag)
@@ -1440,7 +1452,7 @@ def test_run_annual_step(case_dir, hef_gdir, io_model_factory):
         os.remove(diag_path)
     model = io_model_factory(fls, mb_model=mb)
     model.run_until_and_store(500, run_path=run_path,
-                                diag_path=diag_path)
+                              diag_path=diag_path)
 
     with xr.open_dataset(diag_path) as ds_:
         # the identical (i.e. attrs + names) doesn't work because of date
@@ -1458,9 +1470,9 @@ def test_run_annual_step(case_dir, hef_gdir, io_model_factory):
                 # this is sloooooow so we test a little bit only
                 fmodel.run_until(yr)
                 np.testing.assert_allclose(model.fls[0].section,
-                                            fmodel.fls[0].section)
+                                           fmodel.fls[0].section)
                 np.testing.assert_allclose(model.fls[0].widths_m,
-                                            fmodel.fls[0].widths_m)
+                                           fmodel.fls[0].widths_m)
 
         np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
         np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
@@ -1472,7 +1484,7 @@ def test_run_annual_step(case_dir, hef_gdir, io_model_factory):
         model.run_until(500)
         fmodel.run_until(500)
         np.testing.assert_allclose(model.fls[0].section,
-                                    fmodel.fls[0].section)
+                                   fmodel.fls[0].section)
 
 
 def test_gdir_copy(case_dir, hef_gdir):
@@ -1480,17 +1492,17 @@ def test_gdir_copy(case_dir, hef_gdir):
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
-                                        setup='all')
+                                     setup='all')
     init_present_time_glacier(new_gdir)
     shutil.rmtree(new_dir)
 
     new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
-                                        setup='run')
+                                     setup='run')
     run_random_climate(new_gdir, nyears=10)
     shutil.rmtree(new_dir)
 
     new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
-                                        setup='inversion')
+                                     setup='inversion')
     inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
     inversion.mass_conservation_inversion(new_gdir)
     inversion.filter_inversion_output(new_gdir)
@@ -1557,17 +1569,18 @@ def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
     y1 = 150.
     rtol = 0.02
 
-    model = backwards_model_factory(backwards_idealized_fls, ela_delta=50., time_stepping='ambitious')
+    model = backwards_model_factory(
+        backwards_idealized_fls, ela_delta=50., time_stepping='ambitious')
 
     ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
-                                                    y1, rtol=rtol)
+                                                 y1, rtol=rtol)
 
     bef_fls = copy.deepcopy(past_model.fls)
     past_model.run_until(y1)
     assert bef_fls[-1].area_m2 > past_model.area_m2
     np.testing.assert_allclose(past_model.area_m2,
-                                backwards_idealized_fls[-1].area_m2,
-                                rtol=rtol)
+                               backwards_idealized_fls[-1].area_m2,
+                               rtol=rtol)
 
     if do_plot:  # pragma: no cover
         plt.plot(backwards_idealized_fls[-1].surface_h, 'k', label='ref')
@@ -1577,16 +1590,17 @@ def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
         plt.legend(loc='best')
         plt.show()
 
-    model = backwards_model_factory(backwards_idealized_fls, ela_delta=-50., y0=y0, time_stepping='ambitious')
+    model = backwards_model_factory(
+        backwards_idealized_fls, ela_delta=-50., y0=y0, time_stepping='ambitious')
 
     ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
-                                                    y1, rtol=rtol)
+                                                 y1, rtol=rtol)
     bef_fls = copy.deepcopy(past_model.fls)
     past_model.run_until(y1)
     assert bef_fls[-1].area_m2 < past_model.area_m2
     np.testing.assert_allclose(past_model.area_m2,
-                                backwards_idealized_fls[-1].area_m2,
-                                rtol=rtol)
+                               backwards_idealized_fls[-1].area_m2,
+                               rtol=rtol)
 
     if do_plot:  # pragma: no cover
         plt.plot(backwards_idealized_fls[-1].surface_h, 'k', label='ref')
@@ -1600,11 +1614,11 @@ def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
 
     # Hit the correct one
     ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
-                                                    y1, rtol=rtol)
+                                                 y1, rtol=rtol)
     past_model.run_until(y1)
     np.testing.assert_allclose(past_model.area_m2,
-                                backwards_idealized_fls[-1].area_m2,
-                                rtol=rtol)
+                               backwards_idealized_fls[-1].area_m2,
+                               rtol=rtol)
 
 
 @pytest.mark.slow
@@ -1615,9 +1629,11 @@ def test_fails(backwards_idealized_fls, backwards_model_factory):
     y0 = 0.
     y1 = 100.
 
-    model = backwards_model_factory(backwards_idealized_fls, ela_delta=-150., y0=y0)
+    model = backwards_model_factory(
+        backwards_idealized_fls, ela_delta=-150., y0=y0)
     with pytest.raises(RuntimeError):
-        _find_inital_glacier(model, model.mb_model, y0, y1, rtol=0.02, max_ite=5)
+        _find_inital_glacier(model, model.mb_model, y0,
+                             y1, rtol=0.02, max_ite=5)
 
 
 def simple_plot(model, gdir):  # pragma: no cover
@@ -1635,6 +1651,7 @@ def simple_plot(model, gdir):  # pragma: no cover
     plt.ylabel('Elevation [m]')
     plt.legend(loc=3)
     plt.show()
+
 
 def double_plot(model, gdir):  # pragma: no cover
     ocls = gdir.read_pickle('inversion_output')
@@ -1666,7 +1683,7 @@ def test_inversion_rectangular(inversion_gdir):
         pg = np.where(fl.thick > 0)
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=fl.surface_h[pg])
+                                     surface_h=fl.surface_h[pg])
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -1713,7 +1730,7 @@ def test_inversion_rectangular(inversion_gdir):
 
     # Check with scalars
     assert inversion.sia_thickness(slope[-5], fl.widths_m[pg][-5],
-                                    inv_flux[-5]) > 1
+                                   inv_flux[-5]) > 1
 
     if do_plot:  # pragma: no cover
         simple_plot(model, inversion_gdir)
@@ -1732,7 +1749,7 @@ def test_inversion_parabolic(inversion_gdir):
         pg = np.where(fl.thick > 0)
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=fl.surface_h[pg])
+                                     surface_h=fl.surface_h[pg])
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -1744,9 +1761,10 @@ def test_inversion_parabolic(inversion_gdir):
     assert_allclose(v, model.volume_m3, rtol=0.01)
 
     inv = inversion_gdir.read_pickle('inversion_output')[-1]
-    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_gl = 4 * inv['thick'] / \
+        (flo.widths * inversion_gdir.grid.dx) ** 2
     bed_shape_ref = (4 * fl.thick[pg] /
-                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+                     (flo.widths * inversion_gdir.grid.dx) ** 2)
 
     # Equations
     mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
@@ -1802,7 +1820,7 @@ def test_inversion_parabolic_sf_adhikari(inversion_gdir):
     mb = LinearMassBalance(2500.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
 
     fls = []
@@ -1810,7 +1828,7 @@ def test_inversion_parabolic_sf_adhikari(inversion_gdir):
         pg = np.where(fl.thick > 0)
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=fl.surface_h[pg])
+                                     surface_h=fl.surface_h[pg])
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -1822,9 +1840,10 @@ def test_inversion_parabolic_sf_adhikari(inversion_gdir):
     assert_allclose(v, model.volume_m3, rtol=0.02)
 
     inv = inversion_gdir.read_pickle('inversion_output')[-1]
-    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_gl = 4 * inv['thick'] / \
+        (flo.widths * inversion_gdir.grid.dx) ** 2
     bed_shape_ref = (4 * fl.thick[pg] /
-                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+                     (flo.widths * inversion_gdir.grid.dx) ** 2)
 
     # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
     if do_plot:  # pragma: no cover
@@ -1863,7 +1882,7 @@ def test_inversion_parabolic_sf_huss(inversion_gdir):
     mb = LinearMassBalance(2500.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
 
     fls = []
@@ -1871,7 +1890,7 @@ def test_inversion_parabolic_sf_huss(inversion_gdir):
         pg = np.where(fl.thick > 0)
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=fl.surface_h[pg])
+                                     surface_h=fl.surface_h[pg])
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -1883,9 +1902,10 @@ def test_inversion_parabolic_sf_huss(inversion_gdir):
     assert_allclose(v, model.volume_m3, rtol=0.01)
 
     inv = inversion_gdir.read_pickle('inversion_output')[-1]
-    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_gl = 4 * inv['thick'] / \
+        (flo.widths * inversion_gdir.grid.dx) ** 2
     bed_shape_ref = (4 * fl.thick[pg] /
-                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+                     (flo.widths * inversion_gdir.grid.dx) ** 2)
 
     # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
     if do_plot:  # pragma: no cover
@@ -1915,11 +1935,11 @@ def test_inversion_parabolic_sf_huss(inversion_gdir):
 def test_inversion_mixed(inversion_gdir):
 
     fls = dummy_mixed_bed(deflambdas=0, map_dx=inversion_gdir.grid.dx,
-                            mixslice=slice(10, 30))
+                          mixslice=slice(10, 30))
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     # This reduces the test's accuracy but makes it much faster.
     model.run_until_equilibrium(rate=0.01)
 
@@ -1929,7 +1949,7 @@ def test_inversion_mixed(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = fl.is_trapezoid[pg]
         fls.append(flo)
@@ -1948,11 +1968,11 @@ def test_inversion_mixed(inversion_gdir):
 def test_inversion_cliff(inversion_gdir):
 
     fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                    cliff_height=100)
+                                   cliff_height=100)
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -1960,7 +1980,7 @@ def test_inversion_cliff(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -1983,13 +2003,13 @@ def test_inversion_cliff_sf_adhikari(inversion_gdir):
     cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
 
     fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                    cliff_height=100)
+                                   cliff_height=100)
     for fl in fls:
         fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -1997,7 +2017,7 @@ def test_inversion_cliff_sf_adhikari(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2023,13 +2043,13 @@ def test_inversion_cliff_sf_huss(inversion_gdir):
     cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
 
     fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                    cliff_height=100)
+                                   cliff_height=100)
     for fl in fls:
         fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -2037,7 +2057,7 @@ def test_inversion_cliff_sf_huss(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2061,7 +2081,7 @@ def test_inversion_noisy(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -2069,7 +2089,7 @@ def test_inversion_noisy(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2096,7 +2116,7 @@ def test_inversion_noisy_sf_adhikari(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -2104,7 +2124,7 @@ def test_inversion_noisy_sf_adhikari(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2135,7 +2155,7 @@ def test_inversion_noisy_sf_huss(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
     fls = []
     for fl in model.fls:
@@ -2143,7 +2163,7 @@ def test_inversion_noisy_sf_huss(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2167,7 +2187,7 @@ def test_inversion_tributary(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
 
     fls = []
@@ -2176,7 +2196,7 @@ def test_inversion_tributary(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2206,7 +2226,7 @@ def test_inversion_tributary_sf_adhikari(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
 
     fls = []
@@ -2215,7 +2235,7 @@ def test_inversion_tributary_sf_adhikari(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2249,7 +2269,7 @@ def test_inversion_tributary_sf_huss(inversion_gdir):
     mb = LinearMassBalance(2600.)
 
     model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                            time_stepping='conservative')
+                           time_stepping='conservative')
     model.run_until_equilibrium()
 
     fls = []
@@ -2258,7 +2278,7 @@ def test_inversion_tributary_sf_huss(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2297,7 +2317,7 @@ def test_inversion_non_equilibrium(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2329,7 +2349,7 @@ def test_inversion_and_run(inversion_gdir):
         line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
         sh = fl.surface_h[pg]
         flo = centerlines.Centerline(line, dx=fl.dx,
-                                        surface_h=sh)
+                                     surface_h=sh)
         flo.widths = fl.widths[pg]
         flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
         fls.append(flo)
@@ -2342,12 +2362,13 @@ def test_inversion_and_run(inversion_gdir):
     assert_allclose(v, model.volume_m3, rtol=0.01)
 
     inv = inversion_gdir.read_pickle('inversion_output')[-1]
-    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_gl = 4 * inv['thick'] / \
+        (flo.widths * inversion_gdir.grid.dx) ** 2
 
     ithick = inv['thick']
     fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
-                                from_other_shape=bed_shape_gl[:-2],
-                                from_other_bed=sh-ithick)
+                              from_other_shape=bed_shape_gl[:-2],
+                              from_other_bed=sh-ithick)
     model2 = FluxBasedModel(fls, mb_model=mb, y0=0.,
                             time_stepping='conservative')
     model2.run_until_equilibrium()
@@ -2374,10 +2395,10 @@ def test_equilibrium(hef_gdir, inversion_params):
 
     fls = hef_gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                            fs=inversion_params['fs'],
-                            glen_a=inversion_params['glen_a'],
-                            min_dt=SEC_IN_DAY/2.,
-                            mb_elev_feedback='never')
+                           fs=inversion_params['fs'],
+                           glen_a=inversion_params['glen_a'],
+                           min_dt=SEC_IN_DAY/2.,
+                           mb_elev_feedback='never')
 
     ref_vol = model.volume_km3
     ref_area = model.area_km2
@@ -2404,14 +2425,14 @@ def test_equilibrium_glacier_wide(hef_gdir, inversion_params):
 
     cl = massbalance.ConstantMassBalance
     mb_mod = massbalance.MultipleFlowlineMassBalance(hef_gdir,
-                                                        mb_model_class=cl)
+                                                     mb_model_class=cl)
 
     fls = hef_gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                            fs=inversion_params['fs'],
-                            glen_a=inversion_params['glen_a'],
-                            min_dt=SEC_IN_DAY/2.,
-                            mb_elev_feedback='never')
+                           fs=inversion_params['fs'],
+                           glen_a=inversion_params['glen_a'],
+                           min_dt=SEC_IN_DAY/2.,
+                           mb_elev_feedback='never')
 
     ref_vol = model.volume_km3
     ref_area = model.area_km2
@@ -2440,8 +2461,8 @@ def test_commitment(hef_gdir, inversion_params):
 
     fls = hef_gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                            fs=inversion_params['fs'],
-                            glen_a=inversion_params['glen_a'])
+                           fs=inversion_params['fs'],
+                           glen_a=inversion_params['glen_a'])
 
     ref_area = model.area_km2
     np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
@@ -2460,12 +2481,12 @@ def test_commitment(hef_gdir, inversion_params):
 
     fls = hef_gdir.read_pickle('model_flowlines')
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                            fs=inversion_params['fs'],
-                            glen_a=inversion_params['glen_a'])
+                           fs=inversion_params['fs'],
+                           glen_a=inversion_params['glen_a'])
 
     ref_vol = model.volume_km3
     ref_area = model.area_km2
-    np.testing.assert_allclose(ref_area,hef_gdir.rgi_area_km2, rtol=0.02)
+    np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
 
     model.run_until_equilibrium()
     assert model.yr > 100
@@ -2490,15 +2511,15 @@ def test_random(hef_gdir, inversion_params):
 
     init_present_time_glacier(hef_gdir)
     run_random_climate(hef_gdir, nyears=100, seed=6,
-                        fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
-                        bias=0, output_filesuffix='_rdn')
+                       fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                       bias=0, output_filesuffix='_rdn')
     run_constant_climate(hef_gdir, nyears=100,
-                            fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
-                            bias=0, output_filesuffix='_ct')
+                         fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                         bias=0, output_filesuffix='_ct')
 
     paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
-                hef_gdir.get_filepath('model_run', filesuffix='_ct'),
-                ]
+             hef_gdir.get_filepath('model_run', filesuffix='_ct'),
+             ]
 
     for path in paths:
         with FileModel(path) as model:
@@ -2506,9 +2527,9 @@ def test_random(hef_gdir, inversion_params):
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                        rtol=0.1)
+                                       rtol=0.1)
             np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                        rtol=0.1)
+                                       rtol=0.1)
             if do_plot:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                 vol.plot(ax=ax1)
@@ -2538,29 +2559,29 @@ def test_random_sh(gdir_sh, hef_gdir):
     climate.local_t_star(gdir_sh)
 
     run_random_climate(gdir_sh, nyears=20, seed=4,
-                        bias=0, output_filesuffix='_rdn')
+                       bias=0, output_filesuffix='_rdn')
     run_constant_climate(gdir_sh, nyears=20,
-                            bias=0, output_filesuffix='_ct')
+                         bias=0, output_filesuffix='_ct')
 
     paths = [gdir_sh.get_filepath('model_diagnostics', filesuffix='_rdn'),
-                gdir_sh.get_filepath('model_diagnostics', filesuffix='_ct'),
-                ]
+             gdir_sh.get_filepath('model_diagnostics', filesuffix='_ct'),
+             ]
     for path in paths:
         with xr.open_dataset(path) as ds:
             assert ds.calendar_month[0] == 4
 
     paths = [gdir_sh.get_filepath('model_run', filesuffix='_rdn'),
-                gdir_sh.get_filepath('model_run', filesuffix='_ct'),
-                ]
+             gdir_sh.get_filepath('model_run', filesuffix='_ct'),
+             ]
     for path in paths:
         with FileModel(path) as model:
             vol = model.volume_km3_ts()
             len = model.length_m_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                        rtol=0.1)
+                                       rtol=0.1)
             np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                        rtol=0.1)
+                                       rtol=0.1)
             if do_plot:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
                 vol.plot(ax=ax1)
@@ -2575,11 +2596,11 @@ def test_random_sh(gdir_sh, hef_gdir):
     # Test a SH/NH mix
     init_present_time_glacier(gdir)
     run_constant_climate(gdir, nyears=20,
-                            bias=0, output_filesuffix='_ct')
+                         bias=0, output_filesuffix='_ct')
 
     utils.compile_climate_input([gdir_sh, gdir])
     utils.compile_run_output([gdir_sh, gdir],
-                                input_filesuffix='_ct')
+                             input_filesuffix='_ct')
 
     f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
     with xr.open_dataset(f) as ds:
@@ -2618,7 +2639,7 @@ def test_start_from_spinup(hef_gdir):
 
     # Again
     run_from_climate_data(hef_gdir, ye=2003, init_model_filesuffix='_1',
-                            output_filesuffix='_2')
+                          output_filesuffix='_2')
     fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
     with FileModel(fp) as fmod:
         fmod.run_until(fmod.last_yr)
@@ -2640,7 +2661,7 @@ def test_start_from_spinup_min_ys(hef_gdir):
 
     # Make a dummy run for 0 years
     run_from_climate_data(hef_gdir, ye=2002, min_ys=2002,
-                            output_filesuffix='_1')
+                          output_filesuffix='_1')
 
     fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
     with FileModel(fp) as fmod:
@@ -2650,8 +2671,8 @@ def test_start_from_spinup_min_ys(hef_gdir):
 
     # Again
     run_from_climate_data(hef_gdir, ys=2002, ye=2003,
-                            init_model_filesuffix='_1',
-                            output_filesuffix='_2')
+                          init_model_filesuffix='_1',
+                          output_filesuffix='_2')
     fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
     with FileModel(fp) as fmod:
         fmod.run_until(fmod.last_yr)
@@ -2684,11 +2705,11 @@ def test_cesm(hef_gdir):
         scesm = cesm.sel(time=slice('1961', '1990'))
         # Climate during the chosen period should be the same
         np.testing.assert_allclose(shist.temp.mean(),
-                                    scesm.temp.mean(),
-                                    rtol=1e-3)
+                                   scesm.temp.mean(),
+                                   rtol=1e-3)
         np.testing.assert_allclose(shist.prcp.mean(),
-                                    scesm.prcp.mean(),
-                                    rtol=1e-3)
+                                   scesm.prcp.mean(),
+                                   rtol=1e-3)
         # And also the anual cycle
         scru = shist.groupby('time.month').mean(dim='time')
         scesm = scesm.groupby('time.month').mean(dim='time')
@@ -2698,7 +2719,7 @@ def test_cesm(hef_gdir):
     # Mass balance models
     mb_cru = massbalance.PastMassBalance(gdir)
     mb_cesm = massbalance.PastMassBalance(gdir,
-                                            filename='gcm_data')
+                                          filename='gcm_data')
 
     # Average over 1961-1990
     h, w = gdir.get_inversion_flowline_hw()
@@ -2716,7 +2737,7 @@ def test_cesm(hef_gdir):
     if do_plot:
         df = pd.DataFrame(index=yrs)
         k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
-                                                            np.std(ts1))
+                                                           np.std(ts1))
         k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
                                                         np.std(ts2))
         df[k1] = ts1
@@ -2724,21 +2745,21 @@ def test_cesm(hef_gdir):
 
         df.plot()
         plt.plot(yrs,
-                    df[k1].rolling(31, center=True, min_periods=15).mean(),
-                    color='C0', linewidth=3)
+                 df[k1].rolling(31, center=True, min_periods=15).mean(),
+                 color='C0', linewidth=3)
         plt.plot(yrs,
-                    df[k2].rolling(31, center=True, min_periods=15).mean(),
-                    color='C1', linewidth=3)
+                 df[k2].rolling(31, center=True, min_periods=15).mean(),
+                 color='C1', linewidth=3)
         plt.title('SMB Hintereisferner Histalp VS CESM')
         plt.show()
 
     # See what that means for a run
     init_present_time_glacier(gdir)
     run_from_climate_data(gdir, ys=1961, ye=1990,
-                            output_filesuffix='_hist')
+                          output_filesuffix='_hist')
     run_from_climate_data(gdir, ys=1961, ye=1990,
-                            climate_filename='gcm_data',
-                            output_filesuffix='_cesm')
+                          climate_filename='gcm_data',
+                          output_filesuffix='_cesm')
 
     ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
     ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
@@ -2751,21 +2772,21 @@ def test_cesm(hef_gdir):
 
     # Do a spinup run
     run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
-                            output_filesuffix='_spinup')
+                         output_filesuffix='_spinup')
     run_from_climate_data(gdir, ys=1961, ye=1990,
-                            init_model_filesuffix='_spinup',
-                            output_filesuffix='_afterspinup')
+                          init_model_filesuffix='_spinup',
+                          output_filesuffix='_afterspinup')
     ds3 = utils.compile_run_output([gdir], path=False,
-                                    input_filesuffix='_afterspinup')
+                                   input_filesuffix='_afterspinup')
     assert (ds1.volume.isel(rgi_id=0, time=-1) <
             0.7*ds3.volume.isel(rgi_id=0, time=-1))
     ds3.close()
 
     # Try the compile optimisation
     out = utils.compile_run_output([gdir, gdir, gdir],
-                                    tmp_file_size=2,
-                                    input_filesuffix='_hist',
-                                    output_filesuffix='_rehist')
+                                   tmp_file_size=2,
+                                   input_filesuffix='_hist',
+                                   output_filesuffix='_rehist')
     assert out is None
     path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
     with xr.open_dataset(path) as ds:
@@ -2782,9 +2803,9 @@ def test_elevation_feedback(hef_gdir):
     tasks = []
     for feedback in feedbacks:
         tasks.append((run_random_climate,
-                        dict(nyears=200, seed=5, mb_elev_feedback=feedback,
-                            output_filesuffix=feedback,
-                            store_monthly_step=True)))
+                      dict(nyears=200, seed=5, mb_elev_feedback=feedback,
+                           output_filesuffix=feedback,
+                           store_monthly_step=True)))
     workflow.execute_parallel_tasks(hef_gdir, tasks)
 
     out = []
@@ -2835,9 +2856,9 @@ def test_merged_simulation(case_dir):
 
     # Get HEF, Vernagt1/2 and Gepatschferner
     glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
-                        (rgidf.RGIId == 'RGI50-11.00719_d01') |
-                        (rgidf.RGIId == 'RGI50-11.00779') |
-                        (rgidf.RGIId == 'RGI50-11.00746')].copy()
+                      (rgidf.RGIId == 'RGI50-11.00719_d01') |
+                      (rgidf.RGIId == 'RGI50-11.00779') |
+                      (rgidf.RGIId == 'RGI50-11.00746')].copy()
     gdirs = workflow.init_glacier_regions(glcdf)
     workflow.gis_prepro_tasks(gdirs)
     workflow.climate_tasks(gdirs)
@@ -2849,15 +2870,15 @@ def test_merged_simulation(case_dir):
 
     # merge, but with 0 buffer, should not do anything
     merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                            glcdf=glcdf, buffer=0)
+                                          glcdf=glcdf, buffer=0)
     assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
-                                            merge0.read_pickle(
-                                                'model_flowlines')])[0]
+                                          merge0.read_pickle(
+                                              'model_flowlines')])[0]
     gdirs += hef
 
     # merge, but with 50 buffer. overlapping glaciers should be excluded
     merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                            glcdf=glcdf, buffer=50)
+                                          glcdf=glcdf, buffer=50)
     assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
                                     merge1.read_pickle('model_flowlines')]
     assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
@@ -2867,7 +2888,7 @@ def test_merged_simulation(case_dir):
 
     # merge HEF and Vernagt, include Gepatsch but it should not be merged
     gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                                glcdf=glcdf)
+                                               glcdf=glcdf)
 
     # test flowlines
     fls = gdir_merged.read_pickle('model_flowlines')
@@ -2897,24 +2918,24 @@ def test_merged_simulation(case_dir):
     # run HEF and the two Vernagts as entities
     gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
     workflow.execute_entity_task(tasks.run_constant_climate,
-                                    gdirs_entity,
-                                    nyears=years,
-                                    output_filesuffix='_entity',
-                                    temperature_bias=tbias)
+                                 gdirs_entity,
+                                 nyears=years,
+                                 output_filesuffix='_entity',
+                                 temperature_bias=tbias)
 
     ds_entity = utils.compile_run_output(gdirs_entity,
-                                            path=False,
-                                            input_filesuffix='_entity')
+                                         path=False,
+                                         input_filesuffix='_entity')
 
     # and run the merged glacier
     workflow.execute_entity_task(tasks.run_constant_climate,
-                                    gdir_merged, output_filesuffix='_merged',
-                                    nyears=years,
-                                    temperature_bias=tbias)
+                                 gdir_merged, output_filesuffix='_merged',
+                                 nyears=years,
+                                 temperature_bias=tbias)
 
     ds_merged = utils.compile_run_output(gdir_merged,
-                                            path=False,
-                                            input_filesuffix='_merged')
+                                         path=False,
+                                         input_filesuffix='_merged')
 
     # areas should be quite similar after 10yrs
     assert_allclose(ds_entity.area.isel(time=10).sum(),

@@ -51,6 +51,7 @@ def _setup_case_dir(call, test_dir):
     mkdir(casedir, reset=True)
     return casedir
 
+
 def _teardown_case_dir(casedir):
     if os.path.exists(casedir):
         shutil.rmtree(casedir)
@@ -78,7 +79,8 @@ def hef_gdir_base(request, test_dir):
     except AttributeError:
         return init_hef()
 
+
 @pytest.fixture(scope='function')
 def hef_gdir(hef_gdir_base, case_dir):
     return tasks.copy_to_basedir(hef_gdir_base, base_dir=case_dir,
-                                          setup='all')
+                                 setup='all')
