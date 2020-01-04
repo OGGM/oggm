@@ -60,11 +60,82 @@ do_plot = False
 
 DOM_BORDER = 80
 
+@pytest.fixture(scope='module')
+def io_model_factory():
+    glen_a = 2.4e-24
+    return lambda fls, **kwargs: FluxBasedModel(fls, glen_a=glen_a, **kwargs)
 
-@pytest.fixture(scope='class')
-def hef_class_copy(hef_gdir_base, class_case_dir):
-    return tasks.copy_to_basedir(hef_gdir_base, base_dir=class_case_dir,
+@pytest.fixture(scope='module')
+def backwards_idealized_fls(backwards_model_factory):
+    cfg.initialize()
+    origfls = dummy_constant_bed(nx=120, hmin=1800)
+
+    model = backwards_model_factory(origfls)
+    model.run_until(500)
+    return copy.deepcopy(model.fls)
+
+@pytest.fixture(scope='module')
+def backwards_model_factory():
+    fs = 5.7e-20
+    # Backwards
+    N = 3
+    fd = 1.9e-24
+    glen_a = (N+2) * fd / 2.
+
+    ela = 2800.
+
+    def _model_factory(*args, ela_delta=0., **kwargs): 
+        mb = LinearMassBalance(ela + ela_delta)
+        return FluxBasedModel(*args, mb_model=mb, fs=fs, glen_a=glen_a, **kwargs)
+
+    return _model_factory
+
+@pytest.fixture(scope='module')
+def inversion_gdir(test_dir):
+    from oggm import GlacierDirectory
+    from oggm.tasks import define_glacier_region
+    import geopandas as gpd
+
+    # Init
+    cfg.initialize()
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+
+    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+    entity = gpd.read_file(hef_file).iloc[0]
+
+    gdir = GlacierDirectory(entity, base_dir=test_dir, reset=True)
+    define_glacier_region(gdir, entity=entity)
+    return gdir
+
+@pytest.fixture(scope='module')
+def gdir_sh(request, test_dir, hef_gdir_base):
+    dir_sh = os.path.join(test_dir, request.module.__name__ + '_sh')
+    utils.mkdir(dir_sh, reset=True)
+    gdir_sh = tasks.copy_to_basedir(hef_gdir_base, base_dir=dir_sh,
                                           setup='all')
+    gdir_sh.hemisphere = 'sh'
+    yield gdir_sh
+    # teardown
+    if os.path.exists(dir_sh):
+        shutil.rmtree(dir_sh)
+
+
+@pytest.fixture
+def with_class_wd(request, test_dir, hef_gdir_base):
+    # dependency on hef_gdir_base to ensure proper initialization order
+    prev_wd = cfg.PATHS['working_dir']
+    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.function.__name__ + '_wd')
+    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+    yield
+    # teardown
+    cfg.PATHS['working_dir'] = prev_wd
+
+
+@pytest.fixture
+def inversion_params(hef_gdir):
+    return hef_gdir.read_pickle('inversion_params')
 
 
 def test_init_present_time_glacier(hef_gdir):
@@ -155,15 +226,6 @@ def test_present_time_glacier_massbalance(hef_gdir):
     np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
 
 
-@pytest.fixture()
-def glacier_alt_cfg_1():
-    cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
-    cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
-    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-
-
-@pytest.mark.usefixtures('glacier_alt_cfg_1')
 def test_define_divides(case_dir):
 
     from oggm.core import centerlines
@@ -172,6 +234,11 @@ def test_define_divides(case_dir):
     from oggm.core import gis
     from oggm import GlacierDirectory
     import geopandas as gpd
+
+    cfg.initialize()
+    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+    cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
+    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
     hef_file = utils.get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.read_file(hef_file)
@@ -1204,12 +1271,6 @@ def test_flowline_to_dataset():
         assert ds_.equals(ds)
 
 
-@pytest.fixture(scope='module')
-def io_model_factory():
-    glen_a = 2.4e-24
-    return lambda fls, **kwargs: FluxBasedModel(fls, glen_a=glen_a, **kwargs)
-
-
 def test_model_to_file(case_dir, hef_gdir, io_model_factory):
     init_present_time_glacier(hef_gdir)
 
@@ -1486,33 +1547,6 @@ def test_hef(case_dir, hef_gdir):
         assert fl.flows_to_indice == fl_.flows_to_indice
 
 
-@pytest.fixture(scope='module')
-def backwards_model_factory():
-    fs = 5.7e-20
-    # Backwards
-    N = 3
-    fd = 1.9e-24
-    glen_a = (N+2) * fd / 2.
-
-    ela = 2800.
-
-    def _model_factory(*args, ela_delta=0., **kwargs): 
-        mb = LinearMassBalance(ela + ela_delta)
-        return FluxBasedModel(*args, mb_model=mb, fs=fs, glen_a=glen_a, **kwargs)
-
-    return _model_factory
-
-
-@pytest.fixture(scope='module')
-def backwards_idealized_fls(backwards_model_factory):
-    cfg.initialize()
-    origfls = dummy_constant_bed(nx=120, hmin=1800)
-
-    model = backwards_model_factory(origfls)
-    model.run_until(500)
-    return copy.deepcopy(model.fls)
-
-
 @pytest.mark.slow
 def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
 
@@ -1584,26 +1618,6 @@ def test_fails(backwards_idealized_fls, backwards_model_factory):
     model = backwards_model_factory(backwards_idealized_fls, ela_delta=-150., y0=y0)
     with pytest.raises(RuntimeError):
         _find_inital_glacier(model, model.mb_model, y0, y1, rtol=0.02, max_ite=5)
-
-
-@pytest.fixture(scope='module')
-def inversion_gdir(test_dir):
-    from oggm import GlacierDirectory
-    from oggm.tasks import define_glacier_region
-    import geopandas as gpd
-
-    # Init
-    cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
-    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-    cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-
-    hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-    entity = gpd.read_file(hef_file).iloc[0]
-
-    gdir = GlacierDirectory(entity, base_dir=test_dir, reset=True)
-    define_glacier_region(gdir, entity=entity)
-    return gdir
 
 
 def simple_plot(model, gdir):  # pragma: no cover
@@ -2351,35 +2365,6 @@ def test_inversion_and_run(inversion_gdir):
         plt.show()
 
 
-@pytest.fixture(scope='module')
-def gdir_sh(request, test_dir, hef_gdir_base):
-    dir_sh = os.path.join(test_dir, request.module.__name__ + '_sh')
-    utils.mkdir(dir_sh, reset=True)
-    gdir_sh = tasks.copy_to_basedir(hef_gdir_base, base_dir=dir_sh,
-                                          setup='all')
-    gdir_sh.hemisphere = 'sh'
-    yield gdir_sh
-    # teardown
-    if os.path.exists(dir_sh):
-        shutil.rmtree(dir_sh)
-
-
-@pytest.fixture(scope='function')
-def with_class_wd(request, test_dir, hef_gdir_base):
-    # dependency on hef_gdir_base to ensure proper initialization order
-    prev_wd = cfg.PATHS['working_dir']
-    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.function.__name__ + '_wd')
-    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
-    yield
-    # teardown
-    cfg.PATHS['working_dir'] = prev_wd
-
-
-@pytest.fixture(scope='function')
-def inversion_params(hef_gdir):
-    return hef_gdir.read_pickle('inversion_params')
-
-
 @pytest.mark.slow
 def test_equilibrium(hef_gdir, inversion_params):
 
@@ -2823,7 +2808,6 @@ def test_elevation_feedback(hef_gdir):
         plt.show()
 
 
-@pytest.mark.focus
 @pytest.mark.slow
 def test_merged_simulation(case_dir):
     import geopandas as gpd
