@@ -1586,8 +1586,8 @@ def test_fails(backwards_idealized_fls, backwards_model_factory):
         _find_inital_glacier(model, model.mb_model, y0, y1, rtol=0.02, max_ite=5)
 
 
-@pytest.fixture(scope='class')
-def inversion_gdir(class_case_dir):
+@pytest.fixture(scope='module')
+def inversion_gdir(test_dir):
     from oggm import GlacierDirectory
     from oggm.tasks import define_glacier_region
     import geopandas as gpd
@@ -1601,739 +1601,754 @@ def inversion_gdir(class_case_dir):
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
-    gdir = GlacierDirectory(entity, base_dir=class_case_dir, reset=True)
+    gdir = GlacierDirectory(entity, base_dir=test_dir, reset=True)
     define_glacier_region(gdir, entity=entity)
     return gdir
 
 
-class TestIdealisedInversion():
-    def simple_plot(self, model, gdir):  # pragma: no cover
-        ocls = gdir.read_pickle('inversion_output')
-        ithick = ocls[-1]['thick']
-        pg = model.fls[-1].thick > 0
+def simple_plot(model, gdir):  # pragma: no cover
+    ocls = gdir.read_pickle('inversion_output')
+    ithick = ocls[-1]['thick']
+    pg = model.fls[-1].thick > 0
+    plt.figure()
+    bh = model.fls[-1].bed_h[pg]
+    sh = model.fls[-1].surface_h[pg]
+    plt.plot(sh, 'k')
+    plt.plot(bh, 'C0', label='Real bed')
+    plt.plot(sh - ithick, 'C3', label='Computed bed')
+    plt.title('Compare Shape')
+    plt.xlabel('[dx]')
+    plt.ylabel('Elevation [m]')
+    plt.legend(loc=3)
+    plt.show()
+
+def double_plot(model, gdir):  # pragma: no cover
+    ocls = gdir.read_pickle('inversion_output')
+    f, axs = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+    for i, ax in enumerate(axs):
+        ithick = ocls[i]['thick']
+        pg = model.fls[i].thick > 0
+        bh = model.fls[i].bed_h[pg]
+        sh = model.fls[i].surface_h[pg]
+        ax.plot(sh, 'k')
+        ax.plot(bh, 'C0', label='Real bed')
+        ax.plot(sh - ithick, 'C3', label='Computed bed')
+        ax.set_title('Compare Shape')
+        ax.set_xlabel('[dx]')
+        ax.legend(loc=3)
+    plt.show()
+
+
+def test_inversion_rectangular(inversion_gdir):
+
+    fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx, widths=10)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=fl.surface_h[pg])
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.01)
+
+    # Equations
+    mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
+    flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
+
+    inv_out = inversion_gdir.read_pickle('inversion_input')
+    inv_flux = inv_out[0]['flux']
+
+    slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
+
+    est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux)
+    mod_h = fl.thick[pg]
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+    # OGGM internal flux
+    est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+    # OK so what's happening here is following: the flux computed in
+    # OGGM intern is less good than the real one with the real MB,
+    # because of the zero-flux assumption at the last grid-point
+    # so this RMSD is smaller:
+    assert (utils.rmsd(est_h[25:95], mod_h[25:95]) <
+            utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
+
+    # And with our current inversion?
+    inv_out = inversion_gdir.read_pickle('inversion_output')
+    our_h = inv_out[0]['thick']
+    assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
+
+    # Check with scalars
+    assert inversion.sia_thickness(slope[-5], fl.widths_m[pg][-5],
+                                    inv_flux[-5]) > 1
+
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+
+def test_inversion_parabolic(inversion_gdir):
+
+    fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
+    mb = LinearMassBalance(2500.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=fl.surface_h[pg])
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+    assert_allclose(v, model.volume_m3, rtol=0.01)
+
+    inv = inversion_gdir.read_pickle('inversion_output')[-1]
+    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_ref = (4 * fl.thick[pg] /
+                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+
+    # Equations
+    mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
+    flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
+
+    inv_out = inversion_gdir.read_pickle('inversion_input')
+    inv_flux = inv_out[0]['flux']
+
+    slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
+
+    est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
+                                    shape='parabolic')
+    mod_h = fl.thick[pg]
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+    # OGGM internal flux
+    est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+    # OK so what's happening here is following: the flux computed in
+    # OGGM intern is less good than the real one with the real MB,
+    # because of the zero-flux assumption at the last grid-point
+    # so this RMSD is smaller:
+    assert (utils.rmsd(est_h[25:95], mod_h[25:95]) <
+            utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
+
+    # And with our current inversion?
+    inv_out = inversion_gdir.read_pickle('inversion_output')
+    our_h = inv_out[0]['thick']
+    assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
+
+    # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
+    if do_plot:  # pragma: no cover
+        plt.plot(bed_shape_ref[:-3])
+        plt.plot(bed_shape_gl[:-3])
+        plt.show()
+
+
+def test_inversion_parabolic_sf_adhikari(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
+
+    fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
+
+    mb = LinearMassBalance(2500.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=fl.surface_h[pg])
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+    assert_allclose(v, model.volume_m3, rtol=0.02)
+
+    inv = inversion_gdir.read_pickle('inversion_output')[-1]
+    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_ref = (4 * fl.thick[pg] /
+                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+
+    # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
+    if do_plot:  # pragma: no cover
+        plt.plot(bed_shape_ref[:-3])
+        plt.plot(bed_shape_gl[:-3])
+        plt.show()
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+    # Equations
+    mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
+    flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
+
+    slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
+
+    est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
+                                    shape='parabolic',
+                                    shape_factor='Adhikari')
+    mod_h = fl.thick[pg]
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+
+def test_inversion_parabolic_sf_huss(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
+
+    fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
+
+    mb = LinearMassBalance(2500.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=fl.surface_h[pg])
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+    assert_allclose(v, model.volume_m3, rtol=0.01)
+
+    inv = inversion_gdir.read_pickle('inversion_output')[-1]
+    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+    bed_shape_ref = (4 * fl.thick[pg] /
+                        (flo.widths * inversion_gdir.grid.dx) ** 2)
+
+    # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
+    if do_plot:  # pragma: no cover
+        plt.plot(bed_shape_ref[:-3])
+        plt.plot(bed_shape_gl[:-3])
+        plt.show()
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+    # Equations
+    mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
+    flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
+
+    slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
+
+    est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
+                                    shape='parabolic',
+                                    shape_factor='Huss')
+    mod_h = fl.thick[pg]
+
+    # Test in the middle where slope is not too important
+    assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+
+
+@pytest.mark.slow
+def test_inversion_mixed(inversion_gdir):
+
+    fls = dummy_mixed_bed(deflambdas=0, map_dx=inversion_gdir.grid.dx,
+                            mixslice=slice(10, 30))
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    # This reduces the test's accuracy but makes it much faster.
+    model.run_until_equilibrium(rate=0.01)
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = fl.is_trapezoid[pg]
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+
+@pytest.mark.slow
+def test_inversion_cliff(inversion_gdir):
+
+    fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
+                                    cliff_height=100)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+
+@pytest.mark.slow
+def test_inversion_cliff_sf_adhikari(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
+
+    fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
+                                    cliff_height=100)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+@pytest.mark.slow
+def test_inversion_cliff_sf_huss(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
+
+    fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
+                                    cliff_height=100)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+def test_inversion_noisy(inversion_gdir):
+
+    fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+
+def test_inversion_noisy_sf_adhikari(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
+
+    fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+@pytest.mark.slow
+def test_inversion_noisy_sf_huss(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
+
+    fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.05)
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+def test_inversion_tributary(inversion_gdir):
+
+    fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+
+    fls[0].set_flows_to(fls[1])
+
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.02)
+    if do_plot:  # pragma: no cover
+        double_plot(model, inversion_gdir)
+
+
+def test_inversion_tributary_sf_adhikari(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
+
+    fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+
+    fls[0].set_flows_to(fls[1])
+
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.02)
+    if do_plot:  # pragma: no cover
+        double_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+@pytest.mark.slow
+def test_inversion_tributary_sf_huss(inversion_gdir):
+    old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
+    old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
+    cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
+
+    fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
+    for fl in fls:
+        fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model.run_until_equilibrium()
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+
+    fls[0].set_flows_to(fls[1])
+
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.02)
+    if do_plot:  # pragma: no cover
+        double_plot(model, inversion_gdir)
+
+    cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
+    cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
+
+
+def test_inversion_non_equilibrium(inversion_gdir):
+
+    fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx)
+    mb = LinearMassBalance(2600.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+    model.run_until_equilibrium()
+
+    mb = LinearMassBalance(2800.)
+    model = FluxBasedModel(fls, mb_model=mb, y0=0)
+    model.run_until(50)
+
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    # expected errors
+    assert v > model.volume_m3
+    ocls = inversion_gdir.read_pickle('inversion_output')
+    ithick = ocls[0]['thick']
+    assert np.mean(ithick) > np.mean(model.fls[0].thick)*1.1
+    if do_plot:  # pragma: no cover
+        simple_plot(model, inversion_gdir)
+
+
+def test_inversion_and_run(inversion_gdir):
+
+    fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
+    mb = LinearMassBalance(2500.)
+
+    model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+    model.run_until_equilibrium()
+    fls = []
+    for fl in model.fls:
+        pg = np.where(fl.thick > 0)
+        line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+        sh = fl.surface_h[pg]
+        flo = centerlines.Centerline(line, dx=fl.dx,
+                                        surface_h=sh)
+        flo.widths = fl.widths[pg]
+        flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+        fls.append(flo)
+    inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+    climate.apparent_mb_from_linear_mb(inversion_gdir)
+    inversion.prepare_for_inversion(inversion_gdir)
+    v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+
+    assert_allclose(v, model.volume_m3, rtol=0.01)
+
+    inv = inversion_gdir.read_pickle('inversion_output')[-1]
+    bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+
+    ithick = inv['thick']
+    fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
+                                from_other_shape=bed_shape_gl[:-2],
+                                from_other_bed=sh-ithick)
+    model2 = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                            time_stepping='conservative')
+    model2.run_until_equilibrium()
+    assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
+
+    if do_plot:  # pragma: no cover
         plt.figure()
-        bh = model.fls[-1].bed_h[pg]
-        sh = model.fls[-1].surface_h[pg]
-        plt.plot(sh, 'k')
-        plt.plot(bh, 'C0', label='Real bed')
-        plt.plot(sh - ithick, 'C3', label='Computed bed')
+        plt.plot(model.fls[-1].bed_h, 'C0')
+        plt.plot(model2.fls[-1].bed_h, 'C3')
+        plt.plot(model.fls[-1].surface_h, 'C0')
+        plt.plot(model2.fls[-1].surface_h, 'C3')
         plt.title('Compare Shape')
-        plt.xlabel('[dx]')
+        plt.xlabel('[m]')
         plt.ylabel('Elevation [m]')
-        plt.legend(loc=3)
         plt.show()
-
-    def double_plot(self, model, gdir):  # pragma: no cover
-        ocls = gdir.read_pickle('inversion_output')
-        f, axs = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
-        for i, ax in enumerate(axs):
-            ithick = ocls[i]['thick']
-            pg = model.fls[i].thick > 0
-            bh = model.fls[i].bed_h[pg]
-            sh = model.fls[i].surface_h[pg]
-            ax.plot(sh, 'k')
-            ax.plot(bh, 'C0', label='Real bed')
-            ax.plot(sh - ithick, 'C3', label='Computed bed')
-            ax.set_title('Compare Shape')
-            ax.set_xlabel('[dx]')
-            ax.legend(loc=3)
-        plt.show()
-
-    def test_inversion_rectangular(self, inversion_gdir):
-
-        fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx, widths=10)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=fl.surface_h[pg])
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.01)
-
-        # Equations
-        mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
-        flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
-
-        inv_out = inversion_gdir.read_pickle('inversion_input')
-        inv_flux = inv_out[0]['flux']
-
-        slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
-
-        est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux)
-        mod_h = fl.thick[pg]
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-        # OGGM internal flux
-        est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-        # OK so what's happening here is following: the flux computed in
-        # OGGM intern is less good than the real one with the real MB,
-        # because of the zero-flux assumption at the last grid-point
-        # so this RMSD is smaller:
-        assert (utils.rmsd(est_h[25:95], mod_h[25:95]) <
-                utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
-
-        # And with our current inversion?
-        inv_out = inversion_gdir.read_pickle('inversion_output')
-        our_h = inv_out[0]['thick']
-        assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
-
-        # Check with scalars
-        assert inversion.sia_thickness(slope[-5], fl.widths_m[pg][-5],
-                                       inv_flux[-5]) > 1
-
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-    def test_inversion_parabolic(self, inversion_gdir):
-
-        fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
-        mb = LinearMassBalance(2500.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=fl.surface_h[pg])
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-        assert_allclose(v, model.volume_m3, rtol=0.01)
-
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
-        bed_shape_ref = (4 * fl.thick[pg] /
-                         (flo.widths * inversion_gdir.grid.dx) ** 2)
-
-        # Equations
-        mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
-        flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
-
-        inv_out = inversion_gdir.read_pickle('inversion_input')
-        inv_flux = inv_out[0]['flux']
-
-        slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
-
-        est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
-                                        shape='parabolic')
-        mod_h = fl.thick[pg]
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-        # OGGM internal flux
-        est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-        # OK so what's happening here is following: the flux computed in
-        # OGGM intern is less good than the real one with the real MB,
-        # because of the zero-flux assumption at the last grid-point
-        # so this RMSD is smaller:
-        assert (utils.rmsd(est_h[25:95], mod_h[25:95]) <
-                utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
-
-        # And with our current inversion?
-        inv_out = inversion_gdir.read_pickle('inversion_output')
-        our_h = inv_out[0]['thick']
-        assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
-
-        # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
-        if do_plot:  # pragma: no cover
-            plt.plot(bed_shape_ref[:-3])
-            plt.plot(bed_shape_gl[:-3])
-            plt.show()
-
-    def test_inversion_parabolic_sf_adhikari(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
-
-        fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
-
-        mb = LinearMassBalance(2500.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=fl.surface_h[pg])
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-        assert_allclose(v, model.volume_m3, rtol=0.02)
-
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
-        bed_shape_ref = (4 * fl.thick[pg] /
-                         (flo.widths * inversion_gdir.grid.dx) ** 2)
-
-        # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
-        if do_plot:  # pragma: no cover
-            plt.plot(bed_shape_ref[:-3])
-            plt.plot(bed_shape_gl[:-3])
-            plt.show()
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-        # Equations
-        mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
-        flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
-
-        slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
-
-        est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
-                                        shape='parabolic',
-                                        shape_factor='Adhikari')
-        mod_h = fl.thick[pg]
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-    def test_inversion_parabolic_sf_huss(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
-
-        fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
-
-        mb = LinearMassBalance(2500.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=fl.surface_h[pg])
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-        assert_allclose(v, model.volume_m3, rtol=0.01)
-
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
-        bed_shape_ref = (4 * fl.thick[pg] /
-                         (flo.widths * inversion_gdir.grid.dx) ** 2)
-
-        # assert utils.rmsd(fl.bed_shape[pg], bed_shape_gl) < 0.001
-        if do_plot:  # pragma: no cover
-            plt.plot(bed_shape_ref[:-3])
-            plt.plot(bed_shape_gl[:-3])
-            plt.show()
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-        # Equations
-        mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
-        flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
-
-        slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
-
-        est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
-                                        shape='parabolic',
-                                        shape_factor='Huss')
-        mod_h = fl.thick[pg]
-
-        # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
-
-    @pytest.mark.slow
-    def test_inversion_mixed(self, inversion_gdir):
-
-        fls = dummy_mixed_bed(deflambdas=0, map_dx=inversion_gdir.grid.dx,
-                              mixslice=slice(10, 30))
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        # This reduces the test's accuracy but makes it much faster.
-        model.run_until_equilibrium(rate=0.01)
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = fl.is_trapezoid[pg]
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-    @pytest.mark.slow
-    def test_inversion_cliff(self, inversion_gdir):
-
-        fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                       cliff_height=100)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-    @pytest.mark.slow
-    def test_inversion_cliff_sf_adhikari(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
-
-        fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                       cliff_height=100)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    @pytest.mark.slow
-    def test_inversion_cliff_sf_huss(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
-
-        fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
-                                       cliff_height=100)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    def test_inversion_noisy(self, inversion_gdir):
-
-        fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-    def test_inversion_noisy_sf_adhikari(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
-
-        fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    @pytest.mark.slow
-    def test_inversion_noisy_sf_huss(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
-
-        fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.05)
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    def test_inversion_tributary(self, inversion_gdir):
-
-        fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-
-        fls[0].set_flows_to(fls[1])
-
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.02)
-        if do_plot:  # pragma: no cover
-            self.double_plot(model, inversion_gdir)
-
-    def test_inversion_tributary_sf_adhikari(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Adhikari'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Adhikari'
-
-        fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-
-        fls[0].set_flows_to(fls[1])
-
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.02)
-        if do_plot:  # pragma: no cover
-            self.double_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    @pytest.mark.slow
-    def test_inversion_tributary_sf_huss(self, inversion_gdir):
-        old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
-        old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = 'Huss'
-        cfg.PARAMS['use_shape_factor_for_inversion'] = 'Huss'
-
-        fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
-        for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
-        model.run_until_equilibrium()
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-
-        fls[0].set_flows_to(fls[1])
-
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.02)
-        if do_plot:  # pragma: no cover
-            self.double_plot(model, inversion_gdir)
-
-        cfg.PARAMS['use_shape_factor_for_fluxbasedmodel'] = old_model_sf
-        cfg.PARAMS['use_shape_factor_for_inversion'] = old_inversion_sf
-
-    def test_inversion_non_equilibrium(self, inversion_gdir):
-
-        fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx)
-        mb = LinearMassBalance(2600.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
-        model.run_until_equilibrium()
-
-        mb = LinearMassBalance(2800.)
-        model = FluxBasedModel(fls, mb_model=mb, y0=0)
-        model.run_until(50)
-
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        # expected errors
-        assert v > model.volume_m3
-        ocls = inversion_gdir.read_pickle('inversion_output')
-        ithick = ocls[0]['thick']
-        assert np.mean(ithick) > np.mean(model.fls[0].thick)*1.1
-        if do_plot:  # pragma: no cover
-            self.simple_plot(model, inversion_gdir)
-
-    def test_inversion_and_run(self, inversion_gdir):
-
-        fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
-        mb = LinearMassBalance(2500.)
-
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
-        model.run_until_equilibrium()
-        fls = []
-        for fl in model.fls:
-            pg = np.where(fl.thick > 0)
-            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
-            sh = fl.surface_h[pg]
-            flo = centerlines.Centerline(line, dx=fl.dx,
-                                         surface_h=sh)
-            flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
-            fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
-
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-
-        assert_allclose(v, model.volume_m3, rtol=0.01)
-
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
-
-        ithick = inv['thick']
-        fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
-                                  from_other_shape=bed_shape_gl[:-2],
-                                  from_other_bed=sh-ithick)
-        model2 = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                time_stepping='conservative')
-        model2.run_until_equilibrium()
-        assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
-
-        if do_plot:  # pragma: no cover
-            plt.figure()
-            plt.plot(model.fls[-1].bed_h, 'C0')
-            plt.plot(model2.fls[-1].bed_h, 'C3')
-            plt.plot(model.fls[-1].surface_h, 'C0')
-            plt.plot(model2.fls[-1].surface_h, 'C3')
-            plt.title('Compare Shape')
-            plt.xlabel('[m]')
-            plt.ylabel('Elevation [m]')
-            plt.show()
 
 
 @pytest.fixture(scope='class')
