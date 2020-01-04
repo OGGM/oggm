@@ -2351,9 +2351,9 @@ def test_inversion_and_run(inversion_gdir):
         plt.show()
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope='module')
 def gdir_sh(request, test_dir, hef_gdir_base):
-    dir_sh = os.path.join(test_dir, request.cls.__name__ + '_sh')
+    dir_sh = os.path.join(test_dir, request.module.__name__ + '_sh')
     utils.mkdir(dir_sh, reset=True)
     gdir_sh = tasks.copy_to_basedir(hef_gdir_base, base_dir=dir_sh,
                                           setup='all')
@@ -2364,460 +2364,470 @@ def gdir_sh(request, test_dir, hef_gdir_base):
         shutil.rmtree(dir_sh)
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope='function')
 def with_class_wd(request, test_dir, hef_gdir_base):
     # dependency on hef_gdir_base to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
-    print('PREVIOUS WORKING DIR: ', prev_wd)
-    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.cls.__name__ + '_wd')
+    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.function.__name__ + '_wd')
     utils.mkdir(cfg.PATHS['working_dir'], reset=True)
     yield
     # teardown
     cfg.PATHS['working_dir'] = prev_wd
 
 
-@pytest.fixture(scope='class')
-def inversion_params(hef_class_copy):
-    return hef_class_copy.read_pickle('inversion_params')
+@pytest.fixture(scope='function')
+def inversion_params(hef_gdir):
+    return hef_gdir.read_pickle('inversion_params')
+
+
+@pytest.mark.slow
+def test_equilibrium(hef_gdir, inversion_params):
+
+    init_present_time_glacier(hef_gdir)
+
+    mb_mod = massbalance.ConstantMassBalance(hef_gdir)
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                            fs=inversion_params['fs'],
+                            glen_a=inversion_params['glen_a'],
+                            min_dt=SEC_IN_DAY/2.,
+                            mb_elev_feedback='never')
+
+    ref_vol = model.volume_km3
+    ref_area = model.area_km2
+    ref_len = model.fls[-1].length_m
+
+    np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
+
+    model.run_until_equilibrium(rate=1e-4)
+    assert not model.dt_warning
+    assert model.yr > 50
+    after_vol = model.volume_km3
+    after_area = model.area_km2
+    after_len = model.fls[-1].length_m
+
+    np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+    np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
+    np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+
+
+@pytest.mark.slow
+def test_equilibrium_glacier_wide(hef_gdir, inversion_params):
+
+    init_present_time_glacier(hef_gdir)
+
+    cl = massbalance.ConstantMassBalance
+    mb_mod = massbalance.MultipleFlowlineMassBalance(hef_gdir,
+                                                        mb_model_class=cl)
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                            fs=inversion_params['fs'],
+                            glen_a=inversion_params['glen_a'],
+                            min_dt=SEC_IN_DAY/2.,
+                            mb_elev_feedback='never')
+
+    ref_vol = model.volume_km3
+    ref_area = model.area_km2
+    ref_len = model.fls[-1].length_m
+
+    np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
+
+    model.run_until_equilibrium(rate=1e-4)
+    assert not model.dt_warning
+    assert model.yr > 50
+    after_vol = model.volume_km3
+    after_area = model.area_km2
+    after_len = model.fls[-1].length_m
+
+    np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
+    np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
+    np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+
+
+@pytest.mark.slow
+def test_commitment(hef_gdir, inversion_params):
+
+    init_present_time_glacier(hef_gdir)
+
+    mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2003 - 15)
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                            fs=inversion_params['fs'],
+                            glen_a=inversion_params['glen_a'])
+
+    ref_area = model.area_km2
+    np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
+
+    model.run_until_equilibrium()
+    assert model.yr > 100
+
+    after_vol_1 = model.volume_km3
+
+    _tmp = cfg.PARAMS['mixed_min_shape']
+    cfg.PARAMS['mixed_min_shape'] = 0.001
+    init_present_time_glacier(hef_gdir)
+    cfg.PARAMS['mixed_min_shape'] = _tmp
+
+    glacier = hef_gdir.read_pickle('model_flowlines')
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                            fs=inversion_params['fs'],
+                            glen_a=inversion_params['glen_a'])
+
+    ref_vol = model.volume_km3
+    ref_area = model.area_km2
+    np.testing.assert_allclose(ref_area,hef_gdir.rgi_area_km2, rtol=0.02)
+
+    model.run_until_equilibrium()
+    assert model.yr > 100
+
+    after_vol_2 = model.volume_km3
+
+    assert after_vol_1 < (0.5 * ref_vol)
+    assert after_vol_2 < (0.5 * ref_vol)
+
+    if do_plot:  # pragma: no cover
+        plt.figure()
+        plt.plot(glacier[-1].surface_h, 'b', label='start')
+        plt.plot(model.fls[-1].surface_h, 'r', label='end')
+
+        plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
+        plt.legend(loc='best')
+        plt.show()
+
+
+@pytest.mark.slow
+def test_random(hef_gdir, inversion_params):
+
+    init_present_time_glacier(hef_gdir)
+    run_random_climate(hef_gdir, nyears=100, seed=6,
+                        fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                        bias=0, output_filesuffix='_rdn')
+    run_constant_climate(hef_gdir, nyears=100,
+                            fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                            bias=0, output_filesuffix='_ct')
+
+    paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
+                hef_gdir.get_filepath('model_run', filesuffix='_ct'),
+                ]
+
+    for path in paths:
+        with FileModel(path) as model:
+            vol = model.volume_km3_ts()
+            len = model.length_m_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                        rtol=0.1)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                        rtol=0.1)
+            if do_plot:
+                fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                vol.plot(ax=ax1)
+                ax1.set_title('Volume')
+                area.plot(ax=ax2)
+                ax2.set_title('Area')
+                len.plot(ax=ax3)
+                ax3.set_title('Length')
+                plt.tight_layout()
+                plt.show()
 
 
 @pytest.mark.usefixtures('with_class_wd')
-class TestHEF:
-    @pytest.mark.slow
-    def test_equilibrium(self, hef_class_copy, inversion_params):
-
-        init_present_time_glacier(hef_class_copy)
-
-        mb_mod = massbalance.ConstantMassBalance(hef_class_copy)
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
-                               min_dt=SEC_IN_DAY/2.,
-                               mb_elev_feedback='never')
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        ref_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_area, hef_class_copy.rgi_area_km2, rtol=0.03)
-
-        model.run_until_equilibrium(rate=1e-4)
-        assert not model.dt_warning
-        assert model.yr > 50
-        after_vol = model.volume_km3
-        after_area = model.area_km2
-        after_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
-
-    @pytest.mark.slow
-    def test_equilibrium_glacier_wide(self, hef_class_copy, inversion_params):
-
-        init_present_time_glacier(hef_class_copy)
-
-        cl = massbalance.ConstantMassBalance
-        mb_mod = massbalance.MultipleFlowlineMassBalance(hef_class_copy,
-                                                         mb_model_class=cl)
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
-                               min_dt=SEC_IN_DAY/2.,
-                               mb_elev_feedback='never')
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        ref_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_area, hef_class_copy.rgi_area_km2, rtol=0.03)
-
-        model.run_until_equilibrium(rate=1e-4)
-        assert not model.dt_warning
-        assert model.yr > 50
-        after_vol = model.volume_km3
-        after_area = model.area_km2
-        after_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
-
-    @pytest.mark.slow
-    def test_commitment(self, hef_class_copy, inversion_params):
-
-        init_present_time_glacier(hef_class_copy)
-
-        mb_mod = massbalance.ConstantMassBalance(hef_class_copy, y0=2003 - 15)
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
-
-        ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area, hef_class_copy.rgi_area_km2, rtol=0.02)
-
-        model.run_until_equilibrium()
-        assert model.yr > 100
-
-        after_vol_1 = model.volume_km3
-
-        _tmp = cfg.PARAMS['mixed_min_shape']
-        cfg.PARAMS['mixed_min_shape'] = 0.001
-        init_present_time_glacier(hef_class_copy)
-        cfg.PARAMS['mixed_min_shape'] = _tmp
-
-        glacier = hef_class_copy.read_pickle('model_flowlines')
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area,hef_class_copy.rgi_area_km2, rtol=0.02)
-
-        model.run_until_equilibrium()
-        assert model.yr > 100
-
-        after_vol_2 = model.volume_km3
-
-        assert after_vol_1 < (0.5 * ref_vol)
-        assert after_vol_2 < (0.5 * ref_vol)
-
-        if do_plot:  # pragma: no cover
-            plt.figure()
-            plt.plot(glacier[-1].surface_h, 'b', label='start')
-            plt.plot(model.fls[-1].surface_h, 'r', label='end')
-
-            plt.plot(glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
-            plt.show()
-
-    @pytest.mark.slow
-    def test_random(self, hef_class_copy, inversion_params):
-
-        init_present_time_glacier(hef_class_copy)
-        run_random_climate(hef_class_copy, nyears=100, seed=6,
-                           fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
-                           bias=0, output_filesuffix='_rdn')
-        run_constant_climate(hef_class_copy, nyears=100,
-                             fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
-                             bias=0, output_filesuffix='_ct')
-
-        paths = [hef_class_copy.get_filepath('model_run', filesuffix='_rdn'),
-                 hef_class_copy.get_filepath('model_run', filesuffix='_ct'),
-                 ]
-
-        for path in paths:
-            with FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                len = model.length_m_ts()
-                area = model.area_km2_ts()
-                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                           rtol=0.1)
-                np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                           rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
-
-    @pytest.mark.slow
-    def test_random_sh(self, gdir_sh, hef_class_copy):
-
-        gdir = hef_class_copy
-        init_present_time_glacier(gdir_sh)
-
-        cfg.PATHS['climate_file'] = ''
-        cfg.PARAMS['baseline_climate'] = 'CRU'
-        cfg.PARAMS['run_mb_calibration'] = True
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        climate.process_cru_data(gdir_sh)
-        climate.compute_ref_t_stars([gdir_sh])
-        climate.local_t_star(gdir_sh)
-
-        run_random_climate(gdir_sh, nyears=20, seed=4,
-                           bias=0, output_filesuffix='_rdn')
-        run_constant_climate(gdir_sh, nyears=20,
-                             bias=0, output_filesuffix='_ct')
-
-        paths = [gdir_sh.get_filepath('model_diagnostics', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_diagnostics', filesuffix='_ct'),
-                 ]
-        for path in paths:
-            with xr.open_dataset(path) as ds:
-                assert ds.calendar_month[0] == 4
-
-        paths = [gdir_sh.get_filepath('model_run', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_run', filesuffix='_ct'),
-                 ]
-        for path in paths:
-            with FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                len = model.length_m_ts()
-                area = model.area_km2_ts()
-                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                           rtol=0.1)
-                np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                           rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
-
-        # Test a SH/NH mix
-        init_present_time_glacier(gdir)
-        run_constant_climate(gdir, nyears=20,
-                             bias=0, output_filesuffix='_ct')
-
-        utils.compile_climate_input([gdir_sh, gdir])
-        utils.compile_run_output([gdir_sh, gdir],
-                                 input_filesuffix='_ct')
-
-        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 4
-        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_nh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 10
-        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_sh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 4
-        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 10
-
-    def test_start_from_spinup(self, hef_class_copy):
-
-        init_present_time_glacier(hef_class_copy)
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        vol = 0
-        area = 0
-        for fl in fls:
-            vol += fl.volume_km3
-            area += fl.area_km2
-        assert hef_class_copy.rgi_date == 2003
-
-        # Make a dummy run for 0 years
-        run_from_climate_data(hef_class_copy, ye=2003, output_filesuffix='_1')
-
-        fp = hef_class_copy.get_filepath('model_run', filesuffix='_1')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
-
-        # Again
-        run_from_climate_data(hef_class_copy, ye=2003, init_model_filesuffix='_1',
-                              output_filesuffix='_2')
-        fp = hef_class_copy.get_filepath('model_run', filesuffix='_2')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
-
-    def test_start_from_spinup_min_ys(self, hef_class_copy):
-
-        init_present_time_glacier(hef_class_copy)
-
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        vol = 0
-        area = 0
-        for fl in fls:
-            vol += fl.volume_km3
-            area += fl.area_km2
-        assert hef_class_copy.rgi_date == 2003
-
-        # Make a dummy run for 0 years
-        run_from_climate_data(hef_class_copy, ye=2002, min_ys=2002,
-                              output_filesuffix='_1')
-
-        fp = hef_class_copy.get_filepath('model_run', filesuffix='_1')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
-
-        # Again
-        run_from_climate_data(hef_class_copy, ys=2002, ye=2003,
-                              init_model_filesuffix='_1',
-                              output_filesuffix='_2')
-        fp = hef_class_copy.get_filepath('model_run', filesuffix='_2')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
-            np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
-
-    @pytest.mark.slow
-    def test_cesm(self, hef_class_copy):
-
-        gdir = hef_class_copy
-
-        # init
-        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['cesm_temp_file'] = f
-        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['cesm_precc_file'] = f
-        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['cesm_precl_file'] = f
-        gcm_climate.process_cesm_data(gdir)
-
-        # Climate data
-        fh = gdir.get_filepath('climate_monthly')
-        fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
-
-            # Let's do some basic checks
-            shist = hist.sel(time=slice('1961', '1990'))
-            scesm = cesm.sel(time=slice('1961', '1990'))
-            # Climate during the chosen period should be the same
-            np.testing.assert_allclose(shist.temp.mean(),
-                                       scesm.temp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(shist.prcp.mean(),
-                                       scesm.prcp.mean(),
-                                       rtol=1e-3)
-            # And also the anual cycle
-            scru = shist.groupby('time.month').mean(dim='time')
-            scesm = scesm.groupby('time.month').mean(dim='time')
-            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
-            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-
-        # Mass balance models
-        mb_cru = massbalance.PastMassBalance(gdir)
-        mb_cesm = massbalance.PastMassBalance(gdir,
-                                              filename='gcm_data')
-
-        # Average over 1961-1990
-        h, w = gdir.get_inversion_flowline_hw()
-        yrs = np.arange(1961, 1991)
-        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
-        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
-        # due to non linear effects the MBs are not equivalent! See if they
-        # aren't too far:
-        assert np.abs(np.mean(ts1) - np.mean(ts2)) < 100
-
-        # For my own interest, some statistics
-        yrs = np.arange(1851, 2004)
-        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
-        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
-        if do_plot:
-            df = pd.DataFrame(index=yrs)
-            k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
-                                                               np.std(ts1))
-            k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
-                                                            np.std(ts2))
-            df[k1] = ts1
-            df[k2] = ts2
-
-            df.plot()
-            plt.plot(yrs,
-                     df[k1].rolling(31, center=True, min_periods=15).mean(),
-                     color='C0', linewidth=3)
-            plt.plot(yrs,
-                     df[k2].rolling(31, center=True, min_periods=15).mean(),
-                     color='C1', linewidth=3)
-            plt.title('SMB Hintereisferner Histalp VS CESM')
-            plt.show()
-
-        # See what that means for a run
-        init_present_time_glacier(gdir)
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              output_filesuffix='_hist')
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              climate_filename='gcm_data',
-                              output_filesuffix='_cesm')
-
-        ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
-        ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
-
-        assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
-                        ds2.volume.isel(rgi_id=0, time=-1),
-                        rtol=0.1)
-        # ELA should be close
-        assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
-
-        # Do a spinup run
-        run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
-                             output_filesuffix='_spinup')
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              init_model_filesuffix='_spinup',
-                              output_filesuffix='_afterspinup')
-        ds3 = utils.compile_run_output([gdir], path=False,
-                                       input_filesuffix='_afterspinup')
-        assert (ds1.volume.isel(rgi_id=0, time=-1) <
-                0.7*ds3.volume.isel(rgi_id=0, time=-1))
-        ds3.close()
-
-        # Try the compile optimisation
-        out = utils.compile_run_output([gdir, gdir, gdir],
-                                       tmp_file_size=2,
-                                       input_filesuffix='_hist',
-                                       output_filesuffix='_rehist')
-        assert out is None
-        path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
+@pytest.mark.slow
+def test_random_sh(gdir_sh, hef_gdir):
+
+    gdir = hef_gdir
+    init_present_time_glacier(gdir_sh)
+
+    cfg.PATHS['climate_file'] = ''
+    cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['run_mb_calibration'] = True
+    cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+    cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
+    climate.process_cru_data(gdir_sh)
+    climate.compute_ref_t_stars([gdir_sh])
+    climate.local_t_star(gdir_sh)
+
+    run_random_climate(gdir_sh, nyears=20, seed=4,
+                        bias=0, output_filesuffix='_rdn')
+    run_constant_climate(gdir_sh, nyears=20,
+                            bias=0, output_filesuffix='_ct')
+
+    paths = [gdir_sh.get_filepath('model_diagnostics', filesuffix='_rdn'),
+                gdir_sh.get_filepath('model_diagnostics', filesuffix='_ct'),
+                ]
+    for path in paths:
         with xr.open_dataset(path) as ds:
-            assert len(ds.rgi_id) == 3
+            assert ds.calendar_month[0] == 4
 
-    @pytest.mark.slow
-    def test_elevation_feedback(self, hef_class_copy):
+    paths = [gdir_sh.get_filepath('model_run', filesuffix='_rdn'),
+                gdir_sh.get_filepath('model_run', filesuffix='_ct'),
+                ]
+    for path in paths:
+        with FileModel(path) as model:
+            vol = model.volume_km3_ts()
+            len = model.length_m_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                        rtol=0.1)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                        rtol=0.1)
+            if do_plot:
+                fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
+                vol.plot(ax=ax1)
+                ax1.set_title('Volume')
+                area.plot(ax=ax2)
+                ax2.set_title('Area')
+                len.plot(ax=ax3)
+                ax3.set_title('Length')
+                plt.tight_layout()
+                plt.show()
 
-        init_present_time_glacier(hef_class_copy)
+    # Test a SH/NH mix
+    init_present_time_glacier(gdir)
+    run_constant_climate(gdir, nyears=20,
+                            bias=0, output_filesuffix='_ct')
 
-        feedbacks = ['annual', 'monthly', 'always', 'never']
-        # Mutliproc
-        tasks = []
-        for feedback in feedbacks:
-            tasks.append((run_random_climate,
-                          dict(nyears=200, seed=5, mb_elev_feedback=feedback,
-                               output_filesuffix=feedback,
-                               store_monthly_step=True)))
-        workflow.execute_parallel_tasks(hef_class_copy, tasks)
+    utils.compile_climate_input([gdir_sh, gdir])
+    utils.compile_run_output([gdir_sh, gdir],
+                                input_filesuffix='_ct')
 
-        out = []
-        for feedback in feedbacks:
-            out.append(utils.compile_run_output([hef_class_copy], path=False,
-                                                input_filesuffix=feedback))
-
-        # Check that volume isn't so different
-        assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
-        assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
-        assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
-        # Except for "never", where things are different
-        assert out[3].volume.mean() < out[2].volume.mean()
-
-        if do_plot:
-            plt.figure()
-            for ds, lab in zip(out, feedbacks):
-                (ds.volume*1e-9).plot(label=lab)
-            plt.xlabel('Vol (km3)')
-            plt.legend()
-            plt.show()
+    f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
+    with xr.open_dataset(f) as ds:
+        assert ds.calendar_month[0] == 4
+    f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_nh.nc')
+    with xr.open_dataset(f) as ds:
+        assert ds.calendar_month[0] == 10
+    f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_sh.nc')
+    with xr.open_dataset(f) as ds:
+        assert ds.calendar_month[0] == 4
+    f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
+    with xr.open_dataset(f) as ds:
+        assert ds.calendar_month[0] == 10
 
 
-@pytest.fixture(scope='class')
-def merged_hef_cfg(class_case_dir):
+def test_start_from_spinup(hef_gdir):
+
+    init_present_time_glacier(hef_gdir)
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    vol = 0
+    area = 0
+    for fl in fls:
+        vol += fl.volume_km3
+        area += fl.area_km2
+    assert hef_gdir.rgi_date == 2003
+
+    # Make a dummy run for 0 years
+    run_from_climate_data(hef_gdir, ye=2003, output_filesuffix='_1')
+
+    fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+    with FileModel(fp) as fmod:
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
+
+    # Again
+    run_from_climate_data(hef_gdir, ye=2003, init_model_filesuffix='_1',
+                            output_filesuffix='_2')
+    fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+    with FileModel(fp) as fmod:
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
+
+
+def test_start_from_spinup_min_ys(hef_gdir):
+
+    init_present_time_glacier(hef_gdir)
+
+    fls = hef_gdir.read_pickle('model_flowlines')
+    vol = 0
+    area = 0
+    for fl in fls:
+        vol += fl.volume_km3
+        area += fl.area_km2
+    assert hef_gdir.rgi_date == 2003
+
+    # Make a dummy run for 0 years
+    run_from_climate_data(hef_gdir, ye=2002, min_ys=2002,
+                            output_filesuffix='_1')
+
+    fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+    with FileModel(fp) as fmod:
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
+
+    # Again
+    run_from_climate_data(hef_gdir, ys=2002, ye=2003,
+                            init_model_filesuffix='_1',
+                            output_filesuffix='_2')
+    fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+    with FileModel(fp) as fmod:
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
+        np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
+
+
+@pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.slow
+def test_cesm(hef_gdir):
+
+    gdir = hef_gdir
+
+    # init
+    f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+    cfg.PATHS['cesm_temp_file'] = f
+    f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+    cfg.PATHS['cesm_precc_file'] = f
+    f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+    cfg.PATHS['cesm_precl_file'] = f
+    gcm_climate.process_cesm_data(gdir)
+
+    # Climate data
+    fh = gdir.get_filepath('climate_monthly')
+    fcesm = gdir.get_filepath('gcm_data')
+    with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+
+        # Let's do some basic checks
+        shist = hist.sel(time=slice('1961', '1990'))
+        scesm = cesm.sel(time=slice('1961', '1990'))
+        # Climate during the chosen period should be the same
+        np.testing.assert_allclose(shist.temp.mean(),
+                                    scesm.temp.mean(),
+                                    rtol=1e-3)
+        np.testing.assert_allclose(shist.prcp.mean(),
+                                    scesm.prcp.mean(),
+                                    rtol=1e-3)
+        # And also the anual cycle
+        scru = shist.groupby('time.month').mean(dim='time')
+        scesm = scesm.groupby('time.month').mean(dim='time')
+        np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
+        np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+    # Mass balance models
+    mb_cru = massbalance.PastMassBalance(gdir)
+    mb_cesm = massbalance.PastMassBalance(gdir,
+                                            filename='gcm_data')
+
+    # Average over 1961-1990
+    h, w = gdir.get_inversion_flowline_hw()
+    yrs = np.arange(1961, 1991)
+    ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
+    ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
+    # due to non linear effects the MBs are not equivalent! See if they
+    # aren't too far:
+    assert np.abs(np.mean(ts1) - np.mean(ts2)) < 100
+
+    # For my own interest, some statistics
+    yrs = np.arange(1851, 2004)
+    ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
+    ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
+    if do_plot:
+        df = pd.DataFrame(index=yrs)
+        k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
+                                                            np.std(ts1))
+        k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
+                                                        np.std(ts2))
+        df[k1] = ts1
+        df[k2] = ts2
+
+        df.plot()
+        plt.plot(yrs,
+                    df[k1].rolling(31, center=True, min_periods=15).mean(),
+                    color='C0', linewidth=3)
+        plt.plot(yrs,
+                    df[k2].rolling(31, center=True, min_periods=15).mean(),
+                    color='C1', linewidth=3)
+        plt.title('SMB Hintereisferner Histalp VS CESM')
+        plt.show()
+
+    # See what that means for a run
+    init_present_time_glacier(gdir)
+    run_from_climate_data(gdir, ys=1961, ye=1990,
+                            output_filesuffix='_hist')
+    run_from_climate_data(gdir, ys=1961, ye=1990,
+                            climate_filename='gcm_data',
+                            output_filesuffix='_cesm')
+
+    ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
+    ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
+
+    assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
+                    ds2.volume.isel(rgi_id=0, time=-1),
+                    rtol=0.1)
+    # ELA should be close
+    assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
+
+    # Do a spinup run
+    run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
+                            output_filesuffix='_spinup')
+    run_from_climate_data(gdir, ys=1961, ye=1990,
+                            init_model_filesuffix='_spinup',
+                            output_filesuffix='_afterspinup')
+    ds3 = utils.compile_run_output([gdir], path=False,
+                                    input_filesuffix='_afterspinup')
+    assert (ds1.volume.isel(rgi_id=0, time=-1) <
+            0.7*ds3.volume.isel(rgi_id=0, time=-1))
+    ds3.close()
+
+    # Try the compile optimisation
+    out = utils.compile_run_output([gdir, gdir, gdir],
+                                    tmp_file_size=2,
+                                    input_filesuffix='_hist',
+                                    output_filesuffix='_rehist')
+    assert out is None
+    path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
+    with xr.open_dataset(path) as ds:
+        assert len(ds.rgi_id) == 3
+
+
+@pytest.mark.slow
+def test_elevation_feedback(hef_gdir):
+
+    init_present_time_glacier(hef_gdir)
+
+    feedbacks = ['annual', 'monthly', 'always', 'never']
+    # Mutliproc
+    tasks = []
+    for feedback in feedbacks:
+        tasks.append((run_random_climate,
+                        dict(nyears=200, seed=5, mb_elev_feedback=feedback,
+                            output_filesuffix=feedback,
+                            store_monthly_step=True)))
+    workflow.execute_parallel_tasks(hef_gdir, tasks)
+
+    out = []
+    for feedback in feedbacks:
+        out.append(utils.compile_run_output([hef_gdir], path=False,
+                                            input_filesuffix=feedback))
+
+    # Check that volume isn't so different
+    assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
+    assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
+    assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
+    # Except for "never", where things are different
+    assert out[3].volume.mean() < out[2].volume.mean()
+
+    if do_plot:
+        plt.figure()
+        for ds, lab in zip(out, feedbacks):
+            (ds.volume*1e-9).plot(label=lab)
+        plt.xlabel('Vol (km3)')
+        plt.legend()
+        plt.show()
+
+
+@pytest.mark.focus
+@pytest.mark.slow
+def test_merged_simulation(case_dir):
+    import geopandas as gpd
+
     # setup logging
     import logging
     log = logging.getLogger(__name__)
@@ -2829,116 +2839,109 @@ def merged_hef_cfg(class_case_dir):
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['correct_for_neg_flux'] = True
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
-    # should this be resetting working_dir at teardown?
-    cfg.PATHS['working_dir'] = class_case_dir
+    # should we be resetting working_dir at teardown?
+    cfg.PATHS['working_dir'] = case_dir
     cfg.PARAMS['border'] = 100
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_multiprocessing'] = False
 
+    hef_file = utils.get_demo_file('rgi_oetztal.shp')
+    rgidf = gpd.read_file(hef_file)
 
-@pytest.mark.usefixtures('merged_hef_cfg')
-class TestMergedHEF():
-    @pytest.mark.slow
-    def test_merged_simulation(self):
-        import geopandas as gpd
+    # Get HEF, Vernagt1/2 and Gepatschferner
+    glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
+                        (rgidf.RGIId == 'RGI50-11.00719_d01') |
+                        (rgidf.RGIId == 'RGI50-11.00779') |
+                        (rgidf.RGIId == 'RGI50-11.00746')].copy()
+    gdirs = workflow.init_glacier_regions(glcdf)
+    workflow.gis_prepro_tasks(gdirs)
+    workflow.climate_tasks(gdirs)
+    workflow.inversion_tasks(gdirs)
+    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-        hef_file = utils.get_demo_file('rgi_oetztal.shp')
-        rgidf = gpd.read_file(hef_file)
+    # store HEF
+    hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
 
-        # Get HEF, Vernagt1/2 and Gepatschferner
-        glcdf = rgidf.loc[(rgidf.RGIId == 'RGI50-11.00897') |
-                          (rgidf.RGIId == 'RGI50-11.00719_d01') |
-                          (rgidf.RGIId == 'RGI50-11.00779') |
-                          (rgidf.RGIId == 'RGI50-11.00746')].copy()
-        gdirs = workflow.init_glacier_regions(glcdf)
-        workflow.gis_prepro_tasks(gdirs)
-        workflow.climate_tasks(gdirs)
-        workflow.inversion_tasks(gdirs)
-        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+    # merge, but with 0 buffer, should not do anything
+    merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                            glcdf=glcdf, buffer=0)
+    assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
+                                            merge0.read_pickle(
+                                                'model_flowlines')])[0]
+    gdirs += hef
 
-        # store HEF
-        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
+    # merge, but with 50 buffer. overlapping glaciers should be excluded
+    merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                            glcdf=glcdf, buffer=50)
+    assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
+                                    merge1.read_pickle('model_flowlines')]
+    assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
+                                    merge1.read_pickle('model_flowlines')]
 
-        # merge, but with 0 buffer, should not do anything
-        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                              glcdf=glcdf, buffer=0)
-        assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
-                                              merge0.read_pickle(
-                                                  'model_flowlines')])[0]
-        gdirs += hef
+    gdirs += hef
 
-        # merge, but with 50 buffer. overlapping glaciers should be excluded
-        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                              glcdf=glcdf, buffer=50)
-        assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
-                                        merge1.read_pickle('model_flowlines')]
-        assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
-                                        merge1.read_pickle('model_flowlines')]
+    # merge HEF and Vernagt, include Gepatsch but it should not be merged
+    gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+                                                glcdf=glcdf)
 
-        gdirs += hef
+    # test flowlines
+    fls = gdir_merged.read_pickle('model_flowlines')
 
-        # merge HEF and Vernagt, include Gepatsch but it should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
-                                                   glcdf=glcdf)
+    # check for gepatsch, should not be there
+    assert 'RGI50-11.00746' not in [fl.rgi_id for fl in fls]
 
-        # test flowlines
-        fls = gdir_merged.read_pickle('model_flowlines')
+    # ascending order
+    assert np.all(np.diff([fl.order for fl in fls]) >= 0)
+    # last flowline has max order
+    assert np.max([fl.order for fl in fls]) == fls[-1].order
+    # first flowline hast 0 order
+    assert fls[0].order == 0
 
-        # check for gepatsch, should not be there
-        assert 'RGI50-11.00746' not in [fl.rgi_id for fl in fls]
+    # test flows to order
+    fls1 = [fl for fl in fls if fl.rgi_id == 'RGI50-11.00779']
+    assert fls1[0].flows_to == fls1[-1]
+    assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
+    assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
 
-        # ascending order
-        assert np.all(np.diff([fl.order for fl in fls]) >= 0)
-        # last flowline has max order
-        assert np.max([fl.order for fl in fls]) == fls[-1].order
-        # first flowline hast 0 order
-        assert fls[0].order == 0
+    gdirs += hef
 
-        # test flows to order
-        fls1 = [fl for fl in fls if fl.rgi_id == 'RGI50-11.00779']
-        assert fls1[0].flows_to == fls1[-1]
-        assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
-        assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
+    # run parameters
+    years = 200  # arbitrary
+    tbias = -1.0  # arbitrary
 
-        gdirs += hef
+    # run HEF and the two Vernagts as entities
+    gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
+    workflow.execute_entity_task(tasks.run_constant_climate,
+                                    gdirs_entity,
+                                    nyears=years,
+                                    output_filesuffix='_entity',
+                                    temperature_bias=tbias)
 
-        # run parameters
-        years = 200  # arbitrary
-        tbias = -1.0  # arbitrary
+    ds_entity = utils.compile_run_output(gdirs_entity,
+                                            path=False,
+                                            input_filesuffix='_entity')
 
-        # run HEF and the two Vernagts as entities
-        gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
-        workflow.execute_entity_task(tasks.run_constant_climate,
-                                     gdirs_entity,
-                                     nyears=years,
-                                     output_filesuffix='_entity',
-                                     temperature_bias=tbias)
+    # and run the merged glacier
+    workflow.execute_entity_task(tasks.run_constant_climate,
+                                    gdir_merged, output_filesuffix='_merged',
+                                    nyears=years,
+                                    temperature_bias=tbias)
 
-        ds_entity = utils.compile_run_output(gdirs_entity,
-                                             path=False,
-                                             input_filesuffix='_entity')
+    ds_merged = utils.compile_run_output(gdir_merged,
+                                            path=False,
+                                            input_filesuffix='_merged')
 
-        # and run the merged glacier
-        workflow.execute_entity_task(tasks.run_constant_climate,
-                                     gdir_merged, output_filesuffix='_merged',
-                                     nyears=years,
-                                     temperature_bias=tbias)
+    # areas should be quite similar after 10yrs
+    assert_allclose(ds_entity.area.isel(time=10).sum(),
+                    ds_merged.area.isel(time=10),
+                    rtol=1e-4)
 
-        ds_merged = utils.compile_run_output(gdir_merged,
-                                             path=False,
-                                             input_filesuffix='_merged')
+    # After 100yrs, merged one should be smaller as Vernagt1 is slightly
+    # flowing into Vernagt2
+    assert (ds_entity.area.isel(time=100).sum() >
+            ds_merged.area.isel(time=100))
 
-        # areas should be quite similar after 10yrs
-        assert_allclose(ds_entity.area.isel(time=10).sum(),
-                        ds_merged.area.isel(time=10),
-                        rtol=1e-4)
-
-        # After 100yrs, merged one should be smaller as Vernagt1 is slightly
-        # flowing into Vernagt2
-        assert (ds_entity.area.isel(time=100).sum() >
-                ds_merged.area.isel(time=100))
-
-        # Merged glacier should have a larger area after 200yrs from advancing
-        assert (ds_entity.area.isel(time=200).sum() <
-                ds_merged.area.isel(time=200))
+    # Merged glacier should have a larger area after 200yrs from advancing
+    assert (ds_entity.area.isel(time=200).sum() <
+            ds_merged.area.isel(time=200))
