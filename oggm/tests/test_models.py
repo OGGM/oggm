@@ -420,8 +420,8 @@ def test_past_mb_model(hef_gdir):
     assert_allclose(mb, mb_gw)
 
 
-def test_glacierwide_mb_model(hef_gdir):
-
+@pytest.mark.parametrize("cl", [massbalance.PastMassBalance, massbalance.ConstantMassBalance, massbalance.RandomMassBalance])
+def test_glacierwide_mb_model(hef_gdir, cl):
     gdir = hef_gdir
     init_present_time_glacier(gdir)
 
@@ -434,81 +434,75 @@ def test_glacierwide_mb_model(hef_gdir):
 
     yrs = np.arange(100) + 1901
 
-    classes = [massbalance.PastMassBalance,
-               massbalance.ConstantMassBalance,
-               massbalance.RandomMassBalance]
+    if cl is massbalance.RandomMassBalance:
+        kwargs = {'seed': 0}
+    else:
+        kwargs = {}
 
-    for cl in classes:
+    mb = cl(gdir, **kwargs)
+    mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
+                                                    mb_model_class=cl,
+                                                    **kwargs)
 
-        if cl is massbalance.RandomMassBalance:
-            kwargs = {'seed': 0}
-        else:
-            kwargs = {}
+    assert_allclose(mb.get_specific_mb(h, w, year=yrs),
+                    mb_gw.get_specific_mb(year=yrs))
 
-        mb = cl(gdir, **kwargs)
-        mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
-                                                        mb_model_class=cl,
-                                                        **kwargs)
+    assert_allclose(mb.get_ela(year=yrs),
+                    mb_gw.get_ela(year=yrs))
 
-        assert_allclose(mb.get_specific_mb(h, w, year=yrs),
-                        mb_gw.get_specific_mb(year=yrs))
+    _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
+    mbs_h = mb.get_annual_mb(_h, year=1950)
 
-        assert_allclose(mb.get_ela(year=yrs),
-                        mb_gw.get_ela(year=yrs))
+    assert_allclose(mbs_h, mbs_gw)
 
-        _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
-        mbs_h = mb.get_annual_mb(_h, year=1950)
+    mb.bias = 100
+    mb_gw.bias = 100
 
-        assert_allclose(mbs_h, mbs_gw)
+    assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                    mb_gw.get_specific_mb(year=yrs[:10]))
 
-        mb.bias = 100
-        mb_gw.bias = 100
+    assert_allclose(mb.get_ela(year=yrs[:10]),
+                    mb_gw.get_ela(year=yrs[:10]))
 
-        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
-                        mb_gw.get_specific_mb(year=yrs[:10]))
+    mb.temp_bias = 100
+    mb_gw.temp_bias = 100
 
-        assert_allclose(mb.get_ela(year=yrs[:10]),
-                        mb_gw.get_ela(year=yrs[:10]))
+    assert mb.temp_bias == mb_gw.temp_bias
 
-        mb.temp_bias = 100
-        mb_gw.temp_bias = 100
+    assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                    mb_gw.get_specific_mb(year=yrs[:10]))
 
-        assert mb.temp_bias == mb_gw.temp_bias
+    assert_allclose(mb.get_ela(year=yrs[:10]),
+                    mb_gw.get_ela(year=yrs[:10]))
 
-        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
-                        mb_gw.get_specific_mb(year=yrs[:10]))
+    mb.prcp_bias = 100
+    mb_gw.prcp_bias = 100
 
-        assert_allclose(mb.get_ela(year=yrs[:10]),
-                        mb_gw.get_ela(year=yrs[:10]))
+    assert mb.prcp_bias == mb_gw.prcp_bias
 
-        mb.prcp_bias = 100
-        mb_gw.prcp_bias = 100
+    assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
+                    mb_gw.get_specific_mb(year=yrs[:10]))
 
-        assert mb.prcp_bias == mb_gw.prcp_bias
+    assert_allclose(mb.get_ela(year=yrs[:10]),
+                    mb_gw.get_ela(year=yrs[:10]))
 
-        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
-                        mb_gw.get_specific_mb(year=yrs[:10]))
+    if cl is massbalance.PastMassBalance:
+        mb = cl(gdir)
+        mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
+                                                        mb_model_class=cl)
+        mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
+                                            rdn_prcp_bias_seed=2,
+                                            rdn_temp_bias_seed=3)
+        mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
+                                                rdn_prcp_bias_seed=2,
+                                                rdn_temp_bias_seed=3)
 
-        assert_allclose(mb.get_ela(year=yrs[:10]),
-                        mb_gw.get_ela(year=yrs[:10]))
+        assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
+                        mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
-    cl = massbalance.PastMassBalance
-    mb = cl(gdir)
-    mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
-                                                    mb_model_class=cl)
-    mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
-                                          rdn_prcp_bias_seed=2,
-                                          rdn_temp_bias_seed=3)
-    mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
-                                             rdn_prcp_bias_seed=2,
-                                             rdn_temp_bias_seed=3)
-
-    assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
-                    mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
-
-    # ELA won't pass because of API incompatibility
-    # assert_allclose(mb.get_ela(year=yrs[:30]),
-    #                 mb_gw.get_ela(year=yrs[:30]))
+        # ELA won't pass because of API incompatibility
+        # assert_allclose(mb.get_ela(year=yrs[:30]),
+        #                 mb_gw.get_ela(year=yrs[:30]))
 
 
 def test_constant_mb_model(hef_gdir):
