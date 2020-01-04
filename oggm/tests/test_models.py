@@ -1204,10 +1204,10 @@ def test_flowline_to_dataset():
         assert ds_.equals(ds)
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def io_model_factory():
     glen_a = 2.4e-24
-    return lambda fls, mb_model, y0=0.: FluxBasedModel(fls, mb_model=mb_model, y0=y0, glen_a=glen_a)
+    return lambda fls, **kwargs: FluxBasedModel(fls, glen_a=glen_a, **kwargs)
 
 
 def test_model_to_file(case_dir, hef_gdir, io_model_factory):
@@ -1486,114 +1486,104 @@ def test_hef(case_dir, hef_gdir):
         assert fl.flows_to_indice == fl_.flows_to_indice
 
 
-BI_FS = 5.7e-20
-# Backwards
-BI_N = 3
-BI_FD = 1.9e-24
-BI_GLEN_A = (BI_N+2) * BI_FD / 2.
+@pytest.fixture(scope='module')
+def backwards_model_factory():
+    fs = 5.7e-20
+    # Backwards
+    N = 3
+    fd = 1.9e-24
+    glen_a = (N+2) * fd / 2.
 
-BI_ELA = 2800.
+    ela = 2800.
+
+    def _model_factory(*args, ela_delta=0., **kwargs): 
+        mb = LinearMassBalance(ela + ela_delta)
+        return FluxBasedModel(*args, mb_model=mb, fs=fs, glen_a=glen_a, **kwargs)
+
+    return _model_factory
 
 
-@pytest.fixture(scope='class')
-def backwards_idealized_glacier():
+@pytest.fixture(scope='module')
+def backwards_idealized_fls(backwards_model_factory):
     cfg.initialize()
     origfls = dummy_constant_bed(nx=120, hmin=1800)
 
-    mb = LinearMassBalance(BI_ELA)
-    model = FluxBasedModel(origfls, mb_model=mb,
-                            fs=BI_FS, glen_a=BI_GLEN_A)
+    model = backwards_model_factory(origfls)
     model.run_until(500)
     return copy.deepcopy(model.fls)
 
 
-class TestBackwardsIdealized():
-    fs = BI_FS
-    glen_a = BI_GLEN_A
+@pytest.mark.slow
+def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
 
-    ela = BI_ELA
+    # This test could be deleted
+    from oggm.sandbox.ideas import _find_inital_glacier
 
-    @pytest.mark.slow
-    def test_iterative_back(self, backwards_idealized_glacier):
+    y0 = 0.
+    y1 = 150.
+    rtol = 0.02
 
-        # This test could be deleted
-        from oggm.sandbox.ideas import _find_inital_glacier
+    model = backwards_model_factory(backwards_idealized_fls, ela_delta=50., time_stepping='ambitious')
 
-        y0 = 0.
-        y1 = 150.
-        rtol = 0.02
+    ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
+                                                    y1, rtol=rtol)
 
-        mb = LinearMassBalance(self.ela + 50.)
-        model = FluxBasedModel(backwards_idealized_glacier, mb_model=mb,
-                               fs=self.fs, glen_a=self.glen_a,
-                               time_stepping='ambitious')
+    bef_fls = copy.deepcopy(past_model.fls)
+    past_model.run_until(y1)
+    assert bef_fls[-1].area_m2 > past_model.area_m2
+    np.testing.assert_allclose(past_model.area_m2,
+                                backwards_idealized_fls[-1].area_m2,
+                                rtol=rtol)
 
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
+    if do_plot:  # pragma: no cover
+        plt.plot(backwards_idealized_fls[-1].surface_h, 'k', label='ref')
+        plt.plot(bef_fls[-1].surface_h, 'b', label='start')
+        plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
+        plt.plot(backwards_idealized_fls[-1].bed_h, 'gray', linewidth=2)
+        plt.legend(loc='best')
+        plt.show()
 
-        bef_fls = copy.deepcopy(past_model.fls)
-        past_model.run_until(y1)
-        assert bef_fls[-1].area_m2 > past_model.area_m2
-        np.testing.assert_allclose(past_model.area_m2,
-                                   backwards_idealized_glacier[-1].area_m2,
-                                   rtol=rtol)
+    model = backwards_model_factory(backwards_idealized_fls, ela_delta=-50., y0=y0, time_stepping='ambitious')
 
-        if do_plot:  # pragma: no cover
-            plt.plot(backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
-            plt.plot(bef_fls[-1].surface_h, 'b', label='start')
-            plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
-            plt.show()
+    ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
+                                                    y1, rtol=rtol)
+    bef_fls = copy.deepcopy(past_model.fls)
+    past_model.run_until(y1)
+    assert bef_fls[-1].area_m2 < past_model.area_m2
+    np.testing.assert_allclose(past_model.area_m2,
+                                backwards_idealized_fls[-1].area_m2,
+                                rtol=rtol)
 
-        mb = LinearMassBalance(self.ela - 50.)
-        model = FluxBasedModel(backwards_idealized_glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a,
-                               time_stepping='ambitious')
+    if do_plot:  # pragma: no cover
+        plt.plot(backwards_idealized_fls[-1].surface_h, 'k', label='ref')
+        plt.plot(bef_fls[-1].surface_h, 'b', label='start')
+        plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
+        plt.plot(backwards_idealized_fls[-1].bed_h, 'gray', linewidth=2)
+        plt.legend(loc='best')
+        plt.show()
 
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
-        bef_fls = copy.deepcopy(past_model.fls)
-        past_model.run_until(y1)
-        assert bef_fls[-1].area_m2 < past_model.area_m2
-        np.testing.assert_allclose(past_model.area_m2,
-                                   backwards_idealized_glacier[-1].area_m2,
-                                   rtol=rtol)
+    model = backwards_model_factory(backwards_idealized_fls, y0=y0)
 
-        if do_plot:  # pragma: no cover
-            plt.plot(backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
-            plt.plot(bef_fls[-1].surface_h, 'b', label='start')
-            plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
-            plt.show()
+    # Hit the correct one
+    ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
+                                                    y1, rtol=rtol)
+    past_model.run_until(y1)
+    np.testing.assert_allclose(past_model.area_m2,
+                                backwards_idealized_fls[-1].area_m2,
+                                rtol=rtol)
 
-        mb = LinearMassBalance(self.ela)
-        model = FluxBasedModel(backwards_idealized_glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a)
 
-        # Hit the correct one
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
-        past_model.run_until(y1)
-        np.testing.assert_allclose(past_model.area_m2,
-                                   backwards_idealized_glacier[-1].area_m2,
-                                   rtol=rtol)
+@pytest.mark.slow
+def test_fails(backwards_idealized_fls, backwards_model_factory):
+    # This test could be deleted
+    from oggm.sandbox.ideas import _find_inital_glacier
 
-    @pytest.mark.slow
-    def test_fails(self, backwards_idealized_glacier):
+    y0 = 0.
+    y1 = 100.
 
-        # This test could be deleted
-        from oggm.sandbox.ideas import _find_inital_glacier
-
-        y0 = 0.
-        y1 = 100.
-
-        mb = LinearMassBalance(self.ela - 150.)
-        model = FluxBasedModel(backwards_idealized_glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a)
-        with pytest.raises(RuntimeError):
-            _find_inital_glacier(model, mb, y0, y1, rtol=0.02, max_ite=5)
+    model = backwards_model_factory(backwards_idealized_fls, ela_delta=-150., y0=y0)
+    with pytest.raises(RuntimeError):
+        _find_inital_glacier(model, model.mb_model, y0, y1, rtol=0.02, max_ite=5)
 
 
 @pytest.fixture(scope='class')
