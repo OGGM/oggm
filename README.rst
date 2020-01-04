@@ -81,8 +81,8 @@ About
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg
-        :target: http://www.gnu.org/licenses/gpl-3.0.en.html
-        :alt: GNU GPLv3 license
+        :target: https://github.com/OGGM/oggm/blob/master/LICENSE.txt
+        :alt: BSD-3-Clause License
 
 :Authors:
 

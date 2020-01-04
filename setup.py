@@ -6,8 +6,8 @@ from setuptools import setup, find_packages  # Always prefer setuptools
 
 
 DISTNAME = 'oggm'
-LICENSE = 'GPLv3+'
-AUTHOR = 'oggm Developers'
+LICENSE = 'BSD-3-Clause'
+AUTHOR = 'OGGM Contributors'
 AUTHOR_EMAIL = 'fabien.maussion@uibk.ac.at'
 URL = 'http://oggm.org'
 CLASSIFIERS = [
@@ -16,8 +16,7 @@ CLASSIFIERS = [
         'Development Status :: 4 - Beta',
         # Indicate who your project is intended for
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: GNU General Public License ' +
-        'v3 or later (GPLv3+)',
+        'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',

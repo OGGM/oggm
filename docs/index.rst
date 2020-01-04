@@ -115,74 +115,30 @@ Get in touch
 License and citation
 --------------------
 
-.. image:: _static/gpl.png
-   :width: 140 px
+OGGM is available under the open source `3-Clause BSD License`_.
 
-OGGM is available under the open source `GNU GPLv3 license`_.
-
-.. _GNU GPLv3 license: http://www.gnu.org/licenses/gpl-3.0.en.html
+.. _3-Clause BSD License: https://opensource.org/licenses/BSD-3-Clause
 
 OGGM is free software. This implies that you are free to use the model and
 copy or modify its code at your wish, under certain conditions:
 
 1. When using this software, please acknowledge the original authors of this
-   contribution by linking to our project website `www.oggm.org <http://oggm.org>`_.
-   For your publications, presentations or posters we kindly ask you to refer to the
-   `paper in Geoscientific Model Development`_.
+   contribution by using our logo, referring to our website or using an
+   appropriate citation. See :ref:`citing-oggm` for how to do that.
 
-   BibTeX entry::
+2. Redistributions of any substantial portion of the OGGM source code must
+   meet the conditions listed in the `OGGM license`_
 
-        @Article{gmd-12-909-2019,
-        AUTHOR = {Maussion, F. and Butenko, A. and Champollion, N. and
-                  Dusch, M. and Eis, J. and Fourteau, K. and Gregor, P. and
-                  Jarosch, A. H. and Landmann, J. and Oesterle, F. and
-                  Recinos, B. and Rothenpieler, T. and Vlug, A. and
-                  Wild, C. T. and Marzeion, B.},
-        TITLE = {The Open Global Glacier Model (OGGM) v1.1},
-        JOURNAL = {Geoscientific Model Development},
-        VOLUME = {2019},
-        YEAR = {2019},
-        PAGES = {909--931},
-        URL = {https://www.geosci-model-dev.net/12/909/2019/},
-        DOI = {10.5194/gmd-12-909-2019}
-        }
+3. Neither OGGM e.V. nor the names of OGGM contributors may be used to endorse
+   or promote products derived from this software without specific prior
+   written permission. This does not mean that you need our written permission
+   to work with OGGM or publish results based on OGGM: it simply means that
+   the OGGM developers are not accountable for your use of the tool
+   (`more info <https://opensource.stackexchange.com/a/9137>`_).
 
+See the `OGGM license`_ for more information.
 
-   If you want to refer to a specific version of the software you can use
-   the `Zenodo citation`_ for this purpose.
-
-   An example BibTeX entry::
-
-        @misc{OGGM_v1.1,
-        author       = {Fabien Maussion and Timo Rothenpieler and
-                        Matthias Dusch and Beatriz Recinos and Anouk Vlug and
-                        Ben Marzeion and Johannes Landmann and Julia Eis and
-                        Sadie Bartholomew and Nicolas Champollion and
-                        Philipp Gregor and Anton Butenko and Schmitty Smith and
-                        Moritz Oberrauch},
-        title        = {OGGM/oggm: v1.1},
-        month        = feb,
-        year         = 2019,
-        doi          = {10.5281/zenodo.2580277},
-        url          = {https://doi.org/10.5281/zenodo.2580277}
-        }
-
-
-2. Your modifications to the code belong to you, but if you decide
-   to share these modifications with others you'll have to do so under the same
-   license as OGGM (the GNU General Public License as published by the Free
-   Software Foundation).
-
-See the `wikipedia page about GPL`_ and the `OGGM license`_ for more
-information.
-
-.. _paper in Geoscientific Model Development: https://www.geosci-model-dev.net/12/909/2019/
-
-.. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
-
-.. _wikipedia page about GPL: https://en.wikipedia.org/wiki/GNU_General_Public_License
-
-.. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.rst
+.. _OGGM license: https://github.com/OGGM/oggm/blob/master/LICENSE.txt
 
 About
 -----
@@ -228,8 +184,8 @@ About
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg
-        :target: http://www.gnu.org/licenses/gpl-3.0.en.html
-        :alt: GNU GPLv3 license
+        :target: https://github.com/OGGM/oggm/blob/master/LICENSE.txt
+        :alt: BSD-3-Clause License
 
 :Authors:
 

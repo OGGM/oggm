@@ -4,6 +4,12 @@
 Version history
 ===============
 
+v1.2.0 (04.01.2020)
+-------------------
+
+**OGGM is released under a new license.** We now use the
+`BSD-3-Clause <https://github.com/OGGM/oggm/blob/master/LICENSE.txt>`_ license.
+
 v1.1.3 (03.01.2020)
 -------------------
 
@@ -11,7 +17,8 @@ Minor release of the OGGM model with several small improvements.
 We don't expect major changes in the model results due to this release.
 
 **Important:** this will be the last release under a GPL license. The next
-release (v1.2) will be done without modifications but under a MIT license.
+release (v1.2) will be done without modifications but under a BSD-3-Clause
+License.
 
 Enhancements
 ~~~~~~~~~~~~

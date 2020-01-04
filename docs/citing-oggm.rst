@@ -53,7 +53,6 @@ the `Zenodo citation`_ for this purpose. An example BibTeX entry::
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
 
-
 Logo
 ----
 

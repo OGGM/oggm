@@ -1,8 +1,8 @@
 """ OGGM package.
 
-Copyright: OGGM developers, 2014-2018
+Copyright: OGGM e.V. and OGGM Contributors
 
-License: GPLv3+
+License: BSD-3-Clause
 """
 # flake8: noqa
 from pkg_resources import get_distribution, DistributionNotFound
