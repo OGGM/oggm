@@ -4,6 +4,18 @@
 Version history
 ===============
 
+v1.3.0 (unreleased)
+-------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
 v1.2.0 (04.01.2020)
 -------------------
 
