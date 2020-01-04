@@ -1190,305 +1190,300 @@ def test_mixed():
     assert_allclose(rec.surface_h, surface_h - 10)
 
 
-@pytest.fixture(scope='class')
-def io_init_gdir(hef_class_copy):
-    init_present_time_glacier(hef_class_copy)
+def test_flowline_to_dataset():
+
+    beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
+            dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
+            dummy_mixed_bed]
+
+    for bed in beds:
+        fl = bed()[0]
+        ds = fl.to_dataset()
+        fl_ = flowline_from_dataset(ds)
+        ds_ = fl_.to_dataset()
+        assert ds_.equals(ds)
 
 
-@pytest.mark.usefixtures('io_init_gdir')
-class TestIO():
+@pytest.fixture
+def io_model_factory():
     glen_a = 2.4e-24
-    def test_flowline_to_dataset(self):
+    return lambda fls, mb_model, y0=0.: FluxBasedModel(fls, mb_model=mb_model, y0=y0, glen_a=glen_a)
 
-        beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
-                dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
-                dummy_mixed_bed]
 
-        for bed in beds:
-            fl = bed()[0]
-            ds = fl.to_dataset()
-            fl_ = flowline_from_dataset(ds)
-            ds_ = fl_.to_dataset()
-            assert ds_.equals(ds)
+def test_model_to_file(case_dir, hef_gdir, io_model_factory):
+    init_present_time_glacier(hef_gdir)
 
-    def test_model_to_file(self, class_case_dir):
+    p = os.path.join(case_dir, 'grp.nc')
+    if os.path.isfile(p):
+        os.remove(p)
 
-        p = os.path.join(class_case_dir, 'grp.nc')
-        if os.path.isfile(p):
-            os.remove(p)
+    fls = dummy_width_bed_tributary()
+    model = FluxBasedModel(fls)
+    model.to_netcdf(p)
+    fls_ = glacier_from_netcdf(p)
 
-        fls = dummy_width_bed_tributary()
-        model = FluxBasedModel(fls)
-        model.to_netcdf(p)
-        fls_ = glacier_from_netcdf(p)
+    for fl, fl_ in zip(fls, fls_):
+        ds = fl.to_dataset()
+        ds_ = fl_.to_dataset()
+        assert ds_.equals(ds)
 
-        for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
-            assert ds_.equals(ds)
+    assert fls_[0].flows_to is fls_[1]
+    assert fls[0].flows_to_indice == fls_[0].flows_to_indice
 
-        assert fls_[0].flows_to is fls_[1]
-        assert fls[0].flows_to_indice == fls_[0].flows_to_indice
+    # They should be sorted
+    to_test = [fl.order for fl in fls_]
+    assert np.array_equal(np.sort(to_test), to_test)
 
-        # They should be sorted
-        to_test = [fl.order for fl in fls_]
-        assert np.array_equal(np.sort(to_test), to_test)
+    # They should be able to start a run
+    mb = LinearMassBalance(2600.)
+    model = io_model_factory(fls_, mb_model=mb)
+    model.run_until(100)
 
-        # They should be able to start a run
-        mb = LinearMassBalance(2600.)
-        model = FluxBasedModel(fls_, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-        model.run_until(100)
 
-    @pytest.mark.slow
-    def test_run(self, class_case_dir):
-        mb = LinearMassBalance(2600.)
+@pytest.mark.slow
+def test_run(case_dir, hef_gdir, io_model_factory):
+    init_present_time_glacier(hef_gdir)
 
-        fls = dummy_constant_bed()
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
-        ds = ds[0]
+    mb = LinearMassBalance(2600.)
 
-        fls = dummy_constant_bed()
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
+    fls = dummy_constant_bed()
+    model = io_model_factory(fls, mb_model=mb)
+    ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
+    ds = ds[0]
 
-        years = utils.monthly_timeseries(0, 500)
-        vol_ref = []
-        a_ref = []
-        l_ref = []
-        vol_diag = []
-        a_diag = []
-        l_diag = []
-        ela_diag = []
-        for yr in years:
-            model.run_until(yr)
-            vol_diag.append(model.volume_m3)
-            a_diag.append(model.area_m2)
-            l_diag.append(model.length_m)
-            ela_diag.append(model.mb_model.get_ela(year=yr))
-            if int(yr) == yr:
-                vol_ref.append(model.volume_m3)
-                a_ref.append(model.area_m2)
-                l_ref.append(model.length_m)
-                if int(yr) == 500:
-                    secfortest = model.fls[0].section
+    fls = dummy_constant_bed()
+    model = io_model_factory(fls, mb_model=mb)
 
-        np.testing.assert_allclose(ds.ts_section.isel(time=-1),
-                                   secfortest)
-
-        np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
-        np.testing.assert_allclose(ds_diag.area_m2, a_diag)
-        np.testing.assert_allclose(ds_diag.length_m, l_diag)
-        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
-
-        fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
-        diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
-        if os.path.exists(diag_path):
-            os.remove(diag_path)
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
-                                  diag_path=diag_path,
-                                  store_monthly_step=True)
-
-        with xr.open_dataset(diag_path) as ds_:
-            # the identical (i.e. attrs + names) doesn't work because of date
-            del ds_diag.attrs['creation_date']
-            del ds_.attrs['creation_date']
-            xr.testing.assert_identical(ds_diag, ds_)
-
-        with FileModel(run_path) as fmodel:
-            assert fmodel.last_yr == 500
-            fls = dummy_constant_bed()
-            model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                   glen_a=self.glen_a)
-            for yr in years:
-                model.run_until(yr)
-                if yr in [100, 300, 500]:
-                    # this is sloooooow so we test a little bit only
-                    fmodel.run_until(yr)
-                    np.testing.assert_allclose(model.fls[0].section,
-                                               fmodel.fls[0].section)
-                    np.testing.assert_allclose(model.fls[0].widths_m,
-                                               fmodel.fls[0].widths_m)
-
-            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
-
-            # Can we start a run from the middle?
-            fmodel.run_until(300)
-            model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                   glen_a=self.glen_a)
-            model.run_until(500)
-            fmodel.run_until(500)
-            np.testing.assert_allclose(model.fls[0].section,
-                                       fmodel.fls[0].section)
-
-    @pytest.mark.slow
-    def test_run_annual_step(self, class_case_dir):
-        mb = LinearMassBalance(2600.)
-
-        fls = dummy_constant_bed()
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500)
-        ds = ds[0]
-
-        fls = dummy_constant_bed()
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-
-        years = np.arange(0, 501)
-        vol_ref = []
-        a_ref = []
-        l_ref = []
-        vol_diag = []
-        a_diag = []
-        l_diag = []
-        ela_diag = []
-        for yr in years:
-            model.run_until(yr)
-            vol_diag.append(model.volume_m3)
-            a_diag.append(model.area_m2)
-            l_diag.append(model.length_m)
-            ela_diag.append(model.mb_model.get_ela(year=yr))
+    years = utils.monthly_timeseries(0, 500)
+    vol_ref = []
+    a_ref = []
+    l_ref = []
+    vol_diag = []
+    a_diag = []
+    l_diag = []
+    ela_diag = []
+    for yr in years:
+        model.run_until(yr)
+        vol_diag.append(model.volume_m3)
+        a_diag.append(model.area_m2)
+        l_diag.append(model.length_m)
+        ela_diag.append(model.mb_model.get_ela(year=yr))
+        if int(yr) == yr:
             vol_ref.append(model.volume_m3)
             a_ref.append(model.area_m2)
             l_ref.append(model.length_m)
             if int(yr) == 500:
                 secfortest = model.fls[0].section
 
-        np.testing.assert_allclose(ds.ts_section.isel(time=-1),
-                                   secfortest)
+    np.testing.assert_allclose(ds.ts_section.isel(time=-1),
+                                secfortest)
 
-        np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
-        np.testing.assert_allclose(ds_diag.area_m2, a_diag)
-        np.testing.assert_allclose(ds_diag.length_m, l_diag)
-        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
+    np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
+    np.testing.assert_allclose(ds_diag.area_m2, a_diag)
+    np.testing.assert_allclose(ds_diag.length_m, l_diag)
+    np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
+    fls = dummy_constant_bed()
+    run_path = os.path.join(case_dir, 'ts_ideal.nc')
+    diag_path = os.path.join(case_dir, 'ts_diag.nc')
+    if os.path.exists(run_path):
+        os.remove(run_path)
+    if os.path.exists(diag_path):
+        os.remove(diag_path)
+    model = io_model_factory(fls, mb_model=mb)
+    model.run_until_and_store(500, run_path=run_path,
+                                diag_path=diag_path,
+                                store_monthly_step=True)
+
+    with xr.open_dataset(diag_path) as ds_:
+        # the identical (i.e. attrs + names) doesn't work because of date
+        del ds_diag.attrs['creation_date']
+        del ds_.attrs['creation_date']
+        xr.testing.assert_identical(ds_diag, ds_)
+
+    with FileModel(run_path) as fmodel:
+        assert fmodel.last_yr == 500
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
-        diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
-        if os.path.exists(diag_path):
-            os.remove(diag_path)
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
-                                  diag_path=diag_path)
+        model = io_model_factory(fls, mb_model=mb)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this is sloooooow so we test a little bit only
+                fmodel.run_until(yr)
+                np.testing.assert_allclose(model.fls[0].section,
+                                            fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                            fmodel.fls[0].widths_m)
 
-        with xr.open_dataset(diag_path) as ds_:
-            # the identical (i.e. attrs + names) doesn't work because of date
-            del ds_diag.attrs['creation_date']
-            del ds_.attrs['creation_date']
-            xr.testing.assert_identical(ds_diag, ds_)
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
-        with FileModel(run_path) as fmodel:
-            assert fmodel.last_yr == 500
-            fls = dummy_constant_bed()
-            model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                   glen_a=self.glen_a)
-            for yr in years:
-                model.run_until(yr)
-                if yr in [100, 300, 500]:
-                    # this is sloooooow so we test a little bit only
-                    fmodel.run_until(yr)
-                    np.testing.assert_allclose(model.fls[0].section,
-                                               fmodel.fls[0].section)
-                    np.testing.assert_allclose(model.fls[0].widths_m,
-                                               fmodel.fls[0].widths_m)
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = io_model_factory(fmodel.fls, mb_model=mb, y0=300)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                    fmodel.fls[0].section)
 
-            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
-            # Can we start a run from the middle?
-            fmodel.run_until(300)
-            model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                   glen_a=self.glen_a)
-            model.run_until(500)
-            fmodel.run_until(500)
-            np.testing.assert_allclose(model.fls[0].section,
-                                       fmodel.fls[0].section)
+@pytest.mark.slow
+def test_run_annual_step(case_dir, hef_gdir, io_model_factory):
+    init_present_time_glacier(hef_gdir)
 
-    def test_gdir_copy(self, hef_class_copy):
+    mb = LinearMassBalance(2600.)
 
-        new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
-        if os.path.exists(new_dir):
-            shutil.rmtree(new_dir)
-        new_gdir = tasks.copy_to_basedir(hef_class_copy, base_dir=new_dir,
-                                         setup='all')
-        init_present_time_glacier(new_gdir)
+    fls = dummy_constant_bed()
+    model = io_model_factory(fls, mb_model=mb)
+    ds, ds_diag = model.run_until_and_store(500)
+    ds = ds[0]
+
+    fls = dummy_constant_bed()
+    model = io_model_factory(fls, mb_model=mb)
+
+    years = np.arange(0, 501)
+    vol_ref = []
+    a_ref = []
+    l_ref = []
+    vol_diag = []
+    a_diag = []
+    l_diag = []
+    ela_diag = []
+    for yr in years:
+        model.run_until(yr)
+        vol_diag.append(model.volume_m3)
+        a_diag.append(model.area_m2)
+        l_diag.append(model.length_m)
+        ela_diag.append(model.mb_model.get_ela(year=yr))
+        vol_ref.append(model.volume_m3)
+        a_ref.append(model.area_m2)
+        l_ref.append(model.length_m)
+        if int(yr) == 500:
+            secfortest = model.fls[0].section
+
+    np.testing.assert_allclose(ds.ts_section.isel(time=-1),
+                                secfortest)
+
+    np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
+    np.testing.assert_allclose(ds_diag.area_m2, a_diag)
+    np.testing.assert_allclose(ds_diag.length_m, l_diag)
+    np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
+
+    fls = dummy_constant_bed()
+    run_path = os.path.join(case_dir, 'ts_ideal.nc')
+    diag_path = os.path.join(case_dir, 'ts_diag.nc')
+    if os.path.exists(run_path):
+        os.remove(run_path)
+    if os.path.exists(diag_path):
+        os.remove(diag_path)
+    model = io_model_factory(fls, mb_model=mb)
+    model.run_until_and_store(500, run_path=run_path,
+                                diag_path=diag_path)
+
+    with xr.open_dataset(diag_path) as ds_:
+        # the identical (i.e. attrs + names) doesn't work because of date
+        del ds_diag.attrs['creation_date']
+        del ds_.attrs['creation_date']
+        xr.testing.assert_identical(ds_diag, ds_)
+
+    with FileModel(run_path) as fmodel:
+        assert fmodel.last_yr == 500
+        fls = dummy_constant_bed()
+        model = io_model_factory(fls, mb_model=mb)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this is sloooooow so we test a little bit only
+                fmodel.run_until(yr)
+                np.testing.assert_allclose(model.fls[0].section,
+                                            fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                            fmodel.fls[0].widths_m)
+
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = io_model_factory(fmodel.fls, mb_model=mb, y0=300)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                    fmodel.fls[0].section)
+
+
+def test_gdir_copy(case_dir, hef_gdir):
+    new_dir = os.path.join(case_dir, 'tmp_testcopy')
+    if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
+    new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
+                                        setup='all')
+    init_present_time_glacier(new_gdir)
+    shutil.rmtree(new_dir)
 
-        new_gdir = tasks.copy_to_basedir(hef_class_copy, base_dir=new_dir,
-                                         setup='run')
-        run_random_climate(new_gdir, nyears=10)
-        shutil.rmtree(new_dir)
+    new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
+                                        setup='run')
+    run_random_climate(new_gdir, nyears=10)
+    shutil.rmtree(new_dir)
 
-        new_gdir = tasks.copy_to_basedir(hef_class_copy, base_dir=new_dir,
-                                         setup='inversion')
-        inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
-        inversion.mass_conservation_inversion(new_gdir)
-        inversion.filter_inversion_output(new_gdir)
-        init_present_time_glacier(new_gdir)
-        run_constant_climate(new_gdir, nyears=10, bias=0)
-        shutil.rmtree(new_dir)
+    new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
+                                        setup='inversion')
+    inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
+    inversion.mass_conservation_inversion(new_gdir)
+    inversion.filter_inversion_output(new_gdir)
+    init_present_time_glacier(new_gdir)
+    run_constant_climate(new_gdir, nyears=10, bias=0)
+    shutil.rmtree(new_dir)
 
-    def test_hef(self, class_case_dir, hef_class_copy):
 
-        p = os.path.join(class_case_dir, 'grp_hef.nc')
-        if os.path.isfile(p):
-            os.remove(p)
+def test_hef(case_dir, hef_gdir):
+    p = os.path.join(case_dir, 'grp_hef.nc')
+    if os.path.isfile(p):
+        os.remove(p)
 
-        init_present_time_glacier(hef_class_copy)
+    init_present_time_glacier(hef_gdir)
 
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls)
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls)
 
-        model.to_netcdf(p)
-        fls_ = glacier_from_netcdf(p)
+    model.to_netcdf(p)
+    fls_ = glacier_from_netcdf(p)
 
-        for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
-            for v in ds.variables.keys():
-                np.testing.assert_allclose(ds_[v], ds[v], equal_nan=True)
+    for fl, fl_ in zip(fls, fls_):
+        ds = fl.to_dataset()
+        ds_ = fl_.to_dataset()
+        for v in ds.variables.keys():
+            np.testing.assert_allclose(ds_[v], ds[v], equal_nan=True)
 
-        for fl, fl_ in zip(fls[:-1], fls_[:-1]):
-            assert fl.flows_to_indice == fl_.flows_to_indice
+    for fl, fl_ in zip(fls[:-1], fls_[:-1]):
+        assert fl.flows_to_indice == fl_.flows_to_indice
 
-        # mixed flowline
-        fls = hef_class_copy.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls)
+    # mixed flowline
+    fls = hef_gdir.read_pickle('model_flowlines')
+    model = FluxBasedModel(fls)
 
-        p = os.path.join(class_case_dir, 'grp_hef_mix.nc')
-        if os.path.isfile(p):
-            os.remove(p)
-        model.to_netcdf(p)
-        fls_ = glacier_from_netcdf(p)
+    p = os.path.join(case_dir, 'grp_hef_mix.nc')
+    if os.path.isfile(p):
+        os.remove(p)
+    model.to_netcdf(p)
+    fls_ = glacier_from_netcdf(p)
 
-        np.testing.assert_allclose(fls[0].section, fls_[0].section)
-        np.testing.assert_allclose(fls[0]._ptrap, fls_[0]._ptrap)
-        np.testing.assert_allclose(fls[0].bed_h, fls_[0].bed_h)
+    np.testing.assert_allclose(fls[0].section, fls_[0].section)
+    np.testing.assert_allclose(fls[0]._ptrap, fls_[0]._ptrap)
+    np.testing.assert_allclose(fls[0].bed_h, fls_[0].bed_h)
 
-        for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
-            np.testing.assert_allclose(fl.section, fl_.section)
-            np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
-            np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
-            xr.testing.assert_allclose(ds, ds_)
+    for fl, fl_ in zip(fls, fls_):
+        ds = fl.to_dataset()
+        ds_ = fl_.to_dataset()
+        np.testing.assert_allclose(fl.section, fl_.section)
+        np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
+        np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
+        xr.testing.assert_allclose(ds, ds_)
 
-        for fl, fl_ in zip(fls[:-1], fls_[:-1]):
-            assert fl.flows_to_indice == fl_.flows_to_indice
+    for fl, fl_ in zip(fls[:-1], fls_[:-1]):
+        assert fl.flows_to_indice == fl_.flows_to_indice
 
 
 BI_FS = 5.7e-20
