@@ -6,7 +6,7 @@ import pytest
 import shapely.geometry as shpg
 
 
-from oggm import cfg
+from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import get_ident, init_hef, init_columbia
 from oggm.utils import mkdir
@@ -46,17 +46,39 @@ def test_dir():
     return out
 
 
-@pytest.fixture(scope='class')
-def class_test_dir(request, test_dir):
-    clsdir = os.path.join(test_dir, request.cls.__name__)
-    mkdir(clsdir, reset=True)
-    yield clsdir
-    # teardown
-    if os.path.exists(clsdir):
-        shutil.rmtree(clsdir)
+def _setup_case_dir(call, test_dir):
+    casedir = os.path.join(test_dir, call.__name__)
+    mkdir(casedir, reset=True)
+    return casedir
+
+def _teardown_case_dir(casedir):
+    if os.path.exists(casedir):
+        shutil.rmtree(casedir)
+
+
+@pytest.fixture(scope='function')
+def case_dir(request, test_dir):
+    cd = _setup_case_dir(request.function, test_dir)
+    yield cd
+    _teardown_case_dir(cd)
 
 
 @pytest.fixture(scope='class')
-def hef_gdir(request, test_dir):
-    border = request.module.DOM_BORDER if request.module.DOM_BORDER else 40
-    return init_hef(border=border)
+def class_case_dir(request, test_dir):
+    cd = _setup_case_dir(request.cls, test_dir)
+    yield cd
+    _teardown_case_dir(cd)
+
+
+@pytest.fixture(scope='module')
+def hef_gdir_base(request, test_dir):
+    try:
+        border = request.module.DOM_BORDER if request.module.DOM_BORDER is not None else 40
+        return init_hef(border=border)
+    except AttributeError:
+        return init_hef()
+
+@pytest.fixture(scope='function')
+def hef_gdir(hef_gdir_base, case_dir):
+    return tasks.copy_to_basedir(hef_gdir_base, base_dir=case_dir,
+                                          setup='all')
