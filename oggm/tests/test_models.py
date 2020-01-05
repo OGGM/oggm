@@ -1088,18 +1088,15 @@ def test_mixed(fl_shape_factory):
     assert_allclose(rec.surface_h, surface_h - 10)
 
 
-def test_flowline_to_dataset():
-
-    beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
+@pytest.mark.parametrize("bed", [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
             dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
-            dummy_mixed_bed]
-
-    for bed in beds:
-        fl = bed()[0]
-        ds = fl.to_dataset()
-        fl_ = flowline_from_dataset(ds)
-        ds_ = fl_.to_dataset()
-        assert ds_.equals(ds)
+            dummy_mixed_bed])
+def test_flowline_to_dataset(bed):
+    fl = bed()[0]
+    ds = fl.to_dataset()
+    fl_ = flowline_from_dataset(ds)
+    ds_ = fl_.to_dataset()
+    assert ds_.equals(ds)
 
 
 def test_model_to_file(case_dir, hef_gdir, io_model_factory):
