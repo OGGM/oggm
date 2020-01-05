@@ -13,8 +13,10 @@ log = logging.getLogger(__name__)
 def default_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
                 output_filesuffix=None, flux_limiter=False):
     """A simple doc"""
+
+    bias = 0 if y0 is None else None
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
-                                     y0=y0, seed=seed)
+                                     bias=bias, y0=y0, seed=seed)
     if temp_bias is not None:
         mb.temp_bias = temp_bias
     robust_model_run(gdir, output_filesuffix=output_filesuffix,
@@ -26,8 +28,10 @@ def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
                min_dt=0, output_filesuffix=None, cfl_number=0.05,
                flux_limiter=False):
     """A simple doc"""
+
+    bias = 0 if y0 is None else None
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
-                                     y0=y0, seed=seed)
+                                     bias=bias, y0=y0, seed=seed)
     if temp_bias is not None:
         mb.temp_bias = temp_bias
 
