@@ -77,6 +77,7 @@ HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
+DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
 
@@ -987,16 +988,20 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, demo_url=False):
+def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, base_url=None):
     with _get_download_lock():
         return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,
-                                         prepro_level, demo_url)
+                                         prepro_level, base_url=base_url)
 
 
 def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
-                              demo_url=False):
+                              base_url=None):
     # Prepro URL
-    url = DEMO_GDIR_URL if demo_url else GDIR_URL
+    if base_url is None:
+        base_url = GDIR_URL
+    if not base_url.endswith('/'):
+        base_url += '/'
+    url = base_url
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(border)
     url += 'L{:d}/'.format(prepro_level)
