@@ -74,7 +74,8 @@ def class_case_dir(request, test_dir):
 @pytest.fixture(scope='module')
 def hef_gdir_base(request, test_dir):
     try:
-        border = request.module.DOM_BORDER if request.module.DOM_BORDER is not None else 40
+        module = request.module
+        border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
         return init_hef(border=border)
     except AttributeError:
         return init_hef()

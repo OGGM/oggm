@@ -84,13 +84,14 @@ def backwards_model_factory():
     # Backwards
     N = 3
     fd = 1.9e-24
-    glen_a = (N+2) * fd / 2.
+    glen_a = (N + 2) * fd / 2.
 
     ela = 2800.
 
     def _model_factory(*args, ela_delta=0., **kwargs):
         mb = LinearMassBalance(ela + ela_delta)
-        return FluxBasedModel(*args, mb_model=mb, fs=fs, glen_a=glen_a, **kwargs)
+        return FluxBasedModel(*args, mb_model=mb, fs=fs,
+                              glen_a=glen_a, **kwargs)
 
     return _model_factory
 
@@ -177,7 +178,7 @@ def test_init_present_time_glacier(hef_gdir):
 
         if refo == 1:
             rmsd = utils.rmsd(ofl.widths[:-5] * gdir.grid.dx,
-                              fl.widths_m[0:len(ofl.widths)-5])
+                              fl.widths_m[0:len(ofl.widths) - 5])
             assert rmsd < 5.
 
     rtol = 0.02
@@ -308,7 +309,7 @@ def test_define_divides(case_dir):
 
     rtol = 0.08
     np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
-    np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
+    np.testing.assert_allclose(v * 1e-9, vol, rtol=rtol)
 
 
 def test_past_mb_model(hef_gdir):
@@ -333,7 +334,7 @@ def test_past_mb_model(hef_gdir):
                                                   year_range=yrp)
 
     mb_mod = massbalance.PastMassBalance(gdir, bias=0)
-    for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+    for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
         ref_mb_on_h = p[:, i] - mu_star * t[:, i]
         my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
         np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
@@ -343,7 +344,7 @@ def test_past_mb_model(hef_gdir):
         assert_allclose(totest[0], 0, atol=1)
 
     mb_mod = massbalance.PastMassBalance(gdir)
-    for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+    for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
         ref_mb_on_h = p[:, i] - mu_star * t[:, i]
         my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
         np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
@@ -352,10 +353,10 @@ def test_past_mb_model(hef_gdir):
         totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
         assert_allclose(totest[0], 0, atol=1)
 
-    for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+    for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
 
         ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-        my_mb_on_h = ref_mb_on_h*0.
+        my_mb_on_h = ref_mb_on_h * 0.
         for m in np.arange(12):
             yrm = utils.date_to_floatyear(yr, m + 1)
             tmp = mb_mod.get_monthly_mb(h, yrm) * SEC_IN_MONTH * rho
@@ -420,7 +421,9 @@ def test_past_mb_model(hef_gdir):
     assert_allclose(mb, mb_gw)
 
 
-@pytest.mark.parametrize("cl", [massbalance.PastMassBalance, massbalance.ConstantMassBalance, massbalance.RandomMassBalance])
+@pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
+                                massbalance.ConstantMassBalance,
+                                massbalance.RandomMassBalance])
 def test_glacierwide_mb_model(hef_gdir, cl):
     gdir = hef_gdir
     init_present_time_glacier(gdir)
@@ -491,11 +494,11 @@ def test_glacierwide_mb_model(hef_gdir, cl):
         mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                         mb_model_class=cl)
         mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
-                                            rdn_prcp_bias_seed=2,
-                                            rdn_temp_bias_seed=3)
+                                              rdn_prcp_bias_seed=2,
+                                              rdn_temp_bias_seed=3)
         mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
-                                                rdn_prcp_bias_seed=2,
-                                                rdn_temp_bias_seed=3)
+                                                 rdn_prcp_bias_seed=2,
+                                                 rdn_temp_bias_seed=3)
 
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
@@ -660,16 +663,16 @@ def test_random_mb(hef_gdir):
     np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
 
     # Monthly
-    time = pd.date_range('1/1/1973', periods=31*12, freq='MS')
+    time = pd.date_range('1/1/1973', periods=31 * 12, freq='MS')
     yrs = utils.date_to_floatyear(time.year, time.month)
 
     ref_mb = np.zeros(12)
     my_mb = np.zeros(12)
     for yr, m in zip(yrs, time.month):
-        ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) *
-                                  SEC_IN_MONTH, weights=w)
-        my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) *
-                                 SEC_IN_MONTH, weights=w)
+        ref_mb[m - 1] += np.average(mb_ref.get_monthly_mb(h, yr) *
+                                    SEC_IN_MONTH, weights=w)
+        my_mb[m - 1] += np.average(mb_mod.get_monthly_mb(h, yr) *
+                                   SEC_IN_MONTH, weights=w)
     my_mb = my_mb / 31
     ref_mb = ref_mb / 31
     assert utils.rmsd(ref_mb, my_mb) < 0.1
@@ -846,7 +849,7 @@ def test_mb_performance(hef_gdir):
     h, w = gdir.get_inversion_flowline_hw()
 
     # Climate period, 10 day timestep
-    yrs = np.arange(1850, 2003, 10/365)
+    yrs = np.arange(1850, 2003, 10 / 365)
 
     # models
     start_time = time.time()
@@ -867,12 +870,18 @@ def test_mb_performance(hef_gdir):
         # no big deal
         pytest.skip('Allowed failure')
 
-# subclass to determine expected kwargs for mixed cases
+
 class MixedParabolicBedFlowline(MixedBedFlowline):
+    """ subclass to determine expected kwargs for mixed cases in
+        fl_shape_factory
+    """
+
     def __init__(self, *args, **kwargs):
         super(MixedParabolicBedFlowline, self).__init__(*args, **kwargs)
 
+
 MODEL_LEN = 200
+
 
 @pytest.fixture(scope='module')
 def fl_shape_factory():
@@ -892,20 +901,25 @@ def fl_shape_factory():
 
     thick = surface_h - bed_h
 
-    shapes = bed_h*0. + 0.003
+    shapes = bed_h * 0. + 0.003
     shapes[:30] = 0.002
     shapes[-30:] = 0.004
 
-    def _factory(fl_model, expects_factory, lambdas=None, is_trap=None, section=None):
+    def _factory(fl_model, expects_factory, lambdas=None,
+                 is_trap=None, section=None):
         kwargs = {}
 
-        parabolic = fl_model is ParabolicBedFlowline or fl_model is MixedParabolicBedFlowline
-        mixed = fl_model is MixedBedFlowline or fl_model is MixedParabolicBedFlowline
+        parabolic = (fl_model is ParabolicBedFlowline or
+                     fl_model is MixedParabolicBedFlowline)
+        mixed = (fl_model is MixedBedFlowline or
+                 fl_model is MixedParabolicBedFlowline)
 
-        (widths_m, section_, vol_m3, area_m2, w_adj) = expects_factory(thick=thick, widths=widths, map_dx=map_dx, lambdas=lambdas, shapes=shapes)
+        (widths_m, section_, vol_m3, area_m2, w_adj) = expects_factory(
+            thick=thick, widths=widths, map_dx=map_dx, lambdas=lambdas,
+            shapes=shapes)
 
         widths_ = widths if w_adj is None else w_adj
-        
+
         lambdas = lambdas
         section = section if section is not None else section_
 
@@ -913,23 +927,24 @@ def fl_shape_factory():
             kwargs['bed_shape'] = shapes
         if mixed:
             kwargs['section'] = section
-            if parabolic and lambdas is None: 
+            if parabolic and lambdas is None:
                 lambdas = shapes
             if not parabolic:
                 kwargs['bed_shape'] = lambdas
             kwargs['is_trapezoid'] = is_trap
-        if not parabolic and not mixed: 
+        if not parabolic and not mixed:
             kwargs['widths'] = widths_
         if lambdas is not None:
             kwargs['lambdas'] = lambdas
-        
 
         return (fl_model(line=line, dx=dx, map_dx=map_dx,
-                        surface_h=surface_h, bed_h=bed_h, 
-                        **kwargs),
-                (thick, surface_h, widths_, widths_m, section, vol_m3, area_m2))
-    
+                         surface_h=surface_h, bed_h=bed_h,
+                         **kwargs),
+                (thick, surface_h, widths_, widths_m,
+                 section, vol_m3, area_m2))
+
     return _factory
+
 
 def rectangular_expects(thick, widths, map_dx, **kwargs):
     widths_m = widths * map_dx
@@ -939,6 +954,7 @@ def rectangular_expects(thick, widths, map_dx, **kwargs):
     area_m2[thick == 0] = 0
     return (widths_m, section, vol_m3, area_m2, None)
 
+
 def trapeze_expects(thick, widths, map_dx, lambdas, **kwargs):
     widths_m = widths * map_dx + lambdas * thick
     w_adj = widths_m / map_dx
@@ -947,6 +963,7 @@ def trapeze_expects(thick, widths, map_dx, lambdas, **kwargs):
     area_m2 = map_dx * widths_m
     area_m2[thick == 0] = 0
     return (widths_m, section, vol_m3, area_m2, w_adj)
+
 
 def parabola_expects(thick, shapes, map_dx, **kwargs):
     widths_m = np.sqrt(4 * thick / shapes)
@@ -961,21 +978,33 @@ def parabola_expects(thick, shapes, map_dx, **kwargs):
 @pytest.mark.parametrize(
     "fl_model, expects_factory, lambdas, is_trap",
     [
-        pytest.param(RectangularBedFlowline, rectangular_expects, None, None, id="rectangular"),
-        pytest.param(TrapezoidalBedFlowline, rectangular_expects, np.zeros(MODEL_LEN, dtype=np.float), None, id="trapeze_rec"),
-        pytest.param(MixedBedFlowline, rectangular_expects, np.zeros(MODEL_LEN, dtype=np.float), np.ones(MODEL_LEN, dtype=np.bool), id="trapeze_rec_mixed"),
-        pytest.param(TrapezoidalBedFlowline, trapeze_expects, np.ones(MODEL_LEN, dtype=np.float), None, id="trapeze_lambda1"),
-        pytest.param(MixedBedFlowline, trapeze_expects, np.ones(MODEL_LEN, dtype=np.float), np.ones(MODEL_LEN, dtype=np.bool), id="trapeze_lambda1_mixed"),
-        pytest.param(ParabolicBedFlowline, parabola_expects, None, None, id="parabola"),
-        pytest.param(MixedParabolicBedFlowline, parabola_expects, None, np.zeros(MODEL_LEN, dtype=np.bool), id="parabola_mixed")
+        pytest.param(RectangularBedFlowline, rectangular_expects,
+                     None, None, id="rectangular"),
+        pytest.param(TrapezoidalBedFlowline, rectangular_expects, np.zeros(
+            MODEL_LEN, dtype=np.float), None, id="trapeze_rec"),
+        pytest.param(MixedBedFlowline, rectangular_expects,
+                     np.zeros(MODEL_LEN, dtype=np.float),
+                     np.ones(MODEL_LEN, dtype=np.bool),
+                     id="trapeze_rec_mixed"),
+        pytest.param(TrapezoidalBedFlowline, trapeze_expects, np.ones(
+            MODEL_LEN, dtype=np.float), None, id="trapeze_lambda1"),
+        pytest.param(MixedBedFlowline, trapeze_expects,
+                     np.ones(MODEL_LEN, dtype=np.float),
+                     np.ones(MODEL_LEN, dtype=np.bool),
+                     id="trapeze_lambda1_mixed"),
+        pytest.param(ParabolicBedFlowline, parabola_expects,
+                     None, None, id="parabola"),
+        pytest.param(MixedParabolicBedFlowline, parabola_expects, None,
+                     np.zeros(MODEL_LEN, dtype=np.bool), id="parabola_mixed")
     ]
 )
-def test_model_flowlines(fl_shape_factory, expects_factory, fl_model, lambdas, is_trap):
-    (fl, expects) = fl_shape_factory(fl_model, expects_factory, lambdas, is_trap)
+def test_model_flowlines(
+        fl_shape_factory, expects_factory, fl_model, lambdas, is_trap):
+    (fl, expects) = fl_shape_factory(fl_model, expects_factory,
+                                     lambdas, is_trap)
 
     (thick, surface_h, widths, widths_m, section, vol_m3, area_m2) = expects
     print("VALUE OF SECTION IS ", section)
-
 
     assert_allclose(fl.thick, thick)
     assert_allclose(fl.widths, widths)
@@ -1013,12 +1042,12 @@ def test_model_flowlines(fl_shape_factory, expects_factory, fl_model, lambdas, i
     if fl_model is RectangularBedFlowline:
         # More adventurous
         fl.section = section / 2
-        assert_allclose(fl.thick, thick/2)
+        assert_allclose(fl.thick, thick / 2)
         assert_allclose(fl.widths, widths)
         assert_allclose(fl.widths_m, widths_m)
-        assert_allclose(fl.section, section/2)
+        assert_allclose(fl.section, section / 2)
         assert_allclose(fl.area_m2, area_m2.sum())
-        assert_allclose(fl.volume_m3, (vol_m3/2).sum())
+        assert_allclose(fl.volume_m3, (vol_m3 / 2).sum())
 
 
 def test_mixed(fl_shape_factory):
@@ -1028,8 +1057,9 @@ def test_mixed(fl_shape_factory):
     lambdas = np.ones(MODEL_LEN, dtype=np.float)
     lambdas[0:50] = 0
 
-    (rec1, expects) = fl_shape_factory(TrapezoidalBedFlowline, trapeze_expects, lambdas)
-    (thick, surface_h, widths, widths_m, section_trap, *_) = expects    
+    (rec1, expects) = fl_shape_factory(
+        TrapezoidalBedFlowline, trapeze_expects, lambdas)
+    (thick, surface_h, widths, widths_m, section_trap, *_) = expects
 
     (rec2, expects) = fl_shape_factory(ParabolicBedFlowline, parabola_expects)
     (thick, surface_h, widths, widths_m, section_para, *_) = expects
@@ -1040,7 +1070,9 @@ def test_mixed(fl_shape_factory):
     section = section_trap.copy()
     section[~is_trap] = section_para[~is_trap]
 
-    (rec, expects) = fl_shape_factory(MixedParabolicBedFlowline, trapeze_expects, lambdas, is_trap, section)
+    (rec, expects) = fl_shape_factory(MixedParabolicBedFlowline,
+                                      trapeze_expects, lambdas, is_trap,
+                                      section)
 
     thick = rec1.thick
     thick[~is_trap] = rec2.thick[~is_trap]
@@ -1088,9 +1120,10 @@ def test_mixed(fl_shape_factory):
     assert_allclose(rec.surface_h, surface_h - 10)
 
 
-@pytest.mark.parametrize("bed", [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
-            dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
-            dummy_mixed_bed])
+@pytest.mark.parametrize("bed", [dummy_constant_bed, dummy_width_bed,
+                                 dummy_noisy_bed, dummy_bumpy_bed,
+                                 dummy_parabolic_bed, dummy_trapezoidal_bed,
+                                 dummy_mixed_bed])
 def test_flowline_to_dataset(bed):
     fl = bed()[0]
     ds = fl.to_dataset()
@@ -1406,8 +1439,8 @@ def test_iterative_back(backwards_idealized_fls, backwards_model_factory):
         plt.legend(loc='best')
         plt.show()
 
-    model = backwards_model_factory(
-        backwards_idealized_fls, ela_delta=-50., y0=y0, time_stepping='ambitious')
+    model = backwards_model_factory(backwards_idealized_fls, ela_delta=-50.,
+                                    y0=y0, time_stepping='ambitious')
 
     ite, bias, past_model = _find_inital_glacier(model, model.mb_model, y0,
                                                  y1, rtol=rtol)
@@ -2147,7 +2180,7 @@ def test_inversion_non_equilibrium(inversion_gdir):
     assert v > model.volume_m3
     ocls = inversion_gdir.read_pickle('inversion_output')
     ithick = ocls[0]['thick']
-    assert np.mean(ithick) > np.mean(model.fls[0].thick)*1.1
+    assert np.mean(ithick) > np.mean(model.fls[0].thick) * 1.1
     if do_plot:  # pragma: no cover
         simple_plot(model, inversion_gdir)
 
@@ -2184,7 +2217,7 @@ def test_inversion_and_run(inversion_gdir):
     ithick = inv['thick']
     fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
                               from_other_shape=bed_shape_gl[:-2],
-                              from_other_bed=sh-ithick)
+                              from_other_bed=sh - ithick)
     model2 = FluxBasedModel(fls, mb_model=mb, y0=0.,
                             time_stepping='conservative')
     model2.run_until_equilibrium()
@@ -2213,7 +2246,7 @@ def test_equilibrium(hef_gdir, inversion_params):
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                            fs=inversion_params['fs'],
                            glen_a=inversion_params['glen_a'],
-                           min_dt=SEC_IN_DAY/2.,
+                           min_dt=SEC_IN_DAY / 2.,
                            mb_elev_feedback='never')
 
     ref_vol = model.volume_km3
@@ -2247,7 +2280,7 @@ def test_equilibrium_glacier_wide(hef_gdir, inversion_params):
     model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                            fs=inversion_params['fs'],
                            glen_a=inversion_params['glen_a'],
-                           min_dt=SEC_IN_DAY/2.,
+                           min_dt=SEC_IN_DAY / 2.,
                            mb_elev_feedback='never')
 
     ref_vol = model.volume_km3
@@ -2327,10 +2360,12 @@ def test_random(hef_gdir, inversion_params):
 
     init_present_time_glacier(hef_gdir)
     run_random_climate(hef_gdir, nyears=100, seed=6,
-                       fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                       fs=inversion_params['fs'],
+                       glen_a=inversion_params['glen_a'],
                        bias=0, output_filesuffix='_rdn')
     run_constant_climate(hef_gdir, nyears=100,
-                         fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                         fs=inversion_params['fs'],
+                         glen_a=inversion_params['glen_a'],
                          bias=0, output_filesuffix='_ct')
 
     paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
@@ -2595,7 +2630,7 @@ def test_cesm(hef_gdir):
     ds3 = utils.compile_run_output([gdir], path=False,
                                    input_filesuffix='_afterspinup')
     assert (ds1.volume.isel(rgi_id=0, time=-1) <
-            0.7*ds3.volume.isel(rgi_id=0, time=-1))
+            0.7 * ds3.volume.isel(rgi_id=0, time=-1))
     ds3.close()
 
     # Try the compile optimisation
@@ -2639,7 +2674,7 @@ def test_elevation_feedback(hef_gdir):
     if do_plot:
         plt.figure()
         for ds, lab in zip(out, feedbacks):
-            (ds.volume*1e-9).plot(label=lab)
+            (ds.volume * 1e-9).plot(label=lab)
         plt.xlabel('Vol (km3)')
         plt.legend()
         plt.show()
