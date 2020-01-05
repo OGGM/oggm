@@ -47,6 +47,7 @@ pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
+
 @pytest.fixture(autouse=True, scope='module')
 def init_url_retrieve(request):
     request.module._url_retrieve = utils.oggm_urlretrieve
@@ -64,7 +65,7 @@ DOM_BORDER = 80
 @pytest.fixture(scope='class')
 def hef_copy(hef_gdir, class_test_dir):
     return tasks.copy_to_basedir(hef_gdir, base_dir=class_test_dir,
-                                          setup='all')
+                                 setup='all')
 
 
 class TestInitFlowline:
@@ -88,10 +89,10 @@ class TestInitFlowline:
             np.testing.assert_allclose(ref, fl.dis_on_line,
                                        rtol=0.001,
                                        atol=0.01)
-            assert(len(fl.surface_h) == 
-                   len(fl.bed_h) == 
-                   len(fl.bed_shape) == 
-                   len(fl.dis_on_line) == 
+            assert(len(fl.surface_h) ==
+                   len(fl.bed_h) ==
+                   len(fl.bed_shape) ==
+                   len(fl.dis_on_line) ==
                    len(fl.widths))
 
             assert np.all(fl.widths >= 0)
@@ -347,7 +348,9 @@ class TestMassBalance:
         mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
         assert_allclose(mb, mb_gw)
 
-    @pytest.mark.parametrize("cl", [massbalance.PastMassBalance, massbalance.ConstantMassBalance, massbalance.RandomMassBalance])
+    @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
+                                    massbalance.ConstantMassBalance,
+                                    massbalance.RandomMassBalance])
     def test_glacierwide_mb_model(self, hef_gdir, cl):
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -418,11 +421,11 @@ class TestMassBalance:
             mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                             mb_model_class=cl)
             mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
-                                                rdn_prcp_bias_seed=2,
-                                                rdn_temp_bias_seed=3)
+                                                  rdn_prcp_bias_seed=2,
+                                                  rdn_temp_bias_seed=3)
             mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
-                                                    rdn_prcp_bias_seed=2,
-                                                    rdn_temp_bias_seed=3)
+                                                     rdn_prcp_bias_seed=2,
+                                                     rdn_temp_bias_seed=3)
 
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
@@ -664,16 +667,16 @@ class TestMassBalance:
         # test uniqueness
         # size
         assert(len(list(mb_mod._state_yr.values())) ==
-                        np.unique(list(mb_mod._state_yr.values())).size)
+               np.unique(list(mb_mod._state_yr.values())).size)
         # size2
         assert(len(list(mb_mod2._state_yr.values())) ==
-                        np.unique(list(mb_mod2._state_yr.values())).size)
+               np.unique(list(mb_mod2._state_yr.values())).size)
         # state years 1 vs 2
         assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                               np.unique(list(mb_mod2._state_yr.values()))))
+                      np.unique(list(mb_mod2._state_yr.values()))))
         # state years 1 vs reference model
         assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                               ref_mod.years))
+                      ref_mod.years))
 
         # test ela vs specific mb
         elats = mb_mod.get_ela(yrs[:200])
@@ -1191,18 +1194,17 @@ def io_init_gdir(hef_copy):
 @pytest.mark.usefixtures('io_init_gdir')
 class TestIO():
     glen_a = 2.4e-24
-    def test_flowline_to_dataset(self):
 
-        beds = [dummy_constant_bed, dummy_width_bed, dummy_noisy_bed,
-                dummy_bumpy_bed, dummy_parabolic_bed, dummy_trapezoidal_bed,
-                dummy_mixed_bed]
-
-        for bed in beds:
-            fl = bed()[0]
-            ds = fl.to_dataset()
-            fl_ = flowline_from_dataset(ds)
-            ds_ = fl_.to_dataset()
-            assert ds_.equals(ds)
+    @pytest.mark.parametrize("bed", [dummy_constant_bed, dummy_width_bed,
+                                     dummy_noisy_bed, dummy_bumpy_bed,
+                                     dummy_parabolic_bed,
+                                     dummy_trapezoidal_bed, dummy_mixed_bed])
+    def test_flowline_to_dataset(self, bed):
+        fl = bed()[0]
+        ds = fl.to_dataset()
+        fl_ = flowline_from_dataset(ds)
+        ds_ = fl_.to_dataset()
+        assert ds_.equals(ds)
 
     def test_model_to_file(self, class_test_dir):
 
@@ -1500,7 +1502,7 @@ def backwards_idealized_glacier():
 
     mb = LinearMassBalance(BI_ELA)
     model = FluxBasedModel(origfls, mb_model=mb,
-                            fs=BI_FS, glen_a=BI_GLEN_A)
+                           fs=BI_FS, glen_a=BI_GLEN_A)
     model.run_until(500)
     return copy.deepcopy(model.fls)
 
@@ -1537,10 +1539,12 @@ class TestBackwardsIdealized():
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
-            plt.plot(backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
+            plt.plot(
+                backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
             plt.plot(bef_fls[-1].surface_h, 'b', label='start')
             plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
+            plt.plot(
+                backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
             plt.legend(loc='best')
             plt.show()
 
@@ -1559,10 +1563,12 @@ class TestBackwardsIdealized():
                                    rtol=rtol)
 
         if do_plot:  # pragma: no cover
-            plt.plot(backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
+            plt.plot(
+                backwards_idealized_glacier[-1].surface_h, 'k', label='ref')
             plt.plot(bef_fls[-1].surface_h, 'b', label='start')
             plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
+            plt.plot(
+                backwards_idealized_glacier[-1].bed_h, 'gray', linewidth=2)
             plt.legend(loc='best')
             plt.show()
 
@@ -1737,7 +1743,8 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+        bed_shape_gl = 4 * inv['thick'] / \
+            (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -1814,7 +1821,8 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.02)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+        bed_shape_gl = 4 * inv['thick'] / \
+            (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -1874,7 +1882,8 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+        bed_shape_gl = 4 * inv['thick'] / \
+            (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -2321,7 +2330,8 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
+        bed_shape_gl = 4 * inv['thick'] / \
+            (flo.widths * inversion_gdir.grid.dx) ** 2
 
         ithick = inv['thick']
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
@@ -2349,7 +2359,7 @@ def gdir_sh(request, test_dir, hef_gdir):
     dir_sh = os.path.join(test_dir, request.cls.__name__ + '_sh')
     utils.mkdir(dir_sh, reset=True)
     gdir_sh = tasks.copy_to_basedir(hef_gdir, base_dir=dir_sh,
-                                          setup='all')
+                                    setup='all')
     gdir_sh.hemisphere = 'sh'
     yield gdir_sh
     # teardown
@@ -2362,7 +2372,8 @@ def with_class_wd(request, test_dir, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
     print('PREVIOUS WORKING DIR: ', prev_wd)
-    cfg.PATHS['working_dir'] = os.path.join(test_dir, request.cls.__name__ + '_wd')
+    cfg.PATHS['working_dir'] = os.path.join(
+        test_dir, request.cls.__name__ + '_wd')
     utils.mkdir(cfg.PATHS['working_dir'], reset=True)
     yield
     # teardown
@@ -2474,7 +2485,7 @@ class TestHEF:
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area,hef_copy.rgi_area_km2, rtol=0.02)
+        np.testing.assert_allclose(ref_area, hef_copy.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         assert model.yr > 100
@@ -2498,10 +2509,12 @@ class TestHEF:
 
         init_present_time_glacier(hef_copy)
         run_random_climate(hef_copy, nyears=100, seed=6,
-                           fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                           fs=inversion_params['fs'], 
+                           glen_a=inversion_params['glen_a'],
                            bias=0, output_filesuffix='_rdn')
         run_constant_climate(hef_copy, nyears=100,
-                             fs=inversion_params['fs'], glen_a=inversion_params['glen_a'],
+                             fs=inversion_params['fs'], 
+                             glen_a=inversion_params['glen_a'],
                              bias=0, output_filesuffix='_ct')
 
         paths = [hef_copy.get_filepath('model_run', filesuffix='_rdn'),
