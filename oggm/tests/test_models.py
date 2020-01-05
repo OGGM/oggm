@@ -867,79 +867,15 @@ def test_mb_performance(hef_gdir):
         # no big deal
         pytest.skip('Allowed failure')
 
+# subclass to determine expected kwargs for mixed cases
+class MixedParabolicBedFlowline(MixedBedFlowline):
+    def __init__(self, *args, **kwargs):
+        super(MixedParabolicBedFlowline, self).__init__(*args, **kwargs)
 
-def test_rectangular():
-    map_dx = 100.
-    dx = 1.
-    nx = 200
-    coords = np.arange(0, nx - 0.5, 1)
-    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+MODEL_LEN = 200
 
-    bed_h = np.linspace(3000, 1000, nx)
-    surface_h = bed_h + 100
-    surface_h[:20] += 50
-    surface_h[-20:] -= 100
-    widths = bed_h * 0. + 20
-    widths[:30] = 40
-    widths[-30:] = 10
-
-    rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                 surface_h=surface_h, bed_h=bed_h,
-                                 widths=widths)
-    thick = surface_h - bed_h
-    widths_m = widths * map_dx
-    section = thick * widths_m
-    vol_m3 = thick * map_dx * widths_m
-    area_m2 = map_dx * widths_m
-    area_m2[thick == 0] = 0
-
-    assert_allclose(rec.thick, thick)
-    assert_allclose(rec.widths, widths)
-    assert_allclose(rec.widths_m, widths_m)
-    assert_allclose(rec.section, section)
-    assert_allclose(rec.area_m2, area_m2.sum())
-    assert_allclose(rec.volume_m3, vol_m3.sum())
-
-    # We set something and everything stays same
-    rec.thick = thick
-    assert_allclose(rec.thick, thick)
-    assert_allclose(rec.surface_h, surface_h)
-    assert_allclose(rec.widths, widths)
-    assert_allclose(rec.widths_m, widths_m)
-    assert_allclose(rec.section, section)
-    assert_allclose(rec.area_m2, area_m2.sum())
-    assert_allclose(rec.volume_m3, vol_m3.sum())
-    rec.section = section
-    assert_allclose(rec.thick, thick)
-    assert_allclose(rec.surface_h, surface_h)
-    assert_allclose(rec.widths, widths)
-    assert_allclose(rec.widths_m, widths_m)
-    assert_allclose(rec.section, section)
-    assert_allclose(rec.area_m2, area_m2.sum())
-    assert_allclose(rec.volume_m3, vol_m3.sum())
-    rec.surface_h = surface_h
-    assert_allclose(rec.thick, thick)
-    assert_allclose(rec.surface_h, surface_h)
-    assert_allclose(rec.widths, widths)
-    assert_allclose(rec.widths_m, widths_m)
-    assert_allclose(rec.section, section)
-    assert_allclose(rec.area_m2, area_m2.sum())
-    assert_allclose(rec.volume_m3, vol_m3.sum())
-
-    # More adventurous
-    rec.section = section / 2
-    assert_allclose(rec.thick, thick/2)
-    assert_allclose(rec.widths, widths)
-    assert_allclose(rec.widths_m, widths_m)
-    assert_allclose(rec.section, section/2)
-    assert_allclose(rec.area_m2, area_m2.sum())
-    assert_allclose(rec.volume_m3, (vol_m3/2).sum())
-
-
-def test_trapeze_mixed_rec():
-
-    # Special case of lambda = 0
-
+@pytest.fixture(scope='module')
+def fl_shape_factory():
     map_dx = 100.
     dx = 1.
     nx = 200
@@ -954,268 +890,157 @@ def test_trapeze_mixed_rec():
     widths[:30] = 40
     widths[-30:] = 10
 
-    lambdas = bed_h*0.
-    is_trap = np.ones(len(lambdas), dtype=np.bool)
-
-    # tests
     thick = surface_h - bed_h
-    widths_m = widths * map_dx
-    section = thick * widths_m
-    vol_m3 = thick * map_dx * widths_m
-    area_m2 = map_dx * widths_m
-    area_m2[thick == 0] = 0
-
-    rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                  surface_h=surface_h,
-                                  bed_h=bed_h, widths=widths,
-                                  lambdas=lambdas)
-
-    rec2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                            surface_h=surface_h, bed_h=bed_h,
-                            section=section, bed_shape=lambdas,
-                            is_trapezoid=is_trap, lambdas=lambdas)
-
-    recs = [rec1, rec2]
-    for rec in recs:
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-
-        # We set something and everything stays same
-        rec.thick = thick
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        rec.section = section
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        rec.surface_h = surface_h
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-
-        # More adventurous
-        rec.section = section / 2
-        assert_allclose(rec.thick, thick/2)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section/2)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, (vol_m3/2).sum())
-
-
-def test_trapeze_mixed_lambda1():
-
-    # Real lambdas
-
-    map_dx = 100.
-    dx = 1.
-    nx = 200
-    coords = np.arange(0, nx - 0.5, 1)
-    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-
-    bed_h = np.linspace(3000, 1000, nx)
-    surface_h = bed_h + 100
-    surface_h[:20] += 50
-    surface_h[-20:] -= 80
-    widths_0 = bed_h * 0. + 20
-    widths_0[:30] = 40
-    widths_0[-30:] = 10
-
-    lambdas = bed_h*0. + 1
-
-    # tests
-    thick = surface_h - bed_h
-    widths_m = widths_0 * map_dx + lambdas * thick
-    widths = widths_m / map_dx
-    section = thick * (widths_0 * map_dx + widths_m) / 2
-    vol_m3 = section * map_dx
-    area_m2 = map_dx * widths_m
-    area_m2[thick == 0] = 0
-
-    is_trap = np.ones(len(lambdas), dtype=np.bool)
-
-    rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                  surface_h=surface_h,
-                                  bed_h=bed_h, widths=widths,
-                                  lambdas=lambdas)
-
-    rec2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                            surface_h=surface_h, bed_h=bed_h,
-                            section=section, bed_shape=lambdas,
-                            is_trapezoid=is_trap, lambdas=lambdas)
-
-    recs = [rec1, rec2]
-    for rec in recs:
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-
-        # We set something and everything stays same
-        rec.thick = thick
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        rec.section = section
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        rec.surface_h = surface_h
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.surface_h, surface_h)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-
-
-def test_parab_mixed():
-
-    # Real parabolas
-
-    map_dx = 100.
-    dx = 1.
-    nx = 200
-    coords = np.arange(0, nx - 0.5, 1)
-    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-
-    bed_h = np.linspace(3000, 1000, nx)
-    surface_h = bed_h + 100
-    surface_h[:20] += 50
-    surface_h[-20:] -= 80
 
     shapes = bed_h*0. + 0.003
     shapes[:30] = 0.002
     shapes[-30:] = 0.004
 
-    # tests
-    thick = surface_h - bed_h
+    def _factory(fl_model, expects_factory, lambdas=None, is_trap=None, section=None):
+        kwargs = {}
+
+        parabolic = fl_model is ParabolicBedFlowline or fl_model is MixedParabolicBedFlowline
+        mixed = fl_model is MixedBedFlowline or fl_model is MixedParabolicBedFlowline
+
+        (widths_m, section_, vol_m3, area_m2, w_adj) = expects_factory(thick=thick, widths=widths, map_dx=map_dx, lambdas=lambdas, shapes=shapes)
+
+        widths_ = widths if w_adj is None else w_adj
+        
+        lambdas = lambdas
+        section = section if section is not None else section_
+
+        if parabolic:
+            kwargs['bed_shape'] = shapes
+        if mixed:
+            kwargs['section'] = section
+            if parabolic and lambdas is None: 
+                lambdas = shapes
+            if not parabolic:
+                kwargs['bed_shape'] = lambdas
+            kwargs['is_trapezoid'] = is_trap
+        if not parabolic and not mixed: 
+            kwargs['widths'] = widths_
+        if lambdas is not None:
+            kwargs['lambdas'] = lambdas
+        
+
+        return (fl_model(line=line, dx=dx, map_dx=map_dx,
+                        surface_h=surface_h, bed_h=bed_h, 
+                        **kwargs),
+                (thick, surface_h, widths_, widths_m, section, vol_m3, area_m2))
+    
+    return _factory
+
+def rectangular_expects(thick, widths, map_dx, **kwargs):
+    widths_m = widths * map_dx
+    section = thick * widths_m
+    vol_m3 = thick * map_dx * widths_m
+    area_m2 = map_dx * widths_m
+    area_m2[thick == 0] = 0
+    return (widths_m, section, vol_m3, area_m2, None)
+
+def trapeze_expects(thick, widths, map_dx, lambdas, **kwargs):
+    widths_m = widths * map_dx + lambdas * thick
+    w_adj = widths_m / map_dx
+    section = thick * (widths * map_dx + widths_m) / 2
+    vol_m3 = section * map_dx
+    area_m2 = map_dx * widths_m
+    area_m2[thick == 0] = 0
+    return (widths_m, section, vol_m3, area_m2, w_adj)
+
+def parabola_expects(thick, shapes, map_dx, **kwargs):
     widths_m = np.sqrt(4 * thick / shapes)
-    widths = widths_m / map_dx
+    w_adj = widths_m / map_dx
     section = 2 / 3 * widths_m * thick
     vol_m3 = section * map_dx
     area_m2 = map_dx * widths_m
     area_m2[thick == 0] = 0
-
-    is_trap = np.zeros(len(shapes), dtype=np.bool)
-
-    rec1 = ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                surface_h=surface_h, bed_h=bed_h,
-                                bed_shape=shapes)
-
-    rec2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                            surface_h=surface_h, bed_h=bed_h,
-                            section=section, bed_shape=shapes,
-                            is_trapezoid=is_trap, lambdas=shapes)
-
-    recs = [rec1, rec2]
-    for rec in recs:
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-
-        # We set something and everything stays same
-        rec.thick = thick
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        rec.section = section
-        assert_allclose(rec.thick, thick)
-        assert_allclose(rec.widths, widths)
-        assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section)
-        assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, vol_m3.sum())
-        assert_allclose(rec.surface_h, surface_h)
+    return (widths_m, section, vol_m3, area_m2, w_adj)
 
 
-def test_mixed():
+@pytest.mark.parametrize(
+    "fl_model, expects_factory, lambdas, is_trap",
+    [
+        pytest.param(RectangularBedFlowline, rectangular_expects, None, None, id="rectangular"),
+        pytest.param(TrapezoidalBedFlowline, rectangular_expects, np.zeros(MODEL_LEN, dtype=np.float), None, id="trapeze_rec"),
+        pytest.param(MixedBedFlowline, rectangular_expects, np.zeros(MODEL_LEN, dtype=np.float), np.ones(MODEL_LEN, dtype=np.bool), id="trapeze_rec_mixed"),
+        pytest.param(TrapezoidalBedFlowline, trapeze_expects, np.ones(MODEL_LEN, dtype=np.float), None, id="trapeze_lambda1"),
+        pytest.param(MixedBedFlowline, trapeze_expects, np.ones(MODEL_LEN, dtype=np.float), np.ones(MODEL_LEN, dtype=np.bool), id="trapeze_lambda1_mixed"),
+        pytest.param(ParabolicBedFlowline, parabola_expects, None, None, id="parabola"),
+        pytest.param(MixedParabolicBedFlowline, parabola_expects, None, np.zeros(MODEL_LEN, dtype=np.bool), id="parabola_mixed")
+    ]
+)
+def test_model_flowlines(fl_shape_factory, expects_factory, fl_model, lambdas, is_trap):
+    (fl, expects) = fl_shape_factory(fl_model, expects_factory, lambdas, is_trap)
+
+    (thick, surface_h, widths, widths_m, section, vol_m3, area_m2) = expects
+    print("VALUE OF SECTION IS ", section)
+
+
+    assert_allclose(fl.thick, thick)
+    assert_allclose(fl.widths, widths)
+    assert_allclose(fl.widths_m, widths_m)
+    assert_allclose(fl.section, section)
+    assert_allclose(fl.area_m2, area_m2.sum())
+    assert_allclose(fl.volume_m3, vol_m3.sum())
+
+    # We set something and everything stays same
+    fl.thick = thick
+    assert_allclose(fl.thick, thick)
+    assert_allclose(fl.surface_h, surface_h)
+    assert_allclose(fl.widths, widths)
+    assert_allclose(fl.widths_m, widths_m)
+    assert_allclose(fl.section, section)
+    assert_allclose(fl.area_m2, area_m2.sum())
+    assert_allclose(fl.volume_m3, vol_m3.sum())
+    fl.section = section
+    assert_allclose(fl.thick, thick)
+    assert_allclose(fl.surface_h, surface_h)
+    assert_allclose(fl.widths, widths)
+    assert_allclose(fl.widths_m, widths_m)
+    assert_allclose(fl.section, section)
+    assert_allclose(fl.area_m2, area_m2.sum())
+    assert_allclose(fl.volume_m3, vol_m3.sum())
+    fl.surface_h = surface_h
+    assert_allclose(fl.thick, thick)
+    assert_allclose(fl.surface_h, surface_h)
+    assert_allclose(fl.widths, widths)
+    assert_allclose(fl.widths_m, widths_m)
+    assert_allclose(fl.section, section)
+    assert_allclose(fl.area_m2, area_m2.sum())
+    assert_allclose(fl.volume_m3, vol_m3.sum())
+
+    if fl_model is RectangularBedFlowline:
+        # More adventurous
+        fl.section = section / 2
+        assert_allclose(fl.thick, thick/2)
+        assert_allclose(fl.widths, widths)
+        assert_allclose(fl.widths_m, widths_m)
+        assert_allclose(fl.section, section/2)
+        assert_allclose(fl.area_m2, area_m2.sum())
+        assert_allclose(fl.volume_m3, (vol_m3/2).sum())
+
+
+def test_mixed(fl_shape_factory):
 
     # Set a section and see if it all matches
 
-    map_dx = 100.
-    dx = 1.
-    nx = 200
-    coords = np.arange(0, nx - 0.5, 1)
-    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-
-    bed_h = np.linspace(3000, 1000, nx)
-    surface_h = bed_h + 100
-    surface_h[:20] += 50
-    surface_h[-20:] -= 80
-    widths_0 = bed_h * 0. + 20
-    widths_0[:30] = 40
-    widths_0[-30:] = 10
-
-    lambdas = bed_h*0. + 1
+    lambdas = np.ones(MODEL_LEN, dtype=np.float)
     lambdas[0:50] = 0
 
-    thick = surface_h - bed_h
-    widths_m = widths_0 * map_dx + lambdas * thick
-    widths = widths_m / map_dx
-    section_trap = thick * (widths_0 * map_dx + widths_m) / 2
+    (rec1, expects) = fl_shape_factory(TrapezoidalBedFlowline, trapeze_expects, lambdas)
+    (thick, surface_h, widths, widths_m, section_trap, *_) = expects    
 
-    rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                  surface_h=surface_h,
-                                  bed_h=bed_h, widths=widths,
-                                  lambdas=lambdas)
+    (rec2, expects) = fl_shape_factory(ParabolicBedFlowline, parabola_expects)
+    (thick, surface_h, widths, widths_m, section_para, *_) = expects
 
-    shapes = bed_h*0. + 0.003
-    shapes[-30:] = 0.004
-
-    # tests
-    thick = surface_h - bed_h
-    widths_m = np.sqrt(4 * thick / shapes)
-    section_para = 2 / 3 * widths_m * thick
-
-    rec2 = ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                surface_h=surface_h, bed_h=bed_h,
-                                bed_shape=shapes)
-
-    is_trap = np.ones(len(shapes), dtype=np.bool)
+    is_trap = np.ones(MODEL_LEN, dtype=np.bool)
     is_trap[100:] = False
 
     section = section_trap.copy()
     section[~is_trap] = section_para[~is_trap]
 
-    rec = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                           surface_h=surface_h, bed_h=bed_h,
-                           section=section, bed_shape=shapes,
-                           is_trapezoid=is_trap, lambdas=lambdas)
+    (rec, expects) = fl_shape_factory(MixedParabolicBedFlowline, trapeze_expects, lambdas, is_trap, section)
 
     thick = rec1.thick
     thick[~is_trap] = rec2.thick[~is_trap]
