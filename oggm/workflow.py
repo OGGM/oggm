@@ -192,7 +192,7 @@ def execute_parallel_tasks(gdir, tasks):
 
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
-                     check_demo_glacier=False):
+                     check_demo_glacier=False, base_url=None):
 
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
@@ -203,23 +203,22 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     except AttributeError:
         rid = entity
 
-    demo_url = False
-    if check_demo_glacier:
+    if check_demo_glacier and base_url is None:
         demo_id = utils.demo_glacier_id(rid)
         if demo_id is not None:
             rid = demo_id
             entity = demo_id
-            demo_url = True
+            base_url = utils.DEMO_GDIR_URL
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
-                                     from_prepro_level, demo_url=demo_url)
+                                     from_prepro_level, base_url=base_url)
     from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
 def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
-                         prepro_rgi_version=None,
+                         prepro_rgi_version=None, prepro_base_url=None,
                          from_tar=False, delete_tar=False,
                          use_demo_glaciers=None):
     """Initializes the list of Glacier Directories for this run.
@@ -247,10 +246,14 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     prepro_rgi_version : str
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
+    prepro_base_url : str
+        for `from_prepro_level` only: if you want to override the default
+        URL from which to download the gdirs. Default currently is
+        https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/
     use_demo_glaciers : bool
         whether to check the demo glaciers for download (faster than the
         standard prepro downloads). The default is to decide whether or
-        not to check based on simple crietria such as glacier list size.
+        not to check based on simple criteria such as glacier list size.
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -316,7 +319,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version,
-                                        check_demo_glacier=use_demo_glaciers)
+                                        check_demo_glacier=use_demo_glaciers,
+                                        base_url=prepro_base_url)
         else:
             # TODO: if necessary this could use multiprocessing as well
             for entity in entities:

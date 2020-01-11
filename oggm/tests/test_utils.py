@@ -648,7 +648,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                               prepro_border=10)
 
         cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 10, 4,
-                                      demo_url=True)
+                                      base_url=utils.DEMO_GDIR_URL)
         assert 'cluster.klima.uni-bremen.de/~fmaussion/' in cfile
 
         # Replace with a dummy file
