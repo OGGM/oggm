@@ -315,6 +315,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
+            # Read the hash dictionary before we use multiproc
+            utils.get_dl_verify_data()
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
@@ -339,8 +341,11 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         fp = utils.get_rgi_intersects_entities(rgi_ids, version=rgi_version)
         cfg.set_intersects_db(fp)
 
-    # If not initialized, run the task in parallel
-    execute_entity_task(tasks.define_glacier_region, new_gdirs)
+    if len(new_gdirs) > 0:
+        # Read the hash dictionary before we use multiproc
+        utils.get_dl_verify_data()
+        # If not initialized, run the task in parallel
+        execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
     return gdirs
 
