@@ -1,4 +1,4 @@
-from oggm import utils
+from oggm import utils, cfg
 from oggm.core.massbalance import RandomMassBalance, MultipleFlowlineMassBalance
 from oggm.core.flowline import (robust_model_run, simple_model_run,
                                 FluxBasedModel)
@@ -25,8 +25,8 @@ def default_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
 
 @utils.entity_task(log)
 def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
-               min_dt=0, output_filesuffix=None, cfl_number=0.05,
-               flux_limiter=False):
+               min_dt=0, max_dt=10*cfg.SEC_IN_DAY, output_filesuffix=None,
+               cfl_number=0.05, fixed_dt=None, flux_limiter=False):
     """A simple doc"""
 
     bias = 0 if y0 is None else None
@@ -35,8 +35,10 @@ def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
     if temp_bias is not None:
         mb.temp_bias = temp_bias
 
-    supermodel = partial(FluxBasedModel, min_dt=min_dt, raise_on_cfl=True,
-                         cfl_number=cfl_number, flux_limiter=flux_limiter)
+    supermodel = partial(FluxBasedModel, min_dt=min_dt, max_dt=max_dt,
+                         raise_on_cfl=True, cfl_number=cfl_number,
+                         flux_limiter=flux_limiter,
+                         fixed_dt=fixed_dt)
     supermodel.__name__ = 'Model' + output_filesuffix
     simple_model_run(gdir, output_filesuffix=output_filesuffix,
                      mb_model=mb, ys=0, ye=nyears,

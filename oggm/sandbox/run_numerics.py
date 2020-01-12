@@ -53,9 +53,10 @@ cfg.PARAMS['use_multiprocessing'] = True
 
 # Runs
 times = pd.DataFrame()
-for y0, temp_bias, exp in zip([None, None, 2000],
-                              [0, -0.5, 0],
-                              ['_ts', '_tsc', '_co']):
+for y0, temp_bias, exp in zip([None, 2000],
+                              [-0.5, 0],
+                              ['_tsc', '_co']):
+
     task_names = []
 
     tn = exp + '_default'
@@ -65,22 +66,40 @@ for y0, temp_bias, exp in zip([None, None, 2000],
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('default_run' + tn)
 
-    tn = exp + '_limited'
-    workflow.execute_entity_task(default_run, gdirs, seed=1, y0=y0,
+    tn = exp + '_cfl_05'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
-                                 flux_limiter=True,
-                                 output_filesuffix=tn)
-    utils.compile_run_output(gdirs, input_filesuffix=tn)
-    task_names.append('default_run' + tn)
-
-    tn = exp + '_nomindt'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=600,
-                                 temp_bias=temp_bias,
+                                 cfl_number=0.05,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
 
-    tn = exp + '_cfl'
+    tn = exp + '_cfl_03'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.03,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
+
+    tn = exp + '_cfl_02'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.02,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
+
+    tn = exp + '_cfl_02_nomax'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.02,
+                                 max_dt=cfg.SEC_IN_YEAR,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
+
+    tn = exp + '_cfl_01'
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.01,
@@ -88,10 +107,28 @@ for y0, temp_bias, exp in zip([None, None, 2000],
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
 
-    tn = exp + '_cfl_limited'
+    tn = exp + '_cfl_01_nomax'
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
-                                 cfl_number=0.01, flux_limiter=True,
+                                 cfl_number=0.01,
+                                 max_dt=cfg.SEC_IN_YEAR,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
+
+    tn = exp + '_cfl_005'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.005,
+                                 output_filesuffix=tn)
+    utils.compile_run_output(gdirs, input_filesuffix=tn)
+    task_names.append('better_run' + tn)
+
+    tn = exp + '_cfl_005_nomax'
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+                                 temp_bias=temp_bias,
+                                 cfl_number=0.005,
+                                 max_dt=cfg.SEC_IN_YEAR,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
