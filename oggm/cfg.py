@@ -459,6 +459,9 @@ def initialize(file=None, logging_level='INFO'):
                     pass
         DATA['dem_grids'] = grids
 
+    # Download verification dictionary
+    DATA['dl_verify_data'] = None
+
 
 def oggm_static_paths():
     """Initialise the OGGM paths from the config file."""

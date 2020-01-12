@@ -119,9 +119,6 @@ tuple2int = partial(np.array, dtype=np.int64)
 # Global Lock
 lock = mp.Lock()
 
-# Download verification dictionary
-_dl_verify_data = None
-
 
 def mkdir(path, reset=False):
     """Checks if directory exists and if not, create one.
@@ -190,10 +187,8 @@ def get_dl_verify_data():
     The returned dictionary resolves str: cache_obj_name
     to a tuple (int: size, bytes: sha256).
     """
-    global _dl_verify_data
-
-    if _dl_verify_data is not None:
-        return _dl_verify_data
+    if cfg.DATA['dl_verify_data'] is not None:
+        return cfg.DATA['dl_verify_data']
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
 
@@ -246,11 +241,11 @@ def get_dl_verify_data():
                 continue
             elems = line.split(maxsplit=2)
             data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
-    _dl_verify_data = data
 
+    cfg.DATA['dl_verify_data'] = data
     logger.info('Successfully loaded verification data.')
 
-    return _dl_verify_data
+    return cfg.DATA['dl_verify_data']
 
 
 def _call_dl_func(dl_func, cache_path):
