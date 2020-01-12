@@ -187,7 +187,7 @@ def get_dl_verify_data():
     The returned dictionary resolves str: cache_obj_name
     to a tuple (int: size, bytes: sha256).
     """
-    if cfg.DATA['dl_verify_data'] is not None:
+    if cfg.DATA.get('dl_verify_data') is not None:
         return cfg.DATA['dl_verify_data']
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
