@@ -12,11 +12,14 @@ OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 detail and should work on any platform.
 
-OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux, and all
-versions above 3.4 should work as well. OGGM doesn't work with Python 2.
+OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux.
+OGGM doesn't work with Python 2.
+We do not test OGGM on Mac OS, but it should probably run fine.
 
-OGGM itself should also work on Mac OS and Windows platforms, but we make no
-guarantee that our dependencies do.
+OGGM usually does not work on Windows. If you are using Windows 10,
+we strongly recommend to install the free
+`Windows subsytem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
+and install and run OGGM from there.
 
 .. note::
 
