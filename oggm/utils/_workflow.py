@@ -2380,7 +2380,8 @@ class GlacierDirectory(object):
         with open(self.logfile) as logfile:
             lines = logfile.readlines()
 
-        lines = [l.replace('\n', '') for l in lines if task_name in l]
+        lines = [l.replace('\n', '') for l in lines
+                 if task_name == l.split(';')[1]]
         if lines:
             # keep only the last log
             return lines[-1].split(';')[-1]
@@ -2407,7 +2408,8 @@ class GlacierDirectory(object):
         with open(self.logfile) as logfile:
             lines = logfile.readlines()
 
-        lines = [l.replace('\n', '') for l in lines if task_name in l]
+        lines = [l.replace('\n', '') for l in lines
+                 if task_name == l.split(';')[1]]
         if lines:
             line = lines[-1]
             # Last log is message
