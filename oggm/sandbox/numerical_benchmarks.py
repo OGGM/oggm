@@ -1,7 +1,7 @@
 from oggm import utils, cfg
 from oggm.core.massbalance import RandomMassBalance, MultipleFlowlineMassBalance
 from oggm.core.flowline import (robust_model_run, simple_model_run,
-                                FluxBasedModel, FlowlineModel)
+                                FlowlineModel)
 from oggm.exceptions import InvalidParamsError
 from functools import partial
 import logging
@@ -76,6 +76,10 @@ class NewModel(FlowlineModel):
                                              inplace=inplace, **kwargs)
 
         self.fixed_dt = fixed_dt
+        if min_dt is None:
+            min_dt = cfg.PARAMS['cfl_min_dt']
+        if cfl_number is None:
+            cfl_number = cfg.PARAMS['cfl_number']
         self.min_dt = min_dt
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
@@ -259,53 +263,6 @@ class NewModel(FlowlineModel):
         self.t += dt
         return dt
 
-    def get_diagnostics(self, fl_id=-1):
-        """Obtain model diagnostics in a pandas DataFrame.
-
-        Parameters
-        ----------
-        fl_id : int
-            the index of the flowline of interest, from 0 to n_flowline-1.
-            Default is to take the last (main) one
-
-        Returns
-        -------
-        a pandas DataFrame, which index is distance along flowline (m). Units:
-            - surface_h, bed_h, ice_tick, section_width: m
-            - section_area: m2
-            - slope: -
-            - ice_flux, tributary_flux: m3 of *ice* per second
-            - ice_velocity: m per second (depth-section integrated)
-        """
-
-        import pandas as pd
-
-        fl = self.fls[fl_id]
-        nx = fl.nx
-
-        df = pd.DataFrame(index=fl.dx_meter * np.arange(nx))
-        df.index.name = 'distance_along_flowline'
-        df['surface_h'] = fl.surface_h
-        df['bed_h'] = fl.bed_h
-        df['ice_thick'] = fl.thick
-        df['section_width'] = fl.widths_m
-        df['section_area'] = fl.section
-
-        # Staggered
-        var = self.slope_stag[fl_id]
-        df['slope'] = (var[1:nx+1] + var[:nx])/2
-        var = self.flux_stag[fl_id]
-        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
-        var = self.u_stag[fl_id]
-        df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
-        var = self.shapefac_stag[fl_id]
-        df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
-
-        # Not Staggered
-        df['tributary_flux'] = self.trib_flux[fl_id]
-
-        return df
-
 
 @utils.entity_task(log)
 def default_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
@@ -332,7 +289,7 @@ def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
     if temp_bias is not None:
         mb.temp_bias = temp_bias
 
-    supermodel = partial(NewModel, monthy_steps=True, min_dt=min_dt,
+    supermodel = partial(NewModel, monthly_steps=True, min_dt=min_dt,
                          cfl_number=cfl_number)
     supermodel.__name__ = 'Model' + output_filesuffix
     simple_model_run(gdir, output_filesuffix=output_filesuffix,
