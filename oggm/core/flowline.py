@@ -421,7 +421,8 @@ class FlowlineModel(object):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=None, inplace=False, is_tidewater=False,
-                 mb_elev_feedback='annual', check_for_boundaries=True):
+                 mb_elev_feedback='annual', check_for_boundaries=True,
+                 monthly_steps=False):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -453,6 +454,7 @@ class FlowlineModel(object):
         """
 
         self.is_tidewater = is_tidewater
+        self.monthly_steps = monthly_steps
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback.lower()
@@ -676,7 +678,7 @@ class FlowlineModel(object):
         """
 
         # We force timesteps at the same frequency as the mb model update
-        if self.mb_step == 'monthly':
+        if self.mb_step == 'monthly' or self.monthly_steps:
             ts = utils.monthly_timeseries(self.yr, y1)
         else:
             ts = np.arange(np.floor(self.yr), np.floor(y1)+1)

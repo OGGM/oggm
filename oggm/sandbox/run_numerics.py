@@ -53,9 +53,9 @@ cfg.PARAMS['use_multiprocessing'] = True
 
 # Runs
 times = pd.DataFrame()
-for y0, temp_bias, exp in zip([None, 2000],
-                              [-0.5, 0],
-                              ['_tsc', '_co']):
+for y0, temp_bias, exp in zip([None],
+                              [-0.5],
+                              ['_tsc']):
 
     task_names = []
 
@@ -70,6 +70,8 @@ for y0, temp_bias, exp in zip([None, 2000],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.05,
+                                 max_dt=cfg.SEC_IN_YEAR,
+                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -78,6 +80,8 @@ for y0, temp_bias, exp in zip([None, 2000],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.03,
+                                 max_dt=cfg.SEC_IN_YEAR,
+                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -86,15 +90,8 @@ for y0, temp_bias, exp in zip([None, 2000],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.02,
-                                 output_filesuffix=tn)
-    utils.compile_run_output(gdirs, input_filesuffix=tn)
-    task_names.append('better_run' + tn)
-
-    tn = exp + '_cfl_02_nomax'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
-                                 temp_bias=temp_bias,
-                                 cfl_number=0.02,
                                  max_dt=cfg.SEC_IN_YEAR,
+                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -103,32 +100,18 @@ for y0, temp_bias, exp in zip([None, 2000],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.01,
-                                 output_filesuffix=tn)
-    utils.compile_run_output(gdirs, input_filesuffix=tn)
-    task_names.append('better_run' + tn)
-
-    tn = exp + '_cfl_01_nomax'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
-                                 temp_bias=temp_bias,
-                                 cfl_number=0.01,
                                  max_dt=cfg.SEC_IN_YEAR,
+                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
 
     tn = exp + '_cfl_005'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
-                                 temp_bias=temp_bias,
-                                 cfl_number=0.005,
-                                 output_filesuffix=tn)
-    utils.compile_run_output(gdirs, input_filesuffix=tn)
-    task_names.append('better_run' + tn)
-
-    tn = exp + '_cfl_005_nomax'
-    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
+    workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=30,
                                  temp_bias=temp_bias,
                                  cfl_number=0.005,
                                  max_dt=cfg.SEC_IN_YEAR,
+                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
