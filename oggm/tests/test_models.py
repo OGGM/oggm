@@ -1546,112 +1546,6 @@ class TestIO(unittest.TestCase):
             self.assertEqual(fl.flows_to_indice, fl_.flows_to_indice)
 
 
-class TestBackwardsIdealized(unittest.TestCase):
-
-    def setUp(self):
-
-        self.fs = 5.7e-20
-        # Backwards
-        N = 3
-        _fd = 1.9e-24
-        self.glen_a = (N+2) * _fd / 2.
-
-        self.ela = 2800.
-
-        origfls = dummy_constant_bed(nx=120, hmin=1800)
-
-        mb = LinearMassBalance(self.ela)
-        model = FluxBasedModel(origfls, mb_model=mb,
-                               fs=self.fs, glen_a=self.glen_a)
-        model.run_until(500)
-        self.glacier = copy.deepcopy(model.fls)
-
-    def tearDown(self):
-        pass
-
-    @pytest.mark.slow
-    def test_iterative_back(self):
-
-        # This test could be deleted
-        from oggm.sandbox.ideas import _find_inital_glacier
-
-        y0 = 0.
-        y1 = 150.
-        rtol = 0.02
-
-        mb = LinearMassBalance(self.ela + 50.)
-        model = FluxBasedModel(self.glacier, mb_model=mb,
-                               fs=self.fs, glen_a=self.glen_a,
-                               time_stepping='ambitious')
-
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
-
-        bef_fls = copy.deepcopy(past_model.fls)
-        past_model.run_until(y1)
-        self.assertTrue(bef_fls[-1].area_m2 > past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2,
-                                   self.glacier[-1].area_m2,
-                                   rtol=rtol)
-
-        if do_plot:  # pragma: no cover
-            plt.plot(self.glacier[-1].surface_h, 'k', label='ref')
-            plt.plot(bef_fls[-1].surface_h, 'b', label='start')
-            plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(self.glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
-            plt.show()
-
-        mb = LinearMassBalance(self.ela - 50.)
-        model = FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a,
-                               time_stepping='ambitious')
-
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
-        bef_fls = copy.deepcopy(past_model.fls)
-        past_model.run_until(y1)
-        self.assertTrue(bef_fls[-1].area_m2 < past_model.area_m2)
-        np.testing.assert_allclose(past_model.area_m2,
-                                   self.glacier[-1].area_m2,
-                                   rtol=rtol)
-
-        if do_plot:  # pragma: no cover
-            plt.plot(self.glacier[-1].surface_h, 'k', label='ref')
-            plt.plot(bef_fls[-1].surface_h, 'b', label='start')
-            plt.plot(past_model.fls[-1].surface_h, 'r', label='end')
-            plt.plot(self.glacier[-1].bed_h, 'gray', linewidth=2)
-            plt.legend(loc='best')
-            plt.show()
-
-        mb = LinearMassBalance(self.ela)
-        model = FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a)
-
-        # Hit the correct one
-        ite, bias, past_model = _find_inital_glacier(model, mb, y0,
-                                                     y1, rtol=rtol)
-        past_model.run_until(y1)
-        np.testing.assert_allclose(past_model.area_m2,
-                                   self.glacier[-1].area_m2,
-                                   rtol=rtol)
-
-    @pytest.mark.slow
-    def test_fails(self):
-
-        # This test could be deleted
-        from oggm.sandbox.ideas import _find_inital_glacier
-
-        y0 = 0.
-        y1 = 100.
-
-        mb = LinearMassBalance(self.ela - 150.)
-        model = FluxBasedModel(self.glacier, mb_model=mb, y0=y0,
-                               fs=self.fs, glen_a=self.glen_a)
-        self.assertRaises(RuntimeError, _find_inital_glacier, model,
-                          mb, y0, y1, rtol=0.02, max_ite=5)
-
-
 class TestIdealisedInversion(unittest.TestCase):
 
     def setUp(self):
@@ -1859,8 +1753,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         mb = LinearMassBalance(2500.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
 
         fls = []
@@ -1919,8 +1812,7 @@ class TestIdealisedInversion(unittest.TestCase):
 
         mb = LinearMassBalance(2500.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
 
         fls = []
@@ -1974,8 +1866,7 @@ class TestIdealisedInversion(unittest.TestCase):
                               mixslice=slice(10, 30))
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         # This reduces the test's accuracy but makes it much faster.
         model.run_until_equilibrium(rate=0.01)
 
@@ -2006,8 +1897,7 @@ class TestIdealisedInversion(unittest.TestCase):
                                        cliff_height=100)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2042,8 +1932,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2081,8 +1970,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2112,8 +2000,7 @@ class TestIdealisedInversion(unittest.TestCase):
         fls = dummy_noisy_bed(map_dx=self.gdir.grid.dx)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2146,8 +2033,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2184,8 +2070,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
@@ -2215,8 +2100,7 @@ class TestIdealisedInversion(unittest.TestCase):
         fls = dummy_width_bed_tributary(map_dx=self.gdir.grid.dx)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
 
         fls = []
@@ -2242,6 +2126,7 @@ class TestIdealisedInversion(unittest.TestCase):
         if do_plot:  # pragma: no cover
             self.double_plot(model)
 
+    @pytest.mark.slow
     def test_inversion_tributary_sf_adhikari(self):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']
@@ -2253,8 +2138,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0., cfl_number=0.01)
         model.run_until_equilibrium()
 
         fls = []
@@ -2295,8 +2179,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                               time_stepping='conservative')
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
 
         fls = []
@@ -2393,8 +2276,7 @@ class TestIdealisedInversion(unittest.TestCase):
         fls = dummy_parabolic_bed(map_dx=self.gdir.grid.dx,
                                   from_other_shape=bed_shape_gl[:-2],
                                   from_other_bed=sh-ithick)
-        model2 = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                time_stepping='conservative')
+        model2 = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model2.run_until_equilibrium()
         assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
 
@@ -2465,7 +2347,6 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until_equilibrium(rate=1e-4)
-        self.assertFalse(model.dt_warning)
         assert model.yr > 50
         after_vol = model.volume_km3
         after_area = model.area_km2
@@ -2498,7 +2379,6 @@ class TestHEF(unittest.TestCase):
         np.testing.assert_allclose(ref_area, self.gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until_equilibrium(rate=1e-4)
-        self.assertFalse(model.dt_warning)
         assert model.yr > 50
         after_vol = model.volume_km3
         after_area = model.area_km2

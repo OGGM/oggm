@@ -675,11 +675,9 @@ class FlowlineModel(object):
             Upper time span for how long the model should run
         """
 
-        # We force timesteps at the same frequency as the mb model update
-        if self.mb_step == 'monthly':
-            ts = utils.monthly_timeseries(self.yr, y1)
-        else:
-            ts = np.arange(np.floor(self.yr), np.floor(y1)+1)
+        # We force monthly time steps to ensure consistence accross runs
+        # with either annual or monthly MB updates
+        ts = utils.monthly_timeseries(self.yr, y1)
 
         # Add the last date to be sure we end on it
         ts = np.append(ts, y1)
@@ -907,9 +905,8 @@ class FluxBasedModel(FlowlineModel):
     """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=0., inplace=False, fixed_dt=None, cfl_number=0.05,
-                 min_dt=1*SEC_IN_HOUR, max_dt=10*SEC_IN_DAY,
-                 time_stepping='user', **kwargs):
+                 fs=0., inplace=False, fixed_dt=None, cfl_number=None,
+                 min_dt=None, **kwargs):
         """Instanciate the model.
 
         Parameters
@@ -943,10 +940,6 @@ class FluxBasedModel(FlowlineModel):
         max_dt : float
             just to make sure that the adaptive time step is not going to
             choose too high values either. We could make this higher I think
-        time_stepping : str
-            let OGGM choose default values for the parameters above for you.
-            Possible settings are: 'ambitious', 'default', 'conservative',
-            'ultra-conservative'.
         is_tidewater: bool, default: False
             use the very basic parameterization for tidewater glaciers
         mb_elev_feedback : str, default: 'annual'
@@ -962,32 +955,12 @@ class FluxBasedModel(FlowlineModel):
                                              y0=y0, glen_a=glen_a, fs=fs,
                                              inplace=inplace, **kwargs)
 
-        if time_stepping == 'ambitious':
-            cfl_number = 0.1
-            min_dt = 1*SEC_IN_DAY
-            max_dt = 15*SEC_IN_DAY
-        elif time_stepping == 'default':
-            cfl_number = 0.05
-            min_dt = 1*SEC_IN_HOUR
-            max_dt = 10*SEC_IN_DAY
-        elif time_stepping == 'conservative':
-            cfl_number = 0.01
-            min_dt = SEC_IN_HOUR
-            max_dt = 5*SEC_IN_DAY
-        elif time_stepping == 'ultra-conservative':
-            cfl_number = 0.01
-            min_dt = SEC_IN_HOUR / 10
-            max_dt = 5*SEC_IN_DAY
-        else:
-            if time_stepping != 'user':
-                raise ValueError('time_stepping not understood.')
-
-        self.dt_warning = False
-        if fixed_dt is not None:
-            min_dt = fixed_dt
-            max_dt = fixed_dt
+        self.fixed_dt = fixed_dt
+        if min_dt is None:
+            min_dt = cfg.PARAMS['cfl_min_dt']
+        if cfl_number is None:
+            cfl_number = cfg.PARAMS['cfl_number']
         self.min_dt = min_dt
-        self.max_dt = max_dt
         self.cfl_number = cfl_number
         self.calving_m3_since_y0 = 0.  # total calving since time y0
 
@@ -1031,9 +1004,6 @@ class FluxBasedModel(FlowlineModel):
         # Just a check to avoid useless computations
         if dt <= 0:
             raise InvalidParamsError('dt needs to be strictly positive')
-
-        # This is to guarantee a precise arrival on a specific date if asked
-        min_dt = dt if dt < self.min_dt else self.min_dt
 
         # Loop over tributaries to determine the flux rate
         for fl_id, fl in enumerate(self.fls):
@@ -1109,16 +1079,24 @@ class FluxBasedModel(FlowlineModel):
             if maxu > 0.:
                 _dt = self.cfl_number * dx / maxu
             else:
-                _dt = self.max_dt
-            if _dt < dt:
-                dt = _dt
+                _dt = dt
 
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
 
         # Time step
-        self.dt_warning = dt < min_dt
-        dt = utils.clip_scalar(dt, min_dt, self.max_dt)
+        if self.fixed_dt:
+            # change only if step dt is larger than the chosen dt
+            if self.fixed_dt < dt:
+                dt = self.fixed_dt
+        else:
+            # change only if step dt is larger than adaptive dt
+            if _dt < dt:
+                if _dt < self.min_dt:
+                    raise RuntimeError('CFL error: required time step smaller '
+                                       'than the minimum allowed: '
+                                       '{}s vs {}s.'.format(_dt, self.min_dt))
+                dt = _dt
 
         # A second loop for the mass exchange
         for fl_id, fl in enumerate(self.fls):
@@ -1608,25 +1586,7 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                      ys=None, ye=None, zero_initial_glacier=False,
                      init_model_fls=None, store_monthly_step=False,
                      **kwargs):
-    """Trial-error-and-retry algorithm to run the flowline model.
-
-     Runs a model simulation with the default time stepping scheme and,
-     if failing, tries a more conservative one.
-     This is a rather clumsy way to deal with numerical instabilities:
-     for most glaciers the default numerical parameters work fine, but for some
-     glaciers numerical instabilities might arise and lead to overfloating
-     errors or NaNs. This catches those, and tries again.
-
-     Pros of the method:
-     - it is cheap, because the "quicker" time stepping is tested first
-     - it is easy
-
-     Cons:
-     - the model might be unstable without necessarily leading to NaN in the
-       solution. These cases will not be caught
-     - it is inelegant
-
-     Possibly a method based on mass-conservation checks would be more robust.
+    """Runs a model simulation with the default time stepping scheme.
 
     Parameters
     ----------
@@ -1662,38 +1622,26 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    steps = ['default', 'conservative', 'ultra-conservative']
-    for step in steps:
-        log.info('(%s) trying %s time stepping scheme.', gdir.rgi_id, step)
-        if init_model_fls is None:
-            fls = gdir.read_pickle('model_flowlines')
-        else:
-            fls = copy.deepcopy(init_model_fls)
-        if zero_initial_glacier:
-            for fl in fls:
-                fl.thick = fl.thick * 0.
-        model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
-                               inplace=True,
-                               time_stepping=step,
-                               is_tidewater=gdir.is_tidewater,
-                               **kwargs)
+    if init_model_fls is None:
+        fls = gdir.read_pickle('model_flowlines')
+    else:
+        fls = copy.deepcopy(init_model_fls)
+    if zero_initial_glacier:
+        for fl in fls:
+            fl.thick = fl.thick * 0.
 
-        with np.warnings.catch_warnings():
-            # For operational runs we ignore the warnings
-            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
-            try:
-                model.run_until_and_store(ye, run_path=run_path,
-                                          diag_path=diag_path,
-                                          store_monthly_step=store_monthly_step
-                                          )
-            except (RuntimeError, FloatingPointError):
-                if step == 'ultra-conservative':
-                    raise
-                continue
+    model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
+                           inplace=True,
+                           is_tidewater=gdir.is_tidewater,
+                           **kwargs)
 
-        # If we get here we good
-        log.info('(%s) %s time stepping was successful!', gdir.rgi_id, step)
-        break
+    with np.warnings.catch_warnings():
+        # For operational runs we ignore the warnings
+        np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+        model.run_until_and_store(ye, run_path=run_path,
+                                  diag_path=diag_path,
+                                  store_monthly_step=store_monthly_step)
+
     return model
 
 
