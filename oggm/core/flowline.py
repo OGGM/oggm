@@ -930,16 +930,15 @@ class FluxBasedModel(FlowlineModel):
         cfl_number : float
             for adaptive time stepping (the default), dt is chosen from the
             CFL criterion (dt = cfl_number * dx / max_u).
-            Schoolbook theory says that the scheme is stable
-            with CFL=1, but practice does not. There is no "best" CFL number:
-            small values are more robust but also slowier...
+            To choose the "best" CFL number we would need a stability
+            analysis - we used an empirical analysis (see blog post) and
+            settled on 0.02.
+            Defaults to cfg.PARAMS['cfl_number']
         min_dt : float
             with high velocities, time steps can become very small and your
-            model might run very slowly. In production we just take the risk
-            of becoming unstable and prevent very small time steps.
-        max_dt : float
-            just to make sure that the adaptive time step is not going to
-            choose too high values either. We could make this higher I think
+            model might run very slowly. In production it might be useful to
+            set a limit below which the model will just error.
+            Defaults to cfg.PARAMS['cfl_min_dt']
         is_tidewater: bool, default: False
             use the very basic parameterization for tidewater glaciers
         mb_elev_feedback : str, default: 'annual'
@@ -1075,11 +1074,21 @@ class FluxBasedModel(FlowlineModel):
             flux_stag[:] = u_stag * section_stag
 
             # CFL condition
-            maxu = np.max(np.abs(u_stag))
-            if maxu > 0.:
-                _dt = self.cfl_number * dx / maxu
-            else:
-                _dt = dt
+            if not self.fixed_dt:
+                maxu = np.max(np.abs(u_stag))
+                if maxu > 0.:
+                    cfl_dt = self.cfl_number * dx / maxu
+                else:
+                    cfl_dt = dt
+
+                # Update dt only if necessary
+                if cfl_dt < dt:
+                    dt = cfl_dt
+                    if cfl_dt < self.min_dt:
+                        raise RuntimeError(
+                            'CFL error: required time step smaller '
+                            'than the minimum allowed: '
+                            '{:.1f}s vs {:.1f}s.'.format(cfl_dt, self.min_dt))
 
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
@@ -1089,14 +1098,6 @@ class FluxBasedModel(FlowlineModel):
             # change only if step dt is larger than the chosen dt
             if self.fixed_dt < dt:
                 dt = self.fixed_dt
-        else:
-            # change only if step dt is larger than adaptive dt
-            if _dt < dt:
-                if _dt < self.min_dt:
-                    raise RuntimeError('CFL error: required time step smaller '
-                                       'than the minimum allowed: '
-                                       '{}s vs {}s.'.format(_dt, self.min_dt))
-                dt = _dt
 
         # A second loop for the mass exchange
         for fl_id, fl in enumerate(self.fls):
