@@ -2138,7 +2138,7 @@ class TestIdealisedInversion(unittest.TestCase):
             fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
         mb = LinearMassBalance(2600.)
 
-        model = FluxBasedModel(fls, mb_model=mb, y0=0., cfl_number=0.01)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model.run_until_equilibrium()
 
         fls = []
@@ -2337,7 +2337,6 @@ class TestHEF(unittest.TestCase):
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=self.fs,
                                glen_a=self.glen_a,
-                               min_dt=SEC_IN_DAY/2.,
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
@@ -2369,7 +2368,6 @@ class TestHEF(unittest.TestCase):
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=self.fs,
                                glen_a=self.glen_a,
-                               min_dt=SEC_IN_DAY/2.,
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3

@@ -84,7 +84,7 @@ class TestIdealisedCases(unittest.TestCase):
 
         assert rmsd(lens[0], lens[1]) < 50.
         assert rmsd(volume[0], volume[1]) < 2e-3
-        assert rmsd(surface_h[0], surface_h[1]) < 1.0
+        assert rmsd(surface_h[0], surface_h[1]) < 1.2
 
     def test_run_until_and_store(self):
 
