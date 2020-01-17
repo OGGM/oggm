@@ -70,8 +70,6 @@ for y0, temp_bias, exp in zip([None],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.05,
-                                 max_dt=cfg.SEC_IN_YEAR,
-                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -80,8 +78,6 @@ for y0, temp_bias, exp in zip([None],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.03,
-                                 max_dt=cfg.SEC_IN_YEAR,
-                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -90,8 +86,6 @@ for y0, temp_bias, exp in zip([None],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.02,
-                                 max_dt=cfg.SEC_IN_YEAR,
-                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -100,8 +94,6 @@ for y0, temp_bias, exp in zip([None],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=60,
                                  temp_bias=temp_bias,
                                  cfl_number=0.01,
-                                 max_dt=cfg.SEC_IN_YEAR,
-                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
@@ -110,8 +102,6 @@ for y0, temp_bias, exp in zip([None],
     workflow.execute_entity_task(better_run, gdirs, seed=1, y0=y0, min_dt=30,
                                  temp_bias=temp_bias,
                                  cfl_number=0.005,
-                                 max_dt=cfg.SEC_IN_YEAR,
-                                 monthly_steps=True,
                                  output_filesuffix=tn)
     utils.compile_run_output(gdirs, input_filesuffix=tn)
     task_names.append('better_run' + tn)
