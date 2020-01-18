@@ -280,7 +280,8 @@ def default_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
 
 @utils.entity_task(log)
 def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
-               output_filesuffix=None, min_dt=0, cfl_number=0.05):
+               output_filesuffix=None, monthly_steps=True, min_dt=0,
+               cfl_number=0.05):
     """A simple doc"""
 
     bias = 0 if y0 is None else None
@@ -289,7 +290,7 @@ def better_run(gdir, nyears=300, y0=None, temp_bias=None, seed=None,
     if temp_bias is not None:
         mb.temp_bias = temp_bias
 
-    supermodel = partial(NewModel, monthly_steps=True, min_dt=min_dt,
+    supermodel = partial(NewModel, monthly_steps=monthly_steps, min_dt=min_dt,
                          cfl_number=cfl_number)
     supermodel.__name__ = 'Model' + output_filesuffix
     simple_model_run(gdir, output_filesuffix=output_filesuffix,
