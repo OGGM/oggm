@@ -675,9 +675,11 @@ class FlowlineModel(object):
             Upper time span for how long the model should run
         """
 
-        # We force monthly time steps to ensure consistence accross runs
-        # with either annual or monthly MB updates
-        ts = utils.monthly_timeseries(self.yr, y1)
+        # We force timesteps at the same frequency as the mb model update
+        if self.mb_step == 'monthly':
+            ts = utils.monthly_timeseries(self.yr, y1)
+        else:
+            ts = np.arange(np.floor(self.yr), np.floor(y1) + 1)
 
         # Add the last date to be sure we end on it
         ts = np.append(ts, y1)
