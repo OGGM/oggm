@@ -8,7 +8,7 @@ Pitfalls and limitations
 
 As the OGGM project is gaining visibility and momentum, we also see an increase
 of potential misuse or misunderstandings about what OGGM can and cannot do.
-Hefer to our :ref:`faq` for a general introduction. Here, we discuss
+Refer to our :ref:`faq` for a general introduction. Here, we discuss
 specific pitfalls in more details.
 
 The default ice dynamics parameter "Glen A" is not calibrated
@@ -29,16 +29,19 @@ That is, :math:`A` is set to the standard value for temperate ice as given in
 reasonable, they are unlikely to be the ones yielding the best results at the
 global scale, and even more unlikely at regional or local scales. In particular,
 in the absence of sliding parameter, it is recommended to set :math:`A` to a
-larger value to compensate for this missing process.
+higher value to compensate for this missing process (effectively making ice
+"less stiff").
 
 There is a way to calibrate :math:`A` for the ice thickness inversion
-procedure based on observations of ice thickness. This does not mean that this
-:math:`A` can be applied unchanged to the forward model, unfortunately.
+procedure based on observations of ice thickness (see
+`this blog post<https://oggm.org/2018/05/21/g2ti/>`_ for an example).
+Unfortunately, this does not mean that this calibrated
+:math:`A` can be applied as is to the forward model.
 At the global scale, a value in the range of [1.1-1.5] times the default value
-gives estimates close to [Farinotti_etal_2019]_. At regional scale, these
+gives volume estimates close to [Farinotti_etal_2019]_. At regional scale, these
 values can differ, with a value closer to a factor 3 e.g. for the Alps. Note
-that this depends on other variables as well, such as precipitation estimates
-(which affect the mass turnover).
+that this depends on other variables as well, such as solid precipitation amounts
+(i.e: mass turnover).
 
 Finally, note that a change in :math:`A` has a very strong influence
 for values close to the default value, but this influences reduces to the
@@ -66,11 +69,21 @@ Sorry, but we don't know yet. We are working on it though!
 
 .. _pitfalls.numerics:
 
-The numerical model in OGGM is numerically unstable in some conditions
-======================================================================
+The numerical model in OGGM v1.2 and below was numerically unstable in some conditions
+======================================================================================
 
-See `this github issue <https://github.com/OGGM/oggm/issues/909>`_ for an
-ongoing discussion. We will post and update here soon!
+See `this github issue <https://github.com/OGGM/oggm/issues/909>`_ for a
+discussion pointing this out, and `this example<https://github.com/OGGM/oggm/issues/860>`_.
+
+We now have fixed the most pressing issues.
+`This blog post <https://oggm.org/2020/01/18/stability-analysis/>`_ explains
+it in detail but in short:
+
+- the previous algorithm was flawed, but did not result in significant errors
+  at large scales.
+- the new algorithm is faster and more likely to be stable
+- we don't guarantee statibility in 100% of the cases, but when the model
+  becomes unstable it should stop.
 
 
 The mass-balance model of OGGM is not calibrated with remote sensing data

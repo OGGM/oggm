@@ -10,6 +10,15 @@ v1.3.0 (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The adaptive time stepping scheme of OGGM has been fixed for several flaws
+  which lead to instable results in certain conditions.
+  See `the blog post <https://oggm.org/2020/01/18/stability-analysis/>`_
+  for a full description. The API didn't change in the process, but the
+  OGGM results are likely to change slightly in some conditions.
+  (:issue:`731`, :issue:`860`, :pull:`931`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Alex Jarosch <https://github.com/alexjarosch>`_.
+
 Enhancements
 ~~~~~~~~~~~~
 

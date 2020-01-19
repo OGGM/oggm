@@ -929,17 +929,17 @@ class FluxBasedModel(FlowlineModel):
         fixed_dt : float
             set to a value (in seconds) to prevent adaptive time-stepping.
         cfl_number : float
-            for adaptive time stepping (the default), dt is chosen from the
+            Defaults to cfg.PARAMS['cfl_number'].
+            For adaptive time stepping (the default), dt is chosen from the
             CFL criterion (dt = cfl_number * dx / max_u).
             To choose the "best" CFL number we would need a stability
             analysis - we used an empirical analysis (see blog post) and
-            settled on 0.02.
-            Defaults to cfg.PARAMS['cfl_number']
+            settled on 0.02 for the default cfg.PARAMS['cfl_number'].
         min_dt : float
-            with high velocities, time steps can become very small and your
-            model might run very slowly. In production it might be useful to
+            Defaults to cfg.PARAMS['cfl_min_dt'].
+            At high velocities, time steps can become very small and your
+            model might run very slowly. In production, it might be useful to
             set a limit below which the model will just error.
-            Defaults to cfg.PARAMS['cfl_min_dt']
         is_tidewater: bool, default: False
             use the very basic parameterization for tidewater glaciers
         mb_elev_feedback : str, default: 'annual'
