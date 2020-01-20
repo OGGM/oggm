@@ -337,6 +337,97 @@ def process_cru_data(gdir):
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
+def process_ERA_data(gdir, dataset='cera20c'):
+    """Extracts the ERA climate data for glacier and stores in a NetCDF file.
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    dataset : str
+        Either CERA-20C (default) or ERA-5 (era5)
+    """
+    #### Start checking if the files are there, and if not download them. ####
+    #### This part still needs to be implemented ####
+    directory = '' 
+    if dataset == 'cera20c':
+        fpath_precp = directory + 'cera-20c_pcp_1901-2010.nc'
+        fpath_temp = directory + 'cera-20c_t2m_1901-2010.nc'
+        fpath_oro = directory + 'cera-20c_invariant.nc'
+        filesuffix = '_cera20'
+    elif dataset == 'era5':
+        fpath_precp = directory + 'era5_monthly_prcp_1979-2018.nc'
+        fpath_temp = directory + 'era5_monthly_t2m_1979-2018.nc'
+        fpath_oro = directory + 'era5_invariant.nc'
+        filesuffix = '_era5'
+    else:
+        print('select either the cera20c or era5 dataset.')
+    ###### End download data ########
+
+    tempds = xr.open_dataset(fpath_temp, decode_times=True)
+    precpds = xr.open_dataset(fpath_precp, decode_times=True)
+    orographyds = xr.open_dataset(fpath_oro)
+
+    # select for location
+    lon = gdir.cenlon
+    lat = gdir.cenlat
+    if lon <= 0:
+        lon += 360
+    temp = tempds.sel(latitude=lat, longitude=lon, method='nearest')
+    precp = precpds.sel(latitude=lat, longitude=lon, method='nearest')
+    orography = orographyds.sel(latitude=lat, longitude=lon, method='nearest')
+
+    # Conversion from geopotential to surface heigth.
+    # (https://confluence.ecmwf.int//display/CKB/ERA5%3A+surface+elevation+and+orography)
+    topo = orography / cfg.G
+    temp.longitude.values = temp.longitude if temp.longitude <= 180 else temp.longitude - 360
+    precp.longitude.values = precp.longitude if precp.longitude <= 180 else precp.longitude - 360
+    topo.longitude.values = topo.longitude if topo.longitude <= 180 else topo.longitude - 360
+
+    # set temporal subset for the climate data (hydro years)
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    yr0 = temp['time.year'][0].values
+    yr1 = temp['time.year'][-1].values
+    sdate = str(yr0) + '-' + str(sm) + '-01'
+    edate = str(yr1) + '-' + str(sm-1) + '-01'
+    temp = temp.sel(time=slice(sdate, edate))
+    precp = precp.sel(time=slice(sdate, edate))
+    if sm == 10:
+        days_a_month = [31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30]
+    elif sm == 4:
+        days_a_month = [30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31]
+
+    # Conversion from K to degrees C
+    temp.t2m.values = temp.t2m.values - 273.15
+    tempds.close()
+    precpds.close()
+    orographyds.close()
+
+    if dataset == 'cera20c':
+        for ens in np.arange(10):
+            temp1 = temp.sel(number=ens)
+            precp1 = precp.sel(number=ens)
+            # Convert precipitation from 'm' to 'kg m-2' # This still needs to be checked
+            precp1.tp.values = precp1.tp.values * 1000 * \
+                               np.tile(days_a_month, yr1-yr0)
+            gdir.write_monthly_climate_file(temp.time.values, precp1.tp,
+                                            temp1.t2m,
+                                            topo.z.values,
+                                            temp.longitude, temp.latitude,
+                                            time_unit='hours since 1900-01-01 00:00:00.0',
+                                            filesuffix=filesuffix + '_ens_' +
+                                                       str(ens).zfill(2))
+    elif dataset == 'era5':
+        # Convert precipitation from 'm' to 'kg m-2' # This still needs to be checked
+        precp.tp.values = precp.tp.values * 1000 * np.tile(days_a_month,
+                                                           yr1 - yr0)
+        gdir.write_monthly_climate_file(temp.time.values, precp.tp, temp.t2m,
+                                        topo.z.values,
+                                        temp.longitude, temp.latitude,
+                                        time_unit='hours since 1900-01-01 00:00:00.0',
+                                        filesuffix=filesuffix)
+
+
+@entity_task(log, writes=['climate_monthly', 'climate_info'])
 def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     """Create a simple baseline climate file for this glacier - for testing!
 
