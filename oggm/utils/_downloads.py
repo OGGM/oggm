@@ -117,7 +117,7 @@ DEM3REG = {
 tuple2int = partial(np.array, dtype=np.int64)
 
 # Global Lock
-lock = mp.Lock()
+lock = mp.get_context('spawn').Lock()
 
 
 def mkdir(path, reset=False):

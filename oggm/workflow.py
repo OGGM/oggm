@@ -38,12 +38,16 @@ def init_mp_pool(reset=False):
     global _mp_pool
     if _mp_pool and not reset:
         return _mp_pool
+
     cfg.CONFIG_MODIFIED = False
     if _mp_pool and reset:
         _mp_pool.terminate()
         _mp_pool = None
+
     cfg_contents = cfg.pack_config()
-    global_lock = mp.Manager().Lock()
+    smp = mp.get_context('spawn')
+    global_lock = smp.Manager().Lock()
+
     mpp = cfg.PARAMS['mp_processes']
     if mpp == -1:
         try:
@@ -51,14 +55,15 @@ def init_mp_pool(reset=False):
             log.workflow('Multiprocessing: using slurm allocated '
                          'processors (N={})'.format(mpp))
         except KeyError:
-            mpp = mp.cpu_count()
+            mpp = smp.cpu_count()
             log.workflow('Multiprocessing: using all available '
                          'processors (N={})'.format(mpp))
     else:
         log.workflow('Multiprocessing: using the requested number of '
                      'processors (N={})'.format(mpp))
-    _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
-                       initargs=(cfg_contents, global_lock))
+
+    _mp_pool = smp.Pool(mpp, initializer=_init_pool_globals,
+                        initargs=(cfg_contents, global_lock))
     return _mp_pool
 
 
