@@ -6,7 +6,7 @@ import pytest
 import shapely.geometry as shpg
 
 
-from oggm import cfg
+from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import get_ident, init_hef, init_columbia
 from oggm.utils import mkdir
@@ -60,3 +60,9 @@ def class_test_dir(request, test_dir):
 def hef_gdir(request, test_dir):
     border = request.module.DOM_BORDER if request.module.DOM_BORDER else 40
     return init_hef(border=border)
+
+
+@pytest.fixture(scope='class')
+def hef_copy(hef_gdir, class_test_dir):
+    return tasks.copy_to_basedir(hef_gdir, base_dir=class_test_dir,
+                                 setup='all')

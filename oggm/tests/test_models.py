@@ -62,12 +62,6 @@ do_plot = False
 DOM_BORDER = 80
 
 
-@pytest.fixture(scope='class')
-def hef_copy(hef_gdir, class_test_dir):
-    return tasks.copy_to_basedir(hef_gdir, base_dir=class_test_dir,
-                                 setup='all')
-
-
 class TestInitFlowline:
     def test_init_present_time_glacier(self, hef_copy):
         gdir = hef_copy
