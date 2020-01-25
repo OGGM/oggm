@@ -161,7 +161,7 @@ def other_glacier_cfg():
 
 @pytest.mark.usefixtures('other_glacier_cfg')
 class TestOtherGlacier:
-    def test_define_divides(self, class_test_dir):
+    def test_define_divides(self, class_case_dir):
 
         from oggm.core import centerlines
         from oggm.core import climate
@@ -175,7 +175,7 @@ class TestOtherGlacier:
 
         # This is another glacier with divides
         entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719_d01'].iloc[0]
-        gdir = GlacierDirectory(entity, base_dir=class_test_dir)
+        gdir = GlacierDirectory(entity, base_dir=class_case_dir)
         gis.define_glacier_region(gdir, entity=entity)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -1200,9 +1200,9 @@ class TestIO():
         ds_ = fl_.to_dataset()
         assert ds_.equals(ds)
 
-    def test_model_to_file(self, class_test_dir):
+    def test_model_to_file(self, class_case_dir):
 
-        p = os.path.join(class_test_dir, 'grp.nc')
+        p = os.path.join(class_case_dir, 'grp.nc')
         if os.path.isfile(p):
             os.remove(p)
 
@@ -1230,7 +1230,7 @@ class TestIO():
         model.run_until(100)
 
     @pytest.mark.slow
-    def test_run(self, class_test_dir):
+    def test_run(self, class_case_dir):
         mb = LinearMassBalance(2600.)
 
         fls = dummy_constant_bed()
@@ -1273,8 +1273,8 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_test_dir, 'ts_ideal.nc')
-        diag_path = os.path.join(class_test_dir, 'ts_diag.nc')
+        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
         if os.path.exists(run_path):
             os.remove(run_path)
         if os.path.exists(diag_path):
@@ -1320,7 +1320,7 @@ class TestIO():
                                        fmodel.fls[0].section)
 
     @pytest.mark.slow
-    def test_run_annual_step(self, class_test_dir):
+    def test_run_annual_step(self, class_case_dir):
         mb = LinearMassBalance(2600.)
 
         fls = dummy_constant_bed()
@@ -1362,8 +1362,8 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_test_dir, 'ts_ideal.nc')
-        diag_path = os.path.join(class_test_dir, 'ts_diag.nc')
+        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
         if os.path.exists(run_path):
             os.remove(run_path)
         if os.path.exists(diag_path):
@@ -1431,9 +1431,9 @@ class TestIO():
         run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
 
-    def test_hef(self, class_test_dir, hef_gdir):
+    def test_hef(self, class_case_dir, hef_gdir):
 
-        p = os.path.join(class_test_dir, 'grp_hef.nc')
+        p = os.path.join(class_case_dir, 'grp_hef.nc')
         if os.path.isfile(p):
             os.remove(p)
 
@@ -1458,7 +1458,7 @@ class TestIO():
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls)
 
-        p = os.path.join(class_test_dir, 'grp_hef_mix.nc')
+        p = os.path.join(class_case_dir, 'grp_hef_mix.nc')
         if os.path.isfile(p):
             os.remove(p)
         model.to_netcdf(p)
@@ -1595,7 +1595,7 @@ class TestBackwardsIdealized():
 
 
 @pytest.fixture(scope='class')
-def inversion_gdir(class_test_dir):
+def inversion_gdir(class_case_dir):
     from oggm import GlacierDirectory
     from oggm.tasks import define_glacier_region
     import geopandas as gpd
@@ -1609,7 +1609,7 @@ def inversion_gdir(class_test_dir):
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
-    gdir = GlacierDirectory(entity, base_dir=class_test_dir, reset=True)
+    gdir = GlacierDirectory(entity, base_dir=class_case_dir, reset=True)
     define_glacier_region(gdir, entity=entity)
     return gdir
 
@@ -2817,7 +2817,7 @@ class TestHEF:
 
 
 @pytest.fixture(scope='class')
-def merged_hef_cfg(class_test_dir):
+def merged_hef_cfg(class_case_dir):
     # setup logging
     import logging
     log = logging.getLogger(__name__)
@@ -2830,7 +2830,7 @@ def merged_hef_cfg(class_test_dir):
     cfg.PARAMS['correct_for_neg_flux'] = True
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     # should this be resetting working_dir at teardown?
-    cfg.PATHS['working_dir'] = class_test_dir
+    cfg.PATHS['working_dir'] = class_case_dir
     cfg.PARAMS['border'] = 100
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
