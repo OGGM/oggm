@@ -35,7 +35,7 @@ def dummy_constant_bed():
 def test_dir():
     """ Provides a reference to the test directory for the entire test session.
         Named after the current git revision.
-        As a session-scoped fixture, this will only be created once and 
+        As a session-scoped fixture, this will only be created once and
         then injected to each test that depends on it.
     """
     s = get_ident()
@@ -69,7 +69,7 @@ def case_dir(request, test_dir):
         current test function.
         As a function-scoped fixture, a new directory is created for
         each function that uses this and then cleaned up when the case
-        completes. 
+        completes.
     """
     cd = _setup_case_dir(request.function, test_dir)
     yield cd
@@ -111,7 +111,7 @@ def hef_gdir_base(request, test_dir):
 @pytest.fixture(scope='class')
 def hef_gdir(hef_gdir_base, class_case_dir):
     """ Provides a copy of the base Hintereisenferner glacier directory in
-        a case directory specific to the current test class. All cases in 
+        a case directory specific to the current test class. All cases in
         the test class will use the same copy of this glacier directory.
     """
     return tasks.copy_to_basedir(hef_gdir_base, base_dir=class_case_dir,

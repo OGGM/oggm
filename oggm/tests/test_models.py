@@ -2389,11 +2389,11 @@ class TestHEF:
 
         init_present_time_glacier(hef_gdir)
         run_random_climate(hef_gdir, nyears=100, seed=6,
-                           fs=inversion_params['fs'], 
+                           fs=inversion_params['fs'],
                            glen_a=inversion_params['glen_a'],
                            bias=0, output_filesuffix='_rdn')
         run_constant_climate(hef_gdir, nyears=100,
-                             fs=inversion_params['fs'], 
+                             fs=inversion_params['fs'],
                              glen_a=inversion_params['glen_a'],
                              bias=0, output_filesuffix='_ct')
 
