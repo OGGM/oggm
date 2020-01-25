@@ -57,12 +57,12 @@ def class_test_dir(request, test_dir):
 
 
 @pytest.fixture(scope='class')
-def hef_gdir(request, test_dir):
+def hef_gdir_base(request, test_dir):
     border = request.module.DOM_BORDER if request.module.DOM_BORDER else 40
     return init_hef(border=border)
 
 
 @pytest.fixture(scope='class')
-def hef_copy(hef_gdir, class_test_dir):
-    return tasks.copy_to_basedir(hef_gdir, base_dir=class_test_dir,
+def hef_gdir(hef_gdir_base, class_test_dir):
+    return tasks.copy_to_basedir(hef_gdir_base, base_dir=class_test_dir,
                                  setup='all')

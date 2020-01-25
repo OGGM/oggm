@@ -63,8 +63,8 @@ DOM_BORDER = 80
 
 
 class TestInitFlowline:
-    def test_init_present_time_glacier(self, hef_copy):
-        gdir = hef_copy
+    def test_init_present_time_glacier(self, hef_gdir):
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -108,9 +108,9 @@ class TestInitFlowline:
             plt.plot(fls[-1].surface_h)
             plt.show()
 
-    def test_present_time_glacier_massbalance(self, hef_copy):
+    def test_present_time_glacier_massbalance(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         mb_mod = massbalance.PastMassBalance(gdir)
@@ -234,13 +234,13 @@ class TestOtherGlacier:
 
 
 class TestMassBalance:
-    def test_past_mb_model(self, hef_copy):
+    def test_past_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
 
         F = SEC_IN_YEAR * rho
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         df = gdir.read_json('local_mustar')
@@ -428,11 +428,11 @@ class TestMassBalance:
         # assert_allclose(mb.get_ela(year=yrs[:30]),
         #                 mb_gw.get_ela(year=yrs[:30]))
 
-    def test_constant_mb_model(self, hef_copy):
+    def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         df = gdir.read_json('local_mustar')
@@ -525,9 +525,9 @@ class TestMassBalance:
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.12)
 
-    def test_random_mb(self, hef_copy):
+    def test_random_mb(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir)
@@ -596,9 +596,9 @@ class TestMassBalance:
         ref_mb = ref_mb / 31
         assert utils.rmsd(ref_mb, my_mb) < 0.1
 
-    def test_random_mb_unique(self, hef_copy):
+    def test_random_mb_unique(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir,
@@ -679,9 +679,9 @@ class TestMassBalance:
         # test mass balance with temperature bias
         assert np.mean(r_mbh) < np.mean(r_mbh3)
 
-    def test_uncertain_mb(self, hef_copy):
+    def test_uncertain_mb(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
 
         ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
@@ -757,9 +757,9 @@ class TestMassBalance:
         assert np.std(unc_mb - ref_mb) > 50
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
-    def test_mb_performance(self, hef_copy):
+    def test_mb_performance(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -1181,8 +1181,8 @@ class TestModelFlowlines():
 
 
 @pytest.fixture(scope='class')
-def io_init_gdir(hef_copy):
-    init_present_time_glacier(hef_copy)
+def io_init_gdir(hef_gdir):
+    init_present_time_glacier(hef_gdir)
 
 
 @pytest.mark.usefixtures('io_init_gdir')
@@ -1407,22 +1407,22 @@ class TestIO():
             np.testing.assert_allclose(model.fls[0].section,
                                        fmodel.fls[0].section)
 
-    def test_gdir_copy(self, hef_copy):
+    def test_gdir_copy(self, hef_gdir):
 
         new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
-        new_gdir = tasks.copy_to_basedir(hef_copy, base_dir=new_dir,
+        new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
                                          setup='all')
         init_present_time_glacier(new_gdir)
         shutil.rmtree(new_dir)
 
-        new_gdir = tasks.copy_to_basedir(hef_copy, base_dir=new_dir,
+        new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
                                          setup='run')
         run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 
-        new_gdir = tasks.copy_to_basedir(hef_copy, base_dir=new_dir,
+        new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
                                          setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
         inversion.mass_conservation_inversion(new_gdir)
@@ -1431,15 +1431,15 @@ class TestIO():
         run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
 
-    def test_hef(self, class_test_dir, hef_copy):
+    def test_hef(self, class_test_dir, hef_gdir):
 
         p = os.path.join(class_test_dir, 'grp_hef.nc')
         if os.path.isfile(p):
             os.remove(p)
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls)
 
         model.to_netcdf(p)
@@ -1455,7 +1455,7 @@ class TestIO():
             assert fl.flows_to_indice == fl_.flows_to_indice
 
         # mixed flowline
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls)
 
         p = os.path.join(class_test_dir, 'grp_hef_mix.nc')
@@ -2375,20 +2375,20 @@ def with_class_wd(request, test_dir, hef_gdir):
 
 
 @pytest.fixture(scope='class')
-def inversion_params(hef_copy):
-    return hef_copy.read_pickle('inversion_params')
+def inversion_params(hef_gdir):
+    return hef_gdir.read_pickle('inversion_params')
 
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHEF:
     @pytest.mark.slow
-    def test_equilibrium(self, hef_copy, inversion_params):
+    def test_equilibrium(self, hef_gdir, inversion_params):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
-        mb_mod = massbalance.ConstantMassBalance(hef_copy)
+        mb_mod = massbalance.ConstantMassBalance(hef_gdir)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['fs'],
                                glen_a=inversion_params['glen_a'],
@@ -2399,7 +2399,7 @@ class TestHEF:
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, hef_copy.rgi_area_km2, rtol=0.03)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until_equilibrium(rate=1e-4)
         assert not model.dt_warning
@@ -2413,15 +2413,15 @@ class TestHEF:
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
     @pytest.mark.slow
-    def test_equilibrium_glacier_wide(self, hef_copy, inversion_params):
+    def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
         cl = massbalance.ConstantMassBalance
-        mb_mod = massbalance.MultipleFlowlineMassBalance(hef_copy,
+        mb_mod = massbalance.MultipleFlowlineMassBalance(hef_gdir,
                                                          mb_model_class=cl)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['fs'],
                                glen_a=inversion_params['glen_a'],
@@ -2432,7 +2432,7 @@ class TestHEF:
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, hef_copy.rgi_area_km2, rtol=0.03)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until_equilibrium(rate=1e-4)
         assert not model.dt_warning
@@ -2446,19 +2446,19 @@ class TestHEF:
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
 
     @pytest.mark.slow
-    def test_commitment(self, hef_copy, inversion_params):
+    def test_commitment(self, hef_gdir, inversion_params):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
-        mb_mod = massbalance.ConstantMassBalance(hef_copy, y0=2003 - 15)
+        mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2003 - 15)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['fs'],
                                glen_a=inversion_params['glen_a'])
 
         ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area, hef_copy.rgi_area_km2, rtol=0.02)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         assert model.yr > 100
@@ -2467,19 +2467,19 @@ class TestHEF:
 
         _tmp = cfg.PARAMS['mixed_min_shape']
         cfg.PARAMS['mixed_min_shape'] = 0.001
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
         cfg.PARAMS['mixed_min_shape'] = _tmp
 
-        glacier = hef_copy.read_pickle('model_flowlines')
+        glacier = hef_gdir.read_pickle('model_flowlines')
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['fs'],
                                glen_a=inversion_params['glen_a'])
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area, hef_copy.rgi_area_km2, rtol=0.02)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
 
         model.run_until_equilibrium()
         assert model.yr > 100
@@ -2499,20 +2499,20 @@ class TestHEF:
             plt.show()
 
     @pytest.mark.slow
-    def test_random(self, hef_copy, inversion_params):
+    def test_random(self, hef_gdir, inversion_params):
 
-        init_present_time_glacier(hef_copy)
-        run_random_climate(hef_copy, nyears=100, seed=6,
+        init_present_time_glacier(hef_gdir)
+        run_random_climate(hef_gdir, nyears=100, seed=6,
                            fs=inversion_params['fs'], 
                            glen_a=inversion_params['glen_a'],
                            bias=0, output_filesuffix='_rdn')
-        run_constant_climate(hef_copy, nyears=100,
+        run_constant_climate(hef_gdir, nyears=100,
                              fs=inversion_params['fs'], 
                              glen_a=inversion_params['glen_a'],
                              bias=0, output_filesuffix='_ct')
 
-        paths = [hef_copy.get_filepath('model_run', filesuffix='_rdn'),
-                 hef_copy.get_filepath('model_run', filesuffix='_ct'),
+        paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
+                 hef_gdir.get_filepath('model_run', filesuffix='_ct'),
                  ]
 
         for path in paths:
@@ -2536,9 +2536,9 @@ class TestHEF:
                     plt.show()
 
     @pytest.mark.slow
-    def test_random_sh(self, gdir_sh, hef_copy):
+    def test_random_sh(self, gdir_sh, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
         init_present_time_glacier(gdir_sh)
 
         cfg.PATHS['climate_file'] = ''
@@ -2607,72 +2607,72 @@ class TestHEF:
         with xr.open_dataset(f) as ds:
             assert ds.calendar_month[0] == 10
 
-    def test_start_from_spinup(self, hef_copy):
+    def test_start_from_spinup(self, hef_gdir):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
         area = 0
         for fl in fls:
             vol += fl.volume_km3
             area += fl.area_km2
-        assert hef_copy.rgi_date == 2003
+        assert hef_gdir.rgi_date == 2003
 
         # Make a dummy run for 0 years
-        run_from_climate_data(hef_copy, ye=2003, output_filesuffix='_1')
+        run_from_climate_data(hef_gdir, ye=2003, output_filesuffix='_1')
 
-        fp = hef_copy.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
-        run_from_climate_data(hef_copy, ye=2003, init_model_filesuffix='_1',
+        run_from_climate_data(hef_gdir, ye=2003, init_model_filesuffix='_1',
                               output_filesuffix='_2')
-        fp = hef_copy.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
-    def test_start_from_spinup_min_ys(self, hef_copy):
+    def test_start_from_spinup_min_ys(self, hef_gdir):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
-        fls = hef_copy.read_pickle('model_flowlines')
+        fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
         area = 0
         for fl in fls:
             vol += fl.volume_km3
             area += fl.area_km2
-        assert hef_copy.rgi_date == 2003
+        assert hef_gdir.rgi_date == 2003
 
         # Make a dummy run for 0 years
-        run_from_climate_data(hef_copy, ye=2002, min_ys=2002,
+        run_from_climate_data(hef_gdir, ye=2002, min_ys=2002,
                               output_filesuffix='_1')
 
-        fp = hef_copy.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
-        run_from_climate_data(hef_copy, ys=2002, ye=2003,
+        run_from_climate_data(hef_gdir, ys=2002, ye=2003,
                               init_model_filesuffix='_1',
                               output_filesuffix='_2')
-        fp = hef_copy.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
             np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
 
     @pytest.mark.slow
-    def test_cesm(self, hef_copy):
+    def test_cesm(self, hef_gdir):
 
-        gdir = hef_copy
+        gdir = hef_gdir
 
         # init
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
@@ -2781,9 +2781,9 @@ class TestHEF:
             assert len(ds.rgi_id) == 3
 
     @pytest.mark.slow
-    def test_elevation_feedback(self, hef_copy):
+    def test_elevation_feedback(self, hef_gdir):
 
-        init_present_time_glacier(hef_copy)
+        init_present_time_glacier(hef_gdir)
 
         feedbacks = ['annual', 'monthly', 'always', 'never']
         # Mutliproc
@@ -2793,11 +2793,11 @@ class TestHEF:
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
                                output_filesuffix=feedback,
                                store_monthly_step=True)))
-        workflow.execute_parallel_tasks(hef_copy, tasks)
+        workflow.execute_parallel_tasks(hef_gdir, tasks)
 
         out = []
         for feedback in feedbacks:
-            out.append(utils.compile_run_output([hef_copy], path=False,
+            out.append(utils.compile_run_output([hef_gdir], path=False,
                                                 input_filesuffix=feedback))
 
         # Check that volume isn't so different
