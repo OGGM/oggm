@@ -540,8 +540,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = LinearMassBalance(2600.)
 
             model = FluxBasedModel(fls, mb_model=mb,
-                                   glen_a=self.glen_a,
-                                   time_stepping=step)
+                                   glen_a=self.glen_a)
 
             length = yrs * 0.
             vol = yrs * 0.

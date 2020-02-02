@@ -158,11 +158,11 @@ The OGGM "flux based" model solves for the :math:`\nabla \cdot q` term
 (hence the name). The strong advantage of this method is that
 the numerical equations are the same for *any* bed shape, considerably
 simplifying the implementation. Similar to the "diffusion approach", the
-model looses mass-conservation in very steep slopes ([Jarosch_etal_2013]_).
+model is not mass-conserving in very steep slopes ([Jarosch_etal_2013]_).
 
 The numerical scheme implemented in OGGM is tested against A. Jarosch's
 MUSCLSuperBee Model (see below) and Hans Oerleman's diffusion model for
-various idealized cases. For all cases but the steep slope one the model
+various idealized cases. For all cases but the steep slope, the model
 performs very well.
 
 In order to increase the stability and speed of the computations, we solve the
