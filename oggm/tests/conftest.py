@@ -1,3 +1,5 @@
+"""Pytest fixtures to be used in other test modules"""
+
 import os
 import shutil
 

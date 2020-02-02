@@ -22,7 +22,7 @@ from oggm.core import gcm_climate, climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
-from oggm.tests.funcs import init_hef, get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed,
@@ -50,8 +50,12 @@ pytest.importorskip('salem')
 
 @pytest.fixture(autouse=True, scope='module')
 def init_url_retrieve(request):
+    # Called at module set-up and shut-down
+    # We patch OGGM's download functions to make sure that we don't
+    # access data sources we shouldnt touch from within the tests
     request.module._url_retrieve = utils.oggm_urlretrieve
     oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
+    # This below is a shut-down
     yield
     oggm.utils._downloads.oggm_urlretrieve = request.module._url_retrieve
 
@@ -62,7 +66,7 @@ do_plot = False
 DOM_BORDER = 80
 
 
-class TestInitFlowline:
+class TestInitPresentDayFlowline:
     def test_init_present_time_glacier(self, hef_gdir):
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -160,7 +164,7 @@ def other_glacier_cfg():
 
 
 @pytest.mark.usefixtures('other_glacier_cfg')
-class TestOtherGlacier:
+class TestInitFlowlineOtherGlacier:
     def test_define_divides(self, class_case_dir):
 
         from oggm.core import centerlines
@@ -233,7 +237,7 @@ class TestOtherGlacier:
         np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
 
 
-class TestMassBalance:
+class TestMassBalanceModels:
     def test_past_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
@@ -1477,7 +1481,7 @@ class TestIO():
             xr.testing.assert_allclose(ds, ds_)
 
         for fl, fl_ in zip(fls[:-1], fls_[:-1]):
-            assert fl.flows_to_indice == fl_.flows_to_indic
+            assert fl.flows_to_indice == fl_.flows_to_indice
 
 
 @pytest.fixture(scope='class')
