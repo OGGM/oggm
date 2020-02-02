@@ -68,7 +68,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '5944d88bb8bdaed12988174fa036c7b603a05148'
+SAMPLE_DATA_COMMIT = '5338f128a3bd859a92b9c3424c76d4974929b955'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -117,7 +117,7 @@ DEM3REG = {
 tuple2int = partial(np.array, dtype=np.int64)
 
 # Global Lock
-lock = mp.Lock()
+lock = mp.get_context('spawn').Lock()
 
 
 def mkdir(path, reset=False):

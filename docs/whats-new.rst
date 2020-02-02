@@ -22,6 +22,10 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- The `test_models` test module has been refactored to use pytest fixtures
+  instead of unittest classes (:pr:`934` and :pr:`922`).
+  By `Chris Merrill <https://github.com/C-Merrill>`_.
+
 Bug fixes
 ~~~~~~~~~
 
