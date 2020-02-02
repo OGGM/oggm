@@ -2311,7 +2311,7 @@ class TestHEF:
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
 
         model.run_until_equilibrium(rate=1e-4)
-        
+
         assert model.yr > 50
         after_vol = model.volume_km3
         after_area = model.area_km2
