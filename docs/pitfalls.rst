@@ -34,7 +34,7 @@ higher value to compensate for this missing process (effectively making ice
 
 There is a way to calibrate :math:`A` for the ice thickness inversion
 procedure based on observations of ice thickness (see
-`this blog post<https://oggm.org/2018/05/21/g2ti/>`_ for an example).
+`this blog post about g2ti <https://oggm.org/2018/05/21/g2ti/>`_ for an example).
 Unfortunately, this does not mean that this calibrated
 :math:`A` can be applied as is to the forward model.
 At the global scale, a value in the range of [1.1-1.5] times the default value
@@ -73,7 +73,7 @@ The numerical model in OGGM v1.2 and below was numerically unstable in some cond
 ======================================================================================
 
 See `this github issue <https://github.com/OGGM/oggm/issues/909>`_ for a
-discussion pointing this out, and `this example<https://github.com/OGGM/oggm/issues/860>`_.
+discussion pointing this out, and `this example <https://github.com/OGGM/oggm/issues/860>`_.
 
 We now have fixed the most pressing issues.
 `This blog post <https://oggm.org/2020/01/18/stability-analysis/>`_ explains

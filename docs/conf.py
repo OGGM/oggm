@@ -38,11 +38,6 @@ try:
 except ImportError:
     print("no scipy")
 try:
-    import PIL
-    print("PIL (Pillow): %s, %s" % (PIL.PILLOW_VERSION, PIL.__file__))
-except ImportError:
-    print("no PIL (Pillow)")
-try:
     import pandas
     print("pandas: %s, %s" % (pandas.__version__, pandas.__file__))
 except ImportError:

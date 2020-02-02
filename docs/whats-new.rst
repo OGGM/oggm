@@ -4,8 +4,15 @@
 Version history
 ===============
 
-v1.3.0 (unreleased)
+v1.3.0 (02.02.2020)
 -------------------
+
+The time stepping scheme of OGGM has been fixed for several flaws.
+`This blog post <https://oggm.org/2020/01/18/stability-analysis/>`_
+explains it in detail. We expect some changes in OGGM results after this
+release, but they should not be noticeable in a vast majority of the cases.
+
+we recommend all users to update to this version.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -23,7 +30,7 @@ Enhancements
 ~~~~~~~~~~~~
 
 - The `test_models` test module has been refactored to use pytest fixtures
-  instead of unittest classes (:pr:`934` and :pr:`922`).
+  instead of unittest classes (:pull:`934` and :pull:`922`).
   By `Chris Merrill <https://github.com/C-Merrill>`_.
 
 Bug fixes
