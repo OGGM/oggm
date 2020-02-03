@@ -326,8 +326,14 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PATHS['climate_file'] = cp['climate_file']
 
     # Multiprocessing pool
-    PARAMS['use_multiprocessing'] = cp.as_bool('use_multiprocessing')
+    try:
+        use_mp = bool(os.environ['OGGM_USE_MULTIPROCESSING'])
+    except KeyError:
+        use_mp = cp.as_bool('use_multiprocessing')
+    PARAMS['use_multiprocessing'] = use_mp
     PARAMS['mp_processes'] = cp.as_int('mp_processes')
+
+
 
     # Some non-trivial params
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
