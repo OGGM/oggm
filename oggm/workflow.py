@@ -147,7 +147,7 @@ def execute_entity_task(task, gdirs, **kwargs):
         if ogmpi.OGGM_MPI_COMM is not None:
             return ogmpi.mpi_master_spin_tasks(pc, gdirs)
 
-    if cfg.PARAMS['use_multiprocessing']:
+    if cfg.PARAMS['use_multiprocessing'] and cfg.PARAMS['mp_processes'] > 1:
         mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
         out = mppool.map(pc, gdirs, chunksize=1)
     else:
@@ -187,7 +187,7 @@ def execute_parallel_tasks(gdir, tasks):
             ogmpi.mpi_master_spin_tasks(pc, _tasks)
             return
 
-    if cfg.PARAMS['use_multiprocessing']:
+    if cfg.PARAMS['use_multiprocessing'] and cfg.PARAMS['mp_processes'] > 1:
         mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
         mppool.map(pc, _tasks, chunksize=1)
     else:
