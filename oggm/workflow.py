@@ -28,14 +28,9 @@ log = logging.getLogger(__name__)
 _mp_pool = None
 
 
-def _init_pool_globals(_cfg_contents, global_lock, proj_data_dir):
+def _init_pool_globals(_cfg_contents, global_lock):
     cfg.unpack_config(_cfg_contents)
     utils.lock = global_lock
-    try:
-        import pyproj
-        pyproj.datadir.set_data_dir(proj_data_dir)
-    except ImportError:
-        pass
 
 
 def init_mp_pool(reset=False):
@@ -43,21 +38,15 @@ def init_mp_pool(reset=False):
     global _mp_pool
     if _mp_pool and not reset:
         return _mp_pool
-    cfg.CONFIG_MODIFIED = False
 
+    cfg.CONFIG_MODIFIED = False
     if _mp_pool and reset:
         _mp_pool.terminate()
         _mp_pool = None
 
     cfg_contents = cfg.pack_config()
-    global_lock = mp.Manager().Lock()
-    proj_data_dir = None
-
-    try:
-        import pyproj
-        proj_data_dir = pyproj.datadir.get_data_dir()
-    except ImportError:
-        pass
+    smp = mp.get_context('spawn')
+    global_lock = smp.Manager().Lock()
 
     mpp = cfg.PARAMS['mp_processes']
     if mpp == -1:
@@ -66,15 +55,15 @@ def init_mp_pool(reset=False):
             log.workflow('Multiprocessing: using slurm allocated '
                          'processors (N={})'.format(mpp))
         except KeyError:
-            mpp = mp.cpu_count()
+            mpp = smp.cpu_count()
             log.workflow('Multiprocessing: using all available '
                          'processors (N={})'.format(mpp))
     else:
         log.workflow('Multiprocessing: using the requested number of '
                      'processors (N={})'.format(mpp))
 
-    _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
-                       initargs=(cfg_contents, global_lock, proj_data_dir))
+    _mp_pool = smp.Pool(mpp, initializer=_init_pool_globals,
+                        initargs=(cfg_contents, global_lock))
     return _mp_pool
 
 
