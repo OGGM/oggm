@@ -987,6 +987,7 @@ class FluxBasedModel(FlowlineModel):
         self.shapefac_stag = []
         self.flux_stag = []
         self.trib_flux = []
+        self.mb_on_surfaceh = []
         for fl, trib in zip(self.fls, self._tributary_indices):
             nx = fl.nx
             # This is not staggered
@@ -1008,6 +1009,9 @@ class FluxBasedModel(FlowlineModel):
         # Just a check to avoid useless computations
         if dt <= 0:
             raise InvalidParamsError('dt needs to be strictly positive')
+
+        # Simple container
+        mbs = []
 
         # Loop over tributaries to determine the flux rate
         for fl_id, fl in enumerate(self.fls):
@@ -1098,6 +1102,12 @@ class FluxBasedModel(FlowlineModel):
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
 
+            # We compute MB in this loop, before mass-redistribution occurs,
+            # so that MB models which rely on glacier geometry to decide things
+            # (like PyGEM) can do wo with a clean glacier state
+            mbs.append(self.get_mb(fl.surface_h, self.yr,
+                                   fl_id=fl_id, fls=self.fls))
+
         # Time step
         if self.fixed_dt:
             # change only if step dt is larger than the chosen dt
@@ -1118,9 +1128,9 @@ class FluxBasedModel(FlowlineModel):
             if is_trib or self.is_tidewater:
                 flx_stag = flx_stag[:-1]
 
-            # Mass balance
+            # Mass-balance
             widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id, fls=self.fls)
+            mb = mbs[fl_id]
             # Allow parabolic beds to grow
             mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 
