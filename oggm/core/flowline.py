@@ -571,7 +571,7 @@ class FlowlineModel(object):
     def length_m(self):
         return self.fls[-1].length_m
 
-    def get_mb(self, heights, year=None, fl_id=None):
+    def get_mb(self, heights, year=None, fl_id=None, fls=None):
         """Get the mass balance at the requested height and time.
 
         Optimized so that no mb model call is necessary at each step.
@@ -579,7 +579,7 @@ class FlowlineModel(object):
 
         # Do we even have to optimise?
         if self.mb_elev_feedback == 'always':
-            return self._mb_call(heights, year, fl_id=fl_id)
+            return self._mb_call(heights, year=year, fl_id=fl_id, fls=fls)
 
         # Ok, user asked for it
         if fl_id is None:
@@ -601,14 +601,18 @@ class FlowlineModel(object):
         if self._mb_current_date == date:
             if fl_id not in self._mb_current_out:
                 # We need to reset just this tributary
-                self._mb_current_out[fl_id] = self._mb_call(heights, year,
-                                                            fl_id=fl_id)
+                self._mb_current_out[fl_id] = self._mb_call(heights,
+                                                            year=year,
+                                                            fl_id=fl_id,
+                                                            fls=fls)
         else:
             # We need to reset all
             self._mb_current_date = date
             self._mb_current_out = dict()
-            self._mb_current_out[fl_id] = self._mb_call(heights, year,
-                                                        fl_id=fl_id)
+            self._mb_current_out[fl_id] = self._mb_call(heights,
+                                                        year=year,
+                                                        fl_id=fl_id,
+                                                        fls=fls)
 
         return self._mb_current_out[fl_id]
 
@@ -1116,7 +1120,7 @@ class FluxBasedModel(FlowlineModel):
 
             # Mass balance
             widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id)
+            mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id, fls=self.fls)
             # Allow parabolic beds to grow
             mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 
