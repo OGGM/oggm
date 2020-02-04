@@ -571,7 +571,7 @@ class FlowlineModel(object):
     def length_m(self):
         return self.fls[-1].length_m
 
-    def get_mb(self, heights, year=None, fl_id=None):
+    def get_mb(self, heights, year=None, fl_id=None, fls=None):
         """Get the mass balance at the requested height and time.
 
         Optimized so that no mb model call is necessary at each step.
@@ -579,7 +579,7 @@ class FlowlineModel(object):
 
         # Do we even have to optimise?
         if self.mb_elev_feedback == 'always':
-            return self._mb_call(heights, year, fl_id=fl_id)
+            return self._mb_call(heights, year=year, fl_id=fl_id, fls=fls)
 
         # Ok, user asked for it
         if fl_id is None:
@@ -601,14 +601,18 @@ class FlowlineModel(object):
         if self._mb_current_date == date:
             if fl_id not in self._mb_current_out:
                 # We need to reset just this tributary
-                self._mb_current_out[fl_id] = self._mb_call(heights, year,
-                                                            fl_id=fl_id)
+                self._mb_current_out[fl_id] = self._mb_call(heights,
+                                                            year=year,
+                                                            fl_id=fl_id,
+                                                            fls=fls)
         else:
             # We need to reset all
             self._mb_current_date = date
             self._mb_current_out = dict()
-            self._mb_current_out[fl_id] = self._mb_call(heights, year,
-                                                        fl_id=fl_id)
+            self._mb_current_out[fl_id] = self._mb_call(heights,
+                                                        year=year,
+                                                        fl_id=fl_id,
+                                                        fls=fls)
 
         return self._mb_current_out[fl_id]
 
@@ -983,6 +987,7 @@ class FluxBasedModel(FlowlineModel):
         self.shapefac_stag = []
         self.flux_stag = []
         self.trib_flux = []
+        self.mb_on_surfaceh = []
         for fl, trib in zip(self.fls, self._tributary_indices):
             nx = fl.nx
             # This is not staggered
@@ -1004,6 +1009,9 @@ class FluxBasedModel(FlowlineModel):
         # Just a check to avoid useless computations
         if dt <= 0:
             raise InvalidParamsError('dt needs to be strictly positive')
+
+        # Simple container
+        mbs = []
 
         # Loop over tributaries to determine the flux rate
         for fl_id, fl in enumerate(self.fls):
@@ -1094,6 +1102,12 @@ class FluxBasedModel(FlowlineModel):
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
 
+            # We compute MB in this loop, before mass-redistribution occurs,
+            # so that MB models which rely on glacier geometry to decide things
+            # (like PyGEM) can do wo with a clean glacier state
+            mbs.append(self.get_mb(fl.surface_h, self.yr,
+                                   fl_id=fl_id, fls=self.fls))
+
         # Time step
         if self.fixed_dt:
             # change only if step dt is larger than the chosen dt
@@ -1114,9 +1128,9 @@ class FluxBasedModel(FlowlineModel):
             if is_trib or self.is_tidewater:
                 flx_stag = flx_stag[:-1]
 
-            # Mass balance
+            # Mass-balance
             widths = fl.widths_m
-            mb = self.get_mb(fl.surface_h, self.yr, fl_id=fl_id)
+            mb = mbs[fl_id]
             # Allow parabolic beds to grow
             mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 

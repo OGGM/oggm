@@ -31,7 +31,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.hemisphere = None
         self.rho = cfg.PARAMS['ice_density']
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
 
         Units: [m s-1], or meters of ice per second
@@ -48,6 +48,10 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         fl_id: float, optional
             the index of the flowline in the fls array (might be ignored
             by some MB models)
+        fls: list of flowline instances, optional
+            the flowlines array, in case the MB model implementation needs
+            to know details about the glacier geometry at the moment the
+            MB model is called
 
         Returns
         -------
@@ -55,7 +59,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None, fls=None):
         """Like `self.get_monthly_mb()`, but for annual MB.
 
         For some simpler mass-balance models ``get_monthly_mb()` and
@@ -75,6 +79,10 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         fl_id: float, optional
             the index of the flowline in the fls array (might be ignored
             by some MB models)
+        fls: list of flowline instances, optional
+            the flowlines array, in case the MB model implementation needs
+            to know details about the glacier geometry at the moment the
+            MB model is called
 
         Returns
         -------
@@ -96,7 +104,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         widths: ndarray
             the widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided
-        fls: list of flowline instances
+        fls: list of flowline instances, optional
             Another way to get heights and widths - overrides them if
             provided.
         year: float, optional
@@ -207,14 +215,14 @@ class LinearMassBalance(MassBalanceModel):
         self.ela_h = self.orig_ela_h + value * 150
         self._temp_bias = value
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, **kwargs):
         mb = (np.asarray(heights) - self.ela_h) * self.grad
         if self.max_mb is not None:
             clip_max(mb, self.max_mb, out=mb)
         return mb / SEC_IN_YEAR / self.rho
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
-        return self.get_monthly_mb(heights, year=year)
+    def get_annual_mb(self, heights, **kwargs):
+        return self.get_monthly_mb(heights, **kwargs)
 
 
 class PastMassBalance(MassBalanceModel):
@@ -431,14 +439,14 @@ class PastMassBalance(MassBalanceModel):
         return (t.mean(axis=1), tfmelt.sum(axis=1),
                 prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, **kwargs):
 
         _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
         mb_month = prcpsol - self.mu_star * tmelt
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
         return mb_month / SEC_IN_MONTH / self.rho
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, **kwargs):
 
         _, temp2dformelt, _, prcpsol = self._get_2d_annual_climate(heights,
                                                                    year)
@@ -597,11 +605,11 @@ class ConstantMassBalance(MassBalanceModel):
                 np.mean(prcp, axis=0) * 12,
                 np.mean(prcpsol, axis=0) * 12)
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, **kwargs):
         yr, m = floatyear_to_date(year)
         return self.interp_m[m-1](heights)
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, **kwargs):
         return self.interp_yr(heights)
 
 
@@ -741,12 +749,12 @@ class RandomMassBalance(MassBalanceModel):
                 self._state_yr[year] = self.rng.randint(*self.yr_range)
         return self._state_yr[year]
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, **kwargs):
         ryr, m = floatyear_to_date(year)
         ryr = date_to_floatyear(self.get_state_yr(ryr), m)
         return self.mbmod.get_monthly_mb(heights, year=ryr)
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, **kwargs):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(heights, year=ryr)
 
@@ -838,10 +846,10 @@ class UncertainMassBalance(MassBalanceModel):
             self._state_bias[year] = self.rng_bias.randn() * self._bias_sigma
         return self._state_bias[year]
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, **kwargs):
         raise NotImplementedError()
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None, **kwargs):
 
         # Keep the original biases and add a random error
         _t = self.mbmod.temp_bias
@@ -1000,7 +1008,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for mbmod in self.flowline_mb_models:
             mbmod.bias = value
 
-    def get_monthly_mb(self, heights, year=None, fl_id=None):
+    def get_monthly_mb(self, heights, year=None, fl_id=None, **kwargs):
 
         if fl_id is None:
             raise ValueError('`fl_id` is required for '
@@ -1009,7 +1017,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return self.flowline_mb_models[fl_id].get_monthly_mb(heights,
                                                              year=year)
 
-    def get_annual_mb(self, heights, year=None, fl_id=None):
+    def get_annual_mb(self, heights, year=None, fl_id=None, **kwargs):
 
         if fl_id is None:
             raise ValueError('`fl_id` is required for '
