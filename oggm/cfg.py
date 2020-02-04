@@ -328,12 +328,31 @@ def initialize_minimal(file=None, logging_level='INFO'):
     # Multiprocessing pool
     try:
         use_mp = bool(os.environ['OGGM_USE_MULTIPROCESSING'])
+        msg = 'ON' if use_mp else 'OFF'
+        log.workflow('Multiprocessing switched {} '.format(msg) +
+                     'according to the ENV variable OGGM_USE_MULTIPROCESSING')
     except KeyError:
         use_mp = cp.as_bool('use_multiprocessing')
+        msg = 'ON' if use_mp else 'OFF'
+        log.workflow('Multiprocessing switched {} '.format(msg) +
+                     'according to the parameter file.')
     PARAMS['use_multiprocessing'] = use_mp
-    PARAMS['mp_processes'] = cp.as_int('mp_processes')
 
-
+    mpp = cp.as_int('mp_processes')
+    if mpp == -1:
+        try:
+            mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
+            log.workflow('Multiprocessing: using slurm allocated '
+                         'processors (N={})'.format(mpp))
+        except KeyError:
+            import multiprocessing
+            mpp = multiprocessing.cpu_count()
+            log.workflow('Multiprocessing: using all available '
+                         'processors (N={})'.format(mpp))
+    else:
+        log.workflow('Multiprocessing: using the requested number of '
+                     'processors (N={})'.format(mpp))
+    PARAMS['mp_processes'] = mpp
 
     # Some non-trivial params
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')

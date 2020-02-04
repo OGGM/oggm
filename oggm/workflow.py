@@ -49,19 +49,8 @@ def init_mp_pool(reset=False):
     global_lock = smp.Manager().Lock()
 
     mpp = cfg.PARAMS['mp_processes']
-    if mpp == -1:
-        try:
-            mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
-            log.workflow('Multiprocessing: using slurm allocated '
-                         'processors (N={})'.format(mpp))
-        except KeyError:
-            mpp = smp.cpu_count()
-            log.workflow('Multiprocessing: using all available '
-                         'processors (N={})'.format(mpp))
-    else:
-        log.workflow('Multiprocessing: using the requested number of '
-                     'processors (N={})'.format(mpp))
-
+    log.workflow('Initializing multiprocessing pool with '
+                 'N={} processes.'.format(mpp))
     _mp_pool = smp.Pool(mpp, initializer=_init_pool_globals,
                         initargs=(cfg_contents, global_lock))
     return _mp_pool
@@ -191,8 +180,8 @@ def execute_parallel_tasks(gdir, tasks):
         mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
         mppool.map(pc, _tasks, chunksize=1)
     else:
-        for task in _tasks:
-            task()
+        for task, (gd, kw) in _tasks:
+            task(gd, **kw)
 
 
 def gdir_from_prepro(entity, from_prepro_level=None,
