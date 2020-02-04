@@ -19,7 +19,7 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse
 import socket
-import multiprocessing as mp
+import multiprocessing
 from netrc import netrc
 
 # External libs
@@ -116,9 +116,7 @@ DEM3REG = {
 # Function
 tuple2int = partial(np.array, dtype=np.int64)
 
-# Global Lock
-lock = mp.get_context('spawn').Lock()
-
+lock = None
 
 def mkdir(path, reset=False):
     """Checks if directory exists and if not, create one.
@@ -178,6 +176,13 @@ def findfiles(root_dir, endswith):
 
 
 def _get_download_lock():
+    global lock
+    if lock is None:
+        # Global Lock
+        if cfg.PARAMS['use_mp_spawn']:
+            lock = multiprocessing.get_context('spawn').Lock()
+        else:
+            lock = multiprocessing.Lock()
     return lock
 
 

@@ -338,6 +338,17 @@ def initialize_minimal(file=None, logging_level='INFO'):
                      'according to the parameter file.')
     PARAMS['use_multiprocessing'] = use_mp
 
+    # Spawn
+    try:
+        use_mp_spawn = bool(int(os.environ['OGGM_USE_MP_SPAWN']))
+        msg = 'ON' if use_mp_spawn else 'OFF'
+        log.workflow('MP spawn context switched {} '.format(msg) +
+                     'according to the ENV variable OGGM_USE_MP_SPAWN')
+    except KeyError:
+        use_mp_spawn = cp.as_bool('use_mp_spawn')
+    PARAMS['use_mp_spawn'] = use_mp_spawn
+
+    # Number of processes
     mpp = cp.as_int('mp_processes')
     if mpp == -1:
         try:
@@ -409,7 +420,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'dl_verify',
+           'rgi_version', 'dl_verify', 'use_mp_spawn',
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
     for k in ltr:
