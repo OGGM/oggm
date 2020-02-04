@@ -179,7 +179,7 @@ def _get_download_lock():
     global lock
     if lock is None:
         # Global Lock
-        if cfg.PARAMS['use_mp_spawn']:
+        if cfg.PARAMS.get('use_mp_spawn', False):
             lock = multiprocessing.get_context('spawn').Lock()
         else:
             lock = multiprocessing.Lock()
