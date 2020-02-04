@@ -327,7 +327,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
 
     # Multiprocessing pool
     try:
-        use_mp = bool(os.environ['OGGM_USE_MULTIPROCESSING'])
+        use_mp = bool(int(os.environ['OGGM_USE_MULTIPROCESSING']))
         msg = 'ON' if use_mp else 'OFF'
         log.workflow('Multiprocessing switched {} '.format(msg) +
                      'according to the ENV variable OGGM_USE_MULTIPROCESSING')

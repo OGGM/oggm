@@ -309,6 +309,24 @@ class TestInitialize(unittest.TestCase):
         cfg.initialize()
         self.homedir = os.path.expanduser('~')
 
+    def test_env_var(self):
+
+        with TempEnvironmentVariable(OGGM_USE_MULTIPROCESSING='1'):
+            cfg.initialize()
+            assert cfg.PARAMS['use_multiprocessing']
+            assert cfg.PARAMS['mp_processes'] >= 1
+
+        with TempEnvironmentVariable(OGGM_USE_MULTIPROCESSING='1',
+                                     SLURM_JOB_CPUS_PER_NODE='13'):
+            cfg.initialize()
+            assert cfg.PARAMS['use_multiprocessing']
+            assert cfg.PARAMS['mp_processes'] == 13
+
+        with TempEnvironmentVariable(OGGM_USE_MULTIPROCESSING='0'):
+            cfg.initialize()
+            assert not cfg.PARAMS['use_multiprocessing']
+            assert cfg.PARAMS['mp_processes'] >= 1
+
     def test_defaults(self):
         self.assertFalse(cfg.PATHS['working_dir'])
 
