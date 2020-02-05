@@ -987,7 +987,6 @@ class FluxBasedModel(FlowlineModel):
         self.shapefac_stag = []
         self.flux_stag = []
         self.trib_flux = []
-        self.mb_on_surfaceh = []
         for fl, trib in zip(self.fls, self._tributary_indices):
             nx = fl.nx
             # This is not staggered
