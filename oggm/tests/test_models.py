@@ -1019,10 +1019,63 @@ class TestModelFlowlines():
             assert_allclose(rec.area_m2, area_m2.sum())
             assert_allclose(rec.volume_m3, vol_m3.sum())
 
+    def test_parab_conserves_shape(self):
+
+        # Real parabolas
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 80
+
+        shapes = bed_h*0. + 0.003
+        shapes[:30] = 0.002
+        shapes[-30:] = 0.004
+
+        # tests
+        thick = surface_h - bed_h
+        widths_m = np.sqrt(4 * thick / shapes)
+        area_m2 = map_dx * widths_m
+        area_m2[thick == 0] = 0
+
+        fl = ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                  surface_h=surface_h, bed_h=bed_h,
+                                  bed_shape=shapes)
+
+        fl2 = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                               surface_h=surface_h, bed_h=bed_h,
+                               section=fl.section, bed_shape=shapes,
+                               lambdas=np.zeros(len(shapes)),
+                               is_trapezoid=np.zeros(len(shapes)).astype(bool))
+
+        thick_bef = fl.thick
+        widths_bef = fl.widths_m
+        section_bef = fl.section
+        assert_allclose(fl2.thick, thick_bef)
+        assert_allclose(fl2.widths_m, widths_bef)
+
+        fl.section = 0
+        fl2.section = 0
+        assert_allclose(fl.thick, 0)
+        assert_allclose(fl.widths_m, 0)
+        assert_allclose(fl2.thick, 0)
+        assert_allclose(fl2.widths_m, 0)
+
+        fl.section = section_bef
+        fl2.section = section_bef
+        assert_allclose(fl.thick, thick_bef)
+        assert_allclose(fl.widths_m, widths_bef)
+        assert_allclose(fl2.thick, thick_bef)
+        assert_allclose(fl2.widths_m, widths_bef)
+
     def test_parab_mixed(self):
 
         # Real parabolas
-
         map_dx = 100.
         dx = 1.
         nx = 200
