@@ -3153,3 +3153,86 @@ class TestCatching(unittest.TestCase):
         # Glacier stats
         df = utils.compile_glacier_statistics([gdir])
         assert 'error_task' in df.columns
+
+
+class TestPyGEM_compat(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['use_intersects'] = False
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_read_gmip_data(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        entity['RGIId'] = 'RGI60-11.00897'
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        from oggm.sandbox import pygem_compat
+        area_path = get_demo_file('gmip_area_centraleurope_10_sel.dat')
+        thick_path = get_demo_file('gmip_thickness_centraleurope_10m_sel.dat')
+        width_path = get_demo_file('gmip_width_centraleurope_10_sel.dat')
+        data = pygem_compat.read_gmip_data(gdir,
+                                           area_path=area_path,
+                                           thick_path=thick_path,
+                                           width_path=width_path)
+        np.testing.assert_allclose(data['area'].sum(), gdir.rgi_area_m2,
+                                   rtol=0.01)
+
+    def test_flowlines_from_gmip_data(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        entity['RGIId'] = 'RGI60-11.00897'
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+
+        from oggm.sandbox import pygem_compat
+        area_path = get_demo_file('gmip_area_centraleurope_10_sel.dat')
+        thick_path = get_demo_file('gmip_thickness_centraleurope_10m_sel.dat')
+        width_path = get_demo_file('gmip_width_centraleurope_10_sel.dat')
+        data = pygem_compat.read_gmip_data(gdir,
+                                           area_path=area_path,
+                                           thick_path=thick_path,
+                                           width_path=width_path)
+
+        pygem_compat.present_time_glacier_from_bins(gdir, data=data)
+        fls = gdir.read_pickle('model_flowlines')
+        data = data.loc[::-1]
+        area = np.asarray(data['area'])
+        width = np.asarray(data['width'])
+        thick = np.asarray(data['thick'])
+        elevation = np.asarray(data.index).astype(np.float)
+        dx_meter = area / width
+        dx_meter = np.where(np.isfinite(dx_meter), dx_meter, 0)
+
+        np.testing.assert_allclose(fls[0].dx_meter, dx_meter)
+        # Careful! The thickness changed
+        np.testing.assert_allclose(fls[0].thick, 3/2 * thick)
+        np.testing.assert_allclose(fls[0].widths_m, width)
+        np.testing.assert_allclose(fls[0].surface_h, elevation)
+        np.testing.assert_allclose(fls[0].section, width*thick)
+        np.testing.assert_allclose(fls[0].area_m2, gdir.rgi_area_m2,
+                                   rtol=0.01)
+        np.testing.assert_allclose(fls[0].volume_m3,
+                                   np.sum(width*thick*dx_meter),
+                                   rtol=0.01)
