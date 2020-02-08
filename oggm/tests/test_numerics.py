@@ -1096,10 +1096,8 @@ class TestFluxGate(unittest.TestCase):
                                flux_gate_thickness=150, flux_gate_build_up=50,
                                is_tidewater=True)
         model.run_until(2000)
-        # TODO: this is not 100% mass conservative although I thought it was
-        # Let's see if we can make this better later.
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
-                        model.flux_gate_total_volume, rtol=0.005)
+                        model.flux_gate_total_volume)
 
         if do_plot:  # pragma: no cover
             plt.plot(model.fls[-1].bed_h, 'k')

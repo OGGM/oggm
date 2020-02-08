@@ -1212,10 +1212,8 @@ class FluxBasedModel(FlowlineModel):
                 self.trib_flux[tr[0]][tr[1]:tr[2]] += \
                     utils.clip_min(flx_stag[-1], 0) * tr[3]
             elif self.is_tidewater:
-                # -2 because the last flux is zero per construction
-                # not sure at all if this is the way to go but mass
-                # conservation is approx OK
-                self.calving_m3_since_y0 += utils.clip_min(flx_stag[-2], 0)*dt
+                # Last flux is calving
+                self.calving_m3_since_y0 += utils.clip_min(flx_stag[-1], 0)*dt
 
             # If we use a flux-gate, store the total volume that came in
             self.flux_gate_total_volume += flx_stag[0] * dt
