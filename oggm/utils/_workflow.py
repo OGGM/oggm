@@ -682,7 +682,8 @@ class compile_to_netcdf(object):
 
             # Ok, now merge and return
             try:
-                with xr.open_mfdataset(tmp_paths, combine='by_coords') as ds:
+                with xr.open_mfdataset(tmp_paths, combine='nested',
+                                       concat_dim='rgi_id') as ds:
                     ds.to_netcdf(path)
             except TypeError:
                 # xr < v 0.13
