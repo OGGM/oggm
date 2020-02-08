@@ -1017,10 +1017,11 @@ class FluxBasedModel(FlowlineModel):
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
         self.flux_gate_yr = flux_gate_build_up
-        self.flux_gate_total_volume = 0.
+        self.flux_gate_m3_since_y0 = 0.
         if flux_gate_thickness is not None:
             # Compute the theoretical ice flux from the slope at the top
-            flux_gate_thickness = utils.tolist(flux_gate_thickness)
+            flux_gate_thickness = utils.tolist(flux_gate_thickness,
+                                               length=len(self.fls))
             self.flux_gate = []
             for fl, fgt in zip(self.fls, flux_gate_thickness):
                 # We set the thickness to the desired value so that
@@ -1216,7 +1217,7 @@ class FluxBasedModel(FlowlineModel):
                 self.calving_m3_since_y0 += utils.clip_min(flx_stag[-1], 0)*dt
 
             # If we use a flux-gate, store the total volume that came in
-            self.flux_gate_total_volume += flx_stag[0] * dt
+            self.flux_gate_m3_since_y0 += flx_stag[0] * dt
 
         # Next step
         self.t += dt

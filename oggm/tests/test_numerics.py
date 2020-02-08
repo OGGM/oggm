@@ -1074,15 +1074,28 @@ class TestFluxGate(unittest.TestCase):
         model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50)
         model.run_until(1000)
-        assert_allclose(model.volume_m3, model.flux_gate_total_volume)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
 
         model = FluxBasedModel(dummy_mixed_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50)
         model.run_until(1000)
-        assert_allclose(model.volume_m3, model.flux_gate_total_volume)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
         # Make sure that we cover the types of beds
         beds = np.unique(model.fls[0].shape_str[model.fls[0].thick > 0])
         assert len(beds) == 2
+
+        if do_plot:  # pragma: no cover
+            plt.plot(model.fls[-1].bed_h, 'k')
+            plt.plot(model.fls[-1].surface_h, 'b')
+            plt.show()
+
+    def test_flux_gate_with_trib(self):
+
+        mb = ScalarMassBalance()
+        model = FluxBasedModel(dummy_width_bed_tributary(), mb_model=mb,
+                               flux_gate_thickness=150, flux_gate_build_up=50)
+        model.run_until(1000)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
 
         if do_plot:  # pragma: no cover
             plt.plot(model.fls[-1].bed_h, 'k')
@@ -1097,7 +1110,7 @@ class TestFluxGate(unittest.TestCase):
                                is_tidewater=True)
         model.run_until(2000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
-                        model.flux_gate_total_volume)
+                        model.flux_gate_m3_since_y0)
 
         if do_plot:  # pragma: no cover
             plt.plot(model.fls[-1].bed_h, 'k')

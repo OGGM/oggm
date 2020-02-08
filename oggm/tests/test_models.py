@@ -2392,7 +2392,7 @@ class TestHEF:
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                flux_gate=0.03, flux_gate_build_up=50)
         model.run_until(500)
-        assert_allclose(model.volume_m3, model.flux_gate_total_volume)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
         # Make sure that we cover the types of beds
         beds = np.unique(model.fls[-1].shape_str[model.fls[-1].thick > 0])
         assert len(beds) == 3
