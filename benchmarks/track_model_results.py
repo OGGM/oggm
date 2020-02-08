@@ -225,31 +225,31 @@ class full_workflow:
     def track_start_volume(self, gdirs):
         self.cfg_init()
         path = os.path.join(cfg.PATHS['working_dir'], 'run_output_tstar*.nc')
-        with xr.open_mfdataset(path) as ds:
+        with xr.open_mfdataset(path, combine='by_coords') as ds:
             return float(ds.volume.sum(dim='rgi_id').isel(time=0)) * 1e-9
 
     def track_tstar_run_final_volume(self, gdirs):
         self.cfg_init()
         path = os.path.join(cfg.PATHS['working_dir'], 'run_output_tstar*.nc')
-        with xr.open_mfdataset(path) as ds:
+        with xr.open_mfdataset(path, combine='by_coords') as ds:
             return float(ds.volume.sum(dim='rgi_id').isel(time=-1)) * 1e-9
 
     def track_1990_run_final_volume(self, gdirs):
         self.cfg_init()
         path = os.path.join(cfg.PATHS['working_dir'], 'run_output_pd*.nc')
-        with xr.open_mfdataset(path) as ds:
+        with xr.open_mfdataset(path, combine='by_coords') as ds:
             return float(ds.volume.sum(dim='rgi_id').isel(time=-1)) * 1e-9
 
     def track_avg_temp_full_period(self, gdirs):
         self.cfg_init()
         path = os.path.join(cfg.PATHS['working_dir'], 'climate_input*.nc')
-        with xr.open_mfdataset(path) as ds:
+        with xr.open_mfdataset(path, combine='by_coords') as ds:
             return float(ds.temp.mean())
 
     def track_avg_prcp_full_period(self, gdirs):
         self.cfg_init()
         path = os.path.join(cfg.PATHS['working_dir'], 'climate_input*.nc')
-        with xr.open_mfdataset(path) as ds:
+        with xr.open_mfdataset(path, combine='by_coords') as ds:
             return float(ds.prcp.mean())
 
 

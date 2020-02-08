@@ -536,6 +536,7 @@ class TestCoxeGlacier(unittest.TestCase):
         tasks.init_present_time_glacier(gdir)
 
         # check that calving happens in the real context as well
-        tasks.run_constant_climate(gdir, bias=0, nyears=100)
+        tasks.run_constant_climate(gdir, bias=0, nyears=100,
+                                   temperature_bias=-0.2)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3.max() > 10
