@@ -32,9 +32,10 @@ from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    PastMassBalance,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
+from oggm.core.inversion import find_sia_flux_from_thickness
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_HOUR
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR
 from oggm.cfg import G, GAUSSIAN_KERNEL
 
 # Module logger
@@ -186,6 +187,11 @@ class ParabolicBedFlowline(Flowline):
     def section(self, val):
         self.thick = (0.75 * val * np.sqrt(self.bed_shape))**(2./3.)
 
+    @utils.lazy_property
+    def shape_str(self):
+        """The bed shape in text (for debug and other things)"""
+        return np.repeat('parabolic', self.nx)
+
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
         ds['bed_shape'] = (['x'],  self.bed_shape)
@@ -232,6 +238,11 @@ class RectangularBedFlowline(Flowline):
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
+
+    @utils.lazy_property
+    def shape_str(self):
+        """The bed shape in text (for debug and other things)"""
+        return np.repeat('rectangular', self.nx)
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
@@ -290,6 +301,11 @@ class TrapezoidalBedFlowline(Flowline):
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
+
+    @utils.lazy_property
+    def shape_str(self):
+        """The bed shape in text (for debug and other things)"""
+        return np.repeat('trapezoid', self.nx)
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
@@ -405,6 +421,14 @@ class MixedBedFlowline(Flowline):
     def area_m2(self):
         widths = np.where(self.thick > 0., self.widths_m, 0.)
         return np.sum(widths * self.dx_meter)
+
+    @utils.lazy_property
+    def shape_str(self):
+        """The bed shape in text (for debug and other things)"""
+        out = np.repeat('rectangular', self.nx)
+        out[~ self.is_trapezoid] = 'parabolic'
+        out[self.is_trapezoid & ~ self.is_rectangular] = 'trapezoid'
+        return out
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
@@ -911,7 +935,9 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=None,
-                 min_dt=None, **kwargs):
+                 min_dt=None, flux_gate_thickness=None,
+                 flux_gate=None, flux_gate_build_up=500,
+                 **kwargs):
         """Instanciate the model.
 
         Parameters
@@ -954,6 +980,18 @@ class FluxBasedModel(FlowlineModel):
         check_for_boundaries: bool, default: True
             raise an error when the glacier grows bigger than the domain
             boundaries
+        flux_gate_thickness : float or array
+            flux of ice from the left domain boundary (and tributaries).
+            Units of m of ice thickness. Note that unrealistic values won't be
+            met by the model, so this is really just a rough guidance.
+            It's better to use `flux_gate` instead.
+        flux_gate : float or array
+            flux of ice from the left domain boundary (and tributaries)
+            (unit: m3 of ice per second). If set to a high value,
+            the model will slowly build it up in order not to force the model
+            too much. This is overriden by `flux_gate_thickness` if provided.
+        flux_gate_buildup : int
+            number of years used to build up the flux gate to full value
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -970,14 +1008,35 @@ class FluxBasedModel(FlowlineModel):
 
         # Do we want to use shape factors?
         self.sf_func = None
-        # Use .get to obtain default None for non-existing key
-        # necessary to pass some tests
-        # TODO: change to direct dictionary query after tests are adapted?
         use_sf = cfg.PARAMS.get('use_shape_factor_for_fluxbasedmodel')
         if use_sf == 'Adhikari' or use_sf == 'Nye':
             self.sf_func = utils.shape_factor_adhikari
         elif use_sf == 'Huss':
             self.sf_func = utils.shape_factor_huss
+
+        # Flux gate
+        self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
+        self.flux_gate_yr = flux_gate_build_up
+        self.flux_gate_total_volume = 0.
+        if flux_gate_thickness is not None:
+            # Compute the theoretical ice flux from the slope at the top
+            flux_gate_thickness = utils.tolist(flux_gate_thickness)
+            self.flux_gate = []
+            for fl, fgt in zip(self.fls, flux_gate_thickness):
+                # We set the thickness to the desired value so that
+                # the widths work ok
+                fl = copy.deepcopy(fl)
+                fl.thick = fl.thick * 0 + fgt
+                slope = (fl.surface_h[0] - fl.surface_h[1]) / fl.dx_meter
+                if slope == 0:
+                    raise ValueError('I need a slope to compute the flux')
+                flux = find_sia_flux_from_thickness(slope,
+                                                    fl.widths_m[0],
+                                                    fgt,
+                                                    shape=fl.shape_str[0],
+                                                    glen_a=self.glen_a,
+                                                    fs=self.fs)
+                self.flux_gate.append(flux)
 
         # Optim
         self.slope_stag = []
@@ -1081,6 +1140,12 @@ class FluxBasedModel(FlowlineModel):
             # Staggered flux rate
             flux_stag[:] = u_stag * section_stag
 
+            # Add boundary condition
+            if self.flux_gate[fl_id] is not None:
+                fac = 1 - (self.flux_gate_yr - self.yr) / self.flux_gate_yr
+                flux_stag[0] = self.flux_gate[fl_id] * utils.clip_scalar(fac,
+                                                                         0, 1)
+
             # CFL condition
             if not self.fixed_dt:
                 maxu = np.max(np.abs(u_stag))
@@ -1149,8 +1214,11 @@ class FluxBasedModel(FlowlineModel):
             elif self.is_tidewater:
                 # -2 because the last flux is zero per construction
                 # not sure at all if this is the way to go but mass
-                # conservation is OK
+                # conservation is approx OK
                 self.calving_m3_since_y0 += utils.clip_min(flx_stag[-2], 0)*dt
+
+            # If we use a flux-gate, store the total volume that came in
+            self.flux_gate_total_volume += flx_stag[0] * dt
 
         # Next step
         self.t += dt

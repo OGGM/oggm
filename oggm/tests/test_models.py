@@ -811,6 +811,9 @@ class TestModelFlowlines():
         rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
                                      surface_h=surface_h, bed_h=bed_h,
                                      widths=widths)
+
+        assert np.all([s == 'rectangular' for s in rec.shape_str])
+
         thick = surface_h - bed_h
         widths_m = widths * map_dx
         section = thick * widths_m
@@ -898,6 +901,8 @@ class TestModelFlowlines():
                                 surface_h=surface_h, bed_h=bed_h,
                                 section=section, bed_shape=lambdas,
                                 is_trapezoid=is_trap, lambdas=lambdas)
+
+        assert np.all([s == 'trapezoid' for s in rec1.shape_str])
 
         recs = [rec1, rec2]
         for rec in recs:
@@ -1052,6 +1057,8 @@ class TestModelFlowlines():
                                section=fl.section, bed_shape=shapes,
                                lambdas=np.zeros(len(shapes)),
                                is_trapezoid=np.zeros(len(shapes)).astype(bool))
+
+        assert np.all([s == 'parabolic' for s in fl.shape_str])
 
         thick_bef = fl.thick
         widths_bef = fl.widths_m
@@ -2297,7 +2304,6 @@ def gdir_sh(request, test_dir, hef_gdir):
 def with_class_wd(request, test_dir, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
-    print('PREVIOUS WORKING DIR: ', prev_wd)
     cfg.PATHS['working_dir'] = os.path.join(
         test_dir, request.cls.__name__ + '_wd')
     utils.mkdir(cfg.PATHS['working_dir'], reset=True)
@@ -2373,6 +2379,27 @@ class TestHEF:
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
         np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+
+    @pytest.mark.slow
+    def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
+
+        init_present_time_glacier(hef_gdir)
+
+        mb_mod = massbalance.ScalarMassBalance()
+        fls = hef_gdir.read_pickle('model_flowlines')
+        for fl in fls:
+            fl.thick = fl.thick * 0
+        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                               flux_gate=0.03, flux_gate_build_up=50)
+        model.run_until(500)
+        assert_allclose(model.volume_m3, model.flux_gate_total_volume)
+        # Make sure that we cover the types of beds
+        beds = np.unique(model.fls[-1].shape_str[model.fls[-1].thick > 0])
+        assert len(beds) == 3
+        if do_plot:
+            from oggm import graphics
+            graphics.plot_modeloutput_section_withtrib(model)
+            plt.show()
 
     @pytest.mark.slow
     def test_commitment(self, hef_gdir, inversion_params):
