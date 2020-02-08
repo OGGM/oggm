@@ -172,6 +172,30 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
 
+class ScalarMassBalance(MassBalanceModel):
+    """Constant mass-balance, everywhere."""
+
+    def __init__(self, mb=0.):
+        """ Initialize.
+        Parameters
+        ----------
+        mb: float
+            Fix the mass balance to a certain value (unit: [mm w.e. yr-1])
+        """
+        super(ScalarMassBalance, self).__init__()
+        self.hemisphere = 'nh'
+        self.valid_bounds = [-2e4, 2e4]  # in m
+        self._mb = mb
+
+    def get_monthly_mb(self, heights, **kwargs):
+        mb = np.asarray(heights) * 0 + self._mb
+        return mb / SEC_IN_YEAR / self.rho
+
+    def get_annual_mb(self, heights, **kwargs):
+        mb = np.asarray(heights) * 0 + self._mb
+        return mb / SEC_IN_YEAR / self.rho
+
+
 class LinearMassBalance(MassBalanceModel):
     """Constant mass-balance as a linear function of altitude.
     """

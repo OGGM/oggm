@@ -42,6 +42,7 @@ from scipy import optimize
 from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -197,6 +198,9 @@ def sia_thickness(slope, width, flux, shape='rectangular',
         glen_a = cfg.PARAMS['inversion_glen_a']
     if fs is None:
         fs = cfg.PARAMS['inversion_fs']
+    if shape not in ['parabolic', 'rectangular']:
+        raise InvalidParamsError('shape must be `parabolic` or `rectangular`,'
+                                 'not: {}'.format(shape))
 
     _inv_function = _inversion_simple if fs == 0 else _inversion_poly
 
@@ -248,6 +252,29 @@ def sia_thickness(slope, width, flux, shape='rectangular',
                  'convergence.'.format(shape_factor, i))
 
     return _compute_thick(a0, a3, flux_a0, sf, _inv_function)
+
+
+def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
+                                 shape='rectangular'):
+    """Find the ice flux produced by a given thickness and slope.
+
+    This can be done analytically but I'm lazy and use optimisation instead.
+    """
+
+    def to_minimize(x):
+        h = sia_thickness(slope, width, x[0], glen_a=glen_a, fs=fs,
+                          shape=shape)
+        return (thick - h)**2
+
+    out = optimize.minimize(to_minimize, [1], bounds=((0, 1e12),))
+    flux = out['x'][0]
+
+    # Sanity check
+    minimum = to_minimize([flux])
+    if minimum > 1:
+        warnings.warn('We did not find a proper flux for this thickness',
+                      RuntimeWarning)
+    return flux
 
 
 @entity_task(log, writes=['inversion_output'])

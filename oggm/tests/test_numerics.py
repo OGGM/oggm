@@ -10,7 +10,8 @@ from numpy.testing import assert_allclose
 
 # Local imports
 import oggm
-from oggm.core.massbalance import LinearMassBalance
+from oggm.core.massbalance import LinearMassBalance, ScalarMassBalance
+from oggm.core.inversion import find_sia_flux_from_thickness
 from oggm import utils, cfg
 from oggm.cfg import SEC_IN_DAY
 from oggm.core.sia2d import Upstream2D
@@ -43,6 +44,7 @@ _url_retrieve = None
 pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
+
 
 def setup_module(module):
     module._url_retrieve = utils.oggm_urlretrieve
@@ -1043,6 +1045,77 @@ class TestIdealisedCases(unittest.TestCase):
         with pytest.raises(RuntimeError) as excinfo:
             model.run_until(300)
         assert 'exceeds domain boundaries' in str(excinfo.value)
+
+
+class TestFluxGate(unittest.TestCase):
+
+    def setUp(self):
+        cfg.initialize()
+
+    def test_find_flux_from_thickness(self):
+
+        mb = LinearMassBalance(2600.)
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb)
+        model.run_until(700)
+
+        # Pick a flux and slope somewhere in the glacier
+        for i in [1, 10, 20, 50]:
+            flux = model.flux_stag[0][i]
+            slope = model.slope_stag[0][i]
+            thick = model.thick_stag[0][i]
+            width = model.fls[0].widths_m[i]
+
+            out = find_sia_flux_from_thickness(slope, width, thick)
+            assert_allclose(out, flux, atol=1e-7)
+
+    def test_simple_flux_gate(self):
+
+        mb = ScalarMassBalance()
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
+                               flux_gate_thickness=150, flux_gate_build_up=50)
+        model.run_until(1000)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
+
+        model = FluxBasedModel(dummy_mixed_bed(), mb_model=mb,
+                               flux_gate_thickness=150, flux_gate_build_up=50)
+        model.run_until(1000)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
+        # Make sure that we cover the types of beds
+        beds = np.unique(model.fls[0].shape_str[model.fls[0].thick > 0])
+        assert len(beds) == 2
+
+        if do_plot:  # pragma: no cover
+            plt.plot(model.fls[-1].bed_h, 'k')
+            plt.plot(model.fls[-1].surface_h, 'b')
+            plt.show()
+
+    def test_flux_gate_with_trib(self):
+
+        mb = ScalarMassBalance()
+        model = FluxBasedModel(dummy_width_bed_tributary(), mb_model=mb,
+                               flux_gate_thickness=150, flux_gate_build_up=50)
+        model.run_until(1000)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(model.fls[-1].bed_h, 'k')
+            plt.plot(model.fls[-1].surface_h, 'b')
+            plt.show()
+
+    def test_flux_gate_with_calving(self):
+
+        mb = ScalarMassBalance()
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
+                               flux_gate_thickness=150, flux_gate_build_up=50,
+                               is_tidewater=True)
+        model.run_until(2000)
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(model.fls[-1].bed_h, 'k')
+            plt.plot(model.fls[-1].surface_h, 'b')
+            plt.show()
 
 
 class TestSia2d(unittest.TestCase):
