@@ -758,6 +758,9 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
             ax.plot(x[i], cls.surface_h[i], 's', markerfacecolor='w',
                     markeredgecolor='k',
                     label='Tributary (inactive)')
+    if getattr(model, 'do_calving', False):
+        ax.hlines()
+
 
     ax.set_ylim(ylim)
 

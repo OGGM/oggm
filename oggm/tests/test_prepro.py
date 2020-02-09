@@ -2310,7 +2310,7 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
 
-    def test_inversion_with_calving(self):
+    def test_inversion_and_run_with_calving(self):
 
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
@@ -2346,20 +2346,27 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         for fl1, fl2 in zip(fls1, fls2):
             assert fl2.mu_star < fl1.mu_star
 
-        # Test new line
+        # Test make a run
         flowline.init_present_time_glacier(gdir)
         fls = gdir.read_pickle('model_flowlines')
 
-        from oggm.core.massbalance import ConstantMassBalance, ScalarMassBalance
+        from oggm.core.massbalance import ConstantMassBalance
         mb_mod = ConstantMassBalance(gdir, bias=0)
-        model = flowline.CalvingModel(fls, mb_model=mb_mod, do_calving=True,
-                                      calving_k=0.5, calving_limiter=True)
-        print(model.length_m, model.volume_m3*1e-9, model.calving_m3_since_y0*1e-9)
-        model.run_until(100)
-        print(model.length_m, model.volume_m3*1e-9, model.calving_m3_since_y0*1e-9)
+        model = flowline.FluxBasedModel(fls, mb_model=mb_mod,
+                                        is_tidewater=True,
+                                        do_kcalving=True,
+                                        calving_k=0.5,
+                                        calving_use_limiter=True)
+        _, ds = model.run_until_and_store(1000)
+        assert ds.calving_m3[-1] > 0
+        assert ds.length_m[-1] > ds.length_m[0]
+        assert ds.volume_m3[-1] > ds.volume_m3[0]
 
         from oggm import graphics
         import matplotlib.pyplot as plt
+
+        ds.volume_m3.plot()
+        plt.figure()
         graphics.plot_modeloutput_section(model)
         plt.show()
 

@@ -527,16 +527,13 @@ class TestCoxeGlacier(unittest.TestCase):
         tasks.mu_star_calibration(gdir)
 
         # Inversion tasks
-        tasks.prepare_for_inversion(gdir)
-        # We use the default parameters for this run
-        tasks.mass_conservation_inversion(gdir)
-        tasks.filter_inversion_output(gdir)
+        tasks.find_inversion_calving(gdir)
 
         # Final preparation for the run
         tasks.init_present_time_glacier(gdir)
 
         # check that calving happens in the real context as well
-        tasks.run_constant_climate(gdir, bias=0, nyears=100,
-                                   temperature_bias=-0.2)
+        tasks.run_constant_climate(gdir, bias=0, nyears=200,
+                                   temperature_bias=-0.5)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
-            assert ds.calving_m3.max() > 10
+            assert ds.calving_m3[-1] > 10

@@ -165,14 +165,15 @@ class TestIdealisedCases(unittest.TestCase):
         assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
 
         # Calving!
-        fls = dummy_constant_bed(hmax=1000., hmin=0., nx=100)
+        fls = dummy_constant_bed(hmax=900., hmin=-100., nx=100)
         mb = LinearMassBalance(450.)
         model = MassConservationChecker(fls, mb_model=mb, y0=0.,
                                         glen_a=self.glen_a,
+                                        do_kcalving=True,
                                         is_tidewater=True)
         model.run_until(500)
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
-        assert_allclose(model.total_mass, tot_vol, rtol=2e-2)
+        assert_allclose(model.total_mass, tot_vol, rtol=0.01)
 
     @pytest.mark.slow
     def test_staggered_diagnostics(self):
@@ -1108,6 +1109,7 @@ class TestFluxGate(unittest.TestCase):
         mb = ScalarMassBalance()
         model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50,
+                               calving_water_level=2000,
                                is_tidewater=True)
         model.run_until(2000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1122,10 +1124,11 @@ class TestFluxGate(unittest.TestCase):
 def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
                      b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
                      water_level=0):
+
     # Bassis & Ultee bed profile
     dx_meter = gridlength / gridsize
     x = np.arange(gridsize+1) * dx_meter
-    bed_h = b_0 - alpha * x + b_1 * np.exp(-((x - x_0) / sigma)** 2)
+    bed_h = b_0 - alpha * x + b_1 * np.exp(-((x - x_0) / sigma)**2)
     bed_h += water_level
     surface_h = bed_h
     widths = surface_h * 0. + widths_m / dx_meter
@@ -1176,8 +1179,8 @@ class TestKCalving():
             df_diag1[['surface_h']].plot(ax=ax, color=['C3'])
             df_diag2[['surface_h', 'bed_h']].plot(ax=ax, color=['C1', 'k'])
             plt.hlines(0, 0, 60000, color='C0', linestyles=':')
-            plt.ylim(-350, 800);
-            plt.ylabel('Altitude [m]');
+            plt.ylim(-350, 800)
+            plt.ylabel('Altitude [m]')
             plt.show()
 
     @pytest.mark.slow
@@ -1201,9 +1204,9 @@ class TestKCalving():
             df_diag = model.get_diagnostics()
             f, ax = plt.subplots(1, 1, figsize=(12, 5))
             df_diag[['surface_h', 'bed_h']].plot(ax=ax, color=['C3', 'k'])
-            plt.hlines(1000, 1000, 60000, color='C0', linestyles=':')
-            plt.ylim(1000-350, 1000+800);
-            plt.ylabel('Altitude [m]');
+            plt.hlines(1000, 0, 60000, color='C0', linestyles=':')
+            plt.ylim(1000-350, 1000+800)
+            plt.ylabel('Altitude [m]')
             plt.show()
 
         # Let the model decide the water level

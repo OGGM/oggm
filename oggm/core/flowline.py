@@ -508,7 +508,7 @@ class FlowlineModel(object):
         self.glen_n = cfg.PARAMS['glen_n']
         self.rho = cfg.PARAMS['ice_density']
 
-        self.check_for_boundaries = check_for_boundaries and not is_tidewater
+        self.check_for_boundaries = check_for_boundaries
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
@@ -1858,6 +1858,7 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
     model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                            inplace=True,
                            is_tidewater=gdir.is_tidewater,
+                           is_lake_terminating=gdir.is_lake_terminating,
                            **kwargs)
 
     with np.warnings.catch_warnings():
