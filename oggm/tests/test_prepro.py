@@ -2348,27 +2348,9 @@ class TestCoxeCalvingInvert(unittest.TestCase):
 
         # Test make a run
         flowline.init_present_time_glacier(gdir)
-        fls = gdir.read_pickle('model_flowlines')
-
-        from oggm.core.massbalance import ConstantMassBalance
-        mb_mod = ConstantMassBalance(gdir, bias=0)
-        model = flowline.FluxBasedModel(fls, mb_model=mb_mod,
-                                        is_tidewater=True,
-                                        do_kcalving=True,
-                                        calving_k=0.5,
-                                        calving_use_limiter=True)
-        _, ds = model.run_until_and_store(1000)
-        assert ds.calving_m3[-1] > 0
-        assert ds.length_m[-1] > ds.length_m[0]
-        assert ds.volume_m3[-1] > ds.volume_m3[0]
-
-        from oggm import graphics
-        import matplotlib.pyplot as plt
-
-        ds.volume_m3.plot()
-        plt.figure()
-        graphics.plot_modeloutput_section(model)
-        plt.show()
+        flowline.run_constant_climate(gdir, bias=0, nyears=100)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            assert ds.calving_m3[-1] > 10
 
 
 class TestColumbiaCalving(unittest.TestCase):

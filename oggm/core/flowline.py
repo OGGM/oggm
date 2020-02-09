@@ -121,7 +121,8 @@ class Flowline(Centerline):
 
     @property
     def volume_m3(self):
-        return np.sum(self.section * self.dx_meter) - self.calving_bucket_m3
+        return (np.sum(self.section * self.dx_meter) -
+                getattr(self, 'calving_bucket_m3', 0))
 
     @property
     def volume_km3(self):
