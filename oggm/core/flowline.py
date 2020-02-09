@@ -84,6 +84,12 @@ class Flowline(Centerline):
         self.bed_h = bed_h
         self.rgi_id = rgi_id
 
+        # volume not yet removed from the flowline
+        self.calving_bucket_m3 = 0
+
+    def has_ice(self):
+        return np.any(self.thick > 0)
+
     @Centerline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
@@ -109,12 +115,13 @@ class Flowline(Centerline):
     @property
     def length_m(self):
         # We define the length a bit differently: but more robust
+        # TODO: take calving bucket into account
         pok = np.where(self.thick > 0.)[0]
         return len(pok) * self.dx_meter
 
     @property
     def volume_m3(self):
-        return np.sum(self.section * self.dx_meter)
+        return np.sum(self.section * self.dx_meter) - self.calving_bucket_m3
 
     @property
     def volume_km3(self):
@@ -122,6 +129,7 @@ class Flowline(Centerline):
 
     @property
     def area_m2(self):
+        # TODO: take calving bucket into account
         return np.sum(self.widths_m * self.dx_meter)
 
     @property
@@ -445,6 +453,7 @@ class FlowlineModel(object):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=None, inplace=False, is_tidewater=False,
+                 is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=True):
         """Create a new flowline model from the flowlines and a MB model.
 
@@ -464,8 +473,10 @@ class FlowlineModel(object):
             whether or not to make a copy of the flowline objects for the run
             setting to True implies that your objects will be modified at run
             time by the model (can help to spare memory)
-        is_tidewater : bool
-            this changes how the last grid points of the domain are handled
+        is_tidewater: bool, default: False
+            is this a tidewater glacier?
+        is_lake_terminating: bool, default: False
+            is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
             mass-balance should be recomputed from the mass balance model.
@@ -477,6 +488,7 @@ class FlowlineModel(object):
         """
 
         self.is_tidewater = is_tidewater
+        self.is_lake_terminating = is_lake_terminating
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback.lower()
@@ -500,6 +512,9 @@ class FlowlineModel(object):
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
+
+        # Calving shenanigans
+        self.calving_m3_since_y0 = 0.  # total calving since time y0
 
         self.y0 = None
         self.t = None
@@ -719,16 +734,17 @@ class FlowlineModel(object):
             while self.t < t:
                 self.step(t-self.t)
 
-        # Check for domain bounds
-        if self.check_for_boundaries:
-            if self.fls[-1].thick[-1] > 10:
-                raise RuntimeError('Glacier exceeds domain boundaries, '
-                                   'at year: {}'.format(self.yr))
+            # Check for domain bounds
+            if self.check_for_boundaries:
+                if self.fls[-1].thick[-1] > 10:
+                    raise RuntimeError('Glacier exceeds domain boundaries, '
+                                       'at year: {}'.format(self.yr))
 
-        # Check for NaNs
-        for fl in self.fls:
-            if np.any(~np.isfinite(fl.thick)):
-                raise FloatingPointError('NaN in numerical solution.')
+            # Check for NaNs
+            for fl in self.fls:
+                if np.any(~np.isfinite(fl.thick)):
+                    raise FloatingPointError('NaN in numerical solution, '
+                                             'at year: {}'.format(self.yr))
 
     def run_until_and_store(self, y1, run_path=None, diag_path=None,
                             store_monthly_step=None):
@@ -936,7 +952,9 @@ class FluxBasedModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=None,
                  min_dt=None, flux_gate_thickness=None,
-                 flux_gate=None, flux_gate_build_up=500,
+                 flux_gate=None, flux_gate_build_up=100,
+                 do_kcalving=None, calving_k=None, calving_use_limiter=None,
+                 calving_limiter_frac=None, calving_water_level=None,
                  **kwargs):
         """Instanciate the model.
 
@@ -971,7 +989,9 @@ class FluxBasedModel(FlowlineModel):
             model might run very slowly. In production, it might be useful to
             set a limit below which the model will just error.
         is_tidewater: bool, default: False
-            use the very basic parameterization for tidewater glaciers
+            is this a tidewater glacier?
+        is_lake_terminating: bool, default: False
+            is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
             mass-balance should be recomputed from the mass balance model.
@@ -992,6 +1012,22 @@ class FluxBasedModel(FlowlineModel):
             too much. This is overriden by `flux_gate_thickness` if provided.
         flux_gate_buildup : int
             number of years used to build up the flux gate to full value
+        do_kcalving : bool
+            switch on the k-calving parameterisation. Ignored if not a
+            tidewater glacier. Use the option from PARAMS per default
+        calving_k : float
+            the calving proportionality constant (units: yr-1). Use the
+            one from PARAMS per default
+        calving_use_limiter : bool
+            whether to switch on the calving limiter on the parameterisation
+            makes the calving fronts thicker but the model is more stable
+        calving_limiter_frac : float
+            limit the front slope to a fraction of the calving front.
+            "3" means 1/3. Setting it to 0 limits the slope to sea-level.
+        calving_water_level : float
+            for lake terminating glaciers, knowing the water level is hard.
+            The default is to pick the elevation of the last glaciated grid
+            point minus 1 meter. You can use this to fix it to a given value.
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -1004,7 +1040,6 @@ class FluxBasedModel(FlowlineModel):
             cfl_number = cfg.PARAMS['cfl_number']
         self.min_dt = min_dt
         self.cfl_number = cfl_number
-        self.calving_m3_since_y0 = 0.  # total calving since time y0
 
         # Do we want to use shape factors?
         self.sf_func = None
@@ -1013,6 +1048,35 @@ class FluxBasedModel(FlowlineModel):
             self.sf_func = utils.shape_factor_adhikari
         elif use_sf == 'Huss':
             self.sf_func = utils.shape_factor_huss
+
+        # Calving params
+        if do_kcalving is None:
+            do_kcalving = cfg.PARAMS['use_kcalving_param']
+        self.do_calving = do_kcalving and self.is_tidewater
+        if calving_k is None:
+            calving_k = cfg.PARAMS['calving_k']
+        self.calving_k = calving_k / cfg.SEC_IN_YEAR
+        if calving_use_limiter is None:
+            calving_use_limiter = cfg.PARAMS['calving_use_limiter']
+        self.calving_use_limiter = calving_use_limiter
+        if calving_limiter_frac is None:
+            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
+        if calving_limiter_frac > 0:
+            raise NotImplementedError('calving limiter other than 0 not '
+                                      'implemented yet')
+        self.calving_limiter_frac = calving_limiter_frac
+        if calving_water_level is None:
+            self.water_level = 0
+            if self.is_lake_terminating:
+                if not self.fls[-1].has_ice():
+                    raise InvalidParamsError('Cannot decide on water level '
+                                             'for lake terminating glacier '
+                                             'without ice.')
+                # Arbitrary water level 1m below last grid points elevation
+                min_h = self.fls[-1].surface_h[self.fls[-1].thick > 0][-1]
+                self.water_level = min_h - 1
+        else:
+            self.water_level = calving_water_level
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
@@ -1051,8 +1115,8 @@ class FluxBasedModel(FlowlineModel):
             nx = fl.nx
             # This is not staggered
             self.trib_flux.append(np.zeros(nx))
-            # We add an additional fake grid point at the end of these
-            if (trib[0] is not None) or self.is_tidewater:
+            # We add an additional fake grid point at the end of tributaries
+            if trib[0] is not None:
                 nx = fl.nx + 1
             # +1 is for the staggered grid
             self.slope_stag.append(np.zeros(nx+1))
@@ -1100,13 +1164,16 @@ class FluxBasedModel(FlowlineModel):
                 surface_h = np.append(surface_h, fl_to.surface_h[ide])
                 thick = np.append(thick, thick[-1])
                 section = np.append(section, section[-1])
-            elif self.is_tidewater:
-                # For tidewater glacier, we trick and set the outgoing thick
-                # to zero (for numerical stability and this should quite OK
-                # represent what happens at the calving tongue)
-                surface_h = np.append(surface_h, surface_h[-1] - thick[-1])
-                thick = np.append(thick, 0)
-                section = np.append(section, 0)
+            elif self.do_calving and self.calving_use_limiter:
+                # We lower the max possible ice deformation
+                # by clipping the surface slope here. It is completely
+                # arbitrary but reduces ice deformation at the calving front.
+                # I think that in essence, it is also partly
+                # a "calving process", because this ice deformation must
+                # be less at the calving front. The result is that calving
+                # front "free boards" are quite high.
+                # Note that 0 is arbitrary, it could be any value below SL
+                surface_h = utils.clip_min(surface_h, self.water_level)
 
             # Staggered gradient
             slope_stag[0] = 0
@@ -1120,9 +1187,8 @@ class FluxBasedModel(FlowlineModel):
             if self.sf_func is not None:
                 # TODO: maybe compute new shape factors only every year?
                 sf = self.sf_func(fl.widths_m, fl.thick, fl.is_rectangular)
-                if is_trib or self.is_tidewater:
-                    # for water termination or inflowing tributary, the sf
-                    # makes no sense
+                if is_trib:
+                    # for inflowing tributary, the sf makes no sense
                     sf = np.append(sf, 1.)
                 sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
                 sf_stag[[0, -1]] = sf[[0, -1]]
@@ -1190,7 +1256,7 @@ class FluxBasedModel(FlowlineModel):
 
             is_trib = tr[0] is not None
             # For these we had an additional grid point
-            if is_trib or self.is_tidewater:
+            if is_trib:
                 flx_stag = flx_stag[:-1]
 
             # Mass-balance
@@ -1212,12 +1278,61 @@ class FluxBasedModel(FlowlineModel):
                 # tr tuple: line_index, start, stop, gaussian_kernel
                 self.trib_flux[tr[0]][tr[1]:tr[2]] += \
                     utils.clip_min(flx_stag[-1], 0) * tr[3]
-            elif self.is_tidewater:
-                # Last flux is calving
-                self.calving_m3_since_y0 += utils.clip_min(flx_stag[-1], 0)*dt
 
             # If we use a flux-gate, store the total volume that came in
             self.flux_gate_m3_since_y0 += flx_stag[0] * dt
+
+            # --- The rest is for calving only ---
+
+            # No need to do calving in these cases
+            if is_trib or not self.do_calving or not fl.has_ice():
+                continue
+
+            # We do calving only if the last glacier bed pixel is below water
+            # (this is to avoid calving elsewhere than at the front)
+            if fl.bed_h[fl.thick > 0][-1] > self.water_level:
+                continue
+
+            # We do calving only if there is some ice above wl
+            last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
+                                       (fl.thick > 0))[0][-1]
+            if fl.bed_h[last_above_wl] > self.water_level:
+                continue
+
+            # OK, we're really calving
+            section = fl.section
+
+            # Calving law
+            h = fl.thick[last_above_wl]
+            d = h - (fl.surface_h[last_above_wl] - self.water_level)
+            k = self.calving_k
+            q_calving = k * d * h * fl.widths_m[last_above_wl]
+            # Add to the bucket and the counter
+            fl.calving_bucket_m3 += q_calving * dt
+            self.calving_m3_since_y0 += q_calving * dt
+
+            # See if we have ice below sea-water to clean out first
+            below_sl = (fl.surface_h < self.water_level) & (fl.thick > 0)
+            to_remove = np.sum(section[below_sl]) * fl.dx_meter
+            if 0 < to_remove < fl.calving_bucket_m3:
+                # This is easy, we remove everything
+                section[below_sl] = 0
+                fl.calving_bucket_m3 -= to_remove
+            elif to_remove > 0:
+                # We can only remove part of if
+                section[below_sl] = 0
+                section[last_above_wl+1] = ((to_remove - fl.calving_bucket_m3)
+                                            / fl.dx_meter)
+                fl.calving_bucket_m3 = 0
+
+            # The rest of the bucket might calve an entire grid point
+            vol_last = section[last_above_wl] * fl.dx_meter
+            if fl.calving_bucket_m3 > vol_last:
+                fl.calving_bucket_m3 -= vol_last
+                section[last_above_wl] = 0
+
+            # We update the glacier with our changes
+            fl.section = section
 
         # Next step
         self.t += dt
@@ -1555,6 +1670,17 @@ def glacier_from_netcdf(path):
     return fls
 
 
+def calving_glacier_downstream_line(line, n_points):
+    """Extends a calving glacier flowline past the terminus."""
+
+    x, y = line.coords.xy
+    dx = x[-1] - x[-2]
+    dy = y[-1] - y[-2]
+    x = np.append(x, x[-1] + dx * np.arange(1, n_points+1))
+    y = np.append(y, y[-1] + dy * np.arange(1, n_points+1))
+    return shpg.LineString(np.array([x, y]).T)
+
+
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir):
     """Merges data from preprocessing tasks. First task after inversion!
@@ -1632,6 +1758,23 @@ def init_present_time_glacier(gdir):
             bed_h = np.append(bed_h, dic_ds['surface_h'])
             widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             line = dic_ds['full_line']
+
+        if gdir.is_tidewater and inv['is_last']:
+            # Continue the bed a little
+            n_points = cfg.PARAMS['calving_line_extension']
+            cf_slope = cfg.PARAMS['calving_front_slope']
+            deepening = n_points * cl.dx * map_dx * cf_slope
+
+            line = calving_glacier_downstream_line(line, n_points=n_points)
+            bed_shape = np.append(bed_shape, np.zeros(n_points))
+            lambdas = np.append(lambdas, np.zeros(n_points))
+            section = np.append(section, np.zeros(n_points))
+            # The bed slowly deepens
+            bed_down = np.linspace(bed_h[-1], bed_h[-1]-deepening, n_points)
+            bed_h = np.append(bed_h, bed_down)
+            surface_h = np.append(surface_h, bed_down)
+            widths_m = np.append(widths_m,
+                                 np.zeros(n_points) + np.mean(widths_m[-5:]))
 
         nfl = MixedBedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
                                surface_h=surface_h, bed_h=bed_h,

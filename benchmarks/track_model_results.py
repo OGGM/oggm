@@ -292,7 +292,7 @@ class columbia_calving:
         df1 = tasks.find_inversion_calving(gdir)
 
         # Test with smaller k (it doesn't overshoot)
-        cfg.PARAMS['k_calving'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df2 = tasks.find_inversion_calving(gdir)
 
         return (df1['calving_flux'], df1['calving_mu_star'],

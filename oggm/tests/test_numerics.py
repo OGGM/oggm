@@ -30,6 +30,7 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
 import matplotlib.pyplot as plt
 
 from oggm.core.flowline import (KarthausModel, FluxBasedModel,
+                                RectangularBedFlowline,
                                 MassConservationChecker)
 from oggm.tests.ext.sia_fluxlim import MUSCLSuperBeeModel
 
@@ -1116,6 +1117,112 @@ class TestFluxGate(unittest.TestCase):
             plt.plot(model.fls[-1].bed_h, 'k')
             plt.plot(model.fls[-1].surface_h, 'b')
             plt.show()
+
+
+def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
+                     b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
+                     water_level=0):
+    # Bassis & Ultee bed profile
+    dx_meter = gridlength / gridsize
+    x = np.arange(gridsize+1) * dx_meter
+    bed_h = b_0 - alpha * x + b_1 * np.exp(-((x - x_0) / sigma)** 2)
+    bed_h += water_level
+    surface_h = bed_h
+    widths = surface_h * 0. + widths_m / dx_meter
+    return [RectangularBedFlowline(dx=1, map_dx=dx_meter, surface_h=surface_h,
+                                   bed_h=bed_h, widths=widths)]
+
+
+@pytest.fixture(scope='class')
+def default_calving():
+    cfg.initialize()
+    model = FluxBasedModel(bu_tidewater_bed(),
+                           mb_model=ScalarMassBalance(),
+                           is_tidewater=True, calving_use_limiter=True,
+                           flux_gate=0.06, do_kcalving=True,
+                           calving_k=0.2)
+    _, ds = model.run_until_and_store(3000)
+    df_diag = model.get_diagnostics()
+    assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                    model.flux_gate_m3_since_y0)
+    assert_allclose(ds.calving_m3[-1], model.calving_m3_since_y0)
+    return model, ds, df_diag
+
+
+@pytest.mark.usefixtures('default_calving')
+class TestKCalving():
+
+    def test_limiter(self, default_calving):
+
+        _, ds1, df_diag1 = default_calving
+
+        model = FluxBasedModel(bu_tidewater_bed(),
+                               mb_model=ScalarMassBalance(),
+                               is_tidewater=True, calving_use_limiter=False,
+                               flux_gate=0.06, do_kcalving=True,
+                               calving_k=0.2)
+        _, ds2 = model.run_until_and_store(3000)
+        df_diag2 = model.get_diagnostics()
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+        assert_allclose(ds2.calving_m3[-1], model.calving_m3_since_y0)
+
+        # Not exact same of course
+        assert_allclose(ds1.volume_m3[-1], ds2.volume_m3[-1], rtol=0.06)
+        assert_allclose(ds1.calving_m3[-1], ds2.calving_m3[-1], rtol=0.15)
+
+        if True:
+            f, ax = plt.subplots(1, 1, figsize=(12, 5))
+            df_diag1[['surface_h']].plot(ax=ax, color=['C3'])
+            df_diag2[['surface_h', 'bed_h']].plot(ax=ax, color=['C1', 'k'])
+            plt.hlines(0, 0, 60000, color='C0', linestyles=':')
+            plt.ylim(-350, 800);
+            plt.ylabel('Altitude [m]');
+            plt.show()
+
+    @pytest.mark.slow
+    def test_water_level(self, default_calving):
+
+        _, ds_1, _ = default_calving
+
+        model = FluxBasedModel(bu_tidewater_bed(water_level=1000),
+                               mb_model=ScalarMassBalance(),
+                               is_tidewater=True, calving_use_limiter=True,
+                               flux_gate=0.06, do_kcalving=True,
+                               calving_water_level=1000,
+                               calving_k=0.2)
+        _, ds_2 = model.run_until_and_store(3000)
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+
+        assert_allclose(ds_1.calving_m3, ds_2.calving_m3)
+
+        if do_plot:
+            df_diag = model.get_diagnostics()
+            f, ax = plt.subplots(1, 1, figsize=(12, 5))
+            df_diag[['surface_h', 'bed_h']].plot(ax=ax, color=['C3', 'k'])
+            plt.hlines(1000, 1000, 60000, color='C0', linestyles=':')
+            plt.ylim(1000-350, 1000+800);
+            plt.ylabel('Altitude [m]');
+            plt.show()
+
+        # Let the model decide the water level
+        fls = bu_tidewater_bed(water_level=1000)
+        thick = fls[0].thick
+        thick[fls[0].bed_h > 1000] = 1
+        fls[0].thick = thick
+        model = FluxBasedModel(fls, mb_model=ScalarMassBalance(),
+                               is_tidewater=True, calving_use_limiter=True,
+                               is_lake_terminating=True,
+                               flux_gate=0.06, do_kcalving=True,
+                               calving_k=0.2)
+        assert_allclose(model.water_level, 1000, atol=1)
+
+        with pytest.raises(InvalidParamsError):
+            fls = bu_tidewater_bed(water_level=1000)
+            FluxBasedModel(fls, mb_model=ScalarMassBalance(),
+                           is_tidewater=True, calving_use_limiter=True,
+                           is_lake_terminating=True)
 
 
 class TestSia2d(unittest.TestCase):
