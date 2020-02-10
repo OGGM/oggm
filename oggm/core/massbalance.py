@@ -133,7 +133,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     pass
                 widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
-                                                        year=year, fl_id=i))
+                                                        year=year, fls=fls,
+                                                        fl_id=i))
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
