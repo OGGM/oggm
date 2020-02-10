@@ -133,7 +133,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     pass
                 widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
-                                                        year=year, fl_id=i))
+                                                        fls=fls, fl_id=i,
+                                                        year=year))
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
@@ -153,7 +154,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
 
         if len(np.atleast_1d(year)) > 1:
-            return np.asarray([self.get_ela(year=yr) for yr in year])
+            return np.asarray([self.get_ela(year=yr, **kwargs) for yr in year])
 
         if self.valid_bounds is None:
             raise ValueError('attribute `valid_bounds` needs to be '
@@ -1103,7 +1104,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         return np.average(mbs, weights=widths)
 
-    def get_ela(self, year=None):
+    def get_ela(self, year=None, **kwargs):
 
         # ELA here is not without ambiguity.
         # We compute a mean weighted by area.
@@ -1113,8 +1114,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         elas = []
         areas = []
-        for fl, mb_mod in zip(self.fls, self.flowline_mb_models):
-            elas = np.append(elas, mb_mod.get_ela(year=year))
+        for fl_id, (fl, mb_mod) in enumerate(zip(self.fls,
+                                                 self.flowline_mb_models)):
+            elas = np.append(elas, mb_mod.get_ela(year=year, fl_id=fl_id,
+                                                  fls=self.fls))
             areas = np.append(areas, np.sum(fl.widths))
 
         return np.average(elas, weights=areas)

@@ -857,7 +857,14 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
-            diag_ds['ela_m'].data[i] = self.mb_model.get_ela(year=yr)
+            try:
+                ela_m = self.mb_model.get_ela(year=yr, fls=self.fls,
+                                              fl_id=len(self.fls)-1)
+                diag_ds['ela_m'].data[i] = ela_m
+            except BaseException:
+                # We really don't want to stop the model for some ELA issues
+                diag_ds['ela_m'].data[i] = np.NaN
+
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 
