@@ -139,14 +139,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         return np.average(mbs, weights=widths) * SEC_IN_YEAR * self.rho
 
-    def get_ela(self, year=None):
+    def get_ela(self, year=None, **kwargs):
         """Compute the equilibrium line altitude for this year
 
         Parameters
         ----------
         year: float, optional
             the time (in the "hydrological floating year" convention)
-
+        **kwargs: any other keyword argument accepted by self.get_annual_mb
         Returns
         -------
         the equilibrium line altitude (ELA, units: m)
@@ -161,14 +161,15 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         # Check for invalid ELAs
         b0, b1 = self.valid_bounds
-        if (np.any(~np.isfinite(self.get_annual_mb([b0, b1], year=year))) or
-                (self.get_annual_mb([b0], year=year)[0] > 0) or
-                (self.get_annual_mb([b1], year=year)[0] < 0)):
+        if (np.any(~np.isfinite(
+                self.get_annual_mb([b0, b1], year=year, **kwargs))) or
+                (self.get_annual_mb([b0], year=year, **kwargs)[0] > 0) or
+                (self.get_annual_mb([b1], year=year, **kwargs)[0] < 0)):
             return np.NaN
 
         def to_minimize(x):
-            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * self.rho
-            return o
+            return (self.get_annual_mb([x], year=year, **kwargs)[0] *
+                    SEC_IN_YEAR * self.rho)
         return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
 
