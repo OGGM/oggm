@@ -2088,6 +2088,38 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
 
+    def test_invert_hef_from_any_mb(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # Reference
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        cls1 = gdir.read_pickle('inversion_input')
+        v1, _ = inversion.mass_conservation_inversion(gdir)
+        # New should be equivalent
+        mb_model = massbalance.LinearMassBalance(ela_h=1800, grad=3)
+        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+                                        mb_years=np.arange(30))
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        v2, _ = inversion.mass_conservation_inversion(gdir)
+        cls2 = gdir.read_pickle('inversion_input')
+
+        # Now the tests
+        for cl1, cl2 in zip(cls1, cls2):
+            np.testing.assert_allclose(cl1['flux_a0'], cl2['flux_a0'])
+        np.testing.assert_allclose(v1, v2)
+
     def test_distribute(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
