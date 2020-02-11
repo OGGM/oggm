@@ -107,6 +107,12 @@ class Flowline(Centerline):
         self.thick = value - self.bed_h
 
     @property
+    def bin_area_m2(self):
+        # area of the grid point
+        # this takes the ice thickness into account
+        return np.where(self.thick > 0, self.widths_m, 0) * self.dx_meter
+
+    @property
     def length_m(self):
         # We define the length a bit differently: but more robust
         pok = np.where(self.thick > 0.)[0]
@@ -122,7 +128,7 @@ class Flowline(Centerline):
 
     @property
     def area_m2(self):
-        return np.sum(self.widths_m * self.dx_meter)
+        return np.sum(self.bin_area_m2)
 
     @property
     def area_km2(self):
@@ -234,11 +240,6 @@ class RectangularBedFlowline(Flowline):
     def section(self, val):
         self.thick = val / self.widths_m
 
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
-
     @utils.lazy_property
     def shape_str(self):
         """The bed shape in text (for debug and other things)"""
@@ -296,11 +297,6 @@ class TrapezoidalBedFlowline(Flowline):
             thick = (np.sqrt(b**2 + 4 * a * val) - b) / a
         thick[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = thick
-
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
 
     @utils.lazy_property
     def shape_str(self):
@@ -416,11 +412,6 @@ class MixedBedFlowline(Flowline):
                                      - b) / a)
             out[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = out
-
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
 
     @utils.lazy_property
     def shape_str(self):
