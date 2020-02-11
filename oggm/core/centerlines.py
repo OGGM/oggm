@@ -72,7 +72,7 @@ class Centerline(object, metaclass=SuperclassMeta):
     """
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None,
-                 rgi_id=None):
+                 rgi_id=None, map_dx=None):
         """ Initialize a Centerline
 
         Parameters
@@ -107,6 +107,12 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         # Optional attrs
         self.dx = dx  # dx in pixels (assumes the line is on constant dx
+        self.map_dx = map_dx  # the pixel spacing
+        try:
+            self.dx_meter = self.dx * self.map_dx
+        except TypeError:
+            # For backwards compatibility we allow this for now
+            self.dx_meter = None
         self._surface_h = surface_h
         self._widths = None
         self.is_rectangular = None
@@ -232,6 +238,10 @@ class Centerline(object, metaclass=SuperclassMeta):
     def widths(self):
         """Needed for overriding later"""
         return self._widths
+
+    @property
+    def widths_m(self):
+        return self.widths * self.map_dx
 
     @widths.setter
     def widths(self, value):
@@ -1156,7 +1166,7 @@ def compute_downstream_bedshape(gdir):
     # We make a flowline out of the downstream for simplicity
     tpl = gdir.read_pickle('inversion_flowlines')[-1]
     cl = gdir.read_pickle('downstream_line')['downstream_line']
-    cl = Centerline(cl, dx=tpl.dx)
+    cl = Centerline(cl, dx=tpl.dx, map_dx=gdir.grid.dx)
 
     # Topography
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -1648,7 +1658,8 @@ def initialize_flowlines(gdir):
             new_line = shpg.LineString(points[sp:])
 
         sl = Centerline(new_line, dx=dx, surface_h=hgts,
-                        orig_head=cl.orig_head, rgi_id=gdir.rgi_id)
+                        orig_head=cl.orig_head, rgi_id=gdir.rgi_id,
+                        map_dx=gdir.grid.dx)
         sl.order = cl.order
         fls.append(sl)
 
