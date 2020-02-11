@@ -91,7 +91,9 @@ class TestInitPresentDayFlowline:
                    len(fl.bed_h) ==
                    len(fl.bed_shape) ==
                    len(fl.dis_on_line) ==
-                   len(fl.widths))
+                   len(fl.widths) ==
+                   len(fl.bin_area_m2)
+                   )
 
             assert np.all(fl.widths >= 0)
             vol += fl.volume_km3
