@@ -818,6 +818,7 @@ class TestGeometry(unittest.TestCase):
 
         area = 0.
         otherarea = 0.
+        evenotherarea = 0
         hgt = []
         harea = []
 
@@ -826,6 +827,7 @@ class TestGeometry(unittest.TestCase):
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
+            evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             otherarea += np.sum(nc.variables['glacier_mask'][:])
 
@@ -836,6 +838,7 @@ class TestGeometry(unittest.TestCase):
 
         tdf = gdir.read_shapefile('outlines')
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
+        np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
         np.testing.assert_allclose(area * 10**-6, np.float(tdf['Area']),
