@@ -1433,10 +1433,11 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 
     # Flowlines in order to be sure
     rho = cfg.PARAMS['ice_density']
-    for fl in fls:
+    for fl_id, fl in enumerate(fls):
         mbz = 0
         for yr in mb_years:
-            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr)
+            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
+                                          fls=fls, fl_id=fl_id)
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
 
