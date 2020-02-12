@@ -133,27 +133,28 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     pass
                 widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
-                                                        year=year, fl_id=i))
+                                                        fls=fls, fl_id=i,
+                                                        year=year))
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
         return np.average(mbs, weights=widths) * SEC_IN_YEAR * self.rho
 
-    def get_ela(self, year=None):
+    def get_ela(self, year=None, **kwargs):
         """Compute the equilibrium line altitude for this year
 
         Parameters
         ----------
         year: float, optional
             the time (in the "hydrological floating year" convention)
-
+        **kwargs: any other keyword argument accepted by self.get_annual_mb
         Returns
         -------
         the equilibrium line altitude (ELA, units: m)
         """
 
         if len(np.atleast_1d(year)) > 1:
-            return np.asarray([self.get_ela(year=yr) for yr in year])
+            return np.asarray([self.get_ela(year=yr, **kwargs) for yr in year])
 
         if self.valid_bounds is None:
             raise ValueError('attribute `valid_bounds` needs to be '
@@ -161,14 +162,15 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         # Check for invalid ELAs
         b0, b1 = self.valid_bounds
-        if (np.any(~np.isfinite(self.get_annual_mb([b0, b1], year=year))) or
-                (self.get_annual_mb([b0], year=year)[0] > 0) or
-                (self.get_annual_mb([b1], year=year)[0] < 0)):
+        if (np.any(~np.isfinite(
+                self.get_annual_mb([b0, b1], year=year, **kwargs))) or
+                (self.get_annual_mb([b0], year=year, **kwargs)[0] > 0) or
+                (self.get_annual_mb([b1], year=year, **kwargs)[0] < 0)):
             return np.NaN
 
         def to_minimize(x):
-            o = self.get_annual_mb([x], year=year)[0] * SEC_IN_YEAR * self.rho
-            return o
+            return (self.get_annual_mb([x], year=year, **kwargs)[0] *
+                    SEC_IN_YEAR * self.rho)
         return optimization.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
 
 
@@ -1102,7 +1104,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         return np.average(mbs, weights=widths)
 
-    def get_ela(self, year=None):
+    def get_ela(self, year=None, **kwargs):
 
         # ELA here is not without ambiguity.
         # We compute a mean weighted by area.
@@ -1112,8 +1114,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         elas = []
         areas = []
-        for fl, mb_mod in zip(self.fls, self.flowline_mb_models):
-            elas = np.append(elas, mb_mod.get_ela(year=year))
+        for fl_id, (fl, mb_mod) in enumerate(zip(self.fls,
+                                                 self.flowline_mb_models)):
+            elas = np.append(elas, mb_mod.get_ela(year=year, fl_id=fl_id,
+                                                  fls=self.fls))
             areas = np.append(areas, np.sum(fl.widths))
 
         return np.average(elas, weights=areas)

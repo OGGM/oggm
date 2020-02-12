@@ -1395,6 +1395,66 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
                       'linear_mb_params')
 
 
+@entity_task(log, writes=['inversion_flowlines'])
+def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
+    """Compute apparent mb from an arbitrary mass-balance profile.
+
+    This searches for a mass-balance residual to add to the mass-balance
+    profile so that the average specific MB is zero.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
+        the mass-balance model to use (superseedes mb_list)
+    mb_years : array
+        the array of years from which you want to average the MB for (for
+        mb_model only).
+    """
+
+    # Do we have a calving glacier?
+    cmb = calving_mb(gdir)
+
+    # For each flowline compute the apparent MB
+    fls = gdir.read_pickle('inversion_flowlines')
+
+    def to_minimize(residual):
+        smb = mb_model.get_specific_mb(fls=fls, year=mb_years)
+        smb = np.mean(smb) + residual[0]
+        return (smb - cmb)**2
+
+    residual = optimization.minimize(to_minimize, [0.], bounds=((-1e5, 1e5), ))
+    residual = residual['x'][0]
+
+    # Reset flux
+    for fl in fls:
+        fl.flux = np.zeros(len(fl.surface_h))
+
+    # Flowlines in order to be sure
+    rho = cfg.PARAMS['ice_density']
+    for fl_id, fl in enumerate(fls):
+        mbz = 0
+        for yr in mb_years:
+            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
+                                          fls=fls, fl_id=fl_id)
+        mbz = mbz / len(mb_years)
+        fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
+
+    # Check and write
+    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
+    # If not marine and a bit far from zero, warning
+    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
+        log.warning('(%s) flux should be zero, but is: '
+                    '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
+    # If not marine and quite far from zero, error
+    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
+        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
+               .format(gdir.rgi_id, aflux))
+        raise MassBalanceCalibrationError(msg)
+    gdir.write_pickle(fls, 'inversion_flowlines')
+
+
 @global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers and writes them to disk

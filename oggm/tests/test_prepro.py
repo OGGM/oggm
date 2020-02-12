@@ -818,6 +818,7 @@ class TestGeometry(unittest.TestCase):
 
         area = 0.
         otherarea = 0.
+        evenotherarea = 0
         hgt = []
         harea = []
 
@@ -826,6 +827,7 @@ class TestGeometry(unittest.TestCase):
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
+            evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             otherarea += np.sum(nc.variables['glacier_mask'][:])
 
@@ -836,6 +838,7 @@ class TestGeometry(unittest.TestCase):
 
         tdf = gdir.read_shapefile('outlines')
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
+        np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
         np.testing.assert_allclose(area * 10**-6, np.float(tdf['Area']),
@@ -2087,6 +2090,38 @@ class TestInversion(unittest.TestCase):
             v += np.nansum(cl['volume'])
         np.testing.assert_allclose(242, maxs, atol=10)
         np.testing.assert_allclose(ref_v, v)
+
+    def test_invert_hef_from_any_mb(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir, entity=entity)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+
+        # Reference
+        climate.apparent_mb_from_linear_mb(gdir)
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        cls1 = gdir.read_pickle('inversion_input')
+        v1, _ = inversion.mass_conservation_inversion(gdir)
+        # New should be equivalent
+        mb_model = massbalance.LinearMassBalance(ela_h=1800, grad=3)
+        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+                                        mb_years=np.arange(30))
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        v2, _ = inversion.mass_conservation_inversion(gdir)
+        cls2 = gdir.read_pickle('inversion_input')
+
+        # Now the tests
+        for cl1, cl2 in zip(cls1, cls2):
+            np.testing.assert_allclose(cl1['flux_a0'], cl2['flux_a0'])
+        np.testing.assert_allclose(v1, v2)
 
     def test_distribute(self):
 

@@ -623,6 +623,12 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         assert gdir.read_json('climate_info')
         assert gdir.read_pickle('climate_info')
+        fls = gdir.read_pickle('inversion_flowlines')
+        with pytest.raises(AttributeError):
+            # This is going to raise as long as we keep the "old" prepro gdirs
+            # remove this test after update.
+            # At least we can read the old pickles
+            fls[0].widths_m
 
         df = utils.compile_glacier_statistics(gdirs)
         assert 'dem_med_elev' in df

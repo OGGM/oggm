@@ -113,6 +113,12 @@ class Flowline(Centerline):
         self.thick = value - self.bed_h
 
     @property
+    def bin_area_m2(self):
+        # area of the grid point
+        # this takes the ice thickness into account
+        return np.where(self.thick > 0, self.widths_m, 0) * self.dx_meter
+
+    @property
     def length_m(self):
         # We define the length a bit differently: but more robust
         # TODO: take calving bucket into account
@@ -131,7 +137,7 @@ class Flowline(Centerline):
     @property
     def area_m2(self):
         # TODO: take calving bucket into account
-        return np.sum(self.widths_m * self.dx_meter)
+        return np.sum(self.bin_area_m2)
 
     @property
     def area_km2(self):
@@ -243,11 +249,6 @@ class RectangularBedFlowline(Flowline):
     def section(self, val):
         self.thick = val / self.widths_m
 
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
-
     @utils.lazy_property
     def shape_str(self):
         """The bed shape in text (for debug and other things)"""
@@ -305,11 +306,6 @@ class TrapezoidalBedFlowline(Flowline):
             thick = (np.sqrt(b**2 + 4 * a * val) - b) / a
         thick[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = thick
-
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
 
     @utils.lazy_property
     def shape_str(self):
@@ -425,11 +421,6 @@ class MixedBedFlowline(Flowline):
                                      - b) / a)
             out[self._prec] = val[self._prec] / self._w0_m[self._prec]
         self.thick = out
-
-    @property
-    def area_m2(self):
-        widths = np.where(self.thick > 0., self.widths_m, 0.)
-        return np.sum(widths * self.dx_meter)
 
     @utils.lazy_property
     def shape_str(self):
@@ -874,7 +865,14 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
-            diag_ds['ela_m'].data[i] = self.mb_model.get_ela(year=yr)
+            try:
+                ela_m = self.mb_model.get_ela(year=yr, fls=self.fls,
+                                              fl_id=len(self.fls)-1)
+                diag_ds['ela_m'].data[i] = ela_m
+            except BaseException:
+                # We really don't want to stop the model for some ELA issues
+                diag_ds['ela_m'].data[i] = np.NaN
+
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
 
