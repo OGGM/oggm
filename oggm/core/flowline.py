@@ -1671,7 +1671,7 @@ class FileModel(object):
         for fl, ds in zip(self.fls, self.dss):
             sel += ds.ts_section.sum(dim='x') * fl.dx_meter
             try:
-                sel += ds.ts_calving_bucket_m3
+                sel -= ds.ts_calving_bucket_m3
             except AttributeError:
                 pass
         return sel.to_series()
