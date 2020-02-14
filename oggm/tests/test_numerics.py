@@ -23,7 +23,7 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_mixed_bed, dummy_constant_bed_obstacle,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
-                              dummy_width_bed_tributary,
+                              dummy_width_bed_tributary, bu_tidewater_bed,
                               patch_url_retrieve_github)
 
 # after oggm.test
@@ -1121,21 +1121,6 @@ class TestFluxGate(unittest.TestCase):
             plt.show()
 
 
-def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
-                     b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
-                     water_level=0):
-
-    # Bassis & Ultee bed profile
-    dx_meter = gridlength / gridsize
-    x = np.arange(gridsize+1) * dx_meter
-    bed_h = b_0 - alpha * x + b_1 * np.exp(-((x - x_0) / sigma)**2)
-    bed_h += water_level
-    surface_h = bed_h
-    widths = surface_h * 0. + widths_m / dx_meter
-    return [RectangularBedFlowline(dx=1, map_dx=dx_meter, surface_h=surface_h,
-                                   bed_h=bed_h, widths=widths)]
-
-
 @pytest.fixture(scope='class')
 def default_calving():
     cfg.initialize()
@@ -1174,7 +1159,7 @@ class TestKCalving():
         assert_allclose(ds1.volume_m3[-1], ds2.volume_m3[-1], rtol=0.06)
         assert_allclose(ds1.calving_m3[-1], ds2.calving_m3[-1], rtol=0.15)
 
-        if True:
+        if do_plot:
             f, ax = plt.subplots(1, 1, figsize=(12, 5))
             df_diag1[['surface_h']].plot(ax=ax, color=['C3'])
             df_diag2[['surface_h', 'bed_h']].plot(ax=ax, color=['C1', 'k'])

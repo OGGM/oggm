@@ -6,6 +6,7 @@
 import logging
 import copy
 from collections import OrderedDict
+from functools import partial
 from time import gmtime, strftime
 import os
 import shutil
@@ -507,6 +508,7 @@ class FlowlineModel(object):
 
         # Calving shenanigans
         self.calving_m3_since_y0 = 0.  # total calving since time y0
+        self.calving_rate_myr = 0.
 
         self.y0 = None
         self.t = None
@@ -808,6 +810,7 @@ class FlowlineModel(object):
         nm = len(monthly_time)
         sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
         widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+        bucket = [(np.zeros(ny) * np.NaN) for _ in self.fls]
         diag_ds = xr.Dataset()
 
         # Global attributes
@@ -850,6 +853,9 @@ class FlowlineModel(object):
             diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
                                                           'calving flux')
             diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
+            diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
         # Run
         j = 0
@@ -857,9 +863,10 @@ class FlowlineModel(object):
             self.run_until(yr)
             # Model run
             if mo == 1:
-                for s, w, fl in zip(sects, widths, self.fls):
+                for s, w, b, fl in zip(sects, widths, bucket, self.fls):
                     s[j, :] = fl.section
                     w[j, :] = fl.widths_m
+                    b[j] = fl.calving_bucket_m3
                 j += 1
             # Diagnostics
             diag_ds['volume_m3'].data[i] = self.volume_m3
@@ -875,10 +882,11 @@ class FlowlineModel(object):
 
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+                diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
 
         # to datasets
         run_ds = []
-        for (s, w) in zip(sects, widths):
+        for (s, w, b) in zip(sects, widths, bucket):
             ds = xr.Dataset()
             ds.attrs['description'] = 'OGGM model output'
             ds.attrs['oggm_version'] = __version__
@@ -893,16 +901,22 @@ class FlowlineModel(object):
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
+            ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
+                                                      coords=varcoords)
             run_ds.append(ds)
 
         # write output?
         if run_path is not None:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
+                      'ts_calving_bucket_m3':  {'zlib': True, 'complevel': 5},
                       }
             for i, ds in enumerate(run_ds):
                 ds.to_netcdf(run_path, 'a', group='fl_{}'.format(i),
                              encoding=encode)
+            # Add other diagnostics
+            diag_ds.to_netcdf(run_path, 'a')
+
         if diag_path is not None:
             diag_ds.to_netcdf(diag_path)
 
@@ -932,6 +946,12 @@ class FlowlineModel(object):
                 t_rate = np.abs(v_af - v_bef) / v_bef
         if ite > max_ite:
             raise RuntimeError('Did not find equilibrium.')
+
+
+def flux_gate_with_build_up(year, flux_value=None, flux_gate_yr=None):
+    """Default scalar flux gate with build up period"""
+    fac = 1 - (flux_gate_yr - year) / flux_gate_yr
+    return flux_value * utils.clip_scalar(fac, 0, 1)
 
 
 class FluxBasedModel(FlowlineModel):
@@ -1004,11 +1024,13 @@ class FluxBasedModel(FlowlineModel):
             Units of m of ice thickness. Note that unrealistic values won't be
             met by the model, so this is really just a rough guidance.
             It's better to use `flux_gate` instead.
-        flux_gate : float or array
+        flux_gate : float or function or array of floats or array of functions
             flux of ice from the left domain boundary (and tributaries)
-            (unit: m3 of ice per second). If set to a high value,
-            the model will slowly build it up in order not to force the model
-            too much. This is overriden by `flux_gate_thickness` if provided.
+            (unit: m3 of ice per second). If set to a high value, consider
+            changing the flux_gate_buildup time. You can also provide
+            a function (or an array of functions) returning the flux
+            (unit: m3 of ice per second) as a function of time.
+            This is overriden by `flux_gate_thickness` if provided.
         flux_gate_buildup : int
             number of years used to build up the flux gate to full value
         do_kcalving : bool
@@ -1079,7 +1101,6 @@ class FluxBasedModel(FlowlineModel):
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
-        self.flux_gate_yr = flux_gate_build_up
         self.flux_gate_m3_since_y0 = 0.
         if flux_gate_thickness is not None:
             # Compute the theoretical ice flux from the slope at the top
@@ -1101,6 +1122,20 @@ class FluxBasedModel(FlowlineModel):
                                                     glen_a=self.glen_a,
                                                     fs=self.fs)
                 self.flux_gate.append(flux)
+
+        # convert the floats to function calls
+        for i, fg in enumerate(self.flux_gate):
+            if fg is None:
+                continue
+            try:
+                # Do we have a function? If yes all good
+                fg(self.yr)
+            except TypeError:
+                # If not, make one
+                self.flux_gate[i] = partial(flux_gate_with_build_up,
+                                            flux_value=fg,
+                                            flux_gate_yr=(flux_gate_build_up +
+                                                          self.y0))
 
         # Optim
         self.slope_stag = []
@@ -1147,6 +1182,7 @@ class FluxBasedModel(FlowlineModel):
             flux_stag = self.flux_stag[fl_id]
             trib_flux = self.trib_flux[fl_id]
             u_stag = self.u_stag[fl_id]
+            flux_gate = self.flux_gate[fl_id]
 
             # Flowline state
             surface_h = fl.surface_h
@@ -1207,10 +1243,8 @@ class FluxBasedModel(FlowlineModel):
             flux_stag[:] = u_stag * section_stag
 
             # Add boundary condition
-            if self.flux_gate[fl_id] is not None:
-                fac = 1 - (self.flux_gate_yr - self.yr) / self.flux_gate_yr
-                flux_stag[0] = self.flux_gate[fl_id] * utils.clip_scalar(fac,
-                                                                         0, 1)
+            if flux_gate is not None:
+                flux_stag[0] = flux_gate(self.yr)
 
             # CFL condition
             if not self.fixed_dt:
@@ -1309,6 +1343,8 @@ class FluxBasedModel(FlowlineModel):
             # Add to the bucket and the counter
             fl.calving_bucket_m3 += q_calving * dt
             self.calving_m3_since_y0 += q_calving * dt
+            self.calving_rate_myr = (q_calving / section[last_above_wl] *
+                                     cfg.SEC_IN_YEAR)
 
             # See if we have ice below sea-water to clean out first
             below_sl = (fl.surface_h < self.water_level) & (fl.thick > 0)
@@ -1534,8 +1570,15 @@ class FileModel(object):
             ds = xr.open_dataset(path, group='fl_{}'.format(flid))
             ds.load()
             dss.append(ds)
+
         self.last_yr = ds.year.values[-1]
         self.dss = dss
+
+        # Calving diags
+        with xr.open_dataset(path) as ds:
+            self._calving_m3_since_y0 = ds.calving_m3.load()
+
+        # time
         self.reset_y0()
 
     def __enter__(self):
@@ -1573,21 +1616,25 @@ class FileModel(object):
     def length_m(self):
         return self.fls[-1].length_m
 
+    @property
+    def calving_m3_since_y0(self):
+        return self._calving_m3_since_y0.sel(time=self.yr).values
+
     def run_until(self, year=None, month=None):
         """Mimics the model's behavior.
 
-        Is quite slow, I must say.
+        Is quite slow tbh.
         """
-
         if month is not None:
             for fl, ds in zip(self.fls, self.dss):
-                sel = ds.ts_section.isel(time=(ds.year == year) &
-                                              (ds.month == month))
-                fl.section = sel.values
+                sel = ds.isel(time=(ds.year == year) & (ds.month == month))
+                fl.section = sel.ts_section.values
+                fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
         else:
             for fl, ds in zip(self.fls, self.dss):
-                sel = ds.ts_section.sel(time=year)
-                fl.section = sel.values
+                sel = ds.sel(time=year)
+                fl.section = sel.ts_section.values
+                fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
         self.yr = sel.time.values
 
     def area_m2_ts(self, rollmin=0):
@@ -1609,7 +1656,8 @@ class FileModel(object):
     def volume_m3_ts(self):
         sel = 0
         for fl, ds in zip(self.fls, self.dss):
-            sel += ds.ts_section.sum(dim='x') * fl.dx_meter
+            sel += (ds.ts_section.sum(dim='x') * fl.dx_meter -
+                    ds.ts_calving_bucket_m3)
         return sel.to_series()
 
     def volume_km3_ts(self):
@@ -1639,7 +1687,8 @@ def flowline_from_dataset(ds):
                 bed_h=ds['bed_h'].values)
 
     have = {'c', 'x', 'surface_h', 'linecoords', 'bed_h', 'z', 'p', 'n',
-            'time', 'month', 'year', 'ts_width_m', 'ts_section'}
+            'time', 'month', 'year', 'ts_width_m', 'ts_section',
+            'ts_calving_bucket_m3'}
     missing_vars = set(ds.variables.keys()).difference(have)
     for k in missing_vars:
         data = ds[k].values

@@ -25,7 +25,7 @@ from oggm.utils import get_demo_file
 from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
-                              dummy_mixed_bed,
+                              dummy_mixed_bed, bu_tidewater_bed,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
                               dummy_width_bed_tributary)
@@ -1384,6 +1384,40 @@ class TestIO():
             fmodel.run_until(500)
             np.testing.assert_allclose(model.fls[0].section,
                                        fmodel.fls[0].section)
+
+    @pytest.mark.slow
+    def test_calving_filemodel(self, class_case_dir):
+        y1 = 1200
+        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
+        if os.path.exists(run_path):
+            os.remove(run_path)
+        if os.path.exists(diag_path):
+            os.remove(diag_path)
+        model = FluxBasedModel(bu_tidewater_bed(),
+                               mb_model=massbalance.ScalarMassBalance(),
+                               is_tidewater=True,
+                               flux_gate=0.12, do_kcalving=True,
+                               calving_k=0.2)
+        _, diag = model.run_until_and_store(y1, run_path=run_path,
+                                            diag_path=diag_path)
+        assert model.calving_m3_since_y0 > 0
+
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+        assert_allclose(diag.volume_m3.max() + diag.calving_m3.max(),
+                        model.flux_gate_m3_since_y0)
+
+        with FileModel(run_path) as fmodel:
+            assert fmodel.last_yr == y1
+
+            np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
+            np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+            np.testing.assert_allclose(fmodel.length_m_ts(), diag.length_m)
+
+            fmodel.run_until(y1)
+            assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
+                            model.flux_gate_m3_since_y0)
 
     @pytest.mark.slow
     def test_run_annual_step(self, class_case_dir):
