@@ -866,7 +866,11 @@ class FlowlineModel(object):
                 for s, w, b, fl in zip(sects, widths, bucket, self.fls):
                     s[j, :] = fl.section
                     w[j, :] = fl.widths_m
-                    b[j] = fl.calving_bucket_m3
+                    if self.is_tidewater:
+                        try:
+                            b[j] = fl.calving_bucket_m3
+                        except AttributeError:
+                            pass
                 j += 1
             # Diagnostics
             diag_ds['volume_m3'].data[i] = self.volume_m3
@@ -901,15 +905,15 @@ class FlowlineModel(object):
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
-                                                      coords=varcoords)
+            if self.is_tidewater:
+                ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
+                                                          coords=varcoords)
             run_ds.append(ds)
 
         # write output?
         if run_path is not None:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
-                      'ts_calving_bucket_m3':  {'zlib': True, 'complevel': 5},
                       }
             for i, ds in enumerate(run_ds):
                 ds.to_netcdf(run_path, 'a', group='fl_{}'.format(i),
@@ -1575,8 +1579,11 @@ class FileModel(object):
         self.dss = dss
 
         # Calving diags
-        with xr.open_dataset(path) as ds:
-            self._calving_m3_since_y0 = ds.calving_m3.load()
+        try:
+            with xr.open_dataset(path) as ds:
+                self._calving_m3_since_y0 = ds.calving_m3.load()
+        except AttributeError:
+            self._calving_m3_since_y0 = 0
 
         # time
         self.reset_y0()
