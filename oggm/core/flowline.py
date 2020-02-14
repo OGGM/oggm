@@ -1636,12 +1636,18 @@ class FileModel(object):
             for fl, ds in zip(self.fls, self.dss):
                 sel = ds.isel(time=(ds.year == year) & (ds.month == month))
                 fl.section = sel.ts_section.values
-                fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
+                try:
+                    fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
+                except AttributeError:
+                    fl.calving_bucket_m3 = 0
         else:
             for fl, ds in zip(self.fls, self.dss):
                 sel = ds.sel(time=year)
                 fl.section = sel.ts_section.values
-                fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
+                try:
+                    fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
+                except AttributeError:
+                    fl.calving_bucket_m3 = 0
         self.yr = sel.time.values
 
     def area_m2_ts(self, rollmin=0):
