@@ -4,6 +4,19 @@
 Version history
 ===============
 
+v1.3.X (unreleased)
+-------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
+
 v1.3.1 (16.02.2020)
 -------------------
 
@@ -56,8 +69,6 @@ Enhancements
   instead of unittest classes (:pull:`934` and :pull:`922`).
   By `Chris Merrill <https://github.com/C-Merrill>`_.
 
-Bug fixes
-~~~~~~~~~
 
 v1.2.0 (04.01.2020)
 -------------------
