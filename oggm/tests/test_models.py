@@ -1410,6 +1410,7 @@ class TestIO():
 
         with FileModel(run_path) as fmodel:
             assert fmodel.last_yr == y1
+            assert fmodel.do_calving
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
             np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)

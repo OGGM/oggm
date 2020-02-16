@@ -1320,9 +1320,14 @@ class FluxBasedModel(FlowlineModel):
             self.flux_gate_m3_since_y0 += flx_stag[0] * dt
 
             # --- The rest is for calving only ---
+            self.calving_rate_myr = 0.
 
-            # No need to do calving in these cases
-            if is_trib or not self.do_calving or not fl.has_ice():
+            # If tributary, do calving only if we are not transferring mass
+            if is_trib and flx_stag[-1] > 0:
+                continue
+
+            # No need to do calving in these cases either
+            if not self.do_calving or not fl.has_ice():
                 continue
 
             # We do calving only if the last glacier bed pixel is below water
@@ -1344,7 +1349,7 @@ class FluxBasedModel(FlowlineModel):
             d = h - (fl.surface_h[last_above_wl] - self.water_level)
             k = self.calving_k
             q_calving = k * d * h * fl.widths_m[last_above_wl]
-            # Add to the bucket and the counter
+            # Add to the bucket and the diagnostics
             fl.calving_bucket_m3 += q_calving * dt
             self.calving_m3_since_y0 += q_calving * dt
             self.calving_rate_myr = (q_calving / section[last_above_wl] *
@@ -1395,7 +1400,6 @@ class FluxBasedModel(FlowlineModel):
             - ice_flux, tributary_flux: m3 of *ice* per second
             - ice_velocity: m per second (depth-section integrated)
         """
-
         import pandas as pd
 
         fl = self.fls[fl_id]
@@ -1582,8 +1586,10 @@ class FileModel(object):
         try:
             with xr.open_dataset(path) as ds:
                 self._calving_m3_since_y0 = ds.calving_m3.load()
+                self.do_calving = True
         except AttributeError:
             self._calving_m3_since_y0 = 0
+            self.do_calving = False
 
         # time
         self.reset_y0()
