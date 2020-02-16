@@ -4,17 +4,27 @@
 Version history
 ===============
 
-v1.3.x (unreleased)
+v1.3.1 (16.02.2020)
 -------------------
 
-Breaking changes
-~~~~~~~~~~~~~~~~
+Minor release with small improvements but an important and necessary change in
+multiprocessing.
 
 Enhancements
 ~~~~~~~~~~~~
 
-Bug fixes
-~~~~~~~~~
+- After a recent change in multiprocessing, creating a pool of workers became
+  very slow. This change was necessary because of race conditions in GDAL,
+  but these conditions are rarely relevant to users. We now make this
+  change in multiprocession optional (:pull:`937`)
+- various improvements and changes in the dynamical model - mass-balance model
+  API. These were necessary to allow compatibility with the PyGEM model
+  (:pull:`938`, :pull:`946`, :pull:`949`, :pull:`953`, :pull:`951`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `David Rounce <https://github.com/drounce>`_.
+- added a "flux gate" to allow for precise mass-conservation checks in
+  numerical experiments (:pull:`944`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 v1.3.0 (02.02.2020)
@@ -25,7 +35,7 @@ The time stepping scheme of OGGM has been fixed for several flaws.
 explains it in detail. We expect some changes in OGGM results after this
 release, but they should not be noticeable in a vast majority of the cases.
 
-we recommend all users to update to this version.
+We recommend all users to update to this version.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
