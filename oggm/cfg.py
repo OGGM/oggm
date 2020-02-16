@@ -385,6 +385,9 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PARAMS['clip_mu_star'] = cp.as_bool('clip_mu_star')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
+    PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
+    PARAMS['use_kcalving_param'] = cp.as_bool('use_kcalving_param')
+    PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -420,9 +423,10 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
-           'rgi_version', 'dl_verify', 'use_mp_spawn',
+           'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
            'use_shape_factor_for_inversion', 'use_rgi_area',
-           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate']
+           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
+           'calving_line_extension', 'use_kcalving_param']
     for k in ltr:
         cp.pop(k, None)
 

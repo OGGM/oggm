@@ -816,7 +816,7 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
 
     # Defaults
     if k is None:
-        k = cfg.PARAMS['k_calving']
+        k = cfg.PARAMS['inversion_calving_k']
 
     # Read inversion output
     cl = gdir.read_pickle('inversion_output')[-1]

@@ -218,6 +218,22 @@ def dummy_width_bed_tributary(map_dx=100., n_trib=1):
     return out[::-1]
 
 
+def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
+                     b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
+                     water_level=0):
+
+    # Bassis & Ultee bed profile
+    dx_meter = gridlength / gridsize
+    x = np.arange(gridsize+1) * dx_meter
+    bed_h = b_0 - alpha * x + b_1 * np.exp(-((x - x_0) / sigma)**2)
+    bed_h += water_level
+    surface_h = bed_h
+    widths = surface_h * 0. + widths_m / dx_meter
+    return [flowline.RectangularBedFlowline(dx=1, map_dx=dx_meter,
+                                            surface_h=surface_h,
+                                            bed_h=bed_h, widths=widths)]
+
+
 def patch_url_retrieve_github(url, *args, **kwargs):
     """A simple patch to OGGM's download function to make sure we don't
     download elsewhere than expected."""

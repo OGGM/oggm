@@ -2345,7 +2345,7 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
 
-    def test_inversion_with_calving(self):
+    def test_inversion_and_run_with_calving(self):
 
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
@@ -2380,6 +2380,12 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         assert v_ref < 0.9*v_a
         for fl1, fl2 in zip(fls1, fls2):
             assert fl2.mu_star < fl1.mu_star
+
+        # Test make a run
+        flowline.init_present_time_glacier(gdir)
+        flowline.run_constant_climate(gdir, bias=0, nyears=100)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            assert ds.calving_m3[-1] > 10
 
 
 class TestColumbiaCalving(unittest.TestCase):
@@ -2428,8 +2434,8 @@ class TestColumbiaCalving(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
-        default_calving = cfg.PARAMS['k_calving']
-        cfg.PARAMS['k_calving'] = 0.2
+        default_calving = cfg.PARAMS['inversion_calving_k']
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 0.5
@@ -2438,7 +2444,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Test with fixed water depth
         water_depth = 275.282
-        cfg.PARAMS['k_calving'] = default_calving
+        cfg.PARAMS['inversion_calving_k'] = default_calving
 
         # Test with fixed water depth (it still overshoot)
         df = inversion.find_inversion_calving(gdir,
@@ -2450,7 +2456,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_front_width'] > 100  # just to check its here
 
         # Test with smaller k (it doesn't overshoot)
-        cfg.PARAMS['k_calving'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving(gdir,
                                               fixed_water_depth=water_depth)
 
@@ -2491,8 +2497,8 @@ class TestColumbiaCalving(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
-        default_calving = cfg.PARAMS['k_calving']
-        cfg.PARAMS['k_calving'] = 0.2
+        default_calving = cfg.PARAMS['inversion_calving_k']
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving_loop(gdir)
 
         assert max(df.index) < 14
@@ -2503,7 +2509,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.mu_star.iloc[-1] > 0
 
         # Test with smaller k and large starting water depth
-        cfg.PARAMS['k_calving'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving_loop(gdir,
                                                    initial_water_depth=1200)
 
@@ -2516,7 +2522,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Test with fixed water depth
         wd = 275.282
-        cfg.PARAMS['k_calving'] = default_calving
+        cfg.PARAMS['inversion_calving_k'] = default_calving
 
         # Test with fixed water depth (it still overshoots, quickly)
         df = inversion.find_inversion_calving_loop(gdir,
@@ -2530,7 +2536,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.water_depth.iloc[-1] == wd
 
         # Test with smaller k (it doesn't overshoot)
-        cfg.PARAMS['k_calving'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving_loop(gdir,
                                                    initial_water_depth=wd,
                                                    fixed_water_depth=True)

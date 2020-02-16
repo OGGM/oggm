@@ -758,6 +758,9 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
             ax.plot(x[i], cls.surface_h[i], 's', markerfacecolor='w',
                     markeredgecolor='k',
                     label='Tributary (inactive)')
+    if getattr(model, 'do_calving', False):
+        ax.hlines(model.water_level, x[0], x[-1], linestyles=':', color='C0')
+
 
     ax.set_ylim(ylim)
 
