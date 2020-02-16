@@ -10,6 +10,10 @@ v1.3.x (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The dynamical model now has a "real" parameterization for calving (WIP).
+  A blog post explaining it will follow (:pull:`945`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 Enhancements
 ~~~~~~~~~~~~
 
