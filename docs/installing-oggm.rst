@@ -10,7 +10,8 @@ Installing OGGM
 
 OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
-detail and should work on any platform.
+detail and should work on any platform. See :ref:`install-troubleshooting`
+if something goes wrong.
 
 OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux.
 OGGM doesn't work with Python 2.
@@ -71,7 +72,7 @@ GIS tools:
 
 Testing:
     - pytest
-    - pytest-mpl ([OGGM fork][https://github.com/OGGM/pytest-mpl] required)
+    - pytest-mpl (`OGGM fork <https://github.com/OGGM/pytest-mpl>`_ required)
 
 Other libraries:
     - `salem <https://github.com/fmaussion/salem>`_
@@ -264,6 +265,64 @@ This runs a minimal suite of tests. If you want to run the entire test suite
     pytest --pyargs oggm --run-slow --mpl
 
 **Congrats**, you are now set-up for the :ref:`getting-started` section!
+
+
+
+.. _install-troubleshooting:
+
+Installation troubleshooting
+----------------------------
+
+We try to do our best to avoid issues, but experience shows that the installation
+of the necessary packages can be difficult. Typical errors are often
+related to the pyproj, fiona and GDAL packages, which are heavy and (for pyproj)
+have changed a lot in the recent past and are prone to platform specific errors.
+
+If the tests don't pass, a diagnostic of which package creates the errors
+might be necessary. Errors like ``segmentation fault`` or ``Proj Error``
+are frequent and point to errors in upstream packages, rarely in OGGM itself.
+
+If you are having troubles, installing the packages manually from a fresh
+environment might help. At the time of writing (21.02.2020), creating an
+environment from this environment.yml file used to work (see the
+`conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
+for more information about how to create an environment from a yml file)::
+
+    name: oggm_env
+    channels:
+      - conda-forge
+    dependencies:
+      - python=3.7
+      - jupyter
+      - jupyterlab
+      - numpy<1.17
+      - scipy
+      - pandas<1
+      - shapely
+      - matplotlib
+      - Pillow
+      - netcdf4
+      - scikit-image
+      - scikit-learn
+      - configobj
+      - xarray
+      - pytest
+      - dask
+      - bottleneck
+      - pyproj<2.3
+      - cartopy
+      - geopandas<0.7.0
+      - rasterio
+      - descartes
+      - seaborn
+      - pip
+      - pip:
+        - joblib
+        - progressbar2
+        - motionless
+        - git+https://github.com/fmaussion/salem.git
+        - git+https://github.com/OGGM/oggm.git
+        - git+https://github.com/OGGM/pytest-mpl
 
 
 .. _virtualenv-install:
