@@ -2506,7 +2506,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
-        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
+        assert df.mu_star.iloc[-1] > 0
 
         # Test with smaller k and large starting water depth
         cfg.PARAMS['inversion_calving_k'] = 0.2
@@ -2518,7 +2518,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
-        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
+        assert df.mu_star.iloc[-1] > 0
 
         # Test with fixed water depth
         wd = 275.282
