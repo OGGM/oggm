@@ -1573,8 +1573,8 @@ def catchment_intersections(gdir):
     except TypeError:
         # from_crs not available yet
         if LooseVersion(gpd.__version__) >= LooseVersion('0.7.0'):
-            raise RuntimeError('You have geopandas v0.7 or more. '
-                               'Please update salem as well.')
+            raise RuntimeError('You have installed geopandas v0.7 or higher. '
+                               'Please also update salem for compatibility.')
         gdfc.crs = gdir.grid
         gdfi.crs = gdir.grid
         salem.transform_geopandas(gdfc, to_crs=gdir.grid.proj, inplace=True)

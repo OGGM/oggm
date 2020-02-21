@@ -328,7 +328,10 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                 gdir = oggm.GlacierDirectory(entity, reset=reset,
                                              from_tar=from_tar,
                                              delete_tar=delete_tar)
-                if not os.path.exists(gdir.get_filepath('dem')):
+                outlines_path = gdir.get_filepath('outlines')
+                if not (os.path.exists(outlines_path) or
+                        os.path.exists(outlines_path.replace('.shp',
+                                                             '.tar.gz'))):
                     new_gdirs.append((gdir, dict(entity=entity)))
                 gdirs.append(gdir)
 
