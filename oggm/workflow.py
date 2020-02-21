@@ -293,7 +293,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         # The dirs should be there already
         gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
         for root, _, files in os.walk(gl_dir):
-            if files and ('dem.tif' in files):
+            if files and ('outlines.shp' in files or
+                          'outlines.tar.gz' in files):
                 gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
     else:
 
@@ -327,7 +328,10 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                 gdir = oggm.GlacierDirectory(entity, reset=reset,
                                              from_tar=from_tar,
                                              delete_tar=delete_tar)
-                if not os.path.exists(gdir.get_filepath('dem')):
+                outlines_path = gdir.get_filepath('outlines')
+                if not (os.path.exists(outlines_path) or
+                        os.path.exists(outlines_path.replace('.shp',
+                                                             '.tar.gz'))):
                     new_gdirs.append((gdir, dict(entity=entity)))
                 gdirs.append(gdir)
 

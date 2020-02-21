@@ -126,6 +126,19 @@ class TestGIS(unittest.TestCase):
 
         assert gdir.status == 'Glacier or ice cap'
 
+    def test_init_glacier_regions(self):
+
+        hef_rgi = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp'))
+        gdir = workflow.init_glacier_regions(hef_rgi)[0]
+        nx, ny = gdir.grid.nx, gdir.grid.ny
+
+        # Change something and note that no error happens because the
+        # directory is not overwritten
+        cfg.PARAMS['border'] = 12
+        gdir = workflow.init_glacier_regions(hef_rgi)[0]
+        assert nx == gdir.grid.nx
+        assert ny == gdir.grid.ny
+
     def test_divides_as_glaciers(self):
 
         hef_rgi = gpd.read_file(get_demo_file('divides_alps.shp'))
@@ -2483,7 +2496,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) > 3
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        assert df.mu_star.iloc[-1] == 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
 
         # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
@@ -2532,7 +2545,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) < 10
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        assert df.mu_star.iloc[-1] == 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
         assert df.water_depth.iloc[-1] == wd
 
         # Test with smaller k (it doesn't overshoot)
