@@ -19,6 +19,7 @@ import logging
 import copy
 from itertools import groupby
 from collections import Counter
+from distutils.version import LooseVersion
 
 # External libs
 import numpy as np
@@ -1563,10 +1564,21 @@ def catchment_intersections(gdir):
 
     # We project them onto the mercator proj before writing. This is a bit
     # inefficient (they'll be projected back later), but it's more sustainable
-    gdfc.crs = gdir.grid
-    gdfi.crs = gdir.grid
-    salem.transform_geopandas(gdfc, gdir.grid.proj, inplace=True)
-    salem.transform_geopandas(gdfi, gdir.grid.proj, inplace=True)
+    try:
+        # salem for geopandas > 0.7
+        salem.transform_geopandas(gdfc, from_crs=gdir.grid,
+                                  to_crs=gdir.grid.proj, inplace=True)
+        salem.transform_geopandas(gdfi, from_crs=gdir.grid,
+                                  to_crs=gdir.grid.proj, inplace=True)
+    except TypeError:
+        # from_crs not available yet
+        if LooseVersion(gpd.__version__) >= LooseVersion('0.7.0'):
+            raise RuntimeError('You have geopandas v0.7 or more. '
+                               'Please update salem as well.')
+        gdfc.crs = gdir.grid
+        gdfi.crs = gdir.grid
+        salem.transform_geopandas(gdfc, to_crs=gdir.grid.proj, inplace=True)
+        salem.transform_geopandas(gdfi, to_crs=gdir.grid.proj, inplace=True)
     if hasattr(gdfc.crs, 'srs'):
         # salem uses pyproj
         gdfc.crs = gdfc.crs.srs
@@ -1709,12 +1721,12 @@ def catchment_width_geom(gdir):
     if gdir.has_file('catchments_intersects'):
         # read and transform to grid
         gdf = gdir.read_shapefile('catchments_intersects')
-        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        salem.transform_geopandas(gdf, to_crs=gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
     if gdir.has_file('intersects'):
         # read and transform to grid
         gdf = gdir.read_shapefile('intersects')
-        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        salem.transform_geopandas(gdf, to_crs=gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 
     # apply a buffer to be sure we get the intersects right. Be generous

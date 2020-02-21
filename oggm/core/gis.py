@@ -1036,7 +1036,7 @@ def gridded_attributes(gdir):
     if gdir.has_file('intersects'):
         # read and transform to grid
         gdf = gdir.read_shapefile('intersects')
-        salem.transform_geopandas(gdf, gdir.grid, inplace=True)
+        salem.transform_geopandas(gdf, to_crs=gdir.grid, inplace=True)
         gdfi = pd.concat([gdfi, gdf[['geometry']]])
 
     # Ice divide mask

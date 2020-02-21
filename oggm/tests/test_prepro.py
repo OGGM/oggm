@@ -2483,7 +2483,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) > 3
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        assert df.mu_star.iloc[-1] == 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
 
         # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
@@ -2506,7 +2506,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.calving_flux.iloc[-1] == np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
-        assert df.mu_star.iloc[-1] > 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
 
         # Test with smaller k and large starting water depth
         cfg.PARAMS['inversion_calving_k'] = 0.2
@@ -2518,7 +2518,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 0.5
         assert df.calving_flux.iloc[-1] < 1
-        assert df.mu_star.iloc[-1] > 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
 
         # Test with fixed water depth
         wd = 275.282
@@ -2532,7 +2532,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) < 10
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        assert df.mu_star.iloc[-1] == 0
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
         assert df.water_depth.iloc[-1] == wd
 
         # Test with smaller k (it doesn't overshoot)
