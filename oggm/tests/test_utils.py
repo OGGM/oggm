@@ -366,7 +366,6 @@ class TestWorkflowTools(unittest.TestCase):
 
         df = utils.compile_glacier_statistics([gdir], path=False)
         assert len(df) == 1
-        assert np.all(~df.isnull())
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
