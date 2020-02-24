@@ -1115,6 +1115,9 @@ def glacier_statistics(gdir, inversion_only=False):
         if errlog is not None:
             d['error_task'] = errlog.split(';')[-2]
             d['error_msg'] = errlog.split(';')[-1]
+        else:
+            d['error_task'] = None
+            d['error_msg'] = None
     except BaseException:
         pass
 
