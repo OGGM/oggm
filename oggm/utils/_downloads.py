@@ -89,7 +89,7 @@ WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
 
 DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
-               'DEM3', 'ASTER', 'SRTM', 'REMA']
+               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA']
 
 _RGI_METADATA = dict()
 
@@ -1874,6 +1874,8 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return _in_grid('AntarcticDEM_wgs84.json', lon_ex, lat_ex)
     elif source == 'REMA':
         return _in_grid('REMA_100m_dem.json', lon_ex, lat_ex)
+    elif source == 'ALASKA':
+        return _in_grid('Alaska_albers_V3.json', lon_ex, lat_ex)
     elif source == 'TANDEM':
         return True
     elif source == 'AW3D30':
@@ -1984,6 +1986,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
+          - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
 
     Returns
     -------
@@ -2036,6 +2039,12 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'RAMP':
         _file = _download_topo_file_from_cluster('AntarcticDEM_wgs84.tif')
         files.append(_file)
+
+    if source == 'ALASKA':
+        with _get_download_lock():
+            url = 'https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            url += 'Alaska_albers_V3.tif'
+            files.append(file_downloader(url))
 
     if source == 'REMA':
         zones = rema_zone(lon_ex, lat_ex)
