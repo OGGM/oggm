@@ -488,6 +488,7 @@ def initialize(file=None, logging_level='INFO'):
         grids = {}
         for grid_json in ['gimpdem_90m_v01.1.json',
                           'arcticdem_mosaic_100m_v3.0.json',
+                          'Alaska_albers_V3.json',
                           'AntarcticDEM_wgs84.json',
                           'REMA_100m_dem.json']:
             if grid_json not in grids:

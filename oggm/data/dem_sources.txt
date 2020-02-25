@@ -224,3 +224,29 @@ using the following citation:
 Howat, I. M., Porter, C., Smith, B. E., Noh, M.-J., and Morin, P.:
 The Reference Elevation Model of Antarctica, The Cryosphere, 13, 665-674,
 https://doi.org/10.5194/tc-13-665-2019, 2019.
+
+[ALASKA]
+ALASKA V3
+
+Original resolution: 30m
+Date of acquisition: 2000-2011
+Date range: 2000-2011
+
+Provided by Christian Kienholz.
+
+# Acknowledgements
+
+These remarks should be included in the acknowledgements section of any
+published work, presentation, poster, or document:
+
+DEMs provided by Christian Kienholz.
+
+# Data citation
+
+As a condition of using these data, you must cite the use of this data set
+using the following citation:
+
+ Kienholz, C., Rich, J. L., Arendt, A. A., and Hock, R.: A new method for
+ deriving glacier centerlines applied to glaciers in Alaska and northwest
+ Canada, The Cryosphere, 8, 503–519, https://doi.org/10.5194/tc-8-503-2014,
+ 2014.
