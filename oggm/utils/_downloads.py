@@ -2041,10 +2041,10 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         files.append(_file)
 
     if source == 'ALASKA':
-            with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
-                url += 'Alaska_albers_V3.tif'
-                files.append(file_downloader(url))
+        with _get_download_lock():
+            url = 'https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            url += 'Alaska_albers_V3.tif'
+            files.append(file_downloader(url))
 
     if source == 'REMA':
         zones = rema_zone(lon_ex, lat_ex)
