@@ -384,13 +384,13 @@ def define_glacier_region(gdir, entity=None):
     # Back to lon, lat for DEM download/preparation
     tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
+
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
     # Open DEM
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
-    if not is_dem_source_available(source,
-                                   (minlon, maxlon),
-                                   (minlat, maxlat)):
+    # We test DEM availability for glacier only (maps can grow big)
+    if not is_dem_source_available(source, *gdir.extent_ll):
         raise InvalidDEMError('Source: {} not available for glacier {}'
                               .format(source, gdir.rgi_id))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
