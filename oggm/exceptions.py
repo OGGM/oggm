@@ -39,5 +39,10 @@ class HttpDownloadError(Exception):
         self.url = url
 
 
+class FTPSDownloadError(Exception):
+    def __init__(self, orgerr):
+        self.orgerr = orgerr
+
+
 class HttpContentTooShortError(Exception):
     pass

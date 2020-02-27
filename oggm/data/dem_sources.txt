@@ -250,3 +250,18 @@ using the following citation:
  deriving glacier centerlines applied to glaciers in Alaska and northwest
  Canada, The Cryosphere, 8, 503–519, https://doi.org/10.5194/tc-8-503-2014,
  2014.
+
+[COPDEM]
+Copernicus DEM GLO-90
+
+Original resolution: 3 arc seconds (~90m)
+Date of acquisition: 2010-2015
+Date range: 2010-2015
+
+# Credit
+Any usage or publication must include the following statement:
+“Includes material ©CCME (year of acquisition ), provided under COPERNICUS by
+the European Union and ESA, all rights reserved”.
+
+Please also read and agree to the full ESA user license:
+https://spacedata.copernicus.eu/documents/12833/14545/CSCDA_ESA_User_Licence

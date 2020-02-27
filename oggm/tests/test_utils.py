@@ -1119,12 +1119,13 @@ def touch(path):
     return path
 
 
-def make_fake_zipdir(dir_path, fakefile=None, archiv='zip', extension='.zip'):
+def make_fake_zipdir(dir_path, fakefile=None, base_dir=None,
+                     archiv='zip', extension='.zip'):
     """Creates a directory with a file in it if asked to, then compresses it"""
     utils.mkdir(dir_path)
     if fakefile:
         touch(os.path.join(dir_path, fakefile))
-    shutil.make_archive(dir_path, archiv, dir_path)
+    shutil.make_archive(dir_path, archiv, dir_path, base_dir)
     return dir_path + extension
 
 
@@ -1460,6 +1461,36 @@ class TestFakeDownloads(unittest.TestCase):
 
         assert os.path.exists(of[0])
         assert source == 'AW3D30'
+
+    def test_copdem(self):
+
+        # Make a fake topo file
+        deep_path = os.path.join(self.dldir,
+                                 'DEM1_SAR_DGE_90_20110517T170701_20140817T170'
+                                 '857_ADS_000000_4723.DEM',
+                                 'Copernicus_DSM_30_N46_00_E010_00', 'DEM')
+        utils.mkdir(deep_path)
+        upper_path = os.path.dirname(os.path.dirname(deep_path))
+        fakefile = os.path.join(deep_path,
+                                'Copernicus_DSM_30_N46_00_E010_00_DEM.tif')
+        tf = make_fake_zipdir(upper_path, fakefile=fakefile,
+                              base_dir='Copernicus_DSM_30_N46_00_E010_00',
+                              archiv='tar', extension='.tar')
+
+        def down_check(url, *args, **kwargs):
+            expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
+                        'COP-DEM_GLO-90-DGED/2019_1/'
+                        'DEM1_SAR_DGE_90_20110517T170701_20140817T170857_ADS_'
+                        '000000_4723.DEM.tar')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
+                                             source='COPDEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'COPDEM'
 
     def test_ramp(self):
 
@@ -1882,6 +1913,23 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(len(z) == 9)
         self.assertEqual(ref, z)
 
+    def test_copdemzone(self):
+        z = utils.copdem_zone(lat_ex=[-9.8, -9.5], lon_ex=[-77.6, -77.3])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual(('DEM1_SAR_DGE_90_20110427T104941_20140819T105300_'
+                          'ADS_000000_2733.DEM.tar'), z[0][0])
+        self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0][1])
+
+        z = utils.copdem_zone(lat_ex=[46.37, 46.59], lon_ex=[7.89, 8.12])
+        self.assertTrue(len(z) == 2)
+        self.assertTrue('Copernicus_DSM_30_N46_00_E008_00' in
+                        [z[0][1], z[1][1]])
+        self.assertTrue('Copernicus_DSM_30_N46_00_E007_00' in
+                        [z[0][1], z[1][1]])
+
+        z = utils.copdem_zone(lat_ex=[0, 1], lon_ex=[0, 1])
+        self.assertTrue(len(z) == 0)
+
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
         assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
@@ -1994,6 +2042,18 @@ class TestDataFiles(unittest.TestCase):
         fp = _download_tandem_file(zone)
         self.assertTrue(os.path.exists(fp))
         fp = _download_tandem_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    @pytest.mark.creds
+    def test_copdemdownload(self):
+        from oggm.utils._downloads import _download_copdem_file
+
+        # this zone does exist and file should be small enough for download
+        cppfile = ('DEM1_SAR_DGE_90_20110109T094723_20140326T001716_ADS_'
+                   '000000_5845.DEM.tar')
+        tilename = 'Copernicus_DSM_30_N78_00_E102_00'
+        fp = _download_copdem_file(cppfile, tilename)
         self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.creds
