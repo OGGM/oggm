@@ -155,4 +155,3 @@ def cli():
         sys.exit(-1)
 
     read_credentials(key, testurl)
-

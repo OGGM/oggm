@@ -2146,6 +2146,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
           - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
           - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
+
     Returns
     -------
     tuple: (list with path(s) to the DEM file(s), data source str)
