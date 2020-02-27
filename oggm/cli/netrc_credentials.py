@@ -13,7 +13,7 @@ def _test_credentials(authfile, key, testurl):
     """ Helper function to test the credentials
     """
 
-    if 'ftps' in testurl:
+    if 'ftps://' in testurl:
         # FTP_TLS needs some extra workflow
         try:
             upar = urlparse(testurl)
