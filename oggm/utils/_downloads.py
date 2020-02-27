@@ -21,6 +21,9 @@ from urllib.parse import urlparse
 import socket
 import multiprocessing
 from netrc import netrc
+import ftplib
+import ssl
+import tarfile
 
 # External libs
 import pandas as pd
@@ -59,7 +62,7 @@ from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError,
-                             InvalidDEMError)
+                             InvalidDEMError, FTPSDownloadError)
 
 # Module logger
 logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
@@ -68,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'cf81c0041a9339f6629d323f908b26e1cb56ad84'
+SAMPLE_DATA_COMMIT = '78bce79de8016b62a902b31e7d577b5e548e3901'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -89,7 +92,7 @@ WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
 
 DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
-               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA']
+               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM']
 
 _RGI_METADATA = dict()
 
@@ -410,6 +413,74 @@ def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
         socket.setdefaulttimeout(old_def_timeout)
 
 
+class ImplicitFTPTLS(ftplib.FTP_TLS):
+    """ FTP_TLS subclass that automatically wraps sockets in SSL to support
+        implicit FTPS.
+
+        Taken from https://stackoverflow.com/a/36049814
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sock = None
+
+    @property
+    def sock(self):
+        """Return the socket."""
+        return self._sock
+
+    @sock.setter
+    def sock(self, value):
+        """When modifying the socket, ensure that it is ssl wrapped."""
+        if value is not None and not isinstance(value, ssl.SSLSocket):
+            value = self.context.wrap_socket(value)
+        self._sock = value
+
+
+def _ftps_retrieve(url, path, reporthook, auth=None, timeout=None):
+    """ Wrapper around ftplib to download from FTPS server
+    """
+
+    if not auth:
+        raise DownloadCredentialsMissingException('No authentication '
+                                                  'credentials given!')
+
+    upar = urlparse(url)
+
+    # Decide if Implicit or Explicit FTPS is used based on the port in url
+    if upar.port == 990:
+        ftps = ImplicitFTPTLS()
+    elif upar.port == 21:
+        ftps = ftplib.FTP_TLS()
+
+    try:
+        # establish ssl connection
+        ftps.connect(host=upar.hostname, port=upar.port, timeout=timeout)
+        ftps.login(user=auth[0], passwd=auth[1])
+        ftps.prot_p()
+
+        logger.info('Established connection %s' % upar.hostname)
+
+        # meta for progress bar size
+        count = 0
+        total = ftps.size(upar.path)
+        bs = 12*1024
+
+        def _ftps_progress(data):
+            outfile.write(data)
+            nonlocal count
+            count += 1
+            reporthook(count, count*bs, total)
+
+        with open(path, 'wb') as outfile:
+            ftps.retrbinary('RETR ' + upar.path, _ftps_progress, blocksize=bs)
+
+    except (ftplib.error_perm, socket.timeout, socket.gaierror) as err:
+        raise FTPSDownloadError(err)
+    finally:
+        ftps.close()
+
+
 def _get_url_cache_name(url):
     """Returns the cache name for any given url.
     """
@@ -436,7 +507,11 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
         try:
             _requests_urlretrieve(url, cache_path, reporthook, auth, timeout)
         except requests.exceptions.InvalidSchema:
-            _classic_urlretrieve(url, cache_path, reporthook, auth, timeout)
+            if 'ftps://' in url:
+                _ftps_retrieve(url, cache_path, reporthook, auth, timeout)
+            else:
+                _classic_urlretrieve(url, cache_path, reporthook, auth,
+                                     timeout)
         return cache_path
 
     return _verified_download_helper(cache_obj_name, _dlf, reset)
@@ -567,6 +642,12 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
                             (www_path, retry_counter, retry_max))
                 time.sleep(10)
                 continue
+        except FTPSDownloadError as err:
+            logger.info("Downloading %s failed with FTPSDownloadError"
+                        " error: '%s', retrying in 10 seconds... %s/%s" %
+                        (www_path, err.orgerr, retry_counter, retry_max))
+            time.sleep(10)
+            continue
 
     # See if we managed (fail is allowed)
     if not local_path or not os.path.exists(local_path):
@@ -594,7 +675,7 @@ def download_with_authentification(wwwfile, key):
     # Attempt to download without credentials first to hit the cache
     try:
         dest_file = file_downloader(wwwfile)
-    except HttpDownloadError:
+    except (HttpDownloadError, DownloadCredentialsMissingException):
         dest_file = None
 
     # Grab auth parameters
@@ -603,17 +684,16 @@ def download_with_authentification(wwwfile, key):
 
         if not os.path.isfile(authfile):
             raise DownloadCredentialsMissingException(
-                (authfile, ' does not exist. Create and add credentials for ',
-                 'TanDEM-X with `oggm_tdmdem90_login`. And use ',
-                 '`oggm_nasa_earthdata_login` for ASTER data.'))
+                (authfile, ' does not exist. Add necessary credentials for ',
+                 key, ' with `oggm_netrc_credentials. You may have to ',
+                 'register at the respective service first.'))
 
         try:
             netrc(authfile).authenticators(key)[0]
         except TypeError:
             raise DownloadCredentialsMissingException(
                 ('Credentials for ', key, ' are not in ', authfile, '. Add ',
-                 'credentials for TanDEM-X with `oggm_tdmdem90_login`. ',
-                 'And use `oggm_nasa_earthdata_login` for ASTER data.'))
+                 'credentials for with `oggm_netrc_credentials`.'))
 
         dest_file = file_downloader(
             wwwfile, auth=(netrc(authfile).authenticators(key)[0],
@@ -906,6 +986,59 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
+def _download_copdem_file(cppfile, tilename):
+    with _get_download_lock():
+        return _download_copdem_file_unlocked(cppfile, tilename)
+
+
+def _download_copdem_file_unlocked(cppfile, tilename):
+    """Checks if Copernicus DEM file is in the directory, if not download it.
+
+    cppfile : name of the tarfile to download
+    tilename : name of folder and tif file within the cppfile
+
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+
+    # tarfiles are extracted in directories per each tile
+    fpath = '{0}_DEM.tif'.format(tilename)
+    demfile = os.path.join(tmpdir, fpath)
+
+    # check if extracted file exists already
+    if os.path.exists(demfile):
+        return demfile
+
+    # Did we download it yet?
+    ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
+               'datasets/COP-DEM_GLO-90-DGED/2019_1/' +
+               cppfile)
+
+    dest_file = download_with_authentification(ftpfile,
+                                               'spacedata.copernicus.eu')
+
+    # None means we tried hard but we couldn't find it
+    if not dest_file:
+        return None
+
+    # ok we have to extract it
+    if not os.path.exists(demfile):
+        tiffile = os.path.join(tilename, 'DEM', fpath)
+        with tarfile.open(dest_file) as tf:
+            tmember = tf.getmember(tiffile)
+            # do not extract the full path of the file
+            tmember.name = os.path.basename(tf.getmember(tiffile).name)
+            tf.extract(tmember, tmpdir)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(demfile)
+    cfg.get_lru_handler(tmpdir).append(demfile)
+
+    return demfile
+
+
 def _download_aw3d30_file(zone):
     with _get_download_lock():
         return _download_aw3d30_file_unlocked(zone)
@@ -1172,6 +1305,29 @@ def rema_zone(lon_ex, lat_ex):
     p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
     gdf = gdf.loc[gdf.intersects(p)]
     return gdf.tile.values if len(gdf) > 0 else []
+
+
+def copdem_zone(lon_ex, lat_ex):
+    """Returns a list of Copernicus DEM tarfile and tilename tuples
+    """
+
+    # path to the lookup shapefiles
+    gdf = gpd.read_file(get_demo_file('RGI60_COPDEM_lookup.shp'))
+
+    # intersect with lat lon extents
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+
+    flist = []
+    for _, g in gdf.iterrows():
+        cpp = g['CPP File']
+        eop = g['Eop Id']
+        eop = eop.split(':')[-2]
+        assert 'Copernicus' in eop
+
+        flist.append((cpp, eop))
+
+    return flist
 
 
 def dem3_viewpano_zone(lon_ex, lat_ex):
@@ -1888,6 +2044,8 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
     elif source == 'SRTM':
         return np.max(np.abs(lat_ex)) < 60
+    elif source == 'COPDEM':
+        return True
     elif source == 'USER':
         return True
     elif source is None:
@@ -1987,6 +2145,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
           - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
+          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
 
     Returns
     -------
@@ -2084,6 +2243,11 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = srtm_zone(lon_ex, lat_ex)
         for z in zones:
             files.append(_download_srtm_file(z))
+
+    if source == 'COPDEM':
+        filetuple = copdem_zone(lon_ex, lat_ex)
+        for cpp, eop in filetuple:
+            files.append(_download_copdem_file(cpp, eop))
 
     # filter for None (e.g. oceans)
     files = [s for s in files if s]

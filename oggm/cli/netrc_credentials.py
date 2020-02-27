@@ -4,26 +4,57 @@ import getpass
 import requests
 from netrc import netrc
 from subprocess import Popen
+from urllib.parse import urlparse
+import ftplib
+import socket
 
 
 def _test_credentials(authfile, key, testurl):
     """ Helper function to test the credentials
     """
-    # checking requests.head does work for some servers even with wrong
-    # credentials -> use requests.get but only for some bytes
-    header = {"Range": "bytes=0-100"}
 
-    r = requests.get(testurl, headers=header,
-                     auth=(netrc(authfile).authenticators(key)[0],
-                           netrc(authfile).authenticators(key)[2]))
-    if (r.status_code == 206) or (r.status_code == 200):
-        # code 200 is "OK", code 206 is "partial content" which is ok here
-        print("Authentication successful!")
-        return 0
+    if 'ftps://' in testurl:
+        # FTP_TLS needs some extra workflow
+        try:
+            upar = urlparse(testurl)
+
+            # Decide if Implicit or Explicit FTPS
+            if upar.port == 990:
+                from oggm.utils import ImplicitFTPTLS
+                ftps = ImplicitFTPTLS()
+            elif upar.port == 21:
+                ftps = ftplib.FTP_TLS()
+
+            # establish ssl connection
+            ftps.connect(host=upar.hostname, port=upar.port, timeout=30)
+            ftps.login(user=netrc(authfile).authenticators(key)[0],
+                       passwd=netrc(authfile).authenticators(key)[2])
+            ftps.prot_p()
+            ftps.close()
+            print("Authentication successful!")
+            return 0
+        except (ftplib.error_perm, socket.timeout, socket.gaierror) as err:
+            print("Authentication for {} failed with: {1}".
+                  format(key, err))
+            ftps.close()
+            return -1
+
     else:
-        print("Authentication failed with HTML status code {}!".
-              format(r.status_code))
-        return -1
+        # checking requests.head does work for some servers even with wrong
+        # credentials -> use requests.get but only for some bytes
+        header = {"Range": "bytes=0-100"}
+
+        r = requests.get(testurl, headers=header,
+                         auth=(netrc(authfile).authenticators(key)[0],
+                               netrc(authfile).authenticators(key)[2]))
+        if (r.status_code == 206) or (r.status_code == 200):
+            # code 200 is "OK", code 206 is "partial content" which is ok here
+            print("Authentication successful!")
+            return 0
+        else:
+            print("Authentication failed with HTML status code {}!".
+                  format(r.status_code))
+            return -1
 
 
 def read_credentials(key, testurl):
@@ -92,21 +123,35 @@ def read_credentials(key, testurl):
     sys.exit(_test_credentials(authfile, key, testurl))
 
 
-def earthdata():
-    """ setup the credentials for NASA Earthdata, where we get ASTER from
+def cli():
+    """ command line interface to store different NETRC credentials
+    call via 'oggm_netrc_credentials'
     """
-    key = 'urs.earthdata.nasa.gov'
-    testurl = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
-               '2000.03.01/ASTGTMV003_S09W158.zip')
 
-    read_credentials(key, testurl)
+    print('This will store login credentials in a local .netrc file.\n'
+          'Enter the number or the service you want to add credentials for, '
+          'this might override existing credentials in the .netrc file!\n\n'
+          '[0] urs.earthdata.nasa.gov, ASTER DEM\n'
+          '[1] geoservice.dlr.de, TanDEM-X\n'
+          '[2] spacedata.copernicus.eu, Copernicus DEM Glo-90\n\n')
+    nr = input("Number: ")
 
+    if nr == '0':
+        key = 'urs.earthdata.nasa.gov'
+        testurl = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
+                   '2000.03.01/ASTGTMV003_S09W158.zip')
 
-def tandemx():
-    """ setup the credentials for Tandem-X from DLR
-    """
-    key = 'geoservice.dlr.de'
-    testurl = ("https://download.geoservice.dlr.de" +
-               "/TDM90/files/N57/E000/TDM1_DEM__30_N57E006.zip")
+    elif nr == '1':
+        key = 'geoservice.dlr.de'
+        testurl = ("https://download.geoservice.dlr.de" +
+                   "/TDM90/files/N57/E000/TDM1_DEM__30_N57E006.zip")
+
+    elif nr == '2':
+        key = 'spacedata.copernicus.eu'
+        testurl = 'ftps://cdsdata.copernicus.eu:990'
+
+    else:
+        print('Not a valid number, aborting.')
+        sys.exit(-1)
 
     read_credentials(key, testurl)

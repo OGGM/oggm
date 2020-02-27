@@ -17,6 +17,12 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Added Copernicus DEM GLO-90 as optional DEM. Requires credentials to
+  ``spacedata.copernicus.eu`` stored in a local ``.netrc`` file. Credentials
+  can be added on the command line via ``$ oggm_netrc_credentials``
+  (:pull:`961`).
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+
 Bug fixes
 ~~~~~~~~~
 
