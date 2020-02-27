@@ -1313,8 +1313,6 @@ def copdem_zone(lon_ex, lat_ex):
 
     # path to the lookup shapefiles
     gdf = gpd.read_file(get_demo_file('RGI60_COPDEM_lookup.shp'))
-    #look = '/home/matthias/rgi/copernicus/lookup/RGI60_COPDEM_lookup.shp'
-    #gdf = gpd.read_file(look)
 
     # intersect with lat lon extents
     p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
