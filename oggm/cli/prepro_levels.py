@@ -203,7 +203,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rs = i == 0
             rgidf['DEM_SOURCE'] = s
             log.workflow('Running prepro on sources: {}'.format(s))
-            #gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
             gdirs = []
             for_task = []
             for _, entity in rgidf.iterrows():
