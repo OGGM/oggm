@@ -15,7 +15,7 @@ import geopandas as gpd
 
 # Locals
 import oggm.cfg as cfg
-from oggm import utils, workflow, tasks
+from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
 
@@ -183,6 +183,25 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Just for fun
         rgidf = rgidf.sample(test_nr)
 
+    myglcs = ['RGI60-11.00897',
+              'RGI60-11.01827',
+              'RGI60-01.10689',
+              'RGI60-06.00477',
+              'RGI60-05.10137',
+              'RGI60-03.02489',
+              'RGI60-16.02207',
+              'RGI60-19.02274',
+              'RGI60-19.00124',
+              'RGI60-19.01251',
+              'RGI60-03.00251',
+              'RGI60-15.02578',
+              'RGI60-07.01114',
+              'RGI60-08.01126',
+              'RGI60-18.00854',
+              'RGI60-09.00552']
+
+    rgidf = rgidf.loc[rgidf.RGIId.isin(myglcs)]
+
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
 
@@ -203,7 +222,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rs = i == 0
             rgidf['DEM_SOURCE'] = s
             log.workflow('Running prepro on sources: {}'.format(s))
-            gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
+            #gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
+            gdirs = []
+            for_task = []
+            for _, entity in rgidf.iterrows():
+                gdir = GlacierDirectory(entity, reset=rs)
+                for_task.append((gdir, dict(entity=entity)))
+                gdirs.append(gdir)
+
+            workflow.execute_entity_task(tasks.define_glacier_region, for_task)
             workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
 
         # make a GeoTiff mask of the glacier, choose any source

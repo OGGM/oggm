@@ -29,6 +29,7 @@ import tarfile
 import pandas as pd
 import numpy as np
 from shapely.ops import transform as shp_trafo
+from shapely.ops import unary_union
 import shapely.geometry as shpg
 import requests
 
@@ -1317,6 +1318,13 @@ def copdem_zone(lon_ex, lat_ex):
     # intersect with lat lon extents
     p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
     gdf = gdf.loc[gdf.intersects(p)]
+
+    # COPDEM is global, if we miss any tile it is worth an error
+    if (len(gdf) == 0) or (not unary_union(gdf.geometry).contains(p)):
+        raise InvalidDEMError('Could not find all necessary Copernicus DEM '
+                              'tiles. This should not happen in a global DEM. '
+                              'Check the RGI-CopernicusDEM lookup shapefile '
+                              'for this particular glacier!')
 
     flist = []
     for _, g in gdf.iterrows():

@@ -26,7 +26,7 @@ from oggm import cfg
 from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
                               init_hef, TempEnvironmentVariable)
 from oggm.utils import shape_factor_adhikari
-from oggm.exceptions import (InvalidParamsError,
+from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
 
 
@@ -1927,8 +1927,9 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue('Copernicus_DSM_30_N46_00_E007_00' in
                         [z[0][1], z[1][1]])
 
-        z = utils.copdem_zone(lat_ex=[0, 1], lon_ex=[0, 1])
-        self.assertTrue(len(z) == 0)
+        # we want an error if copdem does not find all or any
+        self.assertRaises(InvalidDEMError, utils.copdem_zone,
+                          lat_ex=[0, 1], lon_ex=[0, 1])
 
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
