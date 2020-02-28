@@ -183,25 +183,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Just for fun
         rgidf = rgidf.sample(test_nr)
 
-    myglcs = ['RGI60-11.00897',
-              'RGI60-11.01827',
-              'RGI60-01.10689',
-              'RGI60-06.00477',
-              'RGI60-05.10137',
-              'RGI60-03.02489',
-              'RGI60-16.02207',
-              'RGI60-19.02274',
-              'RGI60-19.00124',
-              'RGI60-19.01251',
-              'RGI60-03.00251',
-              'RGI60-15.02578',
-              'RGI60-07.01114',
-              'RGI60-08.01126',
-              'RGI60-18.00854',
-              'RGI60-09.00552']
-
-    rgidf = rgidf.loc[rgidf.RGIId.isin(myglcs)]
-
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
 
