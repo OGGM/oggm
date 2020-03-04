@@ -490,7 +490,7 @@ def _get_centerline_lonlat(gdir):
     olist = []
     for j, cl in enumerate(cls[::-1]):
         mm = 1 if j == 0 else 0
-        gs = gpd.GeoSeries()
+        gs = dict()
         gs['RGIID'] = gdir.rgi_id
         gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
         gs['MAIN'] = mm
