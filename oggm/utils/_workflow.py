@@ -520,36 +520,15 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
 
     olist = []
     for gdir in gdirs:
-        olist.extend(_get_centerline_lonlat(gdir))
+        try:
+            olist.extend(_get_centerline_lonlat(gdir))
+        except FileNotFoundError:
+            pass
 
     odf = gpd.GeoDataFrame(olist)
-
-    shema = dict()
-    props = OrderedDict()
-    props['RGIID'] = 'str:14'
-    props['LE_SEGMENT'] = 'int:9'
-    props['MAIN'] = 'int:9'
-    shema['geometry'] = 'LineString'
-    shema['properties'] = props
-
-    crs = {'init': 'epsg:4326'}
-
-    # some writing function from geopandas rep
-    from shapely.geometry import mapping
-    import fiona
-
-    def feature(i, row):
-        return {
-            'id': str(i),
-            'type': 'Feature',
-            'properties':
-                dict((k, v) for k, v in row.items() if k != 'geometry'),
-            'geometry': mapping(row['geometry'])}
-
-    with fiona.open(path, 'w', driver='ESRI Shapefile',
-                    crs=crs, schema=shema) as c:
-        for i, row in odf.iterrows():
-            c.write(feature(i, row))
+    odf = odf.sort_values(by='RGIID')
+    odf.crs = {'init': 'epsg:4326'}
+    odf.to_file(path)
 
 
 def demo_glacier_id(key):
