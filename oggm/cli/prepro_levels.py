@@ -15,7 +15,7 @@ import geopandas as gpd
 
 # Locals
 import oggm.cfg as cfg
-from oggm import utils, workflow, tasks
+from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
 
@@ -203,7 +203,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rs = i == 0
             rgidf['DEM_SOURCE'] = s
             log.workflow('Running prepro on sources: {}'.format(s))
-            gdirs = workflow.init_glacier_regions(rgidf, reset=rs, force=rs)
+            gdirs = []
+            for_task = []
+            for _, entity in rgidf.iterrows():
+                gdir = GlacierDirectory(entity, reset=rs)
+                for_task.append((gdir, dict(entity=entity)))
+                gdirs.append(gdir)
+
+            workflow.execute_entity_task(tasks.define_glacier_region, for_task)
             workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
 
         # make a GeoTiff mask of the glacier, choose any source
