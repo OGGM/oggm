@@ -27,6 +27,7 @@ jobs:
       id: push-image
       uses: OGGM/docker-build-and-push-action@v1
       with:
+        only_on_repo: OGGM/oggm
         user: ${{ secrets.DockerhubUser }}
         pass: ${{ secrets.DockerhubPass }}
         path: ./deployment/docker
