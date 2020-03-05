@@ -1820,12 +1820,12 @@ class TestDataFiles(unittest.TestCase):
     def test_nasazone(self):
 
         z = utils.nasadem_zone(lon_ex=[137.5, 137.5],
-                              lat_ex=[-72.5, -72.5])
+                               lat_ex=[-72.5, -72.5])
         self.assertTrue(len(z) == 1)
         self.assertEqual('s73e137', z[0])
 
         z = utils.nasadem_zone(lon_ex=[-95.5, -95.5],
-                              lat_ex=[30.5, 30.5])
+                               lat_ex=[30.5, 30.5])
         self.assertTrue(len(z) == 1)
         self.assertEqual('n30w096', z[0])
 
