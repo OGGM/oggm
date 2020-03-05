@@ -73,7 +73,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_nr=4, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       test_crudir=None, disable_mp=False, timeout=0,
-                      max_level=4, logging_level='WORKFLOW'):
+                      max_level=4, logging_level='WORKFLOW',
+                      map_dmax=None, map_d1=None):
     """Does the actual job.
 
     Parameters
@@ -110,6 +111,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the maximum pre-processing level before stopping
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
+    map_dmax : float
+        maximum resolution [m] of spatial grid resolution
+    map_d1 : float
+        equation parameter which is used to calculate the grid resolution
     """
 
     # TODO: temporarily silence Fiona deprecation warnings
@@ -143,6 +148,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # How many grid points around the glacier?
     # Make it large if you expect your glaciers to grow large
     cfg.PARAMS['border'] = border
+
+    # Size of the spatial map
+    cfg.PARAMS['dmax'] = map_dmax if map_dmax else cfg.PARAMS['dmax']
+    cfg.PARAMS['d1'] = map_d1 if map_d1 else cfg.PARAMS['d1']
 
     # Set to True for operational runs
     cfg.PARAMS['continue_on_error'] = True
@@ -383,6 +392,13 @@ def parse_args(args):
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
+    parser.add_argument('--map_dmax', type=float,
+                        help='maximal resolution of the spatial grid. Defaults'
+                             ' to value from params.cfg.')
+    parser.add_argument('--map_d1', type=float,
+                        help='d1 parameter to calculate the resolution of the '
+                             'spatial grid. Defaults to value from '
+                             'params.cfg.')
     args = parser.parse_args(args)
 
     # Check input
@@ -422,7 +438,9 @@ def parse_args(args):
                 is_test=args.test, test_nr=args.test_nr,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
-                disable_mp=args.disable_mp, logging_level=args.logging_level)
+                disable_mp=args.disable_mp, logging_level=args.logging_level,
+                map_dmax=args.map_dmax, map_d1=args.map_d1,
+                )
 
 
 def main():
