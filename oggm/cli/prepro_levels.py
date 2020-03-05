@@ -74,7 +74,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       test_intersects_file=None, test_topofile=None,
                       test_crudir=None, disable_mp=False, timeout=0,
                       max_level=4, logging_level='WORKFLOW',
-                      map_maxd=None, map_d1=None):
+                      map_dmax=None, map_d1=None):
     """Does the actual job.
 
     Parameters
@@ -111,7 +111,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the maximum pre-processing level before stopping
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
-    map_maxd : float
+    map_dmax : float
         maximum resolution [m] of spatial grid resolution
     map_d1 : float
         equation parameter which is used to calculate the grid resolution
@@ -150,7 +150,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     cfg.PARAMS['border'] = border
 
     # Size of the spatial map
-    cfg.PARAMS['dmax'] = map_maxd if map_maxd else cfg.PARAMS['dmax']
+    cfg.PARAMS['dmax'] = map_dmax if map_dmax else cfg.PARAMS['dmax']
     cfg.PARAMS['d1'] = map_d1 if map_d1 else cfg.PARAMS['d1']
 
     # Set to True for operational runs
@@ -392,7 +392,7 @@ def parse_args(args):
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
-    parser.add_argument('--map_maxd', type=float,
+    parser.add_argument('--map_dmax', type=float,
                         help='maximal resolution of the spatial grid. Defaults'
                              ' to value from params.cfg.')
     parser.add_argument('--map_d1', type=float,
@@ -439,7 +439,7 @@ def parse_args(args):
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
                 disable_mp=args.disable_mp, logging_level=args.logging_level,
-                map_maxd=args.map_maxd, map_d1=args.map_d1,
+                map_dmax=args.map_dmax, map_d1=args.map_d1,
                 )
 
 
