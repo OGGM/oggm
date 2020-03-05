@@ -93,7 +93,7 @@ WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
 
 DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
-               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM']
+               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM', 'NASADEM']
 
 _RGI_METADATA = dict()
 
@@ -778,6 +778,45 @@ def _download_srtm_file_unlocked(zone):
     return outpath
 
 
+def _download_nasadem_file(zone):
+    with _get_download_lock():
+        return _download_nasadem_file_unlocked(zone)
+
+
+def _download_nasadem_file_unlocked(zone):
+    """Checks if the NASADEM data is in the directory and if not, download it.
+    """
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+    wwwfile = ('https://e4ftl01.cr.usgs.gov/MEASURES/NASADEM_HGT.001/'
+               '2000.02.11/NASADEM_HGT_{}.zip'.format(zone))
+    demfile = '{}.hgt'.format(zone)
+    outpath = os.path.join(tmpdir, demfile)
+
+    # check if extracted file exists already
+    if os.path.exists(outpath):
+        return outpath
+
+    # Did we download it yet?
+    dest_file = file_downloader(wwwfile)
+
+    # None means we tried hard but we couldn't find it
+    if not dest_file:
+        return None
+
+    # ok we have to extract it
+    if not os.path.exists(outpath):
+        with zipfile.ZipFile(dest_file) as zf:
+            zf.extract(demfile, path=tmpdir)
+
+    # See if we're good, don't overfill the tmp directory
+    assert os.path.exists(outpath)
+    cfg.get_lru_handler(tmpdir).append(outpath)
+    return outpath
+
+
 def _download_tandem_file(zone):
     with _get_download_lock():
         return _download_tandem_file_unlocked(zone)
@@ -924,7 +963,7 @@ def _download_aster_file(zone):
 
 
 def _download_aster_file_unlocked(zone):
-    """Checks if the tandem data is in the directory and if not, download it.
+    """Checks if the ASTER data is in the directory and if not, download it.
     """
 
     # extract directory
@@ -1447,6 +1486,33 @@ def aster_zone(lon_ex, lat_ex):
             ew = 'W' if lon < 0 else 'E'
             filename = 'ASTGTMV003_{}{:02.0f}{}{:03.0f}'.format(ns, abs(lat),
                                                                 ew, abs(lon))
+            zones.append(filename)
+    return list(sorted(set(zones)))
+
+
+def nasadem_zone(lon_ex, lat_ex):
+    """Returns a list of NASADEM zones covering the desired extent.
+
+    NASADEM tiles are 1 degree x 1 degree
+    N50 contains 50 to 50.9
+    E10 contains 10 to 10.9
+    S70 contains -69.99 to -69.0
+    W20 contains -19.99 to -19.0
+    """
+
+    # adding small buffer for unlikely case where one lon/lat_ex == xx.0
+    lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
+    lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
+
+    zones = []
+    for lat in lats:
+        # north or south?
+        ns = 's' if lat < 0 else 'n'
+        for lon in lons:
+            # east or west?
+            ew = 'w' if lon < 0 else 'e'
+            filename = '{}{:02.0f}{}{:03.0f}'.format(ns, abs(lat), ew,
+                                                     abs(lon))
             zones.append(filename)
     return list(sorted(set(zones)))
 
@@ -2054,6 +2120,8 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return np.max(np.abs(lat_ex)) < 60
     elif source == 'COPDEM':
         return True
+    elif source == 'NASADEM':
+        return (np.min(lat_ex) > -56) and (np.max(lat_ex) < 60)
     elif source == 'USER':
         return True
     elif source is None:
@@ -2154,6 +2222,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
           - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
           - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
+          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
 
     Returns
     -------
@@ -2256,6 +2325,11 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         filetuple = copdem_zone(lon_ex, lat_ex)
         for cpp, eop in filetuple:
             files.append(_download_copdem_file(cpp, eop))
+
+    if source == 'NASADEM':
+        zones = nasadem_zone(lon_ex, lat_ex)
+        for z in zones:
+            files.append(_download_nasadem_file(z))
 
     # filter for None (e.g. oceans)
     files = [s for s in files if s]

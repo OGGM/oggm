@@ -22,6 +22,9 @@ Enhancements
   can be added on the command line via ``$ oggm_netrc_credentials``
   (:pull:`961`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- Added NASADEM as optional DEM. This is a improved version of  SRTM and could
+  become replace SRTM.
+  By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 Bug fixes
 ~~~~~~~~~

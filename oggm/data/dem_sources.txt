@@ -265,3 +265,17 @@ the European Union and ESA, all rights reserved”.
 
 Please also read and agree to the full ESA user license:
 https://spacedata.copernicus.eu/documents/12833/14545/CSCDA_ESA_User_Licence
+
+[NASADEM]
+NASADEM Merged DEM Global
+
+Original resolution: 1 arcsec (~30m)
+Date of acquisition: February 2000
+Date range: 2000-2000
+
+# Data Citation
+
+NASADEM Merged DEM Global 1 arc second - NASADEM_HGT
+NASA JPL (2020). NASADEM Merged DEM Global 1 arc second V001 [Data set]. NASA
+EOSDIS Land Processes DAAC. Accessed YYYY-MM-DD from
+https://doi.org/10.5067/MEaSUREs/NASADEM/NASADEM_HGT.001

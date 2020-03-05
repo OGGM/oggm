@@ -1396,6 +1396,25 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'SRTM'
 
+    def test_nasadem(self):
+
+        # Make a fake topo file
+        tf = make_fake_zipdir(os.path.join(self.dldir, 'NASADEM_HGT_n47e011'),
+                              fakefile='n47e011.hgt')
+
+        def down_check(url, *args, **kwargs):
+            expected = ('https://e4ftl01.cr.usgs.gov/MEASURES/NASADEM_HGT.001/'
+                        '2000.02.11/NASADEM_HGT_n47e011.zip')
+            self.assertEqual(url, expected)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1],
+                                             source='NASADEM')
+
+        assert os.path.exists(of[0])
+        assert source == 'NASADEM'
+
     def test_dem3(self):
 
         def down_check(url, *args, **kwargs):
@@ -1798,6 +1817,25 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual('ASTGTMV003_N30W096', z[1])
         self.assertEqual('ASTGTMV003_N30W097', z[2])
 
+    def test_nasazone(self):
+
+        z = utils.nasadem_zone(lon_ex=[137.5, 137.5],
+                              lat_ex=[-72.5, -72.5])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('s73e137', z[0])
+
+        z = utils.nasadem_zone(lon_ex=[-95.5, -95.5],
+                              lat_ex=[30.5, 30.5])
+        self.assertTrue(len(z) == 1)
+        self.assertEqual('n30w096', z[0])
+
+        z = utils.nasadem_zone(lon_ex=[-96.5, -94.5],
+                               lat_ex=[30.5, 30.5])
+        self.assertTrue(len(z) == 3)
+        self.assertEqual('n30w095', z[0])
+        self.assertEqual('n30w096', z[1])
+        self.assertEqual('n30w097', z[2])
+
     def test_mapzen_zone(self):
 
         z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
@@ -2032,6 +2070,25 @@ class TestDataFiles(unittest.TestCase):
         # this zone does not exist
         zone = '41_20'
         self.assertTrue(_download_srtm_file(zone) is None)
+
+    @pytest.mark.download
+    def test_nasadownload(self):
+        from oggm.utils._downloads import _download_nasadem_file
+
+        # this zone does exist and file should be small enough for download
+        zone = 'n01e119'
+        fp = _download_nasadem_file(zone)
+        self.assertTrue(os.path.exists(fp))
+        fp = _download_nasadem_file(zone)
+        self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    def test_nasademdownloadfails(self):
+        from oggm.utils._downloads import _download_nasadem_file
+
+        # this zone does not exist
+        zone = 'n80w100'
+        self.assertTrue(_download_nasadem_file(zone) is None)
 
     @pytest.mark.download
     @pytest.mark.creds
