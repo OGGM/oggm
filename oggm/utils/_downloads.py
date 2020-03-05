@@ -487,7 +487,7 @@ def _get_url_cache_name(url):
     """
 
     res = urlparse(url)
-    return res.netloc + res.path
+    return res.netloc.split(':', 1)[0] + res.path
 
 
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
