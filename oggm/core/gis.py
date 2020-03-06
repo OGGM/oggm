@@ -288,7 +288,7 @@ def define_glacier_region(gdir, entity=None):
                        k=0.9996, x_0=0, y_0=0, datum='WGS84')
     proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
                 "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
-    proj_in = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
+    proj_in = pyproj.Proj("epsg:4326", preserve_units=True)
     proj_out = pyproj.Proj(proj4_str, preserve_units=True)
     project = partial(transform_proj, proj_in, proj_out)
     # transform geometry to map
