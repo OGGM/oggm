@@ -2339,7 +2339,7 @@ class TestSkyIsFalling(unittest.TestCase):
         srs = ('+units=m +proj=lcc +lat_1=29.0 +lat_2=29.0 '
                '+lat_0=29.0 +lon_0=89.8')
 
-        proj_out = pyproj.Proj("+init=EPSG:4326", preserve_units=True)
+        proj_out = pyproj.Proj("EPSG:4326", preserve_units=True)
         proj_in = pyproj.Proj(srs, preserve_units=True)
 
         from salem.gis import transform_proj

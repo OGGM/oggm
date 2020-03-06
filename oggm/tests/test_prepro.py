@@ -3276,7 +3276,9 @@ class TestPyGEM_compat(unittest.TestCase):
         width = np.asarray(data['width'])
         thick = np.asarray(data['thick'])
         elevation = np.asarray(data.index).astype(np.float)
-        dx_meter = area / width
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            dx_meter = area / width
         dx_meter = np.where(np.isfinite(dx_meter), dx_meter, 0)
 
         np.testing.assert_allclose(fls[0].dx_meter, dx_meter)

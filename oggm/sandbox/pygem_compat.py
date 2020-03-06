@@ -1,5 +1,6 @@
 # Builtins
 import logging
+import warnings
 
 # External libs
 import numpy as np
@@ -89,17 +90,19 @@ def present_time_glacier_from_bins(gdir, data=None,
     if data.index[0] < data.index[-1]:
         data = data.loc[::-1]
 
-    nx = len(data)
-    area = np.asarray(data['area'])
-    width = np.asarray(data['width'])
-    thick = np.asarray(data['thick'])
-    elevation = np.asarray(data.index).astype(np.float)
-    dx_meter = area / width
-    dx_meter = np.where(np.isfinite(dx_meter), dx_meter, 0)
-    section = width * thick
-    thick = 3/2 * section / width
-    thick = np.where(np.isfinite(thick), thick, 0)
-    bed_shape = 4 * thick / width ** 2
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        nx = len(data)
+        area = np.asarray(data['area'])
+        width = np.asarray(data['width'])
+        thick = np.asarray(data['thick'])
+        elevation = np.asarray(data.index).astype(np.float)
+        dx_meter = area / width
+        dx_meter = np.where(np.isfinite(dx_meter), dx_meter, 0)
+        section = width * thick
+        thick = 3/2 * section / width
+        thick = np.where(np.isfinite(thick), thick, 0)
+        bed_shape = 4 * thick / width ** 2
 
     # TODO: this is a very dirty fix -> we should rather interpolate,
     # AND we should be really carefull about flat bed shapes
