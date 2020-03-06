@@ -435,7 +435,8 @@ def define_glacier_region(gdir, entity=None):
         'transform': dst_transform,
         'nodata': nodata,
         'width': nx,
-        'height': ny
+        'height': ny,
+        'driver': 'GTiff'
     })
 
     # Could be extended so that the cfg file takes all Resampling.* methods
