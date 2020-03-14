@@ -74,7 +74,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       test_intersects_file=None, test_topofile=None,
                       test_crudir=None, disable_mp=False, timeout=0,
                       max_level=4, logging_level='WORKFLOW',
-                      map_dmax=None, map_d1=None):
+                      map_dmax=None, map_d1=None, disable_dl_verify=False):
     """Does the actual job.
 
     Parameters
@@ -115,6 +115,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         maximum resolution [m] of spatial grid resolution
     map_d1 : float
         equation parameter which is used to calculate the grid resolution
+    disable_dl_verify : bool
+        disable the hash verification of OGGM downloads
     """
 
     # TODO: temporarily silence Fiona deprecation warnings
@@ -158,6 +160,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Timeout
     cfg.PARAMS['task_timeout'] = timeout
+
+    # Check for the integrity of the files OGGM downloads at run time
+    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
+    # takes a long time, so deactivating this can make sense
+    cfg.PARAMS['dl_verify'] = not disable_dl_verify
 
     # For statistics
     climate_periods = [1920, 1960, 2000]
@@ -387,18 +394,22 @@ def parse_args(args):
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
     parser.add_argument('--test_nr', type=int, default=4,
-                        help='if --test True, specify how many glaciers to'
+                        help='if --test, specify how many glaciers to'
                              'test.')
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
-    parser.add_argument('--map_dmax', type=float,
+    parser.add_argument('--map-dmax', type=float,
                         help='maximal resolution of the spatial grid. Defaults'
                              ' to value from params.cfg.')
-    parser.add_argument('--map_d1', type=float,
+    parser.add_argument('--map-d1', type=float,
                         help='d1 parameter to calculate the resolution of the '
                              'spatial grid. Defaults to value from '
                              'params.cfg.')
+    parser.add_argument('--disable-dl-verify', nargs='?', const=True,
+                        default=False,
+                        help='if used OGGM downloads will not be verified '
+                             'against a hash sum.')
     args = parser.parse_args(args)
 
     # Check input
@@ -440,6 +451,7 @@ def parse_args(args):
                 max_level=args.max_level, timeout=args.timeout,
                 disable_mp=args.disable_mp, logging_level=args.logging_level,
                 map_dmax=args.map_dmax, map_d1=args.map_d1,
+                disable_dl_verify=args.disable_dl_verify
                 )
 
 
