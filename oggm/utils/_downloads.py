@@ -72,7 +72,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '78bce79de8016b62a902b31e7d577b5e548e3901'
+SAMPLE_DATA_COMMIT = 'ca88ba01060a6465dbe88e25f6186ff4fd221f64'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1347,6 +1347,16 @@ def rema_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
+def alaska_dem_zone(lon_ex, lat_ex):
+    """Returns a list of Alaska-DEM zones covering the desired extent.
+    """
+
+    gdf = gpd.read_file(get_demo_file('Alaska_albers_V3_tiles.shp'))
+    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
+    gdf = gdf.loc[gdf.intersects(p)]
+    return gdf.tile.values if len(gdf) > 0 else []
+
+
 def copdem_zone(lon_ex, lat_ex):
     """Returns a list of Copernicus DEM tarfile and tilename tuples
     """
@@ -2277,10 +2287,14 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         files.append(_file)
 
     if source == 'ALASKA':
-        with _get_download_lock():
-            url = 'https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
-            url += 'Alaska_albers_V3.tif'
-            files.append(file_downloader(url))
+        zones = alaska_dem_zone(lon_ex, lat_ex)
+        for z in zones:
+            with _get_download_lock():
+                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url += 'DEM/Alaska_albers_V3/'
+                url += '{}_Alaska_albers_V3/'.format(z)
+                url += '{}_Alaska_albers_V3.tif'.format(z)
+                files.append(file_downloader(url))
 
     if source == 'REMA':
         zones = rema_zone(lon_ex, lat_ex)
