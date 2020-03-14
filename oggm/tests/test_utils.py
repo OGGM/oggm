@@ -1553,6 +1553,26 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.exists(of[0])
         assert source == 'REMA'
 
+    def test_alaska(self):
+
+        # Make a fake topo file
+        tf = touch(os.path.join(self.dldir, 'file.tif'))
+
+        def down_check(url, *args, **kwargs):
+            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+                        'Alaska_albers_V3/008_004_Alaska_albers_V3/'
+                        '008_004_Alaska_albers_V3.tif')
+            self.assertEqual(expected, url)
+            return tf
+
+        with FakeDownloadManager('_progress_urlretrieve', down_check):
+            of, source = utils.get_topo_file([-140.428, -140.428],
+                                             [60.177, 60.177],
+                                             source='ALASKA')
+
+        assert os.path.exists(of[0])
+        assert source == 'ALASKA'
+
     def test_arcticdem(self):
 
         # Make a fake topo file
