@@ -657,7 +657,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
     return local_path
 
 
-def download_with_authentification(wwwfile, key):
+def download_with_authentication(wwwfile, key):
     """ Uses credentials from a local .netrc file to download files
 
     This is function is currently used for TanDEM-X and ASTER
@@ -841,7 +841,7 @@ def _download_tandem_file_unlocked(zone):
     if os.path.exists(outpath):
         return outpath
 
-    dest_file = download_with_authentification(wwwfile, 'geoservice.dlr.de')
+    dest_file = download_with_authentication(wwwfile, 'geoservice.dlr.de')
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -981,8 +981,7 @@ def _download_aster_file_unlocked(zone):
         return outpath
 
     # download from NASA Earthdata with credentials
-    dest_file = download_with_authentification(wwwfile,
-                                               'urs.earthdata.nasa.gov')
+    dest_file = download_with_authentication(wwwfile, 'urs.earthdata.nasa.gov')
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -1059,8 +1058,8 @@ def _download_copdem_file_unlocked(cppfile, tilename):
                'datasets/COP-DEM_GLO-90-DGED/2019_1/' +
                cppfile)
 
-    dest_file = download_with_authentification(ftpfile,
-                                               'spacedata.copernicus.eu')
+    dest_file = download_with_authentication(ftpfile,
+                                             'spacedata.copernicus.eu')
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
