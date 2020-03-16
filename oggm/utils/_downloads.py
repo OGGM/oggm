@@ -673,11 +673,14 @@ def download_with_authentification(wwwfile, key):
     -------
 
     """
-    # Attempt to download without credentials first to hit the cache
-    try:
-        dest_file = file_downloader(wwwfile)
-    except (HttpDownloadError, DownloadCredentialsMissingException):
-        dest_file = None
+    # Check the cache first. Use dummy download function to assure nothing is
+    # tried to be downloaded without credentials:
+
+    def _always_none(foo):
+        return None
+
+    cache_obj_name = _get_url_cache_name(wwwfile)
+    dest_file = _verified_download_helper(cache_obj_name, _always_none)
 
     # Grab auth parameters
     if not dest_file:
