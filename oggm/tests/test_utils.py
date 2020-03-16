@@ -2124,19 +2124,6 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.download
     @pytest.mark.creds
-    def test_tandemdownload_cache(self):
-        from oggm.utils._downloads import download_with_authentification
-
-        # this zone does exist but without credentials this should just check
-        # the cache and return None if it does not exist
-        zone = 'N47/E010/TDM1_DEM__30_N47E011'
-        wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
-                   '{}.zip'.format(zone))
-
-        dest_file = download_with_authentification(wwwfile, 'geoservice.dlr.de')
-
-    @pytest.mark.download
-    @pytest.mark.creds
     def test_tandemdownloadfails(self):
         from oggm.utils._downloads import _download_tandem_file
 
