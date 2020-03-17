@@ -1504,7 +1504,7 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(expected, url)
             return tf
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
+        with FakeDownloadManager('download_with_authentication', down_check):
             of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
                                              source='COPDEM')
 
@@ -1626,7 +1626,7 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(url, expect)
             return tf
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
+        with FakeDownloadManager('download_with_authentication', down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88.1, -88.9],
                                              source='ASTER')
 
@@ -1644,7 +1644,7 @@ class TestFakeDownloads(unittest.TestCase):
             self.assertEqual(url, expect)
             return tf
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
+        with FakeDownloadManager('download_with_authentication', down_check):
             of, source = utils.get_topo_file([-145.2, -145.3], [60.1, 60.9],
                                              source='TANDEM')
 
@@ -1678,7 +1678,7 @@ class TestFakeDownloads(unittest.TestCase):
 
             return file
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
+        with FakeDownloadManager('download_with_authentication', down_check):
             of, source = utils.get_topo_file([-144.1, -143.9], [60.5, 60.6],
                                              source='TANDEM')
 
@@ -2121,6 +2121,16 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(os.path.exists(fp))
         fp = _download_tandem_file(zone)
         self.assertTrue(os.path.exists(fp))
+
+    @pytest.mark.download
+    @pytest.mark.creds
+    def test_tandemdownloadfails(self):
+        from oggm.utils._downloads import _download_tandem_file
+
+        # this zone does not exist, so it should return None
+        zone = 'N47/E010/TDM1_DEM__30_NxxExxx'
+        fp = _download_tandem_file(zone)
+        self.assertIsNone(fp)
 
     @pytest.mark.download
     @pytest.mark.creds

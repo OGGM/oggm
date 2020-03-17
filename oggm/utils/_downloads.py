@@ -657,7 +657,7 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
     return local_path
 
 
-def download_with_authentification(wwwfile, key):
+def download_with_authentication(wwwfile, key):
     """ Uses credentials from a local .netrc file to download files
 
     This is function is currently used for TanDEM-X and ASTER
@@ -673,11 +673,14 @@ def download_with_authentification(wwwfile, key):
     -------
 
     """
-    # Attempt to download without credentials first to hit the cache
-    try:
-        dest_file = file_downloader(wwwfile)
-    except (HttpDownloadError, DownloadCredentialsMissingException):
-        dest_file = None
+    # Check the cache first. Use dummy download function to assure nothing is
+    # tried to be downloaded without credentials:
+
+    def _always_none(foo):
+        return None
+
+    cache_obj_name = _get_url_cache_name(wwwfile)
+    dest_file = _verified_download_helper(cache_obj_name, _always_none)
 
     # Grab auth parameters
     if not dest_file:
@@ -838,7 +841,7 @@ def _download_tandem_file_unlocked(zone):
     if os.path.exists(outpath):
         return outpath
 
-    dest_file = download_with_authentification(wwwfile, 'geoservice.dlr.de')
+    dest_file = download_with_authentication(wwwfile, 'geoservice.dlr.de')
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -978,8 +981,7 @@ def _download_aster_file_unlocked(zone):
         return outpath
 
     # download from NASA Earthdata with credentials
-    dest_file = download_with_authentification(wwwfile,
-                                               'urs.earthdata.nasa.gov')
+    dest_file = download_with_authentication(wwwfile, 'urs.earthdata.nasa.gov')
 
     # That means we tried hard but we couldn't find it
     if not dest_file:
@@ -1056,8 +1058,8 @@ def _download_copdem_file_unlocked(cppfile, tilename):
                'datasets/COP-DEM_GLO-90-DGED/2019_1/' +
                cppfile)
 
-    dest_file = download_with_authentification(ftpfile,
-                                               'spacedata.copernicus.eu')
+    dest_file = download_with_authentication(ftpfile,
+                                             'spacedata.copernicus.eu')
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
