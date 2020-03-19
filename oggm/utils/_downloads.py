@@ -1076,7 +1076,7 @@ def _download_copdem_file_unlocked(cppfile, tilename):
 
     # See if we're good, don't overfill the tmp directory
     assert os.path.exists(demfile)
-    cfg.get_lru_handler(tmpdir).append(demfile)
+    cfg.get_lru_handler(tmpdir, maxsize=1000).append(demfile)
 
     return demfile
 
