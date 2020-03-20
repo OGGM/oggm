@@ -2066,7 +2066,7 @@ class TestDataFiles(unittest.TestCase):
         # init handler for dldir and ending 'foo'
         lru_foo = cfg.get_lru_handler(self.dldir, ending='.foo')
         # no maxsize specified: use default
-        self.assertTrue(lru_foo.maxsize == cfg.PARAMS['LRU_maxsize'])
+        self.assertTrue(lru_foo.maxsize == cfg.PARAMS['lru_maxsize'])
         # all files should exist
         self.assertTrue(all([os.path.exists(f) for f in foo]))
 

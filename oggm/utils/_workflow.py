@@ -240,7 +240,7 @@ class LRUFileCache():
         """
         self.files = [] if l0 is None else l0
         # if no maxsize is specified, use value from configuration
-        maxsize = cfg.PARAMS['LRU_maxsize'] if maxsize is None else maxsize
+        maxsize = cfg.PARAMS['lru_maxsize'] if maxsize is None else maxsize
         self.maxsize = maxsize
         self.purge()
 

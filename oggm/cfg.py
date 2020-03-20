@@ -371,8 +371,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
         log.workflow('Size of LRU cache set to {} '.format(lru_maxsize) +
                      'according to the ENV variable LRU_MAXSIZE')
     except KeyError:
-        lru_maxsize = cp.as_int('LRU_maxsize')
-    PARAMS['LRU_maxsize'] = lru_maxsize
+        lru_maxsize = cp.as_int('lru_maxsize')
+    PARAMS['lru_maxsize'] = lru_maxsize
 
     # Some non-trivial params
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
