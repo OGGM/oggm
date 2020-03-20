@@ -2856,7 +2856,7 @@ class TestGCMClimate(unittest.TestCase):
             # Here no std dev!
             _scru = scru.groupby('time.month').std(dim='time')
             _scesm = scesm.groupby('time.month').std(dim='time')
-            assert not np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+            assert np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
 
             # And also the annual cycle
             scru = scru.groupby('time.month').mean(dim='time')
