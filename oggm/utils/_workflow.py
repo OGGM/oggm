@@ -228,7 +228,7 @@ class LRUFileCache():
     The files which are no longer used are deleted from the disk.
     """
 
-    def __init__(self, l0=None, maxsize=100):
+    def __init__(self, l0=None, maxsize=None):
         """Instanciate.
 
         Parameters
@@ -239,6 +239,8 @@ class LRUFileCache():
             the max number of files to keep
         """
         self.files = [] if l0 is None else l0
+        # if no maxsize is specified, use value from configuration
+        maxsize = cfg.PARAMS['LRU_maxsize'] if maxsize is None else maxsize
         self.maxsize = maxsize
         self.purge()
 

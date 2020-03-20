@@ -365,6 +365,15 @@ def initialize_minimal(file=None, logging_level='INFO'):
                      'processors (N={})'.format(mpp))
     PARAMS['mp_processes'] = mpp
 
+    # Size of LRU cache
+    try:
+        lru_maxsize = int(os.environ['LRU_MAXSIZE'])
+        log.workflow('Size of LRU cache set to {} '.format(lru_maxsize) +
+                     'according to the ENV variable LRU_MAXSIZE')
+    except KeyError:
+        lru_maxsize = cp.as_int('LRU_maxsize')
+    PARAMS['LRU_maxsize'] = lru_maxsize
+
     # Some non-trivial params
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
@@ -577,7 +586,7 @@ def oggm_static_paths():
 oggm_static_paths()
 
 
-def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
+def get_lru_handler(tmpdir=None, maxsize=None, ending='.tif'):
     """LRU handler for a given temporary directory (singleton).
 
     Parameters
@@ -598,12 +607,17 @@ def get_lru_handler(tmpdir=None, maxsize=100, ending='.tif'):
     if not os.path.exists(tmpdir):
         os.makedirs(tmpdir)
 
-    # one handler per directory and per size
+    # one handler per directory and file ending
     # (in practice not very useful, but a dict is easier to handle)
-    k = (tmpdir, maxsize)
+    k = (tmpdir, ending)
     if k in LRUHANDLERS:
         # was already there
-        return LRUHANDLERS[k]
+        lru = LRUHANDLERS[k]
+        # possibility to increase or decrease the cachesize if need be
+        if maxsize is not None:
+            lru.maxsize = maxsize
+            lru.purge()
+        return lru
     else:
         # we do a new one
         from oggm.utils import LRUFileCache
