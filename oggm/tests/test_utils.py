@@ -1202,7 +1202,8 @@ class TestFakeDownloads(unittest.TestCase):
         file_sha256 = file_sha256.digest()
 
         data = utils.get_dl_verify_data()
-        data['test.com/test.txt'] = (file_size, file_sha256)
+        data.loc['test.com/test.txt', 'size'] = file_size
+        data.loc['test.com/test.txt', 'sha256'] = file_sha256.hex()
 
         return 'https://test.com/test.txt'
 

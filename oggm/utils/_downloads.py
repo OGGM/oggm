@@ -199,6 +199,7 @@ def get_dl_verify_data():
     if cfg.DATA.get('dl_verify_data') is not None:
         return cfg.DATA['dl_verify_data']
 
+    verify_hdf_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
 
     try:
@@ -220,6 +221,8 @@ def get_dl_verify_data():
                 logger.warning('%s changed or invalid, deleting.'
                                % (verify_file_path))
                 os.remove(verify_file_path)
+                if os.path.exists(verify_hdf_path):
+                    os.remove(verify_hdf_path)
 
     do_verify()
 
@@ -242,16 +245,27 @@ def get_dl_verify_data():
         logger.warning('Downloading and verifiying checksums failed.')
         return dict()
 
-    data = dict()
-    with lzma.open(verify_file_path, 'rb') as f:
-        for line in f:
-            line = line.decode('utf-8').strip()
-            if not line:
-                continue
-            elems = line.split(maxsplit=2)
-            data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
+    if not os.path.exists(verify_hdf_path):
+        index = []
+        size = []
+        sha256 = []
+        with lzma.open(verify_file_path, 'rb') as f:
+            for line in f:
+                line = line.decode('utf-8').strip()
+                if not line:
+                    continue
+                elems = line.split(maxsplit=2)
+                index.append(elems[2])
+                size.append(int(elems[1]))
+                sha256.append(elems[0])
+        df = pd.DataFrame(index=index)
+        df['size'] = size
+        df['sha256'] = sha256
+        df.to_hdf(verify_hdf_path, key='df')
+    else:
+        df = pd.read_hdf(verify_hdf_path, key='df')
 
-    cfg.DATA['dl_verify_data'] = data
+    cfg.DATA['dl_verify_data'] = df
     logger.info('Successfully loaded verification data.')
 
     return cfg.DATA['dl_verify_data']
@@ -335,8 +349,8 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
         dl_verify = True
 
     if dl_verify and path is not None:
-        data = get_dl_verify_data()
-        if cache_obj_name not in data:
+        df = get_dl_verify_data()
+        if cache_obj_name not in df.index:
             logger.warning('No known hash for %s' % cache_obj_name)
         else:
             # compute the hash
@@ -348,10 +362,10 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
             size = os.path.getsize(path)
 
             # check
-            data = data[cache_obj_name]
-            if data[0] != size or data[1] != sha256:
+            s, h = df.loc[cache_obj_name]
+            if s != size or bytearray.fromhex(h) != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path, size, sha256.hex(), data[0], data[1].hex())
+                    path, size, sha256.hex(), s, h)
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
 
