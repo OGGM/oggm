@@ -9,6 +9,7 @@ import gzip
 import bz2
 import hashlib
 import pytest
+import itertools
 from unittest import mock
 
 import numpy as np
@@ -2052,25 +2053,39 @@ class TestDataFiles(unittest.TestCase):
 
     def test_lruhandler(self):
 
+        # initiate some files in empty directory
         self.reset_dir()
-        f1 = os.path.join(self.dldir, 'f1.txt')
-        f2 = os.path.join(self.dldir, 'f2.txt')
-        f3 = os.path.join(self.dldir, 'f3.txt')
-        open(f1, 'a').close()
-        time.sleep(0.1)
-        open(f2, 'a').close()
-        time.sleep(0.1)
-        open(f3, 'a').close()
+        foo = []
+        bar = []
+        for i, e in itertools.product(range(1, 4), ['foo', 'bar']):
+            f = os.path.join(self.dldir, 'f{}.{}'.format(i, e))
+            open(f, 'a').close()
+            (foo.append(f) if e == 'foo' else bar.append(f))
+            time.sleep(0.1)
 
-        cfg.get_lru_handler(self.dldir, maxsize=3, ending='.txt')
-        assert os.path.exists(f1)
-        assert os.path.exists(f2)
-        assert os.path.exists(f3)
+        # init handler for dldir and ending 'foo'
+        lru_foo = cfg.get_lru_handler(self.dldir, ending='.foo')
+        # no maxsize specified: use default
+        self.assertTrue(lru_foo.maxsize == cfg.PARAMS['lru_maxsize'])
+        # all files should exist
+        self.assertTrue(all([os.path.exists(f) for f in foo]))
 
-        cfg.get_lru_handler(self.dldir, maxsize=2, ending='.txt')
-        assert not os.path.exists(f1)
-        assert os.path.exists(f2)
-        assert os.path.exists(f3)
+        # init handler for dldir and ending bar
+        cfg.get_lru_handler(self.dldir, maxsize=3, ending='.bar')
+        # all files should exist
+        self.assertTrue(all([os.path.exists(b) for b in bar]))
+
+        # update foo handler, decresing maxsize should delete first file
+        lru_foo2 = cfg.get_lru_handler(self.dldir, maxsize=2, ending='.foo')
+        self.assertFalse(os.path.exists(foo[0]))
+        self.assertTrue(os.path.exists(foo[1]))
+        self.assertTrue(os.path.exists(foo[2]))
+        # but this should be the same handler instance as above:
+        self.assertTrue(lru_foo is lru_foo2)
+        self.assertTrue(lru_foo.maxsize == 2)
+
+        # And bar files should not be affected by decreased cache size of foo
+        self.assertTrue(all([os.path.exists(b) for b in bar]))
 
     @pytest.mark.download
     def test_srtmdownload(self):
