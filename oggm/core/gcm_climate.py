@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 @entity_task(log, writes=['gcm_data', 'climate_info'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
-                     year_range=('1961', '1990'), scale_stddev=False,
+                     year_range=('1961', '1990'), scale_stddev=True,
                      time_unit=None, calendar=None):
     """ Applies the anomaly method to GCM climate data
 
