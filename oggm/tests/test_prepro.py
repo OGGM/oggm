@@ -2893,9 +2893,9 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cmip5_temp_file'] = f
         f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
         cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns')
-        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4',
-                                       scale_stddev=True)
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns',
+                                       scale_stddev=False)
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_monthly')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
