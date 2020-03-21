@@ -435,7 +435,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
-           'calving_line_extension', 'use_kcalving_param']
+           'calving_line_extension', 'use_kcalving_param', 'lru_maxsize']
     for k in ltr:
         cp.pop(k, None)
 
