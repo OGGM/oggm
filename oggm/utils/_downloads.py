@@ -79,8 +79,8 @@ CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
 
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
-GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
-DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
+GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
+DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
 DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
@@ -894,7 +894,7 @@ def _download_dem3_viewpano_unlocked(zone):
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in DEM3REG.keys():
         # We prepared these files as tif already
-        ifile = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                  'DEM3_MERGED/{}.tif'.format(zone))
         return file_downloader(ifile)
     else:
@@ -1707,7 +1707,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     elif version == '61':
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
     elif version == '62':
-        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi62.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/misc/rgi62.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1838,7 +1838,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
     if version == '62':
-        dfile = ('https://cluster.klima.uni-bremen.de/~fmaussion/misc/'
+        dfile = ('https://cluster.klima.uni-bremen.de/~oggm/misc/'
                  'rgi62_Intersects.zip')
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
@@ -2279,7 +2279,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = arcticdem_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/ArcticDEM_100m_v3.0/'
                 url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
@@ -2292,7 +2292,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = alaska_dem_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/Alaska_albers_V3/'
                 url += '{}_Alaska_albers_V3/'.format(z)
                 url += '{}_Alaska_albers_V3.tif'.format(z)
@@ -2302,7 +2302,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = rema_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/REMA_100m_v1.1/'
                 url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
