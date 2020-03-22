@@ -247,7 +247,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     prepro_base_url : str
         for `from_prepro_level` only: if you want to override the default
         URL from which to download the gdirs. Default currently is
-        https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/
+        https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/
     use_demo_glaciers : bool
         whether to check the demo glaciers for download (faster than the
         standard prepro downloads). The default is to decide whether or
