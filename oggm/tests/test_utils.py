@@ -663,7 +663,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
-    @pytest.xfail
+    @pytest.mark.xfail
     def test_corrupted_file(self):
 
         # Go - initialize working directories
