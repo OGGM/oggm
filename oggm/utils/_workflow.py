@@ -41,14 +41,20 @@ except ImportError:
 try:
     import salem
     from salem import wgs84
+    from salem.gis import transform_proj
 except ImportError:
     pass
+try:
+    import pyproj
+except ImportError:
+    pass
+
 
 # Locals
 from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
-                               haversine)
+                               haversine, multipolygon_to_polygon)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
@@ -1564,10 +1570,12 @@ class GlacierDirectory(object):
             xx, yy = salem.transform_proj(crs, salem.wgs84,
                                           [g.bounds[0], g.bounds[2]],
                                           [g.bounds[1], g.bounds[3]])
+            write_shp = False
         else:
             g = rgi_entity['geometry']
             xx, yy = ([g.bounds[0], g.bounds[2]],
                       [g.bounds[1], g.bounds[3]])
+            write_shp = True
 
         # Extent of the glacier in lon/lat
         self.extent_ll = [xx, yy]
@@ -1689,6 +1697,10 @@ class GlacierDirectory(object):
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
 
+        if write_shp:
+            # Write shapefile
+            self._reproject_and_write_shapefile(rgi_entity)
+
         # Optimization
         self._mbdf = None
         self._mbprofdf = None
@@ -1713,6 +1725,68 @@ class GlacierDirectory(object):
                         str(self.grid.dy) + ')']
         return '\n'.join(summary) + '\n'
 
+    def _reproject_and_write_shapefile(self, entity):
+
+        # Make a local glacier map
+        params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
+                      k=0.9996, x_0=0, y_0=0, datum='WGS84')
+        proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
+                    "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**params)
+
+        # Reproject
+        proj_in = pyproj.Proj("epsg:4326", preserve_units=True)
+        proj_out = pyproj.Proj(proj4_str, preserve_units=True)
+        project = partial(transform_proj, proj_in, proj_out)
+
+        # transform geometry to map
+        geometry = shp_trafo(project, entity['geometry'])
+        geometry = multipolygon_to_polygon(geometry, gdir=self)
+
+        # Save transformed geometry to disk
+        entity = entity.copy()
+        entity['geometry'] = geometry
+        # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
+        for k, s in entity.iteritems():
+            if type(s) in [np.int32, np.int64]:
+                entity[k] = int(s)
+        towrite = gpd.GeoDataFrame(entity).T
+        towrite.crs = proj4_str
+        # Delete the source before writing
+        if 'DEM_SOURCE' in towrite:
+            del towrite['DEM_SOURCE']
+
+        # Do we want to use the RGI area or ours?
+        if not cfg.PARAMS['use_rgi_area']:
+            # Update Area
+            area = geometry.area * 1e-6
+            entity['Area'] = area
+            towrite['Area'] = area
+
+        # Write shapefile
+        self.write_shapefile(towrite, 'outlines')
+
+        # Also transform the intersects if necessary
+        gdf = cfg.PARAMS['intersects_gdf']
+        if len(gdf) > 0:
+            gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
+                           (gdf.RGIId_2 == self.rgi_id))]
+            if len(gdf) > 0:
+                gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
+                if hasattr(gdf.crs, 'srs'):
+                    # salem uses pyproj
+                    gdf.crs = gdf.crs.srs
+                self.write_shapefile(gdf, 'intersects')
+        else:
+            # Sanity check
+            if cfg.PARAMS['use_intersects']:
+                raise InvalidParamsError(
+                    'You seem to have forgotten to set the '
+                    'intersects file for this run. OGGM '
+                    'works better with such a file. If you '
+                    'know what your are doing, set '
+                    "cfg.PARAMS['use_intersects'] = False to "
+                    "suppress this error.")
+
     @lazy_property
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
@@ -1725,8 +1799,19 @@ class GlacierDirectory(object):
             _area = self.read_shapefile('outlines')['Area']
             return np.round(float(_area), decimals=3)
         except OSError:
-            raise RuntimeError('Please run `define_glacier_region` before '
-                               'using this property.')
+            raise RuntimeError('No outlines available')
+
+    @lazy_property
+    def intersects_ids(self):
+        """The glacier's intersects RGI ids."""
+        try:
+            gdf = self.read_shapefile('intersects')
+            ids = np.append(gdf['RGIId_1'], gdf['RGIId_2'])
+            ids = list(np.unique(np.sort(ids)))
+            ids.remove(self.rgi_id)
+            return ids
+        except OSError:
+            return []
 
     @lazy_property
     def dem_daterange(self):

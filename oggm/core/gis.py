@@ -57,7 +57,7 @@ import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError, GeometryError)
 from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
-                        nicenumber, ncDataset, tolist)
+                        nicenumber, ncDataset, tolist, multipolygon_to_polygon)
 
 
 # Module logger
@@ -116,56 +116,6 @@ def gaussian_blur(in_array, size):
 
     # do the Gaussian blur
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
-
-
-def multi_to_poly(geometry, gdir=None):
-    """Sometimes an RGI geometry is a multipolygon: this should not happen.
-
-    Parameters
-    ----------
-    geometry : shpg.Polygon or shpg.MultiPolygon
-        the geometry to check
-    gdir : GlacierDirectory, optional
-        for logging
-
-    Returns
-    -------
-    the corrected geometry
-    """
-
-    # Log
-    rid = gdir.rgi_id + ': ' if gdir is not None else ''
-
-    if 'Multi' in geometry.type:
-        parts = np.array(geometry)
-        for p in parts:
-            assert p.type == 'Polygon'
-        areas = np.array([p.area for p in parts])
-        parts = parts[np.argsort(areas)][::-1]
-        areas = areas[np.argsort(areas)][::-1]
-
-        # First case (was RGIV4):
-        # let's assume that one poly is exterior and that
-        # the other polygons are in fact interiors
-        exterior = parts[0].exterior
-        interiors = []
-        was_interior = 0
-        for p in parts[1:]:
-            if parts[0].contains(p):
-                interiors.append(p.exterior)
-                was_interior += 1
-        if was_interior > 0:
-            # We are done here, good
-            geometry = shpg.Polygon(exterior, interiors)
-        else:
-            # This happens for bad geometries. We keep the largest
-            geometry = parts[0]
-            if np.any(areas[1:] > (areas[0] / 4)):
-                log.warning('Geometry {} lost quite a chunk.'.format(rid))
-
-    if geometry.type != 'Polygon':
-        raise InvalidGeometryError('Geometry {} is not a Polygon.'.format(rid))
-    return geometry
 
 
 def _interp_polygon(polygon, dx):
@@ -293,7 +243,7 @@ def define_glacier_region(gdir, entity=None):
     project = partial(transform_proj, proj_in, proj_out)
     # transform geometry to map
     geometry = shapely.ops.transform(project, entity['geometry'])
-    geometry = multi_to_poly(geometry, gdir=gdir)
+    geometry = multipolygon_to_polygon(geometry, gdir=gdir)
     xx, yy = geometry.exterior.xy
 
     # Save transformed geometry to disk

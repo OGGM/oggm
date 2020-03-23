@@ -101,6 +101,8 @@ class TestGIS(unittest.TestCase):
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['Area']), rtol=1e-2)
         self.assertTrue(gdir.has_file('intersects'))
+        np.testing.assert_array_equal(gdir.intersects_ids,
+                                      ['RGI50-11.00846', 'RGI50-11.00950'])
 
         # From string
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
