@@ -85,7 +85,7 @@ DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
 
-CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.xz'
+CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 
 # Web mercator proj constants
@@ -190,16 +190,17 @@ def _get_download_lock():
     return lock
 
 
-def get_dl_verify_data():
-    """Returns a dictionary with all known download object hashes.
+def get_dl_verify_data(section):
+    """Returns a pandas DataFrame with all known download object hashes.
 
-    The returned dictionary resolves str: cache_obj_name
-    to a tuple (int: size, bytes: sha256).
+    The returned dictionary resolves str: cache_obj_name (without section)
+    to a tuple int(size) and bytes(sha256)
     """
-    if cfg.DATA.get('dl_verify_data') is not None:
-        return cfg.DATA['dl_verify_data']
+    verify_key = 'dl_verify_data_' + section
+    if cfg.DATA.get(verify_key) is not None:
+        return cfg.DATA[verify_key]
 
-    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
+    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
 
     try:
         with requests.get(CHECKSUM_VALIDATION_URL) as req:
@@ -240,21 +241,18 @@ def get_dl_verify_data():
 
     if not os.path.isfile(verify_file_path):
         logger.warning('Downloading and verifiying checksums failed.')
-        return dict()
+        return pd.DataFrame()
 
-    data = dict()
-    with lzma.open(verify_file_path, 'rb') as f:
-        for line in f:
-            line = line.decode('utf-8').strip()
-            if not line:
-                continue
-            elems = line.split(maxsplit=2)
-            data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
+    data = None
+    try:
+        data = pd.read_hdf(verify_file_path, key=section)
+    except KeyError:
+        data = pd.DataFrame()
 
-    cfg.DATA['dl_verify_data'] = data
+    cfg.DATA[verify_key] = data
     logger.info('Successfully loaded verification data.')
 
-    return cfg.DATA['dl_verify_data']
+    return data
 
 
 def _call_dl_func(dl_func, cache_path):
@@ -335,8 +333,9 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
         dl_verify = True
 
     if dl_verify and path is not None:
-        data = get_dl_verify_data()
-        if cache_obj_name not in data:
+        cache_section, cache_path = cache_obj_name.split('/', 1)
+        data = get_dl_verify_data(cache_section)
+        if cache_path not in data.index:
             logger.warning('No known hash for %s' % cache_obj_name)
         else:
             # compute the hash
@@ -348,8 +347,8 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
             size = os.path.getsize(path)
 
             # check
-            data = data[cache_obj_name]
-            if data[0] != size or data[1] != sha256:
+            data = data.loc[cache_path]
+            if data['size'] != size or bytes(data['sha256']) != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
                     path, size, sha256.hex(), data[0], data[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)

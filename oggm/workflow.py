@@ -283,6 +283,9 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         if os.path.exists(fpath):
             rmtree(fpath)
 
+    # Read the hash dictionary before we use multiproc
+    utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
+
     gdirs = []
     new_gdirs = []
     if rgidf is None:
@@ -314,8 +317,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
-            # Read the hash dictionary before we use multiproc
-            utils.get_dl_verify_data()
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
@@ -344,8 +345,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         cfg.set_intersects_db(fp)
 
     if len(new_gdirs) > 0:
-        # Read the hash dictionary before we use multiproc
-        utils.get_dl_verify_data()
         # If not initialized, run the task in parallel
         execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
