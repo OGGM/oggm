@@ -176,7 +176,7 @@ def test_multiple_inversion():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_modelsection():
 
     gdir = init_hef()
