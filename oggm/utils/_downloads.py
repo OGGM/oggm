@@ -72,20 +72,20 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'ca88ba01060a6465dbe88e25f6186ff4fd221f64'
+SAMPLE_DATA_COMMIT = '09acafd6d4e4ffecfd93a52937e20bfee4b7fa63'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
 
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
-GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/'
-DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~fmaussion/demo_gdirs/'
+GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
+DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
 DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
 
 CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
 
-CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.xz'
+CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 
 # Web mercator proj constants
@@ -190,16 +190,17 @@ def _get_download_lock():
     return lock
 
 
-def get_dl_verify_data():
-    """Returns a dictionary with all known download object hashes.
+def get_dl_verify_data(section):
+    """Returns a pandas DataFrame with all known download object hashes.
 
-    The returned dictionary resolves str: cache_obj_name
-    to a tuple (int: size, bytes: sha256).
+    The returned dictionary resolves str: cache_obj_name (without section)
+    to a tuple int(size) and bytes(sha256)
     """
-    if cfg.DATA.get('dl_verify_data') is not None:
-        return cfg.DATA['dl_verify_data']
+    verify_key = 'dl_verify_data_' + section
+    if cfg.DATA.get(verify_key) is not None:
+        return cfg.DATA[verify_key]
 
-    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.xz')
+    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
 
     try:
         with requests.get(CHECKSUM_VALIDATION_URL) as req:
@@ -240,21 +241,18 @@ def get_dl_verify_data():
 
     if not os.path.isfile(verify_file_path):
         logger.warning('Downloading and verifiying checksums failed.')
-        return dict()
+        return pd.DataFrame()
 
-    data = dict()
-    with lzma.open(verify_file_path, 'rb') as f:
-        for line in f:
-            line = line.decode('utf-8').strip()
-            if not line:
-                continue
-            elems = line.split(maxsplit=2)
-            data[elems[2]] = (int(elems[1]), bytearray.fromhex(elems[0]))
+    data = None
+    try:
+        data = pd.read_hdf(verify_file_path, key=section)
+    except KeyError:
+        data = pd.DataFrame()
 
-    cfg.DATA['dl_verify_data'] = data
+    cfg.DATA[verify_key] = data
     logger.info('Successfully loaded verification data.')
 
-    return cfg.DATA['dl_verify_data']
+    return data
 
 
 def _call_dl_func(dl_func, cache_path):
@@ -335,8 +333,9 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
         dl_verify = True
 
     if dl_verify and path is not None:
-        data = get_dl_verify_data()
-        if cache_obj_name not in data:
+        cache_section, cache_path = cache_obj_name.split('/', 1)
+        data = get_dl_verify_data(cache_section)
+        if cache_path not in data.index:
             logger.warning('No known hash for %s' % cache_obj_name)
         else:
             # compute the hash
@@ -348,8 +347,8 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
             size = os.path.getsize(path)
 
             # check
-            data = data[cache_obj_name]
-            if data[0] != size or data[1] != sha256:
+            data = data.loc[cache_path]
+            if data['size'] != size or bytes(data['sha256']) != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
                     path, size, sha256.hex(), data[0], data[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
@@ -894,7 +893,7 @@ def _download_dem3_viewpano_unlocked(zone):
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in DEM3REG.keys():
         # We prepared these files as tif already
-        ifile = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                  'DEM3_MERGED/{}.tif'.format(zone))
         return file_downloader(ifile)
     else:
@@ -1707,7 +1706,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     elif version == '61':
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
     elif version == '62':
-        dfile = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi62.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/misc/rgi62.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1838,7 +1837,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
     if version == '62':
-        dfile = ('https://cluster.klima.uni-bremen.de/~fmaussion/misc/'
+        dfile = ('https://cluster.klima.uni-bremen.de/~oggm/misc/'
                  'rgi62_Intersects.zip')
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
@@ -2279,7 +2278,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = arcticdem_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/ArcticDEM_100m_v3.0/'
                 url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
@@ -2292,7 +2291,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = alaska_dem_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/Alaska_albers_V3/'
                 url += '{}_Alaska_albers_V3/'.format(z)
                 url += '{}_Alaska_albers_V3.tif'.format(z)
@@ -2302,7 +2301,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         zones = rema_zone(lon_ex, lat_ex)
         for z in zones:
             with _get_download_lock():
-                url = 'https://cluster.klima.uni-bremen.de/~fmaussion/'
+                url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/REMA_100m_v1.1/'
                 url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))

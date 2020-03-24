@@ -2500,7 +2500,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) > 3
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0, atol=1e-7)
 
         # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
@@ -2549,7 +2549,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert max(df.index) < 10
         assert df.calving_flux.iloc[-1] < np.max(df.calving_flux)
         assert df.calving_flux.iloc[-1] > 2
-        np.testing.assert_allclose(df.mu_star.iloc[-1], 0)
+        np.testing.assert_allclose(df.mu_star.iloc[-1], 0, atol=1e-7)
         assert df.water_depth.iloc[-1] == wd
 
         # Test with smaller k (it doesn't overshoot)
@@ -2860,7 +2860,7 @@ class TestGCMClimate(unittest.TestCase):
             # Here no std dev!
             _scru = scru.groupby('time.month').std(dim='time')
             _scesm = scesm.groupby('time.month').std(dim='time')
-            assert not np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+            assert np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
 
             # And also the annual cycle
             scru = scru.groupby('time.month').mean(dim='time')
@@ -2897,9 +2897,9 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cmip5_temp_file'] = f
         f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
         cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns')
-        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4',
-                                       scale_stddev=True)
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4_ns',
+                                       scale_stddev=False)
+        gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_monthly')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')

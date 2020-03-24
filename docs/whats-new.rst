@@ -11,7 +11,13 @@ Breaking changes
 ~~~~~~~~~~~~~~~~
 
 - The dynamical model now has a "real" parameterization for calving (WIP).
-  A blog post explaining it will follow (:pull:`945`).
+  A blog post explaining it can be found
+  `on the website <https://oggm.org/2020/02/16/calving-param/>`_
+  (:pull:`945`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The new default when applying GCM data to a glacier is to correct for
+  temperature standard deviation (:pull:`978`). The previous default was
+  wrong and should not be the default.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
@@ -29,6 +35,12 @@ Enhancements
 
 Bug fixes
 ~~~~~~~~~
+
+- Maintainance updates for upstream libraries and various small bug fixes
+  (:pull:`957`, :pull:`967`, :pull:`968`, :pull:`958`, :pull:`974`, :pull:`977`,
+  :pull:`976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Matthias Dusch <https://github.com/matthiasdusch>`_.
 
 
 v1.3.1 (16.02.2020)

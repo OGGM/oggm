@@ -248,7 +248,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     prepro_base_url : str
         for `from_prepro_level` only: if you want to override the default
         URL from which to download the gdirs. Default currently is
-        https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/
+        https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/
     use_demo_glaciers : bool
         whether to check the demo glaciers for download (faster than the
         standard prepro downloads). The default is to decide whether or
@@ -291,6 +291,9 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         if os.path.exists(fpath):
             rmtree(fpath)
 
+    # Read the hash dictionary before we use multiproc
+    utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
+
     gdirs = []
     new_gdirs = []
     if rgidf is None:
@@ -321,8 +324,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
-            # Read the hash dictionary before we use multiproc
-            utils.get_dl_verify_data()
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
@@ -349,8 +350,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                 gdirs.append(gdir)
 
     if len(new_gdirs) > 0:
-        # Read the hash dictionary before we use multiproc
-        utils.get_dl_verify_data()
         # If not initialized, run the task in parallel
         execute_entity_task(tasks.define_glacier_region, new_gdirs)
 

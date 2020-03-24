@@ -34,7 +34,7 @@ from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
 pytestmark = pytest.mark.test_env("utils")
 _url_retrieve = None
 
-TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~fmaussion/'
+TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
                  'test_gdirs/oggm_v1.1/')
 
 
@@ -669,6 +669,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
+    @pytest.mark.xfail
     def test_corrupted_file(self):
 
         # Go - initialize working directories
@@ -679,7 +680,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 10, 4,
                                       base_url=utils.DEMO_GDIR_URL)
-        assert 'cluster.klima.uni-bremen.de/~fmaussion/' in cfile
+        assert 'cluster.klima.uni-bremen.de/~oggm/' in cfile
 
         # Replace with a dummy file
         os.remove(cfile)
@@ -1207,8 +1208,10 @@ class TestFakeDownloads(unittest.TestCase):
 
         file_sha256 = file_sha256.digest()
 
-        data = utils.get_dl_verify_data()
-        data['test.com/test.txt'] = (file_size, file_sha256)
+        data = utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
+        s = pd.Series({'size': file_size, 'sha256': file_sha256}, name='test.txt')
+        data = data.append(s)
+        cfg.DATA['dl_verify_data_test.com'] = data
 
         return 'https://test.com/test.txt'
 
@@ -1436,7 +1439,7 @@ class TestFakeDownloads(unittest.TestCase):
         assert source == 'DEM3'
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                         'DEM3_MERGED/ISL.tif')
             self.assertEqual(url, expected)
             return self.dem3_testfile
@@ -1540,7 +1543,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                         'REMA_100m_v1.1/'
                         '40_10_100m_v1.1/40_10_100m_v1.1_reg_dem.tif')
             self.assertEqual(expected, url)
@@ -1566,7 +1569,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                         'Alaska_albers_V3/008_004_Alaska_albers_V3/'
                         '008_004_Alaska_albers_V3.tif')
             self.assertEqual(expected, url)
@@ -1586,7 +1589,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~fmaussion/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
                         'ArcticDEM_100m_v3.0/'
                         '14_52_100m_v3.0/14_52_100m_v3.0_reg_dem.tif')
             self.assertEqual(expected, url)

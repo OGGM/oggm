@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MAIN_TEST_CONTAINER_TAG="20191004"
+MAIN_TEST_CONTAINER_TAG="20200323"
 
 for os in linux; do
 	for test_container in $MAIN_TEST_CONTAINER_TAG py36; do
