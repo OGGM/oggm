@@ -36,7 +36,7 @@ class hef_prepro:
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
-        tasks.define_glacier_region(gdir, entity=entity)
+        tasks.define_glacier_region(gdir)
         tasks.glacier_masks(gdir)
         tasks.compute_centerlines(gdir)
         tasks.initialize_flowlines(gdir)
@@ -276,7 +276,7 @@ class columbia_calving:
         entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
-        tasks.define_glacier_region(gdir, entity=entity)
+        tasks.define_glacier_region(gdir)
         tasks.glacier_masks(gdir)
         tasks.compute_centerlines(gdir)
         tasks.initialize_flowlines(gdir)

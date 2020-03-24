@@ -12,7 +12,7 @@ cfg.PATHS['working_dir'] = base_dir
 entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
-tasks.define_glacier_region(gdir, entity=entity)
+tasks.define_glacier_region(gdir)
 tasks.glacier_masks(gdir)
 tasks.compute_centerlines(gdir)
 tasks.initialize_flowlines(gdir)

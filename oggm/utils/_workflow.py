@@ -1745,6 +1745,13 @@ class GlacierDirectory(object):
         # Save transformed geometry to disk
         entity = entity.copy()
         entity['geometry'] = geometry
+
+        # Do we want to use the RGI area or ours?
+        if not cfg.PARAMS['use_rgi_area']:
+            # Update Area
+            area = geometry.area * 1e-6
+            entity['Area'] = area
+
         # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
         for k, s in entity.iteritems():
             if type(s) in [np.int32, np.int64]:
@@ -1754,13 +1761,6 @@ class GlacierDirectory(object):
         # Delete the source before writing
         if 'DEM_SOURCE' in towrite:
             del towrite['DEM_SOURCE']
-
-        # Do we want to use the RGI area or ours?
-        if not cfg.PARAMS['use_rgi_area']:
-            # Update Area
-            area = geometry.area * 1e-6
-            entity['Area'] = area
-            towrite['Area'] = area
 
         # Write shapefile
         self.write_shapefile(towrite, 'outlines')

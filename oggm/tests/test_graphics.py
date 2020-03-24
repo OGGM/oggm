@@ -386,7 +386,7 @@ def test_coxe():
     entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
-    gis.define_glacier_region(gdir, entity=entity)
+    gis.define_glacier_region(gdir)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
     centerlines.initialize_flowlines(gdir)

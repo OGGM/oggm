@@ -182,7 +182,7 @@ class TestInitFlowlineOtherGlacier:
         # This is another glacier with divides
         entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719_d01'].iloc[0]
         gdir = GlacierDirectory(entity, base_dir=class_case_dir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1597,7 +1597,7 @@ def inversion_gdir(class_case_dir):
     entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = GlacierDirectory(entity, base_dir=class_case_dir, reset=True)
-    define_glacier_region(gdir, entity=entity)
+    define_glacier_region(gdir)
     return gdir
 
 

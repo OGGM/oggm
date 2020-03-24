@@ -453,7 +453,7 @@ class TestCoxeGlacier(unittest.TestCase):
         entity = gpd.read_file(self.rgi_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -510,7 +510,7 @@ class TestCoxeGlacier(unittest.TestCase):
         entity = gpd.read_file(self.rgi_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)

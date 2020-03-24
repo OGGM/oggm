@@ -322,22 +322,23 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                                         check_demo_glacier=use_demo_glaciers,
                                         base_url=prepro_base_url)
         else:
-            # TODO: if necessary this could use multiprocessing as well
+            # We can set the intersects file automatically here
+            if (cfg.PARAMS['use_intersects'] and
+                    len(cfg.PARAMS['intersects_gdf']) == 0):
+                rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                                             entities]))
+                rgi_version = rgi_ids[0].split('-')[0][-2:]
+                fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                       version=rgi_version)
+                cfg.set_intersects_db(fp)
+
             for entity in entities:
                 gdir = oggm.GlacierDirectory(entity, reset=reset,
                                              from_tar=from_tar,
                                              delete_tar=delete_tar)
                 if not os.path.exists(gdir.get_filepath('dem')):
-                    new_gdirs.append((gdir, dict(entity=entity)))
+                    new_gdirs.append(gdir)
                 gdirs.append(gdir)
-
-    # We can set the intersects file automatically here
-    if (cfg.PARAMS['use_intersects'] and new_gdirs and
-            (len(cfg.PARAMS['intersects_gdf']) == 0)):
-        rgi_ids = np.unique(np.sort([t[0].rgi_id for t in new_gdirs]))
-        rgi_version = new_gdirs[0][0].rgi_version
-        fp = utils.get_rgi_intersects_entities(rgi_ids, version=rgi_version)
-        cfg.set_intersects_db(fp)
 
     if len(new_gdirs) > 0:
         # Read the hash dictionary before we use multiproc
