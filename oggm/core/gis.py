@@ -376,7 +376,7 @@ def define_glacier_region(gdir, entity=None):
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
-    glacier_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny),  dxdy=(dx, -dx),
+    glacier_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), dxdy=(dx, -dx),
                               x0y0=x0y0)
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
 

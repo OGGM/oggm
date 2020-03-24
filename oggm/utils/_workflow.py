@@ -1688,6 +1688,7 @@ class GlacierDirectory(object):
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
             robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            write_shp = False
         else:
             mkdir(self.dir)
 

@@ -355,6 +355,7 @@ class TestWorkflowTools(unittest.TestCase):
 
         hef_file = utils.get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
+        cfg.PARAMS['use_intersects'] = False
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
         df = gdir.get_ref_length_data()
