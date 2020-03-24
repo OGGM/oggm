@@ -52,7 +52,7 @@ log.workflow('Starting OGGM run')
 log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go - get the pre-processed glacier directories
-gdirs = workflow.init_glacier_regions(rgidf, from_prepro_level=4)
+gdirs = workflow.init_glacier_directories(rgidf, from_prepro_level=4)
 
 # We can step directly to a new experiment!
 # Random climate representative for the recent climate (1985-2015)

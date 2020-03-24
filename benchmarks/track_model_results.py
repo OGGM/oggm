@@ -172,10 +172,11 @@ class full_workflow:
         rgidf = rgidf.sort_values('Area', ascending=False)
 
         # Go - initialize glacier directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,

@@ -40,8 +40,9 @@ log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
 # Go - get the pre-processed glacier directories
 # We start at level 3, because we need all data for the inversion
-gdirs = workflow.init_glacier_regions(rgidf, from_prepro_level=3,
-                                      prepro_border=10)
+gdirs = workflow.init_glacier_directories(rgidf,
+                                          from_prepro_level=3,
+                                          prepro_border=10)
 
 # Default parameters
 # Deformation: from Cuffey and Patterson 2010

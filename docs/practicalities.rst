@@ -250,7 +250,7 @@ you have to deal with:
   :py:func:`utils.gdir_to_tar` and :py:func:`utils.base_dir_to_tar` functions
   to create compressed, aggregated files of your directories. You can
   later initialize new directories from these tar files with the `from_tar`
-  keyword argument in :py:func:`workflow.init_glacier_regions`.
+  keyword argument in :py:func:`workflow.init_glacier_directories`.
 
 
 Run per RGI region, not globally

@@ -97,10 +97,11 @@ class TestSouthGlacier(unittest.TestCase):
         rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,
@@ -159,10 +160,11 @@ class TestSouthGlacier(unittest.TestCase):
         rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,
@@ -237,10 +239,11 @@ class TestSouthGlacier(unittest.TestCase):
         rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,
@@ -307,10 +310,11 @@ class TestSouthGlacier(unittest.TestCase):
         rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,
@@ -385,10 +389,11 @@ class TestSouthGlacier(unittest.TestCase):
         rgidf = gpd.read_file(get_demo_file('SouthGlacier.shp'))
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_regions(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
 
         # Preprocessing tasks
         task_list = [
+            tasks.define_glacier_region,
             tasks.glacier_masks,
             tasks.compute_centerlines,
             tasks.initialize_flowlines,

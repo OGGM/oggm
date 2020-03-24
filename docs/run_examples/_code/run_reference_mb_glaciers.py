@@ -70,7 +70,7 @@ log.info('For RGIV{} we have {} candidate reference '
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:
-gdirs = workflow.init_glacier_regions(rgidf)
+gdirs = workflow.init_glacier_directories(rgidf)
 
 # We need to know which period we have data for
 log.info('Process the climate data...')
@@ -96,10 +96,11 @@ rgidf.to_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 rgidf = rgidf.sort_values('Area', ascending=False)
 
 # Go - initialize glacier directories
-gdirs = workflow.init_glacier_regions(rgidf)
+gdirs = workflow.init_glacier_directories(rgidf)
 
 # Prepro tasks
 task_list = [
+    tasks.define_glacier_region,
     tasks.glacier_masks,
     tasks.compute_centerlines,
     tasks.initialize_flowlines,

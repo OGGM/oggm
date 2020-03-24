@@ -247,7 +247,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgidf['DEM_SOURCE'] = dem_source.upper()
 
     # L1 - go
-    gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
+    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+    workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L1', 'summary')

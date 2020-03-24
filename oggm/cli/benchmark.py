@@ -127,8 +127,8 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
 
     # Initialize working directories
     start = time.time()
-    gdirs = workflow.init_glacier_regions(rgidf, reset=True, force=True)
-    _add_time_to_df(odf, 'init_glacier_regions', time.time()-start)
+    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+    _add_time_to_df(odf, 'init_glacier_directories', time.time()-start)
 
     # Pre-download other files just in case
     if test_crudir is None:
@@ -139,6 +139,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
 
     # Tasks
     task_list = [
+        tasks.define_glacier_region,
         tasks.process_cru_data,
         tasks.glacier_masks,
         tasks.compute_centerlines,

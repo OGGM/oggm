@@ -211,6 +211,7 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
     from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
+    print(from_tar)
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
@@ -219,7 +220,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          prepro_rgi_version=None, prepro_base_url=None,
                          from_tar=False, delete_tar=False,
                          use_demo_glaciers=None):
-    """Initializes the list of Glacier Directories for this run.
+    """DEPRECATED: Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
     available in the working directory, use them. If not, create new ones.
@@ -264,6 +265,13 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     -------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the initialised glacier directories
+
+    Notes
+    -----
+    This task is deprecated in favor of the more explicit
+    init_glacier_directories. Indeed, init_glacier_directories is very
+    similar to init_glacier_regions, but it does not process the DEMs:
+    a glacier directory is valid also without DEM.
     """
 
     if reset and not force:
@@ -400,7 +408,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
     Notes
     -----
-
     This task is very similar to init_glacier_regions, with one main
     difference: it does not process the DEMs for this glacier.
     Eventually, init_glacier_regions will be deprecated and removed from the
@@ -493,6 +500,7 @@ def gis_prepro_tasks(gdirs):
     """
 
     task_list = [
+        tasks.define_glacier_region,
         tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.initialize_flowlines,

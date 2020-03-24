@@ -134,8 +134,7 @@ class TestGIS(unittest.TestCase):
         gdir = workflow.init_glacier_regions(hef_rgi)[0]
         nx, ny = gdir.grid.nx, gdir.grid.ny
 
-        # Change something and note that no error happens because the
-        # directory is not overwritten
+        # Change something and note that no change occurs because dem is there
         cfg.PARAMS['border'] = 12
         gdir = workflow.init_glacier_regions(hef_rgi)[0]
         assert nx == gdir.grid.nx
@@ -151,7 +150,7 @@ class TestGIS(unittest.TestCase):
                             ['_d01', '_d02', '_d03']]
 
         # Just check that things are working
-        gdirs = workflow.init_glacier_regions(hef_rgi)
+        gdirs = workflow.init_glacier_directories(hef_rgi)
         workflow.gis_prepro_tasks(gdirs)
 
         assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
