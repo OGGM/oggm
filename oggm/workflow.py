@@ -53,8 +53,6 @@ def init_mp_pool(reset=False):
     global_lock = mp.Manager().Lock()
 
     mpp = cfg.PARAMS['mp_processes']
-    log.workflow('Initializing multiprocessing pool with '
-                 'N={} processes.'.format(mpp))
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
                        initargs=(cfg_contents, global_lock))
     return _mp_pool
@@ -211,7 +209,6 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
     from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
-    print(from_tar)
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
@@ -291,9 +288,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         if os.path.exists(fpath):
             rmtree(fpath)
 
-    # Read the hash dictionary before we use multiproc
-    utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
-
     gdirs = []
     new_gdirs = []
     if rgidf is None:
@@ -324,6 +318,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
+            # Read the hash dictionary before we use multiproc
+            utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
@@ -350,6 +346,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                 gdirs.append(gdir)
 
     if len(new_gdirs) > 0:
+        # Read the hash dictionary before we use multiproc
+        utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
         # If not initialized, run the task in parallel
         execute_entity_task(tasks.define_glacier_region, new_gdirs)
 
@@ -462,6 +460,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_directories from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
+            # Read the hash dictionary before we use multiproc
+            utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
