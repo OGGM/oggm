@@ -89,9 +89,7 @@ class PathOrderedDict(ResettingOrderedDict):
 class ParamsLoggingDict(ResettingOrderedDict):
     """Quick "magic" to log the parameter changes by the user."""
 
-    def __setitem__(self, *args, **kwargs):
-        ResettingOrderedDict.__setitem__(self, *args, **kwargs)
-        self.do_log = False
+    do_log = False
 
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
