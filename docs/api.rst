@@ -26,6 +26,7 @@ Tools to set-up and run OGGM.
     cfg.set_intersects_db
     cfg.reset_working_dir
     workflow.init_glacier_directories
+    workflow.init_glacier_regions
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.climate_tasks

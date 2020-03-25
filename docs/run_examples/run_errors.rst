@@ -25,19 +25,19 @@ applications.
 
 If everything went "well", you should see an output similar to::
 
-2020-03-24 18:54:32: oggm.cfg: Using configuration file: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork/oggm/params.cfg
-2020-03-24 18:54:32: oggm.cfg: Multiprocessing switched ON according to the parameter file.
-2020-03-24 18:54:32: oggm.cfg: Multiprocessing: using all available processors (N=8)
-2020-03-24 18:54:32: __main__: Starting OGGM run
-2020-03-24 18:54:32: __main__: Number of glaciers: 3
-2020-03-24 18:54:32: oggm.workflow: init_glacier_directories from prepro level 4 on 3 glaciers.
-2020-03-24 18:54:32: oggm.workflow: Execute entity task gdir_from_prepro on 3 glaciers
-2020-03-24 18:54:32: oggm.workflow: Initializing multiprocessing pool with N=8 processes.
-2020-03-24 18:55:00: oggm.workflow: Execute entity task run_random_climate on 3 glaciers
-2020-03-24 18:55:00: oggm.core.flowline: RuntimeError occurred during task run_random_climate on RGI60-11.03295: Need a valid `model_flowlines` file. If you explicitly want to use `inversion_flowlines`, set use_inversion_flowlines=True.
-2020-03-24 18:55:10: oggm.core.flowline: RuntimeError occurred during task run_random_climate on RGI60-11.00897: Glacier exceeds domain boundaries, at year: 135.83333333333334
-2020-03-24 18:55:31: oggm.workflow: Execute entity task glacier_statistics on 3 glaciers
-2020-03-24 18:55:31: __main__: OGGM is done! Time needed: 0:00:59
+    2020-03-24 18:54:32: oggm.cfg: Using configuration file: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork/oggm/params.cfg
+    2020-03-24 18:54:32: oggm.cfg: Multiprocessing switched ON according to the parameter file.
+    2020-03-24 18:54:32: oggm.cfg: Multiprocessing: using all available processors (N=8)
+    2020-03-24 18:54:32: __main__: Starting OGGM run
+    2020-03-24 18:54:32: __main__: Number of glaciers: 3
+    2020-03-24 18:54:32: oggm.workflow: init_glacier_directories from prepro level 4 on 3 glaciers.
+    2020-03-24 18:54:32: oggm.workflow: Execute entity task gdir_from_prepro on 3 glaciers
+    2020-03-24 18:54:32: oggm.workflow: Initializing multiprocessing pool with N=8 processes.
+    2020-03-24 18:55:00: oggm.workflow: Execute entity task run_random_climate on 3 glaciers
+    2020-03-24 18:55:00: oggm.core.flowline: RuntimeError occurred during task run_random_climate on RGI60-11.03295: Need a valid `model_flowlines` file. If you explicitly want to use `inversion_flowlines`, set use_inversion_flowlines=True.
+    2020-03-24 18:55:10: oggm.core.flowline: RuntimeError occurred during task run_random_climate on RGI60-11.00897: Glacier exceeds domain boundaries, at year: 135.83333333333334
+    2020-03-24 18:55:31: oggm.workflow: Execute entity task glacier_statistics on 3 glaciers
+    2020-03-24 18:55:31: __main__: OGGM is done! Time needed: 0:00:59
 
 
 Dealing with errors
