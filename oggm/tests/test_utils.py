@@ -669,7 +669,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
-    @pytest.mark.xfail
     def test_corrupted_file(self):
 
         # Go - initialize working directories
@@ -1209,7 +1208,8 @@ class TestFakeDownloads(unittest.TestCase):
         file_sha256 = file_sha256.digest()
 
         data = utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
-        s = pd.Series({'size': file_size, 'sha256': file_sha256}, name='test.txt')
+        s = pd.Series({'size': file_size, 'sha256': file_sha256},
+                      name='test.txt')
         data = data.append(s)
         cfg.DATA['dl_verify_data_test.com'] = data
 

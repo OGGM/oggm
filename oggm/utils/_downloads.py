@@ -4,7 +4,6 @@
 import glob
 import os
 import gzip
-import lzma
 import bz2
 import hashlib
 import shutil
@@ -122,6 +121,7 @@ tuple2int = partial(np.array, dtype=np.int64)
 
 lock = None
 
+
 def mkdir(path, reset=False):
     """Checks if directory exists and if not, create one.
 
@@ -196,22 +196,25 @@ def get_dl_verify_data(section):
     The returned dictionary resolves str: cache_obj_name (without section)
     to a tuple int(size) and bytes(sha256)
     """
+
     verify_key = 'dl_verify_data_' + section
     if cfg.DATA.get(verify_key) is not None:
         return cfg.DATA[verify_key]
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
 
-    try:
-        with requests.get(CHECKSUM_VALIDATION_URL) as req:
-            req.raise_for_status()
-            verify_file_sha256 = req.text.split(maxsplit=1)[0]
-            verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
-    except Exception as e:
-        verify_file_sha256 = None
-        logger.warning('Failed getting verification checksum: ' + repr(e))
+    def verify_file():
+        """Check the hash file's own hash"""
+        logger.info('Checking the download verification file checksum...')
+        try:
+            with requests.get(CHECKSUM_VALIDATION_URL) as req:
+                req.raise_for_status()
+                verify_file_sha256 = req.text.split(maxsplit=1)[0]
+                verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
+        except Exception as e:
+            verify_file_sha256 = None
+            logger.warning('Failed getting verification checksum: ' + repr(e))
 
-    def do_verify():
         if os.path.isfile(verify_file_path) and verify_file_sha256:
             sha256 = hashlib.sha256()
             with open(verify_file_path, 'rb') as f:
@@ -222,7 +225,10 @@ def get_dl_verify_data(section):
                                % (verify_file_path))
                 os.remove(verify_file_path)
 
-    do_verify()
+    if not np.any(['dl_verify_data_' in k for k in cfg.DATA.keys()]):
+        # We check the hash file only once per session
+        # no need to do it at each call
+        verify_file()
 
     if not os.path.isfile(verify_file_path):
         logger.info('Downloading %s to %s...'
@@ -237,20 +243,18 @@ def get_dl_verify_data(section):
 
         logger.info('Done downloading.')
 
-        do_verify()
+        verify_file()
 
     if not os.path.isfile(verify_file_path):
-        logger.warning('Downloading and verifiying checksums failed.')
+        logger.warning('Downloading and verifying checksums failed.')
         return pd.DataFrame()
 
-    data = None
     try:
         data = pd.read_hdf(verify_file_path, key=section)
     except KeyError:
         data = pd.DataFrame()
 
     cfg.DATA[verify_key] = data
-    logger.info('Successfully loaded verification data.')
 
     return data
 
