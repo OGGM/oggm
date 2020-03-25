@@ -430,7 +430,7 @@ class TestStartFromTar(unittest.TestCase):
 
         # Test - reopen form tar
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True,
-                                                 delete_tar=True)
+                                                  delete_tar=True)
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert not os.path.exists(gdir.dir + '.tar.gz')

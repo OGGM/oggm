@@ -19,6 +19,15 @@ Breaking changes
   temperature standard deviation (:pull:`978`). The previous default was
   wrong and should not be the default.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new "glacier directory initialization" global task:
+  `init_glacier_directories` (:pull:`983`, :issue:`965`). It replaces
+  `init_glacier_regions` and covers all its functionality, except that
+  it does *not* process the DEM data (this was a confusing "feature" of
+  `init_glacier_regions`). The old task `init_glacier_regions` is officially
+  deprecated but without warnings for now. Since it is a very widely used
+  task, we prefer to deprecate it in a slow cycle: first, change the
+  documentation, deprecate later.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
 ~~~~~~~~~~~~
