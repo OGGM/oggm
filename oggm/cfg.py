@@ -509,8 +509,9 @@ def initialize(file=None, logging_level='INFO'):
                     pass
         DATA['dem_grids'] = grids
 
-    # Download verification dictionary
-    DATA['dl_verify_data'] = None
+    # Trigger a one time check of the hash file
+    from oggm.utils import get_dl_verify_data
+    get_dl_verify_data('dummy_section')
 
 
 def oggm_static_paths():
