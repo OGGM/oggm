@@ -62,6 +62,7 @@ Configuration file parsing tool:
 
 I/O:
     - netcdf4
+    - pytables
 
 GIS tools:
     - gdal
@@ -306,6 +307,7 @@ for more information about how to create an environment from a yml file)::
       - scikit-learn
       - configobj
       - xarray
+      - pytables
       - pytest
       - dask
       - bottleneck
@@ -399,7 +401,8 @@ Install some packages one by one::
 
    $ pip install numpy==1.16.4 scipy pandas shapely matplotlib pyproj \
        rasterio Pillow geopandas netcdf4==1.3.1 scikit-image configobj joblib \
-       xarray progressbar2 pytest motionless dask bottleneck toolz descartes
+       xarray progressbar2 pytest motionless dask bottleneck toolz descartes \
+       pytables
 
 The pinning of the NetCDF4 package was necessary for us, but your system
 might differ
@@ -423,8 +426,8 @@ Legacy: install GDAL with link to the system libraries
 
 .. note::
 
-    The steps below used to be necessary before pip wheels. We document them
-    here just in case.
+    The steps below used to be necessary before the availability of pip wheels.
+    We still document them here, just in case.
 
 Installing **GDAL** is not so straightforward. First, check which version of
 GDAL is installed on your Linux system::
@@ -460,6 +463,7 @@ install this shorter list:
 - configobj
 - netcdf4
 - xarray
+- pytables
 
 Installing them with pip or conda should be much easier.
 
