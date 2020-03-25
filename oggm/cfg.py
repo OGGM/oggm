@@ -86,9 +86,55 @@ class PathOrderedDict(ResettingOrderedDict):
         ResettingOrderedDict.__setitem__(self, key, os.path.expanduser(value))
 
 
+class ParamsLoggingDict(ResettingOrderedDict):
+    """Quick "magic" to log the parameter changes by the user."""
+
+    def __setitem__(self, *args, **kwargs):
+        ResettingOrderedDict.__setitem__(self, *args, **kwargs)
+        self.do_log = False
+
+    def __setitem__(self, key, value):
+        # Overrides the original dic to log the change
+        if self.do_log:
+            self._log_param_change(key, value)
+        ResettingOrderedDict.__setitem__(self, key, value)
+
+    def _log_param_change(self, key, value):
+
+        prev = self.get(key)
+        if prev is None:
+            log.warning('WARNING: adding an unknown parameter '
+                        '`{}`:`{}` to PARAMS.'.format(key, value))
+            return
+
+        if prev == value:
+            return
+
+        if key == 'use_multiprocessing':
+            msg = 'ON' if value else 'OFF'
+            log.workflow('Multiprocessing switched {} '.format(msg) +
+                         'after user settings.')
+            return
+
+        if key == 'mp_processes':
+            if value == -1:
+                import multiprocessing
+                value = multiprocessing.cpu_count()
+                log.workflow('Multiprocessing: using all available '
+                             'processors (N={})'.format(value))
+            else:
+                log.workflow('Multiprocessing: using the requested number of '
+                             'processors (N={})'.format(value))
+            return
+
+        log.workflow("PARAMS['{}'] changed from `{}` to `{}`.".format(key,
+                                                                      prev,
+                                                                      value))
+
+
 # Globals
 IS_INITIALIZED = False
-PARAMS = ResettingOrderedDict()
+PARAMS = ParamsLoggingDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 LRUHANDLERS = ResettingOrderedDict()
@@ -325,6 +371,9 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
 
+    # Do not spam
+    PARAMS.do_log = False
+
     # Multiprocessing pool
     try:
         use_mp = bool(int(os.environ['OGGM_USE_MULTIPROCESSING']))
@@ -442,6 +491,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     # Other params are floats
     for k in cp:
         PARAMS[k] = cp.as_float(k)
+    PARAMS.do_log = True
 
     # Empty defaults
     set_intersects_db()
@@ -465,6 +515,9 @@ def initialize(file=None, logging_level='INFO'):
     global DATA
 
     initialize_minimal(file=file, logging_level=logging_level)
+
+    # Do not spam
+    PARAMS.do_log = False
 
     # Make sure we have a proper cache dir
     from oggm.utils import download_oggm_files, get_demo_file
@@ -511,6 +564,9 @@ def initialize(file=None, logging_level='INFO'):
 
     # Download verification dictionary
     DATA['dl_verify_data'] = None
+
+    # OK
+    PARAMS.do_log = True
 
 
 def oggm_static_paths():
@@ -573,8 +629,10 @@ def oggm_static_paths():
         PATHS[k] = os.path.abspath(os.path.expanduser(v))
 
     # Other
+    PARAMS.do_log = False
     PARAMS['has_internet'] = config.as_bool('has_internet')
     PARAMS['dl_cache_readonly'] = config.as_bool('dl_cache_readonly')
+    PARAMS.do_log = True
 
     # Create cache dir if possible
     if not os.path.exists(PATHS['dl_cache_dir']):
@@ -645,6 +703,9 @@ def set_intersects_db(path_or_gdf=None):
         the intersects file to use
     """
 
+    global PARAMS
+    PARAMS.do_log = False
+
     if PARAMS['use_intersects'] and path_or_gdf is not None:
         if isinstance(path_or_gdf, str):
             PARAMS['intersects_gdf'] = gpd.read_file(path_or_gdf)
@@ -652,6 +713,7 @@ def set_intersects_db(path_or_gdf=None):
             PARAMS['intersects_gdf'] = path_or_gdf
     else:
         PARAMS['intersects_gdf'] = pd.DataFrame()
+    PARAMS.do_log = True
 
 
 def reset_working_dir():
