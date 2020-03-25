@@ -36,7 +36,7 @@ cfg.PATHS['working_dir'] = WORKING_DIR
 rgidf = gpd.read_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
 
 # Go - initialize glacier directories
-gdirs = workflow.init_glacier_regions(rgidf)
+gdirs = workflow.init_glacier_directories(rgidf)
 
 # Cross-validation
 file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')

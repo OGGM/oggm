@@ -94,13 +94,15 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         extent = gdir.extent_ll
 
         tdf = gdir.read_shapefile('outlines')
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, np.float(tdf['Area']), rtol=1e-2)
         self.assertTrue(gdir.has_file('intersects'))
+        np.testing.assert_array_equal(gdir.intersects_ids,
+                                      ['RGI50-11.00846', 'RGI50-11.00950'])
 
         # From string
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
@@ -115,7 +117,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
                                      reset=True)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         # Close but not same
         assert gdir.rgi_area_km2 != prev_area
         assert gdir.cenlon != prev_lon
@@ -132,8 +134,7 @@ class TestGIS(unittest.TestCase):
         gdir = workflow.init_glacier_regions(hef_rgi)[0]
         nx, ny = gdir.grid.nx, gdir.grid.ny
 
-        # Change something and note that no error happens because the
-        # directory is not overwritten
+        # Change something and note that no change occurs because dem is there
         cfg.PARAMS['border'] = 12
         gdir = workflow.init_glacier_regions(hef_rgi)[0]
         assert nx == gdir.grid.nx
@@ -149,7 +150,7 @@ class TestGIS(unittest.TestCase):
                             ['_d01', '_d02', '_d03']]
 
         # Just check that things are working
-        gdirs = workflow.init_glacier_regions(hef_rgi)
+        gdirs = workflow.init_glacier_directories(hef_rgi)
         workflow.gis_prepro_tasks(gdirs)
 
         assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
@@ -163,7 +164,7 @@ class TestGIS(unittest.TestCase):
         # Test fixed method
         cfg.PARAMS['grid_dx_method'] = 'fixed'
         cfg.PARAMS['fixed_dx'] = 50
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
         np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
 
@@ -172,7 +173,7 @@ class TestGIS(unittest.TestCase):
         cfg.PARAMS['d1'] = 5.
         cfg.PARAMS['d2'] = 10.
         cfg.PARAMS['dmax'] = 100.
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         targetdx = np.rint(5. * gdir.rgi_area_km2 + 10.)
         targetdx = np.clip(targetdx, 10., 100.)
         mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
@@ -183,7 +184,7 @@ class TestGIS(unittest.TestCase):
         cfg.PARAMS['d1'] = 5.
         cfg.PARAMS['d2'] = 10.
         cfg.PARAMS['dmax'] = 100.
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         targetdx = np.rint(5. * np.sqrt(gdir.rgi_area_km2) + 10.)
         targetdx = np.clip(targetdx, 10., 100.)
         mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
@@ -209,7 +210,7 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         self.assertEqual(gdir.__repr__(), expected)
 
     def test_glacierdir(self):
@@ -217,7 +218,7 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         # this should simply run
         oggm.GlacierDirectory(entity.RGIId, base_dir=self.testdir)
@@ -229,7 +230,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.process_dem(gdir)
         gis.glacier_masks(gdir)
         gis.gridded_attributes(gdir)
@@ -265,7 +266,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -324,7 +325,7 @@ class TestGIS(unittest.TestCase):
         cfg.PARAMS['border'] = 1
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         # The test below does NOT pass on OGGM
         shutil.copyfile(gdir.get_filepath('gridded_data'),
@@ -354,7 +355,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         # specifying a source will look for a DEN in a respective folder
         self.assertRaises(ValueError, gis.rasterio_glacier_mask,
@@ -394,7 +395,7 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         self.assertTrue(gdir.has_file('intersects'))
 
     def test_dem_source_text(self):
@@ -407,7 +408,7 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         # dem_info should return a string
         self.assertIsInstance(gdir.dem_info, str)
@@ -431,7 +432,7 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         cfg.add_to_basenames('mybn', 'testfb.pkl', docstr='Some docs')
 
@@ -528,7 +529,7 @@ class TestCenterlines(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
 
@@ -552,7 +553,7 @@ class TestCenterlines(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -573,7 +574,7 @@ class TestCenterlines(unittest.TestCase):
         cfg.PARAMS['border'] = 80
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -628,26 +629,29 @@ class TestCenterlines(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('baltoro_srtm_clip.tif')
 
         b_file = get_demo_file('baltoro_wgs84.shp')
-        entity = gpd.read_file(b_file).iloc[0]
+        gdf = gpd.read_file(b_file)
 
         kienholz_file = get_demo_file('centerlines_baltoro_wgs84.shp')
         kdf = gpd.read_file(kienholz_file)
 
         # add fake attribs
-        del entity['RGIID']
-        entity.RGIId = 'RGI50-00.00000'
-        entity['GLIMSId'] = entity['GLIMSID']
-        entity['Area'] = entity['AREA']
-        entity['CenLat'] = entity['CENLAT']
-        entity['CenLon'] = entity['CENLON']
-        entity.BgnDate = '-999'
-        entity.Name = 'Baltoro'
-        entity.GlacType = '0000'
-        entity.Status = '0'
-        entity.O1Region = '01'
-        entity.O2Region = '01'
+        area = gdf['AREA']
+        del gdf['RGIID']
+        del gdf['AREA']
+        gdf['RGIId'] = 'RGI50-00.00000'
+        gdf['GLIMSId'] = gdf['GLIMSID']
+        gdf['Area'] = area
+        gdf['CenLat'] = gdf['CENLAT']
+        gdf['CenLon'] = gdf['CENLON']
+        gdf['BgnDate'] = '-999'
+        gdf['Name'] = 'Baltoro'
+        gdf['GlacType'] = '0000'
+        gdf['Status'] = '0'
+        gdf['O1Region'] = '01'
+        gdf['O2Region'] = '01'
+        entity = gdf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
 
@@ -747,7 +751,7 @@ class TestGeometry(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.catchment_area(gdir)
@@ -772,7 +776,7 @@ class TestGeometry(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -807,7 +811,7 @@ class TestGeometry(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -821,7 +825,7 @@ class TestGeometry(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -883,7 +887,7 @@ class TestGeometry(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
 
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -938,7 +942,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -963,7 +967,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -984,7 +988,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -1010,10 +1014,10 @@ class TestClimate(unittest.TestCase):
         gdirs = []
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
         climate.process_custom_climate_data(gdirs[0])
@@ -1053,10 +1057,10 @@ class TestClimate(unittest.TestCase):
         gdirs = []
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
         climate.process_dummy_cru_file(gdirs[0], seed=0)
@@ -1102,10 +1106,10 @@ class TestClimate(unittest.TestCase):
         gdirs = []
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
         climate.process_custom_climate_data(gdirs[0])
@@ -1159,12 +1163,12 @@ class TestClimate(unittest.TestCase):
         assert gdir.hemisphere == 'nh'
         gdir.hemisphere = 'sh'
 
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
         assert gdir.hemisphere == 'nh'
         gdir.hemisphere = 'sh'
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         climate.process_custom_climate_data(gdirs[0])
         ci = gdirs[0].read_json('climate_info')
@@ -1217,7 +1221,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
@@ -1280,7 +1284,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
@@ -1360,7 +1364,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1393,7 +1397,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1453,7 +1457,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1499,7 +1503,7 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_scaling_factor'] = 2.9
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1572,7 +1576,7 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1662,14 +1666,14 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         assert gdir.rgi_version == '50'
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
 
         hef_file = get_demo_file('Hintereisferner_RGI6.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         assert gdir.rgi_version == '60'
         workflow.gis_prepro_tasks([gdir])
         workflow.climate_tasks([gdir])
@@ -1713,7 +1717,7 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['correct_for_neg_flux'] = False
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1742,7 +1746,7 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['correct_for_neg_flux'] = False
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1803,7 +1807,7 @@ class TestFilterNegFlux(unittest.TestCase):
         entity = entity.loc[entity.RGIId == 'RGI50-11.00666'].iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -1889,7 +1893,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2015,7 +2019,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2110,7 +2114,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2142,7 +2146,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2203,7 +2207,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2310,7 +2314,7 @@ class TestInversion(unittest.TestCase):
         entity.RGIId = 'RGI50-11.fake'
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2364,7 +2368,7 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         entity = gpd.read_file(coxe_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2769,7 +2773,7 @@ class TestGCMClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -2824,7 +2828,7 @@ class TestGCMClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -2882,7 +2886,7 @@ class TestGCMClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         climate.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
@@ -2954,7 +2958,7 @@ class TestGCMClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         climate.process_cru_data(gdir)
         utils.compile_climate_input([gdir])
@@ -3044,7 +3048,7 @@ class TestIdealizedGdir(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -3113,7 +3117,7 @@ class TestCatching(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
 
         # This will "run" but log an error
@@ -3137,7 +3141,7 @@ class TestCatching(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = True
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
 
         self.assertEqual(gdir.get_task_status(gis.glacier_masks.__name__),
@@ -3239,7 +3243,7 @@ class TestPyGEM_compat(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         entity['RGIId'] = 'RGI60-11.00897'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         from oggm.sandbox import pygem_compat
         area_path = get_demo_file('gmip_area_centraleurope_10_sel.dat')
@@ -3258,7 +3262,7 @@ class TestPyGEM_compat(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         entity['RGIId'] = 'RGI60-11.00897'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir, entity=entity)
+        gis.define_glacier_region(gdir)
 
         from oggm.sandbox import pygem_compat
         area_path = get_demo_file('gmip_area_centraleurope_10_sel.dat')

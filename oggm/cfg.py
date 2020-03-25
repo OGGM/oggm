@@ -633,8 +633,8 @@ def set_intersects_db(path_or_gdf=None):
     """Set the glacier intersection database for OGGM to use.
 
     It is now set automatically by the
-    :func:`oggm.workflow.init_glacier_regions` task, but setting it manually
-    can be useful for a slightly faster run initialization.
+    :func:`oggm.workflow.init_glacier_directories` task, but setting it
+    manually can be useful for a slightly faster run initialization.
 
     See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain
     such data.

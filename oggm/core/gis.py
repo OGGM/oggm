@@ -118,56 +118,6 @@ def gaussian_blur(in_array, size):
     return scipy.signal.fftconvolve(padded_array, g, mode='valid')
 
 
-def multi_to_poly(geometry, gdir=None):
-    """Sometimes an RGI geometry is a multipolygon: this should not happen.
-
-    Parameters
-    ----------
-    geometry : shpg.Polygon or shpg.MultiPolygon
-        the geometry to check
-    gdir : GlacierDirectory, optional
-        for logging
-
-    Returns
-    -------
-    the corrected geometry
-    """
-
-    # Log
-    rid = gdir.rgi_id + ': ' if gdir is not None else ''
-
-    if 'Multi' in geometry.type:
-        parts = np.array(geometry)
-        for p in parts:
-            assert p.type == 'Polygon'
-        areas = np.array([p.area for p in parts])
-        parts = parts[np.argsort(areas)][::-1]
-        areas = areas[np.argsort(areas)][::-1]
-
-        # First case (was RGIV4):
-        # let's assume that one poly is exterior and that
-        # the other polygons are in fact interiors
-        exterior = parts[0].exterior
-        interiors = []
-        was_interior = 0
-        for p in parts[1:]:
-            if parts[0].contains(p):
-                interiors.append(p.exterior)
-                was_interior += 1
-        if was_interior > 0:
-            # We are done here, good
-            geometry = shpg.Polygon(exterior, interiors)
-        else:
-            # This happens for bad geometries. We keep the largest
-            geometry = parts[0]
-            if np.any(areas[1:] > (areas[0] / 4)):
-                log.warning('Geometry {} lost quite a chunk.'.format(rid))
-
-    if geometry.type != 'Polygon':
-        raise InvalidGeometryError('Geometry {} is not a Polygon.'.format(rid))
-    return geometry
-
-
 def _interp_polygon(polygon, dx):
     """Interpolates an irregular polygon to a regular step dx.
 
@@ -280,70 +230,22 @@ def define_glacier_region(gdir, entity=None):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     entity : geopandas.GeoSeries
-        the glacier geometry to process
+        the glacier geometry to process - DEPRECATED. It is now ignored
     """
 
-    # Make a local glacier map
-    proj_params = dict(name='tmerc', lat_0=0., lon_0=gdir.cenlon,
-                       k=0.9996, x_0=0, y_0=0, datum='WGS84')
-    proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
-                "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**proj_params)
-    proj_in = pyproj.Proj("epsg:4326", preserve_units=True)
-    proj_out = pyproj.Proj(proj4_str, preserve_units=True)
-    project = partial(transform_proj, proj_in, proj_out)
-    # transform geometry to map
-    geometry = shapely.ops.transform(project, entity['geometry'])
-    geometry = multi_to_poly(geometry, gdir=gdir)
-    xx, yy = geometry.exterior.xy
+    # Get the local map proj params and glacier extent
+    gdf = gdir.read_shapefile('outlines')
 
-    # Save transformed geometry to disk
-    entity = entity.copy()
-    entity['geometry'] = geometry
-    # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
-    for k, s in entity.iteritems():
-        if type(s) in [np.int32, np.int64]:
-            entity[k] = int(s)
-    towrite = gpd.GeoDataFrame(entity).T
-    towrite.crs = proj4_str
-    # Delete the source before writing
-    if 'DEM_SOURCE' in towrite:
-        del towrite['DEM_SOURCE']
+    # Get the map proj
+    utm_proj = salem.check_crs(gdf.crs)
+
+    # Get glacier extent
+    xx, yy = gdf.iloc[0]['geometry'].exterior.xy
 
     # Define glacier area to use
-    area = entity['Area']
+    area = gdir.rgi_area_km2
 
-    # Do we want to use the RGI area or ours?
-    if not cfg.PARAMS['use_rgi_area']:
-        # Update Area
-        area = geometry.area * 1e-6
-        entity['Area'] = area
-        towrite['Area'] = area
-
-    # Write shapefile
-    gdir.write_shapefile(towrite, 'outlines')
-
-    # Also transform the intersects if necessary
-    gdf = cfg.PARAMS['intersects_gdf']
-    if len(gdf) > 0:
-        gdf = gdf.loc[((gdf.RGIId_1 == gdir.rgi_id) |
-                       (gdf.RGIId_2 == gdir.rgi_id))]
-        if len(gdf) > 0:
-            gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
-            if hasattr(gdf.crs, 'srs'):
-                # salem uses pyproj
-                gdf.crs = gdf.crs.srs
-            gdir.write_shapefile(gdf, 'intersects')
-    else:
-        # Sanity check
-        if cfg.PARAMS['use_intersects']:
-            raise InvalidParamsError('You seem to have forgotten to set the '
-                                     'intersects file for this run. OGGM '
-                                     'works better with such a file. If you '
-                                     'know what your are doing, set '
-                                     "cfg.PARAMS['use_intersects'] = False to "
-                                     "suppress this error.")
-
-    # 6. choose a spatial resolution with respect to the glacier area
+    # Choose a spatial resolution with respect to the glacier area
     dxmethod = cfg.PARAMS['grid_dx_method']
     if dxmethod == 'linear':
         dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
@@ -382,12 +284,12 @@ def define_glacier_region(gdir, entity=None):
     ny = np.int((uly - lry) / dx)
 
     # Back to lon, lat for DEM download/preparation
-    tmp_grid = salem.Grid(proj=proj_out, nxny=(nx, ny), x0y0=(ulx, uly),
+    tmp_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
-
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
     # Open DEM
+    entity = gdf.iloc[0]
     source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
@@ -431,7 +333,7 @@ def define_glacier_region(gdir, entity=None):
     # Set up profile for writing output
     profile = dem_dss[0].profile
     profile.update({
-        'crs': proj4_str,
+        'crs': utm_proj.srs,
         'transform': dst_transform,
         'nodata': nodata,
         'width': nx,
@@ -463,7 +365,7 @@ def define_glacier_region(gdir, entity=None):
             # Destination parameters
             destination=dst_array,
             dst_transform=dst_transform,
-            dst_crs=proj4_str,
+            dst_crs=utm_proj.srs,
             dst_nodata=nodata,
             # Configuration
             resampling=resampling)
@@ -474,7 +376,7 @@ def define_glacier_region(gdir, entity=None):
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
-    glacier_grid = salem.Grid(proj=proj_out, nxny=(nx, ny),  dxdy=(dx, -dx),
+    glacier_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), dxdy=(dx, -dx),
                               x0y0=x0y0)
     glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
 

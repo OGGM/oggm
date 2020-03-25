@@ -33,7 +33,8 @@ cfg.PARAMS['use_multiprocessing'] = True
 cfg.PARAMS['border'] = 80
 
 # Go - initialize glacier directories
-gdirs = workflow.init_glacier_regions(['RGI60-11.00897'], from_prepro_level=4)
+gdirs = workflow.init_glacier_directories(['RGI60-11.00897'],
+                                          from_prepro_level=4)
 
 # Additional climate file (CESM)
 cfg.PATHS['cesm_temp_file'] = get_demo_file('cesm.TREFHT.160001-200512'

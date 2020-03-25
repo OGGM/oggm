@@ -127,7 +127,7 @@ of the current stable OGGM version. If you want to change these parameters,
 you'll have to do a full run from scratch using the :ref:`rawdata`.
 
 To start from a pre-processed state, simply use the
-:py:func:`workflow.init_glacier_regions` function with the
+:py:func:`workflow.init_glacier_directories` function with the
 ``from_prepro_level`` and ``prepro_border`` keyword arguments set to the
 values of your choice.
 
@@ -178,9 +178,9 @@ Here is an example with the Hintereisferner in the Alps:
 
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
     for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 250]):
-        gdir = workflow.init_glacier_regions('RGI60-11.00897',
-                                             from_prepro_level=1,
-                                             prepro_border=border)
+        gdir = workflow.init_glacier_directories('RGI60-11.00897',
+                                                 from_prepro_level=1,
+                                                 prepro_border=border)
         graphics.plot_domain(gdir, ax=ax, title='Border: {}'.format(border),
                              add_colorbar=False,
                              lonlat_contours_kwargs={'add_tick_labels':False})
@@ -290,7 +290,7 @@ EndDate             not included
 For Greenland and Antarctica, OGGM does not take into account the
 connectivity level between the Glaciers and the Ice sheets.
 We recommend to the users to think about this before they
-run the task: ``workflow.init_glacier_regions()``.
+run the task: ``workflow.init_glacier_directories``.
 
 .. _Randolph Glacier Inventory (RGI): https://www.glims.org/RGI/
 
@@ -490,8 +490,9 @@ have access to the timeseries through the glacier directory:
 
 .. ipython:: python
 
-    gdir = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=4,
-                                         prepro_border=10)[0]
+    gdir = workflow.init_glacier_directories('RGI60-11.00897',
+                                             from_prepro_level=4,
+                                             prepro_border=10)[0]
     mb = gdir.get_ref_mb_data()
     @savefig plot_ref_mbdata.png width=100%
     mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner')

@@ -31,18 +31,18 @@ Here, we run the inversion algorithm for all glaciers in the Pyrenees.
 
 If everything went well, you should see an output similar to::
 
-    2019-02-16 22:16:19: oggm.cfg: Using configuration file: /home/mowglie/Documents/git/oggm-fork/oggm/params.cfg
-    2019-02-16 22:16:20: __main__: Starting OGGM inversion run
-    2019-02-16 22:16:20: __main__: Number of glaciers: 35
-    2019-02-16 22:16:20: oggm.workflow: init_glacier_regions from prepro level 3 on 35 glaciers.
-    2019-02-16 22:16:20: oggm.workflow: Execute entity task gdir_from_prepro on 35 glaciers
-    2019-02-16 22:16:20: oggm.workflow: Multiprocessing: using all available processors (N=8)
-    2019-02-16 22:16:21: oggm.workflow: Execute entity task mass_conservation_inversion on 35 glaciers
-    2019-02-16 22:16:21: oggm.workflow: Execute entity task filter_inversion_output on 35 glaciers
+    2020-03-25 12:31:52: oggm.cfg: Using configuration file: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork/oggm/params.cfg
+    2020-03-25 12:31:52: oggm.cfg: Multiprocessing switched ON according to the parameter file.
+    2020-03-25 12:31:52: oggm.cfg: Multiprocessing: using all available processors (N=8)
+    2020-03-25 12:31:53: __main__: Starting OGGM inversion run
+    2020-03-25 12:31:53: __main__: Number of glaciers: 35
+    2020-03-25 12:31:53: oggm.workflow: init_glacier_directories from prepro level 3 on 35 glaciers.
+    2020-03-25 12:31:55: oggm.workflow: Execute entity task gdir_from_prepro on 35 glaciers
+    2020-03-25 12:32:00: oggm.workflow: Execute entity task mass_conservation_inversion on 35 glaciers
     (...)
-    2019-02-16 22:16:25: oggm.workflow: Execute entity task filter_inversion_output on 35 glaciers
-    2019-02-16 22:16:25: oggm.workflow: Execute entity task glacier_statistics on 35 glaciers
-    2019-02-16 22:16:25: __main__: OGGM is done! Time needed: 0:00:05
+    2020-03-25 12:32:33: oggm.workflow: Execute entity task filter_inversion_output on 35 glaciers
+    2020-03-25 12:32:33: oggm.workflow: Execute entity task glacier_statistics on 35 glaciers
+    2020-03-25 12:32:34: __main__: OGGM is done! Time needed: 0:00:41
 
 
 Analysing the output

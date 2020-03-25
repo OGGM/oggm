@@ -88,7 +88,7 @@ def up_to_climate(reset=False):
     cfg.PARAMS['run_mb_calibration'] = True
 
     # Go
-    gdirs = workflow.init_glacier_regions(rgidf)
+    gdirs = workflow.init_glacier_directories(rgidf)
 
     try:
         tasks.catchment_width_correction(gdirs[0])

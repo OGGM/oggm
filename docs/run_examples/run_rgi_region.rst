@@ -29,16 +29,19 @@ Script
 If everything went well, you should see an output similar to::
 
 
-    2019-02-16 17:50:51: oggm.cfg: Using configuration file: /home/mowglie/Documents/git/oggm-fork/oggm/params.cfg
-    2019-02-16 17:50:52: __main__: Starting OGGM run
-    2019-02-16 17:50:52: __main__: Number of glaciers: 54
-    2019-02-16 17:50:52: oggm.workflow: init_glacier_regions from prepro level 4 on 54 glaciers.
-    2019-02-16 17:50:52: oggm.workflow: Execute entity task gdir_from_prepro on 54 glaciers
-    2019-02-16 17:50:52: oggm.workflow: Multiprocessing: using all available processors (N=8)
-    2019-02-16 17:50:54: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
-    2019-02-16 17:51:44: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
-    2019-02-16 17:52:36: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
-    2019-02-16 17:54:11: __main__: OGGM is done! Time needed: 0:03:20
+    2020-03-25 12:34:22: oggm.cfg: Using configuration file: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork/oggm/params.cfg
+    2020-03-25 12:34:22: oggm.cfg: Multiprocessing switched ON according to the parameter file.
+    2020-03-25 12:34:22: oggm.cfg: Multiprocessing: using all available processors (N=8)
+    2020-03-25 12:34:23: __main__: Starting OGGM run
+    2020-03-25 12:34:23: __main__: Number of glaciers: 54
+    2020-03-25 12:34:23: oggm.workflow: init_glacier_directories from prepro level 4 on 54 glaciers.
+    2020-03-25 12:34:25: oggm.workflow: Execute entity task gdir_from_prepro on 54 glaciers
+    2020-03-25 12:34:38: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
+    2020-03-25 12:35:22: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
+    2020-03-25 12:36:12: oggm.workflow: Execute entity task run_random_climate on 54 glaciers
+    2020-03-25 12:38:03: oggm.workflow: Execute entity task glacier_statistics on 54 glaciers
+    2020-03-25 12:38:04: __main__: OGGM is done! Time needed: 0:03:42
+
 
 Some analyses
 -------------

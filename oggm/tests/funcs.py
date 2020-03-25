@@ -310,7 +310,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     if not reset:
         return gdir
 
-    gis.define_glacier_region(gdir, entity=entity)
+    gis.define_glacier_region(gdir)
     execute_entity_task(gis.glacier_masks, [gdir])
     execute_entity_task(centerlines.compute_centerlines, [gdir])
     centerlines.initialize_flowlines(gdir)
@@ -390,7 +390,7 @@ def init_columbia(reset=False):
     if gdir.has_file('climate_monthly'):
         return gdir
 
-    gis.define_glacier_region(gdir, entity=entity)
+    gis.define_glacier_region(gdir)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
     centerlines.initialize_flowlines(gdir)

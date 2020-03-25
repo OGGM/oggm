@@ -25,6 +25,7 @@ Tools to set-up and run OGGM.
     cfg.set_logging_config
     cfg.set_intersects_db
     cfg.reset_working_dir
+    workflow.init_glacier_directories
     workflow.init_glacier_regions
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
@@ -174,9 +175,10 @@ pre-processed state available on the OGGM servers:
     cfg.initialize()  # always initialize before an OGGM task
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir')
-    gdirs = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=1,
-                                          prepro_border=10)
-    gdir = gdirs[0]  # init_glacier_regions always returns a list
+    gdirs = workflow.init_glacier_directories('RGI60-11.00897',
+                                              from_prepro_level=1,
+                                              prepro_border=10)
+    gdir = gdirs[0]  # init_glacier_directories always returns a list
 
 
 We just downloaded the minimal input for a glacier directory. The
@@ -353,9 +355,10 @@ including the model flowlines. This is achieved by choosing preprocessing level
     cfg.initialize()  # always initialize before an OGGM task
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
-    gdirs = workflow.init_glacier_regions('RGI60-11.00897', from_prepro_level=4,
-                                          prepro_border=10)
-    gdir = gdirs[0]  # init_glacier_regions always returns a list
+    gdirs = workflow.init_glacier_directories('RGI60-11.00897',
+                                              from_prepro_level=4,
+                                              prepro_border=10)
+    gdir = gdirs[0]  # init_glacier_directories always returns a list
 
     fls = gdir.read_pickle('model_flowlines')
     fls

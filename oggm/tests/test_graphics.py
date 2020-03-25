@@ -163,7 +163,7 @@ def test_multiple_inversion():
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
     hef_rgi.loc[0, 'RGIId'] = 'RGI50-11.00897'
 
-    gdirs = workflow.init_glacier_regions(hef_rgi)
+    gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
     workflow.climate_tasks(gdirs)
     workflow.inversion_tasks(gdirs)
@@ -241,7 +241,7 @@ def test_multiple_models():
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
     hef_rgi.loc[0, 'RGIId'] = 'RGI50-11.00897'
 
-    gdirs = workflow.init_glacier_regions(hef_rgi)
+    gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
     workflow.climate_tasks(gdirs)
     workflow.inversion_tasks(gdirs)
@@ -311,7 +311,7 @@ def test_chhota_shigri():
     df['Area'] = df.Area * 1e-6  # cause it was in m2
     df['RGIId'] = ['RGI50-14.15990' + d for d in ['_d01', '_d02']]
 
-    gdirs = workflow.init_glacier_regions(df)
+    gdirs = workflow.init_glacier_directories(df)
     workflow.gis_prepro_tasks(gdirs)
     for gdir in gdirs:
         climate.apparent_mb_from_linear_mb(gdir)
@@ -350,7 +350,7 @@ def test_ice_cap():
     df['Area'] = df.Area * 1e-6  # cause it was in m2
     df['RGIId'] = ['RGI50-05.08389_d{:02d}'.format(d+1) for d in df.index]
 
-    gdirs = workflow.init_glacier_regions(df)
+    gdirs = workflow.init_glacier_directories(df)
     workflow.gis_prepro_tasks(gdirs)
 
     from salem import mercator_grid, Map
@@ -386,7 +386,7 @@ def test_coxe():
     entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, base_dir=testdir, reset=True)
-    gis.define_glacier_region(gdir, entity=entity)
+    gis.define_glacier_region(gdir)
     gis.glacier_masks(gdir)
     centerlines.compute_centerlines(gdir)
     centerlines.initialize_flowlines(gdir)
