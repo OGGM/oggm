@@ -209,8 +209,8 @@ def _polygon_to_pix(polygon):
 
 
 @entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
-def define_glacier_region(gdir, entity=None):
-    """Very first task: define the glacier's local grid.
+def define_glacier_region(gdir, entity=None, source=None):
+    """Very first task after initialization: define the glacier's local grid.
 
     Defines the local projection (Transverse Mercator), centered on the
     glacier. There is some options to set the resolution of the local grid.
@@ -231,6 +231,22 @@ def define_glacier_region(gdir, entity=None):
         where to write the data
     entity : geopandas.GeoSeries
         the glacier geometry to process - DEPRECATED. It is now ignored
+    source : str or list of str, optional
+        If you want to force the use of a certain DEM source. Available are:
+          - 'USER' : file set in cfg.PATHS['dem_file']
+          - 'SRTM' : http://srtm.csi.cgiar.org/
+          - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
+          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'REMA' : https://www.pgc.umn.edu/data/rema/
+          - 'DEM3' : http://viewfinderpanoramas.org/
+          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
+          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
+          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
+          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
+          - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
+          - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
+          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
+          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
     """
 
     # Get the local map proj params and glacier extent
@@ -289,8 +305,6 @@ def define_glacier_region(gdir, entity=None):
     minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
     # Open DEM
-    entity = gdf.iloc[0]
-    source = entity.DEM_SOURCE if hasattr(entity, 'DEM_SOURCE') else None
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
         raise InvalidDEMError('Source: {} not available for glacier {}'

@@ -217,16 +217,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         log.workflow('Running prepro on ALL sources')
         for i, s in enumerate(utils.DEM_SOURCES):
             rs = i == 0
-            rgidf['DEM_SOURCE'] = s
             log.workflow('Running prepro on sources: {}'.format(s))
-            gdirs = []
-            for_task = []
-            for _, entity in rgidf.iterrows():
-                gdir = GlacierDirectory(entity, reset=rs)
-                for_task.append((gdir, dict(entity=entity)))
-                gdirs.append(gdir)
-
-            workflow.execute_entity_task(tasks.define_glacier_region, for_task)
+            gdirs = workflow.init_glacier_directories(rgidf, reset=rs,
+                                                      force=rs)
+            workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
+                                         source=s)
             workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
 
         # make a GeoTiff mask of the glacier, choose any source
@@ -242,13 +237,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         _time_log()
         return
 
-    if dem_source:
-        # Force a given source
-        rgidf['DEM_SOURCE'] = dem_source.upper()
+    # Force a given source
+    source = dem_source.upper() if dem_source else None
 
     # L1 - go
     gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
-    workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
+    workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
+                                 source=source)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L1', 'summary')

@@ -680,7 +680,7 @@ def get_lru_handler(tmpdir=None, maxsize=None, ending='.tif'):
         from oggm.utils import LRUFileCache
         # the files already present have to be counted, too
         l0 = list(glob.glob(os.path.join(tmpdir, '*' + ending)))
-        l0.sort(key=os.path.getmtime)
+        l0.sort(key=os.path.getctime)
         lru = LRUFileCache(l0, maxsize=maxsize)
         LRUHANDLERS[k] = lru
         return lru

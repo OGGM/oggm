@@ -2223,21 +2223,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     zoom : int, optional
         if you know the zoom already (for MAPZEN only)
     source : str or list of str, optional
-        If you want to force the use of a certain DEM source. Available are:
-          - 'USER' : file set in cfg.PATHS['dem_file']
-          - 'SRTM' : http://srtm.csi.cgiar.org/
-          - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
-          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
-          - 'REMA' : https://www.pgc.umn.edu/data/rema/
-          - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
-          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
-          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
-          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
-          - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
-          - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
-          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
-          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
+        Name of specific DEM source. See gis.define_glacier_region for details
 
     Returns
     -------
