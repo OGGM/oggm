@@ -1759,9 +1759,6 @@ class GlacierDirectory(object):
                 entity[k] = int(s)
         towrite = gpd.GeoDataFrame(entity).T
         towrite.crs = proj4_str
-        # Delete the source before writing
-        if 'DEM_SOURCE' in towrite:
-            del towrite['DEM_SOURCE']
 
         # Write shapefile
         self.write_shapefile(towrite, 'outlines')
