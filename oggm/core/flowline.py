@@ -27,7 +27,7 @@ from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance,
@@ -977,7 +977,7 @@ class FluxBasedModel(FlowlineModel):
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
-                 calving_limiter_frac=None, calving_water_level=None,
+                 calving_limiter_frac=None, water_level=None,
                  **kwargs):
         """Instanciate the model.
 
@@ -1049,7 +1049,7 @@ class FluxBasedModel(FlowlineModel):
         calving_limiter_frac : float
             limit the front slope to a fraction of the calving front.
             "3" means 1/3. Setting it to 0 limits the slope to sea-level.
-        calving_water_level : float
+        water_level : float
             for lake terminating glaciers, knowing the water level is hard.
             The default is to pick the elevation of the last glaciated grid
             point minus 1 meter. You can use this to fix it to a given value.
@@ -1076,7 +1076,7 @@ class FluxBasedModel(FlowlineModel):
 
         # Calving params
         if do_kcalving is None:
-            do_kcalving = cfg.PARAMS['use_kcalving_param']
+            do_kcalving = cfg.PARAMS['use_kcalving_for_run']
         self.do_calving = do_kcalving and self.is_tidewater
         if calving_k is None:
             calving_k = cfg.PARAMS['calving_k']
@@ -1090,7 +1090,7 @@ class FluxBasedModel(FlowlineModel):
             raise NotImplementedError('calving limiter other than 0 not '
                                       'implemented yet')
         self.calving_limiter_frac = calving_limiter_frac
-        if calving_water_level is None:
+        if water_level is None:
             self.water_level = 0
             if self.is_lake_terminating:
                 if not self.fls[-1].has_ice():
@@ -1099,9 +1099,10 @@ class FluxBasedModel(FlowlineModel):
                                              'without ice.')
                 # Arbitrary water level 1m below last grid points elevation
                 min_h = self.fls[-1].surface_h[self.fls[-1].thick > 0][-1]
-                self.water_level = min_h - 1
+                self.water_level = (min_h -
+                                    cfg.PARAMS['free_board_lake_terminating'])
         else:
-            self.water_level = calving_water_level
+            self.water_level = water_level
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
@@ -1880,6 +1881,7 @@ def init_present_time_glacier(gdir):
 def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
                      ys=None, ye=None, zero_initial_glacier=False,
                      init_model_fls=None, store_monthly_step=False,
+                     water_level=None,
                      **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -1925,10 +1927,23 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         for fl in fls:
             fl.thick = fl.thick * 0.
 
+    if (cfg.PARAMS['use_kcalving_for_run'] and gdir.is_tidewater and
+            water_level is None):
+        # check for water level
+        water_level = gdir.get_diagnostics().get('calving_water_level', None)
+        if water_level is None:
+            raise InvalidWorkflowError('This tidewater glacier seems to not '
+                                       'have been inverted with the '
+                                       'find_inversion_calving task. Set '
+                                       "PARAMS['use_kcalving_for_run'] to "
+                                       'False or set water_level to a value '
+                                       'to ignore this check.')
+
     model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                            inplace=True,
                            is_tidewater=gdir.is_tidewater,
                            is_lake_terminating=gdir.is_lake_terminating,
+                           water_level=water_level,
                            **kwargs)
 
     with np.warnings.catch_warnings():

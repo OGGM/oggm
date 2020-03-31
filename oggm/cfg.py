@@ -258,13 +258,6 @@ _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
-_doc = ('A csv file containing the output of each iteration of the '
-        'find_inversion_calving_loop task loop.')
-BASENAMES['calving_loop'] = ('calving_loop.csv', _doc)
-
-_doc = 'Calving output (deprecated).'
-BASENAMES['calving_output'] = ('calving_output.pkl', _doc)
-
 _doc = "A dict containing the glacier's t*, bias, mu*. Analogous " \
        "to 'local_mustar.json', but for the volume/area scaling model."
 BASENAMES['vascaling_mustar'] = ('vascaling_mustar.json', _doc)
@@ -427,6 +420,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_intersects'] = cp.as_bool('use_intersects')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
+    PARAMS['border'] = cp.as_int('border')
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
@@ -442,7 +436,9 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
-    PARAMS['use_kcalving_param'] = cp.as_bool('use_kcalving_param')
+    k = 'use_kcalving_for_inversion'
+    PARAMS[k] = cp.as_bool(k)
+    PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
 
     # Climate
@@ -459,6 +455,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
     k = 'tstar_search_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
+    k = 'free_board_marine_terminating'
+    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -474,7 +472,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines', 'tstar_search_glacierwide',
+           'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',
            'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
@@ -482,7 +480,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
-           'calving_line_extension', 'use_kcalving_param', 'lru_maxsize']
+           'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
+           'free_board_marine_terminating', 'use_kcalving_for_inversion']
     for k in ltr:
         cp.pop(k, None)
 

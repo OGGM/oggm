@@ -1109,7 +1109,7 @@ class TestFluxGate(unittest.TestCase):
         mb = ScalarMassBalance()
         model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50,
-                               calving_water_level=2000,
+                               water_level=2000,
                                is_tidewater=True)
         model.run_until(2000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1177,7 +1177,7 @@ class TestKCalving():
                                mb_model=ScalarMassBalance(),
                                is_tidewater=True, calving_use_limiter=True,
                                flux_gate=0.06, do_kcalving=True,
-                               calving_water_level=1000,
+                               water_level=1000,
                                calving_k=0.2)
         _, ds_2 = model.run_until_and_store(3000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1197,7 +1197,7 @@ class TestKCalving():
         # Let the model decide the water level
         fls = bu_tidewater_bed(water_level=1000)
         thick = fls[0].thick
-        thick[fls[0].bed_h > 1000] = 1
+        thick[fls[0].bed_h > 1000] = cfg.PARAMS['free_board_lake_terminating']
         fls[0].thick = thick
         model = FluxBasedModel(fls, mb_model=ScalarMassBalance(),
                                is_tidewater=True, calving_use_limiter=True,

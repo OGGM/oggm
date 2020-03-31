@@ -42,7 +42,7 @@ from scipy import optimize
 from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -780,8 +780,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     return thick
 
 
-def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
-                            fixed_water_depth=False):
+def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
+                            thick=None, fixed_water_depth=False):
     """Finds a calving flux from the calving front thickness.
 
     Approach based on Huss and Hock, (2015) and Oerlemans and Nick (2005).
@@ -793,7 +793,9 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
     gdir : GlacierDirectory
     k : float
         calving constant
-    water_depth :
+    water_level : float
+        in case water is not at 0 m a.s.l
+    water_depth : float (mandatory)
         the default is to compute the water_depth from ice thickness
         at the terminus and altitude. Set this to force the water depth
         to a certain value
@@ -823,30 +825,31 @@ def calving_flux_from_depth(gdir, k=None, water_depth=None, thick=None,
     fl = gdir.read_pickle('inversion_flowlines')[-1]
 
     # Altitude at the terminus and frontal width
-    t_altitude = utils.clip_min(fl.surface_h[-1], 0)
+    free_board = utils.clip_min(fl.surface_h[-1], 0) - water_level
     width = fl.widths[-1] * gdir.grid.dx
 
     # Calving formula
     if thick is None:
         thick = cl['thick'][-1]
     if water_depth is None:
-        water_depth = thick - t_altitude
+        water_depth = thick - free_board
     elif not fixed_water_depth:
         # Correct thickness with prescribed water depth
         # If fixed_water_depth=True then we forget about t_altitude
-        thick = water_depth + t_altitude
+        thick = water_depth + free_board
 
     flux = k * thick * water_depth * width / 1e9
 
     if fixed_water_depth:
         # Recompute free board before returning
-        t_altitude = thick - water_depth
+        free_board = thick - water_depth
 
     return {'flux': utils.clip_min(flux, 0),
             'width': width,
             'thick': thick,
             'water_depth': water_depth,
-            'free_board': t_altitude}
+            'water_level': water_level,
+            'free_board': free_board}
 
 
 def _calving_fallback():
@@ -858,159 +861,30 @@ def _calving_fallback():
     cfg.PARAMS['clip_mu_star'] = False
 
 
-@entity_task(log, writes=['calving_loop'], fallback=_calving_fallback)
-def find_inversion_calving_loop(gdir, initial_water_depth=None, max_ite=30,
-                                stop_after_convergence=True,
-                                fixed_water_depth=False):
-    """Iterative search for a calving flux compatible with the bed inversion.
-
-    See Recinos et al 2019 for details.
-
-    Parameters
-    ----------
-    initial_water_depth : float
-        the initial water depth starting the loop (for sensitivity experiments
-        or to fix it to an observed value). The default is to use 1/3 of the
-        terminus elevation if > 10 m, and 10 m otherwise
-    max_ite : int
-        the maximal number of iterations allowed before raising an error
-    stop_after_convergence : bool
-        continue to loop after convergence is reached
-        (for sensitivity experiments)
-    fixed_water_depth : bool
-        fix the water depth and let the frontal altitude vary instead
-    """
-
-    # Shortcuts
-    from oggm.core import climate, inversion
-    from oggm.exceptions import MassBalanceCalibrationError
-
-    # Input
-    if initial_water_depth is None:
-        fl = gdir.read_pickle('inversion_flowlines')[-1]
-        initial_water_depth = utils.clip_min(fl.surface_h[-1] / 3, 10)
-
-    rho = cfg.PARAMS['ice_density']
-
-    # We accept values down to zero before stopping
-    cfg.PARAMS['min_mu_star'] = 0
-
-    # Start iteration
-    i = 0
-    cfg.PARAMS['clip_mu_star'] = False
-    odf = pd.DataFrame()
-    mu_is_zero = False
-    while i < max_ite:
-
-        # Calculates a calving flux from model output
-        if i == 0:
-            # First call we set to zero (it's just to be sure we start
-            # from a non-calving glacier)
-            f_calving = 0
-        elif i == 1:
-            # Second call, we set a small positive calving to start with
-
-            # Default is to get the thickness from free board and
-            # initial water depth
-            thick = None
-            if fixed_water_depth:
-                # This leaves the free board open for change
-                thick = initial_water_depth + 1
-            out = calving_flux_from_depth(gdir,
-                                          water_depth=initial_water_depth,
-                                          thick=thick,
-                                          fixed_water_depth=fixed_water_depth)
-            f_calving = out['flux']
-        elif cfg.PARAMS['clip_mu_star']:
-            # If we had to clip mu, the inversion calving becomes the real
-            # flux, i.e. not compatible with calving law but with the
-            # inversion
-            fl = gdir.read_pickle('inversion_flowlines')[-1]
-            f_calving = fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 / rho
-            mu_is_zero = True
-        else:
-            # Otherwise it is parameterized by the calving law
-            if fixed_water_depth:
-                out = calving_flux_from_depth(gdir,
-                                              water_depth=initial_water_depth,
-                                              fixed_water_depth=True)
-                f_calving = out['flux']
-            else:
-                f_calving = calving_flux_from_depth(gdir)['flux']
-
-        # Give it back to the inversion and recompute
-        gdir.inversion_calving_rate = f_calving
-
-        # At this step we might raise a MassBalanceCalibrationError
-        try:
-            climate.local_t_star(gdir)
-            df = gdir.read_json('local_mustar')
-        except MassBalanceCalibrationError as e:
-            assert 'mu* out of specified bounds' in str(e)
-            # When this happens we clip mu* to zero and store the
-            # bad value (just for plotting)
-            cfg.PARAMS['clip_mu_star'] = True
-            df = gdir.read_json('local_mustar')
-            df['mu_star_glacierwide'] = float(str(e).split(':')[-1])
-            climate.local_t_star(gdir)
-
-        climate.mu_star_calibration(gdir)
-
-        inversion.prepare_for_inversion(gdir, add_debug_var=True)
-        v_inv, _ = inversion.mass_conservation_inversion(gdir)
-        if fixed_water_depth:
-            out = calving_flux_from_depth(gdir,
-                                          water_depth=initial_water_depth,
-                                          fixed_water_depth=True)
-        else:
-            out = calving_flux_from_depth(gdir)
-
-        # Store the data
-        odf.loc[i, 'calving_flux'] = f_calving
-        odf.loc[i, 'mu_star'] = df['mu_star_glacierwide']
-        odf.loc[i, 'calving_law_flux'] = out['flux']
-        odf.loc[i, 'width'] = out['width']
-        odf.loc[i, 'thick'] = out['thick']
-        odf.loc[i, 'water_depth'] = out['water_depth']
-        odf.loc[i, 'free_board'] = out['free_board']
-
-        # Do we have to do another_loop? Start testing at 5th iteration
-        calving_flux = odf.calving_flux.values
-        if stop_after_convergence and i > 4:
-            # We want to make sure that we don't converge by chance
-            # so we test on last two iterations
-            conv = (np.allclose(calving_flux[[-1, -2]],
-                                [out['flux'], out['flux']],
-                                rtol=0.01))
-            if mu_is_zero or conv:
-                break
-        i += 1
-
-    # Write output
-    odf.index.name = 'iterations'
-    odf.to_csv(gdir.get_filepath('calving_loop'))
-
-    # Restore defaults
-    cfg.PARAMS['min_mu_star'] = 1.
-    cfg.PARAMS['clip_mu_star'] = False
-
-    return odf
-
-
 @entity_task(log, writes=['diagnostics'], fallback=_calving_fallback)
-def find_inversion_calving(gdir, fixed_water_depth=None):
+def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     """Optimized search for a calving flux compatible with the bed inversion.
 
     See Recinos et al 2019 for details.
 
     Parameters
     ----------
+    water_level : float
+        the water level. It should be zero m a.s.l, but:
+        - sometimes the frontal elevation is unrealistically high (or low).
+        - lake terminating glaciers
+        - other uncertainties
+        With this parameter, you can still produce more realistic values
     fixed_water_depth : float
         fix the water depth to an observed value and let the free board vary
         instead.
     """
     from oggm.core import climate, inversion
     from oggm.exceptions import MassBalanceCalibrationError
+
+    if not gdir.is_tidewater:
+        raise InvalidWorkflowError('This task should not be called on non '
+                                   'tidewater glaciers.')
 
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
@@ -1024,15 +898,26 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
 
+    # Check that water level is within given bounds
+    if water_level is None:
+        th = cls['hgt'][-1]
+        if gdir.is_lake_terminating:
+            water_level = th - cfg.PARAMS['free_board_lake_terminating']
+        else:
+            vmin, vmax = cfg.PARAMS['free_board_marine_terminating']
+            water_level = utils.clip_scalar(0, th - vmax, th - vmin)
+
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first
     def to_minimize(h):
         if fixed_water_depth is not None:
             fl = calving_flux_from_depth(gdir, thick=h,
+                                         water_level=water_level,
                                          water_depth=fixed_water_depth,
                                          fixed_water_depth=True)
         else:
-            fl = calving_flux_from_depth(gdir, water_depth=h)
+            fl = calving_flux_from_depth(gdir, water_level=water_level,
+                                         water_depth=h)
 
         flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
         sia_thick = sia_thickness(slope, width, flux)
@@ -1045,9 +930,10 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
                            'flux optimization: {}'.format(abs_min))
     if abs_min['fun'] > 0:
         # This happens, and means that this glacier simply can't calve
-        # See e.g. RGI60-01.23642
+        # This is an indicator for physics not matching, often a unrealistic
+        # slope of free-board
         df = gdir.read_json('local_mustar')
-        out = calving_flux_from_depth(gdir)
+        out = calving_flux_from_depth(gdir, water_level=water_level)
 
         odf = dict()
         odf['calving_flux'] = 0
@@ -1055,6 +941,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
         odf['calving_law_flux'] = out['flux']
         odf['calving_slope'] = slope
         odf['calving_thick'] = out['thick']
+        odf['calving_water_level'] = out['water_level']
         odf['calving_water_depth'] = out['water_depth']
         odf['calving_free_board'] = out['free_board']
         odf['calving_front_width'] = out['width']
@@ -1071,12 +958,13 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
 
     # Give the flux to the inversion and recompute
     if fixed_water_depth is not None:
-        out = calving_flux_from_depth(gdir, thick=opt,
+        out = calving_flux_from_depth(gdir, water_level=water_level, thick=opt,
                                       water_depth=fixed_water_depth,
                                       fixed_water_depth=True)
         f_calving = out['flux']
     else:
-        out = calving_flux_from_depth(gdir, water_depth=opt)
+        out = calving_flux_from_depth(gdir, water_level=water_level,
+                                      water_depth=opt)
         f_calving = out['flux']
 
     gdir.inversion_calving_rate = f_calving
@@ -1101,11 +989,11 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
     inversion.mass_conservation_inversion(gdir)
 
     if fixed_water_depth is not None:
-        out = calving_flux_from_depth(gdir,
+        out = calving_flux_from_depth(gdir, water_level=water_level,
                                       water_depth=fixed_water_depth,
                                       fixed_water_depth=True)
     else:
-        out = calving_flux_from_depth(gdir)
+        out = calving_flux_from_depth(gdir, water_level=water_level)
 
     fl = gdir.read_pickle('inversion_flowlines')[-1]
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
@@ -1118,6 +1006,7 @@ def find_inversion_calving(gdir, fixed_water_depth=None):
     odf['calving_law_flux'] = out['flux']
     odf['calving_slope'] = slope
     odf['calving_thick'] = out['thick']
+    odf['calving_water_level'] = out['water_level']
     odf['calving_water_depth'] = out['water_depth']
     odf['calving_free_board'] = out['free_board']
     odf['calving_front_width'] = out['width']
