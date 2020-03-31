@@ -82,7 +82,10 @@ tasks.distribute_thickness_per_altitude(gdir)
 def example_plot_temp_ts():
     d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
     temp = d.temp.resample(time='12MS').mean('time').to_series()
-    del temp.index.name
+    try:
+        temp = temp.rename_axis(None)
+    except AttributeError:
+        del temp.index.name
     temp.plot(figsize=(8, 4), label='Annual temp')
     tsm = temp.rolling(31, center=True, min_periods=15).mean()
     tsm.plot(label='31-yr avg')
@@ -126,3 +129,5 @@ def example_plot_massflux():
     plt.title('Mass flux and mass balance along flowline')
     plt.tight_layout()
     plt.show()
+
+example_plot_temp_ts()
