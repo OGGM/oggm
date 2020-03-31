@@ -298,7 +298,7 @@ for more information about how to create an environment from a yml file)::
       - jupyterlab
       - numpy<1.17
       - scipy
-      - pandas<1
+      - pandas
       - shapely
       - matplotlib
       - Pillow
@@ -313,7 +313,7 @@ for more information about how to create an environment from a yml file)::
       - bottleneck
       - pyproj<2.3
       - cartopy
-      - geopandas<0.7.0
+      - geopandas
       - rasterio
       - descartes
       - seaborn
