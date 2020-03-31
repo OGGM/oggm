@@ -89,6 +89,7 @@ try:
     print("salem: %s, %s" % (salem.__version__, salem.__file__))
 except ImportError:
     print("no salem")
+    import salem
 
 # Remove some warnings
 try:
