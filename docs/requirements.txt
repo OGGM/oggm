@@ -21,4 +21,5 @@ descartes
 toolz
 ipython
 numpydoc
+pytables
 git+https://github.com/fmaussion/salem.git
