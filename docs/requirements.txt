@@ -3,7 +3,7 @@ scipy
 pandas
 shapely
 matplotlib
-pyproj
+pyproj==2.5.0
 rasterio
 Pillow
 geopandas
@@ -14,6 +14,7 @@ joblib
 xarray
 progressbar2
 pytest
+tables
 motionless
 dask
 bottleneck
@@ -21,5 +22,4 @@ descartes
 toolz
 ipython
 numpydoc
-tables
 git+https://github.com/fmaussion/salem.git

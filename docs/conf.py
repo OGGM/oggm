@@ -84,6 +84,11 @@ try:
     print("skimage: %s, %s" % (skimage.__version__, skimage.__file__))
 except ImportError:
     print("no skimage")
+try:
+    import salem
+    print("salem: %s, %s" % (salem.__version__, salem.__file__))
+except ImportError:
+    print("no salem")
 
 # Remove some warnings
 try:

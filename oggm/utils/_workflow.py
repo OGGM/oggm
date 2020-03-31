@@ -40,6 +40,9 @@ except ImportError:
     pass
 try:
     import salem
+except ImportError:
+    pass
+try:
     from salem import wgs84
     from salem.gis import transform_proj
 except ImportError:
