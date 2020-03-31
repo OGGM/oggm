@@ -80,6 +80,11 @@ try:
 except ImportError:
     print("no netCDF4")
 try:
+    import cftime
+    print("cftime: %s, %s" % (cftime.__version__, cftime.__file__))
+except ImportError:
+    print("no netCDF4")
+try:
     import skimage
     print("skimage: %s, %s" % (skimage.__version__, skimage.__file__))
 except ImportError:
@@ -89,7 +94,6 @@ try:
     print("salem: %s, %s" % (salem.__version__, salem.__file__))
 except ImportError:
     print("no salem")
-    import salem
 
 # Remove some warnings
 try:
