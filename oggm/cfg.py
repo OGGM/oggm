@@ -24,6 +24,8 @@ try:
 except ImportError:
     pass
 
+from oggm.exceptions import InvalidParamsError
+
 # Local logger
 log = logging.getLogger(__name__)
 
@@ -598,8 +600,8 @@ def oggm_static_paths():
     for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir',
               'cru_dir', 'rgi_dir', 'test_dir', 'has_internet']:
         if k not in config:
-            raise RuntimeError('The oggm config file ({}) should have an '
-                               'entry for {}.'.format(CONFIG_FILE, k))
+            raise InvalidParamsError('The oggm config file ({}) should have '
+                                     'an entry for {}.'.format(CONFIG_FILE, k))
 
     # Override defaults with env variables if available
     if os.environ.get('OGGM_DOWNLOAD_CACHE_RO') is not None:
@@ -614,11 +616,6 @@ def oggm_static_paths():
         config['tmp_dir'] = os.path.join(edir, 'tmp')
         config['cru_dir'] = os.path.join(edir, 'cru')
         config['rgi_dir'] = os.path.join(edir, 'rgi')
-
-    if not config['dl_cache_dir']:
-        raise RuntimeError('At the very least, the "dl_cache_dir" entry '
-                           'should be provided in the oggm config file '
-                           '({})'.format(CONFIG_FILE, k))
 
     # Fill the PATH dict
     for k, v in config.iteritems():

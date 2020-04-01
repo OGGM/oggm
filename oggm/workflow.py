@@ -595,8 +595,8 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     """
 
     if len(gdirs) > 100:
-        raise RuntimeError('this could take time! I should include an optinal '
-                           'parameter to ignore this.')
+        raise InvalidParamsError('this could take time! I should include an '
+                                 'optional parameter to ignore this.')
 
     # sort all glaciers descending by area
     gdirs.sort(key=lambda x: x.rgi_area_m2, reverse=True)

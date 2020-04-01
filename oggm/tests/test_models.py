@@ -865,6 +865,17 @@ class TestModelFlowlines():
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, (vol_m3/2).sum())
 
+        # Water level
+        rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     widths=widths, water_level=0)
+        assert rec.volume_bsl_km3 == 0
+
+        rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     widths=widths, water_level=5000)
+        assert rec.volume_bsl_km3 == rec.volume_km3
+
     def test_trapeze_mixed_rec(self):
 
         # Special case of lambda = 0
@@ -1244,6 +1255,16 @@ class TestModelFlowlines():
         rec.surface_h = rec.surface_h - 10
         assert_allclose(rec.thick, thick - 10)
         assert_allclose(rec.surface_h, surface_h - 10)
+
+        # Water level
+        rec.water_level = 0
+        assert rec.volume_bsl_km3 == 0
+
+        rec.water_level = 5000
+        assert rec.volume_bsl_km3 == rec.volume_km3
+
+        rec.water_level = 2500
+        assert 0 < rec.volume_bsl_km3 < rec.volume_km3
 
 
 @pytest.fixture(scope='class')

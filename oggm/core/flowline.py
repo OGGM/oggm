@@ -50,7 +50,8 @@ class Flowline(Centerline):
     """
 
     def __init__(self, line=None, dx=1, map_dx=None,
-                 surface_h=None, bed_h=None, rgi_id=None):
+                 surface_h=None, bed_h=None, rgi_id=None,
+                 water_level=None):
         """ Initialize a Flowline
 
         Parameters
@@ -67,6 +68,8 @@ class Flowline(Centerline):
             elevation[m] of the bedrock at the flowline grid points
         rgi_id : str
             The glacier's RGI identifier
+        water_level : float
+            The water level (to compute volume below sea-level)
         """
 
         # This is do add flexibility for testing. I have no time for fancier
@@ -84,6 +87,7 @@ class Flowline(Centerline):
         self.dx_meter = map_dx * self.dx
         self.bed_h = bed_h
         self.rgi_id = rgi_id
+        self.water_level = water_level
 
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
@@ -128,12 +132,34 @@ class Flowline(Centerline):
 
     @property
     def volume_m3(self):
-        return (np.sum(self.section * self.dx_meter) -
-                getattr(self, 'calving_bucket_m3', 0))
+        return utils.clip_min(np.sum(self.section * self.dx_meter) -
+                              getattr(self, 'calving_bucket_m3', 0), 0)
 
     @property
     def volume_km3(self):
         return self.volume_m3 * 1e-9
+
+    @property
+    def volume_bsl_m3(self):
+        # We trick - we set ice as if it was only the one bsl
+        thick = np.copy(self.thick)
+        n_thick = np.copy(thick)
+        bsl = (self.bed_h < self.water_level) & (thick > 0)
+        n_thick[~bsl] = 0
+        self.thick = n_thick
+        vol_tot = np.sum(self.section * self.dx_meter)
+        n_thick[bsl] = utils.clip_max(self.surface_h[bsl],
+                                      self.water_level) - self.bed_h[bsl]
+        self.thick = n_thick
+        vol_bsl = np.sum(self.section * self.dx_meter)
+        self.thick = thick
+        fac = vol_bsl / vol_tot if vol_tot > 0 else 0
+        return utils.clip_min(vol_bsl -
+                              getattr(self, 'calving_bucket_m3', 0) * fac, 0)
+
+    @property
+    def volume_bsl_km3(self):
+        return self.volume_bsl_m3 * 1e-9
 
     @property
     def area_m2(self):
@@ -171,7 +197,8 @@ class ParabolicBedFlowline(Flowline):
     """
 
     def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None, bed_shape=None, rgi_id=None):
+                 surface_h=None, bed_h=None, bed_shape=None, rgi_id=None,
+                 water_level=None):
         """ Instanciate.
 
         Parameters
@@ -185,7 +212,8 @@ class ParabolicBedFlowline(Flowline):
         """
         super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
                                                    surface_h, bed_h,
-                                                   rgi_id=rgi_id)
+                                                   rgi_id=rgi_id,
+                                                   water_level=water_level)
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
@@ -219,7 +247,8 @@ class RectangularBedFlowline(Flowline):
     """
 
     def __init__(self, line=None, dx=None, map_dx=None,
-                 surface_h=None, bed_h=None, widths=None, rgi_id=None):
+                 surface_h=None, bed_h=None, widths=None, rgi_id=None,
+                 water_level=None):
         """ Instanciate.
 
         Parameters
@@ -233,7 +262,8 @@ class RectangularBedFlowline(Flowline):
         """
         super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
-                                                     rgi_id=rgi_id)
+                                                     rgi_id=rgi_id,
+                                                     water_level=water_level)
 
         self._widths = widths
 
@@ -265,7 +295,8 @@ class TrapezoidalBedFlowline(Flowline):
     """
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
-                 bed_h=None, widths=None, lambdas=None, rgi_id=None):
+                 bed_h=None, widths=None, lambdas=None, rgi_id=None,
+                 water_level=None):
         """ Instanciate.
 
         Parameters
@@ -279,7 +310,8 @@ class TrapezoidalBedFlowline(Flowline):
         """
         super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
-                                                     rgi_id=rgi_id)
+                                                     rgi_id=rgi_id,
+                                                     water_level=water_level)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
 
@@ -328,7 +360,8 @@ class MixedBedFlowline(Flowline):
 
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
-                 is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None):
+                 is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
+                 water_level=None):
         """ Instanciate.
 
         Parameters
@@ -345,7 +378,8 @@ class MixedBedFlowline(Flowline):
         super(MixedBedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
                                                surface_h=surface_h.copy(),
                                                bed_h=bed_h.copy(),
-                                               rgi_id=rgi_id)
+                                               rgi_id=rgi_id,
+                                               water_level=water_level)
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)
@@ -447,7 +481,8 @@ class FlowlineModel(object):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=None, inplace=False, is_tidewater=False,
                  is_lake_terminating=False,
-                 mb_elev_feedback='annual', check_for_boundaries=True):
+                 mb_elev_feedback='annual', check_for_boundaries=True,
+                 water_level=None):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -482,6 +517,21 @@ class FlowlineModel(object):
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
+        self.is_marine_terminating = is_tidewater and not is_lake_terminating
+
+        if water_level is None:
+            self.water_level = 0
+            if self.is_lake_terminating:
+                if not self.fls[-1].has_ice():
+                    raise InvalidParamsError('Cannot decide on water level '
+                                             'for lake terminating glacier '
+                                             'without ice.')
+                # Arbitrary water level 1m below last grid points elevation
+                min_h = self.fls[-1].surface_h[self.fls[-1].thick > 0][-1]
+                self.water_level = (min_h -
+                                    cfg.PARAMS['free_board_lake_terminating'])
+        else:
+            self.water_level = water_level
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback.lower()
@@ -560,6 +610,8 @@ class FlowlineModel(object):
         # list of tributary coordinates and stuff
         trib_ind = []
         for fl in self.fls:
+            # Important also
+            fl.water_level = self.water_level
             if fl.flows_to is None:
                 trib_ind.append((None, None, None, None))
                 continue
@@ -578,6 +630,7 @@ class FlowlineModel(object):
                 id0 = ide-2
                 id1 = ide+3
             trib_ind.append((idl, id0, id1, gk))
+
         self._tributary_indices = trib_ind
 
     @property
@@ -595,6 +648,14 @@ class FlowlineModel(object):
     @property
     def volume_km3(self):
         return self.volume_m3 * 1e-9
+
+    @property
+    def volume_bsl_m3(self):
+        return np.sum([f.volume_bsl_m3 for f in self.fls])
+
+    @property
+    def volume_bsl_km3(self):
+        return self.volume_bsl_m3 * 1e-9
 
     @property
     def area_km2(self):
@@ -820,6 +881,7 @@ class FlowlineModel(object):
         diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                   gmtime())
         diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
+        diag_ds.attrs['water_level'] = self.water_level
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)
@@ -838,6 +900,13 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
         diag_ds['volume_m3'].attrs['unit'] = 'm 3'
+        if self.is_marine_terminating:
+            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'below '
+                                                             'sea-level')
+            diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
         diag_ds['area_m2'].attrs['unit'] = 'm 2'
@@ -887,6 +956,8 @@ class FlowlineModel(object):
             if self.is_tidewater:
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+                if self.is_marine_terminating:
+                    diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
 
         # to datasets
         run_ds = []
@@ -1050,13 +1121,21 @@ class FluxBasedModel(FlowlineModel):
             limit the front slope to a fraction of the calving front.
             "3" means 1/3. Setting it to 0 limits the slope to sea-level.
         water_level : float
-            for lake terminating glaciers, knowing the water level is hard.
-            The default is to pick the elevation of the last glaciated grid
-            point minus 1 meter. You can use this to fix it to a given value.
+            the water level. It should be zero m a.s.l, but:
+            - sometimes the frontal elevation is unrealistically high (or low).
+            - lake terminating glaciers
+            - other uncertainties
+            The default is 0. For lake terminating glaciers,
+            it is inferred from PARAMS['free_board_lake_terminating'].
+            The best way to set the water level for real glaciers is to use
+            the same as used for the inversion (this is what
+            `robust_model_run` does for you)
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
-                                             inplace=inplace, **kwargs)
+                                             inplace=inplace,
+                                             water_level=water_level,
+                                             **kwargs)
 
         self.fixed_dt = fixed_dt
         if min_dt is None:
@@ -1090,19 +1169,6 @@ class FluxBasedModel(FlowlineModel):
             raise NotImplementedError('calving limiter other than 0 not '
                                       'implemented yet')
         self.calving_limiter_frac = calving_limiter_frac
-        if water_level is None:
-            self.water_level = 0
-            if self.is_lake_terminating:
-                if not self.fls[-1].has_ice():
-                    raise InvalidParamsError('Cannot decide on water level '
-                                             'for lake terminating glacier '
-                                             'without ice.')
-                # Arbitrary water level 1m below last grid points elevation
-                min_h = self.fls[-1].surface_h[self.fls[-1].thick > 0][-1]
-                self.water_level = (min_h -
-                                    cfg.PARAMS['free_board_lake_terminating'])
-        else:
-            self.water_level = water_level
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
@@ -1906,6 +1972,13 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
+    water_level : float
+        the water level. It should be zero m a.s.l, but:
+        - sometimes the frontal elevation is unrealistically high (or low).
+        - lake terminating glaciers
+        - other uncertainties
+        The default is to take the water level obtained from the ice
+        thickness inverion.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
@@ -1934,10 +2007,10 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         if water_level is None:
             raise InvalidWorkflowError('This tidewater glacier seems to not '
                                        'have been inverted with the '
-                                       'find_inversion_calving task. Set '
+                                       '`find_inversion_calving` task. Set '
                                        "PARAMS['use_kcalving_for_run'] to "
-                                       'False or set water_level to a value '
-                                       'to ignore this check.')
+                                       '`False` or set `water_level` '
+                                       'to prevent this error.')
 
     model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
                            inplace=True,

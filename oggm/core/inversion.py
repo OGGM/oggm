@@ -874,7 +874,9 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         - sometimes the frontal elevation is unrealistically high (or low).
         - lake terminating glaciers
         - other uncertainties
-        With this parameter, you can still produce more realistic values
+        With this parameter, you can produce more realistic values. The default
+        is to infer the water level from PARAMS['free_board_lake_terminating']
+        and PARAMS['free_board_marine_terminating']
     fixed_water_depth : float
         fix the water depth to an observed value and let the free board vary
         instead.
@@ -883,15 +885,17 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     from oggm.exceptions import MassBalanceCalibrationError
 
     if not gdir.is_tidewater:
-        raise InvalidWorkflowError('This task should not be called on non '
-                                   'tidewater glaciers.')
+        # Do nothing
+        return
 
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
     climate.local_t_star(gdir)
     climate.mu_star_calibration(gdir)
     inversion.prepare_for_inversion(gdir, add_debug_var=True)
-    inversion.mass_conservation_inversion(gdir)
+    v_ref, _ = inversion.mass_conservation_inversion(gdir)
+    # Store for statistics
+    gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
     # Get the relevant variables
     cls = gdir.read_pickle('inversion_input')[-1]

@@ -2342,7 +2342,7 @@ class TestInversion(unittest.TestCase):
         self.assertFalse('tstar_avg_temp_mean_elev' in dfc)
 
 
-class TestCoxeCalvingInvert(unittest.TestCase):
+class TestCoxeCalving(unittest.TestCase):
 
     def setUp(self):
 
@@ -2421,6 +2421,7 @@ class TestCoxeCalvingInvert(unittest.TestCase):
         flowline.run_constant_climate(gdir, bias=0, nyears=100)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3[-1] > 10
+            assert ds.volume_bsl_m3[-1] > 0
 
 
 class TestColumbiaCalving(unittest.TestCase):
