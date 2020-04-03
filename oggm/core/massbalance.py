@@ -957,7 +957,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             except FileNotFoundError:
                 raise InvalidWorkflowError('Need a valid `model_flowlines` '
                                            'file. If you explicitly want to '
-                                           'use `inversion_flowlines`, set ' 
+                                           'use `inversion_flowlines`, set '
                                            'use_inversion_flowlines=True.')
 
         self.fls = fls
