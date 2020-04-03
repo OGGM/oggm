@@ -199,7 +199,7 @@ class TestFullRun(unittest.TestCase):
 
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs)
-        self.assertTrue(np.all(dfc.terminus_type == 'Land-terminating'))
+        self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
         assert np.all(dfc.t_star > 1900)
         dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
