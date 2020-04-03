@@ -79,6 +79,10 @@ def up_to_climate(reset=False):
     rgi_file = get_demo_file('rgi_oetztal.shp')
     rgidf = gpd.read_file(rgi_file)
 
+    # Make a fake marine and lake terminating glacier
+    rgidf.loc[0, 'GlacType'] = '0199'
+    rgidf.loc[1, 'GlacType'] = '0299'
+
     # Be sure data is downloaded
     utils.get_cru_cl_file()
 
@@ -226,11 +230,18 @@ class TestFullRun(unittest.TestCase):
             os.makedirs(TEST_DIR)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('none', f)
-        gdirs = up_to_inversion()
+        gdirs = up_to_inversion(reset=False)
+
+        # First tests
+        df = utils.compile_glacier_statistics(gdirs)
+        df['volume_before_calving_km3'] = df['volume_before_calving'] * 1e-9
+        assert np.sum(~ df.volume_before_calving.isnull()) == 2
+        dfs = df.iloc[:2]
+        assert np.all(dfs['volume_before_calving_km3'] < dfs['inv_volume_km3'])
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
-                                     nyears=200, seed=0,
+                                     nyears=100, seed=0,
                                      store_monthly_step=True,
                                      output_filesuffix='_test')
 
@@ -264,11 +275,16 @@ class TestFullRun(unittest.TestCase):
         assert_allclose(ds_diag.volume_m3, ds.volume.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.area_m2, ds.area.sel(rgi_id=gd.rgi_id))
         assert_allclose(ds_diag.length_m, ds.length.sel(rgi_id=gd.rgi_id))
-        # Test output
-        ds = utils.compile_run_output(gdirs, input_filesuffix='_test')
         df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)
+        # Calving stuff
+        assert ds.isel(rgi_id=0).calving[-1] > 0
+        assert ds.isel(rgi_id=0).calving_rate[-1] > 0
+        assert ds.isel(rgi_id=0).volume_bsl[-1] > 0
+        assert ds.isel(rgi_id=1).calving[-1] > 0
+        assert ds.isel(rgi_id=1).calving_rate[-1] > 0
+        assert not np.isfinite(ds.isel(rgi_id=1).volume_bsl[-1])
 
 
 @pytest.mark.slow
