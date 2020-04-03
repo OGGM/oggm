@@ -522,9 +522,10 @@ class FlowlineModel(object):
         if water_level is None:
             self.water_level = 0
             if self.is_lake_terminating:
-                assert flowlines[-1].has_ice(), ('Set `water_level` for lake '
-                                                 'terminating glaciers in '
-                                                 'idealized runs')
+                if not flowlines[-1].has_ice():
+                    raise InvalidParamsError('Set `water_level` for lake '
+                                             'terminating glaciers in '
+                                             'idealized runs')
                 # Arbitrary water level 1m below last grid points elevation
                 min_h = flowlines[-1].surface_h[flowlines[-1].thick > 0][-1]
                 self.water_level = (min_h -
