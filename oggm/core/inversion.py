@@ -34,7 +34,6 @@ import warnings
 
 # External libs
 import numpy as np
-import pandas as pd
 from scipy.interpolate import griddata
 from scipy import optimize
 
@@ -42,7 +41,7 @@ from scipy import optimize
 from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
-from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -890,10 +889,13 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
 
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
-    climate.local_t_star(gdir)
-    climate.mu_star_calibration(gdir)
-    inversion.prepare_for_inversion(gdir, add_debug_var=True)
-    v_ref, _ = inversion.mass_conservation_inversion(gdir)
+
+    with utils.DisableLogger():
+        climate.local_t_star(gdir)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        v_ref, _ = inversion.mass_conservation_inversion(gdir)
+
     # Store for statistics
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
@@ -973,24 +975,25 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
 
     gdir.inversion_calving_rate = f_calving
 
-    # We accept values down to zero before stopping
-    cfg.PARAMS['min_mu_star'] = 0
-    cfg.PARAMS['clip_mu_star'] = False
+    with utils.DisableLogger():
+        # We accept values down to zero before stopping
+        cfg.PARAMS['min_mu_star'] = 0
+        cfg.PARAMS['clip_mu_star'] = False
 
-    # At this step we might raise a MassBalanceCalibrationError
-    try:
-        climate.local_t_star(gdir)
-        df = gdir.read_json('local_mustar')
-    except MassBalanceCalibrationError as e:
-        assert 'mu* out of specified bounds' in str(e)
-        # When this happens we clip mu* to zero
-        cfg.PARAMS['clip_mu_star'] = True
-        climate.local_t_star(gdir)
-        df = gdir.read_json('local_mustar')
+        # At this step we might raise a MassBalanceCalibrationError
+        try:
+            climate.local_t_star(gdir)
+            df = gdir.read_json('local_mustar')
+        except MassBalanceCalibrationError as e:
+            assert 'mu* out of specified bounds' in str(e)
+            # When this happens we clip mu* to zero
+            cfg.PARAMS['clip_mu_star'] = True
+            climate.local_t_star(gdir)
+            df = gdir.read_json('local_mustar')
 
-    climate.mu_star_calibration(gdir)
-    inversion.prepare_for_inversion(gdir, add_debug_var=True)
-    inversion.mass_conservation_inversion(gdir)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir, add_debug_var=True)
+        inversion.mass_conservation_inversion(gdir)
 
     if fixed_water_depth is not None:
         out = calving_flux_from_depth(gdir, water_level=water_level,
@@ -1018,7 +1021,8 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         gdir.add_to_diagnostics(k, v)
 
     # Restore defaults
-    cfg.PARAMS['min_mu_star'] = 1.
-    cfg.PARAMS['clip_mu_star'] = False
+    with utils.DisableLogger():
+        cfg.PARAMS['min_mu_star'] = 1.
+        cfg.PARAMS['clip_mu_star'] = False
 
     return odf
