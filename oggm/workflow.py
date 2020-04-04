@@ -557,22 +557,28 @@ def inversion_tasks(gdirs):
         the glacier directories to process
     """
 
-    # Differentiate between calving and non-calving glaciers
-    gdirs_nc = []
-    gdirs_c = []
-    for gd in gdirs:
-        if gd.is_tidewater:
-            gdirs_c.append(gd)
-        else:
-            gdirs_nc.append(gd)
+    if cfg.PARAMS['use_kcalving_for_inversion']:
+        # Differentiate between calving and non-calving glaciers
+        gdirs_nc = []
+        gdirs_c = []
+        for gd in gdirs:
+            if gd.is_tidewater:
+                gdirs_c.append(gd)
+            else:
+                gdirs_nc.append(gd)
 
-    if gdirs_nc:
-        execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
-        execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
-        execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
+        if gdirs_nc:
+            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
+            execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
-    if gdirs_c:
-        execute_entity_task(tasks.find_inversion_calving, gdirs_c)
+        if gdirs_c:
+            execute_entity_task(tasks.find_inversion_calving, gdirs_c)
+    else:
+        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.filter_inversion_output, gdirs)
+
 
 
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,

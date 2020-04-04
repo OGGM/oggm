@@ -911,7 +911,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     from oggm.core import climate
     from oggm.exceptions import MassBalanceCalibrationError
 
-    if not gdir.is_tidewater:
+    if not gdir.is_tidewater or not cfg.PARAMS['use_kcalving_for_inversion']:
         # Do nothing
         return
 

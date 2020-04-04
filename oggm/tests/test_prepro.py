@@ -2393,9 +2393,9 @@ class TestCoxeCalving(unittest.TestCase):
         # Calving increases the volume and reduces the mu
         v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
         v_new = np.sum([np.sum(fl['volume']) for fl in cls2])
-        assert v_ref < 0.9 * v_new
+        assert v_ref < v_new
         for fl1, fl2 in zip(fls1, fls2):
-            assert fl2.mu_star < fl1.mu_star
+            assert round(fl2.mu_star, 5) <= round(fl1.mu_star, 5)
 
         # Redundancy test
         v_new_bsl = np.sum([np.sum(fl.get('volume_bsl', 0)) for fl in cls2])
@@ -2435,7 +2435,6 @@ class TestCoxeCalving(unittest.TestCase):
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3[-1] > 10
             assert ds.volume_bwl_m3[-1] > 0
-            assert ds.volume_bsl_m3[-1] > 0
             assert ds.volume_bsl_m3[-1] < ds.volume_bwl_m3[-1]
 
 
@@ -2485,7 +2484,6 @@ class TestColumbiaCalving(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
-        default_calving = cfg.PARAMS['inversion_calving_k']
         cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving(gdir)
 
@@ -2493,15 +2491,15 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
 
-        # Test with fixed water depth
+        # Test with fixed water depth and high k
         water_depth = 275.282
-        cfg.PARAMS['inversion_calving_k'] = default_calving
+        cfg.PARAMS['inversion_calving_k'] = 2.4
 
         # Test with fixed water depth (it still overshoot)
         df = inversion.find_inversion_calving(gdir,
                                               fixed_water_depth=water_depth)
 
-        assert df['calving_flux'] > 2
+        assert df['calving_flux'] > 1
         assert df['calving_mu_star'] == 0
         assert df['calving_front_water_depth'] == water_depth
         assert df['calving_front_width'] > 100  # just to check its here
@@ -2520,7 +2518,7 @@ class TestColumbiaCalving(unittest.TestCase):
         odf = utils.compile_glacier_statistics([gdir],
                                                inversion_only=True).iloc[0]
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
-        np.testing.assert_allclose(odf.calving_water_depth, water_depth)
+        np.testing.assert_allclose(odf.calving_front_water_depth, water_depth)
 
 
 class TestGrindelInvert(unittest.TestCase):
