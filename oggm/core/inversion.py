@@ -110,10 +110,9 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
                       slope_angle=angle, is_rectangular=is_rectangular,
-                      is_last=fl.flows_to is None)
+                      is_last=fl.flows_to is None, hgt=hgt)
         if add_debug_var:
             cl_dic['flux'] = flux
-            cl_dic['hgt'] = hgt
         towrite.append(cl_dic)
 
     # Write out
@@ -276,9 +275,20 @@ def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
     return flux
 
 
+def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
+                     is_rectangular, fac, dx, water_level):
+    bsl = (bed_h < water_level) & (thick > 0)
+    n_thick = np.copy(thick)
+    n_thick[~bsl] = 0
+    n_thick[bsl] = utils.clip_max(surface_h[bsl], water_level) - bed_h[bsl]
+    n_w = np.sqrt(4 * n_thick / bed_shape)
+    n_w[is_rectangular] = widths[is_rectangular]
+    return fac * n_thick * n_w * dx
+
+
 @entity_task(log, writes=['inversion_output'])
 def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
-                                filesuffix=''):
+                                filesuffix='', water_level=None):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -297,6 +307,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         during calibration.
     filesuffix : str
         add a suffix to the output file
+    water_level : float
+        to compute volume below water level - adds an entry to the output dict
     """
 
     # Defaults
@@ -369,9 +381,25 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         # volume
         fac = np.where(cl['is_rectangular'], 1, 2./3.)
         volume = fac * out_thick * w * cl['dx']
+
         if write:
             cl['thick'] = out_thick
             cl['volume'] = volume
+
+            # volume below sl
+            bed_h = cl['hgt'] - out_thick
+            bed_shape = 4 * out_thick / w ** 2
+            if np.any(bed_h < 0):
+                cl['volume_bsl'] = _vol_below_water(cl['hgt'], bed_h,
+                                                    bed_shape, out_thick, w,
+                                                    cl['is_rectangular'], fac,
+                                                    cl['dx'], 0)
+            if water_level is not None and np.any(bed_h < water_level):
+                cl['volume_bwl'] = _vol_below_water(cl['hgt'], bed_h,
+                                                    bed_shape, out_thick, w,
+                                                    cl['is_rectangular'], fac,
+                                                    cl['dx'], water_level)
+
         out_volume += np.sum(volume)
 
     if write:
@@ -880,7 +908,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         fix the water depth to an observed value and let the free board vary
         instead.
     """
-    from oggm.core import climate, inversion
+    from oggm.core import climate
     from oggm.exceptions import MassBalanceCalibrationError
 
     if not gdir.is_tidewater:
@@ -893,8 +921,8 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     with utils.DisableLogger():
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
-        inversion.prepare_for_inversion(gdir, add_debug_var=True)
-        v_ref, _ = inversion.mass_conservation_inversion(gdir)
+        prepare_for_inversion(gdir, add_debug_var=True)
+        v_ref, _ = mass_conservation_inversion(gdir, water_level=water_level)
 
     # Store for statistics
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
@@ -945,11 +973,11 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         odf['calving_flux'] = 0
         odf['calving_mu_star'] = df['mu_star_glacierwide']
         odf['calving_law_flux'] = out['flux']
-        odf['calving_slope'] = slope
-        odf['calving_thick'] = out['thick']
         odf['calving_water_level'] = out['water_level']
-        odf['calving_water_depth'] = out['water_depth']
-        odf['calving_free_board'] = out['free_board']
+        odf['calving_front_slope'] = slope
+        odf['calving_front_water_depth'] = out['water_depth']
+        odf['calving_front_free_board'] = out['free_board']
+        odf['calving_front_thick'] = out['thick']
         odf['calving_front_width'] = out['width']
         for k, v in odf.items():
             gdir.add_to_diagnostics(k, v)
@@ -992,8 +1020,8 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
             df = gdir.read_json('local_mustar')
 
         climate.mu_star_calibration(gdir)
-        inversion.prepare_for_inversion(gdir, add_debug_var=True)
-        inversion.mass_conservation_inversion(gdir)
+        prepare_for_inversion(gdir, add_debug_var=True)
+        mass_conservation_inversion(gdir, water_level=water_level)
 
     if fixed_water_depth is not None:
         out = calving_flux_from_depth(gdir, water_level=water_level,
@@ -1011,11 +1039,11 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     odf['calving_flux'] = f_calving
     odf['calving_mu_star'] = df['mu_star_glacierwide']
     odf['calving_law_flux'] = out['flux']
-    odf['calving_slope'] = slope
-    odf['calving_thick'] = out['thick']
     odf['calving_water_level'] = out['water_level']
-    odf['calving_water_depth'] = out['water_depth']
-    odf['calving_free_board'] = out['free_board']
+    odf['calving_front_slope'] = slope
+    odf['calving_front_water_depth'] = out['water_depth']
+    odf['calving_front_free_board'] = out['free_board']
+    odf['calving_front_thick'] = out['thick']
     odf['calving_front_width'] = out['width']
     for k, v in odf.items():
         gdir.add_to_diagnostics(k, v)

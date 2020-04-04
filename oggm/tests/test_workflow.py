@@ -281,7 +281,8 @@ class TestFullRun(unittest.TestCase):
         # Calving stuff
         assert ds.isel(rgi_id=0).calving[-1] > 0
         assert ds.isel(rgi_id=0).calving_rate[-1] > 0
-        assert ds.isel(rgi_id=0).volume_bsl[-1] > 0
+        assert ds.isel(rgi_id=0).volume_bsl[-1] == 0
+        assert ds.isel(rgi_id=0).volume_bwl[-1] > 0
         assert ds.isel(rgi_id=1).calving[-1] > 0
         assert ds.isel(rgi_id=1).calving_rate[-1] > 0
         assert not np.isfinite(ds.isel(rgi_id=1).volume_bsl[-1])

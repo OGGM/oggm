@@ -139,27 +139,38 @@ class Flowline(Centerline):
     def volume_km3(self):
         return self.volume_m3 * 1e-9
 
-    @property
-    def volume_bsl_m3(self):
-        # We trick - we set ice as if it was only the one bsl
+    def _vol_below_level(self, water_level=0):
+
         thick = np.copy(self.thick)
         n_thick = np.copy(thick)
-        bsl = (self.bed_h < self.water_level) & (thick > 0)
-        n_thick[~bsl] = 0
+        bwl = (self.bed_h < water_level) & (thick > 0)
+        n_thick[~bwl] = 0
         self.thick = n_thick
         vol_tot = np.sum(self.section * self.dx_meter)
-        n_thick[bsl] = utils.clip_max(self.surface_h[bsl],
-                                      self.water_level) - self.bed_h[bsl]
+        n_thick[bwl] = utils.clip_max(self.surface_h[bwl],
+                                      water_level) - self.bed_h[bwl]
         self.thick = n_thick
-        vol_bsl = np.sum(self.section * self.dx_meter)
+        vol_bwl = np.sum(self.section * self.dx_meter)
         self.thick = thick
-        fac = vol_bsl / vol_tot if vol_tot > 0 else 0
-        return utils.clip_min(vol_bsl -
+        fac = vol_bwl / vol_tot if vol_tot > 0 else 0
+        return utils.clip_min(vol_bwl -
                               getattr(self, 'calving_bucket_m3', 0) * fac, 0)
+
+    @property
+    def volume_bsl_m3(self):
+        return self._vol_below_level(water_level=0)
 
     @property
     def volume_bsl_km3(self):
         return self.volume_bsl_m3 * 1e-9
+
+    @property
+    def volume_bwl_m3(self):
+        return self._vol_below_level(water_level=self.water_level)
+
+    @property
+    def volume_bwl_km3(self):
+        return self.volume_bwl_m3 * 1e-9
 
     @property
     def area_m2(self):
@@ -658,6 +669,14 @@ class FlowlineModel(object):
         return self.volume_bsl_m3 * 1e-9
 
     @property
+    def volume_bwl_m3(self):
+        return np.sum([f.volume_bwl_m3 for f in self.fls])
+
+    @property
+    def volume_bwl_km3(self):
+        return self.volume_bwl_m3 * 1e-9
+
+    @property
     def area_km2(self):
         return self.area_m2 * 1e-6
 
@@ -906,6 +925,11 @@ class FlowlineModel(object):
                                                              'below '
                                                              'sea-level')
             diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'below '
+                                                             'water-level')
+            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
@@ -958,6 +982,7 @@ class FlowlineModel(object):
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
                 if self.is_marine_terminating:
                     diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
+                    diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
 
         # to datasets
         run_ds = []

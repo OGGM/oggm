@@ -1155,11 +1155,13 @@ class TestKCalving():
                         model.flux_gate_m3_since_y0)
         assert_allclose(ds2.calving_m3[-1], model.calving_m3_since_y0)
         assert_allclose(ds2.volume_bsl_m3[-1], model.volume_bsl_km3 * 1e9)
+        assert_allclose(ds2.volume_bwl_m3[-1], model.volume_bwl_km3 * 1e9)
 
         # Not exact same of course
         assert_allclose(ds1.volume_m3[-1], ds2.volume_m3[-1], rtol=0.06)
         assert_allclose(ds1.calving_m3[-1], ds2.calving_m3[-1], rtol=0.15)
         assert_allclose(ds1.volume_bsl_m3[-1], ds2.volume_bsl_m3[-1], rtol=0.3)
+        assert_allclose(ds2.volume_bsl_m3, ds2.volume_bwl_m3)
 
         if do_plot:
             f, ax = plt.subplots(1, 1, figsize=(12, 5))

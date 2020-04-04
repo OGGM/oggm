@@ -2386,7 +2386,7 @@ class TestCoxeCalving(unittest.TestCase):
         fls1 = gdir.read_pickle('inversion_flowlines')
         cls1 = gdir.read_pickle('inversion_output')
 
-        inversion.find_inversion_calving(gdir)
+        out = inversion.find_inversion_calving(gdir)
         fls2 = gdir.read_pickle('inversion_flowlines')
         cls2 = gdir.read_pickle('inversion_output')
 
@@ -2396,6 +2396,19 @@ class TestCoxeCalving(unittest.TestCase):
         assert v_ref < 0.9 * v_new
         for fl1, fl2 in zip(fls1, fls2):
             assert fl2.mu_star < fl1.mu_star
+
+        # Redundancy test
+        v_new_bsl = np.sum([np.sum(fl.get('volume_bsl', 0)) for fl in cls2])
+        v_new_bwl = np.sum([np.sum(fl.get('volume_bwl', 0)) for fl in cls2])
+        flowline.init_present_time_glacier(gdir)
+        flsg = gdir.read_pickle('model_flowlines')
+        for fl in flsg:
+            fl.water_level = out['calving_water_level']
+        v_new_bsl_g = np.sum([np.sum(fl.volume_bsl_m3) for fl in flsg])
+        v_new_bwl_g = np.sum([np.sum(fl.volume_bwl_m3) for fl in flsg])
+        assert v_new_bsl < v_new_bwl
+        np.testing.assert_allclose(v_new_bsl, v_new_bsl_g)
+        np.testing.assert_allclose(v_new_bwl, v_new_bwl_g)
 
     def test_inversion_and_run_with_calving(self):
 
@@ -2421,7 +2434,9 @@ class TestCoxeCalving(unittest.TestCase):
         flowline.run_constant_climate(gdir, bias=0, nyears=100)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3[-1] > 10
+            assert ds.volume_bwl_m3[-1] > 0
             assert ds.volume_bsl_m3[-1] > 0
+            assert ds.volume_bsl_m3[-1] < ds.volume_bwl_m3[-1]
 
 
 class TestColumbiaCalving(unittest.TestCase):
@@ -2488,7 +2503,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         assert df['calving_flux'] > 2
         assert df['calving_mu_star'] == 0
-        assert df['calving_water_depth'] == water_depth
+        assert df['calving_front_water_depth'] == water_depth
         assert df['calving_front_width'] > 100  # just to check its here
 
         # Test with smaller k (it doesn't overshoot)
@@ -2499,7 +2514,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] > 0.1
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
-        assert df['calving_water_depth'] == water_depth
+        assert df['calving_front_water_depth'] == water_depth
 
         # Test glacier stats
         odf = utils.compile_glacier_statistics([gdir],

@@ -764,6 +764,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     calving_m3 = None
     calving_rate_myr = None
     volume_bsl_m3 = None
+    volume_bwl_m3 = None
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
@@ -785,6 +786,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                     if volume_bsl_m3 is None:
                         volume_bsl_m3 = np.zeros(shape) * np.NaN
                     volume_bsl_m3[:, i] = ds_diag.volume_bsl_m3.values
+                if 'volume_bwl_m3' in ds_diag:
+                    if volume_bwl_m3 is None:
+                        volume_bwl_m3 = np.zeros(shape) * np.NaN
+                    volume_bwl_m3[:, i] = ds_diag.volume_bwl_m3.values
         except BaseException:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
@@ -817,6 +822,11 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds['volume_bsl'].attrs['description'] = ('Total glacier volume below '
                                                  'sea level')
         ds['volume_bsl'].attrs['units'] = 'm3'
+    if volume_bwl_m3 is not None:
+        ds['volume_bwl'] = (('time', 'rgi_id'), volume_bwl_m3)
+        ds['volume_bwl'].attrs['description'] = ('Total glacier volume below '
+                                                 'water level')
+        ds['volume_bwl'].attrs['units'] = 'm3'
 
     if path:
         enc_var = {'dtype': 'float32'}
