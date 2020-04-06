@@ -1303,8 +1303,8 @@ def mu_star_calibration(gdir):
     # If not marine and a bit far from zero, warning
     cmb = calving_mb(gdir)
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.warning('(%s) flux should be zero, but is: '
-                    '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
+        log.info('(%s) flux should be zero, but is: '
+                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
     # If not marine and quite far from zero, error
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
@@ -1383,8 +1383,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.warning('(%s) flux should be zero, but is: '
-                    '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
+        log.info('(%s) flux should be zero, but is: '
+                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
     # If not marine and quite far from zero, error
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
@@ -1445,8 +1445,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.warning('(%s) flux should be zero, but is: '
-                    '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
+        log.info('(%s) flux should be zero, but is: '
+                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
     # If not marine and quite far from zero, error
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'

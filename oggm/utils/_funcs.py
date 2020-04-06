@@ -510,7 +510,7 @@ def multipolygon_to_polygon(geometry, gdir=None):
             # This happens for bad geometries. We keep the largest
             geometry = parts[0]
             if np.any(areas[1:] > (areas[0] / 4)):
-                log.warning('Geometry {} lost quite a chunk.'.format(rid))
+                log.info('Geometry {} lost quite a chunk.'.format(rid))
 
     if geometry.type != 'Polygon':
         raise InvalidGeometryError('Geometry {} is not a Polygon.'.format(rid))

@@ -1227,7 +1227,7 @@ def _mask_to_polygon(mask, gdir=None):
         sr = region_sizes.pop(am)
         for ss in region_sizes:
             if (ss / sr) > 0.2:
-                log.warning('(%s) this blob was unusually large', rid)
+                log.info('(%s) this blob was unusually large', rid)
         mask[:] = 0
         mask[np.where(regions == (am+1))] = 1
 
@@ -1379,7 +1379,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
             break
         else:
             alt_range_th += 20
-            log.warning('Set altitude threshold to {}'.format(alt_range_th))
+            log.info('Set altitude threshold to {}'.format(alt_range_th))
         if alt_range_th > 2000:
             raise GeometryError('Problem by altitude filter.')
 
@@ -1657,9 +1657,9 @@ def initialize_flowlines(gdir):
             diag_n_pix += len(isfin)
             perc_bad = np.sum(~isfin) / len(isfin)
             if perc_bad > 0.8:
-                log.warning('({}) more than {:.0%} of the flowline is cropped '
-                            'due to negative slopes.'.format(gdir.rgi_id,
-                                                             perc_bad))
+                log.info('({}) more than {:.0%} of the flowline is cropped '
+                         'due to negative slopes.'.format(gdir.rgi_id,
+                                                          perc_bad))
 
             sp = np.min(np.where(np.isfinite(hgts))[0])
             while len(hgts[sp:]) < 5:
@@ -1782,7 +1782,7 @@ def catchment_width_geom(gdir):
         if len(valid[0]) == 0:
             # This happens very rarely. Just pick the middle and
             # the correction task should do the rest
-            log.warning('({}) width filtering too strong.'.format(gdir.rgi_id))
+            log.info('({}) width filtering too strong.'.format(gdir.rgi_id))
             fil_widths = widths[np.int(len(widths) / 2.)]
 
         # Special treatment for tidewater glaciers
@@ -1901,13 +1901,13 @@ def catchment_width_correction(gdir):
             if bsize > 500:
                 nmin -= 1
                 bsize = cfg.PARAMS['base_binsize']
-                log.warning('(%s) reduced min n per bin to %d', gdir.rgi_id,
-                            nmin)
+                log.info('(%s) reduced min n per bin to %d', gdir.rgi_id,
+                         nmin)
                 if nmin == 0:
                     raise GeometryError('({}) no binsize could be chosen '
                                         .format(gdir.rgi_id))
         if bsize > 150:
-            log.warning('(%s) chosen binsize %d', gdir.rgi_id, bsize)
+            log.info('(%s) chosen binsize %d', gdir.rgi_id, bsize)
         else:
             log.debug('(%s) chosen binsize %d', gdir.rgi_id, bsize)
 
