@@ -11,7 +11,7 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries, ncDataset,
                         tolist, clip_min, clip_max, clip_array)
-
+from oggm.exceptions import InvalidWorkflowError
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Common logic for the mass balance models.
@@ -307,12 +307,12 @@ class PastMassBalance(MassBalanceModel):
             mu_star = df['mu_star_glacierwide']
             if check_calib_params:
                 if not df['mu_star_allsame']:
-                    raise RuntimeError('You seem to use the glacier-wide mu* '
-                                       'to compute the mass-balance although '
-                                       'this glacier has different mu* for '
-                                       'its flowlines. '
-                                       'Set `check_calib_params=False` '
-                                       'to ignore this warning.')
+                    msg = ('You seem to use the glacier-wide mu* to compute '
+                           'the mass-balance although this glacier has '
+                           'different mu* for its flowlines. Set '
+                           '`check_calib_params=False` to prevent this '
+                           'error.')
+                    raise InvalidWorkflowError(msg)
 
         if bias is None:
             if cfg.PARAMS['use_bias_for_run']:
@@ -336,11 +336,11 @@ class PastMassBalance(MassBalanceModel):
             mb_calib = gdir.read_json('climate_info')['mb_calib_params']
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
-                    raise RuntimeError('You seem to use different mass-'
-                                       'balance parameters than used for the '
-                                       'calibration. '
-                                       'Set `check_calib_params=False` '
-                                       'to ignore this warning.')
+                    msg = ('You seem to use different mass-balance parameters '
+                           'than used for the calibration. Set '
+                           '`check_calib_params=False` to ignore this '
+                           'warning.')
+                    raise InvalidWorkflowError(msg)
 
         # Public attrs
         self.hemisphere = gdir.hemisphere
@@ -955,10 +955,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             try:
                 fls = gdir.read_pickle('model_flowlines')
             except FileNotFoundError:
-                raise RuntimeError('Need a valid `model_flowlines` file. '
-                                   'If you explicitly want to use '
-                                   '`inversion_flowlines`, set '
-                                   'use_inversion_flowlines=True.') from None
+                raise InvalidWorkflowError('Need a valid `model_flowlines` '
+                                           'file. If you explicitly want to '
+                                           'use `inversion_flowlines`, set '
+                                           'use_inversion_flowlines=True.')
 
         self.fls = fls
         _y0 = kwargs.get('y0', None)

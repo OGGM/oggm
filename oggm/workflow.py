@@ -556,14 +556,29 @@ def inversion_tasks(gdirs):
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
     """
-    # Init
-    execute_entity_task(tasks.prepare_for_inversion, gdirs)
 
-    # Inversion for all glaciers
-    execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+    if cfg.PARAMS['use_kcalving_for_inversion']:
+        # Differentiate between calving and non-calving glaciers
+        gdirs_nc = []
+        gdirs_c = []
+        for gd in gdirs:
+            if gd.is_tidewater:
+                gdirs_c.append(gd)
+            else:
+                gdirs_nc.append(gd)
 
-    # Filter
-    execute_entity_task(tasks.filter_inversion_output, gdirs)
+        if gdirs_nc:
+            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
+            execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
+
+        if gdirs_c:
+            execute_entity_task(tasks.find_inversion_calving, gdirs_c)
+    else:
+        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.filter_inversion_output, gdirs)
+
 
 
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
@@ -595,8 +610,8 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     """
 
     if len(gdirs) > 100:
-        raise RuntimeError('this could take time! I should include an optinal '
-                           'parameter to ignore this.')
+        raise InvalidParamsError('this could take time! I should include an '
+                                 'optional parameter to ignore this.')
 
     # sort all glaciers descending by area
     gdirs.sort(key=lambda x: x.rgi_area_m2, reverse=True)

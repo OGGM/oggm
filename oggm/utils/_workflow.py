@@ -758,10 +758,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds['calendar_month'].attrs['description'] = 'Calendar month'
 
     shape = (len(time), len(rgi_ids))
+    # These variables are always available
     vol = np.zeros(shape)
     area = np.zeros(shape)
     length = np.zeros(shape)
     ela = np.zeros(shape)
+    # These are not
+    calving_m3 = None
+    calving_rate_myr = None
+    volume_bsl_m3 = None
+    volume_bwl_m3 = None
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
@@ -771,6 +777,22 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 area[:, i] = ds_diag.area_m2.values
                 length[:, i] = ds_diag.length_m.values
                 ela[:, i] = ds_diag.ela_m.values
+                if 'calving_m3' in ds_diag:
+                    if calving_m3 is None:
+                        calving_m3 = np.zeros(shape) * np.NaN
+                    calving_m3[:, i] = ds_diag.calving_m3.values
+                if 'calving_rate_myr' in ds_diag:
+                    if calving_rate_myr is None:
+                        calving_rate_myr = np.zeros(shape) * np.NaN
+                    calving_rate_myr[:, i] = ds_diag.calving_rate_myr.values
+                if 'volume_bsl_m3' in ds_diag:
+                    if volume_bsl_m3 is None:
+                        volume_bsl_m3 = np.zeros(shape) * np.NaN
+                    volume_bsl_m3[:, i] = ds_diag.volume_bsl_m3.values
+                if 'volume_bwl_m3' in ds_diag:
+                    if volume_bwl_m3 is None:
+                        volume_bwl_m3 = np.zeros(shape) * np.NaN
+                    volume_bwl_m3[:, i] = ds_diag.volume_bwl_m3.values
         except BaseException:
             vol[:, i] = np.NaN
             area[:, i] = np.NaN
@@ -789,6 +811,25 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     ds['ela'] = (('time', 'rgi_id'), ela)
     ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
     ds['ela'].attrs['units'] = 'm a.s.l'
+    if calving_m3 is not None:
+        ds['calving'] = (('time', 'rgi_id'), calving_m3)
+        ds['calving'].attrs['description'] = ('Total calving volume since '
+                                              'simulation start')
+        ds['calving'].attrs['units'] = 'm3'
+    if calving_rate_myr is not None:
+        ds['calving_rate'] = (('time', 'rgi_id'), calving_rate_myr)
+        ds['calving_rate'].attrs['description'] = 'Instantaneous calving rate'
+        ds['calving_rate'].attrs['units'] = 'm yr-1'
+    if volume_bsl_m3 is not None:
+        ds['volume_bsl'] = (('time', 'rgi_id'), volume_bsl_m3)
+        ds['volume_bsl'].attrs['description'] = ('Total glacier volume below '
+                                                 'sea level')
+        ds['volume_bsl'].attrs['units'] = 'm3'
+    if volume_bwl_m3 is not None:
+        ds['volume_bwl'] = (('time', 'rgi_id'), volume_bwl_m3)
+        ds['volume_bwl'].attrs['description'] = ('Total glacier volume below '
+                                                 'water level')
+        ds['volume_bwl'].attrs['units'] = 'm3'
 
     if path:
         enc_var = {'dtype': 'float32'}
@@ -1078,21 +1119,6 @@ def glacier_statistics(gdir, inversion_only=False):
         diags = gdir.get_diagnostics()
         for k, v in diags.items():
             d[k] = v
-    except BaseException:
-        pass
-
-    try:
-        # Calving
-        df = pd.read_csv(gdir.get_filepath('calving_loop'), index_col=0)
-        df = df.iloc[-1]
-        d['calving_n_iterations'] = df.name
-        d['calving_flux'] = df.calving_flux
-        d['calving_mu_star'] = df.mu_star
-        d['calving_calving_law_flux'] = df.calving_law_flux
-        d['calving_front_width'] = df.width
-        d['calving_front_thick'] = df.thick
-        d['calving_front_water_depth'] = df.water_depth
-        d['calving_front_free_board'] = df.free_board
     except BaseException:
         pass
 

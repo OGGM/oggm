@@ -3,6 +3,10 @@ class InvalidParamsError(ValueError):
     pass
 
 
+class InvalidWorkflowError(ValueError):
+    pass
+
+
 class MassBalanceCalibrationError(RuntimeError):
     pass
 

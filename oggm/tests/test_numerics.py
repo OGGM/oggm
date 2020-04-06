@@ -173,7 +173,7 @@ class TestIdealisedCases(unittest.TestCase):
                                         is_tidewater=True)
         model.run_until(500)
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
-        assert_allclose(model.total_mass, tot_vol, rtol=0.01)
+        assert_allclose(model.total_mass, tot_vol, rtol=0.02)
 
     @pytest.mark.slow
     def test_staggered_diagnostics(self):
@@ -1109,7 +1109,7 @@ class TestFluxGate(unittest.TestCase):
         mb = ScalarMassBalance()
         model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50,
-                               calving_water_level=2000,
+                               water_level=2000,
                                is_tidewater=True)
         model.run_until(2000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1154,10 +1154,14 @@ class TestKCalving():
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
         assert_allclose(ds2.calving_m3[-1], model.calving_m3_since_y0)
+        assert_allclose(ds2.volume_bsl_m3[-1], model.volume_bsl_km3 * 1e9)
+        assert_allclose(ds2.volume_bwl_m3[-1], model.volume_bwl_km3 * 1e9)
 
         # Not exact same of course
         assert_allclose(ds1.volume_m3[-1], ds2.volume_m3[-1], rtol=0.06)
         assert_allclose(ds1.calving_m3[-1], ds2.calving_m3[-1], rtol=0.15)
+        assert_allclose(ds1.volume_bsl_m3[-1], ds2.volume_bsl_m3[-1], rtol=0.3)
+        assert_allclose(ds2.volume_bsl_m3, ds2.volume_bwl_m3)
 
         if do_plot:
             f, ax = plt.subplots(1, 1, figsize=(12, 5))
@@ -1177,7 +1181,7 @@ class TestKCalving():
                                mb_model=ScalarMassBalance(),
                                is_tidewater=True, calving_use_limiter=True,
                                flux_gate=0.06, do_kcalving=True,
-                               calving_water_level=1000,
+                               water_level=1000,
                                calving_k=0.2)
         _, ds_2 = model.run_until_and_store(3000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1197,7 +1201,7 @@ class TestKCalving():
         # Let the model decide the water level
         fls = bu_tidewater_bed(water_level=1000)
         thick = fls[0].thick
-        thick[fls[0].bed_h > 1000] = 1
+        thick[fls[0].bed_h > 1000] = cfg.PARAMS['free_board_lake_terminating']
         fls[0].thick = thick
         model = FluxBasedModel(fls, mb_model=ScalarMassBalance(),
                                is_tidewater=True, calving_use_limiter=True,

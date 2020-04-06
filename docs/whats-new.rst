@@ -15,6 +15,10 @@ Breaking changes
   `on the website <https://oggm.org/2020/02/16/calving-param/>`_
   (:pull:`945`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The calving parameterization has been extended and made more useful
+  by logging its output to compiled files. See :pull:`996` for code changes
+  and watch out for upcoming changes in the documentation and notebooks.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The new default when applying GCM data to a glacier is to correct for
   temperature standard deviation (:pull:`978`). The previous default was
   wrong and should not be the default.
