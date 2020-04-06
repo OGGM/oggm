@@ -442,6 +442,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PARAMS[k] = cp.as_bool(k)
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
+    k = 'error_when_glacier_reaches_boundaries'
+    PARAMS[k] = cp.as_bool(k)
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -483,7 +485,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
            'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
-           'free_board_marine_terminating', 'use_kcalving_for_inversion']
+           'free_board_marine_terminating', 'use_kcalving_for_inversion',
+           'error_when_glacier_reaches_boundaries']
     for k in ltr:
         cp.pop(k, None)
 

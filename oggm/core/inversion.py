@@ -281,7 +281,9 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
     n_thick = np.copy(thick)
     n_thick[~bsl] = 0
     n_thick[bsl] = utils.clip_max(surface_h[bsl], water_level) - bed_h[bsl]
-    n_w = np.sqrt(4 * n_thick / bed_shape)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        n_w = np.sqrt(4 * n_thick / bed_shape)
     n_w[is_rectangular] = widths[is_rectangular]
     return fac * n_thick * n_w * dx
 
@@ -874,12 +876,13 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
     return {'flux': utils.clip_min(flux, 0),
             'width': width,
             'thick': thick,
+            'inversion_calving_k': k,
             'water_depth': water_depth,
             'water_level': water_level,
             'free_board': free_board}
 
 
-def _calving_fallback():
+def _calving_fallback(gdir):
     """Restore defaults in case we exit with error"""
 
     # Bounds on mu*
@@ -974,6 +977,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         odf['calving_mu_star'] = df['mu_star_glacierwide']
         odf['calving_law_flux'] = out['flux']
         odf['calving_water_level'] = out['water_level']
+        odf['calving_inversion_k'] = out['inversion_calving_k']
         odf['calving_front_slope'] = slope
         odf['calving_front_water_depth'] = out['water_depth']
         odf['calving_front_free_board'] = out['free_board']
@@ -1040,6 +1044,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     odf['calving_mu_star'] = df['mu_star_glacierwide']
     odf['calving_law_flux'] = out['flux']
     odf['calving_water_level'] = out['water_level']
+    odf['calving_inversion_k'] = out['inversion_calving_k']
     odf['calving_front_slope'] = slope
     odf['calving_front_water_depth'] = out['water_depth']
     odf['calving_front_free_board'] = out['free_board']

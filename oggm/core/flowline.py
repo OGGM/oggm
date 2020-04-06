@@ -491,9 +491,8 @@ class FlowlineModel(object):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=None, inplace=False, is_tidewater=False,
-                 is_lake_terminating=False,
-                 mb_elev_feedback='annual', check_for_boundaries=True,
-                 water_level=None):
+                 is_lake_terminating=False, mb_elev_feedback='annual',
+                 check_for_boundaries=None, water_level=None):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -523,7 +522,8 @@ class FlowlineModel(object):
             at all (the heights are taken from the first call).
         check_for_boundaries : bool
             whether the model should raise an error when the glacier exceeds
-            the domain boundaries.
+            the domain boundaries. The default is to follow
+            PARAMS['error_when_glacier_reaches_boundaries']
         """
 
         self.is_tidewater = is_tidewater
@@ -561,7 +561,9 @@ class FlowlineModel(object):
         self.fs = fs
         self.glen_n = cfg.PARAMS['glen_n']
         self.rho = cfg.PARAMS['ice_density']
-
+        if check_for_boundaries is None:
+            check_for_boundaries = cfg.PARAMS[('error_when_glacier_reaches_'
+                                               'boundaries')]
         self.check_for_boundaries = check_for_boundaries
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
