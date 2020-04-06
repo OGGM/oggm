@@ -502,7 +502,7 @@ def process_dem(gdir):
     if np.any(~valid_mask):
         # We interpolate
         if np.sum(~valid_mask) > (0.25 * nx * ny):
-            log.warning('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
+            log.info('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
         xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(~valid_mask)
         pok = np.nonzero(valid_mask)
@@ -513,7 +513,7 @@ def process_dem(gdir):
                                  method='linear')
         except ValueError:
             raise InvalidDEMError('DEM interpolation not possible.')
-        log.warning(gdir.rgi_id + ': DEM needed interpolation.')
+        log.info(gdir.rgi_id + ': DEM needed interpolation.')
         gdir.add_to_diagnostics('dem_needed_interpolation', True)
         gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx * ny))
 
@@ -531,7 +531,7 @@ def process_dem(gdir):
                                  method='nearest')
         except ValueError:
             raise InvalidDEMError('DEM extrapolation not possible.')
-        log.warning(gdir.rgi_id + ': DEM needed extrapolation.')
+        log.info(gdir.rgi_id + ': DEM needed extrapolation.')
         gdir.add_to_diagnostics('dem_needed_extrapolation', True)
         gdir.add_to_diagnostics('dem_extrapol_perc', len(pnan[0]) / (nx * ny))
 

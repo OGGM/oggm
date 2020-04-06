@@ -281,7 +281,7 @@ def set_logging_config(logging_level='INFO'):
         but that OGGM is still working on this glacier.
     WORKFLOW
         Print only high level, workflow information (typically, one message
-        per task). Errors will still be printed, but warnings won't.
+        per task). Errors and warnings will still be printed.
     ERROR
         Print errors only, e.g. when a glacier cannot run properly.
     CRITICAL
@@ -296,15 +296,15 @@ def set_logging_config(logging_level='INFO'):
     """
 
     # Add a custom level - just for us
-    logging.addLevelName(35, 'WORKFLOW')
+    logging.addLevelName(25, 'WORKFLOW')
 
     def workflow(self, message, *args, **kws):
         """Standard log message with a custom level."""
-        if self.isEnabledFor(35):
+        if self.isEnabledFor(25):
             # Yes, logger takes its '*args' as 'args'.
-            self._log(35, message, args, **kws)
+            self._log(25, message, args, **kws)
 
-    logging.WORKFLOW = 35
+    logging.WORKFLOW = 25
     logging.Logger.workflow = workflow
 
     # Remove all handlers associated with the root logger object.

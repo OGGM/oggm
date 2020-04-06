@@ -85,7 +85,7 @@ def prepare_for_inversion(gdir, add_debug_var=False,
 
         # Clip flux to 0
         if np.any(flux < -0.1):
-            log.warning('(%s) has negative flux somewhere', gdir.rgi_id)
+            log.info('(%s) has negative flux somewhere', gdir.rgi_id)
         utils.clip_min(flux, 0, out=flux)
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
