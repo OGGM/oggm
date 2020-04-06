@@ -173,7 +173,7 @@ class TestIdealisedCases(unittest.TestCase):
                                         is_tidewater=True)
         model.run_until(500)
         tot_vol = model.volume_m3 + model.calving_m3_since_y0
-        assert_allclose(model.total_mass, tot_vol, rtol=0.01)
+        assert_allclose(model.total_mass, tot_vol, rtol=0.02)
 
     @pytest.mark.slow
     def test_staggered_diagnostics(self):
