@@ -6,7 +6,6 @@ to be realized by any OGGM pre-processing workflow.
 import os
 import logging
 import warnings
-from functools import partial
 from distutils.version import LooseVersion
 
 # External libs
@@ -55,7 +54,8 @@ except ImportError:
 from oggm import entity_task, utils
 import oggm.cfg as cfg
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             InvalidDEMError, GeometryError)
+                             InvalidDEMError, GeometryError,
+                             InvalidWorkflowError)
 from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
                         nicenumber, ncDataset, tolist)
 
@@ -403,6 +403,62 @@ def define_glacier_region(gdir, entity=None, source=None):
         fw.write('# Data files\n\n')
         for fname in dem_list:
             fw.write('{}\n'.format(os.path.basename(fname)))
+
+
+def rasterio_to_gdir(gdir, input_file, output_file_name,
+                     resampling='cubic'):
+    """Reprojects a file that rasterio can read into the glacier directory.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory
+    input_file : str
+        path to the file to reproject
+    output_file_name : str
+        name of the output file (must be in cfg.BASENAMES)
+    resampling : str
+        nearest', 'bilinear', 'cubic', 'cubic_spline', or one of
+        https://rasterio.readthedocs.io/en/latest/topics/resampling.html
+    """
+
+    output_file = gdir.get_filepath(output_file_name)
+    assert '.tif' in output_file, 'output_file should end with .tif'
+
+    if not gdir.has_file('dem'):
+        raise InvalidWorkflowError('Need a dem.tif file to reproject to')
+
+    with rasterio.open(input_file) as src:
+
+        kwargs = src.meta.copy()
+        data = src.read(1)
+
+        with rasterio.open(gdir.get_filepath('dem')) as tpl:
+
+            kwargs.update({
+                'crs': tpl.crs,
+                'transform': tpl.transform,
+                'width': tpl.width,
+                'height': tpl.height
+            })
+
+            with rasterio.open(output_file, 'w', **kwargs) as dst:
+                for i in range(1, src.count + 1):
+
+                    dest = np.zeros(shape=(tpl.height, tpl.width),
+                                    dtype=data.dtype)
+
+                    reproject(
+                        source=rasterio.band(src, i),
+                        destination=dest,
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=tpl.transform,
+                        dst_crs=tpl.crs,
+                        resampling=getattr(Resampling, resampling)
+                    )
+
+                    dst.write(dest, indexes=i)
 
 
 def read_geotiff_dem(gdir):
