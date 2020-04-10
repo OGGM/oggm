@@ -6,9 +6,12 @@ try:
     import salem
 except ImportError:
     pass
+try:
+    import rasterio
+except ImportError:
+    pass
 
-from oggm import utils, cfg
-from oggm.core import gis
+from oggm import utils
 from oggm.exceptions import InvalidWorkflowError
 
 # Module logger
@@ -22,7 +25,7 @@ region_files = {}
 for reg in regions:
     d = {}
     for var in ['vx', 'vy', 'vy_err', 'vx_err']:
-        d[var] = '{}_G0120_0000_{}.tif'.format(reg, var)
+        d[var] = base_url + '{}_G0120_0000_{}.tif'.format(reg, var)
     region_files[reg] = d
 
 region_grids = {}
@@ -38,17 +41,13 @@ rgi_region_links = {'01': 'ALA', '02': 'ALA',
                     }
 
 
-cfg.BASENAMES['its_live_vx'] = ('its_live_vx.tif', 'ITS_LIVE velocity files')
-cfg.BASENAMES['its_live_vy'] = ('its_live_vy.tif', 'ITS_LIVE velocity files')
-
-
 def region_grid(reg):
 
     global region_grids
 
     if reg not in region_grids:
         with utils.get_download_lock():
-            fp = utils.file_downloader(base_url + region_files[reg]['vx'])
+            fp = utils.file_downloader(region_files[reg]['vx'])
             ds = salem.GeoTiff(fp)
             region_grids[reg] = ds.grid
 
@@ -76,9 +75,19 @@ def find_region(gdir):
         return None
 
 
-@utils.entity_task(log, writes=['its_live_vx', 'its_live_vy'])
-def vel_to_gdir(gdir):
-    """Reproject the its_live files to the given glacier direcory.
+@utils.entity_task(log, writes=['gridded_data'])
+def velocity_to_gdir(gdir):
+    """Reproject the its_live files to the given glacier directory.
+
+    Variables are added to the gridded_data nc file.
+
+    Reprojecting velocities from one map proj to another is done
+    reprojecting the vector distances. In this process, absolute velocities
+    might change as well because map projections do not always preserve
+    distances.
+
+    We use bilinear interpolation to reproject the velocities to the local
+    glacier map.
 
     Parameters
     ----------
@@ -92,9 +101,73 @@ def vel_to_gdir(gdir):
         raise InvalidWorkflowError('There does not seem to be its_live data '
                                    'available for this glacier')
 
-    with utils.get_download_lock():
-        fx = utils.file_downloader(base_url + region_files[reg]['vx'])
-        fy = utils.file_downloader(base_url + region_files[reg]['vy'])
+    if not gdir.has_file('gridded_data'):
+        raise InvalidWorkflowError('Please run `glacier_masks` before running '
+                                   'this task')
 
-    gis.rasterio_to_gdir(gdir, fx, 'its_live_vx')
-    gis.rasterio_to_gdir(gdir, fy, 'its_live_vy')
+    with utils.get_download_lock():
+        fx = utils.file_downloader(region_files[reg]['vx'])
+        fy = utils.file_downloader(region_files[reg]['vy'])
+
+    # Open the files
+    dsx = salem.GeoTiff(fx)
+    dsy = salem.GeoTiff(fy)
+    # subset them to our map
+    grid_gla = gdir.grid.center_grid
+    proj_vel = dsx.grid.proj
+    x0, x1, y0, y1 = grid_gla.extent_in_crs(proj_vel)
+    dsx.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
+    dsy.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
+    grid_vel = dsx.grid.center_grid
+
+    # TODO: this should be taken care of by salem
+    # https://github.com/fmaussion/salem/issues/171
+    with rasterio.Env():
+        with rasterio.open(fx) as src:
+            nodata = getattr(src, 'nodata', -32767.0)
+
+    # Get the coords at t0
+    xx0, yy0 = grid_vel.center_grid.xy_coordinates
+
+    # Compute coords at t1
+    xx1 = dsx.get_vardata()
+    yy1 = dsy.get_vardata()
+    xx1[xx1 == nodata] = np.NaN
+    yy1[yy1 == nodata] = np.NaN
+    xx1 += xx0
+    yy1 += yy0
+
+    # Transform both to glacier proj
+    xx0, yy0 = salem.transform_proj(proj_vel, grid_gla.proj, xx0, yy0)
+    xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
+
+    # Compute velocities from there
+    vx = xx1 - xx0
+    vy = yy1 - yy0
+    # Correct no data after proj as well (inf)
+    vx[~ np.isfinite(vx)] = np.NaN
+    vy[~ np.isfinite(vy)] = np.NaN
+
+    # And transform to local map
+    vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
+    vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
+
+    # Write
+    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+        vn = 'obs_icevel_x'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm yr-1'
+        v.long_name = 'ITS LIVE velocity data in x map direction'
+        v[:] = vx
+
+        vn = 'obs_icevel_y'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm yr-1'
+        v.long_name = 'ITS LIVE velocity data in xy map direction'
+        v[:] = vy
