@@ -89,6 +89,15 @@ class TestGIS(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
+    def test_init_gdir(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        assert gdir.has_file('outlines')
+        assert gdir.has_file('intersects')
+        assert not gdir.has_file('glacier_grid')
+
     def test_define_region(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
