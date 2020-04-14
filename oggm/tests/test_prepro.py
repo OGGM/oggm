@@ -89,6 +89,15 @@ class TestGIS(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
+    def test_init_gdir(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        assert gdir.has_file('outlines')
+        assert gdir.has_file('intersects')
+        assert not gdir.has_file('glacier_grid')
+
     def test_define_region(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -127,6 +136,32 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-4)
 
         assert gdir.status == 'Glacier or ice cap'
+
+    def test_reproject(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+
+        fn = 'resampled_dem'
+        cfg.BASENAMES[fn] = ('res_dem.tif', 'for testing')
+        gis.rasterio_to_gdir(gdir, get_demo_file('hef_srtm.tif'), fn)
+        with rasterio.open(gdir.get_filepath(fn), 'r',
+                           driver='GTiff') as ds:
+            totest = ds.read(1).astype(rasterio.float32)
+        np.testing.assert_allclose(gis.read_geotiff_dem(gdir), totest)
+
+        # With other resampling less exact
+        fn = 'resampled_dem_n'
+        cfg.BASENAMES[fn] = ('res_dem.tif', 'for testing')
+        gis.rasterio_to_gdir(gdir, get_demo_file('hef_srtm.tif'), fn,
+                             resampling='bilinear')
+        with rasterio.open(gdir.get_filepath(fn), 'r',
+                           driver='GTiff') as ds:
+            totest = ds.read(1).astype(rasterio.float32)
+        np.testing.assert_allclose(gis.read_geotiff_dem(gdir), totest,
+                                   rtol=0.01)
 
     def test_init_glacier_regions(self):
 

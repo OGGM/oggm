@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '09acafd6d4e4ffecfd93a52937e20bfee4b7fa63'
+SAMPLE_DATA_COMMIT = '1d6ab28c48db1c45f7ee6ff69fdf7ae9919a770d'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -179,7 +179,7 @@ def findfiles(root_dir, endswith):
     return out
 
 
-def _get_download_lock():
+def get_download_lock():
     global lock
     if lock is None:
         # Global Lock
@@ -552,7 +552,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
 
 
 def aws_file_download(aws_path, cache_name=None, reset=False):
-    with _get_download_lock():
+    with get_download_lock():
         return _aws_file_download_unlocked(aws_path, cache_name, reset)
 
 
@@ -710,7 +710,7 @@ def download_with_authentication(wwwfile, key):
 
 
 def download_oggm_files():
-    with _get_download_lock():
+    with get_download_lock():
         return _download_oggm_files_unlocked()
 
 
@@ -747,7 +747,7 @@ def _download_oggm_files_unlocked():
 
 
 def _download_srtm_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_srtm_file_unlocked(zone)
 
 
@@ -785,7 +785,7 @@ def _download_srtm_file_unlocked(zone):
 
 
 def _download_nasadem_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_nasadem_file_unlocked(zone)
 
 
@@ -824,7 +824,7 @@ def _download_nasadem_file_unlocked(zone):
 
 
 def _download_tandem_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_tandem_file_unlocked(zone)
 
 
@@ -870,7 +870,7 @@ def _download_tandem_file_unlocked(zone):
 
 
 def _download_dem3_viewpano(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_dem3_viewpano_unlocked(zone)
 
 
@@ -964,7 +964,7 @@ def _download_dem3_viewpano_unlocked(zone):
 
 
 def _download_aster_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_aster_file_unlocked(zone)
 
 
@@ -1002,7 +1002,7 @@ def _download_aster_file_unlocked(zone):
 
 
 def _download_topo_file_from_cluster(fname):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_topo_file_from_cluster_unlocked(fname)
 
 
@@ -1032,7 +1032,7 @@ def _download_topo_file_from_cluster_unlocked(fname):
 
 
 def _download_copdem_file(cppfile, tilename):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_copdem_file_unlocked(cppfile, tilename)
 
 
@@ -1085,7 +1085,7 @@ def _download_copdem_file_unlocked(cppfile, tilename):
 
 
 def _download_aw3d30_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_aw3d30_file_unlocked(zone)
 
 
@@ -1133,7 +1133,7 @@ def _download_aw3d30_file_unlocked(fullzone):
 
 
 def _download_mapzen_file(zone):
-    with _get_download_lock():
+    with get_download_lock():
         return _download_mapzen_file_unlocked(zone)
 
 
@@ -1167,7 +1167,7 @@ def _get_centerline_lonlat(gdir):
 
 
 def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, base_url=None):
-    with _get_download_lock():
+    with get_download_lock():
         return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,
                                          prepro_level, base_url=base_url)
 
@@ -1682,7 +1682,7 @@ def get_rgi_dir(version=None, reset=False):
         path to the RGI directory
     """
 
-    with _get_download_lock():
+    with get_download_lock():
         return _get_rgi_dir_unlocked(version=version, reset=reset)
 
 
@@ -1817,7 +1817,7 @@ def get_rgi_intersects_dir(version=None, reset=False):
         path to the directory
     """
 
-    with _get_download_lock():
+    with get_download_lock():
         return _get_rgi_intersects_dir_unlocked(version=version, reset=reset)
 
 
@@ -1981,7 +1981,7 @@ def get_cru_file(var=None):
     str
         path to the CRU file
     """
-    with _get_download_lock():
+    with get_download_lock():
         return _get_cru_file_unlocked(var)
 
 
@@ -2038,7 +2038,7 @@ def get_histalp_file(var=None):
     str
         path to the CRU file
     """
-    with _get_download_lock():
+    with get_download_lock():
         return _get_histalp_file_unlocked(var)
 
 
@@ -2267,7 +2267,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'ARCTICDEM':
         zones = arcticdem_zone(lon_ex, lat_ex)
         for z in zones:
-            with _get_download_lock():
+            with get_download_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/ArcticDEM_100m_v3.0/'
                 url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
@@ -2280,7 +2280,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'ALASKA':
         zones = alaska_dem_zone(lon_ex, lat_ex)
         for z in zones:
-            with _get_download_lock():
+            with get_download_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/Alaska_albers_V3/'
                 url += '{}_Alaska_albers_V3/'.format(z)
@@ -2290,7 +2290,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'REMA':
         zones = rema_zone(lon_ex, lat_ex)
         for z in zones:
-            with _get_download_lock():
+            with get_download_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/REMA_100m_v1.1/'
                 url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
