@@ -652,7 +652,7 @@ class TestVAScalingModel(unittest.TestCase):
 
         # relative error of average spec mb
         # TODO: does this even make any sense?!
-        assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.36
+        assert np.abs(rel_err(past_mb.mean(), vas_mb.mean())) <= 0.38
 
         # check correlation of positive and negative mb years
         assert corrcoef(np.sign(past_mb), np.sign(vas_mb)) >= 0.72
