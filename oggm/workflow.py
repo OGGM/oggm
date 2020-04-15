@@ -470,12 +470,16 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and
                     len(cfg.PARAMS['intersects_gdf']) == 0):
-                rgi_ids = np.unique(np.sort([entity.RGIId for entity in
-                                             entities]))
-                rgi_version = rgi_ids[0].split('-')[0][-2:]
-                fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                       version=rgi_version)
-                cfg.set_intersects_db(fp)
+                try:
+                    rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                                                 entities]))
+                    rgi_version = rgi_ids[0].split('-')[0][-2:]
+                    fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                           version=rgi_version)
+                    cfg.set_intersects_db(fp)
+                except AttributeError:
+                    # List of str
+                    pass
 
             gdirs = []
             for entity in entities:

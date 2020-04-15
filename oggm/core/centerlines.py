@@ -516,8 +516,11 @@ def _filter_lines_slope(lines, heads, topo, gdir):
         # Finally slope
         slope = np.arctan(-np.gradient(hgts, dx_cls*gdir.grid.dx))
 
+        # And altitude range
+        z_range = np.max(hgts) - np.min(hgts)
+
         # arbitrary threshold with which we filter the lines, otherwise bye bye
-        if np.sum(slope >= min_slope) >= 5:
+        if np.sum(slope >= min_slope) >= 5 and z_range > 10:
             olines.append(line)
             oheads.append(head)
 
@@ -1645,6 +1648,14 @@ def initialize_flowlines(gdir):
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
+
+        # Clip topography to 0 m a.s.l.
+        utils.clip_min(hgts, 0, out=hgts)
+
+        # Last safeguard here
+        if ic == (len(cls)-1) and ((np.max(hgts) - np.min(hgts)) < 10):
+            raise RuntimeError('Altitude range of main flowline too small: '
+                               '{}'.format(np.max(hgts) - np.min(hgts)))
 
         # Check for min slope issues and correct if needed
         if do_filter:

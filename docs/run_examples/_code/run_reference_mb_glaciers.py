@@ -4,6 +4,7 @@ import os
 
 # Libs
 import numpy as np
+import pandas as pd
 
 # Locals
 import oggm
@@ -17,7 +18,7 @@ import logging
 log = logging.getLogger(__name__)
 
 # RGI Version
-rgi_version = '61'
+rgi_version = '62'
 
 # CRU or HISTALP?
 baseline = 'CRU'
@@ -44,6 +45,9 @@ cfg.PARAMS['use_multiprocessing'] = True
 # Set to True for operational runs - here we want all glaciers to run
 cfg.PARAMS['continue_on_error'] = False
 
+# No need for a big map here
+cfg.PARAMS['border'] = 10
+
 if baseline == 'HISTALP':
     # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
     cfg.PARAMS['baseline_y0'] = 1850
@@ -62,15 +66,13 @@ rids = [rid for rid in rids if not ('-19.' in rid)]
 if baseline == 'HISTALP':
     rids = [rid for rid in rids if '-11.' in rid]
 
-# Make a new dataframe with those (this takes a while)
-log.info('Reading the RGI shapefiles...')
-rgidf = utils.get_rgi_glacier_entities(rids, version=rgi_version)
-log.info('For RGIV{} we have {} candidate reference '
-         'glaciers.'.format(rgi_version, len(rgidf)))
+rgidf = pd.read_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
+gdirs = workflow.init_glacier_directories(rgidf['rgi_ids'])
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:
-gdirs = workflow.init_glacier_directories(rgidf)
+from oggm.shop import rgitopo
+gdirs = rgitopo.init_glacier_directories_from_rgitopo(rids)
 
 # We need to know which period we have data for
 log.info('Process the climate data...')
@@ -84,23 +86,18 @@ elif baseline == 'HISTALP':
 gdirs = utils.get_ref_mb_glaciers(gdirs)
 
 # Keep only these
-rgidf = rgidf.loc[rgidf.RGIId.isin([g.rgi_id for g in gdirs])]
+rids = [g.rgi_id for g in gdirs]
 
 # Save
 log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
-                                                                   len(rgidf)))
-rgidf.to_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
-
-# Sort for more efficient parallel computing
-rgidf = rgidf.sort_values('Area', ascending=False)
-
-# Go - initialize glacier directories
-gdirs = workflow.init_glacier_directories(rgidf)
+                                                                   len(rids)))
+rgidf = pd.DataFrame()
+rgidf['rgi_ids'] = rids
+rgidf.to_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
 
 # Prepro tasks
 task_list = [
-    tasks.define_glacier_region,
     tasks.glacier_masks,
     tasks.compute_centerlines,
     tasks.initialize_flowlines,
@@ -128,7 +125,6 @@ utils.compile_glacier_statistics(gdirs)
 # Tests: for all glaciers, the mass-balance around tstar and the
 # bias with observation should be approx 0
 for gd in gdirs:
-
     mb_mod = MultipleFlowlineMassBalance(gd,
                                          mb_model_class=ConstantMassBalance,
                                          use_inversion_flowlines=True,
@@ -142,7 +138,7 @@ for gd in gdirs:
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
-                               atol=5)  # atol for numerical errors
+                               atol=10)  # atol for numerical errors
 
 # Log
 log.info('Calibration is done!')
