@@ -389,18 +389,25 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
             cl['volume'] = volume
 
             # volume below sl
-            bed_h = cl['hgt'] - out_thick
-            bed_shape = 4 * out_thick / w ** 2
-            if np.any(bed_h < 0):
-                cl['volume_bsl'] = _vol_below_water(cl['hgt'], bed_h,
-                                                    bed_shape, out_thick, w,
-                                                    cl['is_rectangular'], fac,
-                                                    cl['dx'], 0)
-            if water_level is not None and np.any(bed_h < water_level):
-                cl['volume_bwl'] = _vol_below_water(cl['hgt'], bed_h,
-                                                    bed_shape, out_thick, w,
-                                                    cl['is_rectangular'], fac,
-                                                    cl['dx'], water_level)
+            try:
+                bed_h = cl['hgt'] - out_thick
+                bed_shape = 4 * out_thick / w ** 2
+                if np.any(bed_h < 0):
+                    cl['volume_bsl'] = _vol_below_water(cl['hgt'], bed_h,
+                                                        bed_shape, out_thick,
+                                                        w,
+                                                        cl['is_rectangular'],
+                                                        fac, cl['dx'], 0)
+                if water_level is not None and np.any(bed_h < water_level):
+                    cl['volume_bwl'] = _vol_below_water(cl['hgt'], bed_h,
+                                                        bed_shape, out_thick,
+                                                        w,
+                                                        cl['is_rectangular'],
+                                                        fac, cl['dx'],
+                                                        water_level)
+            except KeyError:
+                # cl['hgt'] is not available on old prepro dirs
+                pass
 
         out_volume += np.sum(volume)
 
