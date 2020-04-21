@@ -55,19 +55,15 @@ if baseline == 'HISTALP':
     cfg.PARAMS['temp_melt'] = -1.75
 
 # Get the reference glacier ids (they are different for each RGI version)
-rgi_dir = utils.get_rgi_dir(version=rgi_version)
 df, _ = utils.get_wgms_files()
 rids = df['RGI{}0_ID'.format(rgi_version[0])]
 
-# We can't do Antarctica
-rids = [rid for rid in rids if not ('-19.' in rid)]
-
-# For HISTALP only RGI reg 11
 if baseline == 'HISTALP':
+    # For HISTALP only RGI reg 11
     rids = [rid for rid in rids if '-11.' in rid]
-
-rgidf = pd.read_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
-gdirs = workflow.init_glacier_directories(rgidf['rgi_ids'])
+elif baseline == 'CRU':
+    # For CRU we can't do Antarctica
+    rids = [rid for rid in rids if not ('-19.' in rid)]
 
 # We have to check which of them actually have enough mb data.
 # Let OGGM do it:
@@ -88,12 +84,11 @@ gdirs = utils.get_ref_mb_glaciers(gdirs)
 # Keep only these
 rids = [g.rgi_id for g in gdirs]
 
-# Save
+# Save the list of glaciers for later
 log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
                                                                    len(rids)))
-rgidf = pd.DataFrame()
-rgidf['rgi_ids'] = rids
+rgidf = pd.Series(data=rids)
 rgidf.to_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
 
 # Prepro tasks

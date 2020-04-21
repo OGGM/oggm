@@ -31,11 +31,12 @@ dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
 WORKING_DIR = utils.gettempdir(dirname, home=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
-# Read the rgi file
-rgidf = pd.read_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
+# Read the rgi ids of the reference glaciers
+rids = pd.read_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'),
+                   index_col=0, squeeze=True)
 
 # Go - initialize glacier directories
-gdirs = workflow.init_glacier_directories(rgidf['rgi_ids'])
+gdirs = workflow.init_glacier_directories(rids)
 
 # Cross-validation
 file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
