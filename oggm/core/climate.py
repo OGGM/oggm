@@ -1192,7 +1192,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
     # Mass-balance. These tributaries wouldn't exist with a single
     # glacier-wide mu*, and therefore need a specific calibration.
     # All other mus may be affected
-    if cfg.PARAMS['correct_for_neg_flux']:
+    if cfg.PARAMS['correct_for_neg_flux'] and (len(fls) > 1):
         if np.any([fl.flux_needs_correction for fl in fls]):
 
             # We start with the highest Strahler number that needs correction

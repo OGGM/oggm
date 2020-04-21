@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '1d6ab28c48db1c45f7ee6ff69fdf7ae9919a770d'
+SAMPLE_DATA_COMMIT = 'd6f7cae46f216f9627ad9f0a90cab2655751e913'
 
 CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
               '.1709081022.v4.01/')
@@ -1640,7 +1640,7 @@ def get_wgms_files():
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
 
-    outf = os.path.join(sdir, 'rgi_wgms_links_20171101.csv')
+    outf = os.path.join(sdir, 'rgi_wgms_links_20200415.csv')
     outf = pd.read_csv(outf, dtype={'RGI_REG': object})
 
     return outf, datadir

@@ -4,7 +4,6 @@ import os
 # Libs
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 
 # Locals
 import oggm
@@ -13,7 +12,7 @@ from oggm.core.massbalance import PastMassBalance, MultipleFlowlineMassBalance
 import matplotlib.pyplot as plt
 
 # RGI Version
-rgi_version = '61'
+rgi_version = '62'
 
 # CRU or HISTALP?
 baseline = 'CRU'
@@ -32,11 +31,12 @@ dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
 WORKING_DIR = utils.gettempdir(dirname, home=True)
 cfg.PATHS['working_dir'] = WORKING_DIR
 
-# Read the rgi file
-rgidf = gpd.read_file(os.path.join(WORKING_DIR, 'mb_ref_glaciers.shp'))
+# Read the rgi ids of the reference glaciers
+rids = pd.read_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'),
+                   index_col=0, squeeze=True)
 
 # Go - initialize glacier directories
-gdirs = workflow.init_glacier_directories(rgidf)
+gdirs = workflow.init_glacier_directories(rids)
 
 # Cross-validation
 file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
@@ -78,17 +78,18 @@ ref_df.to_csv(os.path.join(cfg.PATHS['working_dir'], 'crossval_tstars.csv'))
 # Marzeion et al Figure 3
 f, ax = plt.subplots(1, 1)
 bins = np.arange(20) * 400 - 3800
+ylim = 130
 ref_df['CV_MB_BIAS'].plot(ax=ax, kind='hist', bins=bins, color='C3', label='')
-ax.vlines(ref_df['CV_MB_BIAS'].mean(), 0, 120, linestyles='--', label='Mean')
-ax.vlines(ref_df['CV_MB_BIAS'].quantile(), 0, 120, label='Median')
-ax.vlines(ref_df['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, 120, color='grey',
+ax.vlines(ref_df['CV_MB_BIAS'].mean(), 0, ylim, linestyles='--', label='Mean')
+ax.vlines(ref_df['CV_MB_BIAS'].quantile(), 0, ylim, label='Median')
+ax.vlines(ref_df['CV_MB_BIAS'].quantile([0.05, 0.95]), 0, ylim, color='grey',
           label='5% and 95%\npercentiles')
 ax.text(0.01, 0.99, 'N = {}'.format(len(gdirs)),
         horizontalalignment='left',
         verticalalignment='top',
         transform=ax.transAxes)
 
-ax.set_ylim(0, 120)
+ax.set_ylim(0, ylim)
 ax.set_ylabel('N Glaciers')
 ax.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
 ax.legend(loc='best')

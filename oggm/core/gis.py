@@ -605,6 +605,9 @@ def process_dem(gdir):
     else:
         smoothed_dem = dem.copy()
 
+    # Clip topography to 0 m a.s.l.
+    utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
+
     # Write to file
     with GriddedNcdfFile(gdir, reset=True) as nc:
 
