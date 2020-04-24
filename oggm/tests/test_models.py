@@ -22,7 +22,7 @@ from oggm.core import gcm_climate, climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed, bu_tidewater_bed,
