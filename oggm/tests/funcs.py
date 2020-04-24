@@ -11,8 +11,8 @@ import oggm
 import oggm.cfg as cfg
 from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
-from oggm.utils import oggm_urlretrieve
 from oggm.core import flowline
+from oggm import tasks
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -234,16 +234,6 @@ def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
                                             bed_h=bed_h, widths=widths)]
 
 
-def patch_url_retrieve_github(url, *args, **kwargs):
-    """A simple patch to OGGM's download function to make sure we don't
-    download elsewhere than expected."""
-
-    assert ('github' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url)
-    return oggm_urlretrieve(url, *args, **kwargs)
-
-
 def patch_minimal_download_oggm_files(*args, **kwargs):
     """A simple patch to make sure we don't download."""
 
@@ -399,7 +389,7 @@ def init_columbia(reset=False):
     centerlines.catchment_intersections(gdir)
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
-    climate.process_dummy_cru_file(gdir, seed=0)
+    tasks.process_dummy_cru_file(gdir, seed=0)
     return gdir
 
 

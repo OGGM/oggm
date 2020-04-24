@@ -21,8 +21,8 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import (get_test_dir, use_multiprocessing,
-                              patch_url_retrieve_github)
+from oggm.tests.funcs import get_test_dir, use_multiprocessing
+from oggm.shop import cru
 from oggm.core import flowline
 from oggm import tasks
 from oggm import utils
@@ -31,19 +31,6 @@ from oggm import utils
 pytestmark = pytest.mark.test_env("workflow")
 TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
 CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
-
-_url_retrieve = None
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-    graphics.set_oggm_cmaps(use_hcl=False)
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
-    graphics.set_oggm_cmaps()
 
 
 def clean_dir(testdir):
@@ -84,7 +71,7 @@ def up_to_climate(reset=False):
     rgidf.loc[1, 'GlacType'] = '0299'
 
     # Be sure data is downloaded
-    utils.get_cru_cl_file()
+    cru.get_cru_cl_file()
 
     # Params
     cfg.PARAMS['border'] = 70
@@ -126,8 +113,6 @@ def up_to_inversion(reset=False):
         # Use histalp for the actual inversion test
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
-        cru_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -159,8 +144,6 @@ def up_to_distrib(reset=False):
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['temp_use_local_gradient'] = False
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
         with warnings.catch_warnings():
             # There is a warning from salem
             warnings.simplefilter("ignore")

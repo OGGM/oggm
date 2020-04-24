@@ -15,24 +15,13 @@ gpd = pytest.importorskip('geopandas')
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
-_url_retrieve = None
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
-
 
 class TestSouthGlacier(unittest.TestCase):
 
@@ -60,7 +49,6 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cfg.PATHS['dem_file'])
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):

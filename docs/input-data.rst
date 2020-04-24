@@ -70,7 +70,6 @@ The file should look like::
     dl_cache_dir = /path/to/download_cache
     dl_cache_readonly = False
     tmp_dir = /path/to/tmp_dir
-    cru_dir = /path/to/cru_dir
     rgi_dir = /path/to/rgi_dir
     test_dir = /path/to/test_dir
     has_internet = True
@@ -94,8 +93,6 @@ Some explanations:
   following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
   this directory might still grow to quite a large size. Simply delete it
   if you want to get this space back.
-- ``cru_dir`` is the location where the CRU climate files are extracted if
-  needed. They are quite large! (approx. 6Gb)
 - ``rgi_dir`` is the location where the RGI shapefiles are extracted.
 - ``test_dir`` is the location where OGGM will write some of its output during
   tests. It can be set to ``tmp_dir`` if you want to, but it can also be
@@ -105,7 +102,7 @@ Some explanations:
 .. note::
 
   For advanced users or cluster configuration:
-  ``tmp_dir``, ``cru_dir`` and ``rgi_dir`` can be overridden and set to a
+  ``tmp_dir`` and ``rgi_dir`` can be overridden and set to a
   specific directory by defining an environment variable ``OGGM_EXTRACT_DIR``
   to a directory path. Similarly, the environment variables
   ``OGGM_DOWNLOAD_CACHE`` and ``OGGM_DOWNLOAD_CACHE_RO`` override the
@@ -411,9 +408,10 @@ first run. In a python interpreter, type:
 
 .. code-block:: python
 
-    from oggm import utils
-    utils.get_cru_file(var='tmp')
-    utils.get_cru_file(var='pre')
+    from oggm.shop import cru
+    cru.get_cl_file()
+    cru.get_cru_file(var='tmp')
+    cru.get_cru_file(var='pre')
 
 
 .. warning::

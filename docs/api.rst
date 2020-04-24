@@ -66,11 +66,19 @@ Input/Output
     utils.get_rgi_intersects_dir
     utils.get_rgi_intersects_region_file
     utils.get_rgi_intersects_entities
-    utils.get_cru_file
-    utils.get_histalp_file
     utils.get_ref_mb_glaciers
     utils.write_centerlines_to_shape
 
+OGGM Shop
+=========
+
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    shop.cru.get_cru_file
+    shop.histalp.get_histalp_file
 
 .. _apientitytasks:
 

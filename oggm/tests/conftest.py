@@ -7,11 +7,39 @@ import numpy as np
 import pytest
 import shapely.geometry as shpg
 
-
+from oggm.shop import cru, histalp
 from oggm import cfg, tasks
 from oggm.core import flowline
-from oggm.tests.funcs import get_ident, init_hef, init_columbia
-from oggm.utils import mkdir
+from oggm.tests.funcs import get_ident, init_hef
+from oggm.utils import mkdir, _downloads
+from oggm.utils import oggm_urlretrieve
+
+
+@pytest.fixture(autouse=True)
+def patch_data_urls(monkeypatch):
+    """This makes sure we never download the big files with our tests"""
+    url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
+    monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
+    monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
+    monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
+
+
+def secure_url_retrieve(url, *args, **kwargs):
+    """A simple patch to OGGM's download function to make sure we don't
+    download elsewhere than expected."""
+
+    assert ('github' in url or
+            'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
+            'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
+            'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
+            'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url
+            )
+    return oggm_urlretrieve(url, *args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def patch_url_retrieve(monkeypatch):
+    monkeypatch.setattr(_downloads, 'oggm_urlretrieve', secure_url_retrieve)
 
 
 @pytest.fixture()

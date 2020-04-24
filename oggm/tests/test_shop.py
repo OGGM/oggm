@@ -18,25 +18,10 @@ from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo
 from oggm.core import gis
 from oggm import cfg, tasks
-from oggm.tests.funcs import patch_url_retrieve_github
-
 
 pytestmark = pytest.mark.test_env("utils")
-_url_retrieve = None
 
 DO_PLOT = False
-
-
-@pytest.fixture(autouse=True, scope='module')
-def init_url_retrieve(request):
-    # Called at module set-up and shut-down
-    # We patch OGGM's download functions to make sure that we don't
-    # access data sources we shouldnt touch from within the tests
-    request.module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-    # This below is a shut-down
-    yield
-    oggm.utils._downloads.oggm_urlretrieve = request.module._url_retrieve
 
 
 class Test_its_live:

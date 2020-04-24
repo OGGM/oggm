@@ -261,13 +261,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L2 - Tasks
-    # Pre-download other files just in case
-    if test_crudir is None:
-        _ = utils.get_cru_file(var='tmp')
-        _ = utils.get_cru_file(var='pre')
-    else:
-        cfg.PATHS['cru_dir'] = test_crudir
-
     workflow.execute_entity_task(tasks.process_cru_data, gdirs)
 
     # Glacier stats

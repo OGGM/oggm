@@ -46,7 +46,7 @@ def region_grid(reg):
     global region_grids
 
     if reg not in region_grids:
-        with utils.get_download_lock():
+        with utils.get_lock():
             fp = utils.file_downloader(region_files[reg]['vx'])
             ds = salem.GeoTiff(fp)
             region_grids[reg] = ds.grid
@@ -105,7 +105,7 @@ def velocity_to_gdir(gdir):
         raise InvalidWorkflowError('Please run `glacier_masks` before running '
                                    'this task')
 
-    with utils.get_download_lock():
+    with utils.get_lock():
         fx = utils.file_downloader(region_files[reg]['vx'])
         fy = utils.file_downloader(region_files[reg]['vy'])
 
