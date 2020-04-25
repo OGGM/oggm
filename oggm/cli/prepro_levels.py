@@ -72,7 +72,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_nr=4, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      test_crudir=None, disable_mp=False, timeout=0,
+                      disable_mp=False, timeout=0,
                       max_level=4, logging_level='WORKFLOW',
                       map_dmax=None, map_d1=None, disable_dl_verify=False):
     """Does the actual job.

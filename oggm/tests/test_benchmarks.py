@@ -97,12 +97,17 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
+        pf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.pre.dat.nc')
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=tf,
+                            pre_file=pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))

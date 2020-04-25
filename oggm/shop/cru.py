@@ -22,13 +22,19 @@ from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
 # Module logger
 log = logging.getLogger(__name__)
 
-CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
-              '.1709081022.v4.01/')
+CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.03/'
+              'cruts.1905011326.v4.03/')
 
-CRU_BASE = 'cru_ts4.01.1901.2016.{}.dat.nc'
+CRU_BASE = 'cru_ts4.03.1901.2018.{}.dat.nc'
 
 CRU_CL = ('https://cluster.klima.uni-bremen.de/~oggm/climate/cru/'
           'cru_cl2.nc.zip')
+
+
+def set_cru_url(url):
+    """If you want to use a different server for CRU (for testing, etc)."""
+    global CRU_SERVER
+    CRU_SERVER = url
 
 
 @utils.locked_func
@@ -66,7 +72,7 @@ def get_cru_file(var=None):
 
 
 @entity_task(log, writes=['climate_monthly', 'climate_info'])
-def process_cru_data(gdir):
+def process_cru_data(gdir, tmp_file=None, pre_file=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
     Interpolates the CRU TS data to the high-resolution CL2 climatologies
@@ -76,6 +82,12 @@ def process_cru_data(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    tmp_file : str
+        path to the CRU temperature file (defaults to the current OGGM chosen
+        CRU version)
+    pre_file : str
+        path to the CRU precip file (defaults to the current OGGM chosen
+        CRU version)
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -91,8 +103,12 @@ def process_cru_data(gdir):
     ncclim = salem.GeoNetcdf(get_cru_cl_file())
 
     # and the TS data
-    nc_ts_tmp = salem.GeoNetcdf(get_cru_file('tmp'), monthbegin=True)
-    nc_ts_pre = salem.GeoNetcdf(get_cru_file('pre'), monthbegin=True)
+    if tmp_file is None:
+        tmp_file = get_cru_file('tmp')
+    if pre_file is None:
+        pre_file = get_cru_file('pre')
+    nc_ts_tmp = salem.GeoNetcdf(tmp_file, monthbegin=True)
+    nc_ts_pre = salem.GeoNetcdf(pre_file, monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]

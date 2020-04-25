@@ -849,8 +849,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof,
-                          test_crudir=os.path.dirname(cru_file))
+                          test_topofile=topof)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -1099,8 +1098,7 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof,
-                      test_crudir=os.path.dirname(cru_file))
+                      test_topofile=topof)
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
                          index_col=0)
@@ -1336,45 +1334,6 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi,
                                            'Intersects_OGGM_Manifest.txt'))
-
-    def test_cru(self):
-
-        # Create fake cru file
-        cf = os.path.join(self.dldir, 'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
-        with gzip.open(cf, 'wb') as gz:
-            gz.write(b'dummy')
-
-        def down_check(url, *args, **kwargs):
-            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
-                        'cruts.1709081022.v4.01/tmp/'
-                        'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
-            self.assertEqual(url, expected)
-            return cf
-
-        from oggm.shop import cru
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            tf = cru.get_cru_file('tmp')
-
-        assert os.path.exists(tf)
-
-    def test_histalp(self):
-
-        # Create fake histalp file
-        cf = os.path.join(self.dldir, 'HISTALP_temperature_1780-2014.nc.bz2')
-        with bz2.open(cf, 'wb') as gz:
-            gz.write(b'dummy')
-
-        def down_check(url, *args, **kwargs):
-            expected = ('http://www.zamg.ac.at/histalp/download/grid5m/'
-                        'HISTALP_temperature_1780-2014.nc.bz2')
-            self.assertEqual(url, expected)
-            return cf
-
-        from oggm.shop.histalp import get_histalp_file
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            tf = get_histalp_file('tmp')
-
-        assert os.path.exists(tf)
 
     def test_srtm(self):
 

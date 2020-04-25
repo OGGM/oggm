@@ -34,10 +34,10 @@ file. Let's replicate Figure 3 in  `Marzeion et al., (2012)`_ :
 
 This should generate an output similar to::
 
-    Median bias: 18.78
-    Mean bias: 15.34
-    RMS: 518.83
-    Sigma bias: 0.87
+    Median bias: 3.66
+    Mean bias: -20.52
+    RMS: 517.82
+    Sigma bias: 0.85
 
 
 .. figure:: ../_static/mb_crossval.png

@@ -24,6 +24,12 @@ log = logging.getLogger(__name__)
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 
+def set_histalp_url(url):
+    """If you want to use a different server for HISTALP (for testing, etc)."""
+    global HISTALP_SERVER
+    HISTALP_SERVER = url
+
+
 @utils.locked_func
 def get_histalp_file(var=None):
     """Returns a path to the desired HISTALP baseline climate file.

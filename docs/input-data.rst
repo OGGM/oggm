@@ -33,22 +33,13 @@ Calibration data and testing: the ``~/.oggm`` directory
 At the first import, OGGM will create a cached ``.oggm`` directory in your
 ``$HOME`` folder. This directory contains all data obtained from the
 `oggm sample data`_ repository. It contains several files needed only for
-testing, but also some important files needed for calibration and validation.
-For example:
-
-- The CRU `baseline climatology`_ (CL v2.0, obtained from
-  `crudata.uea.ac.uk/ <https://crudata.uea.ac.uk/cru/data/hrg/>`_ and prepared
-  for OGGM),
-- The `reference mass-balance data`_ from WGMS with
-  `links to the respective RGI polygons`_,
-- The `reference ice thickness data`_ from WGMS (`GlaThiDa`_ database).
+testing, but also some important files needed for calibration and validation
+(e.g. the `reference mass-balance data`_ from WGMS with
+`links to the respective RGI polygons`_).
 
 .. _oggm sample data: https://github.com/OGGM/oggm-sample-data
-.. _baseline climatology: https://github.com/OGGM/oggm-sample-data/tree/master/cru
 .. _reference mass-balance data: https://github.com/OGGM/oggm-sample-data/tree/master/wgms
 .. _links to the respective RGI polygons: http://fabienmaussion.info/2017/02/19/wgms-rgi-links/
-.. _reference ice thickness data: https://github.com/OGGM/oggm-sample-data/tree/master/glathida
-.. _GlaThiDa: http://www.gtn-g.ch/data_catalogue_glathida/
 
 The ``~/.oggm`` directory should be updated automatically when you update OGGM,
 but if you encounter any problems with it, simply delete the directory (it will
@@ -80,29 +71,33 @@ Some explanations:
   downloaded will be cached for later use. Most of the users won't need to
   explore this folder (it is organized as a list of urls) but you have to make
   sure to set this path to a folder with sufficient disk space available. This
-  folder can be shared across computers if needed. Once a file is stored
-  in this cache folder, OGGM won't download it again.
+  folder can be shared across compute nodes if needed (it is even recommended
+  for HPC setups). Once a file is stored in this cache folder (e.g. a specific
+  DEM tile), OGGM won't download it again.
 - ``dl_cache_readonly`` indicates if writing is allowed in this folder (this is
   the default). Setting this to ``True`` will prevent any further download in
   this directory (useful for cluster environments, where this data might be
-  available on a readonly folder).
-- ``tmp_dir`` is a path to OGGM's temporary directory. Most of the topography
-  files used by OGGM are downloaded and cached in a compressed (zip) format.
-  They will be extracted in ``tmp_dir`` before use. OGGM will never allow more
-  than 100 ``.tif`` files to exist in this directory by deleting the oldest ones
+  available on a readonly folder): in this case, OGGM will use a fall back
+  directory in your current working directory.
+- ``tmp_dir`` is a path to OGGM's temporary directory. Most of the
+  files used by OGGM are downloaded and cached in a compressed format (zip,
+  bz, gz...).
+  These files are extracted in ``tmp_dir`` before use. OGGM will never allow more
+  than 100 ``.tif`` (or 100 ``.nc``) files to exist in this directory by
+  deleting the oldest ones
   following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
   this directory might still grow to quite a large size. Simply delete it
   if you want to get this space back.
 - ``rgi_dir`` is the location where the RGI shapefiles are extracted.
 - ``test_dir`` is the location where OGGM will write some of its output during
   tests. It can be set to ``tmp_dir`` if you want to, but it can also be
-  another directory (for example a fast SSD disk). This folder shouldn't become
-  too large but here again, don't hesitate to delete it if you need to.
+  another directory (for example a fast SSD disk). This folder shouldn't take
+  too much disk space but here again, don't hesitate to delete it if you need to.
 
 .. note::
 
-  For advanced users or cluster configuration:
-  ``tmp_dir`` and ``rgi_dir`` can be overridden and set to a
+  For advanced users or cluster configuration: the user's
+  ``tmp_dir`` and ``rgi_dir`` settings can be overridden and set to a
   specific directory by defining an environment variable ``OGGM_EXTRACT_DIR``
   to a directory path. Similarly, the environment variables
   ``OGGM_DOWNLOAD_CACHE`` and ``OGGM_DOWNLOAD_CACHE_RO`` override the
@@ -403,8 +398,8 @@ data provided by the Climatic Research Unit of the University of East Anglia.
 **‣ CRU (default)**
 
 If not specified otherwise, OGGM will automatically download and unpack the
-latest dataset from the CRU servers. We recommend to do this before your
-first run. In a python interpreter, type:
+latest dataset from the CRU servers. To download them you can use the
+following convenience functions:
 
 .. code-block:: python
 
@@ -416,7 +411,7 @@ first run. In a python interpreter, type:
 
 .. warning::
 
-    While the downloaded zip files are ~370mb in size, they are ~5.6Gb large
+    While each downloaded zip file is ~200mb in size, they are ~2.9Gb large
     after decompression!
 
 The raw, coarse (0.5°) dataset is then downscaled to a higher resolution grid
@@ -464,7 +459,7 @@ Mass-balance data
 ~~~~~~~~~~~~~~~~~
 
 In-situ mass-balance data is used by OGGM to calibrate and validate the
-mass-balance model. We reliy on mass-balance observations provided by the
+mass-balance model. We rely on mass-balance observations provided by the
 World Glacier Monitoring Service (`WGMS`_).
 The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
 values for several hundreds of glaciers worldwide. We exclude water-terminating
@@ -472,7 +467,7 @@ glaciers and the time series with less than five years of
 data.
 Since 2017, the WGMS provides a lookup table
 linking the RGI and the WGMS databases. We updated this list for version 6 of
-the RGI, leaving us with 254 mass balance time series. These are not equally
+the RGI, leaving us with 268 mass balance time series. These are not equally
 reparted over the globe:
 
 .. figure:: _static/wgms_rgi_map.png
