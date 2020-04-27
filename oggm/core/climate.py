@@ -175,7 +175,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
 
     # Read file
     igrad = None
-    with utils.ncDataset(gdir.get_filepath('climate_historical'), mode='r') as nc:
+    with utils.ncDataset(gdir.get_filepath('climate_historical')) as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)

@@ -198,7 +198,7 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
     # read the climate file
     igrad = None
-    with utils.ncDataset(gdir.get_filepath('climate_historical'), mode='r') as nc:
+    with utils.ncDataset(gdir.get_filepath('climate_historical')) as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)
@@ -1000,9 +1000,9 @@ class RandomVASMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, seed=None, filename='climate_historical',
-                 input_filesuffix='', all_years=False,
-                 unique_samples=False):
+                 y0=None, halfsize=15, seed=None,
+                 filename='climate_historical', input_filesuffix='',
+                 all_years=False, unique_samples=False):
         """Initialize.
 
         Parameters

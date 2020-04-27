@@ -651,9 +651,9 @@ class RandomMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, seed=None, filename='climate_historical',
-                 input_filesuffix='', all_years=False,
-                 unique_samples=False):
+                 y0=None, halfsize=15, seed=None,
+                 filename='climate_historical', input_filesuffix='',
+                 all_years=False, unique_samples=False):
         """Initialize.
 
         Parameters
