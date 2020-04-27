@@ -31,7 +31,7 @@ def _add_time_to_df(df, index, t):
 def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
                   output_folder='', working_dir='', is_test=False,
                   test_rgidf=None, test_intersects_file=None,
-                  test_topofile=None, test_crudir=None):
+                  test_topofile=None):
     """Does the actual job.
 
     Parameters
@@ -53,8 +53,6 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     test_intersects_file : shapefile
         for testing purposes only
     test_topofile : str
-        for testing purposes only
-    test_crudir : str
         for testing purposes only
     """
 
@@ -129,13 +127,6 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     start = time.time()
     gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
     _add_time_to_df(odf, 'init_glacier_directories', time.time()-start)
-
-    # Pre-download other files just in case
-    if test_crudir is None:
-        _ = utils.get_cru_file(var='tmp')
-        _ = utils.get_cru_file(var='pre')
-    else:
-        cfg.PATHS['cru_dir'] = test_crudir
 
     # Tasks
     task_list = [

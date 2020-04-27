@@ -22,20 +22,10 @@ from oggm.utils import (get_demo_file, ncDataset, md, rmsd_bc, rel_err,
                         corrcoef)
 from oggm.core import (gis, vascaling, climate, centerlines,
                        massbalance, flowline, inversion)
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir
 
 
 pytestmark = pytest.mark.test_env("vascaling")
-_url_retrieve = None
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 class TestVAScalingModel(unittest.TestCase):

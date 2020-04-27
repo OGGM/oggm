@@ -23,8 +23,7 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_mixed_bed, dummy_constant_bed_obstacle,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
-                              dummy_width_bed_tributary, bu_tidewater_bed,
-                              patch_url_retrieve_github)
+                              dummy_width_bed_tributary, bu_tidewater_bed)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -40,20 +39,10 @@ MUSCLSuperBeeModel = partial(MUSCLSuperBeeModel, inplace=True)
 
 pytestmark = pytest.mark.test_env("numerics")
 do_plot = False
-_url_retrieve = None
 
 pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 class TestIdealisedCases(unittest.TestCase):

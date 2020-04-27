@@ -538,10 +538,6 @@ def initialize(file=None, logging_level='INFO'):
                 mbpar = json.load(fp)
             PARAMS[prefix + fn + '_calib_params'] = mbpar
 
-    # Pre extract cru cl to avoid problems by multiproc
-    from oggm.utils import get_cru_cl_file
-    get_cru_cl_file()
-
     # Read in the demo glaciers
     file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                         'data', 'demo_glaciers.csv')
@@ -584,7 +580,6 @@ def oggm_static_paths():
         config['dl_cache_dir'] = os.path.join(dldir, 'download_cache')
         config['dl_cache_readonly'] = False
         config['tmp_dir'] = os.path.join(dldir, 'tmp')
-        config['cru_dir'] = os.path.join(dldir, 'cru')
         config['rgi_dir'] = os.path.join(dldir, 'rgi')
         config['test_dir'] = os.path.join(dldir, 'tests')
         config['has_internet'] = True
@@ -601,7 +596,7 @@ def oggm_static_paths():
 
     # Check that all keys are here
     for k in ['dl_cache_dir', 'dl_cache_readonly', 'tmp_dir',
-              'cru_dir', 'rgi_dir', 'test_dir', 'has_internet']:
+              'rgi_dir', 'test_dir', 'has_internet']:
         if k not in config:
             raise InvalidParamsError('The oggm config file ({}) should have '
                                      'an entry for {}.'.format(CONFIG_FILE, k))
@@ -617,7 +612,6 @@ def oggm_static_paths():
         # On the cluster it might be useful to do it on a fast disc
         edir = os.path.abspath(os.environ.get('OGGM_EXTRACT_DIR'))
         config['tmp_dir'] = os.path.join(edir, 'tmp')
-        config['cru_dir'] = os.path.join(edir, 'cru')
         config['rgi_dir'] = os.path.join(edir, 'rgi')
 
     # Fill the PATH dict

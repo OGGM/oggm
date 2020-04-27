@@ -21,23 +21,12 @@ import oggm
 from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
                        flowline, massbalance)
 import oggm.cfg as cfg
-from oggm import utils
+from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
-                              init_columbia)
+from oggm.tests.funcs import get_test_dir, init_columbia
 from oggm import workflow
 
 pytestmark = pytest.mark.test_env("prepro")
-_url_retrieve = None
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 def read_svgcoords(svg_file):
@@ -1057,13 +1046,9 @@ class TestClimate(unittest.TestCase):
         gdirs.append(gdir)
 
         climate.process_custom_climate_data(gdirs[0])
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = ''
+        tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_json('climate_info')
@@ -1099,14 +1084,10 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
-        climate.process_dummy_cru_file(gdirs[0], seed=0)
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cru_dir = os.path.dirname(cru_dir)
+        tasks.process_dummy_cru_file(gdirs[0], seed=0)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = ''
+        tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_json('climate_info')
@@ -1149,15 +1130,11 @@ class TestClimate(unittest.TestCase):
         gdirs.append(gdir)
 
         climate.process_custom_climate_data(gdirs[0])
-        cru_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
-        cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
         cfg.PARAMS['baseline_y0'] = 1850
         cfg.PARAMS['baseline_y1'] = 2003
-        climate.process_histalp_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = ''
+        tasks.process_histalp_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_json('climate_info')
@@ -1211,13 +1188,9 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1803)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2002)
 
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        climate.process_cru_data(gdirs[1])
-        cfg.PATHS['cru_dir'] = ''
+        tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_json('climate_info')
@@ -1692,10 +1665,7 @@ class TestClimate(unittest.TestCase):
     def test_automated_workflow(self):
 
         cfg.PARAMS['run_mb_calibration'] = False
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2414,7 +2384,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
+        tasks.process_dummy_cru_file(gdir, seed=0)
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2462,7 +2432,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
+        tasks.process_dummy_cru_file(gdir, seed=0)
         inversion.find_inversion_calving(gdir)
 
         # Test make a run
@@ -2734,10 +2704,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cru_dir = os.path.dirname(cru_dir)
         cfg.PATHS['climate_file'] = ''
-        cfg.PATHS['cru_dir'] = cru_dir
         cfg.PARAMS['border'] = 10
 
     def tearDown(self):
@@ -2757,7 +2724,7 @@ class TestGCMClimate(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        climate.process_cru_data(gdir)
+        tasks.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
@@ -2812,7 +2779,7 @@ class TestGCMClimate(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        climate.process_cru_data(gdir)
+        tasks.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
@@ -2870,7 +2837,7 @@ class TestGCMClimate(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        climate.process_cru_data(gdir)
+        tasks.process_cru_data(gdir)
 
         ci = gdir.read_json('climate_info')
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
@@ -2943,7 +2910,7 @@ class TestGCMClimate(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
 
-        climate.process_cru_data(gdir)
+        tasks.process_cru_data(gdir)
         utils.compile_climate_input([gdir])
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')

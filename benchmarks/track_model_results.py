@@ -6,11 +6,11 @@ import xarray as xr
 
 from oggm import tasks
 from oggm import cfg, utils, workflow
-from oggm.exceptions import MassBalanceCalibrationError
 from oggm.utils import get_demo_file
 from oggm.tests.funcs import get_test_dir
 from oggm.core import climate, massbalance
 from oggm.workflow import execute_entity_task
+from oggm.shop import cru
 
 
 class hef_prepro:
@@ -156,9 +156,9 @@ class full_workflow:
         self.cfg_init()
 
         # Pre-download other files which will be needed later
-        utils.get_cru_cl_file()
-        utils.get_cru_file(var='tmp')
-        utils.get_cru_file(var='pre')
+        cru.get_cru_cl_file()
+        cru.get_cru_file(var='tmp')
+        cru.get_cru_file(var='pre')
 
         # Get the RGI glaciers for the run.
         rgi_list = ['RGI60-01.10299', 'RGI60-11.00897', 'RGI60-18.02342']
@@ -287,7 +287,7 @@ class columbia_calving:
         tasks.catchment_intersections(gdir)
         tasks.catchment_width_geom(gdir)
         tasks.catchment_width_correction(gdir)
-        climate.process_dummy_cru_file(gdir, seed=0)
+        tasks.process_dummy_cru_file(gdir, seed=0)
 
         # Test default k (it overshoots)
         df1 = tasks.find_inversion_calving(gdir)

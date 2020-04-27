@@ -22,7 +22,7 @@ from oggm.core import gcm_climate, climate, inversion, centerlines
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed, bu_tidewater_bed,
@@ -41,24 +41,10 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel,
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
-_url_retrieve = None
 
 pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
-
-
-@pytest.fixture(autouse=True, scope='module')
-def init_url_retrieve(request):
-    # Called at module set-up and shut-down
-    # We patch OGGM's download functions to make sure that we don't
-    # access data sources we shouldnt touch from within the tests
-    request.module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-    # This below is a shut-down
-    yield
-    oggm.utils._downloads.oggm_urlretrieve = request.module._url_retrieve
-
 
 pytestmark = pytest.mark.test_env("models")
 do_plot = False
@@ -2562,9 +2548,7 @@ class TestHEF:
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['run_mb_calibration'] = True
-        cru_dir = get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cru_dir)
-        climate.process_cru_data(gdir_sh)
+        tasks.process_cru_data(gdir_sh)
         climate.compute_ref_t_stars([gdir_sh])
         climate.local_t_star(gdir_sh)
 

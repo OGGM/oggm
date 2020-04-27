@@ -11,7 +11,7 @@ import zipfile
 import sys
 import math
 import logging
-from functools import partial
+from functools import partial, wraps
 import time
 import fnmatch
 import urllib.request
@@ -71,12 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'd6f7cae46f216f9627ad9f0a90cab2655751e913'
-
-CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/cruts'
-              '.1709081022.v4.01/')
-
-HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
+SAMPLE_DATA_COMMIT = '699473a1d767846285dc97811b45806355a31d33'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
@@ -179,7 +174,8 @@ def findfiles(root_dir, endswith):
     return out
 
 
-def get_download_lock():
+def get_lock():
+    """Get multiprocessing lock."""
     global lock
     if lock is None:
         # Global Lock
@@ -340,7 +336,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
         cache_section, cache_path = cache_obj_name.split('/', 1)
         data = get_dl_verify_data(cache_section)
         if cache_path not in data.index:
-            logger.warning('No known hash for %s' % cache_obj_name)
+            logger.info('No known hash for %s' % cache_obj_name)
         else:
             # compute the hash
             sha256 = hashlib.sha256()
@@ -552,7 +548,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
 
 
 def aws_file_download(aws_path, cache_name=None, reset=False):
-    with get_download_lock():
+    with get_lock():
         return _aws_file_download_unlocked(aws_path, cache_name, reset)
 
 
@@ -660,6 +656,94 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
     return local_path
 
 
+def locked_func(func):
+    """To decorate a function that needs to be locked for multiprocessing"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with get_lock():
+            return func(*args, **kwargs)
+    return wrapper
+
+
+def file_extractor(file_path):
+    """For archives with only one file inside extract the file to tmpdir."""
+
+    filename, file_extension = os.path.splitext(file_path)
+    # Second one for tar.gz files
+    f2, ex2 = os.path.splitext(filename)
+    if ex2 == '.tar':
+        filename, file_extension = f2, '.tar.gz'
+    bname = os.path.basename(file_path)
+
+    # extract directory
+    tmpdir = cfg.PATHS['tmp_dir']
+    mkdir(tmpdir)
+
+    # Check output extension
+    def _check_ext(f):
+        _, of_ext = os.path.splitext(f)
+        if of_ext not in ['.nc', '.tif']:
+            raise InvalidParamsError('Extracted file extension not recognized'
+                                     ': {}'.format(of_ext))
+        return of_ext
+
+    if file_extension == '.zip':
+        with zipfile.ZipFile(file_path) as zf:
+            members = zf.namelist()
+            if len(members) != 1:
+                raise RuntimeError('Cannot extract multiple files')
+            o_name = members[0]
+            o_path = os.path.join(tmpdir, o_name)
+            of_ext = _check_ext(o_path)
+            if not os.path.exists(o_path):
+                logger.info('Extracting {} to {}...'.format(bname, o_path))
+                of = zf.extract(members[0], tmpdir)
+                assert os.path.normpath(of) == os.path.normpath(o_path)
+    elif file_extension == '.gz':
+        # Gzip files cannot be inspected. It's always only one file
+        # Decide on its name
+        o_name = os.path.basename(filename)
+        o_path = os.path.join(tmpdir, o_name)
+        of_ext = _check_ext(o_path)
+        if not os.path.exists(o_path):
+            logger.info('Extracting {} to {}...'.format(bname, o_path))
+            with gzip.GzipFile(file_path) as zf:
+                with open(o_path, 'wb') as outfile:
+                    for line in zf:
+                        outfile.write(line)
+    elif file_extension == '.bz2':
+        # bzip2 files cannot be inspected. It's always only one file
+        # Decide on its name
+        o_name = os.path.basename(filename)
+        o_path = os.path.join(tmpdir, o_name)
+        of_ext = _check_ext(o_path)
+        if not os.path.exists(o_path):
+            logger.info('Extracting {} to {}...'.format(bname, o_path))
+            with bz2.open(file_path) as zf:
+                with open(o_path, 'wb') as outfile:
+                    for line in zf:
+                        outfile.write(line)
+    elif file_extension in ['.tar.gz', '.tar']:
+        with tarfile.open(file_path) as zf:
+            members = zf.getmembers()
+            if len(members) != 1:
+                raise RuntimeError('Cannot extract multiple files')
+            o_name = members[0].name
+            o_path = os.path.join(tmpdir, o_name)
+            of_ext = _check_ext(o_path)
+            if not os.path.exists(o_path):
+                logger.info('Extracting {} to {}...'.format(bname, o_path))
+                zf.extract(members[0], tmpdir)
+    else:
+        raise InvalidParamsError('Extension not recognized: '
+                                 '{}'.format(file_extension))
+
+    # Be sure we don't overfill the folder
+    cfg.get_lru_handler(tmpdir, ending=of_ext).append(o_path)
+
+    return o_path
+
+
 def download_with_authentication(wwwfile, key):
     """ Uses credentials from a local .netrc file to download files
 
@@ -710,7 +794,7 @@ def download_with_authentication(wwwfile, key):
 
 
 def download_oggm_files():
-    with get_download_lock():
+    with get_lock():
         return _download_oggm_files_unlocked()
 
 
@@ -747,7 +831,7 @@ def _download_oggm_files_unlocked():
 
 
 def _download_srtm_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_srtm_file_unlocked(zone)
 
 
@@ -785,7 +869,7 @@ def _download_srtm_file_unlocked(zone):
 
 
 def _download_nasadem_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_nasadem_file_unlocked(zone)
 
 
@@ -824,7 +908,7 @@ def _download_nasadem_file_unlocked(zone):
 
 
 def _download_tandem_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_tandem_file_unlocked(zone)
 
 
@@ -870,7 +954,7 @@ def _download_tandem_file_unlocked(zone):
 
 
 def _download_dem3_viewpano(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_dem3_viewpano_unlocked(zone)
 
 
@@ -964,7 +1048,7 @@ def _download_dem3_viewpano_unlocked(zone):
 
 
 def _download_aster_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_aster_file_unlocked(zone)
 
 
@@ -1002,7 +1086,7 @@ def _download_aster_file_unlocked(zone):
 
 
 def _download_topo_file_from_cluster(fname):
-    with get_download_lock():
+    with get_lock():
         return _download_topo_file_from_cluster_unlocked(fname)
 
 
@@ -1032,7 +1116,7 @@ def _download_topo_file_from_cluster_unlocked(fname):
 
 
 def _download_copdem_file(cppfile, tilename):
-    with get_download_lock():
+    with get_lock():
         return _download_copdem_file_unlocked(cppfile, tilename)
 
 
@@ -1085,7 +1169,7 @@ def _download_copdem_file_unlocked(cppfile, tilename):
 
 
 def _download_aw3d30_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_aw3d30_file_unlocked(zone)
 
 
@@ -1133,7 +1217,7 @@ def _download_aw3d30_file_unlocked(fullzone):
 
 
 def _download_mapzen_file(zone):
-    with get_download_lock():
+    with get_lock():
         return _download_mapzen_file_unlocked(zone)
 
 
@@ -1167,7 +1251,7 @@ def _get_centerline_lonlat(gdir):
 
 
 def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, base_url=None):
-    with get_download_lock():
+    with get_lock():
         return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,
                                          prepro_level, base_url=base_url)
 
@@ -1607,24 +1691,6 @@ def get_demo_file(fname):
         return None
 
 
-def get_cru_cl_file():
-    """Returns the path to the unpacked CRU CL file (is in sample data)."""
-
-    download_oggm_files()
-
-    sdir = os.path.join(cfg.CACHE_DIR,
-                        'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
-                        'cru')
-    fpath = os.path.join(sdir, 'cru_cl2.nc')
-    if os.path.exists(fpath):
-        return fpath
-    else:
-        with zipfile.ZipFile(fpath + '.zip') as zf:
-            zf.extractall(sdir)
-        assert os.path.exists(fpath)
-        return fpath
-
-
 def get_wgms_files():
     """Get the path to the default WGMS-RGI link file and the data dir.
 
@@ -1682,7 +1748,7 @@ def get_rgi_dir(version=None, reset=False):
         path to the RGI directory
     """
 
-    with get_download_lock():
+    with get_lock():
         return _get_rgi_dir_unlocked(version=version, reset=reset)
 
 
@@ -1817,7 +1883,7 @@ def get_rgi_intersects_dir(version=None, reset=False):
         path to the directory
     """
 
-    with get_download_lock():
+    with get_lock():
         return _get_rgi_intersects_dir_unlocked(version=version, reset=reset)
 
 
@@ -1963,124 +2029,6 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
     selection.crs = sh.crs  # for geolocalisation
 
     return selection
-
-
-def get_cru_file(var=None):
-    """Returns a path to the desired CRU baseline climate file.
-
-    If the file is not present, download it.
-
-    Parameters
-    ----------
-    var : str
-        'tmp' for temperature
-        'pre' for precipitation
-
-    Returns
-    -------
-    str
-        path to the CRU file
-    """
-    with get_download_lock():
-        return _get_cru_file_unlocked(var)
-
-
-def _get_cru_file_unlocked(var=None):
-
-    cru_dir = cfg.PATHS['cru_dir']
-
-    # Be sure the user gave a sensible path to the climate dir
-    if not cru_dir:
-        raise InvalidParamsError('The CRU data directory has to be'
-                                 'specified explicitly.')
-    cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
-    mkdir(cru_dir)
-
-    # Be sure input makes sense
-    if var not in ['tmp', 'pre']:
-        raise InvalidParamsError('CRU variable {} does not exist!'.format(var))
-
-    # The user files may have different dates, so search for patterns
-    bname = 'cru_ts*.{}.dat.nc'.format(var)
-    search = glob.glob(os.path.join(cru_dir, bname))
-    if len(search) == 1:
-        ofile = search[0]
-    elif len(search) > 1:
-        raise RuntimeError('You seem to have more than one file in your CRU '
-                           'directory: {}. Help me by deleting the one'
-                           'you dont want to use anymore.'.format(cru_dir))
-    else:
-        # if not there download it
-        cru_filename = 'cru_ts4.01.1901.2016.{}.dat.nc'.format(var)
-        cru_url = CRU_SERVER + '{}/'.format(var) + cru_filename + '.gz'
-        dlfile = file_downloader(cru_url)
-        ofile = os.path.join(cru_dir, cru_filename)
-        with gzip.GzipFile(dlfile) as zf:
-            with open(ofile, 'wb') as outfile:
-                for line in zf:
-                    outfile.write(line)
-    return ofile
-
-
-def get_histalp_file(var=None):
-    """Returns a path to the desired HISTALP baseline climate file.
-
-    If the file is not present, download it.
-
-    Parameters
-    ----------
-    var : str
-        'tmp' for temperature
-        'pre' for precipitation
-
-    Returns
-    -------
-    str
-        path to the CRU file
-    """
-    with get_download_lock():
-        return _get_histalp_file_unlocked(var)
-
-
-def _get_histalp_file_unlocked(var=None):
-
-    cru_dir = cfg.PATHS['cru_dir']
-
-    # Be sure the user gave a sensible path to the climate dir
-    if not cru_dir:
-        raise InvalidParamsError('The CRU data directory has to be'
-                                 'specified explicitly.')
-    cru_dir = os.path.abspath(os.path.expanduser(cru_dir))
-    mkdir(cru_dir)
-
-    # Be sure input makes sense
-    if var not in ['tmp', 'pre']:
-        raise InvalidParamsError('HISTALP variable {} '
-                                 'does not exist!'.format(var))
-
-    # File to look for
-    if var == 'tmp':
-        bname = 'HISTALP_temperature_1780-2014.nc'
-    else:
-        bname = 'HISTALP_precipitation_all_abs_1801-2014.nc'
-
-    search = glob.glob(os.path.join(cru_dir, bname))
-    if len(search) == 1:
-        ofile = search[0]
-    elif len(search) > 1:
-        raise RuntimeError('You seem to have more than one matching file in '
-                           'your CRU directory: {}. Help me by deleting the '
-                           'one you dont want to use anymore.'.format(cru_dir))
-    else:
-        # if not there download it
-        h_url = HISTALP_SERVER + bname + '.bz2'
-        dlfile = file_downloader(h_url)
-        ofile = os.path.join(cru_dir, bname)
-        with bz2.BZ2File(dlfile) as zf:
-            with open(ofile, 'wb') as outfile:
-                for line in zf:
-                    outfile.write(line)
-    return ofile
 
 
 def is_dem_source_available(source, lon_ex, lat_ex):
@@ -2267,7 +2215,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'ARCTICDEM':
         zones = arcticdem_zone(lon_ex, lat_ex)
         for z in zones:
-            with get_download_lock():
+            with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/ArcticDEM_100m_v3.0/'
                 url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
@@ -2280,7 +2228,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'ALASKA':
         zones = alaska_dem_zone(lon_ex, lat_ex)
         for z in zones:
-            with get_download_lock():
+            with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/Alaska_albers_V3/'
                 url += '{}_Alaska_albers_V3/'.format(z)
@@ -2290,7 +2238,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source == 'REMA':
         zones = rema_zone(lon_ex, lat_ex)
         for z in zones:
-            with get_download_lock():
+            with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
                 url += 'DEM/REMA_100m_v1.1/'
                 url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)

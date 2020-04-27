@@ -8,7 +8,7 @@ import pandas as pd
 
 # Locals
 import oggm
-from oggm import cfg, utils, tasks, workflow
+from oggm import cfg, utils, tasks
 from oggm.workflow import execute_entity_task
 from oggm.core.massbalance import (ConstantMassBalance, PastMassBalance,
                                    MultipleFlowlineMassBalance)

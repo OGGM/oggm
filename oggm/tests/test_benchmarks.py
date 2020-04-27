@@ -15,24 +15,13 @@ gpd = pytest.importorskip('geopandas')
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir, patch_url_retrieve_github
+from oggm.tests.funcs import get_test_dir
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
 
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
-_url_retrieve = None
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
-
 
 class TestSouthGlacier(unittest.TestCase):
 
@@ -60,8 +49,10 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
-        cfg.PATHS['cru_dir'] = os.path.dirname(cfg.PATHS['dem_file'])
         cfg.PARAMS['border'] = 10
+
+        self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
+        self.pf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.pre.dat.nc')
 
     def tearDown(self):
         self.rm_dir()
@@ -109,12 +100,15 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=self.tf,
+                            pre_file=self.pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -172,12 +166,15 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=self.tf,
+                            pre_file=self.pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Tested tasks
         task_list = [
@@ -251,12 +248,15 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=self.tf,
+                            pre_file=self.pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -322,12 +322,15 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=self.tf,
+                            pre_file=self.pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Reference data
         gdir = gdirs[0]
@@ -401,12 +404,15 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
-            tasks.process_cru_data,
-            tasks.local_t_star,
-            tasks.mu_star_calibration,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)
+
+        execute_entity_task(tasks.process_cru_data, gdirs,
+                            tmp_file=self.tf,
+                            pre_file=self.pf)
+        execute_entity_task(tasks.local_t_star, gdirs)
+        execute_entity_task(tasks.mu_star_calibration, gdirs)
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)

@@ -12,10 +12,13 @@ from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                local_t_star, mu_star_calibration)
 from oggm.core.massbalance import (ConstantMassBalance)
 from oggm.utils import get_demo_file, gettempdir
+from oggm.shop import histalp
 
 cfg.initialize()
 cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+histalp.set_histalp_url('https://cluster.klima.uni-bremen.de/~oggm/'
+                        'test_climate/histalp/')
 
 base_dir = gettempdir('Climate_docs')
 cfg.PATHS['working_dir'] = base_dir
@@ -30,8 +33,6 @@ tasks.compute_downstream_line(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
-data_dir = get_demo_file('HISTALP_precipitation_all_abs_1801-2014.nc')
-cfg.PATHS['cru_dir'] = os.path.dirname(data_dir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
 cfg.PARAMS['baseline_y0'] = 1850
 tasks.process_histalp_data(gdir)

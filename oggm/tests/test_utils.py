@@ -15,7 +15,6 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 from numpy.testing import assert_array_equal, assert_allclose
-from _pytest.monkeypatch import MonkeyPatch
 
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
@@ -24,27 +23,16 @@ import oggm
 from oggm import utils, workflow, tasks
 from oggm.utils import _downloads
 from oggm import cfg
-from oggm.tests.funcs import (get_test_dir, patch_url_retrieve_github,
-                              init_hef, TempEnvironmentVariable)
+from oggm.tests.funcs import get_test_dir, init_hef, TempEnvironmentVariable
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
 
 
 pytestmark = pytest.mark.test_env("utils")
-_url_retrieve = None
 
 TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
                  'test_gdirs/oggm_v1.1/')
-
-
-def setup_module(module):
-    module._url_retrieve = utils.oggm_urlretrieve
-    oggm.utils._downloads.oggm_urlretrieve = patch_url_retrieve_github
-
-
-def teardown_module(module):
-    oggm.utils._downloads.oggm_urlretrieve = module._url_retrieve
 
 
 def clean_dir(testdir):
@@ -698,9 +686,10 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 class TestPreproCLI(unittest.TestCase):
 
     def setUp(self):
+        from _pytest.monkeypatch import MonkeyPatch
+        self.monkeypatch = MonkeyPatch()
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
         self.reset_dir()
-        self.monkeypatch = MonkeyPatch()
 
     def tearDown(self):
         if os.path.exists(self.testdir):
@@ -860,8 +849,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof,
-                          test_crudir=os.path.dirname(cru_file))
+                          test_topofile=topof)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -929,8 +917,7 @@ class TestPreproCLI(unittest.TestCase):
 
     def test_source_run(self):
 
-        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES',
-                                 ['USER'])
+        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1111,8 +1098,7 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof,
-                      test_crudir=os.path.dirname(cru_file))
+                      test_topofile=topof)
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
                          index_col=0)
@@ -1167,7 +1153,6 @@ class TestFakeDownloads(unittest.TestCase):
         cfg.PATHS['working_dir'] = os.path.join(self.dldir, 'wd')
         cfg.PATHS['tmp_dir'] = os.path.join(self.dldir, 'extract')
         cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_test')
-        cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_test')
         self.reset_dir()
 
     def tearDown(self):
@@ -1182,7 +1167,6 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['working_dir'])
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
-        utils.mkdir(cfg.PATHS['cru_dir'])
 
     def prepare_verify_test(self, valid_size=True, valid_crc32=True):
         self.reset_dir()
@@ -1350,43 +1334,6 @@ class TestFakeDownloads(unittest.TestCase):
         assert os.path.isdir(rgi)
         assert os.path.exists(os.path.join(rgi,
                                            'Intersects_OGGM_Manifest.txt'))
-
-    def test_cru(self):
-
-        # Create fake cru file
-        cf = os.path.join(self.dldir, 'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
-        with gzip.open(cf, 'wb') as gz:
-            gz.write(b'dummy')
-
-        def down_check(url, *args, **kwargs):
-            expected = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.01/'
-                        'cruts.1709081022.v4.01/tmp/'
-                        'cru_ts4.01.1901.2016.tmp.dat.nc.gz')
-            self.assertEqual(url, expected)
-            return cf
-
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            tf = utils.get_cru_file('tmp')
-
-        assert os.path.exists(tf)
-
-    def test_histalp(self):
-
-        # Create fake histalp file
-        cf = os.path.join(self.dldir, 'HISTALP_temperature_1780-2014.nc.bz2')
-        with bz2.open(cf, 'wb') as gz:
-            gz.write(b'dummy')
-
-        def down_check(url, *args, **kwargs):
-            expected = ('http://www.zamg.ac.at/histalp/download/grid5m/'
-                        'HISTALP_temperature_1780-2014.nc.bz2')
-            self.assertEqual(url, expected)
-            return cf
-
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            tf = utils.get_histalp_file('tmp')
-
-        assert os.path.exists(tf)
 
     def test_srtm(self):
 
@@ -1738,12 +1685,10 @@ class TestDataFiles(unittest.TestCase):
         cfg.PATHS['working_dir'] = os.path.join(self.dldir, 'wd')
         cfg.PATHS['tmp_dir'] = os.path.join(self.dldir, 'extract')
         self.reset_dir()
-        oggm.utils._downloads.oggm_urlretrieve = _url_retrieve
 
     def tearDown(self):
         if os.path.exists(self.dldir):
             shutil.rmtree(self.dldir)
-        utils.oggm_urlretrieve = patch_url_retrieve_github
 
     def reset_dir(self):
         if os.path.exists(self.dldir):
@@ -1768,6 +1713,43 @@ class TestDataFiles(unittest.TestCase):
 
         lf = utils.get_glathida_file()
         self.assertTrue(os.path.exists(lf))
+
+    def test_file_extractor(self):
+
+        tmp_file = os.path.join(cfg.PATHS['working_dir'], 'f.nc')
+        touch(tmp_file)
+
+        # writing file to a zipfile
+        tmp_comp = os.path.join(cfg.PATHS['working_dir'], 'f.nc.zip')
+        import zipfile
+        with zipfile.ZipFile(tmp_comp, 'w') as zip:
+            zip.write(tmp_file, arcname='f.nc')
+        of = utils.file_extractor(tmp_comp)
+        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        os.remove(of)
+
+        # writing file to a gzip
+        tmp_comp = os.path.join(cfg.PATHS['working_dir'], 'f.nc.gz')
+        import gzip
+        with gzip.GzipFile(tmp_comp, 'w') as zip:
+            with open(tmp_file, 'rb') as f_in:
+                shutil.copyfileobj(f_in, zip)
+        of = utils.file_extractor(tmp_comp)
+        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        os.remove(of)
+
+        # writing file to a tar.gz
+        tmp_comp = os.path.join(cfg.PATHS['working_dir'], 'f.nc.tar.gz')
+        import tarfile
+        with tarfile.open(tmp_comp, 'w:gz') as zip:
+            zip.add(tmp_file, arcname='f.nc')
+        of = utils.file_extractor(tmp_comp)
+        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        os.remove(of)
+
+        # Raise error if nothing to extract
+        with pytest.raises(InvalidParamsError):
+            utils.file_extractor(tmp_file)
 
     def test_srtmzone(self):
 
@@ -2206,28 +2188,13 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue(_download_aster_file(zone) is None)
 
     @pytest.mark.download
-    def test_download_cru(self):
-
-        tmp = cfg.PATHS['cru_dir']
-        cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_extract')
-
-        of = utils.get_cru_file('tmp')
-        self.assertTrue(os.path.exists(of))
-
-        cfg.PATHS['cru_dir'] = tmp
-
-    @pytest.mark.download
     def test_download_histalp(self):
 
-        tmp = cfg.PATHS['cru_dir']
-        cfg.PATHS['cru_dir'] = os.path.join(self.dldir, 'cru_extract')
-
-        of = utils.get_histalp_file('tmp')
+        from oggm.shop.histalp import get_histalp_file
+        of = get_histalp_file('tmp')
         self.assertTrue(os.path.exists(of))
-        of = utils.get_histalp_file('pre')
+        of = get_histalp_file('pre')
         self.assertTrue(os.path.exists(of))
-
-        cfg.PATHS['cru_dir'] = tmp
 
     @pytest.mark.download
     def test_download_rgi5(self):
