@@ -63,7 +63,7 @@ def get_histalp_file(var=None):
     return utils.file_extractor(utils.file_downloader(h_url))
 
 
-@entity_task(log, writes=['climate_monthly', 'climate_info'])
+@entity_task(log, writes=['climate_historical', 'climate_info'])
 def process_histalp_data(gdir):
     """Processes and writes the HISTALP baseline climate data for this glacier.
 

@@ -198,7 +198,7 @@ def get_yearly_mb_temp_prcp(gdir, time_range=None, year_range=None):
 
     # read the climate file
     igrad = None
-    with utils.ncDataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
+    with utils.ncDataset(gdir.get_filepath('climate_historical')) as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)
@@ -634,7 +634,7 @@ class VAScalingMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 filename='climate_monthly', input_filesuffix='',
+                 filename='climate_historical', input_filesuffix='',
                  repeat=False, ys=None, ye=None, check_calib_params=True):
         """Initialize.
 
@@ -1000,9 +1000,9 @@ class RandomVASMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, seed=None, filename='climate_monthly',
-                 input_filesuffix='', all_years=False,
-                 unique_samples=False):
+                 y0=None, halfsize=15, seed=None,
+                 filename='climate_historical', input_filesuffix='',
+                 all_years=False, unique_samples=False):
         """Initialize.
 
         Parameters
@@ -1226,7 +1226,7 @@ class RandomVASMassBalance(MassBalanceModel):
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
-                       climate_filename='climate_monthly',
+                       climate_filename='climate_historical',
                        climate_input_filesuffix='', output_filesuffix='',
                        init_area_m2=None, unique_samples=False):
     """Runs the random mass balance model for a given number of years.
@@ -1258,7 +1258,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     temperature_bias : float, optional
         add a bias to the temperature timeseries, default = None
     climate_filename : str, optional
-        name of the climate file, e.g. 'climate_monthly' (default) or
+        name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str, optional
         filesuffix for the input climate file
@@ -1317,7 +1317,7 @@ class ConstantVASMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, filename='climate_monthly',
+                 y0=None, halfsize=15, filename='climate_historical',
                  input_filesuffix=''):
         """Initialize.
 
@@ -1528,7 +1528,7 @@ class ConstantVASMassBalance(MassBalanceModel):
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          bias=None, temperature_bias=None,
-                         climate_filename='climate_monthly',
+                         climate_filename='climate_historical',
                          climate_input_filesuffix='', output_filesuffix='',
                          init_area_m2=None):
     """
@@ -1557,7 +1557,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     temperature_bias : float, optional
         add a bias to the temperature timeseries, default = None
     climate_filename : str, optional
-        name of the climate file, e.g. 'climate_monthly' (default) or
+        name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str, optional
         filesuffix for the input climate file

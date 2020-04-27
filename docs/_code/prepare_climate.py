@@ -81,7 +81,7 @@ tasks.distribute_thickness_per_altitude(gdir)
 
 # plot functions
 def example_plot_temp_ts():
-    d = xr.open_dataset(gdir.get_filepath('climate_monthly'))
+    d = xr.open_dataset(gdir.get_filepath('climate_historical'))
     temp = d.temp.resample(time='12MS').mean('time').to_series()
     temp.index = temp.index.year
     try:

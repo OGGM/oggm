@@ -648,7 +648,7 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
 
 
 def _recursive_merging(gdirs, gdir_main, glcdf=None,
-                       filename='climate_monthly', input_filesuffix=''):
+                       filename='climate_historical', input_filesuffix=''):
     """ Recursive function to merge all tributary glaciers.
 
     This function should start with the largest glacier and then be called

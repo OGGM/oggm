@@ -30,7 +30,7 @@ from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
 log = logging.getLogger(__name__)
 
 
-@entity_task(log, writes=['climate_monthly', 'climate_info'])
+@entity_task(log, writes=['climate_historical', 'climate_info'])
 def process_custom_climate_data(gdir):
     """Processes and writes the climate data from a user-defined climate file.
 
@@ -175,7 +175,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
 
     # Read file
     igrad = None
-    with utils.ncDataset(gdir.get_filepath('climate_monthly'), mode='r') as nc:
+    with utils.ncDataset(gdir.get_filepath('climate_historical')) as nc:
         # time
         time = nc.variables['time']
         time = netCDF4.num2date(time[:], time.units)

@@ -255,7 +255,7 @@ class PastMassBalance(MassBalanceModel):
     """Mass balance during the climate data period."""
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 filename='climate_monthly', input_filesuffix='',
+                 filename='climate_historical', input_filesuffix='',
                  repeat=False, ys=None, ye=None, check_calib_params=True):
         """Initialize.
 
@@ -487,7 +487,7 @@ class ConstantMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, filename='climate_monthly',
+                 y0=None, halfsize=15, filename='climate_historical',
                  input_filesuffix='', **kwargs):
         """Initialize
 
@@ -651,9 +651,9 @@ class RandomMassBalance(MassBalanceModel):
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
-                 y0=None, halfsize=15, seed=None, filename='climate_monthly',
-                 input_filesuffix='', all_years=False,
-                 unique_samples=False):
+                 y0=None, halfsize=15, seed=None,
+                 filename='climate_historical', input_filesuffix='',
+                 all_years=False, unique_samples=False):
         """Initialize.
 
         Parameters

@@ -979,7 +979,7 @@ class TestClimate(unittest.TestCase):
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_monthly.nc')
+        f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
@@ -999,7 +999,7 @@ class TestClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
-        with xr.open_dataset(gdir.get_filepath('climate_monthly')) as ds:
+        with xr.open_dataset(gdir.get_filepath('climate_historical')) as ds:
             grad = ds['gradient'].data
             try:
                 assert np.std(grad) > 0.0001
@@ -1025,7 +1025,7 @@ class TestClimate(unittest.TestCase):
             ref_p = nc_r.variables['prcp'][:, 1, 1]
             ref_t = nc_r.variables['temp'][:, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_monthly.nc')
+        f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
             self.assertTrue(ref_h == nc_r.ref_hgt)
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
@@ -1057,8 +1057,8 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
-        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
+        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
         with xr.open_dataset(f1) as nc_h:
             with xr.open_dataset(f2) as nc_c:
                 # put on the same altitude
@@ -1096,8 +1096,8 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
-        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
+        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
         with xr.open_dataset(f1) as nc_d:
             with xr.open_dataset(f2) as nc_c:
                 # same altitude
@@ -1115,7 +1115,7 @@ class TestClimate(unittest.TestCase):
                 an2 = nc_c.prcp.groupby('time.month').mean()
                 np.testing.assert_allclose(an1, an2, rtol=0.2)
 
-    def test_distribute_climate_histalp_new(self):
+    def test_distribute_climate_historicalalp_new(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1143,8 +1143,8 @@ class TestClimate(unittest.TestCase):
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_monthly.nc')
-        f2 = os.path.join(gdc.dir, 'climate_monthly.nc')
+        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
+        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
         with xr.open_dataset(f1) as nc_h:
             with xr.open_dataset(f2) as nc_c:
                 nc_hi = nc_h.isel(time=slice(49*12, 2424))
@@ -1200,7 +1200,7 @@ class TestClimate(unittest.TestCase):
         gdh = gdirs[0]
         gdc = gdirs[1]
         with xr.open_dataset(
-                os.path.join(gdh.dir, 'climate_monthly.nc')) as nc_h:
+                os.path.join(gdh.dir, 'climate_historical.nc')) as nc_h:
 
             assert nc_h['time.month'][0] == 4
             assert nc_h['time.year'][0] == 1802
@@ -1208,7 +1208,7 @@ class TestClimate(unittest.TestCase):
             assert nc_h['time.year'][-1] == 2002
 
             with xr.open_dataset(
-                    os.path.join(gdc.dir, 'climate_monthly.nc')) as nc_c:
+                    os.path.join(gdc.dir, 'climate_historical.nc')) as nc_c:
 
                 assert nc_c['time.month'][0] == 4
                 assert nc_c['time.year'][0] == 1901
@@ -2738,7 +2738,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cesm_precl_file'] = f
         gcm_climate.process_cesm_data(gdir)
 
-        fh = gdir.get_filepath('climate_monthly')
+        fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
         with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
 
@@ -2791,7 +2791,7 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['cmip5_precip_file'] = f
         gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_monthly')
+        fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
         with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
 
@@ -2851,7 +2851,7 @@ class TestGCMClimate(unittest.TestCase):
                                        scale_stddev=False)
         gcm_climate.process_cmip5_data(gdir, filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_monthly')
+        fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
         with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
 
@@ -2925,7 +2925,7 @@ class TestGCMClimate(unittest.TestCase):
 
         # CRU
         f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
-        f2 = gdir.get_filepath(filename='climate_monthly')
+        f2 = gdir.get_filepath(filename='climate_historical')
         with xr.open_dataset(f1) as clim_cru1, \
                 xr.open_dataset(f2) as clim_cru2:
             np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
