@@ -71,7 +71,7 @@ def get_cru_file(var=None):
     return utils.file_extractor(utils.file_downloader(cru_url))
 
 
-@entity_task(log, writes=['climate_monthly', 'climate_info'])
+@entity_task(log, writes=['climate_historical', 'climate_info'])
 def process_cru_data(gdir, tmp_file=None, pre_file=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
@@ -290,7 +290,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None):
     gdir.write_json(out, 'climate_info')
 
 
-@entity_task(log, writes=['climate_monthly', 'climate_info'])
+@entity_task(log, writes=['climate_historical', 'climate_info'])
 def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     """Create a simple baseline climate file for this glacier - for testing!
 

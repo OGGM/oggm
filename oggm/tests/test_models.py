@@ -2686,7 +2686,7 @@ class TestHEF:
         gcm_climate.process_cesm_data(gdir)
 
         # Climate data
-        fh = gdir.get_filepath('climate_monthly')
+        fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
         with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
 

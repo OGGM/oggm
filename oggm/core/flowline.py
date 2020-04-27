@@ -2060,7 +2060,7 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
                        store_monthly_step=False,
-                       climate_filename='climate_monthly',
+                       climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        zero_initial_glacier=False,
@@ -2097,7 +2097,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
     climate_filename : str
-        name of the climate file, e.g. 'climate_monthly' (default) or
+        name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
@@ -2141,7 +2141,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          bias=None, temperature_bias=None,
                          store_monthly_step=False,
                          output_filesuffix='',
-                         climate_filename='climate_monthly',
+                         climate_filename='climate_historical',
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
@@ -2174,7 +2174,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
     climate_filename : str
-        name of the climate file, e.g. 'climate_monthly' (default) or
+        name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
@@ -2209,7 +2209,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                           store_monthly_step=False,
-                          climate_filename='climate_monthly',
+                          climate_filename='climate_historical',
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
@@ -2236,7 +2236,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
     climate_filename : str
-        name of the climate file, e.g. 'climate_monthly' (default) or
+        name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
@@ -2292,7 +2292,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                             **kwargs)
 
 
-def merge_to_one_glacier(main, tribs, filename='climate_monthly',
+def merge_to_one_glacier(main, tribs, filename='climate_historical',
                          input_filesuffix=''):
     """Merge multiple tributary glacier flowlines to a main glacier
 

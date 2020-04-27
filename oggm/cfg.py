@@ -223,7 +223,10 @@ _doc = ('A "better" version of the Centerlines, now on a regular spacing '
         'They are now "1.5D" i.e., with a width.')
 BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 
-_doc = 'The monthly climate timeseries stored in a netCDF file.'
+_doc = 'The historical monthly climate timeseries stored in a netCDF file.'
+BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
+
+_doc = 'Deprecated: old name for `climate_historical`.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
 _doc = ('Some information (dictionary) about the climate data and the mass '

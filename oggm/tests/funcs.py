@@ -377,7 +377,7 @@ def init_columbia(reset=False):
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
-    if gdir.has_file('climate_monthly'):
+    if gdir.has_file('climate_historical'):
         return gdir
 
     gis.define_glacier_region(gdir)

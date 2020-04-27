@@ -80,7 +80,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     temp = temp[sm-1:sm-13].load()
 
     # Get CRU to apply the anomaly to
-    fpath = gdir.get_filepath('climate_monthly')
+    fpath = gdir.get_filepath('climate_historical')
     ds_cru = xr.open_dataset(fpath)
 
     # Add CRU clim

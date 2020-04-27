@@ -843,7 +843,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
 
 @compile_to_netcdf(log)
-def compile_climate_input(gdirs, path=True, filename='climate_monthly',
+def compile_climate_input(gdirs, path=True, filename='climate_historical',
                           input_filesuffix='', use_compression=True):
     """Merge the climate input files in the glacier directories into one file.
 
@@ -1899,6 +1899,13 @@ class GlacierDirectory(object):
             fname = fname[0] + filesuffix + '.' + fname[1]
 
         out = os.path.join(self.dir, fname)
+
+        if filename == 'climate_historical' and not os.path.exists(out):
+            # For backwards compatibility, in these cases try climate_monthly
+            if self.has_file('climate_monthly'):
+                return self.get_filepath('climate_monthly', delete=delete,
+                                         filesuffix=filesuffix)
+
         if delete and os.path.isfile(out):
             os.remove(out)
         return out
@@ -2176,7 +2183,7 @@ class GlacierDirectory(object):
                                    gradient=None,
                                    time_unit=None,
                                    calendar=None,
-                                   file_name='climate_monthly',
+                                   file_name='climate_historical',
                                    filesuffix=''):
         """Creates a netCDF4 file with climate data timeseries.
 
@@ -2569,7 +2576,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_monthly',
+                 'local_mustar', 'climate_historical',
                  'gcm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -2577,7 +2584,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid',
-                 'local_mustar', 'climate_monthly', 'gridded_data',
+                 'local_mustar', 'climate_historical', 'gridded_data',
                  'gcm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -2590,7 +2597,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
-                           filename='climate_monthly', input_filesuffix=''):
+                           filename='climate_historical', input_filesuffix=''):
     """Creats a new GlacierDirectory if tributaries are merged to a glacier
 
     This function should be called after centerlines.intersect_downstream_lines

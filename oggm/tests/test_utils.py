@@ -5,8 +5,6 @@ import unittest
 import os
 import shutil
 import time
-import gzip
-import bz2
 import hashlib
 import pytest
 import itertools
@@ -592,7 +590,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
-            assert gdir.has_file('climate_monthly')
+            assert gdir.has_file('climate_historical')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
@@ -610,7 +608,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert gdir.has_file('gridded_data')
-            assert gdir.has_file('climate_monthly')
+            assert gdir.has_file('climate_historical')
             assert gdir.has_file('climate_info')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
