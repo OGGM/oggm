@@ -50,7 +50,6 @@ cfg.PARAMS['border'] = 10
 
 if baseline == 'HISTALP':
     # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
-    cfg.PARAMS['baseline_y0'] = 1850
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
 

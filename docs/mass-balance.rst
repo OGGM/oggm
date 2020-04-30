@@ -64,8 +64,7 @@ download and use the data from the `HISTALP`_ dataset.
 
 The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
 However, the data is considered spurious before 1850. Therefore, we
-recommend to use data from 1850 onwards. This can be done by setting
-``cfg.PARAMS['baseline_y0'] = 1850``.
+recommend to use data from 1850 onwards.
 
 .. ipython:: python
 
@@ -87,7 +86,7 @@ GCM data
 ~~~~~~~~
 
 OGGM can also use climate model output to drive the mass-balance model. In
-this case we still rely on gridded observations (CRU) for the baseline
+this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
 period (currently: 1961-1990). This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.

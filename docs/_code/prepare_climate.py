@@ -34,7 +34,6 @@ tasks.catchment_area(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
-cfg.PARAMS['baseline_y0'] = 1850
 tasks.process_histalp_data(gdir)
 mu_yr_clim = tasks.glacier_mu_candidates(gdir)
 

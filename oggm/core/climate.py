@@ -9,7 +9,6 @@ import warnings
 import numpy as np
 import netCDF4
 import pandas as pd
-import xarray as xr
 from scipy import stats
 from scipy import optimize as optimization
 
@@ -31,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_custom_climate_data(gdir):
+def process_custom_climate_data(gdir, y0=None, y1=None):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format (see
@@ -44,6 +43,14 @@ def process_custom_climate_data(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    y0 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
+    y1 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
     """
 
     if not (('climate_file' in cfg.PATHS) and
@@ -65,11 +72,9 @@ def process_custom_climate_data(gdir):
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts.time.year
-    y0, y1 = yrs[0], yrs[-1]
-    if cfg.PARAMS['baseline_y0'] != 0:
-        y0 = cfg.PARAMS['baseline_y0']
-    if cfg.PARAMS['baseline_y1'] != 0:
-        y1 = cfg.PARAMS['baseline_y1']
+    y0 = yrs[0] if y0 is None else y0
+    y1 = yrs[-1] if y1 is None else y1
+
     nc_ts.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                      t1='{}-{:02d}-01'.format(y1, em))
     time = nc_ts.time
