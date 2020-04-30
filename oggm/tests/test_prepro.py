@@ -1132,9 +1132,7 @@ class TestClimate(unittest.TestCase):
         climate.process_custom_climate_data(gdirs[0])
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
-        cfg.PARAMS['baseline_y0'] = 1850
-        cfg.PARAMS['baseline_y1'] = 2003
-        tasks.process_histalp_data(gdirs[1])
+        tasks.process_histalp_data(gdirs[1], y0=1850, y1=2003)
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.read_json('climate_info')
@@ -1459,9 +1457,6 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
 
-        cfg.PARAMS['baseline_y0'] = 1940
-        cfg.PARAMS['baseline_y1'] = 2000
-
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -1473,7 +1468,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
-        climate.process_custom_climate_data(gdir)
+        climate.process_custom_climate_data(gdir, y0=1940, y1=2000)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
@@ -1667,6 +1662,10 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['run_mb_calibration'] = False
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
+
+        # Bck change
+        with pytest.raises(ValueError):
+            cfg.PARAMS['baseline_y0'] = 1
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]

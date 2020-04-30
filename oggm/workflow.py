@@ -584,7 +584,6 @@ def inversion_tasks(gdirs):
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier

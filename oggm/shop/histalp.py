@@ -64,7 +64,7 @@ def get_histalp_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_histalp_data(gdir):
+def process_histalp_data(gdir, y0=1850, y1=None):
     """Processes and writes the HISTALP baseline climate data for this glacier.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
@@ -73,6 +73,13 @@ def process_histalp_data(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    y0 : int
+        the starting year of the timeseries to write. The default is to take
+        1850 (because the data is quite bad before that)
+    y1 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -109,11 +116,8 @@ def process_histalp_data(gdir):
     sm = cfg.PARAMS['hydro_month_nh']
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
-    y0, y1 = yrs[0], yrs[-1]
-    if cfg.PARAMS['baseline_y0'] != 0:
-        y0 = cfg.PARAMS['baseline_y0']
-    if cfg.PARAMS['baseline_y1'] != 0:
-        y1 = cfg.PARAMS['baseline_y1']
+    y0 = yrs[0] if y0 is None else y0
+    y1 = yrs[-1] if y1 is None else y1
 
     nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                          t1='{}-{:02d}-01'.format(y1, em))

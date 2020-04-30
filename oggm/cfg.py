@@ -103,6 +103,13 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
         prev = self.get(key)
         if prev is None:
+            if key in ['baseline_y0', 'baseline_y1']:
+                raise InvalidParamsError('The `baseline_y0` and `baseline_y1` '
+                                         'parameters have been removed. '
+                                         'You now have to set them explicitly '
+                                         'in your call to '
+                                         '`process_climate_data`.')
+
             log.warning('WARNING: adding an unknown parameter '
                         '`{}`:`{}` to PARAMS.'.format(key, value))
             return
@@ -450,8 +457,6 @@ def initialize_minimal(file=None, logging_level='INFO'):
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
-    PARAMS['baseline_y0'] = cp.as_int('baseline_y0')
-    PARAMS['baseline_y1'] = cp.as_int('baseline_y1')
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
@@ -476,7 +481,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing', 'baseline_y0', 'baseline_y1',
+           'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',

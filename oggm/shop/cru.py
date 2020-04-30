@@ -72,7 +72,7 @@ def get_cru_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_cru_data(gdir, tmp_file=None, pre_file=None):
+def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
     Interpolates the CRU TS data to the high-resolution CL2 climatologies
@@ -88,6 +88,14 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None):
     pre_file : str
         path to the CRU precip file (defaults to the current OGGM chosen
         CRU version)
+    y0 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
+    y1 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -114,11 +122,8 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None):
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
-    y0, y1 = yrs[0], yrs[-1]
-    if cfg.PARAMS['baseline_y0'] != 0:
-        y0 = cfg.PARAMS['baseline_y0']
-    if cfg.PARAMS['baseline_y1'] != 0:
-        y1 = cfg.PARAMS['baseline_y1']
+    y0 = yrs[0] if y0 is None else y0
+    y1 = yrs[-1] if y1 is None else y1
 
     nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
                          t1='{}-{:02d}-01'.format(y1, em))
@@ -291,7 +296,8 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None):
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
+def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
+                           y0=None, y1=None):
     """Create a simple baseline climate file for this glacier - for testing!
 
     This simply reproduces the climatology with a little randomness in it.
@@ -310,6 +316,14 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
         ts)
     seed : int
         the RandomState seed
+    y0 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
+    y1 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
     """
 
     # read the climatology
@@ -320,11 +334,8 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None):
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
 
-    y0, y1 = 1901, 2018
-    if cfg.PARAMS['baseline_y0'] != 0:
-        y0 = cfg.PARAMS['baseline_y0']
-    if cfg.PARAMS['baseline_y1'] != 0:
-        y1 = cfg.PARAMS['baseline_y1']
+    y0 = 1901 if y0 is None else y0
+    y1 = 2018 if y1 is None else y1
 
     time = pd.date_range(start='{}-{:02d}-01'.format(y0, sm),
                          end='{}-{:02d}-01'.format(y1, em),
