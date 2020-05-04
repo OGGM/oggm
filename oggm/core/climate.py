@@ -34,7 +34,7 @@ def process_custom_climate_data(gdir, y0=None, y1=None):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format (see
-    https://github.com/OGGM/oggm-sample-data test-files/histalp_merged_hef.nc
+    https://github.com/OGGM/oggm-sample-data ->test-files/histalp_merged_hef.nc
     for an example).
 
     This is the way OGGM used to do it for HISTALP before it got automatised.
@@ -130,6 +130,44 @@ def process_custom_climate_data(gdir, y0=None, y1=None):
            'baseline_hydro_yr_0': y0+1,
            'baseline_hydro_yr_1': y1}
     gdir.write_json(out, 'climate_info')
+
+
+def process_climate_data(gdir, y0=None, y1=None, **kwargs):
+    """Adds the selected climate data to this glacier directory.
+
+    Simply reads `cfg.PARAMS['baseline_climate']` and decides on which
+    task to run.
+
+    If you want to make it explicit, simply call the relevant task
+    (e.g. oggm.shop.cru.process_cru_data).
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    y0 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
+    y1 : int
+        the starting year of the timeseries to write. The default is to take
+        the entire time period available in the file, but with this kwarg
+        you can shorten it (to save space or to crop bad data)
+    **kwargs :
+        any other argument relevant to the task that will be called.
+    """
+
+    # Which climate should we use?
+    if cfg.PARAMS['baseline_climate'] == 'CRU':
+        from oggm.shop.cru import process_cru_data
+        return process_cru_data(gdir, y0=y0, y1=y1, **kwargs)
+    elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
+        from oggm.shop.histalp import process_histalp_data
+        return process_histalp_data(gdir, y0=y0, y1=y1, **kwargs)
+    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
+        return process_custom_climate_data(gdir, y0=y0, y1=y1, **kwargs)
+    else:
+        raise ValueError("cfg.['baseline_climate'] not understood")
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
@@ -1024,6 +1062,9 @@ def compute_ref_t_stars(gdirs):
                                  '`run_mb_calibration` parameter to `True`.')
 
     log.info('Compute the reference t* and mu* for WGMS glaciers')
+
+    # Should be iterable
+    gdirs = utils.tolist(gdirs)
 
     # Reference glaciers only if in the list and period is good
     ref_gdirs = utils.get_ref_mb_glaciers(gdirs)

@@ -117,11 +117,8 @@ def execute_entity_task(task, gdirs, **kwargs):
         the glacier directories to process
     """
 
-    # If not iterable it's ok
-    try:
-        len(gdirs)
-    except TypeError:
-        gdirs = [gdirs]
+    # Should be iterable
+    gdirs = utils.tolist(gdirs)
 
     if len(gdirs) == 0:
         return
@@ -525,23 +522,8 @@ def climate_tasks(gdirs):
         the glacier directories to process
     """
 
-    # If not iterable it's ok
-    try:
-        len(gdirs)
-    except TypeError:
-        gdirs = [gdirs]
-
-    # Which climate should we use?
-    if cfg.PARAMS['baseline_climate'] == 'CRU':
-        _process_task = tasks.process_cru_data
-    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
-        _process_task = tasks.process_custom_climate_data
-    elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
-        _process_task = tasks.process_histalp_data
-    else:
-        raise ValueError('baseline_climate parameter not understood')
-
-    execute_entity_task(_process_task, gdirs)
+    # Process climate data
+    execute_entity_task(tasks.process_climate_data, gdirs)
 
     # Then, calibration?
     if cfg.PARAMS['run_mb_calibration']:

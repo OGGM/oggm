@@ -69,25 +69,22 @@ elif baseline == 'CRU':
 from oggm.shop import rgitopo
 gdirs = rgitopo.init_glacier_directories_from_rgitopo(rids)
 
+# For histalp do a second filtering for glaciers in the Alps only
+if baseline == 'HISTALP':
+    gdirs = [gdir for gdir in gdirs if gdir.rgi_subregion == '11-01']
+
 # We need to know which period we have data for
 log.info('Process the climate data...')
-if baseline == 'CRU':
-    execute_entity_task(tasks.process_cru_data, gdirs, print_log=False)
-elif baseline == 'HISTALP':
-    # exclude glaciers outside of the Alps
-    gdirs = [gdir for gdir in gdirs if gdir.rgi_subregion == '11-01']
-    execute_entity_task(tasks.process_histalp_data, gdirs, print_log=False)
+execute_entity_task(tasks.process_climate_data, gdirs, print_log=False)
 
+# Let OGGM decide which of these have enough data
 gdirs = utils.get_ref_mb_glaciers(gdirs)
-
-# Keep only these
-rids = [g.rgi_id for g in gdirs]
 
 # Save the list of glaciers for later
 log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
-                                                                   len(rids)))
-rgidf = pd.Series(data=rids)
+                                                                   len(gdirs)))
+rgidf = pd.Series(data=[g.rgi_id for g in gdirs])
 rgidf.to_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
 
 # Prepro tasks
