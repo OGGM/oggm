@@ -261,7 +261,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L2 - Tasks
-    workflow.execute_entity_task(tasks.process_cru_data, gdirs)
+    workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L2', 'summary')
