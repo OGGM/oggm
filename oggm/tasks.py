@@ -19,6 +19,7 @@ from oggm.core.centerlines import catchment_width_geom
 from oggm.core.centerlines import catchment_width_correction
 from oggm.core.centerlines import terminus_width_correction
 from oggm.core.climate import glacier_mu_candidates
+from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
