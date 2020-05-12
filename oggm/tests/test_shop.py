@@ -1,3 +1,4 @@
+import os
 import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
@@ -17,7 +18,7 @@ from oggm import utils
 from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo
 from oggm.core import gis
-from oggm import cfg, tasks
+from oggm import cfg, tasks, workflow
 
 pytestmark = pytest.mark.test_env("utils")
 
@@ -133,3 +134,79 @@ class Test_rgitopo:
 
         # we can work from here
         tasks.glacier_masks(gd)
+
+
+class Test_ecmwf:
+
+    def test_get_ecmwf_file(self):
+        from oggm.shop import ecmwf
+        for d, vars in ecmwf.BASENAMES.items():
+            for v, _ in vars.items():
+                assert os.path.isfile(ecmwf.get_ecmwf_file(d, v))
+
+        with pytest.raises(ValueError):
+            ecmwf.get_ecmwf_file('ERA5', 'zoup')
+        with pytest.raises(ValueError):
+            ecmwf.get_ecmwf_file('zoup', 'tmp')
+
+
+class Test_climate_datasets:
+
+    def test_all_at_once(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+
+        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
+        files = []
+        ref_hgts = []
+        for base in exps:
+            cfg.PARAMS['baseline_climate'] = base
+            tasks.process_climate_data(gdir, output_filesuffix=base)
+            files.append(gdir.get_filepath('climate_historical',
+                                           filesuffix=base))
+            with xr.open_dataset(files[-1]) as ds:
+                ref_hgts.append(ds.ref_hgt)
+
+        # TEMP
+        with xr.open_mfdataset(files, concat_dim=exps) as ds:
+            dft = ds.temp.to_dataframe().unstack().T
+            dft.index = dft.index.levels[1]
+
+        # Common period
+        dfy = dft.resample('AS').mean().dropna().iloc[1:]
+        dfm = dft.groupby(dft.index.month).mean()
+        assert dfy.corr().min().min() > 0.6
+        assert dfm.corr().min().min() > 0.97
+        dfavg = dfy.describe()
+
+        # Correct for hgt
+        ref_h = ref_hgts[0]
+        for h, d in zip(ref_hgts, exps):
+            dfy[d] = dfy[d] - 0.0065 * (ref_h - h)
+            dfm[d] = dfm[d] - 0.0065 * (ref_h - h)
+        dfavg_cor = dfy.describe()
+
+        # After correction less spread
+        assert dfavg_cor.loc['mean'].std() < 0.6 * dfavg.loc['mean'].std()
+        assert dfavg_cor.loc['mean'].std() < 2
+
+        # PRECIP
+        with xr.open_mfdataset(files, concat_dim=exps) as ds:
+            dft = ds.prcp.to_dataframe().unstack().T
+            dft.index = dft.index.levels[1]
+
+        # Common period
+        dfy = dft.resample('AS').mean().dropna().iloc[1:] * 12
+        dfm = dft.groupby(dft.index.month).mean()
+        assert dfy.corr().min().min() > 0.5
+        assert dfm.corr().min().min() > 0.85
+        dfavg = dfy.describe()
+        assert dfavg.loc['mean'].std() / dfavg.loc['mean'].mean() < 0.15  # %

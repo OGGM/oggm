@@ -85,7 +85,14 @@ class PathOrderedDict(ResettingOrderedDict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to expand the path
-        ResettingOrderedDict.__setitem__(self, key, os.path.expanduser(value))
+        try:
+            value = os.path.expanduser(value)
+        except AttributeError:
+            raise InvalidParamsError('The value you are trying to set does '
+                                     'not seem to be a valid path: '
+                                     '{}'.format(value))
+
+        ResettingOrderedDict.__setitem__(self, key, value)
 
 
 class ParamsLoggingDict(ResettingOrderedDict):
@@ -154,7 +161,7 @@ SEC_IN_HOUR = 3600
 SEC_IN_MONTH = 2628000
 DAYS_IN_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
-G = 9.81  # gravity
+G = 9.80665  # gravity
 
 GAUSSIAN_KERNEL = dict()
 for ks in [5, 7, 9]:

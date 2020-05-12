@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import shapely.geometry as shpg
 
-from oggm.shop import cru, histalp
+from oggm.shop import cru, histalp, ecmwf
 from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import get_ident, init_hef
@@ -22,6 +22,7 @@ def patch_data_urls(monkeypatch):
     monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
     monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
+    monkeypatch.setattr(ecmwf, 'ECMWF_SERVER', url)
 
 
 def secure_url_retrieve(url, *args, **kwargs):
@@ -64,6 +65,7 @@ def dummy_constant_bed():
 @pytest.fixture(scope='session')
 def test_dir():
     """ Provides a reference to the test directory for the entire test session.
+
         Named after the current git revision.
         As a session-scoped fixture, this will only be created once and
         then injected to each test that depends on it.

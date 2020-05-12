@@ -72,7 +72,8 @@ def get_cru_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None):
+def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
+                     output_filesuffix=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
     Interpolates the CRU TS data to the high-resolution CL2 climatologies
@@ -96,6 +97,9 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None):
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -282,6 +286,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None):
 
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
+                                    filesuffix=output_filesuffix,
                                     gradient=ts_grad)
 
     source = nc_ts_tmp._nc.title[:10]
@@ -297,7 +302,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None):
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
 def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
-                           y0=None, y1=None):
+                           y0=None, y1=None, output_filesuffix=None):
     """Create a simple baseline climate file for this glacier - for testing!
 
     This simply reproduces the climatology with a little randomness in it.
@@ -324,6 +329,9 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     """
 
     # read the climatology
@@ -430,7 +438,8 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
 
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
-                                    gradient=ts_grad)
+                                    gradient=ts_grad,
+                                    filesuffix=output_filesuffix)
 
     source = 'CRU CL2 and some randomness'
     ncclim._nc.close()

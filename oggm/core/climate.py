@@ -30,7 +30,8 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_custom_climate_data(gdir, y0=None, y1=None):
+def process_custom_climate_data(gdir, y0=None, y1=None,
+                                output_filesuffix=None):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format (see
@@ -51,6 +52,9 @@ def process_custom_climate_data(gdir, y0=None, y1=None):
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     """
 
     if not (('climate_file' in cfg.PATHS) and
@@ -124,6 +128,7 @@ def process_custom_climate_data(gdir, y0=None, y1=None):
 
     gdir.write_monthly_climate_file(time, iprcp, itemp, ihgt,
                                     ref_pix_lon, ref_pix_lat,
+                                    filesuffix=output_filesuffix,
                                     gradient=igrad)
     # metadata
     out = {'baseline_climate_source': fpath,
@@ -132,7 +137,8 @@ def process_custom_climate_data(gdir, y0=None, y1=None):
     gdir.write_json(out, 'climate_info')
 
 
-def process_climate_data(gdir, y0=None, y1=None, **kwargs):
+def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
+                         **kwargs):
     """Adds the selected climate data to this glacier directory.
 
     Simply reads `cfg.PARAMS['baseline_climate']` and decides on which
@@ -153,19 +159,32 @@ def process_climate_data(gdir, y0=None, y1=None, **kwargs):
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     **kwargs :
         any other argument relevant to the task that will be called.
     """
 
     # Which climate should we use?
-    if cfg.PARAMS['baseline_climate'] == 'CRU':
+    baseline = cfg.PARAMS['baseline_climate']
+    if baseline == 'CRU':
         from oggm.shop.cru import process_cru_data
-        return process_cru_data(gdir, y0=y0, y1=y1, **kwargs)
-    elif cfg.PARAMS['baseline_climate'] == 'HISTALP':
+        return process_cru_data(gdir, output_filesuffix=output_filesuffix,
+                                y0=y0, y1=y1, **kwargs)
+    elif baseline == 'HISTALP':
         from oggm.shop.histalp import process_histalp_data
-        return process_histalp_data(gdir, y0=y0, y1=y1, **kwargs)
-    elif cfg.PARAMS['baseline_climate'] == 'CUSTOM':
-        return process_custom_climate_data(gdir, y0=y0, y1=y1, **kwargs)
+        return process_histalp_data(gdir, output_filesuffix=output_filesuffix,
+                                    y0=y0, y1=y1, **kwargs)
+    elif baseline in ['ERA5', 'ERA5L', 'CERA']:
+        from oggm.shop.ecmwf import process_ecmwf_data
+        return process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
+                                  dataset=baseline, y0=y0, y1=y1,
+                                  **kwargs)
+    elif baseline == 'CUSTOM':
+        return process_custom_climate_data(gdir, y0=y0, y1=y1,
+                                           output_filesuffix=output_filesuffix,
+                                           **kwargs)
     else:
         raise ValueError("cfg.['baseline_climate'] not understood")
 

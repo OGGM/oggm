@@ -45,7 +45,7 @@ def get_histalp_file(var=None):
     Returns
     -------
     str
-        path to the CRU file
+        path to the file
     """
 
     # Be sure input makes sense
@@ -64,7 +64,7 @@ def get_histalp_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical', 'climate_info'])
-def process_histalp_data(gdir, y0=1850, y1=None):
+def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the HISTALP baseline climate data for this glacier.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
@@ -80,6 +80,9 @@ def process_histalp_data(gdir, y0=1850, y1=None):
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     """
 
     if cfg.PATHS.get('climate_file', None):
@@ -110,6 +113,10 @@ def process_histalp_data(gdir, y0=1850, y1=None):
     # Now open with salem
     nc_ts_tmp = salem.GeoNetcdf(ft, time=time_t)
     nc_ts_pre = salem.GeoNetcdf(fp, time=time_p)
+
+    # Some default
+    if y0 is None:
+        y0 = 1850
 
     # set temporal subset for the ts data (hydro years)
     # the reference time is given by precip, which is shorter
@@ -168,7 +175,8 @@ def process_histalp_data(gdir, y0=1850, y1=None):
 
     gdir.write_monthly_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
                                     hgt[1, 1], ref_lon[1], ref_lat[1],
-                                    gradient=igrad)
+                                    gradient=igrad,
+                                    filesuffix=output_filesuffix)
     # metadata
     out = {'baseline_climate_source': source,
            'baseline_hydro_yr_0': y0 + 1,
