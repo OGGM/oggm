@@ -13,6 +13,7 @@ import xarray as xr
 from oggm import cfg
 from oggm import utils
 from oggm import entity_task
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -95,7 +96,11 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
         std_fac = std_fac.roll(month=13-sm, roll_coords=True)
         std_fac = np.tile(std_fac.data, len(temp) // 12)
-        win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) + 1
+        # We need an even number of years for this to work
+        if ((len(ts_tmp_sel) // 12) % 2) == 1:
+            raise InvalidParamsError('We need an even number of years '
+                                     'for this to work')
+        win_size = len(ts_tmp_sel) + 1
 
         def roll_func(x, axis=None):
             assert axis == 1

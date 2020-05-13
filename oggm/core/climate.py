@@ -7,6 +7,7 @@ import warnings
 
 # External libs
 import numpy as np
+import xarray as xr
 import netCDF4
 import pandas as pd
 from scipy import stats
@@ -141,8 +142,8 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                          **kwargs):
     """Adds the selected climate data to this glacier directory.
 
-    Simply reads `cfg.PARAMS['baseline_climate']` and decides on which
-    task to run.
+    Short wrapper deciding on which task to run based on
+    `cfg.PARAMS['baseline_climate']`.
 
     If you want to make it explicit, simply call the relevant task
     (e.g. oggm.shop.cru.process_cru_data).
@@ -187,6 +188,138 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                            **kwargs)
     else:
         raise ValueError("cfg.['baseline_climate'] not understood")
+
+
+@entity_task(log, writes=['climate_historical', 'climate_info'])
+def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
+                            out_filesuffix='', ref_year_range=None,
+                            delete_input_files=True, scale_stddev=True,
+                            keep_ref_data=True):
+    """Applies the anomaly method to historical climate data
+
+    This function can be used to prolongate historical time series,
+    for example by bias-correcting CERA-20C to ERA5 or ERA5-Land.
+
+    The timeseries must be already available in the glacier directory
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    ref_filesuffix : str
+        the filesuffix of the historical climate data to take as reference
+    hist_filesuffix : str
+        the filesuffix of the historical climate data to apply to the
+        reference
+    out_filesuffix : str
+        the filesuffix of the output file (usually left empty - i.e. this
+        file will become the default)
+    ref_year_range : tuple of str
+        the year range for which you want to compute the anomalies. The
+        default is to take the entire reference data period, but you could
+         also choose `('1961', '1990')` for example
+    delete_input_files : bool
+        delete the input files after use - useful for operational runs
+        where you don't want to carry too many files
+    scale_stddev : bool
+        whether or not to scale the temperature standard deviation as well
+        (you probably want to do that)
+    keep_ref_data : bool
+        the default is to paste the bias-corrected data where no reference
+        data is available, i.e. creating timeseries which are not consistent
+        in time (e.g. CERA-20C until 1980, then ERA5). Set this to False
+        to present this and make a consistent time series of CERA-20C, but
+        bias corrected to the reference data
+    """
+
+    if ref_year_range is not None:
+        raise NotImplementedError()
+
+    # Read input
+    f = gdir.get_filepath('climate_historical', filesuffix=ref_filesuffix)
+    with xr.open_dataset(f) as ds:
+        ref_temp = ds['temp']
+        ref_prcp = ds['prcp']
+        ref_hgt = float(ds.ref_hgt)
+        ref_lon = float(ds.ref_pix_lon)
+        ref_lat = float(ds.ref_pix_lat)
+
+    f = gdir.get_filepath('climate_historical', filesuffix=hist_filesuffix)
+    with xr.open_dataset(f) as ds:
+        hist_temp = ds['temp']
+        hist_prcp = ds['prcp']
+
+    # Common time period
+    cmn_time = (ref_temp + hist_temp)['time']
+    assert len(cmn_time) // 12 == len(cmn_time) / 12
+    # We need an even number of years for this to work
+    if ((len(cmn_time) // 12) % 2) == 1:
+        cmn_time = cmn_time.isel(time=slice(12, len(cmn_time)))
+    assert len(cmn_time) // 12 == len(cmn_time) / 12
+    assert ((len(cmn_time) // 12) % 2) == 0
+    cmn_time_range = cmn_time.values[[0, -1]]
+
+    # See if we need to scale the variability
+    if scale_stddev:
+        # This is a bit more arithmetic
+        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+        tmp_sel = hist_temp.sel(time=slice(*cmn_time_range))
+        tmp_std = tmp_sel.groupby('time.month').std(dim='time')
+        tmp_ref = ref_temp.sel(time=slice(*cmn_time_range))
+        std_fac = tmp_ref.groupby('time.month').std(dim='time') / tmp_std
+        std_fac = std_fac.roll(month=13-sm, roll_coords=True)
+        std_fac = np.tile(std_fac.data, len(hist_temp) // 12)
+        win_size = len(cmn_time) + 1
+
+        def roll_func(x, axis=None):
+            assert axis == 1
+            x = x[:, ::12]
+            n = len(x[0, :]) // 2
+            xm = np.nanmean(x, axis=axis)
+            return xm + (x[:, n] - xm) * std_fac
+
+        hist_temp = hist_temp.rolling(time=win_size, center=True,
+                                      min_periods=1).reduce(roll_func)
+
+    # compute monthly anomalies
+    # of temp
+    ts_tmp_sel = hist_temp.sel(time=slice(*cmn_time_range))
+    ts_tmp_avg = ts_tmp_sel.groupby('time.month').mean(dim='time')
+    ts_tmp = hist_temp.groupby('time.month') - ts_tmp_avg
+    # of precip -- scaled anomalies
+    ts_pre_avg = hist_prcp.sel(time=slice(*cmn_time_range))
+    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+    ts_pre_ano = hist_prcp.groupby('time.month') - ts_pre_avg
+    # scaled anomalies is the default. Standard anomalies above
+    # are used later for where ts_pre_avg == 0
+    ts_pre = hist_prcp.groupby('time.month') / ts_pre_avg
+
+    # reference averages
+    # for temp
+    loc_tmp = ref_temp.groupby('time.month').mean()
+    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
+
+    # for prcp
+    loc_pre = ref_prcp.groupby('time.month').mean()
+    # scaled anomalies
+    ts_pre = ts_pre.groupby('time.month') * loc_pre
+    # standard anomalies
+    ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
+    # Correct infinite values with standard anomalies
+    ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                             ts_pre.values,
+                             ts_pre_ano.values)
+    # The previous step might create negative values (unlikely). Clip them
+    ts_pre.values = utils.clip_min(ts_pre.values, 0)
+
+    assert np.all(np.isfinite(ts_pre.values))
+    assert np.all(np.isfinite(ts_tmp.values))
+
+    gdir.write_monthly_climate_file(ts_tmp.time.values,
+                                    ts_pre.values, ts_tmp.values,
+                                    ref_hgt, ref_lon, ref_lat,
+                                    time_unit='days since 1801-01-01 00:00:00',
+                                    filesuffix=out_filesuffix)
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):

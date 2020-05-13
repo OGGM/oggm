@@ -149,6 +149,22 @@ class Test_ecmwf:
         with pytest.raises(ValueError):
             ecmwf.get_ecmwf_file('zoup', 'tmp')
 
+    def test_ecmwf_climate_workflow(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+        tasks.process_ecmwf_data(gdir, dataset='ERA5', output_filesuffix='ERA5')
+        tasks.process_ecmwf_data(gdir, dataset='CERA', output_filesuffix='CERA')
+        tasks.historical_delta_method(gdir, ref_filesuffix='ERA5',
+                                      hist_filesuffix='CERA')
+
 
 class Test_climate_datasets:
 

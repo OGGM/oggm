@@ -21,18 +21,23 @@ log = logging.getLogger(__name__)
 
 ECMWF_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
-BASENAMES = {'ERA5':{'inv':'era5/monthly/v1.0/era5_invariant.nc',
-                     'pre':'era5/monthly/v1.0/era5_monthly_prcp_1979-2018.nc',
-                     'tmp':'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'},
-             'ERA5L':{'inv':'era5-land/monthly/v1.0/era5_land_invariant.nc',
-                      'pre':'era5-land/monthly/v1.0/era5_land_monthly_prcp_'
-                            '1981-2018.nc',
-                      'tmp':'era5-land/monthly/v1.0/era5_land_monthly_t2m_'
-                            '1981-2018.nc'},
-             'CERA':{'inv':'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
-                     'pre':'cera-20c/monthly/v1.0/cera-20c_pcp_1901-2010.nc',
-                     'tmp':'cera-20c/monthly/v1.0/cera-20c_t2m_1901-2010.nc'}
-             }
+BASENAMES = {
+    'ERA5': {
+        'inv': 'era5/monthly/v1.0/era5_invariant.nc',
+        'pre': 'era5/monthly/v1.0/era5_monthly_prcp_1979-2018.nc',
+        'tmp': 'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'
+    },
+    'ERA5L': {
+        'inv': 'era5-land/monthly/v1.0/era5_land_invariant.nc',
+        'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018.nc',
+        'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018.nc'
+    },
+    'CERA': {
+        'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
+        'pre': 'cera-20c/monthly/v1.0/cera-20c_pcp_1901-2010.nc',
+        'tmp': 'cera-20c/monthly/v1.0/cera-20c_t2m_1901-2010.nc'
+    }
+}
 
 
 def set_ecmwf_url(url):
