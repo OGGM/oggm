@@ -237,7 +237,7 @@ class TestFullRun(unittest.TestCase):
             df.loc[gd.rgi_id, 'start_length'] = model.length_m
         assert_allclose(df['rgi_area_km2'], df['start_area_km2'], 0.06)
         assert_allclose(df['rgi_area_km2'].sum(), df['start_area_km2'].sum(),
-                        0.003)
+                        0.004)
         assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.04)
         assert_allclose(df['inv_volume_km3'].sum(),
                         df['start_volume_km3'].sum(), 0.001)
