@@ -1185,8 +1185,11 @@ def glacier_statistics(gdir, inversion_only=False):
         for fl in fls:
             hgt = fl.surface_h
             h = np.append(h, hgt)
-            widths = np.append(widths, fl.widths * dx)
+            widths = np.append(widths, fl.widths * gdir.grid.dx)
             slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+            length = len(hgt) * dx
+        d['main_flowline_length'] = length
+        d['inv_flowline_glacier_area'] = np.sum(widths * dx)
         d['flowline_mean_elev'] = np.average(h, weights=widths)
         d['flowline_max_elev'] = np.max(h)
         d['flowline_min_elev'] = np.min(h)

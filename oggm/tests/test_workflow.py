@@ -221,15 +221,30 @@ class TestFullRun(unittest.TestCase):
         assert np.sum(~ df.volume_before_calving.isnull()) == 2
         dfs = df.iloc[:2]
         assert np.all(dfs['volume_before_calving_km3'] < dfs['inv_volume_km3'])
+        assert_allclose(df['inv_flowline_glacier_area']*1e-6,
+                        df['rgi_area_km2'])
 
         workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+        # Check init_present_time_glacier not messing around too much
+        for gd in gdirs:
+            from oggm.core.massbalance import LinearMassBalance
+            from oggm.core.flowline import FluxBasedModel
+            mb_mod = LinearMassBalance(ela_h=2500)
+            fls = gd.read_pickle('model_flowlines')
+            model = FluxBasedModel(fls, mb_model=mb_mod)
+            df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
+            df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
+            df.loc[gd.rgi_id, 'start_length'] = model.length_m
+        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], 0.06)
+        assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.04)
+        assert_allclose(df['main_flowline_length'], df['start_length'])
+
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
                                      nyears=100, seed=0,
                                      store_monthly_step=True,
                                      output_filesuffix='_test')
 
         for gd in gdirs:
-
             path = gd.get_filepath('model_run', filesuffix='_test')
             # See that we are running ok
             with flowline.FileModel(path) as model:
@@ -261,6 +276,16 @@ class TestFullRun(unittest.TestCase):
         df = ds.volume.sel(rgi_id=gd.rgi_id).to_series().to_frame('OUT')
         df['RUN'] = ds_diag.volume_m3.to_series()
         assert_allclose(df.RUN, df.OUT)
+
+        # Compare to statistics
+        df = utils.compile_glacier_statistics(gdirs)
+        df['y0_vol'] = ds.volume.sel(rgi_id=df.index, time=0) * 1e-9
+        df['y0_area'] = ds.area.sel(rgi_id=df.index, time=0) * 1e-6
+        df['y0_len'] = ds.length.sel(rgi_id=df.index, time=0)
+        assert_allclose(df['rgi_area_km2'], df['y0_area'], 0.06)
+        assert_allclose(df['inv_volume_km3'], df['y0_vol'], 0.04)
+        assert_allclose(df['main_flowline_length'], df['y0_len'])
+
         # Calving stuff
         assert ds.isel(rgi_id=0).calving[-1] > 0
         assert ds.isel(rgi_id=0).calving_rate[-1] > 0
