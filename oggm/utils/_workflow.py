@@ -2086,10 +2086,6 @@ class GlacierDirectory(object):
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function handling some backwards compat aspects"""
 
-        if not self.has_file('climate_historical',
-                             filesuffix=input_filesuffix):
-            raise InvalidWorkflowError('Need some climate data beforehand!')
-
         try:
             out = self.read_json('climate_info')
         except FileNotFoundError:
@@ -2102,7 +2098,7 @@ class GlacierDirectory(object):
                 out['baseline_climate_source'] = nc.climate_source
                 out['baseline_hydro_yr_0'] = nc.hydro_yr_0
                 out['baseline_hydro_yr_1'] = nc.hydro_yr_1
-        except AttributeError:
+        except (AttributeError, FileNotFoundError):
             pass
 
         return out
@@ -2392,7 +2388,7 @@ class GlacierDirectory(object):
 
         # logic for period
         ci = self.get_climate_info()
-        if not 'baseline_hydro_yr_0' in ci:
+        if 'baseline_hydro_yr_0' not in ci:
             raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']

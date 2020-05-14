@@ -276,12 +276,14 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         std_fac = std_fac.roll(month=13-sm, roll_coords=True)
         std_fac = np.tile(std_fac.data, len(hist_temp) // 12)
         win_size = len(cmn_time) + 1
+
         def roll_func(x, axis=None):
             assert axis == 1
             x = x[:, ::12]
             n = len(x[0, :]) // 2
             xm = np.nanmean(x, axis=axis)
             return xm + (x[:, n] - xm) * std_fac
+
         hist_temp = hist_temp.rolling(time=win_size, center=True,
                                       min_periods=1).reduce(roll_func)
 
