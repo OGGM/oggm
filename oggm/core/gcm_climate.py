@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 @entity_task(log, writes=['gcm_data'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
-                     time_unit=None, calendar=None):
+                     time_unit=None, calendar=None, source=''):
     """ Applies the anomaly method to GCM climate data
 
     This function can be applied to any GCM data, if it is provided in a
@@ -63,6 +63,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         For example: 'days since 0850-01-01 00:00:00'
     calendar : str
         If you use an exotic calendar (e.g. 'noleap')
+    source : str
+        For metadata: the source of the climate data
     """
 
     # Standard sanity checks
@@ -150,6 +152,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                     time_unit=time_unit,
                                     calendar=calendar,
                                     file_name='gcm_data',
+                                    source=source,
                                     filesuffix=filesuffix)
 
     ds_cru.close()
@@ -331,4 +334,5 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
     # - time_unit='days since 1870-01-15 12:00:00'
     # - calendar='standard'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
-                     time_unit=time_units, calendar=calendar, **kwargs)
+                     time_unit=time_units, calendar=calendar, source='CESM',
+                     **kwargs)
