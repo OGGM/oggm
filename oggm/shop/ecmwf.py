@@ -79,7 +79,7 @@ def get_ecmwf_file(dataset='ERA5', var=None):
     return utils.file_downloader(ECMWF_SERVER + BASENAMES[dataset][var])
 
 
-@entity_task(log, writes=['climate_historical', 'climate_info'])
+@entity_task(log, writes=['climate_historical'])
 def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
                        y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the ECMWF baseline climate data for this glacier.
@@ -157,10 +157,5 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         raise NotImplementedError()
 
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
-                                    time_unit='days since 1801-01-01 00:00:00',
-                                    filesuffix=output_filesuffix)
-    # metadata
-    out = {'baseline_climate_source': dataset,
-           'baseline_hydro_yr_0': y0 + 1,
-           'baseline_hydro_yr_1': y1}
-    gdir.write_json(out, 'climate_info')
+                                    filesuffix=output_filesuffix,
+                                    source=dataset)

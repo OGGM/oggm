@@ -71,7 +71,7 @@ def get_cru_file(var=None):
     return utils.file_extractor(utils.file_downloader(cru_url))
 
 
-@entity_task(log, writes=['climate_historical', 'climate_info'])
+@entity_task(log, writes=['climate_historical'])
 def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
                      output_filesuffix=None):
     """Processes and writes the CRU baseline climate data for this glacier.
@@ -287,20 +287,15 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=ts_grad)
+                                    gradient=ts_grad,
+                                    source=nc_ts_tmp._nc.title[:10])
 
-    source = nc_ts_tmp._nc.title[:10]
     ncclim._nc.close()
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
-    # metadata
-    out = {'baseline_climate_source': source,
-           'baseline_hydro_yr_0': y0+1,
-           'baseline_hydro_yr_1': y1}
-    gdir.write_json(out, 'climate_info')
 
 
-@entity_task(log, writes=['climate_historical', 'climate_info'])
+@entity_task(log, writes=['climate_historical'])
 def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
                            y0=None, y1=None, output_filesuffix=None):
     """Create a simple baseline climate file for this glacier - for testing!
@@ -439,12 +434,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
                                     gradient=ts_grad,
-                                    filesuffix=output_filesuffix)
-
-    source = 'CRU CL2 and some randomness'
+                                    filesuffix=output_filesuffix,
+                                    source='CRU CL2 and some randomness')
     ncclim._nc.close()
-    # metadata
-    out = {'baseline_climate_source': source,
-           'baseline_hydro_yr_0': y0+1,
-           'baseline_hydro_yr_1': y1}
-    gdir.write_json(out, 'climate_info')

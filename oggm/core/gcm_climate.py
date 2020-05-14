@@ -19,7 +19,7 @@ from oggm.exceptions import InvalidParamsError
 log = logging.getLogger(__name__)
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
                      time_unit=None, calendar=None):
@@ -155,7 +155,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     ds_cru.close()
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None, **kwargs):
     """Processes and writes CESM climate data for this glacier.
@@ -254,7 +254,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                      time_unit=time_unit, calendar=calendar, **kwargs)
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
                        fpath_precip=None, **kwargs):
     """Read, process and store the CMIP5 climate data data for this glacier.

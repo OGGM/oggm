@@ -106,7 +106,7 @@ execute_entity_task(tasks.local_t_star, gdirs)
 execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
-mb_calib = gdirs[0].read_json('climate_info')['mb_calib_params']
+mb_calib = gdirs[0].get_climate_info()['mb_calib_params']
 with open(os.path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 

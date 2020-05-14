@@ -25,6 +25,7 @@ from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
 from oggm.tests.funcs import get_test_dir, init_columbia
 from oggm import workflow
+from oggm.exceptions import InvalidWorkflowError
 
 pytestmark = pytest.mark.test_env("prepro")
 
@@ -970,7 +971,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -995,7 +996,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -1016,7 +1017,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1802)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -1051,7 +1052,7 @@ class TestClimate(unittest.TestCase):
         tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1090,7 +1091,7 @@ class TestClimate(unittest.TestCase):
         tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1135,7 +1136,7 @@ class TestClimate(unittest.TestCase):
         tasks.process_histalp_data(gdirs[1], y0=1850, y1=2003)
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1851)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2003)
 
@@ -1182,7 +1183,7 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
         climate.process_custom_climate_data(gdirs[0])
-        ci = gdirs[0].read_json('climate_info')
+        ci = gdirs[0].get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1803)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2002)
 
@@ -1191,7 +1192,7 @@ class TestClimate(unittest.TestCase):
         tasks.process_cru_data(gdirs[1])
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -1627,7 +1628,7 @@ class TestClimate(unittest.TestCase):
 
         assert len(cfg.DATA) >= 2
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(InvalidWorkflowError):
             utils.get_ref_mb_glaciers([gdir])
 
         climate.process_custom_climate_data(gdir)
@@ -2646,7 +2647,6 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         # Trick
-        gdir.write_json({'source': 'HISTALP'}, 'climate_info')
         climate.local_t_star(gdir, tstar=1975, bias=0.)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2725,7 +2725,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         tasks.process_cru_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -2780,7 +2780,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         tasks.process_cru_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
@@ -2838,7 +2838,7 @@ class TestGCMClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         tasks.process_cru_data(gdir)
 
-        ci = gdir.read_json('climate_info')
+        ci = gdir.get_climate_info()
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 

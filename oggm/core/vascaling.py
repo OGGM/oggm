@@ -328,7 +328,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # Make some checks and use the default one
-                climate_info = gdir.read_json('climate_info')
+                climate_info = gdir.get_climate_info()
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
@@ -373,7 +373,7 @@ def local_t_star(gdir, ref_df=None, tstar=None, bias=None):
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    out = gdir.read_json('climate_info')
+    out = gdir.get_climate_info()
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
     gdir.write_json(out, 'climate_info')
 
@@ -441,7 +441,7 @@ def t_star_from_refmb(gdir, mbdf=None):
     # Compute one mu candidate per year and the associated statistics
     # Only get the years were we consider looking for t*
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_json('climate_info')
+    ci = gdir.get_climate_info()
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
     years = np.arange(y0, y1+1)
@@ -493,10 +493,10 @@ def t_star_from_refmb(gdir, mbdf=None):
     amin = np.abs(diff).idxmin()
 
     # write results to the `climate_info.pkl`
-    d = gdir.read_json('climate_info')
+    d = gdir.get_climate_info()
     d['t_star'] = amin
     d['bias'] = diff[amin]
-    gdir.write_json(d, 'climate_info')
+    gdir.get_climate_info()
 
     return {'t_star': amin, 'bias': diff[amin],
             'avg_mb_per_mu': mb_per_mu, 'avg_ref_mb': ref_mb}
@@ -696,7 +696,7 @@ class VAScalingMassBalance(MassBalanceModel):
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
-            mb_calib = gdir.read_json('climate_info')['mb_calib_params']
+            mb_calib = gdir.get_climate_info()['mb_calib_params']
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
                     raise RuntimeError('You seem to use different mass-'

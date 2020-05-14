@@ -30,7 +30,7 @@ from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
 log = logging.getLogger(__name__)
 
 
-@entity_task(log, writes=['climate_historical', 'climate_info'])
+@entity_task(log, writes=['climate_historical'])
 def process_custom_climate_data(gdir, y0=None, y1=None,
                                 output_filesuffix=None):
     """Processes and writes the climate data from a user-defined climate file.
@@ -130,12 +130,8 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
     gdir.write_monthly_climate_file(time, iprcp, itemp, ihgt,
                                     ref_pix_lon, ref_pix_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=igrad)
-    # metadata
-    out = {'baseline_climate_source': fpath,
-           'baseline_hydro_yr_0': y0+1,
-           'baseline_hydro_yr_1': y1}
-    gdir.write_json(out, 'climate_info')
+                                    gradient=igrad,
+                                    source=fpath)
 
 
 def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
@@ -190,11 +186,11 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         raise ValueError("cfg.['baseline_climate'] not understood")
 
 
-@entity_task(log, writes=['climate_historical', 'climate_info'])
+@entity_task(log, writes=['climate_historical'])
 def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
                             out_filesuffix='', ref_year_range=None,
                             delete_input_files=True, scale_stddev=True,
-                            keep_ref_data=True):
+                            replace_with_ref_data=True):
     """Applies the anomaly method to historical climate data
 
     This function can be used to prolongate historical time series,
@@ -224,12 +220,13 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     scale_stddev : bool
         whether or not to scale the temperature standard deviation as well
         (you probably want to do that)
-    keep_ref_data : bool
+    replace_with_ref_data : bool
         the default is to paste the bias-corrected data where no reference
         data is available, i.e. creating timeseries which are not consistent
-        in time (e.g. CERA-20C until 1980, then ERA5). Set this to False
-        to present this and make a consistent time series of CERA-20C, but
-        bias corrected to the reference data
+        in time but "better" for recent times (e.g. CERA-20C until 1980,
+        then ERA5). Set this to False to present this and make a consistent
+        time series of CERA-20C (but bias corrected to the reference data,
+        so "better" than CERA-20C out of the box).
     """
 
     if ref_year_range is not None:
@@ -243,11 +240,17 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         ref_hgt = float(ds.ref_hgt)
         ref_lon = float(ds.ref_pix_lon)
         ref_lat = float(ds.ref_pix_lat)
+        source = ds.attrs.get('climate_source')
 
     f = gdir.get_filepath('climate_historical', filesuffix=hist_filesuffix)
     with xr.open_dataset(f) as ds:
         hist_temp = ds['temp']
         hist_prcp = ds['prcp']
+        # To differentiate both cases
+        if replace_with_ref_data:
+            source = ds.attrs.get('climate_source') + '+' + source
+        else:
+            source = ds.attrs.get('climate_source') + '_basedon_' + source
 
     # Common time period
     cmn_time = (ref_temp + hist_temp)['time']
@@ -259,25 +262,26 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     assert ((len(cmn_time) // 12) % 2) == 0
     cmn_time_range = cmn_time.values[[0, -1]]
 
+    # Select ref
+    sref_temp = ref_temp.sel(time=slice(*cmn_time_range))
+    sref_prcp = ref_prcp.sel(time=slice(*cmn_time_range))
+
     # See if we need to scale the variability
     if scale_stddev:
         # This is a bit more arithmetic
         sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
         tmp_sel = hist_temp.sel(time=slice(*cmn_time_range))
         tmp_std = tmp_sel.groupby('time.month').std(dim='time')
-        tmp_ref = ref_temp.sel(time=slice(*cmn_time_range))
-        std_fac = tmp_ref.groupby('time.month').std(dim='time') / tmp_std
+        std_fac = sref_temp.groupby('time.month').std(dim='time') / tmp_std
         std_fac = std_fac.roll(month=13-sm, roll_coords=True)
         std_fac = np.tile(std_fac.data, len(hist_temp) // 12)
         win_size = len(cmn_time) + 1
-
         def roll_func(x, axis=None):
             assert axis == 1
             x = x[:, ::12]
             n = len(x[0, :]) // 2
             xm = np.nanmean(x, axis=axis)
             return xm + (x[:, n] - xm) * std_fac
-
         hist_temp = hist_temp.rolling(time=win_size, center=True,
                                       min_periods=1).reduce(roll_func)
 
@@ -296,11 +300,11 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
     # reference averages
     # for temp
-    loc_tmp = ref_temp.groupby('time.month').mean()
+    loc_tmp = sref_temp.groupby('time.month').mean()
     ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
 
     # for prcp
-    loc_pre = ref_prcp.groupby('time.month').mean()
+    loc_pre = sref_prcp.groupby('time.month').mean()
     # scaled anomalies
     ts_pre = ts_pre.groupby('time.month') * loc_pre
     # standard anomalies
@@ -315,11 +319,26 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
 
-    gdir.write_monthly_climate_file(ts_tmp.time.values,
-                                    ts_pre.values, ts_tmp.values,
+    if not replace_with_ref_data:
+        gdir.write_monthly_climate_file(ts_tmp.time.values,
+                                        ts_pre.values, ts_tmp.values,
+                                        ref_hgt, ref_lon, ref_lat,
+                                        filesuffix=out_filesuffix,
+                                        source=source)
+        return
+
+    # Select all hist data before the ref
+    ts_tmp = ts_tmp.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
+    ts_tmp = ts_tmp.isel(time=slice(0, -1))
+    ts_pre = ts_pre.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
+    ts_pre = ts_pre.isel(time=slice(0, -1))
+    # Concatenate and write
+    gdir.write_monthly_climate_file(np.append(ts_pre.time, ref_prcp.time),
+                                    np.append(ts_pre, ref_prcp),
+                                    np.append(ts_tmp, ref_temp),
                                     ref_hgt, ref_lon, ref_lat,
-                                    time_unit='days since 1801-01-01 00:00:00',
-                                    filesuffix=out_filesuffix)
+                                    filesuffix=out_filesuffix,
+                                    source=source)
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
@@ -526,7 +545,7 @@ def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
     return years, temp, prcp
 
 
-@entity_task(log, writes=['climate_info'])
+@entity_task(log)
 def glacier_mu_candidates(gdir):
     """Computes the mu candidates, glacier wide.
 
@@ -550,7 +569,7 @@ def glacier_mu_candidates(gdir):
 
     # Only get the years were we consider looking for tstar
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_json('climate_info')
+    ci = gdir.get_climate_info()
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
 
@@ -578,7 +597,7 @@ def glacier_mu_candidates(gdir):
     return pd.Series(data=mu_yr_clim, index=years)
 
 
-@entity_task(log, writes=['climate_info'])
+@entity_task(log)
 def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     """Computes the ref t* for the glacier, given a series of MB measurements.
 
@@ -614,7 +633,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     # Compute one mu candidate per year and the associated statistics
     # Only get the years were we consider looking for tstar
     y0, y1 = cfg.PARAMS['tstar_search_window']
-    ci = gdir.read_json('climate_info')
+    ci = gdir.get_climate_info()
     y0 = y0 or ci['baseline_hydro_yr_0']
     y1 = y1 or ci['baseline_hydro_yr_1']
     years = np.arange(y0, y1+1)
@@ -691,7 +710,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     amin = np.abs(diff).idxmin()
 
     # Write
-    d = gdir.read_json('climate_info')
+    d = gdir.get_climate_info()
     d['t_star'] = amin
     d['bias'] = diff[amin]
     gdir.write_json(d, 'climate_info')
@@ -736,7 +755,8 @@ def _fallback_local_t_star(gdir):
     gdir.write_json(df, 'local_mustar')
 
 
-@entity_task(log, writes=['local_mustar'], fallback=_fallback_local_t_star)
+@entity_task(log, writes=['local_mustar', 'climate_info'],
+             fallback=_fallback_local_t_star)
 def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     """Compute the local t* and associated glacier-wide mu*.
 
@@ -767,7 +787,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         if ref_df is None:
             if not cfg.PARAMS['run_mb_calibration']:
                 # Make some checks and use the default one
-                climate_info = gdir.read_json('climate_info')
+                climate_info = gdir.get_climate_info()
                 source = climate_info['baseline_climate_source']
                 ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
                 if not np.any(s in source.upper() for s in ok_source):
@@ -810,7 +830,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    out = gdir.read_json('climate_info')
+    out = gdir.get_climate_info()
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
     gdir.write_json(out, 'climate_info')
 

@@ -61,7 +61,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 
 # Default RGI date (median per region)
@@ -1913,7 +1913,7 @@ class GlacierDirectory(object):
             os.remove(out)
         return out
 
-    def has_file(self, filename):
+    def has_file(self, filename, filesuffix=''):
         """Checks if a file exists.
 
         Parameters
@@ -1921,7 +1921,7 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         """
-        fp = self.get_filepath(filename)
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
         if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:
@@ -1942,7 +1942,7 @@ class GlacierDirectory(object):
         if not os.path.exists(fp):
             fp = fp.replace('.json', '.pkl')
             if not os.path.exists(fp):
-                raise RuntimeError('No climate info file available!')
+                raise FileNotFoundError('No climate info file available!')
             _open = gzip.open if cfg.PARAMS['use_compression'] else open
             with _open(fp, 'rb') as f:
                 out = pickle.load(f)
@@ -2083,6 +2083,30 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
 
+    def get_climate_info(self, input_filesuffix=''):
+        """Convenience function handling some backwards compat aspects"""
+
+        if not self.has_file('climate_historical',
+                             filesuffix=input_filesuffix):
+            raise InvalidWorkflowError('Need some climate data beforehand!')
+
+        try:
+            out = self.read_json('climate_info')
+        except FileNotFoundError:
+            out = {}
+
+        try:
+            f = self.get_filepath('climate_historical',
+                                  filesuffix=input_filesuffix)
+            with ncDataset(f) as nc:
+                out['baseline_climate_source'] = nc.climate_source
+                out['baseline_hydro_yr_0'] = nc.hydro_yr_0
+                out['baseline_hydro_yr_1'] = nc.hydro_yr_1
+        except AttributeError:
+            pass
+
+        return out
+
     def read_text(self, filename, filesuffix=''):
         """Reads a text file located in the directory.
 
@@ -2186,6 +2210,7 @@ class GlacierDirectory(object):
                                    gradient=None,
                                    time_unit=None,
                                    calendar=None,
+                                   source=None,
                                    file_name='climate_historical',
                                    filesuffix=''):
         """Creates a netCDF4 file with climate data timeseries.
@@ -2214,6 +2239,8 @@ class GlacierDirectory(object):
             it ourselves based on the starting year.
         calendar : str
             If you use an exotic calendar (e.g. 'noleap')
+        source : str
+            the climate data source (required)
         file_name : str
             How to name the file
         filesuffix : str
@@ -2225,14 +2252,25 @@ class GlacierDirectory(object):
         if os.path.exists(fpath):
             os.remove(fpath)
 
+        if source is None:
+            raise InvalidParamsError('`source` kwarg is required')
+
         zlib = cfg.PARAMS['compress_climate_netcdf']
+
+        try:
+            y0 = time[0].year
+            y1 = time[-1].year
+        except AttributeError:
+            time = pd.DatetimeIndex(time)
+            y0 = time[0].year
+            y1 = time[-1].year
         
         if time_unit is None:
             # http://pandas.pydata.org/pandas-docs/stable/timeseries.html
             # #timestamp-limitations
-            if time[0].year > 1800:
+            if y0 > 1800:
                 time_unit = 'days since 1801-01-01 00:00:00'
-            elif time[0].year >= 0:
+            elif y0 >= 0:
                 time_unit = ('days since {:04d}-01-01 '
                              '00:00:00'.format(time[0].year))
             else:
@@ -2244,6 +2282,9 @@ class GlacierDirectory(object):
             nc.ref_pix_lat = ref_pix_lat
             nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
                                        ref_pix_lon, ref_pix_lat)
+            nc.climate_source = source
+            nc.hydro_yr_0 = y0 + 1
+            nc.hydro_yr_1 = y1
 
             nc.createDimension('time', None)
 
@@ -2350,9 +2391,9 @@ class GlacierDirectory(object):
             self.set_ref_mb_data()
 
         # logic for period
-        if not self.has_file('climate_info'):
+        ci = self.get_climate_info()
+        if not 'baseline_hydro_yr_0' in ci:
             raise RuntimeError('Please process some climate data before call')
-        ci = self.read_json('climate_info')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbdf) > 1:
@@ -2389,7 +2430,7 @@ class GlacierDirectory(object):
         # logic for period
         if not self.has_file('climate_info'):
             raise RuntimeError('Please process some climate data before call')
-        ci = self.read_json('climate_info')
+        ci = self.get_climate_info()
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbprofdf) > 1:

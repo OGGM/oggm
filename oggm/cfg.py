@@ -243,7 +243,7 @@ BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
 _doc = 'Deprecated: old name for `climate_historical`.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
-_doc = ('Some information (dictionary) about the climate data and the mass '
+_doc = ('Some information (dictionary) about the mass '
         'balance parameters for this glacier.')
 BASENAMES['climate_info'] = ('climate_info.json', _doc)
 

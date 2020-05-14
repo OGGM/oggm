@@ -613,7 +613,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
 
-        assert gdir.read_json('climate_info')
+        assert gdir.get_climate_info()
         assert gdir.read_pickle('climate_info')
         fls = gdir.read_pickle('inversion_flowlines')
         with pytest.raises(AttributeError):
