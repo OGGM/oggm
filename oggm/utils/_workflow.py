@@ -2389,7 +2389,8 @@ class GlacierDirectory(object):
         # logic for period
         ci = self.get_climate_info()
         if 'baseline_hydro_yr_0' not in ci:
-            raise RuntimeError('Please process some climate data before call')
+            raise InvalidWorkflowError('Please process some climate data '
+                                       'before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbdf) > 1:

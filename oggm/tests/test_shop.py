@@ -256,6 +256,15 @@ class Test_ecmwf:
             assert np.abs(his.temp.mean() - his_ref.temp.mean()) > 1
             assert np.abs(his.temp.std() - his_ref.temp.std()) > 0.3
 
+        # Delete files
+        tasks.historical_delta_method(gdir,
+                                      ref_filesuffix='ERA5',
+                                      hist_filesuffix='CERA')
+        assert not os.path.exists(gdir.get_filepath('climate_historical',
+                                                    filesuffix='ERA5'))
+        assert not os.path.exists(gdir.get_filepath('climate_historical',
+                                                    filesuffix='CERA'))
+
 
 class Test_climate_datasets:
 

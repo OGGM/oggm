@@ -233,8 +233,8 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         raise NotImplementedError()
 
     # Read input
-    f = gdir.get_filepath('climate_historical', filesuffix=ref_filesuffix)
-    with xr.open_dataset(f) as ds:
+    f_ref = gdir.get_filepath('climate_historical', filesuffix=ref_filesuffix)
+    with xr.open_dataset(f_ref) as ds:
         ref_temp = ds['temp']
         ref_prcp = ds['prcp']
         ref_hgt = float(ds.ref_hgt)
@@ -242,8 +242,8 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         ref_lat = float(ds.ref_pix_lat)
         source = ds.attrs.get('climate_source')
 
-    f = gdir.get_filepath('climate_historical', filesuffix=hist_filesuffix)
-    with xr.open_dataset(f) as ds:
+    f_his = gdir.get_filepath('climate_historical', filesuffix=hist_filesuffix)
+    with xr.open_dataset(f_his) as ds:
         hist_temp = ds['temp']
         hist_prcp = ds['prcp']
         # To differentiate both cases
@@ -322,25 +322,32 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     assert np.all(np.isfinite(ts_tmp.values))
 
     if not replace_with_ref_data:
+        # Just write what we have
         gdir.write_monthly_climate_file(ts_tmp.time.values,
                                         ts_pre.values, ts_tmp.values,
                                         ref_hgt, ref_lon, ref_lat,
                                         filesuffix=out_filesuffix,
                                         source=source)
-        return
+    else:
+        # Select all hist data before the ref
+        ts_tmp = ts_tmp.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
+        ts_tmp = ts_tmp.isel(time=slice(0, -1))
+        ts_pre = ts_pre.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
+        ts_pre = ts_pre.isel(time=slice(0, -1))
+        # Concatenate and write
+        gdir.write_monthly_climate_file(np.append(ts_pre.time, ref_prcp.time),
+                                        np.append(ts_pre, ref_prcp),
+                                        np.append(ts_tmp, ref_temp),
+                                        ref_hgt, ref_lon, ref_lat,
+                                        filesuffix=out_filesuffix,
+                                        source=source)
 
-    # Select all hist data before the ref
-    ts_tmp = ts_tmp.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
-    ts_tmp = ts_tmp.isel(time=slice(0, -1))
-    ts_pre = ts_pre.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
-    ts_pre = ts_pre.isel(time=slice(0, -1))
-    # Concatenate and write
-    gdir.write_monthly_climate_file(np.append(ts_pre.time, ref_prcp.time),
-                                    np.append(ts_pre, ref_prcp),
-                                    np.append(ts_tmp, ref_temp),
-                                    ref_hgt, ref_lon, ref_lat,
-                                    filesuffix=out_filesuffix,
-                                    source=source)
+    if delete_input_files:
+        # Delete all files without suffix
+        if ref_filesuffix:
+            os.remove(f_ref)
+        if hist_filesuffix:
+            os.remove(f_his)
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
