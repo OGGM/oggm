@@ -179,6 +179,10 @@ class Test_ecmwf:
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
+            ci = gdir.get_climate_info('CERA_alone')
+            assert ci['baseline_climate_source'] == 'CERA|ERA5'
+            assert ci['baseline_hydro_yr_0'] == 1902
+            assert ci['baseline_hydro_yr_1'] == 2010
 
             # Climate on common period
             # (minus one year because of the automated stuff in code
@@ -264,6 +268,37 @@ class Test_ecmwf:
                                                     filesuffix='ERA5'))
         assert not os.path.exists(gdir.get_filepath('climate_historical',
                                                     filesuffix='CERA'))
+
+    def test_ecmwf_workflow(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+
+        cfg.PARAMS['baseline_climate'] = 'CERA+ERA5L'
+        tasks.process_climate_data(gdir)
+        f_ref = gdir.get_filepath('climate_historical')
+        with xr.open_dataset(f_ref) as his:
+            # Let's do some basic checks
+            ci = gdir.get_climate_info()
+            assert ci['baseline_climate_source'] == 'CERA+ERA5L'
+            assert ci['baseline_hydro_yr_0'] == 1902
+            assert ci['baseline_hydro_yr_1'] == 2018
+
+        cfg.PARAMS['baseline_climate'] = 'CERA|ERA5'
+        tasks.process_climate_data(gdir)
+        f_ref = gdir.get_filepath('climate_historical')
+        with xr.open_dataset(f_ref) as his:
+            # Let's do some basic checks
+            ci = gdir.get_climate_info()
+            assert ci['baseline_climate_source'] == 'CERA|ERA5'
+            assert ci['baseline_hydro_yr_0'] == 1902
+            assert ci['baseline_hydro_yr_1'] == 2010
 
 
 class Test_climate_datasets:

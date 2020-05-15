@@ -120,7 +120,7 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     # set temporal subset for the ts data (hydro years)
     # the reference time is given by precip, which is shorter
-    sm = cfg.PARAMS['hydro_month_nh']
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
     y0 = yrs[0] if y0 is None else y0

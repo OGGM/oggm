@@ -167,21 +167,39 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     baseline = cfg.PARAMS['baseline_climate']
     if baseline == 'CRU':
         from oggm.shop.cru import process_cru_data
-        return process_cru_data(gdir, output_filesuffix=output_filesuffix,
-                                y0=y0, y1=y1, **kwargs)
+        process_cru_data(gdir, output_filesuffix=output_filesuffix,
+                         y0=y0, y1=y1, **kwargs)
     elif baseline == 'HISTALP':
         from oggm.shop.histalp import process_histalp_data
-        return process_histalp_data(gdir, output_filesuffix=output_filesuffix,
-                                    y0=y0, y1=y1, **kwargs)
+        process_histalp_data(gdir, output_filesuffix=output_filesuffix,
+                             y0=y0, y1=y1, **kwargs)
     elif baseline in ['ERA5', 'ERA5L', 'CERA']:
         from oggm.shop.ecmwf import process_ecmwf_data
-        return process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
-                                  dataset=baseline, y0=y0, y1=y1,
-                                  **kwargs)
+        process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
+                           dataset=baseline, y0=y0, y1=y1, **kwargs)
+    elif '+' in baseline:
+        # This bit below assumes ECMWF only datasets, but it should be
+        # quite easy to extend for HISTALP+ERA5L for example
+        from oggm.shop.ecmwf import process_ecmwf_data
+        his, ref = baseline.split('+')
+        process_ecmwf_data(gdir, output_filesuffix=his, dataset=his,
+                           y0=y0, y1=y1, **kwargs)
+        process_ecmwf_data(gdir, output_filesuffix=ref, dataset=ref,
+                           y0=y0, y1=y1, **kwargs)
+        historical_delta_method(gdir, ref_filesuffix=ref, hist_filesuffix=his)
+    elif '|' in baseline:
+        from oggm.shop.ecmwf import process_ecmwf_data
+        his, ref = baseline.split('|')
+        process_ecmwf_data(gdir, output_filesuffix=his, dataset=his,
+                           y0=y0, y1=y1, **kwargs)
+        process_ecmwf_data(gdir, output_filesuffix=ref, dataset=ref,
+                           y0=y0, y1=y1, **kwargs)
+        historical_delta_method(gdir, ref_filesuffix=ref, hist_filesuffix=his,
+                                replace_with_ref_data=False)
     elif baseline == 'CUSTOM':
-        return process_custom_climate_data(gdir, y0=y0, y1=y1,
-                                           output_filesuffix=output_filesuffix,
-                                           **kwargs)
+        process_custom_climate_data(gdir, y0=y0, y1=y1,
+                                    output_filesuffix=output_filesuffix,
+                                    **kwargs)
     else:
         raise ValueError("cfg.['baseline_climate'] not understood")
 
@@ -250,7 +268,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         if replace_with_ref_data:
             source = ds.attrs.get('climate_source') + '+' + source
         else:
-            source = ds.attrs.get('climate_source') + '_basedon_' + source
+            source = ds.attrs.get('climate_source') + '|' + source
 
     # Common time period
     cmn_time = (ref_temp + hist_temp)['time']

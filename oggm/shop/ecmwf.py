@@ -122,9 +122,9 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     lon = gdir.cenlon + 180
     lat = gdir.cenlat
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
-        assert ds.longitude.min() > 0
+        assert ds.longitude.min() >= 0
         # set temporal subset for the ts data (hydro years)
-        sm = cfg.PARAMS['hydro_month_nh']
+        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
         em = sm - 1 if (sm > 1) else 12
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
@@ -139,7 +139,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ref_lon = float(ds['longitude'])
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
-        assert ds.longitude.min() > 0
+        assert ds.longitude.min() >= 0
         ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                '{}-{:02d}-01'.format(y1, em)))
         if dataset == 'CERA':
@@ -147,7 +147,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
         prcp = ds['tp'].data * 1000 * 24
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
-        assert ds.longitude.min() > 0
+        assert ds.longitude.min() >= 0
         ds = ds.isel(time=0)
         ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
         hgt = ds['z'].data / cfg.G

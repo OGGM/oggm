@@ -1382,7 +1382,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
             break
         else:
             alt_range_th += 20
-            log.info('Set altitude threshold to {}'.format(alt_range_th))
+            log.debug('Set altitude threshold to {}'.format(alt_range_th))
         if alt_range_th > 2000:
             raise GeometryError('Problem by altitude filter.')
 
