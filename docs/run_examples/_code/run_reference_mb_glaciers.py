@@ -9,7 +9,7 @@ import pandas as pd
 # Locals
 import oggm
 from oggm import cfg, utils, tasks
-from oggm.workflow import execute_entity_task
+from oggm.workflow import execute_entity_task, init_glacier_directories
 from oggm.core.massbalance import (ConstantMassBalance, PastMassBalance,
                                    MultipleFlowlineMassBalance)
 
@@ -20,8 +20,8 @@ log = logging.getLogger(__name__)
 # RGI Version
 rgi_version = '62'
 
-# CRU or HISTALP?
-baseline = 'CRU'
+# CRU, HISTALP, ERA5, ERA5L, CERA, CERA+ERA5, CERA+ERA5L?
+baseline = 'CERA+ERA5L'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
@@ -48,6 +48,10 @@ cfg.PARAMS['continue_on_error'] = False
 # No need for a big map here
 cfg.PARAMS['border'] = 10
 
+# Currently verifying ECMWF data is a pain - we need to change that
+cfg.PARAMS['dl_verify'] = False
+
+# Here we will need data-specific params
 if baseline == 'HISTALP':
     # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
@@ -85,7 +89,7 @@ log.info('For RGIV{} and {} we have {} reference glaciers.'.format(rgi_version,
                                                                    baseline,
                                                                    len(gdirs)))
 rgidf = pd.Series(data=[g.rgi_id for g in gdirs])
-rgidf.to_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'))
+rgidf.to_csv(os.path.join(WORKING_DIR, 'mb_ref_glaciers.csv'), header=False)
 
 # Prepro tasks
 task_list = [
@@ -106,7 +110,7 @@ execute_entity_task(tasks.local_t_star, gdirs)
 execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 # We store the associated params
-mb_calib = gdirs[0].read_json('climate_info')['mb_calib_params']
+mb_calib = gdirs[0].get_climate_info()['mb_calib_params']
 with open(os.path.join(WORKING_DIR, 'mb_calib_params.json'), 'w') as fp:
     json.dump(mb_calib, fp)
 
@@ -129,7 +133,7 @@ for gd in gdirs:
     refmb = gd.get_ref_mb_data().copy()
     refmb['OGGM'] = mb_mod.get_specific_mb(year=refmb.index)
     np.testing.assert_allclose(refmb.OGGM.mean(), refmb.ANNUAL_BALANCE.mean(),
-                               atol=10)  # atol for numerical errors
+                               atol=15)  # atol for numerical errors
 
 # Log
 log.info('Calibration is done!')

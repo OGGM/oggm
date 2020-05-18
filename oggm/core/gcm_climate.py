@@ -13,15 +13,16 @@ import xarray as xr
 from oggm import cfg
 from oggm import utils
 from oggm import entity_task
+from oggm.exceptions import InvalidParamsError
 
 # Module logger
 log = logging.getLogger(__name__)
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
-                     time_unit=None, calendar=None):
+                     time_unit=None, calendar=None, source=''):
     """ Applies the anomaly method to GCM climate data
 
     This function can be applied to any GCM data, if it is provided in a
@@ -62,6 +63,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         For example: 'days since 0850-01-01 00:00:00'
     calendar : str
         If you use an exotic calendar (e.g. 'noleap')
+    source : str
+        For metadata: the source of the climate data
     """
 
     # Standard sanity checks
@@ -95,7 +98,11 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
         std_fac = std_fac.roll(month=13-sm, roll_coords=True)
         std_fac = np.tile(std_fac.data, len(temp) // 12)
-        win_size = 12 * (int(year_range[1]) - int(year_range[0]) + 1) + 1
+        # We need an even number of years for this to work
+        if ((len(ts_tmp_sel) // 12) % 2) == 1:
+            raise InvalidParamsError('We need an even number of years '
+                                     'for this to work')
+        win_size = len(ts_tmp_sel) + 1
 
         def roll_func(x, axis=None):
             assert axis == 1
@@ -145,12 +152,13 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                     time_unit=time_unit,
                                     calendar=calendar,
                                     file_name='gcm_data',
+                                    source=source,
                                     filesuffix=filesuffix)
 
     ds_cru.close()
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                       fpath_precl=None, **kwargs):
     """Processes and writes CESM climate data for this glacier.
@@ -249,7 +257,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                      time_unit=time_unit, calendar=calendar, **kwargs)
 
 
-@entity_task(log, writes=['gcm_data', 'climate_info'])
+@entity_task(log, writes=['gcm_data'])
 def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
                        fpath_precip=None, **kwargs):
     """Read, process and store the CMIP5 climate data data for this glacier.
@@ -326,4 +334,5 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
     # - time_unit='days since 1870-01-15 12:00:00'
     # - calendar='standard'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
-                     time_unit=time_units, calendar=calendar, **kwargs)
+                     time_unit=time_units, calendar=calendar, source='CESM',
+                     **kwargs)

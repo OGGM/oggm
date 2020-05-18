@@ -333,7 +333,7 @@ class PastMassBalance(MassBalanceModel):
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
-            mb_calib = gdir.read_json('climate_info')['mb_calib_params']
+            mb_calib = gdir.get_climate_info()['mb_calib_params']
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
                     msg = ('You seem to use different mass-balance parameters '

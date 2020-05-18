@@ -21,9 +21,11 @@ from oggm.core.centerlines import terminus_width_correction
 from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
+from oggm.core.climate import historical_delta_method
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
 from oggm.shop.histalp import process_histalp_data
+from oggm.shop.ecmwf import process_ecmwf_data
 from oggm.core.gcm_climate import process_gcm_data
 from oggm.core.gcm_climate import process_cesm_data
 from oggm.core.gcm_climate import process_cmip5_data
