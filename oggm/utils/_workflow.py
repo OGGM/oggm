@@ -296,6 +296,7 @@ def mkdir(path, reset=False):
 
     if reset and os.path.exists(path):
         shutil.rmtree(path)
+        time.sleep(0.01)  # deleting stuff takes time
     try:
         os.makedirs(path)
     except FileExistsError:

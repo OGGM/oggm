@@ -28,9 +28,10 @@ BASENAMES = {
         'tmp': 'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'
     },
     'ERA5L': {
-        'inv': 'era5-land/monthly/v1.0/era5_land_invariant.nc',
-        'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018.nc',
-        'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018.nc'
+        'inv': 'era5-land/monthly/v1.0/era5_land_invariant_flat.nc',
+        'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018_flat'
+               '.nc',
+        'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018_flat.nc'
     },
     'CERA': {
         'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
@@ -119,7 +120,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
                                  "set to 'ERA5', 'ERA5L' or 'CERA'.")
 
     # Use xarray to read the data
-    lon = gdir.cenlon + 180
+    lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
     lat = gdir.cenlat
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
         assert ds.longitude.min() >= 0
@@ -133,10 +134,16 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
                                '{}-{:02d}-01'.format(y1, em)))
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
-        ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        try:
+            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        except ValueError:
+            # Flattened ERA5
+            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            ds = ds.isel(points=c.argmin())
         temp = ds['t2m'].data - 273.15
         time = ds.time.data
         ref_lon = float(ds['longitude'])
+        ref_lon = ref_lon - 360 if ref_lon > 180 else ref_lon
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
         assert ds.longitude.min() >= 0
@@ -144,12 +151,22 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
                                '{}-{:02d}-01'.format(y1, em)))
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
-        ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        try:
+            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        except ValueError:
+            # Flattened ERA5
+            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            ds = ds.isel(points=c.argmin())
         prcp = ds['tp'].data * 1000 * 24
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         assert ds.longitude.min() >= 0
         ds = ds.isel(time=0)
-        ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        try:
+            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+        except ValueError:
+            # Flattened ERA5
+            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            ds = ds.isel(points=c.argmin())
         hgt = ds['z'].data / cfg.G
 
     # Should we compute the gradient?

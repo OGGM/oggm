@@ -206,7 +206,7 @@ class Test_ecmwf:
             # And its std dev - but less strict
             srefm = sref.groupby('time.month').std(dim='time')
             shism = shis.groupby('time.month').std(dim='time')
-            np.testing.assert_allclose(srefm.temp, shism.temp, rtol=2e-2)
+            np.testing.assert_allclose(srefm.temp, shism.temp, rtol=5e-2)
             with pytest.raises(AssertionError):
                 # This clearly is not scaled
                 np.testing.assert_allclose(srefm.prcp, shism.prcp, rtol=0.5)
@@ -325,7 +325,7 @@ class Test_climate_datasets:
                                            filesuffix=base))
             with xr.open_dataset(files[-1]) as ds:
                 ref_hgts.append(ds.ref_hgt)
-
+                assert ds.ref_pix_dis < 30000
         # TEMP
         with xr.open_mfdataset(files, concat_dim=exps) as ds:
             dft = ds.temp.to_dataframe().unstack().T
@@ -334,7 +334,7 @@ class Test_climate_datasets:
         # Common period
         dfy = dft.resample('AS').mean().dropna().iloc[1:]
         dfm = dft.groupby(dft.index.month).mean()
-        assert dfy.corr().min().min() > 0.6
+        assert dfy.corr().min().min() > 0.44  # ERA5L and CERA do no correlate
         assert dfm.corr().min().min() > 0.97
         dfavg = dfy.describe()
 
@@ -346,8 +346,8 @@ class Test_climate_datasets:
         dfavg_cor = dfy.describe()
 
         # After correction less spread
-        assert dfavg_cor.loc['mean'].std() < 0.6 * dfavg.loc['mean'].std()
-        assert dfavg_cor.loc['mean'].std() < 2
+        assert dfavg_cor.loc['mean'].std() < 0.8 * dfavg.loc['mean'].std()
+        assert dfavg_cor.loc['mean'].std() < 2.1
 
         # PRECIP
         with xr.open_mfdataset(files, concat_dim=exps) as ds:
@@ -358,6 +358,6 @@ class Test_climate_datasets:
         dfy = dft.resample('AS').mean().dropna().iloc[1:] * 12
         dfm = dft.groupby(dft.index.month).mean()
         assert dfy.corr().min().min() > 0.5
-        assert dfm.corr().min().min() > 0.85
+        assert dfm.corr().min().min() > 0.8
         dfavg = dfy.describe()
-        assert dfavg.loc['mean'].std() / dfavg.loc['mean'].mean() < 0.15  # %
+        assert dfavg.loc['mean'].std() / dfavg.loc['mean'].mean() < 0.25  # %

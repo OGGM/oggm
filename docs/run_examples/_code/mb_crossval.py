@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # RGI Version
 rgi_version = '62'
 
-# CRU or HISTALP?
+# CRU, HISTALP, ERA5, ERA5L, CERA, CERA+ERA5, CERA+ERA5L?
 baseline = 'CERA+ERA5L'
 
 # Initialize OGGM and set up the run parameters
