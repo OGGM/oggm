@@ -981,7 +981,7 @@ def _download_dem3_viewpano_unlocked(zone):
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in DEM3REG.keys():
         # We prepared these files as tif already
-        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                  'DEM3_MERGED/{}.tif'.format(zone))
         return file_downloader(ifile)
     else:

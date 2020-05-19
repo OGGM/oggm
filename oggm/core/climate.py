@@ -134,6 +134,7 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
                                     source=fpath)
 
 
+@entity_task(log)
 def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                          **kwargs):
     """Adds the selected climate data to this glacier directory.
@@ -201,7 +202,7 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                     output_filesuffix=output_filesuffix,
                                     **kwargs)
     else:
-        raise ValueError("cfg.['baseline_climate'] not understood")
+        raise ValueError("cfg.PARAMS['baseline_climate'] not understood")
 
 
 @entity_task(log, writes=['climate_historical'])
