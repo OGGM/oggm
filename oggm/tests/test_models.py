@@ -2622,7 +2622,7 @@ class TestHEF:
         assert hef_gdir.rgi_date == 2003
 
         # Make a dummy run for 0 years
-        run_from_climate_data(hef_gdir, ye=2003, output_filesuffix='_1')
+        run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
         with FileModel(fp) as fmod:
@@ -2631,7 +2631,7 @@ class TestHEF:
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
-        run_from_climate_data(hef_gdir, ye=2003, init_model_filesuffix='_1',
+        run_from_climate_data(hef_gdir, ye=2004, init_model_filesuffix='_1',
                               output_filesuffix='_2')
         fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
         with FileModel(fp) as fmod:
