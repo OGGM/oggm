@@ -28,9 +28,10 @@ BASENAMES = {
         'tmp': 'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'
     },
     'ERA5L': {
-        'inv': 'era5-land/monthly/v1.0/era5_land_invariant.nc',
-        'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018.nc',
-        'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018.nc'
+        'inv': 'era5-land/monthly/v1.0/era5_land_invariant_flat.nc',
+        'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018_flat'
+               '.nc',
+        'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018_flat.nc'
     },
     'CERA': {
         'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
