@@ -1869,7 +1869,7 @@ class TestIdealisedInversion():
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v, _ = inversion.mass_conservation_inversion(inversion_gdir)
-        assert_allclose(v, model.volume_m3, rtol=0.01)
+        assert_allclose(v, model.volume_m3, rtol=0.03)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / \
