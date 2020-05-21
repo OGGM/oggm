@@ -507,7 +507,7 @@ class GriddedNcdfFile(object):
 
         nc.author = 'OGGM'
         nc.author_info = 'Open Global Glacier Model'
-        nc.proj_srs = self.grid.proj.srs
+        nc.pyproj_srs = self.grid.proj.srs
 
         x = self.grid.x0 + np.arange(self.grid.nx) * self.grid.dx
         y = self.grid.y0 + np.arange(self.grid.ny) * self.grid.dy
