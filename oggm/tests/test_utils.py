@@ -6,6 +6,7 @@ import os
 import shutil
 import time
 import hashlib
+import tarfile
 import pytest
 import itertools
 from unittest import mock
@@ -672,7 +673,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         with open(cfile, 'w') as f:
             f.write('ups')
 
+        # Since we already verified this will error
+        with pytest.raises(tarfile.ReadError):
+            gdirs = workflow.init_glacier_directories(['hef'],
+                                                      from_prepro_level=4,
+                                                      prepro_rgi_version='61',
+                                                      prepro_border=10)
+
         # This should retrigger a download and just work
+        cfg.DL_VERIFIED.clear()
         gdirs = workflow.init_glacier_directories(['hef'],
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
