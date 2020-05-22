@@ -40,12 +40,14 @@ Unfortunately, this does not mean that this calibrated
 At the global scale, a value in the range of [1.1-1.5] times the default value
 gives volume estimates close to [Farinotti_etal_2019]_. At regional scale, these
 values can differ, with a value closer to a factor 3 e.g. for the Alps. Note
-that this depends on other variables as well, such as solid precipitation amounts
-(i.e: mass turnover).
+that this depends on other variables as well, such as our estimates of 
+solid precipitation amounts (i.e: mass turnover). This makes things 
+complicated, as regions with overestimated solid precipitation can 
+be compensated by a higher :math:`A`, and the other way around.
 
 Finally, note that a change in :math:`A` has a very strong influence
 for values close to the default value, but this influences reduces to the
-power of 1/5 for large values of A (in other worlds, there is a big
+power of 1/5 for large values of A (in other words, there is a big
 difference between values of 1 to 1.3 times the default :math:`A`, but a
 comparatively small difference for values between 3 to 5 times the
 default :math:`A`). This is best shown by this figure from
@@ -64,8 +66,14 @@ default :math:`A`). This is best shown by this figure from
     The latter two estimates are provided for indication only as they
     are based on a different glacier inventory
 
-**How to choose the "best A" for my application?**
-Sorry, but we don't know yet. We are working on it though!
+Now, what you are probably asking yourself: **how to choose the "best A" for my application?**
+
+Sorry, but we don't know yet. We are working on it though! At the moment,
+what we recommend to do is to calibrate :math:`A` do that the regional 
+(or even local) estimates match the volume consensus of 
+`Farinotti et al. (2019) <https://www.nature.com/articles/s41561-019-0300-3>`_.
+We will offer tools to help you do that in the near future.
+
 
 .. _pitfalls.numerics:
 
