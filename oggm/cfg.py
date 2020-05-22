@@ -40,7 +40,7 @@ CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 # config was changed, indicates that multiprocessing needs a reset
 CONFIG_MODIFIED = False
 
-# Share state accross process
+# Share state accross processes
 DL_VERIFIED = Manager().dict()
 
 
