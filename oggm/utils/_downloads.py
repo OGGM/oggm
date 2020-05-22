@@ -332,11 +332,12 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     except KeyError:
         dl_verify = True
 
-    if dl_verify and path is not None:
+    if dl_verify and path and cache_obj_name not in cfg.DL_VERIFIED:
         cache_section, cache_path = cache_obj_name.split('/', 1)
         data = get_dl_verify_data(cache_section)
         if cache_path not in data.index:
             logger.info('No known hash for %s' % cache_obj_name)
+            cfg.DL_VERIFIED[cache_obj_name] = True
         else:
             # compute the hash
             sha256 = hashlib.sha256()
@@ -353,6 +354,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
                     path, size, sha256.hex(), data[0], data[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
+            cfg.DL_VERIFIED[cache_obj_name] = True
 
     return path
 
