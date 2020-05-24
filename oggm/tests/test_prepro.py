@@ -1990,7 +1990,7 @@ class TestInversion(unittest.TestCase):
                 maxs = _max
             v += np.nansum(cl['volume'])
         np.testing.assert_allclose(242, maxs, atol=10)
-        np.testing.assert_allclose(ref_v, v)
+        np.testing.assert_allclose(ref_v, v, rtol=0.01)
 
         # Sanity check - velocities
         inv = gdir.read_pickle('inversion_output')[-1]

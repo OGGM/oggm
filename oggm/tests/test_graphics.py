@@ -188,7 +188,7 @@ def test_modelsection():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_modelsection_withtrib():
+def test_modelsection_withtrib(test_multiple_models):
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)

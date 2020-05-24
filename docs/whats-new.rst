@@ -32,6 +32,11 @@ Breaking changes
   task, we prefer to deprecate it in a slow cycle: first, change the
   documentation, deprecate later.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The `filter_inversion_output` task does not redistribute the filtered
+  volume any more. This should have only a minimal effect on the output
+  (:pull:`1029`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Enhancements
 ~~~~~~~~~~~~

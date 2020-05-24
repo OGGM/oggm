@@ -455,7 +455,7 @@ def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
 
 
 @entity_task(log, writes=['inversion_output'])
-def filter_inversion_output(gdir):
+def filter_inversion_output(gdir, preserve_volume=False):
     """Smooths the last few grid points
 
     The last few grid points sometimes are noisy or can have a negative slope:
@@ -467,6 +467,9 @@ def filter_inversion_output(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    preserve_volume : bool
+        if you want to preserve the volume any way, we can dispatch the lost
+        volume over the entire glacier
     """
 
     if gdir.is_tidewater:
@@ -491,6 +494,18 @@ def filter_inversion_output(gdir):
 
         # final volume
         volume = fac * out_thick * w * cl['dx']
+
+        if preserve_volume:
+            # Redistribute lost volume everywhere
+            new_vol = np.nansum(volume)
+            if new_vol == 0:
+                # Very small glaciers
+                return
+            volume = init_vol / new_vol * volume
+            np.testing.assert_allclose(np.nansum(volume), init_vol)
+
+            # recompute thickness on that base
+            out_thick = volume / (fac * w * cl['dx'])
 
         # output
         cl['thick'] = out_thick

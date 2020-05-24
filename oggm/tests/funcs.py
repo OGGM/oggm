@@ -346,8 +346,8 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     d['factor_fs'] = out[1]
     gdir.write_pickle(d, 'inversion_params')
 
-    # filter
-    inversion.filter_inversion_output(gdir)
+    # filter - preserve_volume=True for backwards compat of graphics tests
+    inversion.filter_inversion_output(gdir, preserve_volume=True)
 
     inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
