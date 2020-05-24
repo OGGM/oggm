@@ -456,10 +456,12 @@ def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
 
 @entity_task(log, writes=['inversion_output'])
 def filter_inversion_output(gdir):
-    """Filters the last few grid point whilst conserving total volume.
+    """Smooths the last few grid points
 
-    The last few grid points sometimes are noisy or can have a negative slope.
-    This function filters them while conserving the total volume.
+    The last few grid points sometimes are noisy or can have a negative slope:
+    we interpolate to zero thickness.
+
+    This does not preserve the total volume.
 
     Parameters
     ----------
@@ -489,17 +491,6 @@ def filter_inversion_output(gdir):
 
         # final volume
         volume = fac * out_thick * w * cl['dx']
-
-        # conserve it
-        new_vol = np.nansum(volume)
-        if new_vol == 0:
-            # Very small glaciers
-            return
-        volume = init_vol / new_vol * volume
-        np.testing.assert_allclose(np.nansum(volume), init_vol)
-
-        # recompute thickness on that base
-        out_thick = volume / (fac * w * cl['dx'])
 
         # output
         cl['thick'] = out_thick

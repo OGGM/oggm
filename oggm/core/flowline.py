@@ -1900,7 +1900,7 @@ def init_present_time_glacier(gdir):
 
         # For the very last pixs of a glacier, the section might be zero after
         # the inversion, and the bedshapes are chaotic. We interpolate from
-        # the downstream. This is not volume conservative
+        # the downstream. This is not volume or area conservative
         if not gdir.is_tidewater and inv['is_last']:
             dic_ds = gdir.read_pickle('downstream_line')
             bed_shape[-5:] = np.nan
