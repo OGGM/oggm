@@ -84,7 +84,9 @@ def velocity_to_gdir(gdir):
     Reprojecting velocities from one map proj to another is done
     reprojecting the vector distances. In this process, absolute velocities
     might change as well because map projections do not always preserve
-    distances.
+    distances -> we scale them back to the original velocities as per the
+    ITS_LIVE documentation that states that velocities are given in
+    ground units, i.e. absolute velocities.
 
     We use bilinear interpolation to reproject the velocities to the local
     glacier map.
@@ -132,8 +134,10 @@ def velocity_to_gdir(gdir):
     # Compute coords at t1
     xx1 = dsx.get_vardata()
     yy1 = dsy.get_vardata()
-    xx1[xx1 == nodata] = np.NaN
-    yy1[yy1 == nodata] = np.NaN
+    non_valid = (xx1 == nodata) | (yy1 == nodata)
+    xx1[non_valid] = np.NaN
+    yy1[non_valid] = np.NaN
+    orig_vel = np.sqrt(xx1**2 + yy1**2)
     xx1 += xx0
     yy1 += yy0
 
@@ -141,12 +145,19 @@ def velocity_to_gdir(gdir):
     xx0, yy0 = salem.transform_proj(proj_vel, grid_gla.proj, xx0, yy0)
     xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
 
+    # Correct no data after proj as well (inf)
+    xx1[non_valid] = np.NaN
+    yy1[non_valid] = np.NaN
+
     # Compute velocities from there
     vx = xx1 - xx0
     vy = yy1 - yy0
-    # Correct no data after proj as well (inf)
-    vx[~ np.isfinite(vx)] = np.NaN
-    vy[~ np.isfinite(vy)] = np.NaN
+
+    # Scale back velocities - https://github.com/OGGM/oggm/issues/1014
+    new_vel = np.sqrt(vx**2 + vy**2)
+    p_ok = new_vel > 0.1  # avoid div by zero
+    vx[p_ok] = vx[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
+    vy[p_ok] = vy[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
 
     # And transform to local map
     vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
