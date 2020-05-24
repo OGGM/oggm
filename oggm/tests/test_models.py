@@ -220,7 +220,7 @@ class TestInitFlowlineOtherGlacier:
             vol += fl.volume_km3
             area += fl.area_km2
 
-        rtol = 0.08
+        rtol = 0.15
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
         np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
 

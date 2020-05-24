@@ -352,7 +352,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
 
-    flowline.init_present_time_glacier(gdir)
+    flowline.init_present_time_glacier(gdir, keep_filtered_surface_h=True)
 
     return gdir
 

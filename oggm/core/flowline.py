@@ -1846,7 +1846,7 @@ def calving_glacier_downstream_line(line, n_points):
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir):
+def init_present_time_glacier(gdir, keep_filtered_surface_h=False):
     """Merges data from preprocessing tasks. First task after inversion!
 
     This updates the `mode_flowlines` file and creates a stand-alone numerical
@@ -1910,9 +1910,17 @@ def init_present_time_glacier(gdir):
                                                     dic_ds['bedshapes'][0]))
             bed_shape = utils.clip_min(bed_shape[:-1], min_shape)
 
+            if keep_filtered_surface_h:
+                new_h = inv['thick'][-5:]
+            else:
+                # Correct the section volume while preserving widths - this
+                # implies correcting the surface_h! Maybe I'll regret this,
+                # but let's give it a try
+                new_h = bed_shape[-5:] * widths_m[-5:]**2 / 4
+                surface_h[-5:] = bed_h[-5:] + new_h
+
             # Correct the section volume
-            h = inv['thick']
-            section[-5:] = (2 / 3 * h * np.sqrt(4 * h / bed_shape))[-5:]
+            section[-5:] = 2 / 3 * new_h * np.sqrt(4 * new_h / bed_shape[-5:])
 
             # Add the downstream
             bed_shape = np.append(bed_shape, dic_ds['bedshapes'])

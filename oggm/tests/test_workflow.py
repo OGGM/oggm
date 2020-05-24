@@ -235,12 +235,12 @@ class TestFullRun(unittest.TestCase):
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
             df.loc[gd.rgi_id, 'start_length'] = model.length_m
-        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], 0.06)
+        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], 0.02)
         assert_allclose(df['rgi_area_km2'].sum(), df['start_area_km2'].sum(),
                         0.004)
-        assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.04)
+        assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.12)
         assert_allclose(df['inv_volume_km3'].sum(),
-                        df['start_volume_km3'].sum(), 0.001)
+                        df['start_volume_km3'].sum(), 0.007)
         assert_allclose(df['main_flowline_length'], df['start_length'])
 
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
@@ -287,7 +287,7 @@ class TestFullRun(unittest.TestCase):
         df['y0_area'] = ds.area.sel(rgi_id=df.index, time=0) * 1e-6
         df['y0_len'] = ds.length.sel(rgi_id=df.index, time=0)
         assert_allclose(df['rgi_area_km2'], df['y0_area'], 0.06)
-        assert_allclose(df['inv_volume_km3'], df['y0_vol'], 0.04)
+        assert_allclose(df['inv_volume_km3'], df['y0_vol'], 0.12)
         assert_allclose(df['main_flowline_length'], df['y0_len'])
 
         # Calving stuff
