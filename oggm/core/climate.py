@@ -853,7 +853,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
             tstar = amin.tstar.iloc[0]
             bias = amin.bias.iloc[0]
         else:
-            tstar = int(np.average(amin.tstar, weights=1./distances))
+            tstar = int(np.average(amin.tstar, weights=1./distances).round())
             bias = np.average(amin.bias, weights=1./distances)
 
     # Add the climate related params to the GlacierDir to make sure
