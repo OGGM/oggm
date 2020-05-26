@@ -78,7 +78,12 @@ progress.
 I have a question about OGGM, can we talk about it per email/phone?
 -------------------------------------------------------------------
 
-Thanks for your interest in OGGM!
+Thanks for your interest in OGGM! Usually, we prefer to keep 
+usage questions on `github issues <https://github.com/OGGM/oggm/issues>`_
+so that everybody can learn from all questions and their answers.
+You can also join our Slack discussion channel if you want a 
+more interactive forum. Keep in touch with us per email if you'd 
+like to join!
 
 
 Usage
