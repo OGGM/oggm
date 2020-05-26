@@ -637,7 +637,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
 
     Returns
     -------
-    A dict: {t_star:[], bias:[]}
+    A dict: {t_star:[], bias:[], 'avg_mb_per_mu': [], 'avg_ref_mb': []}
     """
 
     from oggm.core.massbalance import MultipleFlowlineMassBalance
@@ -1276,6 +1276,15 @@ def compute_ref_t_stars(gdirs):
     # Loop write
     df = pd.DataFrame()
     for gdir, res in zip(ref_gdirs, out):
+        if res is None:
+            # For certain parameters there is no valid mu candidate on certain
+            # glaciers. E.g. if temp is to low for melt. This will raise an
+            # error in t_star_from_refmb and should only get here if
+            # continue_on_error = True
+            # Do not add this glacier to the ref_tstar.csv
+            # Think of better solution later
+            continue
+
         # list of mus compatibles with refmb
         rid = gdir.rgi_id
         df.loc[rid, 'lon'] = gdir.cenlon
