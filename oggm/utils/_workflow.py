@@ -2205,6 +2205,7 @@ class GlacierDirectory(object):
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
                                    gradient=None,
+                                   temp_std=None,
                                    time_unit=None,
                                    calendar=None,
                                    source=None,
@@ -2230,6 +2231,8 @@ class GlacierDirectory(object):
             the location of the gridded data's grid point
         gradient : ndarray, optional
             whether to use a time varying gradient
+        temp_std : ndarray, optional
+            the daily standard deviation of temperature (useful for PyGEM)
         time_unit : str
             the reference time unit for your time array. This should be chosen
             depending on the length of your data. The default is to choose
@@ -2319,8 +2322,15 @@ class GlacierDirectory(object):
             if gradient is not None:
                 v = nc.createVariable('gradient', 'f4', ('time',), zlib=zlib)
                 v.units = 'degC m-1'
-                v.long_name = 'temperature gradient from local regression'
+                v.long_name = ('temperature gradient from local regression or'
+                               'lapserates')
                 v[:] = gradient
+
+            if temp_std is not None:
+                v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)
+                v.units = 'degC'
+                v.long_name = 'standard deviation of daily temperatures'
+                v[:] = temp_std
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
