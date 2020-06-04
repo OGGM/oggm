@@ -386,10 +386,9 @@ class Test_climate_datasets:
                 ref_hgts.append(ds.ref_hgt)
                 assert ds.ref_pix_dis < 10000
 
-        with xr.open_dataset(files[0]) as ds1, \
-            xr.open_dataset(files[1]) as ds2:
-            np.testing.assert_allclose(ds1.temp, ds2.temp)
-            np.testing.assert_allclose(ds1.prcp, ds2.prcp)
+        with xr.open_dataset(files[0]) as d1, xr.open_dataset(files[1]) as d2:
+            np.testing.assert_allclose(d1.temp, d2.temp)
+            np.testing.assert_allclose(d1.prcp, d2.prcp)
             # Fake tests, the plots look plausible
-            np.testing.assert_allclose(ds2.gradient.mean(), -0.0058, atol=.001)
-            np.testing.assert_allclose(ds2.temp_std.mean(), 3.35, atol=0.1)
+            np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
+            np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
