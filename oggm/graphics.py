@@ -578,40 +578,37 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     """
 
     gdir = gdirs[0]
-    if len(gdirs) > 1:
-        raise NotImplementedError('Cannot plot a list of gdirs (yet)')
 
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
-        mask = nc.variables['glacier_mask'][:]
-
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file) as nc:
-        import warnings
-        with warnings.catch_warnings():
-            # https://github.com/Unidata/netcdf4-python/issues/766
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            vn = 'distributed_thickness' + varname_suffix
-            thick = nc.variables[vn][:]
-
-    thick = np.where(mask, thick, np.NaN)
 
     smap.set_topography(topo)
 
-    crs = gdir.grid.center_grid
+    for gdir in gdirs:
+        grids_file = gdir.get_filepath('gridded_data')
+        with utils.ncDataset(grids_file) as nc:
+            import warnings
+            with warnings.catch_warnings():
+                # https://github.com/Unidata/netcdf4-python/issues/766
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                vn = 'distributed_thickness' + varname_suffix
+                thick = nc.variables[vn][:]
+                mask = nc.variables['glacier_mask'][:]
 
-    geom = gdir.read_pickle('geometries')
+        thick = np.where(mask, thick, np.NaN)
 
-    # Plot boundaries
-    poly_pix = geom['polygon_pix']
-    smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
-    for l in poly_pix.interiors:
-        smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        crs = gdir.grid.center_grid
+        geom = gdir.read_pickle('geometries')
+
+        # Plot boundaries
+        poly_pix = geom['polygon_pix']
+        smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
+        for l in poly_pix.interiors:
+            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        smap.set_data(thick, crs=crs, overplot=True)
 
     smap.set_cmap(OGGM_CMAPS['glacier_thickness'])
     smap.set_plot_params(nlevels=256)
-    smap.set_data(thick)
-
     smap.plot(ax)
 
     return dict(cbar_label='Glacier thickness [m]')

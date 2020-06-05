@@ -361,3 +361,34 @@ class Test_climate_datasets:
         assert dfm.corr().min().min() > 0.8
         dfavg = dfy.describe()
         assert dfavg.loc['mean'].std() / dfavg.loc['mean'].mean() < 0.25  # %
+
+    def test_vdr(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+
+        exps = ['ERA5', 'ERA5dr']
+        files = []
+        ref_hgts = []
+        for base in exps:
+            cfg.PARAMS['baseline_climate'] = base
+            tasks.process_climate_data(gdir, output_filesuffix=base)
+            files.append(gdir.get_filepath('climate_historical',
+                                           filesuffix=base))
+            with xr.open_dataset(files[-1]) as ds:
+                ref_hgts.append(ds.ref_hgt)
+                assert ds.ref_pix_dis < 10000
+
+        with xr.open_dataset(files[0]) as d1, xr.open_dataset(files[1]) as d2:
+            np.testing.assert_allclose(d1.temp, d2.temp)
+            np.testing.assert_allclose(d1.prcp, d2.prcp)
+            # Fake tests, the plots look plausible
+            np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
+            np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)

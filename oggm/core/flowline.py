@@ -2267,6 +2267,11 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
             ys = gdir.rgi_date.year
         except AttributeError:
             ys = gdir.rgi_date
+        # The RGI timestamp is in calendar date - we convert to hydro date,
+        # i.e. 2003 becomes 2004 (so that we don't count the MB year 2003
+        # in the simulation)
+        # See also: https://github.com/OGGM/oggm/issues/1020
+        ys += 1
     if ye is None:
         raise InvalidParamsError('Need to set the `ye` kwarg!')
     if min_ys is not None:

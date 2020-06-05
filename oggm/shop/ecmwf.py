@@ -37,6 +37,13 @@ BASENAMES = {
         'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
         'pre': 'cera-20c/monthly/v1.0/cera-20c_pcp_1901-2010.nc',
         'tmp': 'cera-20c/monthly/v1.0/cera-20c_t2m_1901-2010.nc'
+    },
+    'ERA5dr': {
+        'inv': 'era5/monthly/vdr/ERA5_geopotential_monthly.nc',
+        'lapserates': 'era5/monthly/vdr/ERA5_lapserates_monthly.nc',
+        'tmp': 'era5/monthly/vdr/ERA5_temp_monthly.nc',
+        'tempstd': 'era5/monthly/vdr/ERA5_tempstd_monthly.nc',
+        'pre': 'era5/monthly/vdr/ERA5_totalprecip_monthly.nc',
     }
 }
 
@@ -69,12 +76,13 @@ def get_ecmwf_file(dataset='ERA5', var=None):
     """
 
     # Be sure input makes sense
-    if dataset not in ['ERA5', 'ERA5L', 'CERA']:
-        raise InvalidParamsError('ECMWF dataset {} '
-                                 'does not exist!'.format(dataset))
-    if var not in ['inv', 'tmp', 'pre']:
-        raise InvalidParamsError('ECMWF variable {} '
-                                 'does not exist!'.format(var))
+    if dataset not in BASENAMES.keys():
+        raise InvalidParamsError('ECMWF dataset {} not '
+                                 'in {}'.format(dataset, BASENAMES.keys()))
+    if var not in BASENAMES[dataset].keys():
+        raise InvalidParamsError('ECMWF variable {} not '
+                                 'in {}'.format(var,
+                                                BASENAMES[dataset].keys()))
 
     # File to look for
     return utils.file_downloader(ECMWF_SERVER + BASENAMES[dataset][var])
@@ -115,10 +123,6 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     if dataset is None:
         dataset = cfg.PARAMS['baseline_climate']
 
-    if dataset not in ['ERA5', 'ERA5L', 'CERA']:
-        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
-                                 "set to 'ERA5', 'ERA5L' or 'CERA'.")
-
     # Use xarray to read the data
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
     lat = gdir.cenlat
@@ -130,6 +134,11 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
+        if dataset == 'ERA5dr':
+            # Last year incomplete
+            assert ds['time.month'][-1] == 5
+            if em > 5:
+                y1 -= 1
         ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                '{}-{:02d}-01'.format(y1, em)))
         if dataset == 'CERA':
@@ -157,7 +166,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
             ds = ds.isel(points=c.argmin())
-        prcp = ds['tp'].data * 1000 * 24
+        prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         assert ds.longitude.min() >= 0
         ds = ds.isel(time=0)
@@ -169,10 +178,31 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             ds = ds.isel(points=c.argmin())
         hgt = ds['z'].data / cfg.G
 
+    gradient = None
+    temp_std = None
+
     # Should we compute the gradient?
     if cfg.PARAMS['temp_use_local_gradient']:
-        raise NotImplementedError()
+        raise NotImplementedError('`temp_use_local_gradient` not '
+                                  'implemented yet')
+    if dataset == 'ERA5dr':
+        with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
+            assert ds.longitude.min() >= 0
+            ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
+                                   '{}-{:02d}-01'.format(y1, em)))
+            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+            gradient = ds['lapserate'].data
 
+        with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
+            assert ds.longitude.min() >= 0
+            ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
+                                   '{}-{:02d}-01'.format(y1, em)))
+            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+            temp_std = ds['t2m_std'].data
+
+    # OK, ready to write
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
                                     filesuffix=output_filesuffix,
+                                    gradient=gradient,
+                                    temp_std=temp_std,
                                     source=dataset)

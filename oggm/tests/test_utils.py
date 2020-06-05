@@ -6,6 +6,7 @@ import os
 import shutil
 import time
 import hashlib
+import tarfile
 import pytest
 import itertools
 from unittest import mock
@@ -672,7 +673,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         with open(cfile, 'w') as f:
             f.write('ups')
 
+        # Since we already verified this will error
+        with pytest.raises(tarfile.ReadError):
+            gdirs = workflow.init_glacier_directories(['hef'],
+                                                      from_prepro_level=4,
+                                                      prepro_rgi_version='61',
+                                                      prepro_border=10)
+
         # This should retrigger a download and just work
+        cfg.DL_VERIFIED.clear()
         gdirs = workflow.init_glacier_directories(['hef'],
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
@@ -1166,9 +1175,13 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
 
-    def prepare_verify_test(self, valid_size=True, valid_crc32=True):
+    def prepare_verify_test(self, valid_size=True, valid_crc32=True,
+                            reset_dl_dict=True):
         self.reset_dir()
         cfg.PARAMS['dl_verify'] = True
+
+        if reset_dl_dict:
+            cfg.DL_VERIFIED.clear()
 
         tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com',
                                 'test.txt')
@@ -1216,7 +1229,6 @@ class TestFakeDownloads(unittest.TestCase):
             url = self.prepare_verify_test(False, False)
             with self.assertRaises(DownloadVerificationFailedException):
                 utils.oggm_urlretrieve(url)
-
 
     def test_github_no_internet(self):
         self.reset_dir()

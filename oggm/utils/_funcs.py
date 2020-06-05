@@ -705,7 +705,10 @@ def shape_factor_huss(widths, heights, is_rectangular):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         shape_factors[~is_rect] = (widths / (2 * heights + widths))[~is_rect]
 
-    shape_factors[heights <= 0.] = 1.
+    # For very small thicknesses ignore
+    shape_factors[heights <= 1.] = 1.
+    # Security
+    shape_factors = clip_array(shape_factors, 0.2, 1.)
 
     return shape_factors
 
@@ -745,7 +748,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape_factors[~is_rectangular] = ADHIKARI_FACTORS_PARABOLIC(
         zetas[~is_rectangular])
 
-    np.clip(shape_factors, 0.2, 1., out=shape_factors)
+    shape_factors = clip_array(shape_factors, 0.2, 1.)
     # Set NaN values resulting from zero height to a shape factor of 1
     shape_factors[np.isnan(shape_factors)] = 1.
 
