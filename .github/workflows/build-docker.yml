@@ -2,7 +2,8 @@ on:
   push:
     branches:
       - master
-  repository_dispatch: []
+  repository_dispatch:
+    types: [build-docker-image]
 
 jobs:
   build-docker-image:
