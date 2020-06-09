@@ -335,13 +335,14 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                                                        version=rgi_version)
                 cfg.set_intersects_db(fp)
 
-            for entity in entities:
-                gdir = oggm.GlacierDirectory(entity, reset=reset,
-                                             from_tar=from_tar,
-                                             delete_tar=delete_tar)
+            gdirs = execute_entity_task(utils.GlacierDirectory, entities,
+                                        reset=reset,
+                                        from_tar=from_tar,
+                                        delete_tar=delete_tar)
+
+            for gdir in gdirs:
                 if not os.path.exists(gdir.get_filepath('dem')):
                     new_gdirs.append(gdir)
-                gdirs.append(gdir)
 
     if len(new_gdirs) > 0:
         # If not initialized, run the task in parallel
@@ -480,12 +481,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                     # List of str
                     pass
 
-            gdirs = []
-            for entity in entities:
-                gdir = oggm.GlacierDirectory(entity, reset=reset,
-                                             from_tar=from_tar,
-                                             delete_tar=delete_tar)
-                gdirs.append(gdir)
+            gdirs = execute_entity_task(utils.GlacierDirectory, entities,
+                                        reset=reset,
+                                        from_tar=from_tar,
+                                        delete_tar=delete_tar)
 
     return gdirs
 

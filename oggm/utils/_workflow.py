@@ -1770,9 +1770,9 @@ class GlacierDirectory(object):
         # Reproject
         proj_in = pyproj.Proj("epsg:4326", preserve_units=True)
         proj_out = pyproj.Proj(proj4_str, preserve_units=True)
-        project = partial(transform_proj, proj_in, proj_out)
 
         # transform geometry to map
+        project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
         geometry = multipolygon_to_polygon(geometry, gdir=self)
 
