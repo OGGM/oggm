@@ -134,6 +134,7 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
                                     source=fpath)
 
 
+@entity_task(log)
 def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                          **kwargs):
     """Adds the selected climate data to this glacier directory.
@@ -201,7 +202,7 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                     output_filesuffix=output_filesuffix,
                                     **kwargs)
     else:
-        raise ValueError("cfg.['baseline_climate'] not understood")
+        raise ValueError("cfg.PARAMS['baseline_climate'] not understood")
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -636,7 +637,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
 
     Returns
     -------
-    A dict: {t_star:[], bias:[]}
+    A dict: {t_star:[], bias:[], 'avg_mb_per_mu': [], 'avg_ref_mb': []}
     """
 
     from oggm.core.massbalance import MultipleFlowlineMassBalance
@@ -852,7 +853,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
             tstar = amin.tstar.iloc[0]
             bias = amin.bias.iloc[0]
         else:
-            tstar = int(np.average(amin.tstar, weights=1./distances))
+            tstar = int(np.average(amin.tstar, weights=1./distances).round())
             bias = np.average(amin.bias, weights=1./distances)
 
     # Add the climate related params to the GlacierDir to make sure
@@ -1275,6 +1276,15 @@ def compute_ref_t_stars(gdirs):
     # Loop write
     df = pd.DataFrame()
     for gdir, res in zip(ref_gdirs, out):
+        if res is None:
+            # For certain parameters there is no valid mu candidate on certain
+            # glaciers. E.g. if temp is to low for melt. This will raise an
+            # error in t_star_from_refmb and should only get here if
+            # continue_on_error = True
+            # Do not add this glacier to the ref_tstar.csv
+            # Think of better solution later
+            continue
+
         # list of mus compatibles with refmb
         rid = gdir.rgi_id
         df.loc[rid, 'lon'] = gdir.cenlon

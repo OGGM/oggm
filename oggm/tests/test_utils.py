@@ -1396,7 +1396,7 @@ class TestFakeDownloads(unittest.TestCase):
         assert source == 'DEM3'
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                         'DEM3_MERGED/ISL.tif')
             self.assertEqual(url, expected)
             return self.dem3_testfile
@@ -1500,7 +1500,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                         'REMA_100m_v1.1/'
                         '40_10_100m_v1.1/40_10_100m_v1.1_reg_dem.tif')
             self.assertEqual(expected, url)
@@ -1526,7 +1526,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                         'Alaska_albers_V3/008_004_Alaska_albers_V3/'
                         '008_004_Alaska_albers_V3.tif')
             self.assertEqual(expected, url)
@@ -1546,7 +1546,7 @@ class TestFakeDownloads(unittest.TestCase):
         tf = touch(os.path.join(self.dldir, 'file.tif'))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                         'ArcticDEM_100m_v3.0/'
                         '14_52_100m_v3.0/14_52_100m_v3.0_reg_dem.tif')
             self.assertEqual(expected, url)

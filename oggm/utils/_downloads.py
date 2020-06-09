@@ -983,7 +983,7 @@ def _download_dem3_viewpano_unlocked(zone):
         ifile = 'http://viewfinderpanoramas.org/dem3/' + zone + 'v2.zip'
     elif zone in DEM3REG.keys():
         # We prepared these files as tif already
-        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/DEM/'
+        ifile = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
                  'DEM3_MERGED/{}.tif'.format(zone))
         return file_downloader(ifile)
     else:
@@ -2219,7 +2219,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         for z in zones:
             with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
-                url += 'DEM/ArcticDEM_100m_v3.0/'
+                url += 'dem/ArcticDEM_100m_v3.0/'
                 url += '{}_100m_v3.0/{}_100m_v3.0_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
 
@@ -2232,7 +2232,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         for z in zones:
             with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
-                url += 'DEM/Alaska_albers_V3/'
+                url += 'dem/Alaska_albers_V3/'
                 url += '{}_Alaska_albers_V3/'.format(z)
                 url += '{}_Alaska_albers_V3.tif'.format(z)
                 files.append(file_downloader(url))
@@ -2242,7 +2242,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         for z in zones:
             with get_lock():
                 url = 'https://cluster.klima.uni-bremen.de/~oggm/'
-                url += 'DEM/REMA_100m_v1.1/'
+                url += 'dem/REMA_100m_v1.1/'
                 url += '{}_100m_v1.1/{}_100m_v1.1_reg_dem.tif'.format(z, z)
                 files.append(file_downloader(url))
 
