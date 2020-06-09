@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: ${{ matrix.test-env }} on ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        test-env:
+          - prepro
+          - numerics
+          - models
+          - benchmark
+          - utils
+          - vascaling
+          - workflow-single
+          - workflow-multi
+          - graphics-mpl
+        container:
+          - oggm/untested_base:20200323
+          - oggm/untested_base:py36
+        include:
+          - container: python:3.7-slim
+            test-env: minimal
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+    continue-on-error: ${{ contains(matrix.container, 'py3') }}
+    steps:
+      - name: Install tools
+        if: ${{ contains(matrix.container, 'slim') }}
+        run: apt-get -y update && apt-get -y install git curl
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test
+        run: ./ci/run_tests.sh ${{ matrix.test-env }}
+      - name: Upload Coverage
+        if: ${{ !contains(matrix.container, 'py3') }}
+        timeout-minutes: 5
+        run: |
+            while ! [ -f codecov.sh ]; do curl -o codecov.tmp -f https://codecov.io/bash && mv codecov.tmp codecov.sh || sleep 5; done
+            bash codecov.sh -n "${{ matrix.test-env }} on ${{ matrix.container }}"
