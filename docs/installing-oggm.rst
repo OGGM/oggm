@@ -284,7 +284,7 @@ might be necessary. Errors like ``segmentation fault`` or ``Proj Error``
 are frequent and point to errors in upstream packages, rarely in OGGM itself.
 
 If you are having troubles, installing the packages manually from a fresh
-environment might help. At the time of writing (21.02.2020), creating an
+environment might help. At the time of writing (13.06.2020), creating an
 environment from this environment.yml file used to work (see the
 `conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
 for more information about how to create an environment from a yml file)::
@@ -296,13 +296,13 @@ for more information about how to create an environment from a yml file)::
       - python=3.7
       - jupyter
       - jupyterlab
-      - numpy<1.17
-      - scipy
+      - numpy=1.16.5
+      - scipy=1.4.1
       - pandas
       - shapely
       - matplotlib
       - Pillow
-      - netcdf4
+      - netcdf4=1.5.3
       - scikit-image
       - scikit-learn
       - configobj
@@ -311,10 +311,10 @@ for more information about how to create an environment from a yml file)::
       - pytest
       - dask
       - bottleneck
-      - pyproj<2.3
-      - cartopy
-      - geopandas
-      - rasterio
+      - pyproj=2.2.2
+      - cartopy=0.17.0
+      - geopandas=0.7.0
+      - rasterio=1.1.2
       - descartes
       - seaborn
       - pip
@@ -454,6 +454,7 @@ Install a minimal OGGM environment
 If you plan to use only the numerical core of OGGM (that is, for idealized
 simulations or teaching), you can skip many dependencies and only
 install this shorter list:
+
 - numpy
 - scipy
 - pandas
