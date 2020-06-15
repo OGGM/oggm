@@ -9,7 +9,7 @@ import pandas as pd
 # Locals
 import oggm
 from oggm import cfg, utils, tasks
-from oggm.workflow import execute_entity_task, init_glacier_directories
+from oggm.workflow import execute_entity_task
 from oggm.core.massbalance import (ConstantMassBalance, PastMassBalance,
                                    MultipleFlowlineMassBalance)
 
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 # RGI Version
 rgi_version = '62'
 
-# CRU, HISTALP, ERA5, ERA5L, CERA, CERA+ERA5, CERA+ERA5L?
+# CRU, HISTALP, ERA5, ERA5L, CERA+ERA5, CERA+ERA5L?
 baseline = 'CERA+ERA5L'
 
 # Initialize OGGM and set up the run parameters
@@ -52,10 +52,29 @@ cfg.PARAMS['border'] = 10
 cfg.PARAMS['dl_verify'] = False
 
 # Here we will need data-specific params
-if baseline == 'HISTALP':
+if baseline == 'CRU':
+    # Default params
+    pass
+elif baseline == 'HISTALP':
     # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
+elif baseline == 'ERA5':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 2.0
+    cfg.PARAMS['temp_melt'] = -1.25
+elif baseline == 'ERA5L':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 2.0
+    cfg.PARAMS['temp_melt'] = -1.0
+elif baseline == 'CERA+ERA5':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -1.25
+elif baseline == 'CERA+ERA5L':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -0.75
 
 # Get the reference glacier ids (they are different for each RGI version)
 df, _ = utils.get_wgms_files()
