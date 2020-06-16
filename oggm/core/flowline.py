@@ -490,9 +490,10 @@ class FlowlineModel(object):
     """Interface to the actual model"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
-                 fs=None, inplace=False, is_tidewater=False,
-                 is_lake_terminating=False, mb_elev_feedback='annual',
-                 check_for_boundaries=None, water_level=None):
+                 fs=None, inplace=False, smooth_trib_influx=True,
+                 is_tidewater=False, is_lake_terminating=False,
+                 mb_elev_feedback='annual', check_for_boundaries=None,
+                 water_level=None):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -511,6 +512,10 @@ class FlowlineModel(object):
             whether or not to make a copy of the flowline objects for the run
             setting to True implies that your objects will be modified at run
             time by the model (can help to spare memory)
+        smooth_trib_influx : bool
+            whether to smooth the mass influx from the incoming tributary.
+            The fefault is to use a gaussian kernel on a 9 grid points
+            window.
         is_tidewater: bool, default: False
             is this a tidewater glacier?
         is_lake_terminating: bool, default: False
@@ -579,7 +584,8 @@ class FlowlineModel(object):
 
         self.fls = None
         self._tributary_indices = None
-        self.reset_flowlines(flowlines, inplace=inplace)
+        self.reset_flowlines(flowlines, inplace=inplace,
+                             smooth_trib_influx=smooth_trib_influx)
 
     @property
     def mb_model(self):
@@ -607,7 +613,8 @@ class FlowlineModel(object):
         self.y0 = y0
         self.t = 0
 
-    def reset_flowlines(self, flowlines, inplace=False):
+    def reset_flowlines(self, flowlines, inplace=False,
+                        smooth_trib_influx=True):
         """Reset the initial model flowlines"""
 
         if not inplace:
@@ -630,7 +637,11 @@ class FlowlineModel(object):
                 continue
             idl = self.fls.index(fl.flows_to)
             ide = fl.flows_to_indice
-            if fl.flows_to.nx >= 9:
+            if not smooth_trib_influx:
+                gk = 1
+                id0 = ide
+                id1 = ide+1
+            elif fl.flows_to.nx >= 9:
                 gk = GAUSSIAN_KERNEL[9]
                 id0 = ide-4
                 id1 = ide+5
@@ -1347,7 +1358,7 @@ class FluxBasedModel(FlowlineModel):
             # CFL condition
             if not self.fixed_dt:
                 maxu = np.max(np.abs(u_stag))
-                if maxu > 0.:
+                if maxu > cfg.FLOAT_EPS:
                     cfl_dt = self.cfl_number * dx / maxu
                 else:
                     cfl_dt = dt
@@ -1386,6 +1397,7 @@ class FluxBasedModel(FlowlineModel):
             dx = fl.dx_meter
 
             is_trib = tr[0] is not None
+
             # For these we had an additional grid point
             if is_trib:
                 flx_stag = flx_stag[:-1]
@@ -1403,15 +1415,15 @@ class FluxBasedModel(FlowlineModel):
             # Keep positive values only and store
             fl.section = utils.clip_min(new_section, 0)
 
+            # If we use a flux-gate, store the total volume that came in
+            self.flux_gate_m3_since_y0 += flx_stag[0] * dt
+
             # Add the last flux to the tributary
             # this works because the lines are sorted in order
             if is_trib:
                 # tr tuple: line_index, start, stop, gaussian_kernel
                 self.trib_flux[tr[0]][tr[1]:tr[2]] += \
                     utils.clip_min(flx_stag[-1], 0) * tr[3]
-
-            # If we use a flux-gate, store the total volume that came in
-            self.flux_gate_m3_since_y0 += flx_stag[0] * dt
 
             # --- The rest is for calving only ---
             self.calving_rate_myr = 0.

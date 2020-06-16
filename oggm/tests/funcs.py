@@ -13,6 +13,7 @@ from oggm.utils import get_demo_file, mkdir
 from oggm.workflow import execute_entity_task
 from oggm.core import flowline
 from oggm import tasks
+from oggm.core.flowline import RectangularBedFlowline
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -218,9 +219,42 @@ def dummy_width_bed_tributary(map_dx=100., n_trib=1):
     return out[::-1]
 
 
+def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
+    # bed with tributary glacier(s) flowing directly into their top
+    # (for splitted flowline experiments)
+    dx = 1.
+    nx = 200
+
+    surface_h = np.linspace(3000, 1000, nx)
+    bed_h = surface_h
+    widths = surface_h * 0. + 3.
+
+    pix_id = np.linspace(20, 180, n_trib).round().astype(int)
+
+    fls = [flowline.RectangularBedFlowline(dx=dx, map_dx=map_dx,
+                                           surface_h=surface_h[:pix_id[0]],
+                                           bed_h=bed_h[:pix_id[0]],
+                                           widths=widths[:pix_id[0]])]
+
+    for i, pid in enumerate(pix_id):
+        if i == (len(pix_id) - 1):
+            eid = nx + 1
+        else:
+            eid = pix_id[i + 1]
+        dh = -100 if small_cliff else 0
+        fl = flowline.RectangularBedFlowline(dx=dx, map_dx=map_dx,
+                                             surface_h=surface_h[pid:eid] + dh,
+                                             bed_h=bed_h[pid:eid] + dh,
+                                             widths=widths[pid:eid])
+        fls[-1].set_flows_to(fl, to_head=True, check_tail=False)
+        fls.append(fl)
+
+    return fls
+
+
 def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
                      b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
-                     water_level=0):
+                     water_level=0, split_flowline_before_water=None):
 
     # Bassis & Ultee bed profile
     dx_meter = gridlength / gridsize
@@ -229,9 +263,24 @@ def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
     bed_h += water_level
     surface_h = bed_h
     widths = surface_h * 0. + widths_m / dx_meter
-    return [flowline.RectangularBedFlowline(dx=1, map_dx=dx_meter,
-                                            surface_h=surface_h,
-                                            bed_h=bed_h, widths=widths)]
+
+    if split_flowline_before_water is not None:
+        bs = np.min(np.nonzero(bed_h < 0)[0]) - split_flowline_before_water
+        fls = [RectangularBedFlowline(dx=1, map_dx=dx_meter,
+                                      surface_h=surface_h[:bs],
+                                      bed_h=bed_h[:bs],
+                                      widths=widths[:bs]),
+               RectangularBedFlowline(dx=1, map_dx=dx_meter,
+                                      surface_h=surface_h[bs:],
+                                      bed_h=bed_h[bs:],
+                                      widths=widths[bs:]),
+               ]
+        fls[0].set_flows_to(fls[1], check_tail=False, to_head=True)
+        return fls
+    else:
+        return [
+            RectangularBedFlowline(dx=1, map_dx=dx_meter, surface_h=surface_h,
+                                   bed_h=bed_h, widths=widths)]
 
 
 def patch_minimal_download_oggm_files(*args, **kwargs):
