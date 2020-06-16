@@ -23,7 +23,8 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_mixed_bed, dummy_constant_bed_obstacle,
                               dummy_noisy_bed, dummy_parabolic_bed,
                               dummy_trapezoidal_bed, dummy_width_bed,
-                              dummy_width_bed_tributary, bu_tidewater_bed)
+                              dummy_width_bed_tributary, bu_tidewater_bed,
+                              dummy_bed_tributary_tail_to_head)
 
 # after oggm.test
 import matplotlib.pyplot as plt
@@ -1093,6 +1094,24 @@ class TestFluxGate(unittest.TestCase):
             plt.plot(model.fls[-1].surface_h, 'b')
             plt.show()
 
+    @pytest.mark.slow
+    def test_flux_gate_with_trib_tail_to_head(self):
+
+        mb = ScalarMassBalance()
+        fls = dummy_bed_tributary_tail_to_head(n_trib=1, small_cliff=True)
+        model = FluxBasedModel(fls, mb_model=mb,
+                               flux_gate_thickness=[200, 0],
+                               flux_gate_build_up=50,
+                               smooth_trib_influx=False)
+        model.run_until(500)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(np.append(model.fls[0].bed_h, model.fls[1].bed_h), 'k')
+            plt.plot(np.append(model.fls[0].surface_h,
+                               model.fls[1].surface_h), 'b')
+            plt.show()
+
     def test_flux_gate_with_calving(self):
 
         mb = ScalarMassBalance()
@@ -1156,6 +1175,47 @@ class TestKCalving():
             f, ax = plt.subplots(1, 1, figsize=(12, 5))
             df_diag1[['surface_h']].plot(ax=ax, color=['C3'])
             df_diag2[['surface_h', 'bed_h']].plot(ax=ax, color=['C1', 'k'])
+            plt.hlines(0, 0, 60000, color='C0', linestyles=':')
+            plt.ylim(-350, 800)
+            plt.ylabel('Altitude [m]')
+            plt.show()
+
+    @pytest.mark.slow
+    def test_tributary(self, default_calving):
+
+        _, ds1, df_diag1 = default_calving
+
+        model = FluxBasedModel(bu_tidewater_bed(split_flowline_before_water=5),
+                               mb_model=ScalarMassBalance(),
+                               is_tidewater=True, calving_use_limiter=True,
+                               smooth_trib_influx=False,
+                               flux_gate=[0.06, 0], do_kcalving=True,
+                               calving_k=0.2)
+        _, ds2 = model.run_until_and_store(3000)
+        df_diag2_a = model.get_diagnostics(fl_id=0)
+        df_diag2_b = model.get_diagnostics(fl_id=1)
+
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+        assert_allclose(ds2.calving_m3[-1], model.calving_m3_since_y0)
+        assert_allclose(ds2.volume_bsl_m3[-1], model.volume_bsl_km3 * 1e9)
+        assert_allclose(ds2.volume_bwl_m3[-1], model.volume_bwl_km3 * 1e9)
+
+        # should be veeery close
+        rtol = 5e-4
+        assert_allclose(ds1.volume_m3[-1], ds2.volume_m3[-1], rtol=rtol)
+        assert_allclose(ds1.calving_m3[-1], ds2.calving_m3[-1], rtol=rtol)
+        assert_allclose(ds1.volume_bsl_m3[-1], ds2.volume_bsl_m3[-1],
+                        rtol=rtol)
+        assert_allclose(ds2.volume_bsl_m3, ds2.volume_bwl_m3, rtol=rtol)
+
+        df_diag1['surface_h_trib'] = np.append(df_diag2_a['surface_h'],
+                                               df_diag2_b['surface_h'])
+
+        if do_plot:
+            f, ax = plt.subplots(1, 1, figsize=(12, 5))
+            df_diag1[['surface_h', 'surface_h_trib',
+                      'bed_h']].plot(ax=ax, color=['C3', 'C1', 'k'])
             plt.hlines(0, 0, 60000, color='C0', linestyles=':')
             plt.ylim(-350, 800)
             plt.ylabel('Altitude [m]')

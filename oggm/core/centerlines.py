@@ -126,7 +126,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.flux_needs_correction = False  # whether this branch was baaad
         self.rgi_id = rgi_id  # Usefull if line is used with another glacier
 
-    def set_flows_to(self, other, check_tail=True, last_point=False):
+    def set_flows_to(self, other, check_tail=True, to_head=False):
         """Find the closest point in "other" and sets all the corresponding
         attributes. Btw, it modifies the state of "other" too.
 
@@ -151,8 +151,8 @@ class Centerline(object, metaclass=SuperclassMeta):
                 ind_closest = utils.clip_scalar(ind_closest, 2, n-3)
             p = shpg.Point(other.line.coords[int(ind_closest)])
             self.flows_to_point = p
-        elif last_point:
-            self.flows_to_point = other.tail
+        elif to_head:
+            self.flows_to_point = other.head
         else:
             # just the closest
             self.flows_to_point = _projection_point(other, self.tail)
