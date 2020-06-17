@@ -232,6 +232,7 @@ def get_dl_verify_data(section):
 
         with requests.get(CHECKSUM_URL, stream=True) as req:
             if req.status_code == 200:
+                mkdir(os.path.dirname(verify_file_path))
                 with open(verify_file_path, 'wb') as f:
                     for b in req.iter_content(chunk_size=0xFFFF):
                         if b:
