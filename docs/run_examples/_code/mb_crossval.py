@@ -16,14 +16,35 @@ rgi_version = '62'
 
 # CRU, HISTALP, ERA5, ERA5L, CERA, CERA+ERA5, CERA+ERA5L?
 baseline = 'CERA+ERA5L'
+baseline = 'CRU'
 
 # Initialize OGGM and set up the run parameters
 cfg.initialize()
 
-if baseline == 'HISTALP':
+# Here we will need data-specific params
+if baseline == 'CRU':
+    # Default params
+    pass
+elif baseline == 'HISTALP':
     # Other params: see https://oggm.org/2018/08/10/histalp-parameters/
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
+elif baseline == 'ERA5':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 2.0
+    cfg.PARAMS['temp_melt'] = -1.25
+elif baseline == 'ERA5L':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 2.0
+    cfg.PARAMS['temp_melt'] = -1.0
+elif baseline == 'CERA+ERA5':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -1.25
+elif baseline == 'CERA+ERA5L':
+    # Other params from mdusch
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -0.75
 
 # Local paths (where to find the OGGM run output)
 dirname = 'OGGM_ref_mb_{}_RGIV{}_OGGM{}'.format(baseline, rgi_version,
@@ -94,6 +115,8 @@ ax.set_ylabel('N Glaciers')
 ax.set_xlabel('Mass-balance error (mm w.e. yr$^{-1}$)')
 ax.legend(loc='best')
 plt.tight_layout()
+plt.savefig(os.path.join(WORKING_DIR, 'cv_histogram.png'), dpi=150,
+            bbox_inches='tight')
 plt.show()
 
 scores = 'Median bias: {:.2f}\n'.format(ref_df['CV_MB_BIAS'].median())

@@ -369,6 +369,82 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
             os.remove(f_his)
 
 
+@entity_task(log, writes=['climate_historical'])
+def historical_climate_qc(gdir):
+    """"Check the quality of climate data"""
+
+    # Parameters
+    temp_s = (cfg.PARAMS['temp_all_liq'] + cfg.PARAMS['temp_all_solid']) / 2
+    temp_m = cfg.PARAMS['temp_melt']
+    default_grad = cfg.PARAMS['temp_default_gradient']
+    g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+
+    # Read file
+    fpath = gdir.get_filepath('climate_historical')
+    igrad = None
+    with utils.ncDataset(fpath) as nc:
+        # time
+        # Read timeseries
+        itemp = nc.variables['temp'][:]
+        if 'gradient' in nc.variables:
+            igrad = nc.variables['gradient'][:]
+            # Security for stuff that can happen with local gradients
+            igrad = np.where(~np.isfinite(igrad), default_grad, igrad)
+            igrad = utils.clip_array(igrad, g_minmax[0], g_minmax[1])
+        ref_hgt = nc.ref_hgt
+
+    # Default gradient?
+    if igrad is None:
+        igrad = itemp * 0 + default_grad
+
+    ny = len(igrad) // 12
+    assert ny == len(igrad) / 12
+
+    # Geometry data
+    fls = gdir.read_pickle('inversion_flowlines')
+    heights = np.array([])
+    for fl in fls:
+        heights = np.append(heights, fl.surface_h)
+    top_h = np.max(heights)
+    bot_h = np.min(heights)
+
+    # First check - there should be at least one month of melt every year
+    prev_ref_hgt = ref_hgt
+    while True:
+        ts_bot = itemp + default_grad * (bot_h - ref_hgt)
+        ts_bot = ts_bot.reshape((ny, 12)).max(axis=1)
+        if np.all(ts_bot > temp_m):
+            # Ok all good
+            break
+        # put ref hgt a bit higher so that we warm things a bit
+        ref_hgt += 10
+
+    # If we changed this it makes no sense to lower it down again,
+    # so resume here:
+    if ref_hgt != prev_ref_hgt:
+        with utils.ncDataset(fpath, 'a') as nc:
+            nc.ref_hgt = ref_hgt
+            nc.uncorrected_ref_hgt = prev_ref_hgt
+        gdir.add_to_diagnostics('ref_hgt_qc_diff', ref_hgt - prev_ref_hgt)
+        return
+
+    # Second check - there should be at least one month of acc every year
+    while True:
+        ts_top = itemp + default_grad * (top_h - ref_hgt)
+        ts_top = ts_top.reshape((ny, 12)).min(axis=1)
+        if np.all(ts_top < temp_s):
+            # Ok all good
+            break
+        # put ref hgt a bit lower so that we cold things a bit
+        ref_hgt -= 10
+
+    if ref_hgt != prev_ref_hgt:
+        with utils.ncDataset(fpath, 'a') as nc:
+            nc.ref_hgt = ref_hgt
+            nc.uncorrected_ref_hgt = prev_ref_hgt
+        gdir.add_to_diagnostics('ref_hgt_qc_diff', ref_hgt - prev_ref_hgt)
+
+
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     """Mass-balance climate of the glacier at a specific height
 
@@ -888,8 +964,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # If mu out of bounds, raise
     if not (cfg.PARAMS['min_mu_star'] <= mustar <= cfg.PARAMS['max_mu_star']):
-        raise MassBalanceCalibrationError('mu* out of specified bounds: '
-                                          '{:.2f}'.format(mustar))
+        raise MassBalanceCalibrationError('{}: mu* out of specified bounds: '
+                                          '{:.2f}'.format(gdir.rgi_id, mustar))
 
     # Scalars in a small dict for later
     df = dict()

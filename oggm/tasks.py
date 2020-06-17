@@ -22,6 +22,7 @@ from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import historical_delta_method
+from oggm.core.climate import historical_climate_qc
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
 from oggm.shop.histalp import process_histalp_data
