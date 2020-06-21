@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '699473a1d767846285dc97811b45806355a31d33'
+SAMPLE_DATA_COMMIT = '40d1e12bce713ab1155d83e5f77b9e070151be41'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
