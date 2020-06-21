@@ -454,11 +454,14 @@ class TempEnvironmentVariable:
         self.old_envs = {}
         for k, v in self.envs.items():
             self.old_envs[k] = os.environ.get(k)
-            os.environ[k] = v
+            if v is not None:
+                os.environ[k] = v
+            elif k in os.environ:
+                del os.environ[k]
 
     def __exit__(self, *args):
         for k, v in self.old_envs.items():
-            if v:
+            if v is not None:
                 os.environ[k] = v
-            else:
+            elif k in os.environ:
                 del os.environ[k]

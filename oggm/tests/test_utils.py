@@ -298,7 +298,8 @@ class TestInitialize(unittest.TestCase):
         self.homedir = os.path.expanduser('~')
 
     def test_env_var(self):
-        with TempEnvironmentVariable(OGGM_USE_MULTIPROCESSING='1'):
+        with TempEnvironmentVariable(OGGM_USE_MULTIPROCESSING='1',
+                                     OGGM_USE_MP_SPAWN=None):
             cfg.initialize()
             assert cfg.PARAMS['use_multiprocessing']
             assert cfg.PARAMS['mp_processes'] >= 1
