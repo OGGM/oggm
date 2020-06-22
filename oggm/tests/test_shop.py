@@ -171,7 +171,7 @@ class Test_ecmwf:
                                       delete_input_files=False,
                                       ref_filesuffix='ERA5',
                                       hist_filesuffix='CERA',
-                                      out_filesuffix='CERA_alone')
+                                      output_filesuffix='CERA_alone')
 
         f_ref = gdir.get_filepath('climate_historical', filesuffix='ERA5')
         f_h = gdir.get_filepath('climate_historical', filesuffix='CERA_alone')
@@ -217,7 +217,7 @@ class Test_ecmwf:
                                       delete_input_files=False,
                                       ref_filesuffix='ERA5',
                                       hist_filesuffix='CERA',
-                                      out_filesuffix='CERA_repl')
+                                      output_filesuffix='CERA_repl')
 
         f_ref = gdir.get_filepath('climate_historical', filesuffix='ERA5')
         f_h = gdir.get_filepath('climate_historical', filesuffix='CERA_repl')

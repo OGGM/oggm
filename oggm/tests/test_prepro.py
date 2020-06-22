@@ -1455,6 +1455,67 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(df['t_star'], t_star)
         np.testing.assert_allclose(df['bias'], bias)
 
+    def test_climate_qc(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+
+        # Raise ref hgt a lot
+        fc = gdir.get_filepath('climate_historical')
+        with utils.ncDataset(fc, 'a') as nc:
+            nc.ref_hgt = 10000
+        climate.historical_climate_qc(gdir)
+
+        with utils.ncDataset(fc, 'r') as nc:
+            assert (nc.ref_hgt - nc.uncorrected_ref_hgt) < -4000
+
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'],
+                                        glacierwide=True)
+        climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
+        climate.mu_star_calibration(gdir)
+
+        from oggm.core.massbalance import MultipleFlowlineMassBalance
+
+        mb = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
+        mbdf['CALIB_1'] = mb.get_specific_mb(year=mbdf.index.values)
+
+        # Lower ref hgt a lot
+        fc = gdir.get_filepath('climate_historical')
+        with utils.ncDataset(fc, 'a') as nc:
+            nc.ref_hgt = 0
+        climate.historical_climate_qc(gdir)
+
+        with utils.ncDataset(fc, 'r') as nc:
+            assert (nc.ref_hgt - nc.uncorrected_ref_hgt) > 2500
+
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'],
+                                        glacierwide=True)
+        climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
+        climate.mu_star_calibration(gdir)
+
+        mb = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
+        mbdf['CALIB_2'] = mb.get_specific_mb(year=mbdf.index.values)
+
+        mm = mbdf[['ANNUAL_BALANCE', 'CALIB_1', 'CALIB_2']].mean()
+        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_1'],
+                                   rtol=1e-5)
+        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_2'],
+                                   rtol=1e-5)
+
+        cor = mbdf[['ANNUAL_BALANCE', 'CALIB_1', 'CALIB_2']].corr()
+        assert cor.min().min() > 0.35
+
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
 

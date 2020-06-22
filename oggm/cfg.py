@@ -472,6 +472,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
+    PARAMS['climate_qc_months'] = cp.as_int('climate_qc_months')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
 
@@ -494,7 +495,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing',
+           'mp_processes', 'use_multiprocessing', 'climate_qc_months',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',
