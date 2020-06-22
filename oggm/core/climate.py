@@ -183,19 +183,25 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         # quite easy to extend for HISTALP+ERA5L for example
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('+')
-        process_ecmwf_data(gdir, output_filesuffix=his, dataset=his,
+        process_ecmwf_data(gdir, output_filesuffix='tmp'+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix=ref, dataset=ref,
+        process_ecmwf_data(gdir, output_filesuffix='tmp'+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
-        historical_delta_method(gdir, ref_filesuffix=ref, hist_filesuffix=his)
+        historical_delta_method(gdir,
+                                ref_filesuffix='tmp'+ref,
+                                hist_filesuffix='tmp'+his,
+                                output_filesuffix=output_filesuffix)
     elif '|' in baseline:
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('|')
-        process_ecmwf_data(gdir, output_filesuffix=his, dataset=his,
+        process_ecmwf_data(gdir, output_filesuffix='tmp'+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix=ref, dataset=ref,
+        process_ecmwf_data(gdir, output_filesuffix='tmp'+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
-        historical_delta_method(gdir, ref_filesuffix=ref, hist_filesuffix=his,
+        historical_delta_method(gdir,
+                                ref_filesuffix='tmp'+ref,
+                                hist_filesuffix='tmp'+his,
+                                output_filesuffix=output_filesuffix,
                                 replace_with_ref_data=False)
     elif baseline == 'CUSTOM':
         process_custom_climate_data(gdir, y0=y0, y1=y1,
@@ -207,7 +213,7 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
 
 @entity_task(log, writes=['climate_historical'])
 def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
-                            out_filesuffix='', ref_year_range=None,
+                            output_filesuffix='', ref_year_range=None,
                             delete_input_files=True, scale_stddev=True,
                             replace_with_ref_data=True):
     """Applies the anomaly method to historical climate data
@@ -226,7 +232,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     hist_filesuffix : str
         the filesuffix of the historical climate data to apply to the
         reference
-    out_filesuffix : str
+    output_filesuffix : str
         the filesuffix of the output file (usually left empty - i.e. this
         file will become the default)
     ref_year_range : tuple of str
@@ -345,7 +351,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         gdir.write_monthly_climate_file(ts_tmp.time.values,
                                         ts_pre.values, ts_tmp.values,
                                         ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=out_filesuffix,
+                                        filesuffix=output_filesuffix,
                                         source=source)
     else:
         # Select all hist data before the ref
@@ -358,7 +364,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
                                         np.append(ts_pre, ref_prcp),
                                         np.append(ts_tmp, ref_temp),
                                         ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=out_filesuffix,
+                                        filesuffix=output_filesuffix,
                                         source=source)
 
     if delete_input_files:
@@ -371,13 +377,22 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
 @entity_task(log, writes=['climate_historical'])
 def historical_climate_qc(gdir):
-    """"Check the quality of climate data"""
+    """"Check the "quality" of climate data and correct it if needed.
+
+    This forces the climate data to have at least one month of melt per year
+    at the terminus of the glacier (i.e. simply shifting temperatures up
+    when necessary), and at least one month where accumulation is possible
+    at the glacier top (i.e. shifting the temperatures down).
+    """
 
     # Parameters
     temp_s = (cfg.PARAMS['temp_all_liq'] + cfg.PARAMS['temp_all_solid']) / 2
     temp_m = cfg.PARAMS['temp_melt']
     default_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
+    qc_months = cfg.PARAMS['climate_qc_months']
+    if qc_months == 0:
+        return
 
     # Read file
     fpath = gdir.get_filepath('climate_historical')
@@ -412,8 +427,8 @@ def historical_climate_qc(gdir):
     prev_ref_hgt = ref_hgt
     while True:
         ts_bot = itemp + default_grad * (bot_h - ref_hgt)
-        ts_bot = ts_bot.reshape((ny, 12)).max(axis=1)
-        if np.all(ts_bot > temp_m):
+        ts_bot = (ts_bot.reshape((ny, 12)) > temp_m).sum(axis=1)
+        if np.all(ts_bot >= qc_months):
             # Ok all good
             break
         # put ref hgt a bit higher so that we warm things a bit
@@ -425,14 +440,14 @@ def historical_climate_qc(gdir):
         with utils.ncDataset(fpath, 'a') as nc:
             nc.ref_hgt = ref_hgt
             nc.uncorrected_ref_hgt = prev_ref_hgt
-        gdir.add_to_diagnostics('ref_hgt_qc_diff', ref_hgt - prev_ref_hgt)
+        gdir.add_to_diagnostics('ref_hgt_qc_diff', int(ref_hgt - prev_ref_hgt))
         return
 
     # Second check - there should be at least one month of acc every year
     while True:
         ts_top = itemp + default_grad * (top_h - ref_hgt)
-        ts_top = ts_top.reshape((ny, 12)).min(axis=1)
-        if np.all(ts_top < temp_s):
+        ts_top = (ts_top.reshape((ny, 12)) < temp_s).sum(axis=1)
+        if np.all(ts_top >= qc_months):
             # Ok all good
             break
         # put ref hgt a bit lower so that we cold things a bit
@@ -442,7 +457,7 @@ def historical_climate_qc(gdir):
         with utils.ncDataset(fpath, 'a') as nc:
             nc.ref_hgt = ref_hgt
             nc.uncorrected_ref_hgt = prev_ref_hgt
-        gdir.add_to_diagnostics('ref_hgt_qc_diff', ref_hgt - prev_ref_hgt)
+        gdir.add_to_diagnostics('ref_hgt_qc_diff', int(ref_hgt - prev_ref_hgt))
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
@@ -884,7 +899,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
 
     # Relevant mb params
     params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
-              'temp_melt', 'prcp_scaling_factor']
+              'temp_melt', 'prcp_scaling_factor', 'climate_qc_months']
 
     if tstar is None or bias is None:
         # Do our own interpolation
