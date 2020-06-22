@@ -37,6 +37,9 @@ Breaking changes
   climate timeseries.
   This has not been tested intensively yet and is still a WIP.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The order of the tasks applied to  the preprocessed levels has
+  changed, climate data comes in later (:pull:`1038`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
 ~~~~~~~~~~~~
