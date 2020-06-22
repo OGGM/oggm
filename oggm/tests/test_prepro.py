@@ -1485,8 +1485,9 @@ class TestClimate(unittest.TestCase):
         climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
         climate.mu_star_calibration(gdir)
 
-        mb = massbalance.MultipleFlowlineMassBalance(gdir,
-                                                 use_inversion_flowlines=True)
+        from oggm.core.massbalance import MultipleFlowlineMassBalance
+
+        mb = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
         mbdf['CALIB_1'] = mb.get_specific_mb(year=mbdf.index.values)
 
         # Lower ref hgt a lot
@@ -1503,13 +1504,14 @@ class TestClimate(unittest.TestCase):
         climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
         climate.mu_star_calibration(gdir)
 
-        mb = massbalance.MultipleFlowlineMassBalance(gdir,
-                                                 use_inversion_flowlines=True)
+        mb = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
         mbdf['CALIB_2'] = mb.get_specific_mb(year=mbdf.index.values)
 
         mm = mbdf[['ANNUAL_BALANCE', 'CALIB_1', 'CALIB_2']].mean()
-        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_1'])
-        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_2'])
+        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_1'],
+                                   rtol=1e-5)
+        np.testing.assert_allclose(mm['ANNUAL_BALANCE'], mm['CALIB_2'],
+                                   rtol=1e-5)
 
         cor = mbdf[['ANNUAL_BALANCE', 'CALIB_1', 'CALIB_2']].corr()
         assert cor.min().min() > 0.35

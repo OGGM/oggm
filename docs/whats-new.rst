@@ -32,6 +32,11 @@ Breaking changes
   task, we prefer to deprecate it in a slow cycle: first, change the
   documentation, deprecate later.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- More climate datasets are now supported in OGGM (:pull:`1036`).
+  A new task (`historical_climate_qc`) has been added to quality check the
+  climate timeseries.
+  This has not been tested intensively yet and is still a WIP.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
 ~~~~~~~~~~~~
