@@ -206,11 +206,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
-    # Input
+    # L0 - go
+    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+
+    # Glacier stats
+    sum_dir = os.path.join(base_dir, 'L0', 'summary')
+    utils.mkdir(sum_dir)
+    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    utils.compile_glacier_statistics(gdirs, path=opath)
+
+    # L0 OK - compress all in output directory
+    l_base_dir = os.path.join(base_dir, 'L0')
+    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                 base_dir=l_base_dir)
+    utils.base_dir_to_tar(l_base_dir)
+    if max_level == 0:
+        _time_log()
+        return
+
+    # L1 - Add dem files
     if test_topofile:
         cfg.PATHS['dem_file'] = test_topofile
 
-    # L1 - initialize working directories
     # Which DEM source?
     if dem_source.upper() == 'ALL':
         # This is the complex one, just do the job an leave
@@ -241,7 +258,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     source = dem_source.upper() if dem_source else None
 
     # L1 - go
-    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
     workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                  source=source)
 
@@ -261,7 +277,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L2 - Tasks
-    workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+    task_list = [
+        tasks.glacier_masks,
+        tasks.compute_centerlines,
+        tasks.initialize_flowlines,
+        tasks.compute_downstream_line,
+        tasks.compute_downstream_bedshape,
+        tasks.catchment_area,
+        tasks.catchment_intersections,
+        tasks.catchment_width_geom,
+        tasks.catchment_width_correction,
+    ]
+    for task in task_list:
+        workflow.execute_entity_task(task, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L2', 'summary')
@@ -280,21 +308,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L3 - Tasks
     task_list = [
-        tasks.glacier_masks,
-        tasks.compute_centerlines,
-        tasks.initialize_flowlines,
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-        tasks.catchment_area,
-        tasks.catchment_intersections,
-        tasks.catchment_width_geom,
-        tasks.catchment_width_correction,
+        tasks.process_climate_data,
         tasks.local_t_star,
         tasks.mu_star_calibration,
         tasks.prepare_for_inversion,
         tasks.mass_conservation_inversion,
         tasks.filter_inversion_output,
-        tasks.init_present_time_glacier
+        tasks.init_present_time_glacier,
     ]
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)

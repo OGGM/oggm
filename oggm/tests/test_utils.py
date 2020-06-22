@@ -859,14 +859,21 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof)
 
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'glacier_type' in df
+
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'dem_source' in df
 
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'main_flowline_length' in df
+
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'inv_volume_km3' in df
-
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
         assert '1945-1975_avg_prcp' in df
@@ -900,7 +907,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        tasks.glacier_masks(gdir)
+        assert gdir.has_file('inversion_flowlines')
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 
@@ -909,7 +916,6 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        tasks.init_present_time_glacier(gdir)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
 
