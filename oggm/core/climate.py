@@ -183,24 +183,26 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         # quite easy to extend for HISTALP+ERA5L for example
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('+')
-        process_ecmwf_data(gdir, output_filesuffix='tmp'+his, dataset=his,
+        s = 'tmp_'
+        process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix='tmp'+ref, dataset=ref,
+        process_ecmwf_data(gdir, output_filesuffix=s+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
         historical_delta_method(gdir,
-                                ref_filesuffix='tmp'+ref,
-                                hist_filesuffix='tmp'+his,
+                                ref_filesuffix=s+ref,
+                                hist_filesuffix=s+his,
                                 output_filesuffix=output_filesuffix)
     elif '|' in baseline:
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('|')
-        process_ecmwf_data(gdir, output_filesuffix='tmp'+his, dataset=his,
+        s = 'tmp_'
+        process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix='tmp'+ref, dataset=ref,
+        process_ecmwf_data(gdir, output_filesuffix=s+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
         historical_delta_method(gdir,
-                                ref_filesuffix='tmp'+ref,
-                                hist_filesuffix='tmp'+his,
+                                ref_filesuffix=s+ref,
+                                hist_filesuffix=s+his,
                                 output_filesuffix=output_filesuffix,
                                 replace_with_ref_data=False)
     elif baseline == 'CUSTOM':
@@ -918,6 +920,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
                 # Check that the params are fine
                 s = 'cru4' if 'CRU' in source else 'histalp'
                 vn = 'oggm_ref_tstars_rgi{}_{}_calib_params'.format(v, s)
+                # This is for as long as the old files are around
+                if 'climate_qc_months' not in cfg.PARAMS[vn]:
+                    params.remove('climate_qc_months')
                 for k in params:
                     if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
                         msg = ('The reference t* you are trying to use was '
