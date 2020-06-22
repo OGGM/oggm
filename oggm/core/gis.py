@@ -73,7 +73,7 @@ def _parse_source_text():
 
     out = dict()
     cur_key = None
-    with open(fp, 'r') as fr:
+    with open(fp, 'r', encoding='utf-8') as fr:
         this_text = []
         for l in fr.readlines():
             l = l.strip()
