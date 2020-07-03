@@ -90,6 +90,11 @@ class Centerline(object, metaclass=SuperclassMeta):
             The glacier's RGI identifier
         """
 
+        if line is None:
+            # Make a dummy one
+            coords = np.arange(len(surface_h)) * dx
+            line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
         self.tail = None  # Shapely Point
@@ -2109,7 +2114,7 @@ def elevation_band_flowline(gdir):
         df.loc[bi, 'area'] = bin_area
 
         # bin average elevation
-        df.loc[bi, 'elevation'] = np.mean(topo[bin_coords])
+        df.loc[bi, 'mean_elevation'] = np.mean(topo[bin_coords])
 
         # bin averge slope
         # there are a few more shneanigans here described in Werder et al 2019
@@ -2122,17 +2127,68 @@ def elevation_band_flowline(gdir):
         df.loc[bi, 'slope'] = np.mean(s_bin[(s_bin >= qmin) & (s_bin <= qmax)])
 
     # The grid point's grid spacing and widths
+    df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
     df['dx'] = bsize / np.tan(df['slope'])
     df['width'] = df['area'] / df['dx']
 
     # In OGGM we go from top to bottom
     df = df[::-1]
 
-    # The x coordinate in meter - this is a bit arbitrary because here the
-    # coordinate is at the end of the grid point (irregular grid)
-    df.index = np.cumsum(df['dx'])
+    # The x coordinate in meter - this is a bit arbitrary but we put it at the
+    # center of the irregular grid (better for interpolation later
+    dx = df['dx'].values
+    dx_points = np.append(dx[0]/2, (dx[:-1] + dx[1:]) / 2)
+    df.index = np.cumsum(dx_points)
+    df.index.name = 'dis_along_flowline'
 
     # Store and return
     df.to_csv(gdir.get_filepath('elevation_band_flowline'))
 
-    return df
+
+@entity_task(log, writes=['inversion_flowlines'])
+def regular_elevation_band_flowline(gdir):
+    """Converts the "collpased" flowline into a regular "inversion flowline".
+.
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
+
+    map_dx = gdir.grid.dx
+    dx = cfg.PARAMS['flowline_dx']
+    dx_meter = dx * map_dx
+    nx = int(df.dx.sum() / dx_meter)
+    dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter
+
+    while dis_along_flowline[-1] > df.index[-1]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[:-1]
+
+    while dis_along_flowline[0] < df.index[0]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[1:]
+
+    nx = len(dis_along_flowline)
+
+    # Interpolate the data we need
+    hgts = np.interp(dis_along_flowline, df.index, df['mean_elevation'])
+    widths_m = np.interp(dis_along_flowline, df.index, df['width'])
+
+    # Correct the widths - area preserving
+    area = np.sum(widths_m * dx_meter)
+    fac = gdir.rgi_area_m2 / area
+    log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
+    widths_m *= fac
+
+    # Write as a Centerline object
+    fl = Centerline(None, dx=dx, surface_h=hgts, rgi_id=gdir.rgi_id,
+                    map_dx=map_dx)
+    fl.order = 0
+    fl.widths = widths_m / map_dx
+    # TODO - this we yet don't know
+    fl.is_rectangular = np.ones(nx, dtype=bool)
+
+    gdir.write_pickle([fl], 'inversion_flowlines')
