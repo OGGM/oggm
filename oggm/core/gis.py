@@ -761,7 +761,7 @@ def glacier_masks(gdir):
 
 
 @entity_task(log, writes=['gridded_data', 'hypsometry'])
-def simple_glacier_masks(gdir):
+def simple_glacier_masks(gdir, write_hypsometry=False):
     """Compute glacier masks based on much simpler rules than OGGM's default.
 
     This is therefore more robust: we use this function to compute glacier
@@ -771,6 +771,9 @@ def simple_glacier_masks(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    write_hypsometry : bool
+        whether to write out the hypsometry file or not - it is used by e.g,
+        rgitools
     """
 
     if not os.path.exists(gdir.get_filepath('gridded_data')):
@@ -827,7 +830,45 @@ def simple_glacier_masks(gdir):
         raise InvalidDEMError('({}) min equal max in the masked DEM.'
                               .format(gdir.rgi_id))
 
-    # hypsometry
+    # write out the grids in the netcdf file
+    with GriddedNcdfFile(gdir) as nc:
+
+        if 'glacier_mask' not in nc.variables:
+            v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),
+                                  zlib=True)
+            v.units = '-'
+            v.long_name = 'Glacier mask'
+        else:
+            v = nc.variables['glacier_mask']
+        v[:] = glacier_mask
+
+        if 'glacier_ext' not in nc.variables:
+            v = nc.createVariable('glacier_ext', 'i1', ('y', 'x', ),
+                                  zlib=True)
+            v.units = '-'
+            v.long_name = 'Glacier external boundaries'
+        else:
+            v = nc.variables['glacier_ext']
+        v[:] = glacier_ext
+
+        # Log DEM that needed processing within the glacier mask
+        valid_mask = nc.variables['topo_valid_mask'][:]
+        if gdir.get_diagnostics().get('dem_needed_interpolation', False):
+            pnan = (valid_mask == 0) & glacier_mask
+            gdir.add_to_diagnostics('dem_invalid_perc_in_mask',
+                                    np.sum(pnan) / np.sum(glacier_mask))
+
+        # add some meta stats and close
+        nc.max_h_dem = np.max(dem)
+        nc.min_h_dem = np.min(dem)
+        dem_on_g = dem[np.where(glacier_mask)]
+        nc.max_h_glacier = np.max(dem_on_g)
+        nc.min_h_glacier = np.min(dem_on_g)
+
+    # hypsometry if asked for
+    if not write_hypsometry:
+        return
+
     bsize = 50.
     dem_on_ice = dem[glacier_mask]
     bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
@@ -870,45 +911,11 @@ def simple_glacier_masks(gdir):
         df['{}'.format(np.round(bs).astype(int))] = [b]
     df.to_csv(gdir.get_filepath('hypsometry'), index=False)
 
-    # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir) as nc:
-
-        if 'glacier_mask' not in nc.variables:
-            v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),
-                                  zlib=True)
-            v.units = '-'
-            v.long_name = 'Glacier mask'
-        else:
-            v = nc.variables['glacier_mask']
-        v[:] = glacier_mask
-
-        if 'glacier_ext' not in nc.variables:
-            v = nc.createVariable('glacier_ext', 'i1', ('y', 'x', ),
-                                  zlib=True)
-            v.units = '-'
-            v.long_name = 'Glacier external boundaries'
-        else:
-            v = nc.variables['glacier_ext']
-        v[:] = glacier_ext
-
-        # Log DEM that needed processing within the glacier mask
-        valid_mask = nc.variables['topo_valid_mask'][:]
-        if gdir.get_diagnostics().get('dem_needed_interpolation', False):
-            pnan = (valid_mask == 0) & glacier_mask
-            gdir.add_to_diagnostics('dem_invalid_perc_in_mask',
-                                    np.sum(pnan) / np.sum(glacier_mask))
-
-        # add some meta stats and close
-        nc.max_h_dem = np.max(dem)
-        nc.min_h_dem = np.min(dem)
-        dem_on_g = dem[np.where(glacier_mask)]
-        nc.max_h_glacier = np.max(dem_on_g)
-        nc.min_h_glacier = np.min(dem_on_g)
-
 
 @entity_task(log, writes=['glacier_mask'])
 def rasterio_glacier_mask(gdir, source=None):
     """Writes a 1-0 glacier mask GeoTiff with the same dimensions as dem.tif
+
 
     Parameters
     ----------

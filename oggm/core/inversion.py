@@ -740,7 +740,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
     with utils.ncDataset(grids_file) as nc:
-        has_masks = 'glacier_ext_erosion' in nc.variables
+        has_masks = 'ice_divides' in nc.variables
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)

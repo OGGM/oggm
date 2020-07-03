@@ -292,7 +292,7 @@ class TestGIS(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        gis.simple_glacier_masks(gdir)
+        gis.simple_glacier_masks(gdir, write_hypsometry=True)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
@@ -355,7 +355,7 @@ class TestGIS(unittest.TestCase):
         # The test below does NOT pass on OGGM
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'default_masks.nc'))
-        gis.simple_glacier_masks(gdir)
+        gis.simple_glacier_masks(gdir, write_hypsometry=True)
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
@@ -743,6 +743,52 @@ class TestCenterlines(unittest.TestCase):
             self.assertTrue(hss > 0.53)
         if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
             self.assertTrue(hss > 0.41)
+
+
+class TestElevationBandFlowlines(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 10
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_irregular_grid(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        df = centerlines.elevation_band_flowline(gdir)
+
+        # Almost same because of grid VS shape
+        np.testing.assert_allclose(df.area.sum(), gdir.rgi_area_m2, rtol=0.01)
+
+        # Length is very different but that's how it is
+        np.testing.assert_allclose(df.index.max(), entity['Lmax'], rtol=0.2)
+
+        # Slope is similar enough
+        avg_slope = np.average(np.rad2deg(df.slope), weights=df.area)
+        np.testing.assert_allclose(avg_slope, entity['Slope'], rtol=0.12)
 
 
 class TestGeometry(unittest.TestCase):
