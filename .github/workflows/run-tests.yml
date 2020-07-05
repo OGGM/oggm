@@ -43,7 +43,19 @@ jobs:
         run: ./ci/run_tests.sh ${{ matrix.test-env }}
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}
-        timeout-minutes: 10
-        run: |
-            while ! [ -f codecov.sh ]; do curl -o codecov.tmp -f https://codecov.io/bash && mv codecov.tmp codecov.sh || sleep 5; done
-            while ! bash codecov.sh -n "${{ matrix.test-env }} on ${{ matrix.container }}"; do sleep 5; done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_PARALLEL: true
+        run: coveralls
+  finish-coveralls:
+    name: Coveralls Finished
+    needs: test
+    runs-on: ubuntu-latest
+    container: python:3-slim
+    steps:
+    - name: Coveralls Finished
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        pip3 install --upgrade coveralls &&
+        coveralls --finish
