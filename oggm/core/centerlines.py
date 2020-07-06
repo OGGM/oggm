@@ -88,20 +88,24 @@ class Centerline(object, metaclass=SuperclassMeta):
             geometric point of the lines head
         rgi_id : str
             The glacier's RGI identifier
+        map_dx : float
+            the map's grid resolution. Centerline.dx_meter = dx * map_dx
         """
 
-        if line is None:
-            # Make a dummy one
-            coords = np.arange(len(surface_h)) * dx
-            line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+        # This is do add flexibility for testing
+        if dx is None:
+            dx = 1.
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
         self.tail = None  # Shapely Point
-        self.dis_on_line = None  # Shapely Point
-        self.nx = None  # Shapely Point
-        self.is_glacier = None  # Shapely Point
-        self.set_line(line)  # Init all previous properties
+        self.dis_on_line = None
+        self.nx = None
+        if line is not None:
+            self.set_line(line)  # Init all previous properties
+        else:
+            self.nx = len(surface_h)
+            self.dis_on_line = np.arange(self.nx) * dx
 
         self.order = None  # Hydrological flow level (~ Strahler number)
 
@@ -951,11 +955,17 @@ def compute_downstream_line(gdir):
 
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
-        glacier_ext = nc.variables['glacier_ext'][:]
+        glacier_ext = nc.variables['glacier_ext'][:] == 1
 
     # Look for the starting points
-    p = gdir.read_pickle('centerlines')[-1].tail
-    head = (int(p.y), int(p.x))
+    try:
+        # Normal OGGM flowlines
+        p = gdir.read_pickle('centerlines')[-1].tail
+        head = (int(p.y), int(p.x))
+    except FileNotFoundError:
+        # Squeezes lines
+        p = np.where((topo[glacier_ext].min() == topo) & glacier_ext)
+        head = (p[0][0], p[1][0])
 
     # Make going up very costy
     topo = topo**4
@@ -995,8 +1005,13 @@ def compute_downstream_line(gdir):
         raise GeometryError('Downstream line not found')
 
     cl = gdir.read_pickle('inversion_flowlines')[-1]
-    lline, dline = _line_extend(cl.line, line, cl.dx)
-    out = dict(full_line=lline, downstream_line=dline)
+    if cl.line is not None:
+        # normal OGGM lines
+        lline, dline = _line_extend(cl.line, line, cl.dx)
+        out = dict(full_line=lline, downstream_line=dline)
+    else:
+        out = dict(full_line=None, downstream_line=line)
+
     gdir.write_pickle(out, 'downstream_line')
 
 
@@ -2064,7 +2079,7 @@ def intersect_downstream_lines(gdir, candidates=None):
 
 @entity_task(log, writes=['elevation_band_flowline'])
 def elevation_band_flowline(gdir):
-    """Compute "squeezed" or "collpased" glacier flowlines from Huss 2012.
+    """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
 
 
     Parameters
@@ -2147,7 +2162,7 @@ def elevation_band_flowline(gdir):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def regular_elevation_band_flowline(gdir):
-    """Converts the "collpased" flowline into a regular "inversion flowline".
+    """Converts the "collapsed" flowline into a regular "inversion flowline".
 .
     Parameters
     ----------
@@ -2188,7 +2203,7 @@ def regular_elevation_band_flowline(gdir):
                     map_dx=map_dx)
     fl.order = 0
     fl.widths = widths_m / map_dx
-    # TODO - this we yet don't know
+    # TODO - this we don't know yet: rectangular for now
     fl.is_rectangular = np.ones(nx, dtype=bool)
 
     gdir.write_pickle([fl], 'inversion_flowlines')

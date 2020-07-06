@@ -847,7 +847,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         new_area = np.sum(ww * cl.dx * gdir.grid.dx)
         np.testing.assert_allclose(new_area * 10 ** -6, np.float(tdf['Area']))
 
-    def test_full_workflow(self):
+    def test_inversion(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -896,6 +896,34 @@ class TestElevationBandFlowlines(unittest.TestCase):
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
         assert rms < 20
+
+    def test_run(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.regular_elevation_band_flowline(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        climate.process_custom_climate_data(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v1, _ = inversion.mass_conservation_inversion(gdir)
+        flowline.init_present_time_glacier(gdir)
+        flowline.run_random_climate(gdir, nyears=50, y0=1985)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            # it's running and it is retreating
+            assert ds.volume_m3[-1] < ds.volume_m3[0]
+            assert ds.length_m[-1] < ds.length_m[0]
 
 
 class TestGeometry(unittest.TestCase):

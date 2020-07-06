@@ -646,9 +646,15 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         hs = np.append(hs, fl.surface_h)
         ts = np.append(ts, cl['thick'])
         vs = np.append(vs, cl['volume'])
-        x, y = fl.line.xy
+        try:
+            x, y = fl.line.xy
+        except AttributeError:
+            # Squeezed flowlines, dummy coords
+            x = fl.surface_h * 0 - 1
+            y = fl.surface_h * 0 - 1
         xs = np.append(xs, x)
         ys = np.append(ys, y)
+
     init_vol = np.sum(vs)
 
     # Assign a first order thickness to the points
