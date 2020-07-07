@@ -92,10 +92,6 @@ class Centerline(object, metaclass=SuperclassMeta):
             the map's grid resolution. Centerline.dx_meter = dx * map_dx
         """
 
-        # This is do add flexibility for testing
-        if dx is None:
-            dx = 1.
-
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
         self.tail = None  # Shapely Point

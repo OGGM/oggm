@@ -72,6 +72,13 @@ class Flowline(Centerline):
             The water level (to compute volume below sea-level)
         """
 
+        # This is do add flexibility for testing
+        if dx is None:
+            dx = 1.
+        if line is None:
+            coords = np.arange(len(surface_h)) * dx
+            line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
         super(Flowline, self).__init__(line, dx, surface_h)
 
         self._thick = utils.clip_min(surface_h - bed_h, 0.)

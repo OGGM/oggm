@@ -231,10 +231,7 @@ def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
 
     pix_id = np.linspace(20, 180, n_trib).round().astype(int)
 
-    coords = np.arange(len(surface_h[:pix_id[0]])) * dx
-    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-
-    fls = [flowline.RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+    fls = [flowline.RectangularBedFlowline(dx=dx, map_dx=map_dx,
                                            surface_h=surface_h[:pix_id[0]],
                                            bed_h=bed_h[:pix_id[0]],
                                            widths=widths[:pix_id[0]])]
@@ -246,10 +243,7 @@ def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
             eid = pix_id[i + 1]
         dh = -100 if small_cliff else 0
 
-        coords = np.arange(len(surface_h[pid:eid])) * dx
-        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
-
-        fl = flowline.RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+        fl = flowline.RectangularBedFlowline(dx=dx, map_dx=map_dx,
                                              surface_h=surface_h[pid:eid] + dh,
                                              bed_h=bed_h[pid:eid] + dh,
                                              widths=widths[pid:eid])
