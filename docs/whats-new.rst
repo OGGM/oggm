@@ -53,6 +53,12 @@ Enhancements
   replace the current SRTM (https://lpdaac.usgs.gov/products/nasadem_hgtv001/).
   (:pull:`971`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- Added support for "squeezed" flowlines from Huss & Farinotti 2012
+  (:pull:`1040`). The corresponding tasks are
+  :py:func:`tasks.elevation_band_flowline` and
+  :py:func:`tasks.fixed_dx_elevation_band_flowline`.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~

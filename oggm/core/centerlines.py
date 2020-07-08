@@ -88,15 +88,20 @@ class Centerline(object, metaclass=SuperclassMeta):
             geometric point of the lines head
         rgi_id : str
             The glacier's RGI identifier
+        map_dx : float
+            the map's grid resolution. Centerline.dx_meter = dx * map_dx
         """
 
         self.line = None  # Shapely LineString
         self.head = None  # Shapely Point
         self.tail = None  # Shapely Point
-        self.dis_on_line = None  # Shapely Point
-        self.nx = None  # Shapely Point
-        self.is_glacier = None  # Shapely Point
-        self.set_line(line)  # Init all previous properties
+        self.dis_on_line = None
+        self.nx = None
+        if line is not None:
+            self.set_line(line)  # Init all previous properties
+        else:
+            self.nx = len(surface_h)
+            self.dis_on_line = np.arange(self.nx) * dx
 
         self.order = None  # Hydrological flow level (~ Strahler number)
 
@@ -946,11 +951,17 @@ def compute_downstream_line(gdir):
 
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo_smoothed'][:]
-        glacier_ext = nc.variables['glacier_ext'][:]
+        glacier_ext = nc.variables['glacier_ext'][:] == 1
 
     # Look for the starting points
-    p = gdir.read_pickle('centerlines')[-1].tail
-    head = (int(p.y), int(p.x))
+    try:
+        # Normal OGGM flowlines
+        p = gdir.read_pickle('centerlines')[-1].tail
+        head = (int(p.y), int(p.x))
+    except FileNotFoundError:
+        # Squeezes lines
+        p = np.where((topo[glacier_ext].min() == topo) & glacier_ext)
+        head = (p[0][0], p[1][0])
 
     # Make going up very costy
     topo = topo**4
@@ -990,8 +1001,13 @@ def compute_downstream_line(gdir):
         raise GeometryError('Downstream line not found')
 
     cl = gdir.read_pickle('inversion_flowlines')[-1]
-    lline, dline = _line_extend(cl.line, line, cl.dx)
-    out = dict(full_line=lline, downstream_line=dline)
+    if cl.line is not None:
+        # normal OGGM lines
+        lline, dline = _line_extend(cl.line, line, cl.dx)
+        out = dict(full_line=lline, downstream_line=dline)
+    else:
+        out = dict(full_line=None, downstream_line=line)
+
     gdir.write_pickle(out, 'downstream_line')
 
 
@@ -1964,7 +1980,7 @@ def catchment_width_correction(gdir):
 def terminus_width_correction(gdir, new_width=None):
     """Sets a new value for the terminus width.
 
-    This can be useful for e.g. tiddewater glaciers where we know the width
+    This can be useful for e.g. tidewater glaciers where we know the width
     and don't like the OGGM one.
 
     This task preserves the glacier area but will change the fit of the
@@ -2055,3 +2071,152 @@ def intersect_downstream_lines(gdir, candidates=None):
             tributaries.append(trib)
 
     return tributaries
+
+
+@entity_task(log, writes=['elevation_band_flowline'])
+def elevation_band_flowline(gdir):
+    """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
+
+    This writes out a table of along glacier bins, strictly following the
+    method described in Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
+    Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
+    applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
+
+    The only parameter is cfg.PARAMS['elevation_band_flowline_binsize'],
+    which is 30m in Werder et al and 10m in Huss&Farinotti2012.
+
+    Currently the bands are assumed to have a rectangular bed.
+
+    Before calling this task you should run `tasks.define_glacier_region`
+    and `gis.simple_glacier_masks`. The logical following task is
+    `fixed_dx_elevation_band_flowline` to convert this to an OGGM flowline.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    # variables
+    grids_file = gdir.get_filepath('gridded_data')
+    with utils.ncDataset(grids_file) as nc:
+        # Variables
+        glacier_mask = nc.variables['glacier_mask'][:] == 1
+        topo = nc.variables['topo_smoothed'][:]
+
+    # slope
+    sy, sx = np.gradient(topo, gdir.grid.dx)
+    slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
+
+    # clip following Werder et al 2019
+    slope = utils.clip_array(slope, np.deg2rad(0.4), np.deg2rad(60))
+
+    topo = topo[glacier_mask]
+    slope = slope[glacier_mask]
+
+    bsize = cfg.PARAMS['elevation_band_flowline_binsize']
+
+    # Make nice bins ensureing to cover the full range with the given bin size
+    maxb = utils.nicenumber(np.max(topo), bsize)
+    minb = utils.nicenumber(np.min(topo), bsize, lower=True)
+    bins = np.arange(minb, maxb + 0.01, bsize)
+
+    # Go - binning
+    df = pd.DataFrame()
+    topo_digi = np.digitize(topo, bins) - 1  # I prefer the left
+    for bi in range(len(bins) - 1):
+        # the coordinates of the current bin
+        bin_coords = topo_digi == bi
+
+        # bin area
+        bin_area = np.sum(bin_coords) * gdir.grid.dx ** 2
+        if bin_area == 0:
+            # Ignored in this case - which I believe is strange because deltaH
+            # should be larger for the previous bin, but this is what they do
+            # according to Zekollari 2019 review
+            continue
+        df.loc[bi, 'area'] = bin_area
+
+        # bin average elevation
+        df.loc[bi, 'mean_elevation'] = np.mean(topo[bin_coords])
+
+        # bin averge slope
+        # there are a few more shneanigans here described in Werder et al 2019
+        s_bin = slope[bin_coords]
+        # between the 5% percentile and the x% percentile where x is some magic
+        qmin = np.quantile(s_bin, 0.05)
+        x = max(2 * np.quantile(s_bin, 0.2) / np.quantile(s_bin, 0.8), 0.55)
+        x = min(x, 0.95)
+        qmax = np.quantile(s_bin, x)
+        df.loc[bi, 'slope'] = np.mean(s_bin[(s_bin >= qmin) & (s_bin <= qmax)])
+
+    # The grid point's grid spacing and widths
+    df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
+    df['dx'] = bsize / np.tan(df['slope'])
+    df['width'] = df['area'] / df['dx']
+
+    # In OGGM we go from top to bottom
+    df = df[::-1]
+
+    # The x coordinate in meter - this is a bit arbitrary but we put it at the
+    # center of the irregular grid (better for interpolation later
+    dx = df['dx'].values
+    dx_points = np.append(dx[0]/2, (dx[:-1] + dx[1:]) / 2)
+    df.index = np.cumsum(dx_points)
+    df.index.name = 'dis_along_flowline'
+
+    # Store and return
+    df.to_csv(gdir.get_filepath('elevation_band_flowline'))
+
+
+@entity_task(log, writes=['inversion_flowlines'])
+def fixed_dx_elevation_band_flowline(gdir):
+    """Converts the "collapsed" flowline into a regular "inversion flowline".
+
+    You need to run `tasks.elevation_band_flowline` first. It then interpolates
+    onto a regular grid with the same dx as the one that OGGM would choose
+    (cfg.PARAMS['flowline_dx'] * map_dx).
+.
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    """
+
+    df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
+
+    map_dx = gdir.grid.dx
+    dx = cfg.PARAMS['flowline_dx']
+    dx_meter = dx * map_dx
+    nx = int(df.dx.sum() / dx_meter)
+    dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter
+
+    while dis_along_flowline[-1] > df.index[-1]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[:-1]
+
+    while dis_along_flowline[0] < df.index[0]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[1:]
+
+    nx = len(dis_along_flowline)
+
+    # Interpolate the data we need
+    hgts = np.interp(dis_along_flowline, df.index, df['mean_elevation'])
+    widths_m = np.interp(dis_along_flowline, df.index, df['width'])
+
+    # Correct the widths - area preserving
+    area = np.sum(widths_m * dx_meter)
+    fac = gdir.rgi_area_m2 / area
+    log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
+    widths_m *= fac
+
+    # Write as a Centerline object
+    fl = Centerline(None, dx=dx, surface_h=hgts, rgi_id=gdir.rgi_id,
+                    map_dx=map_dx)
+    fl.order = 0
+    fl.widths = widths_m / map_dx
+    # TODO - this we don't know yet: rectangular for now
+    fl.is_rectangular = np.ones(nx, dtype=bool)
+
+    gdir.write_pickle([fl], 'inversion_flowlines')

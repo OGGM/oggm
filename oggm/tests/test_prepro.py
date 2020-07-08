@@ -292,7 +292,7 @@ class TestGIS(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        gis.simple_glacier_masks(gdir)
+        gis.simple_glacier_masks(gdir, write_hypsometry=True)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
@@ -355,7 +355,7 @@ class TestGIS(unittest.TestCase):
         # The test below does NOT pass on OGGM
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'default_masks.nc'))
-        gis.simple_glacier_masks(gdir)
+        gis.simple_glacier_masks(gdir, write_hypsometry=True)
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
@@ -743,6 +743,187 @@ class TestCenterlines(unittest.TestCase):
             self.assertTrue(hss > 0.53)
         if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
             self.assertTrue(hss > 0.41)
+
+
+class TestElevationBandFlowlines(unittest.TestCase):
+
+    def setUp(self):
+
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp')
+        if not os.path.exists(self.testdir):
+            os.makedirs(self.testdir)
+        self.clean_dir()
+
+        # Init
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 10
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['baseline_climate'] = ''
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+
+    def clean_dir(self):
+        shutil.rmtree(self.testdir)
+        os.makedirs(self.testdir)
+
+    def test_irregular_grid(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+
+        df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
+
+        # Almost same because of grid VS shape
+        np.testing.assert_allclose(df.area.sum(), gdir.rgi_area_m2, rtol=0.01)
+
+        # Length is very different but that's how it is
+        np.testing.assert_allclose(df.dx.sum(), entity['Lmax'], rtol=0.2)
+
+        # Slope is similar enough
+        avg_slope = np.average(np.rad2deg(df.slope), weights=df.area)
+        np.testing.assert_allclose(avg_slope, entity['Slope'], rtol=0.12)
+
+    def test_to_inversion_flowline(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+
+        # The tests below are overkill but copied from another test
+        # they check everything, which is OK
+        area = 0.
+        otherarea = 0.
+        evenotherarea = 0
+        hgt = []
+        harea = []
+
+        cls = gdir.read_pickle('inversion_flowlines')
+        for cl in cls:
+            harea.extend(list(cl.widths * cl.dx))
+            hgt.extend(list(cl.surface_h))
+            area += np.sum(cl.widths * cl.dx)
+            evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+            otherarea += np.sum(nc.variables['glacier_mask'][:])
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+            mask = nc.variables['glacier_mask'][:]
+            topo = nc.variables['topo_smoothed'][:]
+        rhgt = topo[np.where(mask)][:]
+
+        tdf = gdir.read_shapefile('outlines')
+        np.testing.assert_allclose(area, otherarea, rtol=0.1)
+        np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
+        area *= gdir.grid.dx ** 2
+        otherarea *= gdir.grid.dx ** 2
+        np.testing.assert_allclose(area * 10 ** -6, np.float(tdf['Area']),
+                                   rtol=1e-4)
+
+        # Check for area distrib
+        bins = np.arange(utils.nicenumber(np.min(hgt), 50, lower=True),
+                         utils.nicenumber(np.max(hgt), 50) + 1,
+                         50.)
+        h1, b = np.histogram(hgt, weights=harea, density=True, bins=bins)
+        h2, b = np.histogram(rhgt, density=True, bins=bins)
+        assert utils.rmsd(h1 * 100 * 50, h2 * 100 * 50) < 1.5
+
+        # Check that utility function is doing what is expected
+        hh, ww = gdir.get_inversion_flowline_hw()
+        new_area = np.sum(ww * cl.dx * gdir.grid.dx)
+        np.testing.assert_allclose(new_area * 10 ** -6, np.float(tdf['Area']))
+
+    def test_inversion(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        climate.process_custom_climate_data(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v1, _ = inversion.mass_conservation_inversion(gdir)
+        inversion.distribute_thickness_per_altitude(gdir)
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ds1 = ds.load()
+
+        # Repeat normal workflow
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        climate.process_custom_climate_data(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v2, _ = inversion.mass_conservation_inversion(gdir)
+        inversion.distribute_thickness_per_altitude(gdir)
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ds2 = ds.load()
+
+        # Total volume is different at only 5%
+        np.testing.assert_allclose(v1, v2, rtol=0.06)
+
+        # And the distributed diff is not too large either
+        rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
+        assert rms < 20
+
+    def test_run(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        climate.process_custom_climate_data(gdir)
+        mbdf = gdir.get_ref_mb_data()
+        res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
+        t_star, bias = res['t_star'], res['bias']
+        climate.local_t_star(gdir, tstar=t_star, bias=bias)
+        climate.mu_star_calibration(gdir)
+        inversion.prepare_for_inversion(gdir)
+        v1, _ = inversion.mass_conservation_inversion(gdir)
+        flowline.init_present_time_glacier(gdir)
+        flowline.run_random_climate(gdir, nyears=50, y0=1985)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            # it's running and it is retreating
+            assert ds.volume_m3[-1] < ds.volume_m3[0]
+            assert ds.length_m[-1] < ds.length_m[0]
 
 
 class TestGeometry(unittest.TestCase):

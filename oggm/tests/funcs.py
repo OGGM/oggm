@@ -242,6 +242,7 @@ def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
         else:
             eid = pix_id[i + 1]
         dh = -100 if small_cliff else 0
+
         fl = flowline.RectangularBedFlowline(dx=dx, map_dx=map_dx,
                                              surface_h=surface_h[pid:eid] + dh,
                                              bed_h=bed_h[pid:eid] + dh,

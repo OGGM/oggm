@@ -18,6 +18,8 @@ from oggm.core.centerlines import initialize_flowlines
 from oggm.core.centerlines import catchment_width_geom
 from oggm.core.centerlines import catchment_width_correction
 from oggm.core.centerlines import terminus_width_correction
+from oggm.core.centerlines import elevation_band_flowline
+from oggm.core.centerlines import fixed_dx_elevation_band_flowline
 from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data

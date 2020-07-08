@@ -646,9 +646,15 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         hs = np.append(hs, fl.surface_h)
         ts = np.append(ts, cl['thick'])
         vs = np.append(vs, cl['volume'])
-        x, y = fl.line.xy
+        try:
+            x, y = fl.line.xy
+        except AttributeError:
+            # Squeezed flowlines, dummy coords
+            x = fl.surface_h * 0 - 1
+            y = fl.surface_h * 0 - 1
         xs = np.append(xs, x)
         ys = np.append(ys, y)
+
     init_vol = np.sum(vs)
 
     # Assign a first order thickness to the points
@@ -740,7 +746,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
     with utils.ncDataset(grids_file) as nc:
-        has_masks = 'glacier_ext_erosion' in nc.variables
+        has_masks = 'ice_divides' in nc.variables
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)
