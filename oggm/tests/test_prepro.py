@@ -803,7 +803,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
         centerlines.elevation_band_flowline(gdir)
-        centerlines.regular_elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
 
         # The tests below are overkill but copied from another test
         # they check everything, which is OK
@@ -856,7 +856,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
         centerlines.elevation_band_flowline(gdir)
-        centerlines.regular_elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
@@ -906,7 +906,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
         centerlines.elevation_band_flowline(gdir)
-        centerlines.regular_elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
         climate.process_custom_climate_data(gdir)

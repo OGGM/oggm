@@ -2077,6 +2077,19 @@ def intersect_downstream_lines(gdir, candidates=None):
 def elevation_band_flowline(gdir):
     """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
 
+    This writes out a table of along glacier bins, strictly following the
+    method described in Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
+    Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
+    applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
+
+    The only parameter is cfg.PARAMS['elevation_band_flowline_binsize'],
+    which is 30m in Werder et al and 10m in Huss&Farinotti2012.
+
+    Currently the bands are assumed to have a rectangular bed.
+
+    Before calling this task you should run `tasks.define_glacier_region`
+    and `gis.simple_glacier_masks`. The logical following task is
+    `fixed_dx_elevation_band_flowline` to convert this to an OGGM flowline.
 
     Parameters
     ----------
@@ -2157,8 +2170,12 @@ def elevation_band_flowline(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def regular_elevation_band_flowline(gdir):
+def fixed_dx_elevation_band_flowline(gdir):
     """Converts the "collapsed" flowline into a regular "inversion flowline".
+
+    You need to run `tasks.elevation_band_flowline` first. It then interpolates
+    onto a regular grid with the same dx as the one that OGGM would choose
+    (cfg.PARAMS['flowline_dx'] * map_dx).
 .
     Parameters
     ----------
