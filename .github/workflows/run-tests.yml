@@ -25,7 +25,7 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - oggm/untested_base:20200323
+          - oggm/untested_base:20200723
           - oggm/untested_base:py36
         include:
           - container: python:3.7-slim
