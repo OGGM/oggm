@@ -155,11 +155,11 @@ for your own purposes. Use ``base``
 if you want to install your own OGGM version (don't forget to test it
 afterwards!), and use ``oggm`` if you know which OGGM version you want.
 
-Here is how we run a given fixed version of OGGM on our cluster, using
-singularity to pull from a given fixed base::
+As an example, here is how we run a given fixed version of OGGM on our 
+own cluster, using singularity to pull from docker hub::
 
     # All commands in the EOF block run inside of the container
-    srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" singularity exec docker://oggm/oggm:20200708 bash -s <<EOF
+    singularity exec docker://oggm/oggm:20200708 bash -s <<EOF
       set -e
       # Setup a fake home dir inside of our workdir, so we don't clutter the
       # actual shared homedir with potentially incompatible stuff
@@ -181,20 +181,24 @@ singularity to pull from a given fixed base::
 
 Some explanations:
 
-- `srun <https://slurm.schedmd.com/srun.html>`_ is the command used by our
-  job scheduler, SLURM. We specify the number of nodes and CPU's we'd like to
-  use. This might vary on your cluster.
 - ``singularity exec`` uses `Singularity <https://www.sylabs.io/>`_
   to execute a series of commands in a singularity container, which here
   simply is taken from our Docker container base (singularity
   `can run docker containers <https://www.sylabs.io/guides/3.1/user-guide/singularity_and_docker.html>`_).
   Singularity is preferred over Docker in cluster
-  environments, mostly for security and performance reasons.
+  environments, mostly for security and performance reasons. 
+  On our cluster, we use the SLURM manager, so we specify the number of nodes and CPU’s 
+  we’d like to use and run singularity with `srun -n 1 -c X singularity exec docker://...`. 
+  This might vary on your cluster.
 - we fix the container version we want to use to a certain
   `tag <https://hub.docker.com/r/oggm/oggm/tags>`_. With this, we are
   guaranteed to always use the same software versions across runs.
 - it follows a number of commands to make sure we don't mess around with
-  the system settings.
+  the system settings. Here we use an `$OGGM_WORKDIR` variable which is 
+  probably not available in your case: it points to a directory you can 
+  write to, and where OGGM will work (for example, it might also be the 
+  directory you are working on with OGGM (`cfg.PATHS['working_dir']`).
+  We suggest to replace this variable with what works for you.
 - the `oggm` docker images ship whith an OGGM version guaranteed to work on this container.
   Sometimes, you may want to use another OGGM version, for example whith newer developments 
   on it. You might also add your own flavor or parameterization to OGGM into the environment. 
