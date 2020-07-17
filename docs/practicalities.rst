@@ -159,7 +159,7 @@ Here is how we run a given fixed version of OGGM on our cluster, using
 singularity to pull from a given fixed base::
 
     # All commands in the EOF block run inside of the container
-    srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" singularity exec docker://oggm/base:20181123 bash -s <<EOF
+    srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" singularity exec docker://oggm/oggm:20200708 bash -s <<EOF
       set -e
       # Setup a fake home dir inside of our workdir, so we don't clutter the
       # actual shared homedir with potentially incompatible stuff
@@ -170,10 +170,10 @@ singularity to pull from a given fixed base::
       # itself, as the base system is immutable.
       python3 -m venv --system-site-packages "$OGGM_WORKDIR/oggm_env"
       source "$OGGM_WORKDIR/oggm_env/bin/activate"
-      # Make sure latest pip is installed
+      # OPTIONAL: make sure latest pip is installed
       pip install --upgrade pip setuptools
-      # Install a fixed OGGM version (here 20 Jan 2019)
-      pip install "git+https://github.com/OGGM/oggm.git@c0c81cb612d6c020647ca7262705349a097b606f"
+      # OPTIONAL: install another OGGM version (here provided by its git commit hash)
+      pip install "git+https://github.com/OGGM/oggm.git@ce22ceb77f3f6ffc865be65964b568835617db0d"
       # Finally, you can test OGGM with `pytest --pyargs oggm`, or run your script:
       YOUR_RUN_SCRIPT_HERE
     EOF
@@ -183,7 +183,7 @@ Some explanations:
 
 - `srun <https://slurm.schedmd.com/srun.html>`_ is the command used by our
   job scheduler, SLURM. We specify the number of nodes and CPU's we'd like to
-  use.
+  use. This might vary on your cluster.
 - ``singularity exec`` uses `Singularity <https://www.sylabs.io/>`_
   to execute a series of commands in a singularity container, which here
   simply is taken from our Docker container base (singularity
@@ -191,18 +191,26 @@ Some explanations:
   Singularity is preferred over Docker in cluster
   environments, mostly for security and performance reasons.
 - we fix the container version we want to use to a certain
-  `tag <https://hub.docker.com/r/oggm/base/tags>`_. With this, we are
+  `tag <https://hub.docker.com/r/oggm/oggm/tags>`_. With this, we are
   guaranteed to always use the same software versions across runs.
 - it follows a number of commands to make sure we don't mess around with
   the system settings.
-- then we install a **specific OGGM version**, here specified by its
+- the `oggm` docker images ship whith an OGGM version guaranteed to work on this container.
+  Sometimes, you may want to use another OGGM version, for example whith newer developments 
+  on it. You might also add your own flavor or parameterization to OGGM into the environment. 
+  For this you can use pip and install the version you want. Here we show an example 
+  where we install a specific OGGM version, here specified by its
   git hash (you can use a
   `git tag <https://stackoverflow.com/questions/13685920/install-specific-git-commit-with-pip>`_
-  as well). Again, this is to ensure reproducibility and **document** which
-  dependency and OGGM versions where used for a specific run.
+  as well). If you do that, you might want to run the tests once first to make sure 
+  that it works as expected. You can do that by replacing `YOUR_RUN_SCRIPT_HERE`
+  with `pytest --pyargs oggm --run-slow`!
+- Finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
+  from this container! Most of the time, it will be a call to your python
+  script.
 
 We recommend to keep these scripts alongside our code and data, so that you
-can trace them.
+can trace them later on.
 
 Data storage
 ~~~~~~~~~~~~
