@@ -255,7 +255,7 @@ class TestFullRun(unittest.TestCase):
                         0.01)
         assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.04)
         assert_allclose(df['inv_volume_km3'].sum(),
-                        df['start_volume_km3'].sum(), 0.001)
+                        df['start_volume_km3'].sum(), 0.005)
         assert_allclose(df['main_flowline_length'], df['start_length'])
 
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
