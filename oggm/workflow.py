@@ -7,6 +7,8 @@ from collections.abc import Sequence
 # External libs
 import multiprocessing
 import numpy as np
+import pandas as pd
+from scipy import optimize as optimization
 
 # Locals
 import oggm
@@ -565,6 +567,58 @@ def inversion_tasks(gdirs):
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
+
+
+def calibrate_inversion_from_consensus_estimate(gdirs):
+    """Fit the total volume of the glaciers to the 2019 consensus estimate.
+
+    This method finds the "best Glen A" to match all glaciers in gdirs with
+    a valid inverted volume.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    gdirs = utils.tolist(gdirs)
+
+    # Get the ref data for the glaciers we have
+    df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+    rids = [gdir.rgi_id for gdir in gdirs]
+    df = df.loc[rids]
+
+    def_a = cfg.PARAMS['inversion_glen_a']
+    a_bounds = [0.1, 10]
+
+    # Optimize the diff to ref
+    def to_minimize(x):
+
+        cfg.PARAMS['inversion_glen_a'] = x * def_a
+        vols = execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        _df = df.copy()
+        _df['oggm'] = vols
+        _df = _df.dropna()
+        return _df.vol_itmix_m3.sum() - _df.oggm.sum()
+
+    out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
+                                     full_output=True)
+    if r.converged:
+        log.workflow('calibrate_inversion_from_consensus_estimate '
+                     'converged after {} iterations. The resulting Glen A '
+                     'factor is {}.'.format(r.iterations, out_fac))
+    else:
+        raise RuntimeError('Unexpected error')
+
+    # Compute the final volume with the correct A
+    cfg.PARAMS['inversion_glen_a'] = out_fac * def_a
+    vols = execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+    df['vol_oggm_m3'] = vols
+    return df
 
 
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,

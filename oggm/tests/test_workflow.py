@@ -70,6 +70,9 @@ def up_to_climate(reset=False):
     rgidf.loc[0, 'GlacType'] = '0199'
     rgidf.loc[1, 'GlacType'] = '0299'
 
+    # Use RGI6
+    rgidf['RGIId'] = [s.replace('RGI50', 'RGI60') for s in rgidf.RGIId]
+
     # Be sure data is downloaded
     cru.get_cru_cl_file()
 
@@ -191,6 +194,17 @@ class TestFullRun(unittest.TestCase):
         assert np.all(dfc.tstar_aar.mean() > 0.5)
 
     @pytest.mark.slow
+    def test_calibrate_inversion(self):
+
+        gdirs = up_to_inversion()
+        df = workflow.calibrate_inversion_from_consensus_estimate(gdirs)
+        df = df.dropna()
+        np.testing.assert_allclose(df.vol_itmix_m3.sum(),
+                                   df.vol_oggm_m3.sum(),
+                                   rtol=0.01)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.35)
+
+    @pytest.mark.slow
     def test_shapefile_output(self):
 
         # Just to increase coveralls, hehe
@@ -201,7 +215,7 @@ class TestFullRun(unittest.TestCase):
         import salem
         shp = salem.read_shapefile(fpath)
         self.assertTrue(shp is not None)
-        shp = shp.loc[shp.RGIID == 'RGI50-11.00897']
+        shp = shp.loc[shp.RGIID == 'RGI60-11.00897']
         self.assertEqual(len(shp), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
 

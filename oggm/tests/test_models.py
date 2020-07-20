@@ -182,7 +182,7 @@ class TestInitFlowlineOtherGlacier:
         climate.local_t_star(gdir, tstar=1930, bias=0)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
-        v, ainv = inversion.mass_conservation_inversion(gdir)
+        v = inversion.mass_conservation_inversion(gdir)
         init_present_time_glacier(gdir)
 
         myarea = 0.
@@ -190,7 +190,6 @@ class TestInitFlowlineOtherGlacier:
         for cl in cls:
             myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
 
-        np.testing.assert_allclose(ainv, gdir.rgi_area_m2, rtol=1e-2)
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
 
         myarea = 0.
@@ -1666,7 +1665,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
@@ -1731,7 +1730,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
@@ -1808,7 +1807,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.02)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
@@ -1868,7 +1867,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.03)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
@@ -1925,7 +1924,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -1954,7 +1953,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -1989,7 +1988,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -2027,7 +2026,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -2057,7 +2056,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -2090,7 +2089,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -2127,7 +2126,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
@@ -2161,7 +2160,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.02)
         if do_plot:  # pragma: no cover
@@ -2200,7 +2199,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.02)
         if do_plot:  # pragma: no cover
@@ -2241,7 +2240,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.02)
         if do_plot:  # pragma: no cover
@@ -2276,7 +2275,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         # expected errors
         assert v > model.volume_m3
@@ -2307,7 +2306,7 @@ class TestIdealisedInversion():
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
-        v, _ = inversion.mass_conservation_inversion(inversion_gdir)
+        v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.01)
 

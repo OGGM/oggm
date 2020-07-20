@@ -377,7 +377,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
         _fd = 1.9e-24 * x[0]
         glen_a = (glen_n+2) * _fd / 2.
         fs = 5.7e-20 * x[1]
-        v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
+        v = inversion.mass_conservation_inversion(gdir, fs=fs,
                                                      glen_a=glen_a)
         return (v - ref_v)**2
 
@@ -387,9 +387,9 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     _fd = 1.9e-24 * out[0]
     glen_a = (glen_n+2) * _fd / 2.
     fs = 5.7e-20 * out[1]
-    v, _ = inversion.mass_conservation_inversion(gdir, fs=fs,
-                                                 glen_a=glen_a,
-                                                 write=True)
+    v = inversion.mass_conservation_inversion(gdir, fs=fs,
+                                              glen_a=glen_a,
+                                              write=True)
 
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]
