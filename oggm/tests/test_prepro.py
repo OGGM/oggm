@@ -2889,7 +2889,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         # Write out
         gdir.write_pickle(towrite, 'inversion_input')
-        v  = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
+        v = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
         cl = gdir.read_pickle('inversion_output')[0]

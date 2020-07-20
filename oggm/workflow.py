@@ -14,7 +14,7 @@ from scipy import optimize as optimization
 import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # MPI
 try:
@@ -569,7 +569,7 @@ def inversion_tasks(gdirs):
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def calibrate_inversion_from_consensus_estimate(gdirs):
+def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -579,6 +579,9 @@ def calibrate_inversion_from_consensus_estimate(gdirs):
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    ignore_missing : bool
+        set this to true to silence the error if some glaciers could not be
+        found in the consensus estimate.
 
     Returns
     -------
@@ -590,7 +593,15 @@ def calibrate_inversion_from_consensus_estimate(gdirs):
     # Get the ref data for the glaciers we have
     df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
     rids = [gdir.rgi_id for gdir in gdirs]
-    df = df.loc[rids]
+
+    found_ids = df.index.intersection(rids)
+    if not ignore_missing and (len(found_ids) != len(rids)):
+        raise InvalidWorkflowError('Could not find matching indices in the '
+                                   'consensus estimate for all provided '
+                                   'glaciers. Set ignore_missing=True to '
+                                   'ignore this error.')
+
+    df = df.reindex(rids)
 
     def_a = cfg.PARAMS['inversion_glen_a']
     a_bounds = [0.1, 10]
