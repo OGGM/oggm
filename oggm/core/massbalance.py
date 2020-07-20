@@ -13,6 +13,7 @@ from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         tolist, clip_min, clip_max, clip_array)
 from oggm.exceptions import InvalidWorkflowError
 
+
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Common logic for the mass balance models.
 

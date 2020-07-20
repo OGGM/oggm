@@ -413,8 +413,10 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
     if write:
         gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
+        gdir.add_to_diagnostics('inversion_glen_a', glen_a)
+        gdir.add_to_diagnostics('inversion_fs', fs)
 
-    return out_volume, gdir.rgi_area_km2 * 1e6
+    return out_volume
 
 
 @entity_task(log, writes=['inversion_output'])
@@ -938,7 +940,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         prepare_for_inversion(gdir, add_debug_var=True)
-        v_ref, _ = mass_conservation_inversion(gdir, water_level=water_level)
+        v_ref = mass_conservation_inversion(gdir, water_level=water_level)
 
     # Store for statistics
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
