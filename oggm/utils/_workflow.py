@@ -2747,8 +2747,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     shutil.copyfile(main.get_filepath('local_mustar'),
                     os.path.join(merged.dir, mufile))
     # I think I need the climate_info only for the main glacier
-    shutil.copyfile(main.get_filepath('climate_info'),
-                    merged.get_filepath('climate_info'))
+    climateinfo = main.read_json('climate_info')
+    merged.write_json(climateinfo, 'climate_info')
 
     # reproject the flowlines to the new grid
     for nr, fl in reversed(list(enumerate(mfls))):
