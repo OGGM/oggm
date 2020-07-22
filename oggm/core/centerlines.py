@@ -122,6 +122,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self._surface_h = surface_h
         self._widths = None
         self.is_rectangular = None
+        self.is_trapezoid = None
         self.orig_head = orig_head  # Useful for debugging and for filtering
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.

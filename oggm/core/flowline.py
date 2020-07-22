@@ -369,7 +369,7 @@ class MixedBedFlowline(Flowline):
     """A Flowline which can take a combination of different shapes (default)
 
     The default shape is parabolic. At ice divides a rectangular shape is used.
-    And if the parabola gets to flat a trapezoidal shape is used.
+    And if the parabola gets too flat a trapezoidal shape is used.
     """
 
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,

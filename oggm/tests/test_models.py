@@ -1537,7 +1537,6 @@ class TestIO():
                                          setup='inversion')
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
         inversion.mass_conservation_inversion(new_gdir)
-        inversion.filter_inversion_output(new_gdir)
         init_present_time_glacier(new_gdir)
         run_constant_climate(new_gdir, nyears=10, bias=0)
         shutil.rmtree(new_dir)
@@ -1664,7 +1663,7 @@ class TestIdealisedInversion():
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
+        inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
         assert_allclose(v, model.volume_m3, rtol=0.01)
@@ -1679,16 +1678,24 @@ class TestIdealisedInversion():
         slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
 
         est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux)
+        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg],
+                                                   flux)
         mod_h = fl.thick[pg]
 
         # Test in the middle where slope is not too important
         assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+        assert_allclose(est_ho[25:75], mod_h[25:75], rtol=0.01)
+        assert_allclose(est_h, est_ho, rtol=0.01)
 
         # OGGM internal flux
         est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)
+        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg],
+                                                   inv_flux)
 
         # Test in the middle where slope is not too important
-        assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+        assert_allclose(est_h_ofl[25:75], mod_h[25:75], rtol=0.02)
+        assert_allclose(est_ho[25:75], mod_h[25:75], rtol=0.02)
+        assert_allclose(est_h_ofl, est_ho, rtol=0.01)
 
         # OK so what's happening here is following: the flux computed in
         # OGGM intern is less good than the real one with the real MB,
@@ -1708,6 +1715,45 @@ class TestIdealisedInversion():
 
         if do_plot:  # pragma: no cover
             self.simple_plot(model, inversion_gdir)
+
+    def test_inversion_trapeze(self, inversion_gdir):
+
+        fls = dummy_trapezoidal_bed(map_dx=inversion_gdir.grid.dx,
+                                    def_lambdas=cfg.PARAMS['trapezoid_lambdas'])
+        mb = LinearMassBalance(2600.)
+
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until_equilibrium()
+
+        fls = []
+        for fl in model.fls:
+            pg = np.where(fl.thick > 0)
+            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+            flo = centerlines.Centerline(line, dx=fl.dx,
+                                         surface_h=fl.surface_h[pg])
+            flo.widths = fl.widths[pg]
+            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            fls.append(flo)
+        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+
+        climate.apparent_mb_from_linear_mb(inversion_gdir)
+
+        # Equations
+        mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
+        flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
+
+        slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
+        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg],
+                                                   flux, shape='trapezoid')
+        mod_h = fl.thick[pg]
+
+        # Test in the middle where slope is not too important
+        assert_allclose(est_ho[25:75], mod_h[25:75], rtol=0.01)
+
+        if do_plot:  # pragma: no cover
+            plt.plot(mod_h)
+            plt.plot(est_ho)
+            plt.show()
 
     def test_inversion_parabolic(self, inversion_gdir):
 
@@ -1729,7 +1775,7 @@ class TestIdealisedInversion():
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
         climate.apparent_mb_from_linear_mb(inversion_gdir)
-        inversion.prepare_for_inversion(inversion_gdir, add_debug_var=True)
+        inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
@@ -1750,10 +1796,14 @@ class TestIdealisedInversion():
 
         est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
                                         shape='parabolic')
+        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg], flux,
+                                                   shape='parabolic')
         mod_h = fl.thick[pg]
 
         # Test in the middle where slope is not too important
         assert_allclose(est_h[25:75], mod_h[25:75], rtol=0.01)
+        assert_allclose(est_ho[25:75], mod_h[25:75], rtol=0.01)
+        assert_allclose(est_h, est_ho, rtol=0.01)
 
         # OGGM internal flux
         est_h_ofl = inversion.sia_thickness(slope, fl.widths_m[pg], inv_flux)

@@ -836,7 +836,6 @@ class TestVAScalingModel(unittest.TestCase):
         # perform ice thickness inversion
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
-        inversion.filter_inversion_output(gdir)
 
         # initialize present time glacier
         flowline.init_present_time_glacier(gdir)

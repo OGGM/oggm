@@ -61,7 +61,6 @@ for f in factors:
     suf = '_{:03d}_without_fs'.format(int(f * 10))
     workflow.execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                                  glen_a=glen_a*f, fs=0)
-    workflow.execute_entity_task(tasks.filter_inversion_output, gdirs)
     # Store the results of the inversion only
     utils.compile_glacier_statistics(gdirs, filesuffix=suf,
                                      inversion_only=True)
@@ -70,7 +69,6 @@ for f in factors:
     suf = '_{:03d}_with_fs'.format(int(f * 10))
     workflow.execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                                  glen_a=glen_a*f, fs=fs)
-    workflow.execute_entity_task(tasks.filter_inversion_output, gdirs)
     # Store the results of the inversion only
     utils.compile_glacier_statistics(gdirs, filesuffix=suf,
                                      inversion_only=True)

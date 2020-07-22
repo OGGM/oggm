@@ -154,15 +154,16 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     return [fls]
 
 
-def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200):
-    map_dx = 100.
+def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
+                          def_lambdas=2):
+
     dx = 1.
 
     surface_h = np.linspace(hmax, hmin, nx)
     bed_h = surface_h
     widths = surface_h * 0. + 1.6
 
-    lambdas = surface_h * 0. + 2
+    lambdas = surface_h * 0. + def_lambdas
 
     coords = np.arange(0, nx - 0.5, 1)
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
@@ -366,7 +367,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
     climate.mu_star_calibration(gdir)
 
-    inversion.prepare_for_inversion(gdir, add_debug_var=True)
+    inversion.prepare_for_inversion(gdir)
 
     ref_v = 0.573 * 1e9
 
@@ -395,9 +396,6 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     d['factor_glen_a'] = out[0]
     d['factor_fs'] = out[1]
     gdir.write_pickle(d, 'inversion_params')
-
-    # filter
-    inversion.filter_inversion_output(gdir)
 
     inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
