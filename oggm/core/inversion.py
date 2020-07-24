@@ -864,8 +864,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
     if k is None:
         k = cfg.PARAMS['inversion_calving_k']
 
-    # Read inversion output
-    cl = gdir.read_pickle('inversion_output')[-1]
+    # Read necessary data
     fl = gdir.read_pickle('inversion_flowlines')[-1]
 
     # Altitude at the terminus and frontal width
@@ -874,6 +873,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
     # Calving formula
     if thick is None:
+        cl = gdir.read_pickle('inversion_output')[-1]
         thick = cl['thick'][-1]
     if water_depth is None:
         water_depth = thick - free_board
