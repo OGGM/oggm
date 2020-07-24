@@ -2937,7 +2937,10 @@ class TestGrindelInvert(unittest.TestCase):
             # add to output
             cl_dic = dict(dx=dx, flux=flux, flux_a0=flux_a0, width=widths,
                           hgt=hgt, slope_angle=angle, is_last=True,
-                          is_rectangular=np.zeros(len(flux), dtype=bool))
+                          is_rectangular=np.zeros(len(flux), dtype=bool),
+                          is_trapezoid=np.zeros(len(flux), dtype=bool),
+                          invert_with_trapezoid=False,
+                          )
             towrite.append(cl_dic)
 
         # Write out

@@ -1796,8 +1796,8 @@ class TestIdealisedInversion():
 
         est_h = inversion.sia_thickness(slope, fl.widths_m[pg], flux,
                                         shape='parabolic')
-        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg], flux,
-                                                   shape='parabolic')
+        est_ho = inversion.sia_thickness_via_optim(slope, fl.widths_m[pg],
+                                                   flux, shape='parabolic')
         mod_h = fl.thick[pg]
 
         # Test in the middle where slope is not too important

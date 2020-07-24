@@ -46,6 +46,9 @@ from oggm.exceptions import InvalidParamsError
 # Module logger
 log = logging.getLogger(__name__)
 
+# arbitrary constant
+MIN_WIDTH_FOR_INV = 10
+
 
 @entity_task(log, writes=['inversion_input'])
 def prepare_for_inversion(gdir, add_debug_var=False,
@@ -223,7 +226,7 @@ def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
     # Sanity
     if flux <= 0:
         return 0
-    if width <= 1e-2:
+    if width <= MIN_WIDTH_FOR_INV:
         return 0
 
     if glen_a is None:
@@ -304,6 +307,13 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
     flux_a0 *= flux / width
+
+    # With numerically small widths this creates very high thicknesses
+    try:
+        flux_a0[width < MIN_WIDTH_FOR_INV] = 0
+    except TypeError:
+        if width < MIN_WIDTH_FOR_INV:
+            flux_a0 = 0
 
     # Polynomial factors (a5 = 1)
     a0 = - flux_a0 / ((rho * cfg.G * slope) ** 3 * fd)
