@@ -391,6 +391,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     v = inversion.mass_conservation_inversion(gdir, fs=fs,
                                               glen_a=glen_a,
                                               write=True)
+    inversion.filter_inversion_output(gdir)
 
     d = dict(fs=fs, glen_a=glen_a)
     d['factor_glen_a'] = out[0]

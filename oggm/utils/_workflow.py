@@ -2501,7 +2501,9 @@ class GlacierDirectory(object):
         if err is None:
             line += 'SUCCESS'
         else:
-            line += err.__class__.__name__ + ': {}'.format(err)
+            line += err.__class__.__name__ + ': {}'.format(err)\
+
+        line = line.replace('\n', ' ')
 
         count = 0
         while count < 5:
@@ -2539,7 +2541,7 @@ class GlacierDirectory(object):
             lines = logfile.readlines()
 
         lines = [l.replace('\n', '') for l in lines
-                 if task_name == l.split(';')[1]]
+                 if ';' in l and (task_name == l.split(';')[1])]
         if lines:
             # keep only the last log
             return lines[-1].split(';')[-1]

@@ -250,12 +250,12 @@ class TestFullRun(unittest.TestCase):
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
             df.loc[gd.rgi_id, 'start_length'] = model.length_m
-        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], 0.06)
+        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], rtol=0.01)
         assert_allclose(df['rgi_area_km2'].sum(), df['start_area_km2'].sum(),
-                        0.01)
-        assert_allclose(df['inv_volume_km3'], df['start_volume_km3'], 0.04)
+                        rtol=0.005)
+        assert_allclose(df['inv_volume_km3'], df['start_volume_km3'])
         assert_allclose(df['inv_volume_km3'].sum(),
-                        df['start_volume_km3'].sum(), 0.005)
+                        df['start_volume_km3'].sum())
         assert_allclose(df['main_flowline_length'], df['start_length'])
 
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,

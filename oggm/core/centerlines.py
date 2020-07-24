@@ -1952,7 +1952,7 @@ def catchment_width_correction(gdir):
         # tributary according to the altitude area distribution.
         # This sometimes leads to abrupt changes in the widths from one
         # grid point to another. I think it's not too harmful to smooth them
-        # here, at the cost of a less perfect altitude area distribution
+        # here, at the cost of a less good altitude area distribution
         if smooth_ws != 0:
             if smooth_ws == 1:
                 new_widths = utils.smooth1d(new_widths)

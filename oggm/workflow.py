@@ -559,12 +559,14 @@ def inversion_tasks(gdirs):
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
+            execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
 def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
@@ -608,7 +610,8 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
     def to_minimize(x):
 
         cfg.PARAMS['inversion_glen_a'] = x * def_a
-        vols = execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
         _df = df.copy()
         _df['oggm'] = vols
         _df = _df.dropna()
@@ -625,7 +628,8 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
 
     # Compute the final volume with the correct A
     cfg.PARAMS['inversion_glen_a'] = out_fac * def_a
-    vols = execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+    execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+    vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
     df['vol_oggm_m3'] = vols
     return df
 

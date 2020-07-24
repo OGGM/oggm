@@ -199,6 +199,7 @@ class full_workflow:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         # We use the default parameters for this run
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         # Final preparation for the run
         execute_entity_task(tasks.init_present_time_glacier, gdirs)

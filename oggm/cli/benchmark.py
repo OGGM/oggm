@@ -145,6 +145,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
         tasks.mu_star_calibration,
         tasks.prepare_for_inversion,
         tasks.mass_conservation_inversion,
+        tasks.filter_inversion_output,
         tasks.init_present_time_glacier,
     ]
     for task in task_list:

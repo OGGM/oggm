@@ -36,6 +36,7 @@ import warnings
 import numpy as np
 from scipy.interpolate import griddata
 from scipy import optimize
+from scipy.ndimage.filters import gaussian_filter1d
 
 # Locals
 from oggm import utils, cfg
@@ -107,7 +108,9 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             # at the last grid point. Therefore, we add some artificial
             # flux here (an alternative would be to pmute the flux on a
             # staggered grid but I actually like the QC and its easier)
-            flux[-1] = flux[-2] / 2  # this is totally arbitrary
+            # note that this value will be ignored if one uses the filter
+            # task afterwards
+            flux[-1] = flux[-2] / 3  # this is totally arbitrary
 
         # Shape
         is_rectangular = fl.is_rectangular
@@ -566,59 +569,55 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
 @entity_task(log, writes=['inversion_output'])
 def filter_inversion_output(gdir):
-    """Filters the last few grid point whilst conserving total volume.
+    """Filters the last few grid points after the physically-based inversion.
 
-    The last few grid points sometimes are noisy or can have a negative slope.
-    This function filters them while conserving the total volume.
+    For various reasons (but mostly: the equilibrium assumption), the last few
+    grid points on a glacier flowline are often noisy and create unphysical
+    depressions. Here we try to correct for that. It is not volume conserving,
+    but area conserving.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     """
-    warnings.warn('The task `filter_inversion_output` is deprecated. As of '
-                  'now, it does nothing. It will be replaced by a similar '
-                  'task which will not be mandatory - it was mainly for '
-                  'aesthetics I think.', DeprecationWarning)
 
-    # if gdir.is_tidewater:
-    #     # No need for filter in tidewater case
-    #     return
-    # cls = gdir.read_pickle('inversion_output')
-    # for cl in cls:
-    #
-    #     init_vol = np.sum(cl['volume'])
-    #     if init_vol == 0 or not cl['is_last']:
-    #         continue
-    #
-    #     w = cl['width']
-    #     out_thick = cl['thick']
-    #     fac = np.where(cl['is_rectangular'], 1, 2./3.)
-    #
-    #     # Last thicknesses can be noisy sometimes: interpolate
-    #     out_thick[-4:] = np.NaN
-    #     out_thick = utils.interp_nans(np.append(out_thick, 0))[:-1]
-    #     assert len(out_thick) == len(fac)
-    #
-    #     # final volume
-    #     volume = fac * out_thick * w * cl['dx']
-    #
-    #     # conserve it
-    #     new_vol = np.nansum(volume)
-    #     if new_vol == 0:
-    #         # Very small glaciers
-    #         return
-    #     volume = init_vol / new_vol * volume
-    #     np.testing.assert_allclose(np.nansum(volume), init_vol)
-    #
-    #     # recompute thickness on that base
-    #     out_thick = volume / (fac * w * cl['dx'])
-    #
-    #     # output
-    #     cl['thick'] = out_thick
-    #     cl['volume'] = volume
-    #
-    # gdir.write_pickle(cls, 'inversion_output')
+    if gdir.is_tidewater:
+        # No need for filter in tidewater case
+        return
+
+    dic_ds = gdir.read_pickle('downstream_line')
+    bs = np.average(dic_ds['bedshapes'][:3])
+
+    n = -5
+
+    cls = gdir.read_pickle('inversion_output')
+    cl = cls[-1]
+
+    # First guess thickness based on width
+    w = cl['width'][n:]
+    s = w**3 * bs / 6
+    h = 3/2 * s / w
+
+    # Smoothing things out a bit
+    hts = np.append(np.append(cl['thick'][n-3:n], h), 0)
+    h = utils.smooth1d(hts, 3)[n-1:-1]
+
+    # Recompute bedshape based on that
+    bs = utils.clip_min(4*h / w**2, cfg.PARAMS['mixed_min_shape'])
+
+    # OK, done
+    s = w**3 * bs / 6
+
+    cl['thick'][n:] = 3/2 * s / w
+    cl['volume'][n:] = s * cl['dx']
+    cl['is_trapezoid'][n:] = False
+    cl['is_rectangular'][n:] = False
+
+    gdir.write_pickle(cls, 'inversion_output')
+
+    # We recompute the volume here
+    return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
 @entity_task(log, writes=['inversion_output'])
