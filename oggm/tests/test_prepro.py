@@ -181,6 +181,21 @@ class TestGIS(unittest.TestCase):
         assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
         assert gdirs[-1].rgi_id == 'RGI50-11.00897_d03'
 
+    def test_raise_on_duplicate(self):
+
+        hef_rgi = gpd.read_file(get_demo_file('divides_alps.shp'))
+        hef_rgi = hef_rgi.loc[hef_rgi.RGIId == 'RGI50-11.00897']
+
+        # Rename the RGI ID
+        rids = ['RGI60-11.00897', 'RGI60-11.00897_d01', 'RGI60-11.00897']
+        hef_rgi['RGIId'] = rids
+
+        # Just check that things are raised
+        with pytest.raises(InvalidWorkflowError):
+            workflow.init_glacier_directories(hef_rgi)
+        with pytest.raises(InvalidWorkflowError):
+            workflow.init_glacier_directories(rids)
+
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]

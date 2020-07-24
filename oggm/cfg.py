@@ -372,17 +372,23 @@ def initialize_minimal(file=None, logging_level='INFO'):
 
     set_logging_config(logging_level=logging_level)
 
+    is_default = False
     if file is None:
         file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'params.cfg')
-
+        is_default = True
     try:
         cp = ConfigObj(file, file_error=True)
     except (ConfigObjError, IOError) as e:
         log.critical('Config file could not be parsed (%s): %s', file, e)
         sys.exit()
 
-    log.workflow('Using configuration file: %s', file)
+    if is_default:
+        log.workflow('Reading default parameters from the OGGM `params.cfg` '
+                     'configuration file.')
+    else:
+        log.workflow('Reading parameters from the user provided '
+                     'configuration file: %s', file)
 
     # Paths
     oggm_static_paths()

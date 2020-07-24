@@ -211,6 +211,22 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
+def _check_duplicates(rgidf=None):
+    """Complain if the input has duplicates."""
+
+    if rgidf is None:
+        return
+    # Check if dataframe or list of strs
+    try:
+        rgidf = rgidf.RGIId
+    except AttributeError:
+        rgidf = utils.tolist(rgidf)
+    u, c = np.unique(rgidf, return_counts=True)
+    if len(u) < len(rgidf):
+        raise InvalidWorkflowError('You there are duplicates in the list of '
+                                   'RGI IDs: {}'.format(u[c > 1]))
+
+
 def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
                          prepro_rgi_version=None, prepro_base_url=None,
@@ -269,6 +285,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     similar to init_glacier_regions, but it does not process the DEMs:
     a glacier directory is valid also without DEM.
     """
+
+    _check_duplicates(rgidf)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
@@ -409,6 +427,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     Eventually, init_glacier_regions will be deprecated and removed from the
     codebase.
     """
+
+    _check_duplicates(rgidf)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
