@@ -14,6 +14,7 @@ gpd = pytest.importorskip('geopandas')
 import oggm
 import xarray as xr
 import numpy as np
+import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo
@@ -316,20 +317,20 @@ class Test_climate_datasets:
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
         exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
-        files = []
         ref_hgts = []
+        dft = []
+        dfp = []
         for base in exps:
             cfg.PARAMS['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
-            files.append(gdir.get_filepath('climate_historical',
-                                           filesuffix=base))
-            with xr.open_dataset(files[-1]) as ds:
+            f = gdir.get_filepath('climate_historical', filesuffix=base)
+            with xr.open_dataset(f) as ds:
                 ref_hgts.append(ds.ref_hgt)
                 assert ds.ref_pix_dis < 30000
-        # TEMP
-        with xr.open_mfdataset(files, concat_dim=exps) as ds:
-            dft = ds.temp.to_dataframe().unstack().T
-            dft.index = dft.index.levels[1]
+                dft.append(ds.temp.to_series())
+                dfp.append(ds.prcp.to_series())
+        dft = pd.concat(dft, axis=1, keys=exps)
+        dfp = pd.concat(dfp, axis=1, keys=exps)
 
         # Common period
         dfy = dft.resample('AS').mean().dropna().iloc[1:]
@@ -350,13 +351,9 @@ class Test_climate_datasets:
         assert dfavg_cor.loc['mean'].std() < 2.1
 
         # PRECIP
-        with xr.open_mfdataset(files, concat_dim=exps) as ds:
-            dft = ds.prcp.to_dataframe().unstack().T
-            dft.index = dft.index.levels[1]
-
         # Common period
-        dfy = dft.resample('AS').mean().dropna().iloc[1:] * 12
-        dfm = dft.groupby(dft.index.month).mean()
+        dfy = dfp.resample('AS').mean().dropna().iloc[1:] * 12
+        dfm = dfp.groupby(dfp.index.month).mean()
         assert dfy.corr().min().min() > 0.5
         assert dfm.corr().min().min() > 0.8
         dfavg = dfy.describe()

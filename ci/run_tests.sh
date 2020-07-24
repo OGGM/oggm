@@ -26,7 +26,7 @@ fi
 
 [[ -d .git ]] || export SETUPTOOLS_SCM_PRETEND_VERSION="g$GITHUB_SHA"
 
-$PIP install --upgrade coverage git+https://github.com/fmaussion/salem.git
+$PIP install --upgrade coverage coveralls git+https://github.com/fmaussion/salem.git
 $PIP install -e .
 
 export COVERAGE_RCFILE="$PWD/.coveragerc"
