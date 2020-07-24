@@ -1860,18 +1860,8 @@ def calving_glacier_downstream_line(line, n_points):
     return shpg.LineString(np.array([x, y]).T)
 
 
-@entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir):
-    """Merges data from preprocessing tasks. First task after inversion!
-
-    This updates the `mode_flowlines` file and creates a stand-alone numerical
-    glacier ready to run.
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    """
+def old_init_present_time_glacier(gdir):
+    """Init_present_time_glacier when trapezoid inversion was not possible."""
 
     # Some vars
     map_dx = gdir.grid.dx
@@ -1893,7 +1883,7 @@ def init_present_time_glacier(gdir):
         bed_h = surface_h - inv['thick']
         widths_m = cl.widths * map_dx
 
-        assert np.all(cl.widths > 0)
+        assert np.all(widths_m > 0)
         bed_shape = 4 * inv['thick'] / (cl.widths * map_dx) ** 2
 
         lambdas = inv['thick'] * np.NaN
@@ -1930,6 +1920,106 @@ def init_present_time_glacier(gdir):
             section[-5:] = (2 / 3 * h * np.sqrt(4 * h / bed_shape))[-5:]
 
             # Add the downstream
+            bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
+            lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
+            section = np.append(section, dic_ds['bedshapes'] * 0.)
+            surface_h = np.append(surface_h, dic_ds['surface_h'])
+            bed_h = np.append(bed_h, dic_ds['surface_h'])
+            widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
+            line = dic_ds['full_line']
+
+        if gdir.is_tidewater and inv['is_last']:
+            # Continue the bed a little
+            n_points = cfg.PARAMS['calving_line_extension']
+            cf_slope = cfg.PARAMS['calving_front_slope']
+            deepening = n_points * cl.dx * map_dx * cf_slope
+
+            line = calving_glacier_downstream_line(line, n_points=n_points)
+            bed_shape = np.append(bed_shape, np.zeros(n_points))
+            lambdas = np.append(lambdas, np.zeros(n_points))
+            section = np.append(section, np.zeros(n_points))
+            # The bed slowly deepens
+            bed_down = np.linspace(bed_h[-1], bed_h[-1]-deepening, n_points)
+            bed_h = np.append(bed_h, bed_down)
+            surface_h = np.append(surface_h, bed_down)
+            widths_m = np.append(widths_m,
+                                 np.zeros(n_points) + np.mean(widths_m[-5:]))
+
+        nfl = MixedBedFlowline(line=line, dx=cl.dx, map_dx=map_dx,
+                               surface_h=surface_h, bed_h=bed_h,
+                               section=section, bed_shape=bed_shape,
+                               is_trapezoid=np.isfinite(lambdas),
+                               lambdas=lambdas,
+                               widths_m=widths_m,
+                               rgi_id=cl.rgi_id)
+
+        # Update attrs
+        nfl.mu_star = cl.mu_star
+
+        if cl.flows_to:
+            flows_to_ids.append(cls.index(cl.flows_to))
+        else:
+            flows_to_ids.append(None)
+
+        new_fls.append(nfl)
+
+    # Finalize the linkages
+    for fl, fid in zip(new_fls, flows_to_ids):
+        if fid:
+            fl.set_flows_to(new_fls[fid])
+
+    # Adds the line level
+    for fl in new_fls:
+        fl.order = line_order(fl)
+
+    # Write the data
+    gdir.write_pickle(new_fls, 'model_flowlines')
+
+
+@entity_task(log, writes=['model_flowlines'])
+def init_present_time_glacier(gdir):
+    """Merges data from preprocessing tasks. First task after inversion!
+
+    This updates the `mode_flowlines` file and creates a stand-alone numerical
+    glacier ready to run.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    """
+
+    # Some vars
+    invs = gdir.read_pickle('inversion_output')
+    if invs[0].get('is_trapezoid', None) is None:
+        return old_init_present_time_glacier(gdir)
+
+    map_dx = gdir.grid.dx
+    def_lambda = cfg.PARAMS['trapezoid_lambdas']
+    cls = gdir.read_pickle('inversion_flowlines')
+
+    # Fill the tributaries
+    new_fls = []
+    flows_to_ids = []
+    for cl, inv in zip(cls, invs):
+
+        # Get the data to make the model flowlines
+        line = cl.line
+        section = inv['volume'] / (cl.dx * map_dx)
+        surface_h = cl.surface_h
+        bed_h = surface_h - inv['thick']
+        widths_m = cl.widths * map_dx
+
+        assert np.all(widths_m > 0)
+        bed_shape = 4 * inv['thick'] / (cl.widths * map_dx) ** 2
+
+        lambdas = inv['thick'] * np.NaN
+        lambdas[inv['is_trapezoid']] = def_lambda
+        lambdas[inv['is_rectangular']] = 0.
+
+        if not gdir.is_tidewater and inv['is_last']:
+            # for valley glaciers, simply add the downstream line
+            dic_ds = gdir.read_pickle('downstream_line')
             bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
             lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
             section = np.append(section, dic_ds['bedshapes'] * 0.)

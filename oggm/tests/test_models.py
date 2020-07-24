@@ -53,17 +53,17 @@ DOM_BORDER = 80
 
 
 class TestInitPresentDayFlowline:
+
     def test_init_present_time_glacier(self, hef_gdir):
+
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
-
-        ofl = gdir.read_pickle('inversion_flowlines')[-1]
+        inv = gdir.read_pickle('inversion_output')
 
         assert gdir.rgi_date == 2003
         assert len(fls) == 3
-
         vol = 0.
         area = 0.
         for fl in fls:
@@ -82,22 +82,22 @@ class TestInitPresentDayFlowline:
                    )
 
             assert np.all(fl.widths >= 0)
-            vol += fl.volume_km3
+            vol += fl.volume_m3
             area += fl.area_km2
 
-            if refo == 1:
-                rmsd = utils.rmsd(ofl.widths[:-5] * gdir.grid.dx,
-                                  fl.widths_m[0:len(ofl.widths)-5])
-                assert rmsd < 5.
+        ref_vol = 0.
+        for cl in inv:
+            ref_vol += np.sum(cl['volume'])
 
-        rtol = 0.02
-        np.testing.assert_allclose(0.573, vol, rtol=rtol)
+        np.testing.assert_allclose(ref_vol, vol)
         np.testing.assert_allclose(6900.0, fls[-1].length_m, atol=101)
-        np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
+        np.testing.assert_allclose(gdir.rgi_area_km2, area)
 
-        if do_plot:
-            plt.plot(fls[-1].bed_h)
-            plt.plot(fls[-1].surface_h)
+        if True:
+            plt.plot(fls[-1].bed_h, color='k')
+            plt.plot(fls[-1].surface_h )
+            plt.figure()
+            plt.plot(fls[-1].surface_h - fls[-1].bed_h)
             plt.show()
 
     def test_present_time_glacier_massbalance(self, hef_gdir):
