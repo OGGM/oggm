@@ -223,7 +223,7 @@ def _check_duplicates(rgidf=None):
         rgidf = utils.tolist(rgidf)
     u, c = np.unique(rgidf, return_counts=True)
     if len(u) < len(rgidf):
-        raise InvalidWorkflowError('You there are duplicates in the list of '
+        raise InvalidWorkflowError('Found duplicates in the list of '
                                    'RGI IDs: {}'.format(u[c > 1]))
 
 
