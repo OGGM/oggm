@@ -2361,7 +2361,7 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4*inv['thick']/(flo.widths*inversion_gdir.grid.dx)** 2
+        bed_shape_gl = 4*inv['thick']/(flo.widths*inversion_gdir.grid.dx)**2
 
         ithick = inv['thick']
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
