@@ -40,6 +40,8 @@ Breaking changes
 - The order of the tasks applied to  the preprocessed levels has
   changed, climate data comes in later (:pull:`1038`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The inversion tasks now can invert for trapezoid shapes (:pull:`1045`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
 ~~~~~~~~~~~~
