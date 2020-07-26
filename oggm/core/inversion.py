@@ -621,7 +621,7 @@ def filter_inversion_output(gdir):
 
     gdir.write_pickle(cls, 'inversion_output')
 
-    # We recompute the volume here
+    # output the volume here - this simplifies code for some downstream funcs
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 

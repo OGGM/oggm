@@ -890,8 +890,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             ds2 = ds.load()
 
-        # Total volume is different at only 5%
-        np.testing.assert_allclose(v1, v2, rtol=0.06)
+        # Total volume is different at only 7%
+        np.testing.assert_allclose(v1, v2, rtol=0.07)
 
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
@@ -916,9 +916,13 @@ class TestElevationBandFlowlines(unittest.TestCase):
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
-        v1 = inversion.mass_conservation_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        inversion.filter_inversion_output(gdir)
         flowline.init_present_time_glacier(gdir)
-        flowline.run_random_climate(gdir, nyears=50, y0=1985)
+        model = flowline.run_random_climate(gdir, nyears=50, y0=1985)
+
+        fl = model.fls[-1]
+        assert np.all(fl.is_trapezoid[:30])
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # it's running and it is retreating

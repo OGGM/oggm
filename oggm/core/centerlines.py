@@ -2217,7 +2217,7 @@ def fixed_dx_elevation_band_flowline(gdir):
                     map_dx=map_dx)
     fl.order = 0
     fl.widths = widths_m / map_dx
-    # TODO - this we don't know yet: rectangular for now
-    fl.is_rectangular = np.ones(nx, dtype=bool)
+    fl.is_rectangular = np.zeros(nx, dtype=bool)
+    fl.is_trapezoid = np.ones(nx, dtype=bool)
 
     gdir.write_pickle([fl], 'inversion_flowlines')
