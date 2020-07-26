@@ -86,11 +86,14 @@ class TestInitPresentDayFlowline:
             area += fl.area_km2
 
         ref_vol = 0.
+        ref_area = 0.
         for cl in inv:
             ref_vol += np.sum(cl['volume'])
+            ref_area += np.sum(cl['width'] * fl.dx_meter)
 
         np.testing.assert_allclose(ref_vol, vol)
         np.testing.assert_allclose(6900.0, fls[-1].length_m, atol=101)
+        np.testing.assert_allclose(gdir.rgi_area_km2, ref_area * 1e-6)
         np.testing.assert_allclose(gdir.rgi_area_km2, area)
 
         if do_plot:
