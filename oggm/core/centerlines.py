@@ -122,6 +122,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self._surface_h = surface_h
         self._widths = None
         self.is_rectangular = None
+        self.is_trapezoid = None
         self.orig_head = orig_head  # Useful for debugging and for filtering
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
@@ -1951,7 +1952,7 @@ def catchment_width_correction(gdir):
         # tributary according to the altitude area distribution.
         # This sometimes leads to abrupt changes in the widths from one
         # grid point to another. I think it's not too harmful to smooth them
-        # here, at the cost of a less perfect altitude area distribution
+        # here, at the cost of a less good altitude area distribution
         if smooth_ws != 0:
             if smooth_ws == 1:
                 new_widths = utils.smooth1d(new_widths)
@@ -2216,7 +2217,7 @@ def fixed_dx_elevation_band_flowline(gdir):
                     map_dx=map_dx)
     fl.order = 0
     fl.widths = widths_m / map_dx
-    # TODO - this we don't know yet: rectangular for now
-    fl.is_rectangular = np.ones(nx, dtype=bool)
+    fl.is_rectangular = np.zeros(nx, dtype=bool)
+    fl.is_trapezoid = np.ones(nx, dtype=bool)
 
     gdir.write_pickle([fl], 'inversion_flowlines')

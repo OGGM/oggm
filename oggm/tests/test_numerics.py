@@ -519,39 +519,6 @@ class TestIdealisedCases(unittest.TestCase):
         assert utils.rmsd(surface_h[1], surface_h[2]) < 5
 
     @pytest.mark.slow
-    def test_timestepping(self):
-
-        steps = ['ambitious',
-                 'default',
-                 'conservative',
-                 'ultra-conservative'][::-1]
-        lens = []
-        surface_h = []
-        volume = []
-        yrs = np.arange(1, 400, 2)
-        for step in steps:
-            fls = dummy_constant_bed()
-            mb = LinearMassBalance(2600.)
-
-            model = FluxBasedModel(fls, mb_model=mb,
-                                   glen_a=self.glen_a)
-
-            length = yrs * 0.
-            vol = yrs * 0.
-            for i, y in enumerate(yrs):
-                model.run_until(y)
-                assert model.yr == y
-                length[i] = fls[-1].length_m
-                vol[i] = fls[-1].volume_km3
-            lens.append(length)
-            volume.append(vol)
-            surface_h.append(fls[-1].surface_h.copy())
-
-        np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
-        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
-        np.testing.assert_allclose(volume[0][-1], volume[3][-1], atol=1e-2)
-
-    @pytest.mark.slow
     def test_bumpy_bed(self):
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]

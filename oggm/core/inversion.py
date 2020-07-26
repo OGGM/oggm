@@ -41,16 +41,21 @@ from scipy import optimize
 from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # Module logger
 log = logging.getLogger(__name__)
+
+# arbitrary constant
+MIN_WIDTH_FOR_INV = 10
 
 
 @entity_task(log, writes=['inversion_input'])
 def prepare_for_inversion(gdir, add_debug_var=False,
                           invert_with_rectangular=True,
-                          invert_all_rectangular=False):
+                          invert_all_rectangular=False,
+                          invert_with_trapezoid=True,
+                          invert_all_trapezoid=False):
     """Prepares the data needed for the inversion.
 
     Mostly the mass flux and slope angle, the rest (width, height) was already
@@ -94,7 +99,17 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                 msg = ('({}) flux at terminus should be zero, but is: '
                        '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))
                 raise RuntimeError(msg)
-            flux[-1] = 0.
+
+            # This contradicts the statement above which has been around for
+            # quite some time, for the reason that it is a quality check: per
+            # construction, the flux at the last grid point should be zero
+            # HOWEVER, it is also meaningful to have a non-zero ice thickness
+            # at the last grid point. Therefore, we add some artificial
+            # flux here (an alternative would be to pmute the flux on a
+            # staggered grid but I actually like the QC and its easier)
+            # note that this value will be ignored if one uses the filter
+            # task afterwards
+            flux[-1] = flux[-2] / 3  # this is totally arbitrary
 
         # Shape
         is_rectangular = fl.is_rectangular
@@ -103,6 +118,15 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         if invert_all_rectangular:
             is_rectangular[:] = True
 
+        # Trapezoid is new - might not be available
+        is_trapezoid = getattr(fl, 'is_trapezoid', None)
+        if is_trapezoid is None:
+            is_trapezoid = fl.is_rectangular * False
+        if not invert_with_trapezoid:
+            is_rectangular[:] = False
+        if invert_all_trapezoid:
+            is_trapezoid[:] = True
+
         # Optimisation: we need to compute this term of a0 only once
         flux_a0 = np.where(is_rectangular, 1, 1.5)
         flux_a0 *= flux / widths
@@ -110,9 +134,9 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Add to output
         cl_dic = dict(dx=dx, flux_a0=flux_a0, width=widths,
                       slope_angle=angle, is_rectangular=is_rectangular,
-                      is_last=fl.flows_to is None, hgt=hgt)
-        if add_debug_var:
-            cl_dic['flux'] = flux
+                      is_trapezoid=is_trapezoid, flux=flux,
+                      is_last=fl.flows_to is None, hgt=hgt,
+                      invert_with_trapezoid=invert_with_trapezoid)
         towrite.append(cl_dic)
 
     # Write out
@@ -170,6 +194,76 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
     return out_thick
 
 
+def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
+                            glen_a=None, fs=None, t_lambda=None):
+    """Compute the thickness numerically instead of analytically.
+
+    It's the only way that works for trapezoid shapes.
+
+    Parameters
+    ----------
+    slope : -np.gradient(hgt, dx)
+    width : section width in m
+    flux : mass flux in m3 s-1
+    shape : 'rectangular', 'trapezoid' or 'parabolic'
+    glen_a : Glen A, defaults to PARAMS
+    fs : sliding, defaults to PARAMS
+    t_lambda: the trapezoid lambda, defaults to PARAMS
+
+    Returns
+    -------
+    the ice thickness (in m)
+    """
+
+    if len(np.atleast_1d(slope)) > 1:
+        shape = utils.tolist(shape, len(slope))
+        t_lambda = utils.tolist(t_lambda, len(slope))
+        out = []
+        for sl, w, f, s, t in zip(slope, width, flux, shape, t_lambda):
+            out.append(sia_thickness_via_optim(sl, w, f, shape=s,
+                                               glen_a=glen_a, fs=fs,
+                                               t_lambda=t))
+        return np.asarray(out)
+
+    # Sanity
+    if flux <= 0:
+        return 0
+    if width <= MIN_WIDTH_FOR_INV:
+        return 0
+
+    if glen_a is None:
+        glen_a = cfg.PARAMS['inversion_glen_a']
+    if fs is None:
+        fs = cfg.PARAMS['inversion_fs']
+    if t_lambda is None:
+        t_lambda = cfg.PARAMS['trapezoid_lambdas']
+    if shape not in ['parabolic', 'rectangular', 'trapezoid']:
+        raise InvalidParamsError('shape must be `parabolic`, `trapezoid` '
+                                 'or `rectangular`, not: {}'.format(shape))
+
+    # Ice flow params
+    n = cfg.PARAMS['glen_n']
+    fd = 2 / (n+2) * glen_a
+    rho = cfg.PARAMS['ice_density']
+    rhogh = (rho * cfg.G * slope) ** n
+
+    # To avoid geometrical inconsistencies
+    max_h = width / t_lambda if shape == 'trapezoid' else 1e4
+
+    def to_minimize(h):
+        u = (h ** (n + 1)) * fd * rhogh + (h ** (n - 1)) * fs * rhogh
+        if shape == 'parabolic':
+            sect = 2./3. * width * h
+        elif shape == 'trapezoid':
+            w0m = width - t_lambda * h
+            sect = (width + w0m) / 2 * h
+        else:
+            sect = width * h
+        return sect * u - flux
+    out_h, r = optimize.brentq(to_minimize, 0, max_h, full_output=True)
+    return out_h
+
+
 def sia_thickness(slope, width, flux, shape='rectangular',
                   glen_a=None, fs=None, shape_factor=None):
     """Computes the ice thickness from mass-conservation.
@@ -197,7 +291,7 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     if fs is None:
         fs = cfg.PARAMS['inversion_fs']
     if shape not in ['parabolic', 'rectangular']:
-        raise InvalidParamsError('shape must be `parabolic` or `rectangular`,'
+        raise InvalidParamsError('shape must be `parabolic` or `rectangular`, '
                                  'not: {}'.format(shape))
 
     _inv_function = _inversion_simple if fs == 0 else _inversion_poly
@@ -215,6 +309,13 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
     flux_a0 *= flux / width
+
+    # With numerically small widths this creates very high thicknesses
+    try:
+        flux_a0[width < MIN_WIDTH_FOR_INV] = 0
+    except TypeError:
+        if width < MIN_WIDTH_FOR_INV:
+            flux_a0 = 0
 
     # Polynomial factors (a5 = 1)
     a0 = - flux_a0 / ((rho * cfg.G * slope) ** 3 * fd)
@@ -276,7 +377,8 @@ def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
 
 
 def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
-                     is_rectangular, fac, dx, water_level):
+                     is_rectangular, is_trapezoid, fac, t_lambda,
+                     dx, water_level):
     bsl = (bed_h < water_level) & (thick > 0)
     n_thick = np.copy(thick)
     n_thick[~bsl] = 0
@@ -285,12 +387,17 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         n_w = np.sqrt(4 * n_thick / bed_shape)
     n_w[is_rectangular] = widths[is_rectangular]
-    return fac * n_thick * n_w * dx
+    out = fac * n_thick * n_w * dx
+    # Trap
+    it = is_trapezoid
+    out[it] = (n_w[it] + n_w[it] - t_lambda*n_thick[it]) / 2*n_thick[it]*dx
+    return out
 
 
 @entity_task(log, writes=['inversion_output'])
 def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
-                                filesuffix='', water_level=None):
+                                filesuffix='', water_level=None,
+                                t_lambda=None):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -300,9 +407,9 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     glen_a : float
-        glen's creep parameter A
+        glen's creep parameter A. Defaults to cfg.PARAMS.
     fs : float
-        sliding parameter
+        sliding parameter. Defaults to cfg.PARAMS.
     write: bool
         default behavior is to compute the thickness and write the
         results in the pickle. Set to False in order to spare time
@@ -311,6 +418,9 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         add a suffix to the output file
     water_level : float
         to compute volume below water level - adds an entry to the output dict
+    t_lambda : float
+        defining the angle of the trapezoid walls (see documentation). Defaults
+        to cfg.PARAMS.
     """
 
     # Defaults
@@ -318,6 +428,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         glen_a = cfg.PARAMS['inversion_glen_a']
     if fs is None:
         fs = cfg.PARAMS['inversion_fs']
+    if t_lambda is None:
+        t_lambda = cfg.PARAMS['trapezoid_lambdas']
 
     # Check input
     _inv_function = _inversion_simple if fs == 0 else _inversion_poly
@@ -381,10 +493,41 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf, _inv_function)
 
         # volume
-        fac = np.where(cl['is_rectangular'], 1, 2./3.)
+        is_rect = cl['is_rectangular']
+        fac = np.where(is_rect, 1, 2./3.)
         volume = fac * out_thick * w * cl['dx']
 
+        # Now recompute thickness where parabola is too flat
+        is_trap = cl['is_trapezoid']
+        if cl['invert_with_trapezoid']:
+            min_shape = cfg.PARAMS['mixed_min_shape']
+            bed_shape = 4 * out_thick / w ** 2
+            is_trap = ((bed_shape < min_shape) & ~ cl['is_rectangular'] &
+                       (cl['flux'] > 0)) | is_trap
+            for i in np.where(is_trap)[0]:
+                try:
+                    out_thick[i] = sia_thickness_via_optim(slope[i], w[i],
+                                                           cl['flux'][i],
+                                                           shape='trapezoid',
+                                                           t_lambda=t_lambda,
+                                                           glen_a=glen_a,
+                                                           fs=fs)
+                    sect = (2*w[i] - t_lambda * out_thick[i]) / 2 * out_thick[i]
+                    volume[i] = sect * cl['dx']
+                except ValueError:
+                    # no solution error - we do with rect
+                    out_thick[i] = sia_thickness_via_optim(slope[i], w[i],
+                                                           cl['flux'][i],
+                                                           shape='rectangular',
+                                                           glen_a=glen_a,
+                                                           fs=fs)
+                    is_rect[i] = True
+                    is_trap[i] = False
+                    volume[i] = out_thick[i] * w[i] * cl['dx']
+
         if write:
+            cl['is_trapezoid'] = is_trap
+            cl['is_rectangular'] = is_rect
             cl['thick'] = out_thick
             cl['volume'] = volume
 
@@ -397,13 +540,17 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                                         bed_shape, out_thick,
                                                         w,
                                                         cl['is_rectangular'],
-                                                        fac, cl['dx'], 0)
+                                                        cl['is_trapezoid'],
+                                                        fac, t_lambda,
+                                                        cl['dx'], 0)
                 if water_level is not None and np.any(bed_h < water_level):
                     cl['volume_bwl'] = _vol_below_water(cl['hgt'], bed_h,
                                                         bed_shape, out_thick,
                                                         w,
                                                         cl['is_rectangular'],
-                                                        fac, cl['dx'],
+                                                        cl['is_trapezoid'],
+                                                        fac, t_lambda,
+                                                        cl['dx'],
                                                         water_level)
             except KeyError:
                 # cl['hgt'] is not available on old prepro dirs
@@ -420,48 +567,13 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
 
 @entity_task(log, writes=['inversion_output'])
-def volume_inversion(gdir, glen_a=None, fs=None, filesuffix=''):
-    """Computes the inversion the glacier.
-
-    If glen_a and fs are not given, it will use the optimized params.
-
-    Parameters
-    ----------
-    gdir : oggm.GlacierDirectory
-    glen_a : float, optional
-        the ice creep parameter (defaults to cfg.PARAMS['inversion_glen_a'])
-    fs : float, optional
-        the sliding parameter (defaults to cfg.PARAMS['inversion_fs'])
-    fs : float, optional
-        the sliding parameter (defaults to cfg.PARAMS['inversion_fs'])
-    filesuffix : str
-        add a suffix to the output file
-    """
-
-    warnings.warn('The task `volume_inversion` is deprecated. Use '
-                  'a direct call to `mass_conservation_inversion` instead.',
-                  DeprecationWarning)
-
-    if fs is not None and glen_a is None:
-        raise ValueError('Cannot set fs without glen_a.')
-
-    if glen_a is None:
-        glen_a = cfg.PARAMS['inversion_glen_a']
-
-    if fs is None:
-        fs = cfg.PARAMS['inversion_fs']
-
-    # go
-    return mass_conservation_inversion(gdir, glen_a=glen_a, fs=fs, write=True,
-                                       filesuffix=filesuffix)
-
-
-@entity_task(log, writes=['inversion_output'])
 def filter_inversion_output(gdir):
-    """Filters the last few grid point whilst conserving total volume.
+    """Filters the last few grid points after the physically-based inversion.
 
-    The last few grid points sometimes are noisy or can have a negative slope.
-    This function filters them while conserving the total volume.
+    For various reasons (but mostly: the equilibrium assumption), the last few
+    grid points on a glacier flowline are often noisy and create unphysical
+    depressions. Here we try to correct for that. It is not volume conserving,
+    but area conserving.
 
     Parameters
     ----------
@@ -473,41 +585,44 @@ def filter_inversion_output(gdir):
         # No need for filter in tidewater case
         return
 
+    if not gdir.has_file('downstream_line'):
+        raise InvalidWorkflowError('filter_inversion_output now needs a '
+                                   'previous call to the '
+                                   'compute_dowstream_line and '
+                                   'compute_downstream_bedshape tasks')
+
+    dic_ds = gdir.read_pickle('downstream_line')
+    bs = np.average(dic_ds['bedshapes'][:3])
+
+    n = -5
+
     cls = gdir.read_pickle('inversion_output')
-    for cl in cls:
+    cl = cls[-1]
 
-        init_vol = np.sum(cl['volume'])
-        if init_vol == 0 or not cl['is_last']:
-            continue
+    # First guess thickness based on width
+    w = cl['width'][n:]
+    s = w**3 * bs / 6
+    h = 3/2 * s / w
 
-        w = cl['width']
-        out_thick = cl['thick']
-        fac = np.where(cl['is_rectangular'], 1, 2./3.)
+    # Smoothing things out a bit
+    hts = np.append(np.append(cl['thick'][n-3:n], h), 0)
+    h = utils.smooth1d(hts, 3)[n-1:-1]
 
-        # Last thicknesses can be noisy sometimes: interpolate
-        out_thick[-4:] = np.NaN
-        out_thick = utils.interp_nans(np.append(out_thick, 0))[:-1]
-        assert len(out_thick) == len(fac)
+    # Recompute bedshape based on that
+    bs = utils.clip_min(4*h / w**2, cfg.PARAMS['mixed_min_shape'])
 
-        # final volume
-        volume = fac * out_thick * w * cl['dx']
+    # OK, done
+    s = w**3 * bs / 6
 
-        # conserve it
-        new_vol = np.nansum(volume)
-        if new_vol == 0:
-            # Very small glaciers
-            return
-        volume = init_vol / new_vol * volume
-        np.testing.assert_allclose(np.nansum(volume), init_vol)
-
-        # recompute thickness on that base
-        out_thick = volume / (fac * w * cl['dx'])
-
-        # output
-        cl['thick'] = out_thick
-        cl['volume'] = volume
+    cl['thick'][n:] = 3/2 * s / w
+    cl['volume'][n:] = s * cl['dx']
+    cl['is_trapezoid'][n:] = False
+    cl['is_rectangular'][n:] = False
 
     gdir.write_pickle(cls, 'inversion_output')
+
+    # output the volume here - this simplifies code for some downstream funcs
+    return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
 @entity_task(log, writes=['inversion_output'])
@@ -939,7 +1054,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     with utils.DisableLogger():
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
-        prepare_for_inversion(gdir, add_debug_var=True)
+        prepare_for_inversion(gdir)
         v_ref = mass_conservation_inversion(gdir, water_level=water_level)
 
     # Store for statistics
@@ -1039,7 +1154,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
             df = gdir.read_json('local_mustar')
 
         climate.mu_star_calibration(gdir)
-        prepare_for_inversion(gdir, add_debug_var=True)
+        prepare_for_inversion(gdir)
         mass_conservation_inversion(gdir, water_level=water_level)
 
     if fixed_water_depth is not None:

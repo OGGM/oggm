@@ -283,8 +283,8 @@ class TestSouthGlacier(unittest.TestCase):
 
         rmsd_int = ((df.oggm_int - df.thick) ** 2).mean() ** .5
         rmsd_alt = ((df.oggm_int - df.thick) ** 2).mean() ** .5
-        assert rmsd_int < 80
-        assert rmsd_alt < 80
+        assert rmsd_int < 85
+        assert rmsd_alt < 85
 
         dfm = df.mean()
         np.testing.assert_allclose(dfm.thick, dfm.oggm_int, 50)
@@ -369,7 +369,7 @@ class TestSouthGlacier(unittest.TestCase):
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd = ((df.oggm - df.thick) ** 2).mean() ** .5
-        assert rmsd < 60
+        assert rmsd < 30
 
         dfm = df.mean()
         np.testing.assert_allclose(dfm.thick, dfm.oggm, 10)
@@ -404,6 +404,8 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
             tasks.catchment_width_correction,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
         ]
         for task in task_list:
             execute_entity_task(task, gdirs)

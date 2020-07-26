@@ -855,8 +855,8 @@ class TestVAScalingModel(unittest.TestCase):
         # specify which parameters to compare and their respective correlation
         # coefficients and rmsd values
         params = ['length_m', 'area_m2', 'volume_m3']
-        corr_coeffs = np.array([0.96, 0.90, 0.93])
-        rmsds = np.array([0.43e3, 0.14e6, 0.03e9])
+        corr_coeffs = np.array([0.7, 0.7, 0.7])
+        rmsds = np.array([0.43e3, 0.25e6, 0.05e9])
 
         # compare given parameters
         for param, cc, rmsd in zip(params, corr_coeffs, rmsds):

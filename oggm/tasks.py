@@ -37,7 +37,6 @@ from oggm.core.climate import mu_star_calibration
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import mass_conservation_inversion
-from oggm.core.inversion import volume_inversion
 from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import distribute_thickness_per_altitude
 from oggm.core.inversion import distribute_thickness_interp

@@ -43,7 +43,7 @@ local_t_star(gdir, tstar=res['t_star'], bias=res['bias'], reset=True)
 mu_star_calibration(gdir, reset=True)
 
 # For flux plot
-tasks.prepare_for_inversion(gdir, add_debug_var=True)
+tasks.prepare_for_inversion(gdir)
 
 # For plots
 years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir)

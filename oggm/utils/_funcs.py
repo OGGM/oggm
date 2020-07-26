@@ -122,7 +122,7 @@ def tolist(arg, length=None):
     """Makes sure that arg is a list."""
 
     if isinstance(arg, str):
-        return [arg]
+        arg = [arg]
 
     try:
         (e for e in arg)
