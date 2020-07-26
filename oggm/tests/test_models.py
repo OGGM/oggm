@@ -2361,13 +2361,12 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4 * inv['thick'] / \
-            (flo.widths * inversion_gdir.grid.dx) ** 2
+        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
 
         ithick = inv['thick']
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
                                   from_other_shape=bed_shape_gl[:-2],
-                                  from_other_bed=sh-ithick)
+                                  from_other_bed=(sh-ithick)[:-2])
         model2 = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model2.run_until_equilibrium()
         assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
@@ -2416,6 +2415,7 @@ def inversion_params(hef_gdir):
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHEF:
+
     @pytest.mark.slow
     def test_equilibrium(self, hef_gdir, inversion_params):
 
@@ -2433,17 +2433,17 @@ class TestHEF:
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
-        assert model.yr > 50
+        assert model.yr >= 50
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
 
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
@@ -2464,18 +2464,18 @@ class TestHEF:
         ref_area = model.area_km2
         ref_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.03)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
 
-        assert model.yr > 50
+        assert model.yr >= 50
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.03)
-        np.testing.assert_allclose(ref_len, after_len, atol=500.01)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
 
     @pytest.mark.slow
     def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
@@ -2511,17 +2511,14 @@ class TestHEF:
                                glen_a=inversion_params['glen_a'])
 
         ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium()
         assert model.yr > 100
 
         after_vol_1 = model.volume_km3
 
-        _tmp = cfg.PARAMS['mixed_min_shape']
-        cfg.PARAMS['mixed_min_shape'] = 0.001
         init_present_time_glacier(hef_gdir)
-        cfg.PARAMS['mixed_min_shape'] = _tmp
 
         glacier = hef_gdir.read_pickle('model_flowlines')
 
@@ -2532,7 +2529,7 @@ class TestHEF:
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2, rtol=0.02)
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium()
         assert model.yr > 100
@@ -2574,7 +2571,7 @@ class TestHEF:
                 len = model.length_m_ts()
                 area = model.area_km2_ts()
                 np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                           rtol=0.1)
+                                           rtol=0.12)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
                 if do_plot:

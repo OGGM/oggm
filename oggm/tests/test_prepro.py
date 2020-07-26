@@ -2267,6 +2267,8 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_area(gdir)
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
         climate.process_custom_climate_data(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])

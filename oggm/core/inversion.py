@@ -36,13 +36,12 @@ import warnings
 import numpy as np
 from scipy.interpolate import griddata
 from scipy import optimize
-from scipy.ndimage.filters import gaussian_filter1d
 
 # Locals
 from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -585,6 +584,12 @@ def filter_inversion_output(gdir):
     if gdir.is_tidewater:
         # No need for filter in tidewater case
         return
+
+    if not gdir.has_file('downstream_line'):
+        raise InvalidWorkflowError('filter_inversion_output now needs a '
+                                   'previous call to the '
+                                   'compute_dowstream_line and '
+                                   'compute_downstream_bedshape tasks')
 
     dic_ds = gdir.read_pickle('downstream_line')
     bs = np.average(dic_ds['bedshapes'][:3])
