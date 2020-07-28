@@ -11,7 +11,7 @@ from asv import util
 logging.getLogger("requests").setLevel(logging.WARNING)
 
 OGGM_CONDA_ENV_URL = ("https://raw.githubusercontent.com/OGGM/"
-                      "OGGM-dependency-list/master/linux-64/{0}")
+                      "OGGM-dependency-list/master/Linux-64/{0}")
 OGGM_CONDA_ENVS = {
     "36": "oggmdev-1.2.0.202002022248_20200202_py36.yml",
     "37": "oggmdev-1.2.0.202002022248_20200202_py37.yml",
