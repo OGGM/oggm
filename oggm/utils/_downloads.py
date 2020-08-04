@@ -703,8 +703,8 @@ def file_extractor(file_path):
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
                 logger.info('Extracting {} to {}...'.format(bname, o_path))
-                of = zf.extract(members[0], tmpdir)
-                assert os.path.normpath(of) == os.path.normpath(o_path)
+                with open(o_path, 'wb') as f:
+                    f.write(zf.read(members[0]))
     elif file_extension == '.gz':
         # Gzip files cannot be inspected. It's always only one file
         # Decide on its name
@@ -739,7 +739,8 @@ def file_extractor(file_path):
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
                 logger.info('Extracting {} to {}...'.format(bname, o_path))
-                zf.extract(members[0], tmpdir)
+                with open(o_path, 'wb') as f:
+                    f.write(zf.extractfile(members[0]).read())
     else:
         raise InvalidParamsError('Extension not recognized: '
                                  '{}'.format(file_extension))

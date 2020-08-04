@@ -1742,7 +1742,8 @@ class TestDataFiles(unittest.TestCase):
         with zipfile.ZipFile(tmp_comp, 'w') as zip:
             zip.write(tmp_file, arcname='f.nc')
         of = utils.file_extractor(tmp_comp)
-        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        assert 'f.nc' in of
+        assert os.path.isfile(of)
         os.remove(of)
 
         # writing file to a gzip
@@ -1752,7 +1753,8 @@ class TestDataFiles(unittest.TestCase):
             with open(tmp_file, 'rb') as f_in:
                 shutil.copyfileobj(f_in, zip)
         of = utils.file_extractor(tmp_comp)
-        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        assert 'f.nc' in of
+        assert os.path.isfile(of)
         os.remove(of)
 
         # writing file to a tar.gz
@@ -1761,7 +1763,8 @@ class TestDataFiles(unittest.TestCase):
         with tarfile.open(tmp_comp, 'w:gz') as zip:
             zip.add(tmp_file, arcname='f.nc')
         of = utils.file_extractor(tmp_comp)
-        assert of == os.path.join(cfg.PATHS['tmp_dir'], 'f.nc')
+        assert 'f.nc' in of
+        assert os.path.isfile(of)
         os.remove(of)
 
         # Raise error if nothing to extract
