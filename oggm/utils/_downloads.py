@@ -677,9 +677,9 @@ def file_extractor(file_path):
     if ex2 == '.tar':
         filename, file_extension = f2, '.tar.gz'
     bname = os.path.basename(file_path)
-    dname = os.path.dirname(file_path)
+
     # This is to give a unique name to the tmp file
-    dname = dname.replace(os.sep, '_') + '_'
+    hid = hashlib.md5(file_path.encode()).hexdigest()[:7] + '_'
 
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
@@ -698,7 +698,7 @@ def file_extractor(file_path):
             members = zf.namelist()
             if len(members) != 1:
                 raise RuntimeError('Cannot extract multiple files')
-            o_name = dname + members[0]
+            o_name = hid + members[0]
             o_path = os.path.join(tmpdir, o_name)
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
@@ -708,7 +708,7 @@ def file_extractor(file_path):
     elif file_extension == '.gz':
         # Gzip files cannot be inspected. It's always only one file
         # Decide on its name
-        o_name = dname + os.path.basename(filename)
+        o_name = hid + os.path.basename(filename)
         o_path = os.path.join(tmpdir, o_name)
         of_ext = _check_ext(o_path)
         if not os.path.exists(o_path):
@@ -720,7 +720,7 @@ def file_extractor(file_path):
     elif file_extension == '.bz2':
         # bzip2 files cannot be inspected. It's always only one file
         # Decide on its name
-        o_name = dname + os.path.basename(filename)
+        o_name = hid + os.path.basename(filename)
         o_path = os.path.join(tmpdir, o_name)
         of_ext = _check_ext(o_path)
         if not os.path.exists(o_path):
@@ -734,7 +734,7 @@ def file_extractor(file_path):
             members = zf.getmembers()
             if len(members) != 1:
                 raise RuntimeError('Cannot extract multiple files')
-            o_name = dname + members[0].name
+            o_name = hid + members[0].name
             o_path = os.path.join(tmpdir, o_name)
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
