@@ -677,6 +677,9 @@ def file_extractor(file_path):
     if ex2 == '.tar':
         filename, file_extension = f2, '.tar.gz'
     bname = os.path.basename(file_path)
+    dname = os.path.dirname(file_path)
+    # This is to give a unique name to the tmp file
+    dname = dname.replace(os.sep, '_') + '_'
 
     # extract directory
     tmpdir = cfg.PATHS['tmp_dir']
@@ -695,17 +698,17 @@ def file_extractor(file_path):
             members = zf.namelist()
             if len(members) != 1:
                 raise RuntimeError('Cannot extract multiple files')
-            o_name = members[0]
+            o_name = dname + members[0]
             o_path = os.path.join(tmpdir, o_name)
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
                 logger.info('Extracting {} to {}...'.format(bname, o_path))
-                of = zf.extract(members[0], tmpdir)
-                assert os.path.normpath(of) == os.path.normpath(o_path)
+                with open(o_path, 'wb') as f:
+                    f.write(zf.read(members[0]))
     elif file_extension == '.gz':
         # Gzip files cannot be inspected. It's always only one file
         # Decide on its name
-        o_name = os.path.basename(filename)
+        o_name = dname + os.path.basename(filename)
         o_path = os.path.join(tmpdir, o_name)
         of_ext = _check_ext(o_path)
         if not os.path.exists(o_path):
@@ -717,7 +720,7 @@ def file_extractor(file_path):
     elif file_extension == '.bz2':
         # bzip2 files cannot be inspected. It's always only one file
         # Decide on its name
-        o_name = os.path.basename(filename)
+        o_name = dname + os.path.basename(filename)
         o_path = os.path.join(tmpdir, o_name)
         of_ext = _check_ext(o_path)
         if not os.path.exists(o_path):
@@ -731,12 +734,13 @@ def file_extractor(file_path):
             members = zf.getmembers()
             if len(members) != 1:
                 raise RuntimeError('Cannot extract multiple files')
-            o_name = members[0].name
+            o_name = dname + members[0].name
             o_path = os.path.join(tmpdir, o_name)
             of_ext = _check_ext(o_path)
             if not os.path.exists(o_path):
                 logger.info('Extracting {} to {}...'.format(bname, o_path))
-                zf.extract(members[0], tmpdir)
+                with open(o_path, 'wb') as f:
+                    f.write(zf.extractfile(members[0]).read())
     else:
         raise InvalidParamsError('Extension not recognized: '
                                  '{}'.format(file_extension))
@@ -1779,7 +1783,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     elif version == '61':
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
     elif version == '62':
-        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/misc/rgi62.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62.zip'
 
     test_file = os.path.join(rgi_dir,
                              '*_rgi*{}_manifest.txt'.format(version))
@@ -1910,7 +1914,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/'
     dfile += 'RGI_V{}_Intersects.zip'.format(version)
     if version == '62':
-        dfile = ('https://cluster.klima.uni-bremen.de/~oggm/misc/'
+        dfile = ('https://cluster.klima.uni-bremen.de/~oggm/rgi/'
                  'rgi62_Intersects.zip')
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
