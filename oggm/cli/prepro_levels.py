@@ -230,7 +230,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Which DEM source?
     if dem_source.upper() == 'ALL':
-        # This is the complex one, just do the job an leave
+        # This is the complex one, just do the job and leave
         log.workflow('Running prepro on ALL sources')
         for i, s in enumerate(utils.DEM_SOURCES):
             rs = i == 0
@@ -430,6 +430,8 @@ def parse_args(args):
         if rgi_reg is None:
             raise InvalidParamsError('--rgi-reg is required!')
     rgi_reg = '{:02}'.format(int(rgi_reg))
+    if rgi_reg not in ['{:02}'.format(int(r)) for r in range(1, 20)]:
+        raise InvalidParamsError('--rgi-reg should range from 01 to 19!')
 
     rgi_version = args.rgi_version
 
