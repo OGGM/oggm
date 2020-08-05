@@ -2815,18 +2815,8 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
         mkdir(os.path.dirname(opath))
 
-    tried = 0
-    while True:
-        # Random io errors sometimes...
-        try:
-            with tarfile.open(opath, "w:gz") as tar:
-                tar.add(source_dir, arcname=os.path.basename(source_dir))
-            break
-        except FileNotFoundError:
-            tried += 1
-            if tried == 5:
-                raise
-            time.sleep(1)
+    with tarfile.open(opath, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
 
     if delete:
         shutil.rmtree(source_dir)
@@ -2862,18 +2852,8 @@ def base_dir_to_tar(base_dir=None, delete=True):
         if not (len(bname) == 11 and bname[-3] == '.'):
             continue
         opath = dirname + '.tar'
-        tried = 0
-        while True:
-            # Random io errors sometimes...
-            try:
-                with tarfile.open(opath, 'w') as tar:
-                    tar.add(dirname, arcname=os.path.basename(dirname))
-                break
-            except FileNotFoundError:
-                tried += 1
-                if tried == 5:
-                    raise
-                time.sleep(1)
+        with tarfile.open(opath, 'w') as tar:
+            tar.add(dirname, arcname=os.path.basename(dirname))
         if delete:
             to_delete.append(dirname)
 

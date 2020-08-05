@@ -164,7 +164,7 @@ Enhancements
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
 - Added ASTER v3 as optional DEM. Requires credentials to
   ``urs.earthdata.nasa.gov`` stored in a local ``.netrc`` file. Credentials
-  can be added on the command line via ``$ oggm_nasa_earthdata_login``
+  can be added on the command line via ``$ oggm_netrc_credentials``
   (:pull:`884`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 - Added a global task (``tasks.compile_task_time`` and the associated method at
