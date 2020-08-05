@@ -169,7 +169,7 @@ Date range: 2011-2014
 
 To access TanDEM-X data self-registration is necessary. Read and follow:
 https://geoservice.dlr.de/web/dataguide/tdm90/#access
-Afterwards use `oggm_tdmdem90_login` to store your credentials locally.
+Afterwards use `oggm_netrc_credentials` to store your credentials locally.
 
 # Data rights
 
