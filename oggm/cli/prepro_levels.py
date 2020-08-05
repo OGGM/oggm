@@ -430,7 +430,8 @@ def parse_args(args):
         if rgi_reg is None:
             raise InvalidParamsError('--rgi-reg is required!')
     rgi_reg = '{:02}'.format(int(rgi_reg))
-    if rgi_reg not in ['{:02}'.format(int(r)) for r in range(1, 20)]:
+    ok_regs = ['{:02}'.format(int(r)) for r in range(1, 20)]
+    if not args.demo and rgi_reg not in ok_regs:
         raise InvalidParamsError('--rgi-reg should range from 01 to 19!')
 
     rgi_version = args.rgi_version
