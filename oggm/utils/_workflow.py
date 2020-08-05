@@ -2815,8 +2815,18 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
         mkdir(os.path.dirname(opath))
 
-    with tarfile.open(opath, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
+    tried = 0
+    while True:
+        # Random io errors sometimes...
+        try:
+            with tarfile.open(opath, "w:gz") as tar:
+                tar.add(source_dir, arcname=os.path.basename(source_dir))
+            break
+        except FileNotFoundError:
+            tried += 1
+            if tried == 5:
+                raise
+            time.sleep(1)
 
     if delete:
         shutil.rmtree(source_dir)
@@ -2845,13 +2855,27 @@ def base_dir_to_tar(base_dir=None, delete=True):
             raise ValueError("Need a valid PATHS['working_dir']!")
         base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
 
+    to_delete = []
     for dirname, subdirlist, filelist in os.walk(base_dir):
         # RGI60-01.00
         bname = os.path.basename(dirname)
         if not (len(bname) == 11 and bname[-3] == '.'):
             continue
         opath = dirname + '.tar'
-        with tarfile.open(opath, 'w') as tar:
-            tar.add(dirname, arcname=os.path.basename(dirname))
+        tried = 0
+        while True:
+            # Random io errors sometimes...
+            try:
+                with tarfile.open(opath, 'w') as tar:
+                    tar.add(dirname, arcname=os.path.basename(dirname))
+                break
+            except FileNotFoundError:
+                tried += 1
+                if tried == 5:
+                    raise
+                time.sleep(1)
         if delete:
-            shutil.rmtree(dirname)
+            to_delete.append(dirname)
+
+    for dirname in to_delete:
+        shutil.rmtree(dirname)
