@@ -392,16 +392,24 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
         log.workflow('Reading parameters from the user provided '
                      'configuration file: %s', file)
 
+    # Static Paths
+    oggm_static_paths()
+
     # Apply code-side manual params overrides
     if params:
         for k, v in params.items():
             cp[k] = v
 
     # Paths
-    oggm_static_paths()
     PATHS['working_dir'] = cp['working_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
+
+    # Ephemeral paths overrides
+    if os.environ.get('OGGM_WORKDIR') is not None:
+        PATHS['working_dir'] = os.environ.get('OGGM_WORKDIR')
+        log.workflow('Overriding initial working dir with OGGM_WORKDIR: ' +
+                     PATHS['working_dir'])
 
     # Do not spam
     PARAMS.do_log = False
