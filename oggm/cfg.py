@@ -406,10 +406,11 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PATHS['climate_file'] = cp['climate_file']
 
     # Ephemeral paths overrides
-    if os.environ.get('OGGM_WORKDIR') is not None:
-        PATHS['working_dir'] = os.environ.get('OGGM_WORKDIR')
-        log.workflow('Overriding initial working dir with OGGM_WORKDIR: ' +
-                     PATHS['working_dir'])
+    env_wd = os.environ.get('OGGM_WORKDIR')
+    if env_wd and not PATHS['working_dir']:
+        PATHS['working_dir'] = env_wd
+        log.workflow("PATHS['working_dir'] set to env variable $OGGM_WORKDIR: "
+                     + env_wd)
 
     # Do not spam
     PARAMS.do_log = False
