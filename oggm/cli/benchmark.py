@@ -63,12 +63,15 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     # Module logger
     log = logging.getLogger(__name__)
 
-    # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level='WORKFLOW')
+    # Params
+    params = {}
 
     # Local paths
     utils.mkdir(working_dir)
-    cfg.PATHS['working_dir'] = working_dir
+    params['working_dir'] = working_dir
+
+    # Initialize OGGM and set up the run parameters
+    cfg.initialize(logging_level='WORKFLOW', params=params)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = True
