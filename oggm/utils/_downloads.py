@@ -270,11 +270,14 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """
     cache_dir = cfg.PATHS['dl_cache_dir']
     cache_ro = cfg.PARAMS['dl_cache_readonly']
-    try:
+
+    # A lot of logic below could be simplified but it's also not too important
+    wd = cfg.PATHS.get('working_dir')
+    if wd:
         # this is for real runs
-        fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
+        fb_cache_dir = os.path.join(wd, 'cache')
         check_fb_dir = False
-    except KeyError:
+    else:
         # Nothing have been set up yet, this is bad - find a place to write
         # This should happen on read-only cluster only but still
         wd = os.environ.get('OGGM_WORKDIR')

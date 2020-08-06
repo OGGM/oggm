@@ -354,7 +354,7 @@ def set_logging_config(logging_level='INFO'):
                         level=getattr(logging, logging_level))
 
 
-def initialize_minimal(file=None, logging_level='INFO'):
+def initialize_minimal(file=None, logging_level='INFO', params=None):
     """Same as initialise() but without requiring any download of data.
 
     This is useful for "flowline only" OGGM applications
@@ -365,6 +365,8 @@ def initialize_minimal(file=None, logging_level='INFO'):
         path to the configuration file (default: OGGM params.cfg)
     logging_level : str
         set a logging level. See :func:`set_logging_config` for options.
+    params : dict
+        overrides for specific parameters from the config file
     """
     global IS_INITIALIZED
     global PARAMS
@@ -390,11 +392,25 @@ def initialize_minimal(file=None, logging_level='INFO'):
         log.workflow('Reading parameters from the user provided '
                      'configuration file: %s', file)
 
-    # Paths
+    # Static Paths
     oggm_static_paths()
+
+    # Apply code-side manual params overrides
+    if params:
+        for k, v in params.items():
+            cp[k] = v
+
+    # Paths
     PATHS['working_dir'] = cp['working_dir']
     PATHS['dem_file'] = cp['dem_file']
     PATHS['climate_file'] = cp['climate_file']
+
+    # Ephemeral paths overrides
+    env_wd = os.environ.get('OGGM_WORKDIR')
+    if env_wd and not PATHS['working_dir']:
+        PATHS['working_dir'] = env_wd
+        log.workflow("PATHS['working_dir'] set to env variable $OGGM_WORKDIR: "
+                     + env_wd)
 
     # Do not spam
     PARAMS.do_log = False
@@ -531,7 +547,7 @@ def initialize_minimal(file=None, logging_level='INFO'):
     IS_INITIALIZED = True
 
 
-def initialize(file=None, logging_level='INFO'):
+def initialize(file=None, logging_level='INFO', params=None):
     """Read the configuration file containing the run's parameters.
 
     This should be the first call, before using any of the other OGGM modules
@@ -543,11 +559,13 @@ def initialize(file=None, logging_level='INFO'):
         path to the configuration file (default: OGGM params.cfg)
     logging_level : str
         set a logging level. See :func:`set_logging_config` for options.
+    params : dict
+        overrides for specific parameters from the config file
     """
     global PARAMS
     global DATA
 
-    initialize_minimal(file=file, logging_level=logging_level)
+    initialize_minimal(file=file, logging_level=logging_level, params=params)
 
     # Do not spam
     PARAMS.do_log = False

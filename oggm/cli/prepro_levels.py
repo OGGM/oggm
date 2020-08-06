@@ -137,12 +137,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         log.workflow('OGGM prepro_levels is done! Time needed: '
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
-    # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level=logging_level)
+    # Config Override Params
+    params = {}
 
     # Local paths
     utils.mkdir(working_dir)
-    cfg.PATHS['working_dir'] = working_dir
+    params['working_dir'] = working_dir
+
+    # Initialize OGGM and set up the run parameters
+    cfg.initialize(logging_level=logging_level, params=params)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp
