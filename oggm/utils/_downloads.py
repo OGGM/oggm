@@ -275,9 +275,13 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         fb_cache_dir = os.path.join(cfg.PATHS['working_dir'], 'cache')
         check_fb_dir = False
     except KeyError:
-        # Nothing have been set up yet, this is bad - use tmp
-        # This should happen on RO cluster only but still
-        fb_cache_dir = os.path.join(cfg.CACHE_DIR, 'cache')
+        # Nothing have been set up yet, this is bad - find a place to write
+        # This should happen on read-only cluster only but still
+        wd = os.environ.get('OGGM_WORKDIR')
+        if wd is not None and os.path.isdir(wd):
+            fb_cache_dir = os.path.join(wd, 'cache')
+        else:
+            fb_cache_dir = os.path.join(cfg.CACHE_DIR, 'cache')
         check_fb_dir = True
 
     if not cache_dir:
