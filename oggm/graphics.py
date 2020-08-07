@@ -54,6 +54,7 @@ def set_oggm_cmaps(use_hcl=None):
 
 set_oggm_cmaps()
 
+
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
     """Remove extreme colors from a colormap."""
     new_cmap = colors.LinearSegmentedColormap.from_list(
@@ -303,8 +304,7 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
         pass
 
     cm = truncate_colormap(OGGM_CMAPS['terrain'], minval=0.25, maxval=1.0)
-    smap.set_cmap(cm)
-    smap.set_plot_params(nlevels=256)
+    smap.set_plot_params(cmap=cm)
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
@@ -349,8 +349,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         topo = nc.variables['topo'][:]
 
     cm = truncate_colormap(OGGM_CMAPS['terrain'], minval=0.25, maxval=1.0)
-    smap.set_cmap(cm)
-    smap.set_plot_params(nlevels=256)
+    smap.set_plot_params(cmap=cm)
     smap.set_data(topo)
     for gdir in gdirs:
         crs = gdir.grid.center_grid
@@ -557,7 +556,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'], nlevels=256,
+    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'],
                           data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
@@ -607,8 +606,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
             smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
         smap.set_data(thick, crs=crs, overplot=True)
 
-    smap.set_cmap(OGGM_CMAPS['glacier_thickness'])
-    smap.set_plot_params(nlevels=256)
+    smap.set_plot_params(cmap=OGGM_CMAPS['glacier_thickness'])
     smap.plot(ax)
 
     return dict(cbar_label='Glacier thickness [m]')
@@ -669,7 +667,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                 toplot_lines.append(line)
                 toplot_crs.append(crs)
 
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'], nlevels=256,
+    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'],
                           data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
