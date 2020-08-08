@@ -94,7 +94,7 @@ Accessing the tutorials (and other content) with nbgitpuller
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Per default, your user space after logging should be empty. We recommend to
-use`nbgitpuller <https://jupyterhub.github.io/nbgitpuller>`_ to
+use `nbgitpuller <https://jupyterhub.github.io/nbgitpuller>`_ to
 automatically download content from our
 `tutorials repository <https://github.com/OGGM/oggm-edu-notebooks>`_ for you.
 
