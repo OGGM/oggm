@@ -349,41 +349,17 @@ this is strictly necessary, but you never know**.
 
 For the build::
 
-    $ sudo apt-get install build-essential python-pip liblapack-dev \
-        gfortran libproj-dev python-setuptools
+    $ sudo apt-get install build-essential python3-pip
 
-For matplolib::
+For NetCDF and HDF::
 
-    $ sudo apt-get install tk-dev python3-tk python3-dev
-
-For GDAL::
-
-    $ sudo apt-get install gdal-bin libgdal-dev python-gdal
-
-For NetCDF::
-
-    $ sudo apt-get install netcdf-bin ncview python-netcdf4
+    $ sudo apt-get install netcdf-bin ncview hdf5-tools libhdf5-dev 
 
 
 Virtual environment
 ~~~~~~~~~~~~~~~~~~~
 
-Next follow these steps to set up a virtual environment.
-
-Install extensions to virtualenv::
-
-    $ sudo apt-get install virtualenvwrapper
-
-Reload your profile::
-
-    $ source /etc/profile
-
-Make a new environment, for example called ``oggm_env``, with **Python 3**::
-
-    $ mkvirtualenv oggm_env -p /usr/bin/python3
-
-(further details can be found for example in
-`this tutorial <http://simononsoftware.com/virtualenv-tutorial-part-2/>`_)
+Install `virtualenvwrapper <https://virtualenvwrapper.readthedocs.io/en/latest/install.html#>`_ and git.
 
 
 Python packages
@@ -399,10 +375,10 @@ Update pip (important!)::
 
 Install some packages one by one::
 
-   $ pip install numpy==1.16.4 scipy pandas shapely matplotlib pyproj \
+   $ pip install numpy scipy pandas shapely matplotlib pyproj \
        rasterio Pillow geopandas netcdf4==1.3.1 scikit-image configobj joblib \
        xarray progressbar2 pytest motionless dask bottleneck toolz descartes \
-       pytables
+       tables
 
 The pinning of the NetCDF4 package was necessary for us, but your system
 might differ
