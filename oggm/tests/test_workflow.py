@@ -29,8 +29,8 @@ from oggm import utils
 
 # Globals
 pytestmark = pytest.mark.test_env("workflow")
-TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
-CLI_LOGF = os.path.join(TEST_DIR, 'clilog.pkl')
+_TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
+CLI_LOGF = os.path.join(_TEST_DIR, 'clilog.pkl')
 
 
 def clean_dir(testdir):
@@ -42,10 +42,10 @@ def up_to_climate(reset=False):
     """Run the tasks you want."""
 
     # test directory
-    if not os.path.exists(TEST_DIR):
-        os.makedirs(TEST_DIR)
+    if not os.path.exists(_TEST_DIR):
+        os.makedirs(_TEST_DIR)
     if reset:
-        clean_dir(TEST_DIR)
+        clean_dir(_TEST_DIR)
 
     if not os.path.exists(CLI_LOGF):
         with open(CLI_LOGF, 'wb') as f:
@@ -58,7 +58,7 @@ def up_to_climate(reset=False):
     cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
 
     # Working dir
-    cfg.PATHS['working_dir'] = TEST_DIR
+    cfg.PATHS['working_dir'] = _TEST_DIR
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
@@ -210,7 +210,7 @@ class TestFullRun(unittest.TestCase):
 
         # Just to increase coveralls, hehe
         gdirs = up_to_climate()
-        fpath = os.path.join(TEST_DIR, 'centerlines.shp')
+        fpath = os.path.join(_TEST_DIR, 'centerlines.shp')
         write_centerlines_to_shape(gdirs, path=fpath)
 
         import salem
@@ -224,8 +224,8 @@ class TestFullRun(unittest.TestCase):
     def test_random(self):
 
         # Fake Reset (all these tests are horribly coded)
-        if not os.path.exists(TEST_DIR):
-            os.makedirs(TEST_DIR)
+        if not os.path.exists(_TEST_DIR):
+            os.makedirs(_TEST_DIR)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('none', f)
         gdirs = up_to_inversion(reset=False)

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from oggm.shop import cru, histalp, ecmwf
 from oggm import cfg, tasks
 from oggm.core import flowline
-from oggm.tests.funcs import get_ident, init_hef
+from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils
 from oggm.utils import mkdir, _downloads
 from oggm.utils import oggm_urlretrieve
@@ -154,17 +154,7 @@ def test_dir():
         As a session-scoped fixture, this will only be created once and
         then injected to each test that depends on it.
     """
-    s = get_ident()
-    out = os.path.join(cfg.PATHS['test_dir'], s)
-    if 'PYTEST_XDIST_WORKER' in os.environ:
-        out = os.path.join(out, os.environ.get('PYTEST_XDIST_WORKER'))
-    mkdir(out)
-
-    # If new ident, remove all other dirs so spare space
-    for d in os.listdir(cfg.PATHS['test_dir']):
-        if d and d != s:
-            shutil.rmtree(os.path.join(cfg.PATHS['test_dir'], d))
-    return out
+    return get_test_dir()
 
 
 def _setup_case_dir(call, test_dir):

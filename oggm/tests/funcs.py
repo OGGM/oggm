@@ -1,6 +1,7 @@
 import os
 import shutil
 from distutils.util import strtobool
+import hashlib
 
 import numpy as np
 import shapely.geometry as shpg
@@ -9,11 +10,14 @@ from scipy import optimize as optimization
 # Local imports
 import oggm
 import oggm.cfg as cfg
-from oggm.utils import get_demo_file, mkdir
+from oggm.utils import (get_demo_file, mkdir, get_git_ident, get_sys_info,
+                        get_env_info)
 from oggm.workflow import execute_entity_task
 from oggm.core import flowline
 from oggm import tasks
 from oggm.core.flowline import RectangularBedFlowline
+
+_TEST_DIR = None
 
 
 def dummy_constant_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
@@ -298,26 +302,27 @@ def use_multiprocessing():
         return True
 
 
-def get_ident():
-    ident_str = '$Id$'
-    if ":" not in ident_str:
-        return 'no_git_id'
-    return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
-
-
 def get_test_dir():
 
-    s = get_ident()
-    out = os.path.join(cfg.PATHS['test_dir'], s)
-    if 'PYTEST_XDIST_WORKER' in os.environ:
-        out = os.path.join(out, os.environ.get('PYTEST_XDIST_WORKER'))
-    mkdir(out)
+    global _TEST_DIR
 
-    # If new ident, remove all other dirs so spare space
-    for d in os.listdir(cfg.PATHS['test_dir']):
-        if d and d != s:
-            shutil.rmtree(os.path.join(cfg.PATHS['test_dir'], d))
-    return out
+    if _TEST_DIR is None:
+        s = get_git_ident()
+        s += ''.join([str(k) + str(v) for k, v in get_sys_info()])
+        s += ''.join([str(k) + str(v) for k, v in get_env_info()])
+        s = hashlib.md5(s.encode()).hexdigest()
+        out = os.path.join(cfg.PATHS['test_dir'], s)
+        if 'PYTEST_XDIST_WORKER' in os.environ:
+            out = os.path.join(out, os.environ.get('PYTEST_XDIST_WORKER'))
+        mkdir(out)
+        _TEST_DIR = out
+
+        # If new ident, remove all other dirs so spare space
+        for d in os.listdir(cfg.PATHS['test_dir']):
+            if d and d != s:
+                shutil.rmtree(os.path.join(cfg.PATHS['test_dir'], d))
+
+    return _TEST_DIR
 
 
 def init_hef(reset=False, border=40, logging_level='INFO'):
