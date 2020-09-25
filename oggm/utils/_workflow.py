@@ -136,7 +136,7 @@ get_temp_dir = gettempdir
 
 
 def get_sys_info():
-    """Returns system information as a dict"""
+    """Returns system information as a list of tuples"""
 
     blob = []
     try:
@@ -156,22 +156,8 @@ def get_sys_info():
     return blob
 
 
-def show_versions(logger=None):
-    """Prints the OGGM version and other system information.
-
-    Parameters
-    ----------
-    logger : optional
-        the logger you want to send the printouts to. If None, will use stdout
-
-    Returns
-    -------
-    the output string
-    """
-
-    _print = print if logger is None else logger.workflow
-
-    sys_info = get_sys_info()
+def get_env_info():
+    """Returns env information as a list of tuples"""
 
     deps = [
         # (MODULE_NAME, f(mod) -> mod version)
@@ -184,7 +170,6 @@ def show_versions(logger=None):
         ("matplotlib", lambda mod: mod.__version__),
         ("rasterio", lambda mod: mod.__version__),
         ("fiona", lambda mod: mod.__version__),
-        ("osgeo.gdal", lambda mod: mod.__version__),
         ("pyproj", lambda mod: mod.__version__),
         ("shapely", lambda mod: mod.__version__),
         ("xarray", lambda mod: mod.__version__),
@@ -203,12 +188,42 @@ def show_versions(logger=None):
         except BaseException:
             deps_blob.append((modname, None))
 
+    return deps_blob
+
+
+def get_git_ident():
+    ident_str = '$Id: f2cb553755951450761f5ee64e4a4c433ef61521 $'
+    if ":" not in ident_str:
+        return 'no_git_id'
+    return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
+
+
+def show_versions(logger=None):
+    """Prints the OGGM version and other system information.
+
+    Parameters
+    ----------
+    logger : optional
+        the logger you want to send the printouts to. If None, will use stdout
+
+    Returns
+    -------
+    the output string
+    """
+
+    _print = print if logger is None else logger.workflow
+
+    sys_info = get_sys_info()
+    deps_blob = get_env_info()
+
     out = ["# System info:"]
     for k, stat in sys_info:
         out.append("%s: %s" % (k, stat))
     out.append("# Packages info:")
     for k, stat in deps_blob:
         out.append("%s: %s" % (k, stat))
+    out.append("# OGGM git identifier:")
+    out.append(get_git_ident())
     for l in out:
         _print(l)
     return '\n'.join(out)
