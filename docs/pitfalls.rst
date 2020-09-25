@@ -85,7 +85,7 @@ discussion pointing this out, and `this example <https://github.com/OGGM/oggm/is
 
 We now have fixed the most pressing issues.
 `This blog post <https://oggm.org/2020/01/18/stability-analysis/>`_ explains
-it in detail but in short:
+it in detail, for a summary:
 
 - the previous algorithm was flawed, but did not result in significant errors
   at large scales.

@@ -10,28 +10,24 @@ Installing OGGM
 
 OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
-detail and should work on any platform. See :ref:`install-troubleshooting`
+detail and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
 OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux.
-OGGM doesn't work with Python 2.
-We do not test OGGM on Mac OS, but it should probably run fine.
+OGGM doesn't work with Python 2. We do not test OGGM on Mac OS, but it
+should probably run fine.
 
-OGGM usually does not work on Windows. If you are using Windows 10,
-we strongly recommend to install the free
-`Windows subsytem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
-and install and run OGGM from there.
+.. warning::
 
-.. note::
+    OGGM does not work on Windows. If you are using Windows 10,
+    we strongly recommend to install the free
+    `Windows subsytem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
+    and install and run OGGM from there.
 
-   Complete beginners should get familiar with Python and its packaging
-   ecosystem before trying to install and run OGGM.
-
-For most users we recommend following :ref:`the steps here<conda-install>` to
-install Python and the package dependencies with the conda_ package manager.
-Linux or Debian users and people with experience with `pip`_ can
-:ref:`follow the specific instructions here<virtualenv-install>` to install
-with virtualenv.
+For most users we recommend to
+install Python and the package dependencies with the :ref:`conda package manager <conda-install>`.
+Linux users with experience with `pip`_ can follow
+:ref:`these instructions <virtualenv-install>` to install OGGM in a pyenv environment with pip.
 
 .. _tested: https://travis-ci.org/OGGM/oggm
 .. _conda: http://conda.pydata.org/docs/using/index.html
@@ -43,7 +39,7 @@ Dependencies
 ------------
 
 Here is a list of *all* dependencies of the OGGM model. If you want to use
-the numerical models and nothing else, refer to
+OGGM's numerical models only (i.e. no GIS or preprocessing tools), refer to
 `Install a minimal OGGM environment`_ below.
 
 Standard SciPy stack:
@@ -65,7 +61,6 @@ I/O:
     - pytables
 
 GIS tools:
-    - gdal
     - shapely
     - pyproj
     - rasterio
@@ -81,7 +76,7 @@ Other libraries:
 
 Optional:
     - progressbar2 (displays the download progress)
-    - bottleneck (speeds up xarray operations)
+    - bottleneck (might speed up some xarray operations)
     - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
       (applies HCL-based color palettes to some graphics)
 
@@ -90,7 +85,14 @@ Optional:
 Install with conda (all platforms)
 ----------------------------------
 
-This is the recommended way to install OGGM.
+This is the recommended way to install OGGM for most users.
+
+.. note::
+
+    If you are not familiar with Python and its
+    `way too many package management systems <https://xkcd.com/1987/>`_, you might find all
+    of this quite confusing and overwhelming. Be patient,
+    `read the docs <https://docs.conda.io>`_ and stay hydrated.
 
 Prerequisites
 ~~~~~~~~~~~~~
@@ -104,7 +106,6 @@ need).
 .. _miniconda: http://conda.pydata.org/miniconda.html
 .. _anaconda: http://docs.continuum.io/anaconda/install
 
-
 Conda environment
 ~~~~~~~~~~~~~~~~~
 
@@ -114,17 +115,25 @@ window, type::
     conda create --name oggm_env python=3.X
 
 
-where ``3.X`` is the Python version shipped with conda (currently 3.6).
+where ``3.X`` is the Python version shipped with conda (currently 3.8).
 You can of course use any other name for your environment.
 
 Don't forget to activate it before going on::
 
     source activate oggm_env
 
-(on Windows: ``activate oggm_env``)
 
 .. _environment: http://conda.pydata.org/docs/using/envs.html
-.. _this problem: https://github.com/conda-forge/geopandas-feedstock/issues/9
+
+
+Feeling adventurous? Try mamba
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The conda package manager has recently been criticized for being slow (it *is*
+quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://github.com/mamba-org/mamba>`_.
+Mamba is a drop-in replacement for all conda commands.
+If you feel like it, install mamba in your conda environment (`conda install -c conda-forge mamba`)
+and replace all occurrences of `conda` with `mamba` in the instructions below.
 
 
 Dependencies
@@ -137,7 +146,7 @@ Install all OGGM dependencies from the ``conda-forge`` and ``oggm`` conda channe
 The ``oggm-deps`` package is a "meta package". It does not contain any code but
 will install all the packages OGGM needs automatically.
 
-.. warning::
+.. important::
 
     The `conda-forge`_ channel ensures that the complex package dependencies are
     handled correctly. Subsequent installations or upgrades from the default
@@ -145,17 +154,15 @@ will install all the packages OGGM needs automatically.
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_ (and ``oggm``) as your 
-default channels::
+You might consider setting `conda-forge`_  as your
+default channel::
 
     conda config --add channels conda-forge
-    conda config --add channels oggm
 
-No scientific Python installation is complete without installing
-`IPython`_ and `Jupyter`_::
+No scientific Python installation is complete without installing a good
+testing framework, as well as `IPython`_ and `Jupyter`_::
 
-    conda install -c conda-forge ipython jupyter
-
+    conda install -c conda-forge pytest ipython jupyter
 
 .. _conda-forge: https://conda-forge.github.io/
 .. _IPython: https://ipython.org/
@@ -168,7 +175,9 @@ Install OGGM itself
 First, choose which version of OGGM you would like to install:
 
 - **stable**: this is the latest version officially released and has a fixed
-  version number (e.g. v1.1).
+  version number (e.g. v1.1). As of today (Sept 2020), we do *not* recommend to
+  install the stable version which is quite outdated. We are in the process
+  of releasing a new stable version soon(ish).
 - **dev**: this is the development version. It might contain new
   features and bug fixes, but is also likely to continue to change until a
   new release is made. This is the recommended way if you want to use the
@@ -190,7 +199,7 @@ If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/p
 **‣ install the dev version:**
 
 For this to work you'll need to have the `git`_ software installed on your
-system. In your conda environmnent, simply do::
+system. In your conda environment, simply do::
 
     pip install --upgrade git+https://github.com/OGGM/oggm.git
 
@@ -235,26 +244,32 @@ anywhere (don't forget to activate your environment first)::
 
     pytest --pyargs oggm
 
-The tests can run for a couple of minutes. If everything worked fine, you
-should see something like::
+The tests can run for about 10 minutes (`we are trying to reduce this <https://github.com/OGGM/oggm/issues/1063>`_).
+If everything worked fine, you should see something like::
 
-    =============================== test session starts ===============================
-    platform linux -- Python 3.5.2, pytest-3.3.1, py-1.5.2, pluggy-0.6.0
-    Matplotlib: 2.1.1
-    Freetype: 2.6.1
-    rootdir:
-    plugins: mpl-0.9
-    collected 164 items
+    ================================================ test session starts =================================================
+    platform linux -- Python 3.8.5, pytest-6.0.2, py-1.9.0, pluggy-0.13.1
+    Matplotlib: 3.3.2
+    Freetype: 2.10.2
+    rootdir: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork, configfile: pytest.ini
+    plugins: mpl-0.123
+    collected 316 items
 
-    oggm/tests/test_benchmarks.py ...                                           [  1%]
-    oggm/tests/test_graphics.py ...................                             [ 13%]
-    oggm/tests/test_models.py ................sss.ss.....sssssss                [ 34%]
-    oggm/tests/test_numerics.py .ssssssssssssssss                               [ 44%]
-    oggm/tests/test_prepro.py .......s........................s..s.......       [ 70%]
-    oggm/tests/test_utils.py .....................sss.s.sss.sssss..ss.          [ 95%]
-    oggm/tests/test_workflow.py sssssss                                         [100%]
+    oggm/tests/test_benchmarks.py .......                                                                          [  2%]
+    oggm/tests/test_graphics.py ss.................X                                                               [  8%]
+    oggm/tests/test_minimal.py ...                                                                                 [  9%]
+    oggm/tests/test_models.py ..........................sss.......ssss..s.ss..ssssss..sss                          [ 28%]
+    oggm/tests/test_numerics.py .sssssssssss.ssss...s..ss.s                                                        [ 36%]
+    oggm/tests/test_prepro.py .................s........................s................s....s............        [ 61%]
+    oggm/tests/test_shop.py .......                                                                                [ 63%]
+    oggm/tests/test_utils.py ....................................................ss.ss..sssss.ssssss..sss...s.ss.s [ 90%]
+    s.ss..                                                                                                         [ 92%]
+    oggm/tests/test_vascaling.py ...................                                                               [ 98%]
+    oggm/tests/test_workflow.py ssssss                                                                             [100%]
 
-    ==================== 112 passed, 52 skipped in 187.35 seconds =====================
+    ================================================== warnings summary ==================================================
+    (most warnings are OK)
+    ========================= 240 passed, 75 skipped, 1 xpassed, 8 warnings in 590.35s (0:09:50) =========================
 
 
 You can safely ignore deprecation warnings and other messages (if any),
@@ -298,7 +313,7 @@ for more information about how to create an environment from a yml file)::
       - jupyterlab
       - numpy=1.16.5
       - scipy=1.4.1
-      - pandas
+      - pandas=0.25.3
       - shapely
       - matplotlib
       - Pillow
@@ -307,7 +322,6 @@ for more information about how to create an environment from a yml file)::
       - scikit-learn
       - configobj
       - xarray
-      - pytables
       - pytest
       - dask
       - bottleneck
@@ -317,57 +331,60 @@ for more information about how to create an environment from a yml file)::
       - rasterio=1.1.2
       - descartes
       - seaborn
+      - pytables=3.6.1
       - pip
       - pip:
         - joblib
         - progressbar2
         - motionless
         - git+https://github.com/fmaussion/salem.git
-        - git+https://github.com/OGGM/oggm.git
+        - git+https://github.com/retostauffer/python-colorspace
         - git+https://github.com/OGGM/pytest-mpl
 
 
 .. _virtualenv-install:
 
-Install with virtualenv (Linux/Debian)
---------------------------------------
+Install with pyenv (Linux)
+--------------------------
 
 .. note::
 
-   We used to recommend our users to use `conda` instead of `pip`, because
-   of the ease of installation with `conda`. As of August 2019, a `pip`
-   installation is also possible without major issue on Debian.
-
-
-The instructions below have been tested on Debian / Ubuntu / Mint systems only!
+   We recommend our users to use `conda` instead of `pip`, because
+   of the ease of installation with `conda`. If you are familiar with `pip` and
+   `pyenv`, the instructions below work as well: as of Sept 2020 (and thanks
+   to pip wheels), a pyenv
+   installation is possible without major issue on Debian/Ubuntu/Mint
+   systems.
 
 Linux packages
 ~~~~~~~~~~~~~~
 
-Run the following commands to install required packages. **We are not sure
-this is strictly necessary, but you never know**.
+Run the following commands to install required linux packages.
 
-For the build::
+For building python and stuff::
 
-    $ sudo apt-get install build-essential python3-pip
+    $ sudo apt-get install --no-install-recommends make build-essential git \
+        libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget \
+        curl llvm libncurses5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev \
+        libffi-dev liblzma-dev`
 
 For NetCDF and HDF::
 
     $ sudo apt-get install netcdf-bin ncview hdf5-tools libhdf5-dev 
 
 
-Virtual environment
-~~~~~~~~~~~~~~~~~~~
+Pyenv and pyenv-virtualenv
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Install `virtualenvwrapper <https://virtualenvwrapper.readthedocs.io/en/latest/install.html#>`_ and git.
-
+Install `pyenv <https://github.com/pyenv/pyenv>`_ and create a new virtual environment
+with a recent python version (3.7+) using `pyenv-virtualenv <https://github.com/pyenv/pyenv-virtualenv>`_.
 
 Python packages
 ~~~~~~~~~~~~~~~
 
 Be sure to be on the working environment::
 
-    $ workon oggm_env
+    $ pyenv activate oggm_env
 
 Update pip (important!)::
 
@@ -376,12 +393,11 @@ Update pip (important!)::
 Install some packages one by one::
 
    $ pip install numpy scipy pandas shapely matplotlib pyproj \
-       rasterio Pillow geopandas netcdf4==1.3.1 scikit-image configobj joblib \
+       rasterio Pillow geopandas netcdf4 scikit-image configobj joblib \
        xarray progressbar2 pytest motionless dask bottleneck toolz descartes \
        tables
 
-The pinning of the NetCDF4 package was necessary for us, but your system
-might differ
+A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems
 (`related issue <https://github.com/Unidata/netcdf4-python/issues/962>`_).
 
 Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries::
@@ -394,35 +410,6 @@ OGGM and tests
 ~~~~~~~~~~~~~~
 
 Refer to `Install OGGM itself`_ above.
-
-
-Legacy: install GDAL with link to the system libraries
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-.. note::
-
-    The steps below used to be necessary before the availability of pip wheels.
-    We still document them here, just in case.
-
-Installing **GDAL** is not so straightforward. First, check which version of
-GDAL is installed on your Linux system::
-
-    $ gdal-config --version
-
-The package version (e.g. ``2.2.0``, ``2.3.1``, ...) should match
-that of the Python package you want to install. For example, if the Linux
-GDAL version is ``2.2.0``, install the latest corresponding Python version.
-The following command works on any system and automatically gets the right version::
-
-    $ pip install gdal=="$(gdal-config --version)" --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
-
-Fiona also builds upon GDAL, so let's compile it the same way::
-
-    $ pip install fiona --install-option="build_ext" --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
-
-(Details can be found in `this blog post <http://tylerickson.blogspot.co.at/2011/09/installing-gdal-in-python-virtual.html>`_.)
-
 
 Install a minimal OGGM environment
 ----------------------------------
