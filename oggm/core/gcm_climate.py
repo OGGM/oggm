@@ -105,7 +105,6 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         win_size = len(ts_tmp_sel) + 1
 
         def roll_func(x, axis=None):
-            assert axis == 1
             x = x[:, ::12]
             n = len(x[0, :]) // 2
             xm = np.nanmean(x, axis=axis)

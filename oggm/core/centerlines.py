@@ -344,15 +344,15 @@ def _filter_heads(heads, heads_height, radius, polygon):
             if inter_poly.type == 'MultiLineString':
                 inter_poly = shapely.ops.linemerge(inter_poly)
 
-            if inter_poly.type is not 'LineString':
+            if inter_poly.type != 'LineString':
                 # keep the local polygon only
                 for sub_poly in inter_poly:
                     if sub_poly.intersects(head):
                         inter_poly = sub_poly
                         break
-        elif inter_poly.type is 'LineString':
+        elif inter_poly.type == 'LineString':
             inter_poly = shpg.Polygon(np.asarray(inter_poly.xy).T)
-        elif inter_poly.type is 'Polygon':
+        elif inter_poly.type == 'Polygon':
             pass
         else:
             extext = ('Geometry collection not expected: '
@@ -418,7 +418,7 @@ def _filter_lines(lines, heads, k, r):
                 # loop over all remaining lines and compute their diff
                 # to the last longest line
                 diff = l.difference(toremove)
-                if diff.type is 'MultiLineString':
+                if diff.type == 'MultiLineString':
                     # Remove the lines that have no head
                     diff = list(diff)
                     for il in diff:
