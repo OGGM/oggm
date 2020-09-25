@@ -305,7 +305,6 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         win_size = len(cmn_time) + 1
 
         def roll_func(x, axis=None):
-            assert axis == 1
             x = x[:, ::12]
             n = len(x[0, :]) // 2
             xm = np.nanmean(x, axis=axis)
@@ -761,7 +760,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
 
     ny = len(years)
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
-    mb_per_mu = pd.Series(index=years)
+    mb_per_mu = pd.Series(index=years, dtype=np.float)
 
     if glacierwide:
         # The old (but fast) method to find t*

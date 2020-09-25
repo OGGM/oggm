@@ -448,7 +448,7 @@ def t_star_from_refmb(gdir, mbdf=None):
 
     ny = len(years)
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
-    mb_per_mu = pd.Series(index=years)
+    mb_per_mu = pd.Series(index=years, dtype=np.float)
 
     # get mass balance relevant climate parameters
     years, temp, prcp = get_yearly_mb_temp_prcp(gdir, year_range=[y0, y1])
