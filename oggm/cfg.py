@@ -283,10 +283,6 @@ _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
-_doc = ("A dict containing the glacier's t*, bias, mu*. Analogous "
-        "to 'local_mustar.json', but for the volume/area scaling model.")
-BASENAMES['vascaling_mustar'] = ('vascaling_mustar.json', _doc)
-
 _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 

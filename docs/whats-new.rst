@@ -50,6 +50,9 @@ Breaking changes
   not volume. This also is a step towards more physical consistency between
   inverse and forward model.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- the `vascaling` module has been removed from oggm core (:pull:`1065`). It
+  is now available via a separate package (`oggm-vas <https://github.com/OGGM/oggm-vas>`_,
+  maintained by Moritz Oberrauch).
 
 Enhancements
 ~~~~~~~~~~~~
