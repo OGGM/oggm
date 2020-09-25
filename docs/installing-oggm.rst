@@ -247,29 +247,30 @@ anywhere (don't forget to activate your environment first)::
 The tests can run for about 10 minutes (`we are trying to reduce this <https://github.com/OGGM/oggm/issues/1063>`_).
 If everything worked fine, you should see something like::
 
-    ================================================ test session starts =================================================
+    ================================ test session starts ================================
     platform linux -- Python 3.8.5, pytest-6.0.2, py-1.9.0, pluggy-0.13.1
     Matplotlib: 3.3.2
-    Freetype: 2.10.2
+    Freetype: 2.6.1
     rootdir: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork, configfile: pytest.ini
-    plugins: mpl-0.123
-    collected 316 items
+    plugins: mpl-0.122
+    collected 297 items
 
-    oggm/tests/test_benchmarks.py .......                                                                          [  2%]
-    oggm/tests/test_graphics.py ss.................X                                                               [  8%]
-    oggm/tests/test_minimal.py ...                                                                                 [  9%]
-    oggm/tests/test_models.py ..........................sss.......ssss..s.ss..ssssss..sss                          [ 28%]
-    oggm/tests/test_numerics.py .sssssssssss.ssss...s..ss.s                                                        [ 36%]
-    oggm/tests/test_prepro.py .................s........................s................s....s............        [ 61%]
-    oggm/tests/test_shop.py .......                                                                                [ 63%]
-    oggm/tests/test_utils.py ....................................................ss.ss..sssss.ssssss..sss...s.ss.s [ 90%]
-    s.ss..                                                                                                         [ 92%]
-    oggm/tests/test_vascaling.py ...................                                                               [ 98%]
-    oggm/tests/test_workflow.py ssssss                                                                             [100%]
+    oggm/tests/test_benchmarks.py .......                                         [  2%]
+    oggm/tests/test_graphics.py ...................X                              [  9%]
+    oggm/tests/test_minimal.py ...                                                [ 10%]
+    oggm/tests/test_models.py ..........................sss.......ssss..s.ss..sss [ 27%]
+    sss..sss                                                                      [ 29%]
+    oggm/tests/test_numerics.py .sssssssssss.ssss...s..ss.s                       [ 39%]
+    oggm/tests/test_prepro.py .................s........................s........ [ 56%]
+    ........s....s............                                                    [ 64%]
+    oggm/tests/test_shop.py .......                                               [ 67%]
+    oggm/tests/test_utils.py .................................................... [ 84%]
+    ss.ss..sssss.ssssss..sss...s.ss.ss.ss..                                       [ 97%]
+    oggm/tests/test_workflow.py ssssss                                            [100%]
 
-    ================================================== warnings summary ==================================================
-    (most warnings are OK)
-    ========================= 240 passed, 75 skipped, 1 xpassed, 8 warnings in 590.35s (0:09:50) =========================
+    ================================= warnings summary ==================================
+    (warnings are mostly ok)
+    ======== 223 passed, 73 skipped, 1 xpassed, 9 warnings in 771.11s (0:12:51) =========
 
 
 You can safely ignore deprecation warnings and other messages (if any),

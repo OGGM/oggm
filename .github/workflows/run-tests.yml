@@ -20,7 +20,6 @@ jobs:
           - models
           - benchmark
           - utils
-          - vascaling
           - workflow-single
           - workflow-multi
           - graphics-mpl
