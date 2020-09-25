@@ -192,7 +192,7 @@ def get_env_info():
 
 
 def get_git_ident():
-    ident_str = '$Id: f2cb553755951450761f5ee64e4a4c433ef61521 $'
+    ident_str = '$Id$'
     if ":" not in ident_str:
         return 'no_git_id'
     return ident_str.replace("$", "").replace("Id:", "").replace(" ", "")
