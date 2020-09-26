@@ -14,7 +14,11 @@ from distutils.util import strtobool
 
 import numpy as np
 import pandas as pd
-from scipy.signal import gaussian
+try:
+    from scipy.signal.windows import gaussian
+except AttributeError:
+    # Old scipy
+    from scipy.signal import gaussian
 from configobj import ConfigObj, ConfigObjError
 try:
     import geopandas as gpd
