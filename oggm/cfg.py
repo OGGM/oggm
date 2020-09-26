@@ -570,8 +570,8 @@ def initialize(file=None, logging_level='INFO', params=None):
     from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
 
-    # Read-in the reference t* data for all available models types (oggm, vas)
-    model_prefixes = ['oggm_', 'vas_']
+    # Read-in the reference t* data for all available models types (only oggm)
+    model_prefixes = ['oggm_']
     for prefix in model_prefixes:
         fns = ['ref_tstars_rgi5_cru4', 'ref_tstars_rgi6_cru4',
                'ref_tstars_rgi5_histalp', 'ref_tstars_rgi6_histalp']
