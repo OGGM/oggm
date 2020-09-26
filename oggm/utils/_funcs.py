@@ -13,7 +13,11 @@ from distutils.version import LooseVersion
 import pandas as pd
 import numpy as np
 from scipy.ndimage import filters
-from scipy.signal import gaussian
+try:
+    from scipy.signal.windows import gaussian
+except AttributeError:
+    # Old scipy
+    from scipy.signal import gaussian
 from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
