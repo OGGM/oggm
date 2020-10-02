@@ -1486,23 +1486,35 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     return gdir
 
 
+def _back_up_retry(func, exceptions, max_count=5):
+    """Re-Try an action up to max_count times.
+    """
+
+    count = 0
+    while count < max_count:
+        try:
+            if count > 0:
+                time.sleep(random.uniform(0.05, 0.1))
+            return func()
+        except exceptions:
+            count += 1
+            if count >= max_count:
+                raise
+
+
 def _robust_extract(to_dir, *args, **kwargs):
     """For some obscure reason this operation randomly fails.
 
     Try to make it more robust.
     """
-    count = 0
-    while count < 5:
-        try:
-            if count > 1:
-                time.sleep(random.uniform(0.05, 0.1))
-            with tarfile.open(*args, **kwargs) as tf:
-                tf.extractall(os.path.dirname(to_dir))
-            break
-        except FileExistsError:
-            count += 1
-            if count == 5:
-                raise
+
+    def func():
+        with tarfile.open(*args, **kwargs) as tf:
+            if not len(tf.getnames()):
+                raise RuntimeError("Empty tarfile")
+            tf.extractall(os.path.dirname(to_dir))
+
+    _back_up_retry(func, FileExistsError)
 
 
 def robust_tar_extract(from_tar, to_dir, delete_tar=False):
@@ -1521,9 +1533,14 @@ def robust_tar_extract(from_tar, to_dir, delete_tar=False):
         # Open the tar
         bname = os.path.basename(from_tar)
         dirbname = os.path.basename(os.path.dirname(from_tar))
-        with tarfile.open(base_tar, 'r') as tf:
-            i_from_tar = tf.getmember(os.path.join(dirbname, bname))
-            _robust_extract(to_dir, fileobj=tf.extractfile(i_from_tar))
+
+        def func():
+            with tarfile.open(base_tar, 'r') as tf:
+                i_from_tar = tf.getmember(os.path.join(dirbname, bname))
+                with tf.extractfile(i_from_tar) as fileobj:
+                    _robust_extract(to_dir, fileobj=fileobj)
+
+        _back_up_retry(func, RuntimeError)
 
     if delete_tar:
         os.remove(from_tar)
@@ -2281,7 +2298,7 @@ class GlacierDirectory(object):
             time = pd.DatetimeIndex(time)
             y0 = time[0].year
             y1 = time[-1].year
-        
+
         if time_unit is None:
             # http://pandas.pydata.org/pandas-docs/stable/timeseries.html
             # #timestamp-limitations
@@ -2309,7 +2326,7 @@ class GlacierDirectory(object):
             nc.author_info = 'Open Global Glacier Model'
 
             timev = nc.createVariable('time', 'i4', ('time',))
-            
+
             tatts = {'units': time_unit}
             if calendar is None:
                 calendar = 'standard'
