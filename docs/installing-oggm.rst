@@ -341,6 +341,7 @@ for more information about how to create an environment from a yml file)::
         - git+https://github.com/fmaussion/salem.git
         - git+https://github.com/retostauffer/python-colorspace
         - git+https://github.com/OGGM/pytest-mpl
+        - git+https://github.com/OGGM/oggm
 
 
 .. _virtualenv-install:
