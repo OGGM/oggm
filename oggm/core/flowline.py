@@ -124,10 +124,12 @@ class Flowline(Centerline):
 
     @property
     def length_m(self):
-        # We define the length a bit differently: but more robust
+        # We define the length as continuous ice along the flowline
         # TODO: take calving bucket into account
-        pok = np.where(self.thick > 0.)[0]
-        return len(pok) * self.dx_meter
+        pok = len(self.thick) if (self.thick > 0.).all() else\
+            np.where(self.thick <= 0.)[0][0]
+        return pok * self.dx_meter
+
 
     @property
     def volume_m3(self):
@@ -1799,7 +1801,13 @@ class FileModel(object):
         fl = self.fls[-1]
         ds = self.dss[-1]
         sel = ds.ts_section.copy()
-        sel[:] = ds.ts_section != 0.
+        for da in sel:
+            if (da > 0.).all():
+                da[:] = 1.
+            else:
+                pok = np.where(da <= 0)[0][0]
+                da[pok:] = 0.
+                da[:pok] = 1.
         sel = sel.sum(dim='x') * fl.dx_meter
         sel = sel.to_series()
         if rollmin != 0:
