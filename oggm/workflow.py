@@ -434,25 +434,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         reset = utils.query_yes_no('Delete all glacier directories?')
 
     if from_prepro_level:
-
-        if prepro_border is None:
-            prepro_border = int(cfg.PARAMS['border'])
-
-        if prepro_rgi_version is None:
-            prepro_rgi_version = cfg.PARAMS['rgi_version']
-
-        if prepro_border is None:
-            prepro_border = int(cfg.PARAMS['border'])
-
-        if prepro_base_url is None:
-            if prepro_base_url is None:
-                prepro_base_url = utils._downloads.GDIR_URL
-            if not prepro_base_url.endswith('/'):
-                prepro_base_url += '/'
-
-        url = prepro_base_url
-        url += 'RGI{}/'.format(prepro_rgi_version)
-        url += 'b_{:03d}/'.format(prepro_border)
+        url = utils.get_prepro_base_url(base_url=prepro_base_url,
+                                        border=prepro_border,
+                                        prepro_level=from_prepro_level,
+                                        rgi_version=prepro_rgi_version)
         if not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
