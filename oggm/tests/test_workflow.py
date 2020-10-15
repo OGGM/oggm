@@ -269,11 +269,9 @@ class TestFullRun(unittest.TestCase):
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()
                 area = model.area_km2_ts()
-                length = model.length_m_ts()
 
                 self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
                 self.assertTrue(np.all(np.isfinite(area) & area != 0.))
-                self.assertTrue(np.all(np.isfinite(length) & length != 0.))
 
             ds_diag = gd.get_filepath('model_diagnostics', filesuffix='_test')
             ds_diag = xr.open_dataset(ds_diag)
@@ -282,9 +280,6 @@ class TestFullRun(unittest.TestCase):
             assert_allclose(df.RUN, df.DIAG)
             df = area.to_frame('RUN')
             df['DIAG'] = ds_diag.area_m2.to_series() * 1e-6
-            assert_allclose(df.RUN, df.DIAG)
-            df = length.to_frame('RUN')
-            df['DIAG'] = ds_diag.length_m.to_series()
             assert_allclose(df.RUN, df.DIAG)
 
         # Test output

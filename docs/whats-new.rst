@@ -53,6 +53,10 @@ Breaking changes
 - the `vascaling` module has been removed from oggm core (:pull:`1065`). It
   is now available via a separate package (`oggm-vas <https://github.com/OGGM/oggm-vas>`_,
   maintained by Moritz Oberrauch).
+- new options to compute the length of a glacier during a run:
+  `PARAMS['min_ice_thick_for_length']` and `PARAMS['glacier_length_method']`
+  (:pull:`1069`). By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+
 
 Enhancements
 ~~~~~~~~~~~~

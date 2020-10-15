@@ -124,10 +124,16 @@ class Flowline(Centerline):
 
     @property
     def length_m(self):
-        # We define the length a bit differently: but more robust
-        # TODO: take calving bucket into account
-        pok = np.where(self.thick > 0.)[0]
-        return len(pok) * self.dx_meter
+        # TODO: take calving bucket into account for fine tuned length?
+        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+            if (self.thick > lt).all():
+                nx = len(self.thick)
+            else:
+                nx = np.where(self.thick <= lt)[0][0]
+        else:
+            nx = len(np.where(self.thick > lt)[0])
+        return nx * self.dx_meter
 
     @property
     def volume_m3(self):
@@ -1795,17 +1801,10 @@ class FileModel(object):
         return self.volume_m3_ts() * 1e-9
 
     def length_m_ts(self, rollmin=0):
-        """rollmin is the number of years you want to smooth onto"""
-        fl = self.fls[-1]
-        ds = self.dss[-1]
-        sel = ds.ts_section.copy()
-        sel[:] = ds.ts_section != 0.
-        sel = sel.sum(dim='x') * fl.dx_meter
-        sel = sel.to_series()
-        if rollmin != 0:
-            sel = sel.rolling(rollmin).min()
-            sel.iloc[0:rollmin] = sel.iloc[rollmin]
-        return sel
+        raise NotImplementedError('length_m_ts is no longer available in the '
+                                  'full output files. To obtain the length '
+                                  'time series, refer to the diagnostic '
+                                  'output file.')
 
 
 def flowline_from_dataset(ds):

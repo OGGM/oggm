@@ -797,6 +797,7 @@ class TestModelFlowlines():
         widths = bed_h * 0. + 20
         widths[:30] = 40
         widths[-30:] = 10
+        ref_l = 18000
 
         rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
                                      surface_h=surface_h, bed_h=bed_h,
@@ -817,6 +818,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
 
         # We set something and everything stays same
         rec.thick = thick
@@ -827,6 +829,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
         rec.section = section
         assert_allclose(rec.thick, thick)
         assert_allclose(rec.surface_h, surface_h)
@@ -835,6 +838,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
         rec.surface_h = surface_h
         assert_allclose(rec.thick, thick)
         assert_allclose(rec.surface_h, surface_h)
@@ -843,6 +847,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
 
         # More adventurous
         rec.section = section / 2
@@ -1258,6 +1263,49 @@ class TestModelFlowlines():
         assert 0 < rec.volume_bwl_km3 < rec.volume_km3
         assert rec.volume_bsl_km3 == 0
 
+    def test_length_methods(self):
+
+        cfg.initialize()
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 100
+        widths = bed_h * 0. + 20
+        widths[:30] = 40
+        widths[-30:] = 10
+        ref_l = 18000
+        full_l = 20000
+
+        rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     widths=widths)
+
+        assert rec.length_m == ref_l
+        rec.thick = rec.thick * 0 + 100
+        assert rec.length_m == full_l
+
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        assert rec.length_m == full_l
+
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        rec.thick = rec.thick * 0 + 0.5
+        assert rec.length_m == 0
+
+        t = rec.thick * 0 + 20
+        t[10] = 0.5
+        rec.thick = t
+        assert rec.length_m == 1000
+
+        cfg.PARAMS['glacier_length_method'] = 'naive'
+        assert rec.length_m == full_l - 100
+
 
 @pytest.fixture(scope='class')
 def io_init_gdir(hef_gdir):
@@ -1387,7 +1435,8 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
             np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+            with pytest.raises(NotImplementedError):
+                fmodel.length_m_ts()
 
             # Can we start a run from the middle?
             fmodel.run_until(300)
@@ -1397,6 +1446,8 @@ class TestIO():
             fmodel.run_until(500)
             np.testing.assert_allclose(model.fls[0].section,
                                        fmodel.fls[0].section)
+            np.testing.assert_allclose(model.fls[0].thick,
+                                       fmodel.fls[0].thick)
 
     @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
@@ -1427,7 +1478,6 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
             np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
-            np.testing.assert_allclose(fmodel.length_m_ts(), diag.length_m)
 
             fmodel.run_until(y1)
             assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
@@ -1510,7 +1560,6 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
             np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
             # Can we start a run from the middle?
             fmodel.run_until(300)
@@ -2571,22 +2620,12 @@ class TestHEF:
         for path in paths:
             with FileModel(path) as model:
                 vol = model.volume_km3_ts()
-                len = model.length_m_ts()
                 area = model.area_km2_ts()
                 np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
                                            rtol=0.12)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
+
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
@@ -2619,22 +2658,11 @@ class TestHEF:
         for path in paths:
             with FileModel(path) as model:
                 vol = model.volume_km3_ts()
-                len = model.length_m_ts()
                 area = model.area_km2_ts()
                 np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
 
         # Test a SH/NH mix
         init_present_time_glacier(gdir)
