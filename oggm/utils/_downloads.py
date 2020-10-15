@@ -447,6 +447,12 @@ class ImplicitFTPTLS(ftplib.FTP_TLS):
         self._sock = value
 
 
+def url_exists(url):
+    """Checks if a given a URL exists or not."""
+    request = requests.get(url)
+    return request.status_code < 400
+
+
 def _ftps_retrieve(url, path, reporthook, auth=None, timeout=None):
     """ Wrapper around ftplib to download from FTPS server
     """

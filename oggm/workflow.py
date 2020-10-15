@@ -436,10 +436,16 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
 
-    if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
-        if 'test' not in utils._downloads.GDIR_URL:
-            raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
-                                     "should be one of: 10, 80, 160, 250.")
+    if prepro_rgi_version is None:
+        prepro_rgi_version = cfg.PARAMS['rgi_version']
+
+    if from_prepro_level:
+        url = prepro_base_url
+        url += 'RGI{}/'.format(prepro_rgi_version)
+        url += 'b_{:03d}/'.format(prepro_border)
+        if not utils.url_exists(url):
+            raise InvalidParamsError("base url seems unreachable with these "
+                                     "parameters: {}".format(url))
 
     # if reset delete also the log directory
     if reset:
