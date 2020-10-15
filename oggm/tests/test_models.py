@@ -1387,7 +1387,8 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
             np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
+            with pytest.raises(NotImplementedError):
+                fmodel.length_m_ts()
 
             # Can we start a run from the middle?
             fmodel.run_until(300)
@@ -1397,6 +1398,8 @@ class TestIO():
             fmodel.run_until(500)
             np.testing.assert_allclose(model.fls[0].section,
                                        fmodel.fls[0].section)
+            np.testing.assert_allclose(model.fls[0].thick,
+                                       fmodel.fls[0].thick)
 
     @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
@@ -1427,7 +1430,6 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
             np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
-            np.testing.assert_allclose(fmodel.length_m_ts(), diag.length_m)
 
             fmodel.run_until(y1)
             assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
@@ -1510,7 +1512,6 @@ class TestIO():
 
             np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
             np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            np.testing.assert_allclose(fmodel.length_m_ts(), l_ref)
 
             # Can we start a run from the middle?
             fmodel.run_until(300)
@@ -2571,22 +2572,12 @@ class TestHEF:
         for path in paths:
             with FileModel(path) as model:
                 vol = model.volume_km3_ts()
-                len = model.length_m_ts()
                 area = model.area_km2_ts()
                 np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
                                            rtol=0.12)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
+
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
@@ -2619,22 +2610,11 @@ class TestHEF:
         for path in paths:
             with FileModel(path) as model:
                 vol = model.volume_km3_ts()
-                len = model.length_m_ts()
                 area = model.area_km2_ts()
                 np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
                                            rtol=0.1)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-                if do_plot:
-                    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))
-                    vol.plot(ax=ax1)
-                    ax1.set_title('Volume')
-                    area.plot(ax=ax2)
-                    ax2.set_title('Area')
-                    len.plot(ax=ax3)
-                    ax3.set_title('Length')
-                    plt.tight_layout()
-                    plt.show()
 
         # Test a SH/NH mix
         init_present_time_glacier(gdir)

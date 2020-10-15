@@ -88,6 +88,9 @@ class Flowline(Centerline):
         self.rgi_id = rgi_id
         self.water_level = water_level
 
+        self._consecutive_length = cfg.PARAMS['glacier_length_method'] == 'consecutive'
+        self._length_t = cfg.PARAMS['min_ice_thick_for_length']
+
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -124,12 +127,15 @@ class Flowline(Centerline):
 
     @property
     def length_m(self):
-        # We define the length as continuous ice along the flowline
-        # TODO: take calving bucket into account
-        pok = len(self.thick) if (self.thick > 0.).all() else\
-            np.where(self.thick <= 0.)[0][0]
-        return pok * self.dx_meter
-
+        # TODO: take calving bucket into account for fine tuned length?
+        if self._consecutive_length:
+            if (self.thick > self._length_t).all():
+                pok = self.thick
+            else:
+                pok = np.where(self.thick <= self._length_t)[0]
+        else:
+            pok = np.where(self.thick > self._length_t)[0]
+        return len(pok) * self.dx_meter
 
     @property
     def volume_m3(self):
@@ -1693,6 +1699,9 @@ class FileModel(object):
         self.last_yr = ds.year.values[-1]
         self.dss = dss
 
+        self._consecutive_length = cfg.PARAMS['glacier_length_method'] == 'consecutive'
+        self._length_t = cfg.PARAMS['min_ice_thick_for_length']
+
         # Calving diags
         try:
             with xr.open_dataset(path) as ds:
@@ -1797,23 +1806,10 @@ class FileModel(object):
         return self.volume_m3_ts() * 1e-9
 
     def length_m_ts(self, rollmin=0):
-        """rollmin is the number of years you want to smooth onto"""
-        fl = self.fls[-1]
-        ds = self.dss[-1]
-        sel = ds.ts_section.copy()
-        for da in sel:
-            if (da > 0.).all():
-                da[:] = 1.
-            else:
-                pok = np.where(da <= 0)[0][0]
-                da[pok:] = 0.
-                da[:pok] = 1.
-        sel = sel.sum(dim='x') * fl.dx_meter
-        sel = sel.to_series()
-        if rollmin != 0:
-            sel = sel.rolling(rollmin).min()
-            sel.iloc[0:rollmin] = sel.iloc[rollmin]
-        return sel
+        raise NotImplementedError('length_m_ts is no longer available in the '
+                                  'full output files. To obtain the length '
+                                  'time series, refer to the diagnostic '
+                                  'output file.')
 
 
 def flowline_from_dataset(ds):
