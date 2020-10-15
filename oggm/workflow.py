@@ -433,13 +433,23 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
 
-    if prepro_border is None:
-        prepro_border = int(cfg.PARAMS['border'])
-
-    if prepro_rgi_version is None:
-        prepro_rgi_version = cfg.PARAMS['rgi_version']
-
     if from_prepro_level:
+
+        if prepro_border is None:
+            prepro_border = int(cfg.PARAMS['border'])
+
+        if prepro_rgi_version is None:
+            prepro_rgi_version = cfg.PARAMS['rgi_version']
+
+        if prepro_border is None:
+            prepro_border = int(cfg.PARAMS['border'])
+
+        if prepro_base_url is None:
+            if prepro_base_url is None:
+                prepro_base_url = utils.GDIR_URL
+            if not prepro_base_url.endswith('/'):
+                prepro_base_url += '/'
+
         url = prepro_base_url
         url += 'RGI{}/'.format(prepro_rgi_version)
         url += 'b_{:03d}/'.format(prepro_border)
