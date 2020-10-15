@@ -537,7 +537,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         utils.mkdir(self.dldir, reset=True)
 
     @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
@@ -554,7 +553,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
     @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
@@ -583,7 +581,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
     @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
@@ -601,7 +598,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
     @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
@@ -640,7 +636,6 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
     @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils.GDIR_URL', TEST_GDIR_URL)
     def test_start_from_level_4(self):
 
         # Go - initialize working directories

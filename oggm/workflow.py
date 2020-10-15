@@ -446,7 +446,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
         if prepro_base_url is None:
             if prepro_base_url is None:
-                prepro_base_url = utils.GDIR_URL
+                prepro_base_url = utils._downloads.GDIR_URL
             if not prepro_base_url.endswith('/'):
                 prepro_base_url += '/'
 
