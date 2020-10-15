@@ -797,6 +797,7 @@ class TestModelFlowlines():
         widths = bed_h * 0. + 20
         widths[:30] = 40
         widths[-30:] = 10
+        ref_l = 18000
 
         rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
                                      surface_h=surface_h, bed_h=bed_h,
@@ -817,6 +818,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
 
         # We set something and everything stays same
         rec.thick = thick
@@ -827,6 +829,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
         rec.section = section
         assert_allclose(rec.thick, thick)
         assert_allclose(rec.surface_h, surface_h)
@@ -835,6 +838,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
         rec.surface_h = surface_h
         assert_allclose(rec.thick, thick)
         assert_allclose(rec.surface_h, surface_h)
@@ -843,6 +847,7 @@ class TestModelFlowlines():
         assert_allclose(rec.section, section)
         assert_allclose(rec.area_m2, area_m2.sum())
         assert_allclose(rec.volume_m3, vol_m3.sum())
+        assert_allclose(rec.length_m, ref_l)
 
         # More adventurous
         rec.section = section / 2

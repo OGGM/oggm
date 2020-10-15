@@ -88,9 +88,6 @@ class Flowline(Centerline):
         self.rgi_id = rgi_id
         self.water_level = water_level
 
-        self._consecutive_length = cfg.PARAMS['glacier_length_method'] == 'consecutive'
-        self._length_t = cfg.PARAMS['min_ice_thick_for_length']
-
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -128,13 +125,14 @@ class Flowline(Centerline):
     @property
     def length_m(self):
         # TODO: take calving bucket into account for fine tuned length?
-        if self._consecutive_length:
-            if (self.thick > self._length_t).all():
+        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+            if (self.thick > lt).all():
                 pok = self.thick
             else:
-                pok = np.where(self.thick <= self._length_t)[0]
+                pok = np.where(self.thick <= lt)[0]
         else:
-            pok = np.where(self.thick > self._length_t)[0]
+            pok = np.where(self.thick > lt)[0]
         return len(pok) * self.dx_meter
 
     @property
@@ -1698,9 +1696,6 @@ class FileModel(object):
 
         self.last_yr = ds.year.values[-1]
         self.dss = dss
-
-        self._consecutive_length = cfg.PARAMS['glacier_length_method'] == 'consecutive'
-        self._length_t = cfg.PARAMS['min_ice_thick_for_length']
 
         # Calving diags
         try:
