@@ -433,13 +433,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
 
-    if prepro_border is None:
-        prepro_border = int(cfg.PARAMS['border'])
-
-    if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
-        if 'test' not in utils._downloads.GDIR_URL:
-            raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
-                                     "should be one of: 10, 80, 160, 250.")
+    if from_prepro_level:
+        url = utils.get_prepro_base_url(base_url=prepro_base_url,
+                                        border=prepro_border,
+                                        prepro_level=from_prepro_level,
+                                        rgi_version=prepro_rgi_version)
+        if not utils.url_exists(url):
+            raise InvalidParamsError("base url seems unreachable with these "
+                                     "parameters: {}".format(url))
 
     # if reset delete also the log directory
     if reset:

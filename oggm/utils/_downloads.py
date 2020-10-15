@@ -447,6 +447,12 @@ class ImplicitFTPTLS(ftplib.FTP_TLS):
         self._sock = value
 
 
+def url_exists(url):
+    """Checks if a given a URL exists or not."""
+    request = requests.get(url)
+    return request.status_code < 400
+
+
 def _ftps_retrieve(url, path, reporthook, auth=None, timeout=None):
     """ Wrapper around ftplib to download from FTPS server
     """
@@ -1270,19 +1276,35 @@ def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, base_url=None):
                                          prepro_level, base_url=base_url)
 
 
-def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
-                              base_url=None):
-    # Prepro URL
+def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
+                        prepro_level=None):
+    """Extended base url where to find the desired gdirs."""
+
     if base_url is None:
         base_url = GDIR_URL
+
     if not base_url.endswith('/'):
         base_url += '/'
+
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS['rgi_version']
+
+    if border is None:
+        border = cfg.PARAMS['border']
+
     url = base_url
     url += 'RGI{}/'.format(rgi_version)
-    url += 'b_{:03d}/'.format(border)
+    url += 'b_{:03d}/'.format(int(border))
     url += 'L{:d}/'.format(prepro_level)
-    url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
+    return url
 
+
+def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
+                              base_url=None):
+
+    url = get_prepro_base_url(rgi_version=rgi_version, border=border,
+                              prepro_level=prepro_level, base_url=base_url)
+    url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
     tar_base = file_downloader(url)
     if tar_base is None:
         raise RuntimeError('Could not find file at ' + url)
