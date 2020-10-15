@@ -1263,6 +1263,49 @@ class TestModelFlowlines():
         assert 0 < rec.volume_bwl_km3 < rec.volume_km3
         assert rec.volume_bsl_km3 == 0
 
+    def test_length_methods(self):
+
+        cfg.initialize()
+
+        map_dx = 100.
+        dx = 1.
+        nx = 200
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        bed_h = np.linspace(3000, 1000, nx)
+        surface_h = bed_h + 100
+        surface_h[:20] += 50
+        surface_h[-20:] -= 100
+        widths = bed_h * 0. + 20
+        widths[:30] = 40
+        widths[-30:] = 10
+        ref_l = 18000
+        full_l = 20000
+
+        rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                     surface_h=surface_h, bed_h=bed_h,
+                                     widths=widths)
+
+        assert rec.length_m == ref_l
+        rec.thick = rec.thick * 0 + 100
+        assert rec.length_m == full_l
+
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        assert rec.length_m == full_l
+
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        rec.thick = rec.thick * 0 + 0.5
+        assert rec.length_m == 0
+
+        t = rec.thick * 0 + 20
+        t[10] = 0.5
+        rec.thick = t
+        assert rec.length_m == 1000
+
+        cfg.PARAMS['glacier_length_method'] = 'naive'
+        assert rec.length_m == full_l - 100
+
 
 @pytest.fixture(scope='class')
 def io_init_gdir(hef_gdir):

@@ -131,6 +131,26 @@ class TestIdealisedCases(unittest.TestCase):
         assert utils.rmsd(surface_h[0], surface_h[2]) < 1.0
         assert utils.rmsd(surface_h[1], surface_h[2]) < 1.0
 
+    def test_length(self):
+
+        mb = LinearMassBalance(2600.)
+        yrs = np.arange(1, 300, 2)
+
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb, y0=0.)
+        length_1 = yrs * 0.
+        for i, y in enumerate(yrs):
+            model.run_until(y)
+            length_1[i] = model.length_m
+
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb, y0=0.)
+        length_2 = yrs * 0.
+        for i, y in enumerate(yrs):
+            model.run_until(y)
+            length_2[i] = model.length_m
+
+        np.testing.assert_allclose(length_1, length_2)
+
     @pytest.mark.slow
     def test_mass_conservation(self):
 

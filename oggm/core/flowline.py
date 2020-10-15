@@ -128,12 +128,12 @@ class Flowline(Centerline):
         lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
         if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
             if (self.thick > lt).all():
-                pok = self.thick
+                nx = len(self.thick)
             else:
-                pok = np.where(self.thick <= lt)[0]
+                nx = np.where(self.thick <= lt)[0][0]
         else:
-            pok = np.where(self.thick > lt)[0]
-        return len(pok) * self.dx_meter
+            nx = len(np.where(self.thick > lt)[0])
+        return nx * self.dx_meter
 
     @property
     def volume_m3(self):
