@@ -40,6 +40,9 @@ Breaking changes
 - The order of the tasks applied to  the preprocessed levels has
   changed, climate data comes in later (:pull:`1038`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The default DEMS used for each glacier have changed for more modern ones
+  (:pull:`1073`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The inversion tasks now can invert for trapezoid shapes (:pull:`1045`). This
   has non-trivial consequences for the model workflow. First and foremost,
   the decision about using a trapezoid bed (instead of parabolic when the
