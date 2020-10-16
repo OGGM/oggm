@@ -1365,7 +1365,8 @@ class TestFakeDownloads(unittest.TestCase):
             return tf
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1])
+            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1],
+                                             source='SRTM')
 
         assert os.path.exists(of[0])
         assert source == 'SRTM'
@@ -1397,7 +1398,8 @@ class TestFakeDownloads(unittest.TestCase):
             return self.dem3_testfile
 
         with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8])
+            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8],
+                                             source='DEM3')
 
         assert os.path.exists(of[0])
         assert source == 'DEM3'
@@ -1495,8 +1497,7 @@ class TestFakeDownloads(unittest.TestCase):
         with FakeDownloadManager('_download_topo_file_from_cluster',
                                  down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                             rgi_region='19',
-                                             rgi_subregion='19-11')
+                                             source='RAMP')
 
         assert of[0] == 'yo'
         assert source == 'RAMP'
@@ -1583,7 +1584,7 @@ class TestFakeDownloads(unittest.TestCase):
         with FakeDownloadManager('_download_topo_file_from_cluster',
                                  down_check):
             of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                             rgi_region=5)
+                                             source='GIMP')
 
         assert of[0] == 'yo'
         assert source == 'GIMP'
@@ -2015,21 +2016,11 @@ class TestDataFiles(unittest.TestCase):
 
     def test_find_dem_zone(self):
 
-        # Somewhere in the Alps: SRTM
-        assert utils.default_dem_source(11, 47) == 'SRTM'
-        # High Lats: DEM3
-        assert utils.default_dem_source(11, 65) == 'DEM3'
-        # Eastern russia: DEM3
-        assert utils.default_dem_source(170.1, 59.1) == 'DEM3'
-        # Greenland
-        assert utils.default_dem_source(0, 0, rgi_region='5') == 'GIMP'
-        # Antarctica
-        with pytest.raises(InvalidParamsError):
-            utils.default_dem_source(0, 0, rgi_region='19')
-        assert utils.default_dem_source(0, 0, rgi_region='19',
-                                        rgi_subregion='19-06') == 'RAMP'
-        assert utils.default_dem_source(0, 0, rgi_region='19',
-                                        rgi_subregion='19-01') == 'DEM3'
+        assert utils.default_dem_source('RGI60-11.00897') == 'NASADEM'
+        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM'
+        assert utils.default_dem_source('RGI60-19.00970') == 'REMA'
+        assert utils.default_dem_source('RGI60-05.10315') == 'GIMP'
+        assert utils.default_dem_source('RGI60-19.01820') == 'MAPZEN'
 
     def test_lrufilecache(self):
 
@@ -2190,13 +2181,13 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.download
     def test_gimp(self):
-        fp, z = utils.get_topo_file([], [], rgi_region=5)
+        fp, z = utils.get_topo_file([], [], source='GIMP')
         self.assertTrue(os.path.exists(fp[0]))
         self.assertEqual(z, 'GIMP')
 
     @pytest.mark.download
     def test_iceland(self):
-        fp, z = utils.get_topo_file([-20, -20], [65, 65])
+        fp, z = utils.get_topo_file([-20, -20], [65, 65], source='DEM3')
         self.assertTrue(os.path.exists(fp[0]))
 
     @pytest.mark.creds
@@ -2325,21 +2316,6 @@ class TestDataFiles(unittest.TestCase):
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
         fp = utils.get_cmip5_file(fn)
         self.assertTrue(os.path.isfile(fp))
-
-    @pytest.mark.download
-    def test_auto_topo(self):
-        # Test for combine
-        fdem, src = utils.get_topo_file([6, 14], [41, 41])
-        self.assertEqual(src, 'SRTM')
-        self.assertEqual(len(fdem), 2)
-        for fp in fdem:
-            self.assertTrue(os.path.exists(fp))
-
-        fdem, src = utils.get_topo_file([-143, -131], [61, 61])
-        self.assertEqual(src, 'DEM3')
-        self.assertEqual(len(fdem), 3)
-        for fp in fdem:
-            self.assertTrue(os.path.exists(fp))
 
     @pytest.mark.download
     def test_from_prepro(self):

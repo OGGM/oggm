@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '13959b56bc47705f2b891e8f590fdbf345d82e46'
+SAMPLE_DATA_COMMIT = 'd6f23678780a118db2f6a8e86109dd1b0ac11634'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
@@ -88,6 +88,7 @@ WEB_EARTH_RADUIS = 6378137.
 
 DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
                'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM', 'NASADEM']
+DEM_SOURCES_PER_GLACIER = None
 
 _RGI_METADATA = dict()
 
@@ -2127,70 +2128,44 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
 
 
-def default_dem_source(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None):
+def default_dem_source(rgi_id):
     """Current default DEM source at a given location.
 
     Parameters
     ----------
-    lon_ex : tuple or int, required
-        a (min_lon, max_lon) tuple delimiting the requested area longitudes
-    lat_ex : tuple or int, required
-        a (min_lat, max_lat) tuple delimiting the requested area latitudes
-    rgi_region : str, optional
-        the RGI region number (required for the GIMP DEM)
-    rgi_subregion : str, optional
-        the RGI subregion str (useful for RGI Reg 19)
+    rgi_id : str
+        the RGI id
 
     Returns
     -------
     the chosen DEM source
     """
-    from oggm.utils import tolist
-    lon_ex = tolist(lon_ex, length=2)
-    lat_ex = tolist(lat_ex, length=2)
+    rgi_reg = 'RGI{}'.format(rgi_id[6:8])
+    if cfg.DEM_SOURCE_TABLE.get(rgi_reg) is None:
+        fp = get_demo_file('rgi62_dem_frac.h5')
+        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp, key=rgi_reg)
 
-    # GIMP is in polar stereographic, not easy to test if glacier is on the map
-    # It would be possible with a salem grid but this is a bit more expensive
-    # Instead, we are just asking RGI for the region
-    if rgi_region is not None and int(rgi_region) == 5:
-        return 'GIMP'
+    sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
+    for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+        if sel.loc[s] > 0.75:
+            return s
 
-    # ARCTIC DEM is not yet automatized
-    # If we have to automatise this one day, we should use the shapefile
-    # of the tiles, and then check for RGI region:
-    # use_without_check = ['03', '05', '06', '07', '09']
-    # to_test_on_shape = ['01', '02', '04', '08']
-
-    # Antarctica
-    if rgi_region is not None and int(rgi_region) == 19:
-        if rgi_subregion is None:
-            raise InvalidParamsError('Must specify subregion for Antarctica')
-        if rgi_subregion in ['19-01', '19-02', '19-03', '19-04', '19-05']:
-            # special case for some distant islands
-            return 'DEM3'
-        return 'RAMP'
-
-    # In high latitudes and an exceptional region in Eastern Russia, DEM3
-    # exceptional test for eastern russia:
-    if ((np.min(lat_ex) < -60.) or (np.max(lat_ex) > 60.) or
-            (np.min(lat_ex) > 59 and np.min(lon_ex) > 170)):
-        return 'DEM3'
-
-    # Everywhere else SRTM
-    return 'SRTM'
+    return None
 
 
-def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
+def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
                   dx_meter=None, zoom=None, source=None):
     """Path(s) to the DEM file(s) covering the desired extent.
 
     If the needed files for covering the extent are not present, download them.
 
-    By default it will be referred to SRTM for [-60S; 60N], GIMP for Greenland,
-    RAMP for Antarctica, and a corrected DEM3 (viewfinderpanoramas.org)
-    elsewhere.
+    The default behavior is to try a list of DEM sources in order, and
+    stop once the downloaded data is covering a large enough part of the
+    glacier. The DEM sources are tested in the following order:
 
-    A user-specified data source can be given with the ``source`` keyword.
+    'NASADEM' -> 'COPDEM' -> 'GIMP' -> 'REMA' -> 'TANDEM' -> 'MAPZEN'
+
+    To force usage of a certain data source, use the ``source`` kwarg argument.
 
     Parameters
     ----------
@@ -2198,6 +2173,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
         a (min_lon, max_lon) tuple delimiting the requested area longitudes
     lat_ex : tuple or int, required
         a (min_lat, max_lat) tuple delimiting the requested area latitudes
+    rgi_id : str, required if source=None
+        the glacier id, used to decide on the DEM source
     rgi_region : str, optional
         the RGI region number (required for the GIMP DEM)
     rgi_subregion : str, optional
@@ -2207,7 +2184,7 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     zoom : int, optional
         if you know the zoom already (for MAPZEN only)
     source : str or list of str, optional
-        Name of specific DEM source. See gis.define_glacier_region for details
+        Name of specific DEM source. see utils.DEM_SOURCES for a list
 
     Returns
     -------
@@ -2220,10 +2197,8 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
     if source is not None and not isinstance(source, str):
         # check all user options
         for s in source:
-            demf, source_str = get_topo_file(lon_ex, lat_ex,
-                                             rgi_region=rgi_region,
-                                             rgi_subregion=rgi_subregion,
-                                             source=s)
+            demf, source_str = get_topo_file(lon_ex=lon_ex, lat_ex=lat_ex,
+                                             rgi_id=rgi_id, source=s)
             if demf[0]:
                 return demf, source_str
 
@@ -2235,8 +2210,9 @@ def get_topo_file(lon_ex, lat_ex, rgi_region=None, rgi_subregion=None,
 
     # Some logic to decide which source to take if unspecified
     if source is None:
-        source = default_dem_source(lon_ex, lat_ex, rgi_region=rgi_region,
-                                    rgi_subregion=rgi_subregion)
+        if rgi_id is None:
+            raise InvalidParamsError('rgi_id is needed if source=None')
+        source = default_dem_source(rgi_id)
 
     if source not in DEM_SOURCES:
         raise InvalidParamsError('`source` must be one of '
