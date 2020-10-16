@@ -2731,21 +2731,25 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     maindf = glcdf.loc[idx].copy()
 
     # add tributary geometries to maindf
-    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0]
+    merged_geometry = maindf.loc[idx, 'geometry'].iloc[0].buffer(0)
     for trib in tribs:
         geom = trib.read_pickle('geometries')['polygon_hr']
         geom = salem.transform_geometry(geom, crs=trib.grid)
-        merged_geometry = merged_geometry.union(geom)
+        merged_geometry = merged_geometry.union(geom).buffer(0)
 
     # to get the center point, maximal extensions for DEM and single Polygon:
-    maindf.loc[idx, 'geometry'] = merged_geometry.convex_hull
+    new_geometry = merged_geometry.convex_hull
+    maindf.loc[idx, 'geometry'] = new_geometry
 
     # make some adjustments to the rgi dataframe
-    # 1. update central point of new glacier
-    # Could also use the mean of the Flowline centroids, to shift it more
-    # downstream. But this is more straight forward.
-    maindf.loc[idx, 'CenLon'] = maindf.loc[idx, 'geometry'].centroid.x
-    maindf.loc[idx, 'CenLat'] = maindf.loc[idx, 'geometry'].centroid.y
+    # 1. calculate central point of new glacier
+    #    reproject twice to avoid Warning, first to flat projection
+    flat_centroid = salem.transform_geometry(new_geometry,
+                                             to_crs=main.grid).centroid
+    #    second reprojection of centroid to wgms
+    new_centroid = salem.transform_geometry(flat_centroid, crs=main.grid)
+    maindf.loc[idx, 'CenLon'] = new_centroid.x
+    maindf.loc[idx, 'CenLat'] = new_centroid.y
     # 2. update names
     maindf.loc[idx, 'RGIId'] += '_merged'
     if maindf.loc[idx, 'Name'].iloc[0] is None:
