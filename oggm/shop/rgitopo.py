@@ -7,6 +7,11 @@ try:
     import salem
 except ImportError:
     pass
+try:
+    import rasterio
+except ImportError:
+    pass
+import numpy as np
 
 from oggm import utils, workflow
 from oggm.exceptions import InvalidParamsError
@@ -102,7 +107,8 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
         if os.path.exists(fp):
             os.remove(fp)
 
-    sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()]
+    sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
+               and not f.name.startswith('.')]
 
     if dem_source is None:
         if 'NASADEM' in sources:
@@ -121,3 +127,52 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     if not keep_dem_folders:
         for source in sources:
             shutil.rmtree(os.path.join(gdir.dir, source))
+
+
+@utils.entity_task(log, writes=[])
+def dem_quality_check(gdir):
+    """Run a simple quality check on the rgitopo DEMs
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+
+    Returns
+    -------
+    a dict of DEMSOURCE:frac pairs, where frac is the percentage of
+    valid DEM grid points on the glacier.
+    """
+
+    with rasterio.open(gdir.get_filepath('glacier_mask'), 'r',
+                       driver='GTiff') as ds:
+        mask = ds.read(1) == 1
+    area = mask.sum()
+
+    sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
+               and not f.name.startswith('.')]
+
+    out = {}
+    for s in sources:
+        try:
+            with rasterio.open(os.path.join(gdir.dir, s, 'dem.tif'), 'r',
+                               driver='GTiff') as ds:
+                topo = ds.read(1).astype(rasterio.float32)
+                topo[topo <= -999.] = np.NaN
+                topo[ds.read_masks(1) == 0] = np.NaN
+
+            valid_mask = np.isfinite(topo) & mask
+            if np.all(~valid_mask):
+                continue
+
+            z_on_glacier = topo[valid_mask]
+            zmax, zmin = np.nanmax(z_on_glacier), np.nanmin(z_on_glacier)
+            if zmin == zmax:
+                continue
+
+            out[s] = valid_mask.sum() / area
+
+        except BaseException:
+            pass
+
+    return out

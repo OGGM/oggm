@@ -136,6 +136,24 @@ class Test_rgitopo:
         # we can work from here
         tasks.glacier_masks(gd)
 
+    def test_qc(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PARAMS['border'] = 10
+
+        monkeypatch.setattr(rgitopo, 'DEMS_URL', 'https://cluster.klima.uni-br'
+                                                 'emen.de/~oggm/test_gdirs/dem'
+                                                 's_v1/default/')
+
+        gd = rgitopo.init_glacier_directories_from_rgitopo(['RGI60-09.01004'],
+                                                           keep_dem_folders=True)
+        out = rgitopo.dem_quality_check(gd[0])
+        assert len(out) > 5
+        assert np.sum(list(out.values())) > 5
+
 
 class Test_ecmwf:
 
