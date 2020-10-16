@@ -310,8 +310,7 @@ def define_glacier_region(gdir, entity=None, source=None):
         raise InvalidDEMError('Source: {} not available for glacier {}'
                               .format(source, gdir.rgi_id))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         rgi_region=gdir.rgi_region,
-                                         rgi_subregion=gdir.rgi_subregion,
+                                         rgi_id=gdir.rgi_id,
                                          dx_meter=dx,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)

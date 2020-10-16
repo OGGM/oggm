@@ -317,23 +317,23 @@ Topography data
 ~~~~~~~~~~~~~~~
 
 When creating a :ref:`glacierdir` a suitable topographical data source is
-chosen automatically, depending on the glacier's location. Currently we use:
+chosen automatically, depending on the glacier's location. OGGM supports
+a large number of datasets (almost all of the freely available ones, we
+hope). They are listed on the
+`RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ website.
 
-- the `Shuttle Radar Topography Mission`_ (SRTM) 90m Digital Elevation Database v4.1
-  for all locations in the [60°S; 60°N] range
-- the `Greenland Mapping Project`_ (GIMP) Digital Elevation Model
-  for mountain glaciers in Greenland (RGI region 05)
-- the `Radarsat Antarctic Mapping Project`_ (RAMP) Digital Elevation Model, Version 2
-  for mountain glaciers in the Antarctic continent
-  (RGI region 19 with the exception of the peripheral islands)
-- the `Viewfinder Panoramas DEM3`_ products
-  elsewhere (most notably: North America, Russia, Iceland, Svalbard)
+The current default is to use the following datasets:
 
+- NASADEM: 60°S-60°N
+- COPDEM: Global, with missing regions (islands, etc.)
+- GIMP, REMA: Regional datasets
+- TANDEM: Global, with artefacts / missing data
+- MAPZEN: Global, when all other things failed
 
-.. _Shuttle Radar Topography Mission: http://srtm.csi.cgiar.org/
-.. _Greenland Mapping Project: https://bpcrc.osu.edu/gdg/data/gimpdem
-.. _Radarsat Antarctic Mapping Project: http://nsidc.org/data/nsidc-0082
-.. _Viewfinder Panoramas DEM3: http://viewfinderpanoramas.org/dem3.html
+These data are chosen in the provided order. If a dataset is not available,
+the next on the list will be tested: if the tested dataset covers
+75% of the glacier area, it is selected. In practice, NASADEM and COPDEM
+are sufficient for all but about 300 of the world's glaciers.
 
 These data are downloaded only when needed (i.e.: during an OGGM run)
 and they are stored in the ``dl_cache_dir``

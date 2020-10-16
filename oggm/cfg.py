@@ -46,9 +46,11 @@ CONFIG_MODIFIED = False
 
 # Share state accross processes
 DL_VERIFIED = Manager().dict()
+DEM_SOURCE_TABLE = Manager().dict()
 
 # Machine epsilon
 FLOAT_EPS = np.finfo(float).eps
+
 
 class DocumentedDict(dict):
     """Quick "magic" to document the BASENAMES entries."""
