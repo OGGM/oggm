@@ -59,8 +59,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine, multipolygon_to_polygon)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
-                                   get_rgi_glacier_entities,
-                                   default_dem_source)
+                                   get_rgi_glacier_entities)
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
