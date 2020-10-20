@@ -2931,9 +2931,6 @@ class TestMergedHEF():
                           (rgidf.RGIId == 'RGI50-11.00779') |
                           (rgidf.RGIId == 'RGI50-11.00746')].copy()
 
-        # lets use RGI60 ids
-        glcdf['RGIId'] = [s.replace('RGI50', 'RGI60') for s in glcdf.RGIId]
-
         gdirs = workflow.init_glacier_directories(glcdf)
         workflow.gis_prepro_tasks(gdirs)
         workflow.climate_tasks(gdirs)
@@ -2941,35 +2938,35 @@ class TestMergedHEF():
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
         # store HEF
-        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI60-11.00897']
+        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
 
         # merge, but with 0 buffer, should not do anything
-        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI60-11.00897',
+        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
                                               glcdf=glcdf, buffer=0)
-        assert 'RGI60-11.00897' == np.unique([fl.rgi_id for fl in
+        assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
                                               merge0.read_pickle(
                                                   'model_flowlines')])[0]
         gdirs += hef
 
         # merge, but with 50 buffer. overlapping glaciers should be excluded
-        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI60-11.00897',
+        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
                                               glcdf=glcdf, buffer=50)
-        assert 'RGI60-11.00719_d01' in [fl.rgi_id for fl in
+        assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
-        assert 'RGI60-11.00779' not in [fl.rgi_id for fl in
+        assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
 
         gdirs += hef
 
         # merge HEF and Vernagt, include Gepatsch but it should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI60-11.00897',
+        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
                                                    glcdf=glcdf)
 
         # test flowlines
         fls = gdir_merged.read_pickle('model_flowlines')
 
         # check for gepatsch, should not be there
-        assert 'RGI60-11.00746' not in [fl.rgi_id for fl in fls]
+        assert 'RGI50-11.00746' not in [fl.rgi_id for fl in fls]
 
         # ascending order
         assert np.all(np.diff([fl.order for fl in fls]) >= 0)
@@ -2979,10 +2976,10 @@ class TestMergedHEF():
         assert fls[0].order == 0
 
         # test flows to order
-        fls1 = [fl for fl in fls if fl.rgi_id == 'RGI60-11.00779']
+        fls1 = [fl for fl in fls if fl.rgi_id == 'RGI50-11.00779']
         assert fls1[0].flows_to == fls1[-1]
-        assert fls1[-1].flows_to.rgi_id == 'RGI60-11.00719_d01'
-        assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI60-11.00897'
+        assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
+        assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
 
         gdirs += hef
 
@@ -2991,7 +2988,7 @@ class TestMergedHEF():
         tbias = -1.0  # arbitrary
 
         # run HEF and the two Vernagts as entities
-        gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI60-11.00746']
+        gdirs_entity = [gd for gd in gdirs if gd.rgi_id != 'RGI50-11.00746']
         workflow.execute_entity_task(tasks.run_constant_climate,
                                      gdirs_entity,
                                      nyears=years,

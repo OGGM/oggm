@@ -2767,14 +2767,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
 
     # run define_glacier_region to get a fitting DEM and proper grid
-    # we specify the source, making sure main and tributary glacier use thesame
-    source_main = default_dem_source(main.rgi_id[:14])
-    source_merge = default_dem_source(merged.rgi_id[:14])
-    if source_main != source_merge:
-        raise RuntimeError('Main and Tributary default DEM sources do not '
-                           'match')
-    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0],
-                          source=source_main)
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
 
     # write gridded data and geometries for visualization
     merged_glacier_masks(merged, merged_geometry)
