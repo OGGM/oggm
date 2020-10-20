@@ -59,7 +59,8 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine, multipolygon_to_polygon)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
-                                   get_rgi_glacier_entities)
+                                   get_rgi_glacier_entities,
+                                   default_dem_source)
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -2766,7 +2767,9 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
 
     # run define_glacier_region to get a fitting DEM and proper grid
-    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
+    # we specify the DEM source of the main glacier here
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0],
+                          source=default_dem_source(main.rgi_id))
 
     # write gridded data and geometries for visualization
     merged_glacier_masks(merged, merged_geometry)
