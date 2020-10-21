@@ -7,6 +7,7 @@ import os
 import logging
 import warnings
 from distutils.version import LooseVersion
+from functools import partial
 
 # External libs
 import numpy as np
@@ -171,10 +172,27 @@ def _polygon_to_pix(polygon):
     def project(x, y):
         return np.rint(x).astype(np.int64), np.rint(y).astype(np.int64)
 
+    def project_coarse(x, y, c=2):
+        return ((np.rint(x/c)*c).astype(np.int64),
+                (np.rint(y/c)*c).astype(np.int64))
+
     poly_pix = shapely.ops.transform(project, polygon)
 
     # simple trick to correct invalid polys:
     tmp = poly_pix.buffer(0)
+
+    # try to deal with a bug in buffer where the corrected poly would be null
+    c = 2
+    while tmp.length == 0 and c < 7:
+        project = partial(project_coarse, c=c)
+        poly_pix = shapely.ops.transform(project_coarse, polygon)
+        tmp = poly_pix.buffer(0)
+        c += 1
+
+    # We tried all we could
+    if tmp.length == 0:
+        raise InvalidGeometryError('This glacier geometry is not valid for '
+                                   'OGGM.')
 
     # sometimes the glacier gets cut out in parts
     if tmp.type == 'MultiPolygon':
@@ -200,10 +218,11 @@ def _polygon_to_pix(polygon):
                         break
                 if b == 0.99:
                     raise InvalidGeometryError('This glacier geometry is not '
-                                               'valid.')
+                                               'valid for OGGM.')
 
     if not tmp.is_valid:
-        raise InvalidGeometryError('This glacier geometry is not valid.')
+        raise InvalidGeometryError('This glacier geometry is not valid '
+                                   'for OGGM.')
 
     return tmp
 
@@ -307,8 +326,8 @@ def define_glacier_region(gdir, entity=None, source=None):
     # Open DEM
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
-        raise InvalidDEMError('Source: {} not available for glacier {}'
-                              .format(source, gdir.rgi_id))
+        log.warning('Source: {} may not be available for glacier {} with '
+                    'border {}'.format(source, gdir.rgi_id, border))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_id=gdir.rgi_id,
                                          dx_meter=dx,
