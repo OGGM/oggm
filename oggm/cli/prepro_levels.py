@@ -466,7 +466,7 @@ def parse_args(args):
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
-                working_dir=working_dir, params_file = args.params_file,
+                working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_nr=args.test_nr,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
