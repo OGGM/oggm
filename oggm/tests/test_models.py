@@ -2930,6 +2930,7 @@ class TestMergedHEF():
                           (rgidf.RGIId == 'RGI50-11.00719_d01') |
                           (rgidf.RGIId == 'RGI50-11.00779') |
                           (rgidf.RGIId == 'RGI50-11.00746')].copy()
+
         gdirs = workflow.init_glacier_directories(glcdf)
         workflow.gis_prepro_tasks(gdirs)
         workflow.climate_tasks(gdirs)

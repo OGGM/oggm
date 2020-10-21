@@ -2141,6 +2141,7 @@ def default_dem_source(rgi_id):
     the chosen DEM source
     """
     rgi_reg = 'RGI{}'.format(rgi_id[6:8])
+    rgi_id = rgi_id[:14]
     if cfg.DEM_SOURCE_TABLE.get(rgi_reg) is None:
         fp = get_demo_file('rgi62_dem_frac.h5')
         cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp, key=rgi_reg)
