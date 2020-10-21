@@ -72,7 +72,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_nr=4, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      disable_mp=False, timeout=0,
+                      disable_mp=False, timeout=0, params_file=None,
                       max_level=4, logging_level='WORKFLOW',
                       map_dmax=None, map_d1=None, disable_dl_verify=False):
     """Does the actual job.
@@ -91,6 +91,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         which DEM source to use: default, SOURCE_NAME or ALL
     working_dir : str
         path to the OGGM working directory
+    params_file : str
+        path to the OGGM parameter file (to override defaults)
     is_test : bool
         to test on a couple of glaciers only!
     test_nr : int
@@ -145,7 +147,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level=logging_level, params=params)
+    cfg.initialize(file=params_file, params=params,
+                   logging_level=logging_level)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp
@@ -381,6 +384,9 @@ def parse_args(args):
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
                              '$OGGM_WORKDIR.')
+    parser.add_argument('--params-file', type=str,
+                        help='path to the OGGM parameter file to use in place '
+                             'of the default one.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -460,7 +466,7 @@ def parse_args(args):
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
-                working_dir=working_dir,
+                working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_nr=args.test_nr,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,

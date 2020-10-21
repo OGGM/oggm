@@ -716,6 +716,7 @@ class TestPreproCLI(unittest.TestCase):
         assert 'working_dir' in kwargs
         assert 'output_folder' in kwargs
         assert kwargs['rgi_version'] is None
+        assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
 
@@ -746,12 +747,14 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--params-file', 'dir/params.cfg',
                                            ])
 
         assert 'working_dir' in kwargs
         assert 'output_folder' in kwargs
         assert 'local' in kwargs['working_dir']
         assert 'local' in kwargs['output_folder']
+        assert 'dir/params.cfg' in kwargs['params_file']
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '00'
         assert kwargs['dem_source'] == ''

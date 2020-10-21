@@ -431,9 +431,9 @@ def _filter_lines(lines, heads, k, r):
                         if hashead:
                             break
                         else:
-                            raise GeometryError('Head not found')
+                            diff = None
                 # keep this head line only if it's long enough
-                if diff.length > r:
+                if diff is not None and diff.length > r:
                     # Fun fact. The heads can be cut by the buffer too
                     diff = shpg.LineString(l.coords[0:2] + diff.coords[2:])
                     tokeep.append(diff)
@@ -1811,7 +1811,7 @@ def catchment_width_geom(gdir):
             # This happens very rarely. Just pick the middle and
             # the correction task should do the rest
             log.info('({}) width filtering too strong.'.format(gdir.rgi_id))
-            fil_widths = widths[np.int(len(widths) / 2.)]
+            fil_widths = np.ones(n) * widths[np.int(len(widths) / 2.)]
 
         # Special treatment for tidewater glaciers
         if gdir.is_tidewater and fl.flows_to is None:
