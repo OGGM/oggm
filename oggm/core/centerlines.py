@@ -965,7 +965,7 @@ def compute_downstream_line(gdir):
         head = (p[0][0], p[1][0])
 
     # Make going up very costy
-    topo = topo**4
+    topo = topo**8
 
     # We add an artificial cost as distance from the glacier
     # This should have to much influence on mountain glaciers but helps for
