@@ -965,15 +965,12 @@ def compute_downstream_line(gdir):
         head = (p[0][0], p[1][0])
 
     # Make going up very costy
-    topo = topo**4
+    topo = topo**8
 
     # We add an artificial cost as distance from the glacier
     # This should have to much influence on mountain glaciers but helps for
     # tidewater-candidates
     topo = topo + distance_transform_edt(1 - glacier_ext)
-
-    # Make going up very costy
-    topo = topo**2
 
     # Variables we gonna need: the outer side of the domain
     xmesh, ymesh = np.meshgrid(np.arange(0, gdir.grid.nx, 1, dtype=np.int64),
@@ -988,13 +985,13 @@ def compute_downstream_line(gdir):
     line = None
     for h, x, y in zip(_h, _x, _y):
         ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
-        if np.all(h == 0):
+        if np.all(h == 0) or len(ids[0]) == 0:
             # Test every fifth (we don't really care)
             ids = [np.arange(0, len(h), 5)]
         for i in ids[0]:
             lids, cost = route_through_array(topo, head, (y[i], x[i]))
             if ((cost < min_cost) or
-                    ((cost == min_cost) and (len(lids) < min_len))):
+                    ((cost <= min_cost) and (len(lids) < min_len))):
                 min_cost = cost
                 min_len = len(lids)
                 line = shpg.LineString(np.array(lids)[:, [1, 0]])

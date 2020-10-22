@@ -70,7 +70,7 @@ def _rename_dem_folder(gdir, source=''):
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
-                      is_test=False, test_nr=4, demo=False, test_rgidf=None,
+                      is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, timeout=0, params_file=None,
                       max_level=4, logging_level='WORKFLOW',
@@ -95,8 +95,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         path to the OGGM parameter file (to override defaults)
     is_test : bool
         to test on a couple of glaciers only!
-    test_nr : int
-        if is_test = True: Amount of glaciers to test
+    test_ids : list
+        if is_test: list of ids to process
     demo : bool
         to run the prepro for the list of demo glaciers
     test_rgidf : shapefile
@@ -202,8 +202,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         cfg.set_intersects_db(test_intersects_file)
 
     if is_test:
-        # Just for fun
-        rgidf = rgidf.sample(test_nr)
+        if test_ids is not None:
+            rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+        else:
+            rgidf = rgidf.sample(4)
 
     # Sort for more efficient parallel computing
     rgidf = rgidf.sort_values('Area', ascending=False)
@@ -411,9 +413,9 @@ def parse_args(args):
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
-    parser.add_argument('--test_nr', type=int, default=4,
-                        help='if --test, specify how many glaciers to'
-                             'test.')
+    parser.add_argument('--test-ids', nargs='+',
+                        help='if --test, specify the RGI ids to run separated '
+                             'by a space (default: 4 randomly selected).')
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
@@ -467,7 +469,7 @@ def parse_args(args):
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, params_file=args.params_file,
-                is_test=args.test, test_nr=args.test_nr,
+                is_test=args.test, test_ids=args.test_ids,
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, timeout=args.timeout,
                 disable_mp=args.disable_mp, logging_level=args.logging_level,

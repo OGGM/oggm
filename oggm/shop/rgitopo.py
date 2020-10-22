@@ -111,10 +111,9 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
                and not f.name.startswith('.')]
 
     if dem_source is None:
-        if 'NASADEM' in sources:
-            dem_source = 'NASADEM'
-        else:
-            dem_source = 'COPDEM'
+        for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+            if s in sources:
+                dem_source = s
 
     if dem_source not in sources:
         raise RuntimeError('source {} not in folder'.format(dem_source))

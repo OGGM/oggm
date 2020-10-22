@@ -786,6 +786,8 @@ class TestPreproCLI(unittest.TestCase):
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
                                            '--test',
+                                           '--test-ids', 'RGI60-19.00134',
+                                                         'RGI60-19.00156',
                                            ])
 
         assert 'local' in kwargs['working_dir']
@@ -794,6 +796,9 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['is_test']
+        assert kwargs['test_ids']
+        assert len(kwargs['test_ids']) == 2
+        assert kwargs['test_ids'][0] == 'RGI60-19.00134'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
