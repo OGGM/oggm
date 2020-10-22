@@ -816,6 +816,7 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
 
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
+    profile['dtype'] = 'int16'
     with rasterio.io.MemoryFile() as memfile:
         with memfile.open(**profile) as dataset:
             dataset.write(data.astype(np.int16)[np.newaxis, ...])
