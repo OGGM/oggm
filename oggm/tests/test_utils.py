@@ -780,6 +780,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
+        assert not kwargs['elev_bands']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -803,6 +804,7 @@ class TestPreproCLI(unittest.TestCase):
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', '/local/out',
+                                           '--elev-bands',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -813,6 +815,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
+        assert kwargs['elev_bands']
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -855,8 +858,6 @@ class TestPreproCLI(unittest.TestCase):
                             for rid in inter.RGIId_1]
         inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_2]
-
-        cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -918,6 +919,82 @@ class TestPreproCLI(unittest.TestCase):
         assert gdir.has_file('inversion_flowlines')
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
+
+        # L3
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, nyears=10)
+        assert isinstance(model, FlowlineModel)
+
+        # L4
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, nyears=10)
+        assert isinstance(model, FlowlineModel)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
+    @pytest.mark.slow
+    def test_elev_bands_run(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        # Read in the RGI file
+        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf, test_intersects_file=inter,
+                          test_topofile=topof, elev_bands=True)
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'glacier_type' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'dem_source' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'main_flowline_length' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'inv_volume_km3' in df
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1945-1975_avg_prcp' in df
+
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
+                                           'package_versions.txt'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+
+        # See if we can start from L3 and L4
+        from oggm import tasks
+        from oggm.core.flowline import FlowlineModel
+        cfg.PARAMS['continue_on_error'] = False
+        rid = df.rgi_id.iloc[0]
+        entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L3
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
