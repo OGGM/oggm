@@ -72,9 +72,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      disable_mp=False, timeout=0, params_file=None,
+                      disable_mp=False, params_file=None, elev_bands=False,
                       max_level=4, logging_level='WORKFLOW',
-                      map_dmax=None, map_d1=None, disable_dl_verify=False):
+                      disable_dl_verify=False):
     """Does the actual job.
 
     Parameters
@@ -113,15 +113,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the maximum pre-processing level before stopping
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
-    map_dmax : float
-        maximum resolution [m] of spatial grid resolution
-    map_d1 : float
-        equation parameter which is used to calculate the grid resolution
     disable_dl_verify : bool
         disable the hash verification of OGGM downloads
     """
 
-    # TODO: temporarily silence Fiona deprecation warnings
+    # TODO: temporarily silence Fiona and other deprecation warnings
     import warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -157,15 +153,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Make it large if you expect your glaciers to grow large
     cfg.PARAMS['border'] = border
 
-    # Size of the spatial map
-    cfg.PARAMS['dmax'] = map_dmax if map_dmax else cfg.PARAMS['dmax']
-    cfg.PARAMS['d1'] = map_d1 if map_d1 else cfg.PARAMS['d1']
-
     # Set to True for operational runs
     cfg.PARAMS['continue_on_error'] = True
-
-    # Timeout
-    cfg.PARAMS['task_timeout'] = timeout
 
     # Check for the integrity of the files OGGM downloads at run time
     # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
@@ -285,19 +274,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L2 - Tasks
-    task_list = [
-        tasks.glacier_masks,
-        tasks.compute_centerlines,
-        tasks.initialize_flowlines,
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-        tasks.catchment_area,
-        tasks.catchment_intersections,
-        tasks.catchment_width_geom,
-        tasks.catchment_width_correction,
-    ]
-    for task in task_list:
-        workflow.execute_entity_task(task, gdirs)
+    if elev_bands:
+        # HH2015 method
+        task_list = [
+            tasks.simple_glacier_masks,
+            tasks.elevation_band_flowline,
+            tasks.fixed_dx_elevation_band_flowline,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs)
+    else:
+        # Default OGGM
+        task_list = [
+            tasks.glacier_masks,
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L2', 'summary')
@@ -393,6 +395,12 @@ def parse_args(args):
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
                              '$OGGM_OUTDIR.')
+    parser.add_argument('--logging-level', type=str, default='WORKFLOW',
+                        help='the logging level to use (DEBUG, INFO, WARNING, '
+                             'WORKFLOW).')
+    parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
+                        help='compute the flowlines based on the Huss&Hock '
+                             '2015 method instead of the OGGM one.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -402,11 +410,6 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
-    parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
-                        help='if you want to disable multiprocessing.')
-    parser.add_argument('--timeout', type=int, default=0,
-                        help='apply a timeout to the entity tasks '
-                             '(in seconds).')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -416,20 +419,12 @@ def parse_args(args):
     parser.add_argument('--test-ids', nargs='+',
                         help='if --test, specify the RGI ids to run separated '
                              'by a space (default: 4 randomly selected).')
-    parser.add_argument('--logging-level', type=str, default='WORKFLOW',
-                        help='the logging level to use (DEBUG, INFO, WARNING, '
-                             'WORKFLOW).')
-    parser.add_argument('--map-dmax', type=float,
-                        help='maximal resolution of the spatial grid. Defaults'
-                             ' to value from params.cfg.')
-    parser.add_argument('--map-d1', type=float,
-                        help='d1 parameter to calculate the resolution of the '
-                             'spatial grid. Defaults to value from '
-                             'params.cfg.')
     parser.add_argument('--disable-dl-verify', nargs='?', const=True,
                         default=False,
                         help='if used OGGM downloads will not be verified '
                              'against a hash sum.')
+    parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
+                        help='if you want to disable multiprocessing.')
     args = parser.parse_args(args)
 
     # Check input
@@ -471,9 +466,8 @@ def parse_args(args):
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
                 demo=args.demo, dem_source=args.dem_source,
-                max_level=args.max_level, timeout=args.timeout,
-                disable_mp=args.disable_mp, logging_level=args.logging_level,
-                map_dmax=args.map_dmax, map_d1=args.map_d1,
+                max_level=args.max_level, disable_mp=args.disable_mp,
+                logging_level=args.logging_level, elev_bands=args.elev_bands,
                 disable_dl_verify=args.disable_dl_verify
                 )
 
