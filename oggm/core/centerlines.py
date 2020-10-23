@@ -2095,18 +2095,17 @@ def elevation_band_flowline(gdir):
         where to write the data
     """
 
-    # variables
+    # Variables
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
-        # Variables
         glacier_mask = nc.variables['glacier_mask'][:] == 1
         topo = nc.variables['topo_smoothed'][:]
 
-    # slope
+    # Slope
     sy, sx = np.gradient(topo, gdir.grid.dx)
     slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
 
-    # clip following Werder et al 2019
+    # Clip following Werder et al 2019
     slope = utils.clip_array(slope, np.deg2rad(0.4), np.deg2rad(60))
 
     topo = topo[glacier_mask]
@@ -2114,7 +2113,7 @@ def elevation_band_flowline(gdir):
 
     bsize = cfg.PARAMS['elevation_band_flowline_binsize']
 
-    # Make nice bins ensureing to cover the full range with the given bin size
+    # Make nice bins ensuring to cover the full range with the given bin size
     maxb = utils.nicenumber(np.max(topo), bsize)
     minb = utils.nicenumber(np.min(topo), bsize, lower=True)
     bins = np.arange(minb, maxb + 0.01, bsize)
@@ -2123,35 +2122,44 @@ def elevation_band_flowline(gdir):
     df = pd.DataFrame()
     topo_digi = np.digitize(topo, bins) - 1  # I prefer the left
     for bi in range(len(bins) - 1):
-        # the coordinates of the current bin
+        # The coordinates of the current bin
         bin_coords = topo_digi == bi
 
-        # bin area
+        # Bin area
         bin_area = np.sum(bin_coords) * gdir.grid.dx ** 2
         if bin_area == 0:
             # Ignored in this case - which I believe is strange because deltaH
             # should be larger for the previous bin, but this is what they do
             # according to Zekollari 2019 review
+            df.loc[bi, 'area'] = np.NaN
             continue
         df.loc[bi, 'area'] = bin_area
 
-        # bin average elevation
+        # Bin average elevation
         df.loc[bi, 'mean_elevation'] = np.mean(topo[bin_coords])
 
-        # bin averge slope
-        # there are a few more shneanigans here described in Werder et al 2019
+        # Bin averge slope
+        # there are a few more shenanigans here described in Werder et al 2019
         s_bin = slope[bin_coords]
         # between the 5% percentile and the x% percentile where x is some magic
         qmin = np.quantile(s_bin, 0.05)
         x = max(2 * np.quantile(s_bin, 0.2) / np.quantile(s_bin, 0.8), 0.55)
         x = min(x, 0.95)
         qmax = np.quantile(s_bin, x)
-        df.loc[bi, 'slope'] = np.mean(s_bin[(s_bin >= qmin) & (s_bin <= qmax)])
+        sel_s_bin = s_bin[(s_bin >= qmin) & (s_bin <= qmax)]
+        if len(sel_s_bin) == 0:
+            # This can happen when n pix is small. In this case we just avg
+            df.loc[bi, 'slope'] = np.mean(s_bin)
+        else:
+            df.loc[bi, 'slope'] = np.mean(sel_s_bin)
 
     # The grid point's grid spacing and widths
     df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
     df['dx'] = bsize / np.tan(df['slope'])
     df['width'] = df['area'] / df['dx']
+
+    # Remove possible NaNs from above
+    df = df.dropna()
 
     # In OGGM we go from top to bottom
     df = df[::-1]
