@@ -55,7 +55,7 @@ from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
                         SuperclassMeta)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             GeometryError)
+                             GeometryError, InvalidDEMError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -2117,6 +2117,17 @@ def elevation_band_flowline(gdir):
     maxb = utils.nicenumber(np.max(topo), bsize)
     minb = utils.nicenumber(np.min(topo), bsize, lower=True)
     bins = np.arange(minb, maxb + 0.01, bsize)
+
+    if len(bins) < 3:
+        # Very low elevation range
+        bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
+        maxb = utils.nicenumber(np.max(topo), bsize)
+        minb = utils.nicenumber(np.min(topo), bsize, lower=True)
+        bins = np.arange(minb, maxb + 0.01, bsize)
+        if len(bins) < 3:
+            # Ok this just not gonna work
+            raise InvalidDEMError('({}) DEM altidude range too small.'
+                                  .format(gdir.rgi_id))
 
     # Go - binning
     df = pd.DataFrame()
