@@ -794,6 +794,10 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
         rgitools
     """
 
+    # In case nominal, just raise
+    if gdir.is_nominal:
+        raise GeometryError('{} is a nominal glacier.'.format(gdir.rgi_id))
+
     if not os.path.exists(gdir.get_filepath('gridded_data')):
         # In a possible future, we might actually want to raise a
         # deprecation warning here
@@ -817,6 +821,7 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
     profile['dtype'] = 'int16'
+    profile.pop('nodata', None)
     with rasterio.io.MemoryFile() as memfile:
         with memfile.open(**profile) as dataset:
             dataset.write(data.astype(np.int16)[np.newaxis, ...])
@@ -883,6 +888,11 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
         dem_on_g = dem[np.where(glacier_mask)]
         nc.max_h_glacier = np.max(dem_on_g)
         nc.min_h_glacier = np.min(dem_on_g)
+
+        # Last sanity check
+        if nc.max_h_glacier < (nc.min_h_glacier + 1):
+            raise InvalidDEMError('({}) min equal max in the masked DEM.'
+                                  .format(gdir.rgi_id))
 
     # hypsometry if asked for
     if not write_hypsometry:
