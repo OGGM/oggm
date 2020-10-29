@@ -81,6 +81,16 @@ def gencolor(n, cmap='Set1'):
         return itertools.cycle(cmap)
 
 
+def surf_to_nan(surf_h, thick):
+
+    t1 = thick[:-2]
+    t2 = thick[1:-1]
+    t3 = thick[2:]
+    pnan = ((t1 == 0) & (t2 == 0)) & ((t2 == 0) & (t3 == 0))
+    surf_h[np.where(pnan)[0] + 1] = np.NaN
+    return surf_h
+
+
 def _plot_map(plotfunc):
     """
     Decorator for common salem.Map plotting logic
@@ -737,10 +747,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
         ax.plot(x, bed_t, color='crimson', linewidth=2.5, label='Bed (Rect.)')
 
     # Plot glacier
-    surfh = cls.surface_h
-    pok = np.where(cls.thick == 0.)[0]
-    if (len(pok) > 0) and (pok[0] < (len(surfh)-1)):
-        surfh[pok[0]+1:] = np.NaN
+    surfh = surf_to_nan(cls.surface_h, cls.thick)
     ax.plot(x, surfh, color='#003399', linewidth=2, label='Glacier')
 
     # Plot tributaries
@@ -828,10 +835,7 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
                     label='Bed (Rect.)')
 
         # Plot glacier
-        surfh = cls.surface_h
-        pok = np.where(cls.thick == 0.)[0]
-        if (len(pok) > 0) and (pok[0] < (len(surfh)-1)):
-            surfh[pok[0]+1:] = np.NaN
+        surfh = surf_to_nan(cls.surface_h, cls.thick)
         ax.plot(x, surfh, color='#003399', linewidth=2, label='Glacier')
 
         # Plot tributaries
