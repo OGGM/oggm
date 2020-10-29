@@ -5,6 +5,7 @@ import shutil
 
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
@@ -38,6 +39,29 @@ def teardown_module():
 
 # ----------------------------------------------------------
 # Lets go
+
+
+def test_surf_to_nan():
+
+    surf = np.array([1., 0, 0, 1])
+    thick = np.array([1, 0, 0, 1])
+    sh = graphics.surf_to_nan(surf, thick)
+    np.testing.assert_allclose(sh, [1, 0, 0, 1])
+
+    surf = np.array([1., 0, 0, 0, 1])
+    thick = np.array([1, 0, 0, 0, 1])
+    sh = graphics.surf_to_nan(surf, thick)
+    np.testing.assert_allclose(sh, [1, 0, np.NaN, 0, 1])
+
+    surf = np.array([1., 0, 0, 0, 0, 1])
+    thick = np.array([1, 0, 0, 0, 0, 1])
+    sh = graphics.surf_to_nan(surf, thick)
+    np.testing.assert_allclose(sh, [1, 0, np.NaN, np.NaN, 0, 1])
+
+    surf = np.array([1., 0, 1, 0, 1])
+    thick = np.array([1, 0, 1, 0, 1])
+    sh = graphics.surf_to_nan(surf, thick)
+    np.testing.assert_allclose(sh, [1, 0, 1, 0, 1])
 
 
 @pytest.mark.internet
