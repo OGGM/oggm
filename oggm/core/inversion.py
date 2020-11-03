@@ -601,11 +601,14 @@ def filter_inversion_output(gdir):
 
     # First guess thickness based on width
     w = cl['width'][n:]
+    old_h = cl['thick'][n:]
     s = w**3 * bs / 6
-    h = 3/2 * s / w
+    new_h = 3/2 * s / w
+    # Change only if it actually does what we want
+    new_h[old_h < new_h] = old_h[old_h < new_h]
 
     # Smoothing things out a bit
-    hts = np.append(np.append(cl['thick'][n-3:n], h), 0)
+    hts = np.append(np.append(cl['thick'][n-3:n], new_h), 0)
     h = utils.smooth1d(hts, 3)[n-1:-1]
 
     # Recompute bedshape based on that
@@ -614,15 +617,17 @@ def filter_inversion_output(gdir):
     # OK, done
     s = w**3 * bs / 6
 
-    cl['thick'][n:] = 3/2 * s / w
+    # Change only if it actually does what we want
+    new_h = 3/2 * s / w
+    if np.any(new_h > old_h):
+        return
+
+    cl['thick'][n:] = new_h
     cl['volume'][n:] = s * cl['dx']
     cl['is_trapezoid'][n:] = False
     cl['is_rectangular'][n:] = False
 
     gdir.write_pickle(cls, 'inversion_output')
-
-    # output the volume here - this simplifies code for some downstream funcs
-    return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
 @entity_task(log, writes=['inversion_output'])
