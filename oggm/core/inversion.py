@@ -115,6 +115,10 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             # task afterwards
             flux[-1] = flux[-2] / 3  # this is totally arbitrary
 
+        if fl.flows_to is not None and flux[-1] <= 0:
+            # Same for tributaries
+            flux[-1] = flux[-2] / 3  # this is totally arbitrary
+
         # Shape
         is_rectangular = fl.is_rectangular
         if not invert_with_rectangular:
