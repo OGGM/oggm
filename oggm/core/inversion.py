@@ -622,7 +622,7 @@ def filter_inversion_output(gdir):
     # Change only if it actually does what we want
     new_h = 3/2 * s / w
     if np.any(new_h > old_h):
-        # No chang in volume
+        # No change in volume
         return np.sum([np.sum(cl['volume']) for cl in cls])
 
     cl['thick'][n:] = new_h
