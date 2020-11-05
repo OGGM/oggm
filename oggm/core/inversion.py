@@ -583,7 +583,9 @@ def filter_inversion_output(gdir):
 
     if gdir.is_tidewater:
         # No need for filter in tidewater case
-        return
+        cls = gdir.read_pickle('inversion_output')
+        init_vol = np.sum([np.sum(cl['volume']) for cl in cls])
+        return init_vol
 
     if not gdir.has_file('downstream_line'):
         raise InvalidWorkflowError('filter_inversion_output now needs a '
@@ -620,7 +622,8 @@ def filter_inversion_output(gdir):
     # Change only if it actually does what we want
     new_h = 3/2 * s / w
     if np.any(new_h > old_h):
-        return
+        # No chang in volume
+        return np.sum([np.sum(cl['volume']) for cl in cls])
 
     cl['thick'][n:] = new_h
     cl['volume'][n:] = s * cl['dx']
@@ -628,6 +631,9 @@ def filter_inversion_output(gdir):
     cl['is_rectangular'][n:] = False
 
     gdir.write_pickle(cls, 'inversion_output')
+
+    # Return volume for convenience
+    return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
 @entity_task(log, writes=['inversion_output'])
