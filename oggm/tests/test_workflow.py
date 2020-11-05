@@ -203,7 +203,7 @@ class TestFullRun(unittest.TestCase):
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.35)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.36)
 
     @pytest.mark.slow
     def test_shapefile_output(self):
