@@ -1235,26 +1235,27 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     # Now find the ELA till the integrated mb is zero
     from oggm.core.massbalance import LinearMassBalance
 
-    def to_minimize(ela_h):
-        mbmod = LinearMassBalance(ela_h[0], grad=mb_gradient)
-        smb = mbmod.get_specific_mb(heights=h, widths=w)
-        return (smb - cmb)**2
-
-    if ela_h is None:
-        ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
-        ela_h = ela_h['x'][0]
-
-    mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
-
-    # For each flowline compute the apparent MB
+    rho = cfg.PARAMS['ice_density']
     fls = gdir.read_pickle('inversion_flowlines')
-
     # Reset flux
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
 
+    def to_minimize(ela_h):
+        mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
+        smb = mbmod.get_specific_mb(heights=h, widths=w)
+        return smb - cmb
+
+    if ela_h is None:
+        ela_h = optimization.brentq(to_minimize, -1e5, 1e5, xtol=1e-5)
+
+    mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
+
+    # For each flowline compute the apparent MB
+    # Reset flux
+    for fl in fls:
+        fl.flux = np.zeros(len(fl.surface_h))
     # Flowlines in order to be sure
-    rho = cfg.PARAMS['ice_density']
     for fl in fls:
         mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz)
@@ -1301,11 +1302,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 
     def to_minimize(residual):
         smb = mb_model.get_specific_mb(fls=fls, year=mb_years)
-        smb = np.mean(smb) + residual[0]
-        return (smb - cmb)**2
+        smb = np.mean(smb) + residual
+        return smb - cmb
 
-    residual = optimization.minimize(to_minimize, [0.], bounds=((-1e5, 1e5), ))
-    residual = residual['x'][0]
+    residual = optimization.brentq(to_minimize, -1e5, 1e5, xtol=1e-5)
 
     # Reset flux
     for fl in fls:
