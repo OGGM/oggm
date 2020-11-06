@@ -1817,7 +1817,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
@@ -1898,7 +1898,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
@@ -1958,7 +1958,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
@@ -2014,7 +2014,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2043,7 +2043,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2078,7 +2078,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2116,7 +2116,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2146,7 +2146,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2179,7 +2179,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2216,7 +2216,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2247,7 +2247,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2286,7 +2286,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2327,7 +2327,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2365,7 +2365,7 @@ class TestIdealisedInversion():
 
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,
@@ -2396,7 +2396,7 @@ class TestIdealisedInversion():
         model.run_until_equilibrium()
         fls = []
         for fl in model.fls:
-            pg = np.where(fl.thick > 0)
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
             line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
             sh = fl.surface_h[pg]
             flo = centerlines.Centerline(line, dx=fl.dx,

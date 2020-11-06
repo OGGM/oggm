@@ -93,6 +93,10 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             log.info('(%s) has negative flux somewhere', gdir.rgi_id)
         utils.clip_min(flux, 0, out=flux)
 
+        if np.sum(flux <= 0) > 1:
+            raise RuntimeError("More than one grid point has zero or "
+                               "negative flux: this should not happen.")
+
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
                 # TODO: this test doesn't seem meaningful here
@@ -109,6 +113,10 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             # staggered grid but I actually like the QC and its easier)
             # note that this value will be ignored if one uses the filter
             # task afterwards
+            flux[-1] = flux[-2] / 3  # this is totally arbitrary
+
+        if fl.flows_to is not None and flux[-1] <= 0:
+            # Same for tributaries
             flux[-1] = flux[-2] / 3  # this is totally arbitrary
 
         # Shape
@@ -524,6 +532,11 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                     is_rect[i] = True
                     is_trap[i] = False
                     volume[i] = out_thick[i] * w[i] * cl['dx']
+
+        # Sanity check
+        if np.any(out_thick <= 0):
+            raise RuntimeError("Found zero or negative thickness: "
+                               "this should not happen.")
 
         if write:
             cl['is_trapezoid'] = is_trap

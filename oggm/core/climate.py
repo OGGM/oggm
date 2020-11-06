@@ -11,7 +11,7 @@ import xarray as xr
 import netCDF4
 import pandas as pd
 from scipy import stats
-from scipy import optimize as optimization
+from scipy import optimize
 
 # Optional libs
 try:
@@ -28,6 +28,9 @@ from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
 
 # Module logger
 log = logging.getLogger(__name__)
+
+# Parameters
+_brentq_xtol = 2e-12
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -1033,11 +1036,11 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 
     if force_mu is None:
         try:
-            mu_star = optimization.brentq(_mu_star_per_minimization,
-                                          cfg.PARAMS['min_mu_star'],
-                                          cfg.PARAMS['max_mu_star'],
-                                          args=(fls, cmb, temp, prcp, widths),
-                                          xtol=1e-5)
+            mu_star = optimize.brentq(_mu_star_per_minimization,
+                                      cfg.PARAMS['min_mu_star'],
+                                      cfg.PARAMS['max_mu_star'],
+                                      args=(fls, cmb, temp, prcp, widths),
+                                      xtol=_brentq_xtol)
         except ValueError:
             # This happens in very rare cases
             _mu_lim = _mu_star_per_minimization(cfg.PARAMS['min_mu_star'],
@@ -1236,25 +1239,21 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     from oggm.core.massbalance import LinearMassBalance
 
     def to_minimize(ela_h):
-        mbmod = LinearMassBalance(ela_h[0], grad=mb_gradient)
+        mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
         smb = mbmod.get_specific_mb(heights=h, widths=w)
-        return (smb - cmb)**2
+        return smb - cmb
 
     if ela_h is None:
-        ela_h = optimization.minimize(to_minimize, [0.], bounds=((0, 10000), ))
-        ela_h = ela_h['x'][0]
-
-    mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
+        ela_h = optimize.brentq(to_minimize, -1e5, 1e5, xtol=_brentq_xtol)
 
     # For each flowline compute the apparent MB
+    rho = cfg.PARAMS['ice_density']
     fls = gdir.read_pickle('inversion_flowlines')
-
     # Reset flux
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
-
     # Flowlines in order to be sure
-    rho = cfg.PARAMS['ice_density']
+    mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
     for fl in fls:
         mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz)
@@ -1301,11 +1300,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 
     def to_minimize(residual):
         smb = mb_model.get_specific_mb(fls=fls, year=mb_years)
-        smb = np.mean(smb) + residual[0]
-        return (smb - cmb)**2
+        smb = np.mean(smb) + residual
+        return smb - cmb
 
-    residual = optimization.minimize(to_minimize, [0.], bounds=((-1e5, 1e5), ))
-    residual = residual['x'][0]
+    residual = optimize.brentq(to_minimize, -1e5, 1e5, xtol=_brentq_xtol)
 
     # Reset flux
     for fl in fls:
