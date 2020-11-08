@@ -75,41 +75,24 @@ def find_region(gdir):
         return None
 
 
-@utils.entity_task(log, writes=['gridded_data'])
-def velocity_to_gdir(gdir):
-    """Reproject the its_live files to the given glacier directory.
+def _reproject_and_scale(gdir, do_error=False):
+    """Reproject and scale itslive data, avoid code duplication for error"""
 
-    Variables are added to the gridded_data nc file.
-
-    Reprojecting velocities from one map proj to another is done
-    reprojecting the vector distances. In this process, absolute velocities
-    might change as well because map projections do not always preserve
-    distances -> we scale them back to the original velocities as per the
-    ITS_LIVE documentation that states that velocities are given in
-    ground units, i.e. absolute velocities.
-
-    We use bilinear interpolation to reproject the velocities to the local
-    glacier map.
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        where to write the data
-
-    """
 
     reg = find_region(gdir)
     if reg is None:
         raise InvalidWorkflowError('There does not seem to be its_live data '
                                    'available for this glacier')
 
-    if not gdir.has_file('gridded_data'):
-        raise InvalidWorkflowError('Please run `glacier_masks` before running '
-                                   'this task')
+    vnx = 'vx'
+    vny = 'vy'
+    if do_error:
+        vnx += '_err'
+        vny += '_err'
 
     with utils.get_lock():
-        fx = utils.file_downloader(region_files[reg]['vx'])
-        fy = utils.file_downloader(region_files[reg]['vy'])
+        fx = utils.file_downloader(region_files[reg][vnx])
+        fy = utils.file_downloader(region_files[reg][vny])
 
     # Open the files
     dsx = salem.GeoTiff(fx)
@@ -127,6 +110,10 @@ def velocity_to_gdir(gdir):
     with rasterio.Env():
         with rasterio.open(fx) as src:
             nodata = getattr(src, 'nodata', -32767.0)
+
+    # Error files are wrong
+    if nodata == 0:
+        nodata = -32767.0
 
     # Get the coords at t0
     xx0, yy0 = grid_vel.center_grid.xy_coordinates
@@ -155,7 +142,7 @@ def velocity_to_gdir(gdir):
 
     # Scale back velocities - https://github.com/OGGM/oggm/issues/1014
     new_vel = np.sqrt(vx**2 + vy**2)
-    p_ok = new_vel > 0.1  # avoid div by zero
+    p_ok = new_vel > 1e-5  # avoid div by zero
     vx[p_ok] = vx[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
     vy[p_ok] = vy[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
 
@@ -166,19 +153,62 @@ def velocity_to_gdir(gdir):
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
         vn = 'obs_icevel_x'
+        if do_error:
+            vn = vn.replace('obs', 'err')
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
         v.units = 'm yr-1'
-        v.long_name = 'ITS LIVE velocity data in x map direction'
+        ln = 'ITS LIVE velocity data in x map direction'
+        if do_error:
+            ln = 'Uncertainty of ' + ln
+        v.long_name = ln
         v[:] = vx
 
         vn = 'obs_icevel_y'
+        if do_error:
+            vn = vn.replace('obs', 'err')
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
             v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
         v.units = 'm yr-1'
-        v.long_name = 'ITS LIVE velocity data in xy map direction'
+        ln = 'ITS LIVE velocity data in y map direction'
+        if do_error:
+            ln = 'Uncertainty of ' + ln
+        v.long_name = ln
         v[:] = vy
+
+
+@utils.entity_task(log, writes=['gridded_data'])
+def velocity_to_gdir(gdir, add_error=False):
+    """Reproject the its_live files to the given glacier directory.
+
+    Variables are added to the gridded_data nc file.
+
+    Reprojecting velocities from one map proj to another is done
+    reprojecting the vector distances. In this process, absolute velocities
+    might change as well because map projections do not always preserve
+    distances -> we scale them back to the original velocities as per the
+    ITS_LIVE documentation that states that velocities are given in
+    ground units, i.e. absolute velocities.
+
+    We use bilinear interpolation to reproject the velocities to the local
+    glacier map.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    add_error : bool
+        also reproject and scale the error data
+    """
+
+    if not gdir.has_file('gridded_data'):
+        raise InvalidWorkflowError('Please run `glacier_masks` before running '
+                                   'this task')
+
+    _reproject_and_scale(gdir, do_error=False)
+    if add_error:
+        _reproject_and_scale(gdir, do_error=True)
