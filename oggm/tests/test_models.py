@@ -2526,7 +2526,7 @@ class TestHEF:
         after_len = model.fls[-1].length_m
 
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.09)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.02)
         np.testing.assert_allclose(ref_len, after_len, atol=100.01)
 
     @pytest.mark.slow
