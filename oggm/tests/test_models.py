@@ -2498,7 +2498,7 @@ class TestHEF:
 
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.09)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.02)
-        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
     @pytest.mark.slow
     def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
