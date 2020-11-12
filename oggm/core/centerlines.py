@@ -288,6 +288,8 @@ class Centerline(object, metaclass=SuperclassMeta):
         # rest we can cope with
         if flux[-2] < 0:
             flux_needs_correction = True
+        if flux[-1] < 0 and self.flows_to is not None:
+            flux_needs_correction = True
 
         self.flux = flux
         self.flux_needs_correction = flux_needs_correction
