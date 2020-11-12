@@ -1127,6 +1127,27 @@ def _fallback_mu_star_calibration(gdir):
     gdir.write_json(df, 'local_mustar')
 
 
+def _check_terminus_mass_flux(gdir, fls, cmb):
+    # Avoid code duplication
+
+    rho = cfg.PARAMS['ice_density']
+
+    # This variable is in "sensible" units normalized by width
+    aflux = fls[-1].flux[-1] * (gdir.grid.dx ** 2) / rho  # m3 ice per year
+    aflux = aflux / fls[-1].widths_m[-1]  # m2 ice per year
+
+    # If not marine and a bit far from zero, warning
+    if cmb == 0 and aflux > 0 and not np.allclose(aflux, 0, atol=1):
+        log.info('(%s) flux should be zero, but is: '
+                 '%.4f m2 ice yr-1', gdir.rgi_id, aflux)
+
+    # If not marine and quite far from zero, error
+    if cmb == 0 and aflux > 0 and not np.allclose(aflux, 0, atol=10):
+        msg = ('({}) flux should be zero, but is: {:.4f} m2 ice yr-1'
+               .format(gdir.rgi_id, aflux))
+        raise MassBalanceCalibrationError(msg)
+
+
 @entity_task(log, writes=['inversion_flowlines'],
              fallback=_fallback_mu_star_calibration)
 def mu_star_calibration(gdir):
@@ -1181,18 +1202,7 @@ def mu_star_calibration(gdir):
         return mu_star_calibration(gdir, reset=True)
 
     # Check and write
-    rho = cfg.PARAMS['ice_density']
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    cmb = calving_mb(gdir)
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls, calving_mb(gdir))
     gdir.write_pickle(fls, 'inversion_flowlines')
 
     # Store diagnostics
@@ -1259,16 +1269,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
         fl.set_apparent_mb(mbz)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls, cmb)
     gdir.write_pickle(fls, 'inversion_flowlines')
     gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
                       'linear_mb_params')
@@ -1320,16 +1321,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls, cmb)
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
