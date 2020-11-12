@@ -998,6 +998,27 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
     gdir.write_json(df, 'local_mustar')
 
 
+def _check_terminus_mass_flux(gdir, fls, cmb):
+    # Avoid code duplication
+
+    rho = cfg.PARAMS['ice_density']
+
+    # This variable is in "sensible" units normalized by width
+    flux = fls[-1].flux[-1]
+    aflux = flux * (gdir.grid.dx ** 2) / rho  # m3 ice per year
+
+    # If not marine and a bit far from zero, warning
+    if cmb == 0 and flux > 0 and not np.allclose(flux, 0, atol=0.01):
+        log.info('(%s) flux should be zero, but is: '
+                 '%.4f m3 ice yr-1', gdir.rgi_id, aflux)
+
+    # If not marine and quite far from zero, error
+    if cmb == 0 and flux > 0 and not np.allclose(flux, 0, atol=1):
+        msg = ('({}) flux should be zero, but is: {:.4f} m3 ice yr-1'
+               .format(gdir.rgi_id, aflux))
+        raise MassBalanceCalibrationError(msg)
+
+
 def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
 
     # Get the corresponding mu

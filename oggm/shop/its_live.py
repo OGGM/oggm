@@ -164,7 +164,7 @@ def _reproject_and_scale(gdir, do_error=False):
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = vx
+        v[:] = vx.filled(np.nan)
 
         vn = 'obs_icevel_y'
         if do_error:
@@ -178,7 +178,7 @@ def _reproject_and_scale(gdir, do_error=False):
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = vy
+        v[:] = vy.filled(np.nan)
 
 
 @utils.entity_task(log, writes=['gridded_data'])
