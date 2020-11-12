@@ -2469,35 +2469,6 @@ def inversion_params(hef_gdir):
 class TestHEF:
 
     @pytest.mark.slow
-    def test_equilibrium(self, hef_gdir, inversion_params):
-
-        init_present_time_glacier(hef_gdir)
-
-        mb_mod = massbalance.ConstantMassBalance(hef_gdir)
-
-        fls = hef_gdir.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
-                               mb_elev_feedback='never')
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        ref_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
-
-        model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 50
-        after_vol = model.volume_km3
-        after_area = model.area_km2
-        after_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
-        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
-
-    @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
 
         init_present_time_glacier(hef_gdir)
