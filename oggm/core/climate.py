@@ -1005,7 +1005,7 @@ def _check_terminus_mass_flux(gdir, fls, cmb):
 
     # This variable is in "sensible" units normalized by width
     flux = fls[-1].flux[-1]
-    aflux = flux * (gdir.grid.dx ** 2) / rho # m3 ice per year
+    aflux = flux * (gdir.grid.dx ** 2) / rho  # m3 ice per year
 
     # If not marine and a bit far from zero, warning
     if cmb == 0 and flux > 0 and not np.allclose(flux, 0, atol=0.01):
