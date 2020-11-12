@@ -284,8 +284,8 @@ class Centerline(object, metaclass=SuperclassMeta):
         flux_needs_correction = False
         flux = np.cumsum(self.flux + mb * self.widths * self.dx)
 
-        # We filter only lines with two negative grid points, the
-        # rest we can cope with
+        # We filter only lines with two negative grid points,
+        # the rest we can cope with
         if flux[-2] < 0:
             flux_needs_correction = True
 
