@@ -93,7 +93,7 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             log.info('(%s) has negative flux somewhere', gdir.rgi_id)
         utils.clip_min(flux, 0, out=flux)
 
-        if np.sum(flux <= 0) > 1:
+        if np.sum(flux <= 0) > 1 and len(fls) == 1:
             raise RuntimeError("More than one grid point has zero or "
                                "negative flux: this should not happen.")
 

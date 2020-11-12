@@ -293,7 +293,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.flux_needs_correction = flux_needs_correction
 
         # Add to outflow. That's why it should happen in order
-        if self.flows_to is not None:
+        if self.flows_to is not None and flux[-1] > 0:
             n = len(self.flows_to.line.coords)
             ide = self.flows_to_indice
             if n >= 9:
