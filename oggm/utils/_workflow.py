@@ -1268,11 +1268,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
                                         ys=None, ye=None, years=None):
-    """Gather as much statistics as possible about a list of glaciers.
-
-    It can be used to do result diagnostics and other stuffs. If the data
-    necessary for a statistic is not available (e.g.: flowlines length) it
-    will simply be ignored.
+    """Compiles a table of specific mass-balance timeseries for all glaciers.
 
     Parameters
     ----------
