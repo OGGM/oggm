@@ -4,8 +4,9 @@ __pycache__
 # asv stuff
 .asv/
 
-# PyCharm stuffs
+# IDE stuffs
 .idea/
+.vscode/
 
 # coverage stuffs
 .coverage
@@ -42,3 +43,4 @@ docs/_sources
 docs/_images
 docs/.doctrees
 oggm/version.py
+oggm/ignore

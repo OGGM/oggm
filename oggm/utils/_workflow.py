@@ -1266,6 +1266,53 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     return out
 
 
+def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
+                                        ys=None, ye=None, years=None):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    ys : int
+        start year of the model run (default: from the climate file)
+        date)
+    ye : int
+        end year of the model run (default: from the climate file)
+    years : array of ints
+        override ys and ye with the years of your choice
+    """
+    from oggm.workflow import execute_entity_task
+    from oggm.core.massbalance import fixed_geometry_mass_balance
+
+    out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 ys=ys, ye=ye, years=years)
+
+    for idx, s in enumerate(out_df):
+        if s is None:
+            out_df[idx] = pd.Series(np.NaN)
+
+    out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('fixed_geometry_mass_balance' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+    return out
+
+
 @entity_task(log)
 def climate_statistics(gdir, add_climate_period=1995):
     """Gather as much statistics as possible about this glacier.
