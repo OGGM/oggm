@@ -425,6 +425,9 @@ class TestSouthGlacier(unittest.TestCase):
         df = utils.compile_glacier_statistics(gdirs)
         assert df.inv_thickness_m[0] < 100
 
+        df = utils.compile_fixed_geometry_mass_balance(gdirs)
+        assert len(df) > 100
+
         if do_plot:
             import matplotlib.pyplot as plt
             from oggm.graphics import plot_inversion

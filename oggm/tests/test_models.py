@@ -336,6 +336,19 @@ class TestMassBalanceModels:
         mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
         assert_allclose(mb, mb_gw)
 
+        # Test massbalance task
+        s = massbalance.fixed_geometry_mass_balance(gdir)
+        assert s.index[0] == 1802
+        assert s.index[-1] == 2003
+
+        s = massbalance.fixed_geometry_mass_balance(gdir, ys=1990, ye=2000)
+        assert s.index[0] == 1990
+        assert s.index[-1] == 2000
+
+        s = massbalance.fixed_geometry_mass_balance(gdir,
+                                                    years=mbdf.index.values)
+        assert_allclose(s, mbdf['MY_MB'])
+
     @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
                                     massbalance.ConstantMassBalance,
                                     massbalance.RandomMassBalance])

@@ -1,7 +1,9 @@
 """Mass-balance models"""
 # Built ins
+import logging
 # External libs
 import numpy as np
+import pandas as pd
 import netCDF4
 from scipy.interpolate import interp1d
 from scipy import optimize as optimization
@@ -12,7 +14,10 @@ from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries, ncDataset,
                         tolist, clip_min, clip_max, clip_array)
 from oggm.exceptions import InvalidWorkflowError
+from oggm import entity_task
 
+# Module logger
+log = logging.getLogger(__name__)
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Common logic for the mass balance models.
@@ -1122,3 +1127,60 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             areas = np.append(areas, np.sum(fl.widths))
 
         return np.average(elas, weights=areas)
+
+
+@entity_task(log)
+def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
+                                monthly_step=False,
+                                climate_filename='climate_historical',
+                                climate_input_filesuffix=''):
+    """Runs a glacier with climate input from e.g. CRU or a GCM.
+
+    This will initialize a
+    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
+    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    ys : int
+        start year of the model run (default: from the climate file)
+        date)
+    ye : int
+        end year of the model run (default: from the climate file)
+    years : array of ints
+        override ys and ye with the years of your choice
+    monthly_step : bool
+        whether to store the diagnostic data at a monthly time step or not
+        (default is yearly)
+    climate_filename : str
+        name of the climate file, e.g. 'climate_historical' (default) or
+        'gcm_data'
+    climate_input_filesuffix: str
+        filesuffix for the input climate file
+    """
+
+    if monthly_step:
+        raise NotImplementedError('monthly_step not implemented yet')
+
+    try:
+        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                         filename=climate_filename,
+                                         input_filesuffix=climate_input_filesuffix)
+    except InvalidWorkflowError:
+        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                         filename=climate_filename,
+                                         use_inversion_flowlines=True,
+                                         input_filesuffix=climate_input_filesuffix)
+
+    if years is None:
+        if ys is None:
+            ys = mb.flowline_mb_models[0].ys
+        if ye is None:
+            ye = mb.flowline_mb_models[0].ye
+        years = np.arange(ys, ye + 1)
+
+    odf = pd.Series(data=mb.get_specific_mb(year=years),
+                    index=years)
+    return odf

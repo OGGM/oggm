@@ -35,6 +35,7 @@ from oggm.core.gcm_climate import process_cmip5_data
 from oggm.core.climate import local_t_star
 from oggm.core.climate import mu_star_calibration
 from oggm.core.climate import apparent_mb_from_linear_mb
+from oggm.core.massbalance import fixed_geometry_mass_balance
 from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import mass_conservation_inversion
 from oggm.core.inversion import filter_inversion_output
