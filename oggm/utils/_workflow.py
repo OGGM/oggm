@@ -1298,6 +1298,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
             out_df[idx] = pd.Series(np.NaN)
 
     out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
+    out = out.dropna(axis=0, how='all')
 
     if path:
         if path is True:
