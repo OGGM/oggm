@@ -863,6 +863,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -957,6 +958,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -1035,6 +1037,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -1194,6 +1197,7 @@ class TestBenchmarkCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
