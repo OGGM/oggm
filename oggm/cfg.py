@@ -271,9 +271,6 @@ BASENAMES['inversion_input'] = ('inversion_input.pkl', _doc)
 _doc = 'List of dicts containing the output data from the inversion.'
 BASENAMES['inversion_output'] = ('inversion_output.pkl', _doc)
 
-_doc = 'Dict of fs and fd as computed by the inversion optimisation.'
-BASENAMES['inversion_params'] = ('inversion_params.pkl', _doc)
-
 _doc = 'List of flowlines ready to be run by the model.'
 BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 

@@ -94,8 +94,8 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         utils.clip_min(flux, 0, out=flux)
 
         if np.sum(flux <= 0) > 1 and len(fls) == 1:
-            raise RuntimeError("More than one grid point has zero or "
-                               "negative flux: this should not happen.")
+            raise log.warning("More than one grid point has zero or "
+                              "negative flux: this should not happen.")
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
@@ -535,8 +535,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
         # Sanity check
         if np.any(out_thick <= 0):
-            raise RuntimeError("Found zero or negative thickness: "
-                               "this should not happen.")
+            raise log.warning("Found zero or negative thickness: "
+                              "this should not happen.")
 
         if write:
             cl['is_trapezoid'] = is_trap

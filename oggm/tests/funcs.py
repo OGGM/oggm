@@ -349,7 +349,8 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     entity = gpd.read_file(hef_file).iloc[0]
 
     gdir = oggm.GlacierDirectory(entity, reset=reset)
-    if not gdir.has_file('inversion_params'):
+
+    if 'inversion_glen_a' not in gdir.get_diagnostics():
         reset = True
         gdir = oggm.GlacierDirectory(entity, reset=reset)
 
@@ -397,11 +398,6 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
                                               glen_a=glen_a,
                                               write=True)
     inversion.filter_inversion_output(gdir)
-
-    d = dict(fs=fs, glen_a=glen_a)
-    d['factor_glen_a'] = out[0]
-    d['factor_fs'] = out[1]
-    gdir.write_pickle(d, 'inversion_params')
 
     inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')

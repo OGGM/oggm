@@ -2475,7 +2475,8 @@ def with_class_wd(request, test_dir, hef_gdir):
 
 @pytest.fixture(scope='class')
 def inversion_params(hef_gdir):
-    return hef_gdir.read_pickle('inversion_params')
+    diag = hef_gdir.get_diagnostics()
+    return {k: diag[k] for k in ('glen_a', 'fs')}
 
 
 @pytest.mark.usefixtures('with_class_wd')
