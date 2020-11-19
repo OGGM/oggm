@@ -2476,7 +2476,7 @@ def with_class_wd(request, test_dir, hef_gdir):
 @pytest.fixture(scope='class')
 def inversion_params(hef_gdir):
     diag = hef_gdir.get_diagnostics()
-    return {k: diag[k] for k in ('glen_a', 'fs')}
+    return {k: diag[k] for k in ('inversion_glen_a', 'inversion_fs')}
 
 
 @pytest.mark.usefixtures('with_class_wd')
@@ -2491,8 +2491,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'],
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
@@ -2522,8 +2522,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'],
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
@@ -2573,8 +2573,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'])
 
         ref_area = model.area_km2
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
@@ -2590,8 +2590,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'])
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -2619,12 +2619,12 @@ class TestHEF:
 
         init_present_time_glacier(hef_gdir)
         run_random_climate(hef_gdir, nyears=100, seed=6,
-                           fs=inversion_params['fs'],
-                           glen_a=inversion_params['glen_a'],
+                           fs=inversion_params['inversion_fs'],
+                           glen_a=inversion_params['inversion_glen_a'],
                            bias=0, output_filesuffix='_rdn')
         run_constant_climate(hef_gdir, nyears=100,
-                             fs=inversion_params['fs'],
-                             glen_a=inversion_params['glen_a'],
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct')
 
         paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
