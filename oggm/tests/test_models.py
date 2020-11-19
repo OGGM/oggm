@@ -2859,8 +2859,8 @@ class TestHEF:
                               output_filesuffix='_afterspinup')
         ds3 = utils.compile_run_output([gdir], path=False,
                                        input_filesuffix='_afterspinup')
-        assert (ds1.volume.isel(rgi_id=0, time=-1) <
-                0.7*ds3.volume.isel(rgi_id=0, time=-1))
+        assert (ds1.volume.isel(rgi_id=0, time=-1).data <
+                0.75*ds3.volume.isel(rgi_id=0, time=-1).data)
         ds3.close()
 
         # Try the compile optimisation
@@ -2897,10 +2897,11 @@ class TestHEF:
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
         assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
         assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
-        # Except for "never", where things are different
-        assert out[3].volume.mean() < out[2].volume.mean()
+        # Except for "never", where things are different and less variable
+        assert out[3].volume.min() > out[2].volume.min()
+        assert out[3].volume.max() < out[2].volume.max()
 
-        if do_plot:
+        if do_plot
             plt.figure()
             for ds, lab in zip(out, feedbacks):
                 (ds.volume*1e-9).plot(label=lab)
