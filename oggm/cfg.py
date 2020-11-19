@@ -533,7 +533,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
-           'error_when_glacier_reaches_boundaries', 'glacier_length_method']
+           'error_when_glacier_reaches_boundaries', 'glacier_length_method',
+           'use_inversion_params_for_run']
     for k in ltr:
         cp.pop(k, None)
 

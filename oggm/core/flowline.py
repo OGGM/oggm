@@ -2130,8 +2130,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
     if cfg.PARAMS['use_inversion_params_for_run']:
         diag = gdir.get_diagnostics()
-        fs = diag['inversion_fs']
-        glen_a = diag['inversion_glen_a']
+        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
     else:
         fs = cfg.PARAMS['fs']
         glen_a = cfg.PARAMS['glen_a']

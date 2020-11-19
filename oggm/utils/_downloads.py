@@ -2352,7 +2352,7 @@ def get_ref_mb_glaciers_candidates(rgi_version=None):
     return cfg.DATA[key]
 
 
-def get_ref_mb_glaciers(gdirs):
+def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
     """Get the list of glaciers we have valid mass balance measurements for.
 
     To be valid glaciers must have more than 5 years of measurements and
@@ -2364,6 +2364,12 @@ def get_ref_mb_glaciers(gdirs):
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         list of glaciers to check for valid reference mass balance data
+    y0 : int
+        override the default behavior which is to check the available
+        climate data and decide from there
+    y1 : int
+        override the default behavior which is to check the available
+        climate data and decide from there
 
     Returns
     -------
@@ -2384,7 +2390,7 @@ def get_ref_mb_glaciers(gdirs):
         if g.rgi_id not in ref_ids or g.is_tidewater:
             continue
         try:
-            mbdf = g.get_ref_mb_data()
+            mbdf = g.get_ref_mb_data(y0=y0, y1=y1)
             if len(mbdf) >= 5:
                 ref_gdirs.append(g)
         except RuntimeError as e:

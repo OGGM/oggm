@@ -2466,22 +2466,33 @@ class GlacierDirectory(object):
         mb_df.index.name = 'YEAR'
         self._mbdf = mb_df
 
-    def get_ref_mb_data(self):
+    def get_ref_mb_data(self, y0=None, y1=None):
         """Get the reference mb data from WGMS (for some glaciers only!).
 
         Raises an Error if it isn't a reference glacier at all.
+
+        Parameters
+        ----------
+        y0 : int
+            override the default behavior which is to check the available
+            climate data and decide from there
+        y1 : int
+            override the default behavior which is to check the available
+            climate data and decide from there
         """
 
         if self._mbdf is None:
             self.set_ref_mb_data()
 
         # logic for period
-        ci = self.get_climate_info()
-        if 'baseline_hydro_yr_0' not in ci:
-            raise InvalidWorkflowError('Please process some climate data '
-                                       'before call')
-        y0 = ci['baseline_hydro_yr_0']
-        y1 = ci['baseline_hydro_yr_1']
+        if y0 is None or y1 is None:
+            ci = self.get_climate_info()
+            if 'baseline_hydro_yr_0' not in ci:
+                raise InvalidWorkflowError('Please process some climate data '
+                                           'before call')
+            y0 = ci['baseline_hydro_yr_0'] if y0 is None else y0
+            y1 = ci['baseline_hydro_yr_1'] if y1 is None else y1
+        
         if len(self._mbdf) > 1:
             out = self._mbdf.loc[y0:y1]
         else:

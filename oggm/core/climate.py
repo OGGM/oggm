@@ -1358,10 +1358,6 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers and writes them to disk
 
-    This task will be needed for mass balance calibration of custom climate
-    data. For CRU and HISTALP baseline climate a precalibrated list is
-    available and should be used instead.
-
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
