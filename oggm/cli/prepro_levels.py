@@ -319,15 +319,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # L3 - Tasks
     task_list = [
         tasks.process_climate_data,
+        tasks.historical_climate_qc,
         tasks.local_t_star,
         tasks.mu_star_calibration,
         tasks.prepare_for_inversion,
-        tasks.mass_conservation_inversion,
-        tasks.filter_inversion_output,
-        tasks.init_present_time_glacier,
     ]
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
+
+    # We match the consensus
+    workflow.calibrate_inversion_from_consensus_estimate(gdirs)
+
+    # We get ready for modelling
+    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L3', 'summary')

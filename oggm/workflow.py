@@ -590,7 +590,7 @@ def inversion_tasks(gdirs):
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
+def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
