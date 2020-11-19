@@ -1134,11 +1134,7 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 monthly_step=False,
                                 climate_filename='climate_historical',
                                 climate_input_filesuffix=''):
-    """Runs a glacier with climate input from e.g. CRU or a GCM.
-
-    This will initialize a
-    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    """Computes the mass-balance with climate input from e.g. CRU or a GCM.
 
     Parameters
     ----------

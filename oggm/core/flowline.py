@@ -10,6 +10,7 @@ from functools import partial
 from time import gmtime, strftime
 import os
 import shutil
+import warnings
 
 # External libs
 import numpy as np
@@ -1176,7 +1177,7 @@ class FluxBasedModel(FlowlineModel):
             it is inferred from PARAMS['free_board_lake_terminating'].
             The best way to set the water level for real glaciers is to use
             the same as used for the inversion (this is what
-            `robust_model_run` does for you)
+            `flowline_model_run` does for you)
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -2081,11 +2082,18 @@ def init_present_time_glacier(gdir):
     gdir.write_pickle(new_fls, 'model_flowlines')
 
 
-def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
-                     ys=None, ye=None, zero_initial_glacier=False,
-                     init_model_fls=None, store_monthly_step=False,
-                     water_level=None,
-                     **kwargs):
+def robust_model_run(*args, **kwargs):
+    warnings.warn('The task `robust_model_run` is deprecated. It should '
+                  'only be used for testing.', DeprecationWarning)
+    return flowline_model_run(*args, **kwargs)
+
+
+@entity_task(log)
+def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
+                       ys=None, ye=None, zero_initial_glacier=False,
+                       init_model_fls=None, store_monthly_step=False,
+                       water_level=None,
+                       **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
     Parameters
@@ -2120,8 +2128,16 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         kwargs to pass to the FluxBasedModel instance
      """
 
-    kwargs.setdefault('fs', cfg.PARAMS['fs'])
-    kwargs.setdefault('glen_a', cfg.PARAMS['glen_a'])
+    if cfg.PARAMS['use_inversion_params_for_run']:
+        diag = gdir.get_diagnostics()
+        fs = diag['inversion_fs']
+        glen_a = diag['inversion_glen_a']
+    else:
+        fs = cfg.PARAMS['fs']
+        glen_a = cfg.PARAMS['glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
 
     run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
                                  delete=True)
@@ -2180,7 +2196,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2238,12 +2254,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=0, ye=nyears,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=0, ye=nyears,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 @entity_task(log)
@@ -2260,7 +2276,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2308,12 +2324,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=0, ye=nyears,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=0, ye=nyears,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 @entity_task(log)
@@ -2328,7 +2344,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2399,12 +2415,12 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
                                      filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=ys, ye=ye,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=ys, ye=ye,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 def merge_to_one_glacier(main, tribs, filename='climate_historical',

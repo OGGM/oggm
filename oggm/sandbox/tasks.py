@@ -8,7 +8,7 @@ from scipy import optimize as optimization
 # Locals
 from oggm import entity_task
 import oggm.core.massbalance as mbmods
-from oggm.core.flowline import robust_model_run
+from oggm.core.flowline import flowline_model_run
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -84,6 +84,6 @@ def run_uncertain_random_climate(gdir, nyears=700,
                                       rdn_bias_seed=rdn_bias_seed,
                                       rdn_bias_sigma=sigma_smb)
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=rmb, ys=0, ye=nyears,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=rmb, ys=0, ye=nyears,
+                              **kwargs)

@@ -485,12 +485,11 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
-    k = 'use_kcalving_for_inversion'
-    PARAMS[k] = cp.as_bool(k)
+    PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
-    k = 'error_when_glacier_reaches_boundaries'
-    PARAMS[k] = cp.as_bool(k)
+    PARAMS['use_inversion_params_for_run'] = cp.as_bool('use_inversion_params_for_run')
+    PARAMS['error_when_glacier_reaches_boundaries'] = cp.as_bool('error_when_glacier_reaches_boundaries')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
