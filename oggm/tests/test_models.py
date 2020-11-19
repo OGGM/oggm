@@ -2901,7 +2901,7 @@ class TestHEF:
         assert out[3].volume.min() > out[2].volume.min()
         assert out[3].volume.max() < out[2].volume.max()
 
-        if do_plot
+        if do_plot:
             plt.figure()
             for ds, lab in zip(out, feedbacks):
                 (ds.volume*1e-9).plot(label=lab)
