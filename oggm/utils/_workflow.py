@@ -2475,16 +2475,22 @@ class GlacierDirectory(object):
         ----------
         y0 : int
             override the default behavior which is to check the available
-            climate data and decide from there
+            climate data (or PARAMS['ref_mb_valid_window']) and decide
         y1 : int
             override the default behavior which is to check the available
-            climate data and decide from there
+            climate data (or PARAMS['ref_mb_valid_window']) and decide
         """
 
         if self._mbdf is None:
             self.set_ref_mb_data()
 
         # logic for period
+        t0, t1 = cfg.PARAMS['ref_mb_valid_window']
+        if t0 > 0 and y0 is None:
+            y0 = t0
+        if t1 > 0 and y1 is None:
+            y1 = t1
+
         if y0 is None or y1 is None:
             ci = self.get_climate_info()
             if 'baseline_hydro_yr_0' not in ci:

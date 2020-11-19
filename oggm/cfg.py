@@ -489,7 +489,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
     PARAMS['use_inversion_params_for_run'] = cp.as_bool('use_inversion_params_for_run')
-    PARAMS['error_when_glacier_reaches_boundaries'] = cp.as_bool('error_when_glacier_reaches_boundaries')
+    k = 'error_when_glacier_reaches_boundaries'
+    PARAMS[k] = cp.as_bool(k)
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -502,6 +503,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
+    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
+    k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
@@ -534,7 +537,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
-           'use_inversion_params_for_run']
+           'use_inversion_params_for_run', 'ref_mb_valid_window']
     for k in ltr:
         cp.pop(k, None)
 

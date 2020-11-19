@@ -2366,10 +2366,10 @@ def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
         list of glaciers to check for valid reference mass balance data
     y0 : int
         override the default behavior which is to check the available
-        climate data and decide from there
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
     y1 : int
         override the default behavior which is to check the available
-        climate data and decide from there
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
 
     Returns
     -------
