@@ -10,6 +10,7 @@ import sys
 import argparse
 import time
 import logging
+import pandas as pd
 import numpy as np
 import geopandas as gpd
 
@@ -161,8 +162,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # takes a long time, so deactivating this can make sense
     cfg.PARAMS['dl_verify'] = not disable_dl_verify
 
-    # For statistics
-    climate_periods = [1920, 1960, 2000]
+    # Log the parameters
+    msg = '# OGGM Run parameters:'
+    for k, v in cfg.PARAMS.items():
+        if type(v) in [pd.DataFrame, dict]:
+            continue
+        msg += '\n    {}: {}'.format(k, v)
+    log.workflow(msg)
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
@@ -339,8 +345,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
     opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_climate_statistics(gdirs, add_climate_period=climate_periods,
-                                     path=opath)
+    utils.compile_climate_statistics(gdirs, path=opath)
 
     # L3 OK - compress all in output directory
     l_base_dir = os.path.join(base_dir, 'L3')

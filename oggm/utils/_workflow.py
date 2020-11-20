@@ -211,21 +211,21 @@ def show_versions(logger=None):
     the output string
     """
 
-    _print = print if logger is None else logger.workflow
-
     sys_info = get_sys_info()
     deps_blob = get_env_info()
 
-    out = ["# System info:"]
+    out = ['# OGGM environment: ']
+    out.append("## System info:")
     for k, stat in sys_info:
-        out.append("%s: %s" % (k, stat))
-    out.append("# Packages info:")
+        out.append("    %s: %s" % (k, stat))
+    out.append("## Packages info:")
     for k, stat in deps_blob:
-        out.append("%s: %s" % (k, stat))
-    out.append("# OGGM git identifier:")
-    out.append(get_git_ident())
-    for l in out:
-        _print(l)
+        out.append("    %s: %s" % (k, stat))
+    out.append("    OGGM git identifier: " + get_git_ident())
+
+    if logger is not None:
+        logger.workflow('\n'.join(out))
+
     return '\n'.join(out)
 
 

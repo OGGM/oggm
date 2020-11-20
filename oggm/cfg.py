@@ -304,11 +304,12 @@ def set_logging_config(logging_level='INFO'):
     WARNING
         Indication that something unexpected happened on a glacier,
         but that OGGM is still working on this glacier.
+    ERROR
+        Print workflow messages and errors only, e.g. when a glacier cannot
+        run properly.
     WORKFLOW
         Print only high level, workflow information (typically, one message
-        per task). Errors and warnings will still be printed.
-    ERROR
-        Print errors only, e.g. when a glacier cannot run properly.
+        per task). Errors and warnings will NOT be printed.
     CRITICAL
         Print nothing but fatal errors.
 
@@ -321,15 +322,15 @@ def set_logging_config(logging_level='INFO'):
     """
 
     # Add a custom level - just for us
-    logging.addLevelName(25, 'WORKFLOW')
+    logging.addLevelName(45, 'WORKFLOW')
 
     def workflow(self, message, *args, **kws):
         """Standard log message with a custom level."""
-        if self.isEnabledFor(25):
+        if self.isEnabledFor(45):
             # Yes, logger takes its '*args' as 'args'.
-            self._log(25, message, args, **kws)
+            self._log(45, message, args, **kws)
 
-    logging.WORKFLOW = 25
+    logging.WORKFLOW = 45
     logging.Logger.workflow = workflow
 
     # Remove all handlers associated with the root logger object.
