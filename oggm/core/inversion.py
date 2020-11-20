@@ -308,11 +308,11 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     rho = cfg.PARAMS['ice_density']
 
-    # Clip the slope, in degrees
-    clip_angle = cfg.PARAMS['min_slope']
+    # Clip the slope, in rad
+    clip_angle = np.deg2rad(cfg.PARAMS['min_slope'])
 
     # Clip slope to avoid negative and small slopes
-    slope = utils.clip_array(slope, np.deg2rad(clip_angle), np.pi / 2.)
+    slope = utils.clip_array(slope, clip_angle, np.pi / 2.)
 
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
@@ -455,8 +455,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     elif use_sf == 'Huss':
         sf_func = utils.shape_factor_huss
 
-    # Clip the slope, in degrees
-    clip_angle = cfg.PARAMS['min_slope']
+    # Clip the slope, in rad
+    clip_angle = np.deg2rad(cfg.PARAMS['min_slope'])
 
     out_volume = 0.
 
@@ -464,7 +464,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
-        slope = utils.clip_array(slope, np.deg2rad(clip_angle), np.pi/2.)
+        slope = utils.clip_array(slope, clip_angle, np.pi/2.)
 
         # Glacier width
         w = cl['width']

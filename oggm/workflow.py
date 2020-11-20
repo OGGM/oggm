@@ -591,7 +591,8 @@ def inversion_tasks(gdirs):
 
 
 def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
-                                                a_bounds=(0.1, 10)):
+                                                a_bounds=(0.1, 10),
+                                                error_on_mismatch=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -606,6 +607,10 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
         found in the consensus estimate.
     a_bounds: tuple
         factor to apply to default A
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
 
     Returns
     -------
@@ -627,9 +632,8 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
 
     df = df.reindex(rids)
 
-    def_a = cfg.PARAMS['inversion_glen_a']
-
     # Optimize the diff to ref
+    def_a = cfg.PARAMS['inversion_glen_a']
 
     def compute_vol(x):
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
@@ -648,6 +652,12 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
     try:
         out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
                                          full_output=True)
+        if r.converged:
+            log.workflow('calibrate_inversion_from_consensus_estimate '
+                         'converged after {} iterations. The resulting Glen A '
+                         'factor is {}.'.format(r.iterations, out_fac))
+        else:
+            raise ValueError('Unexpected error in optimization.brentq')
     except ValueError:
         # Ok can't find an A. Log for debug:
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
@@ -657,14 +667,12 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
                'Ref={:.3f} OGGM={:.3f} for A factor {}'
                ''.format(odf1.vol_itmix_m3, odf1.oggm, a_bounds[0],
                          odf2.vol_itmix_m3, odf2.oggm, a_bounds[1]))
-        raise ValueError(msg)
-
-    if r.converged:
-        log.workflow('calibrate_inversion_from_consensus_estimate '
-                     'converged after {} iterations. The resulting Glen A '
-                     'factor is {}.'.format(r.iterations, out_fac))
-    else:
-        raise RuntimeError('Unexpected error')
+        if error_on_mismatch:
+            raise ValueError(msg)
+        out_fac = a_bounds[int(abs(odf1.vol_itmix_m3 - odf1.oggm) >
+                               abs(odf2.vol_itmix_m3 - odf2.oggm))]
+        log.warning(msg)
+        log.warning('We use A factor = {} and move on.'.format(out_fac))
 
     # Compute the final volume with the correct A
     execute_entity_task(tasks.mass_conservation_inversion,

@@ -1074,7 +1074,7 @@ def gridded_attributes(gdir):
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
     slope_factor = utils.clip_array(slope,
-                                    np.deg2rad(cfg.PARAMS['min_slope']*4),
+                                    np.deg2rad(cfg.PARAMS['min_slope']),
                                     np.pi/2)
     slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 

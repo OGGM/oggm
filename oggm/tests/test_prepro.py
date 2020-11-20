@@ -2303,6 +2303,12 @@ class TestInversion(unittest.TestCase):
             workflow.calibrate_inversion_from_consensus_estimate(gdir,
                                                                  a_bounds=a)
 
+        a = (0.1, 5)
+        df = workflow.calibrate_inversion_from_consensus_estimate(gdir,
+                                                                  a_bounds=a,
+                                                                  error_on_mismatch=False)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.06)
+
     def test_invert_hef_shapes(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
