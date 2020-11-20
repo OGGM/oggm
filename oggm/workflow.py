@@ -662,7 +662,7 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=True,
         # Ok can't find an A. Log for debug:
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
-        msg = ('calibrate_inversion_from_consensus_estimate cannot converge.\n' 
+        msg = ('calibration fom consensus estimate cannot converge.\n'
                'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
                'Ref={:.3f} OGGM={:.3f} for A factor {}'
                ''.format(odf1.vol_itmix_m3, odf1.oggm, a_bounds[0],
