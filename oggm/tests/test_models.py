@@ -1663,6 +1663,7 @@ def inversion_gdir(class_case_dir):
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['min_slope'] = 2
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
