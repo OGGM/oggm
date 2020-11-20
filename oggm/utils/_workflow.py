@@ -1253,7 +1253,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     from oggm.workflow import execute_entity_task
 
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category = RuntimeWarning)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         out_df = execute_entity_task(glacier_statistics, gdirs,
                                      inversion_only=inversion_only)
 
@@ -1460,7 +1460,7 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
     from oggm.workflow import execute_entity_task
 
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category = RuntimeWarning)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         out_df = execute_entity_task(climate_statistics, gdirs,
                                      add_climate_period=add_climate_period)
 

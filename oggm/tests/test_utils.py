@@ -981,7 +981,7 @@ class TestPreproCLI(unittest.TestCase):
         assert 'inv_volume_km3' in df
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
-        assert '1945-1975_avg_prcp' in df
+        assert '1980-2010_avg_prcp' in df
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
