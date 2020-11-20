@@ -1252,8 +1252,10 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     """
     from oggm.workflow import execute_entity_task
 
-    out_df = execute_entity_task(glacier_statistics, gdirs,
-                                 inversion_only=inversion_only)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category = RuntimeWarning)
+        out_df = execute_entity_task(glacier_statistics, gdirs,
+                                     inversion_only=inversion_only)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
@@ -1457,8 +1459,10 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
     """
     from oggm.workflow import execute_entity_task
 
-    out_df = execute_entity_task(climate_statistics, gdirs,
-                                 add_climate_period=add_climate_period)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category = RuntimeWarning)
+        out_df = execute_entity_task(climate_statistics, gdirs,
+                                     add_climate_period=add_climate_period)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
