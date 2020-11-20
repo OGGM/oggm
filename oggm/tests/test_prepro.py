@@ -2297,6 +2297,11 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         df = workflow.calibrate_inversion_from_consensus_estimate(gdir)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
+        # Make it fail
+        with pytest.raises(ValueError):
+            a = (0.1, 3)
+            workflow.calibrate_inversion_from_consensus_estimate(gdir,
+                                                                 a_bounds=a)
 
     def test_invert_hef_shapes(self):
 
