@@ -354,7 +354,7 @@ def test_chhota_shigri():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_ice_cap():
 
     testdir = os.path.join(get_test_dir(), 'tmp_icecap')
