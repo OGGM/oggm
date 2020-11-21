@@ -1119,7 +1119,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.initialize_flowlines(gdir)
 
         fls = gdir.read_pickle('inversion_flowlines')
-        min_slope = np.deg2rad(cfg.PARAMS['min_slope'] - 0.5)
+        min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
         for fl in fls:
             dx = fl.dx * gdir.grid.dx
             slope = np.arctan(-np.gradient(fl.surface_h, dx))

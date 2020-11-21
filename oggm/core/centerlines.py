@@ -468,7 +468,7 @@ def _filter_lines(lines, heads, k, r):
     return olines, oheads
 
 
-def _filter_lines_slope(lines, heads, topo, gdir):
+def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     """Filter the centerline candidates by slope: if they go up, remove
 
     Kienholz et al. (2014), Ch. 4.3.1
@@ -479,6 +479,7 @@ def _filter_lines_slope(lines, heads, topo, gdir):
         The lines to filter out (in raster coordinates).
     topo : the glacier topogaphy
     gdir : the glacier directory for simplicity
+    min_slope: rad
 
     Returns
     -------
@@ -488,9 +489,6 @@ def _filter_lines_slope(lines, heads, topo, gdir):
     dx_cls = cfg.PARAMS['flowline_dx']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     sw = cfg.PARAMS['flowline_height_smooth']
-
-    # Here we use a conservative value
-    min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
 
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
@@ -845,6 +843,8 @@ def compute_centerlines(gdir, heads=None):
     # Params
     single_fl = not cfg.PARAMS['use_multiple_flowlines']
     do_filter_slope = cfg.PARAMS['filter_min_slope']
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
 
     # Force single flowline for ice caps
     if gdir.is_icecap:
@@ -900,7 +900,8 @@ def compute_centerlines(gdir, heads=None):
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
-        olines, oheads = _filter_lines_slope(olines, oheads, topo, gdir)
+        olines, oheads = _filter_lines_slope(olines, oheads, topo,
+                                             gdir, min_slope)
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
@@ -1331,17 +1332,17 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     return width, line
 
 
-def _filter_small_slopes(hgt, dx, min_slope_rad=0):
+def _filter_small_slopes(hgt, dx, min_slope):
     """Masks out slopes with NaN until the slope if all valid points is at
     least min_slope (in radians).
     """
 
     slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
     # slope at the end always OK
-    slope[-1] = min_slope_rad
+    slope[-1] = min_slope
 
     # Find the locs where it doesn't work and expand till we got everything
-    slope_mask = np.where(slope >= min_slope_rad, slope, np.NaN)
+    slope_mask = np.where(slope >= min_slope, slope, np.NaN)
     r, nr = label(~np.isfinite(slope_mask))
     for objs in find_objects(r):
         obj = objs[0]
@@ -1354,7 +1355,7 @@ def _filter_small_slopes(hgt, dx, min_slope_rad=0):
             ngap = obj.stop - i0 - 1
             nhgt = hgt[[i0, obj.stop]]
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
-            if i0 <= 0 or current_slope[0] >= min_slope_rad:
+            if i0 <= 0 or current_slope[0] >= min_slope:
                 break
         slope_mask[i0:obj.stop] = np.NaN
     out = hgt.copy()
@@ -1625,7 +1626,9 @@ def initialize_flowlines(gdir):
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
     do_filter = cfg.PARAMS['filter_min_slope']
-    min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
@@ -1674,8 +1677,7 @@ def initialize_flowlines(gdir):
         # Check for min slope issues and correct if needed
         if do_filter:
             # Correct only where glacier
-            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx,
-                                        min_slope_rad=min_slope)
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope)
             isfin = np.isfinite(hgts)
             if not np.any(isfin):
                 raise GeometryError('This centerline has no positive slopes')

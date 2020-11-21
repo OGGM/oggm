@@ -281,13 +281,15 @@ def sia_thickness(slope, width, flux, shape='rectangular',
 
     Parameters
     ----------
-    slope : -np.gradient(hgt, dx)
+    slope : -np.gradient(hgt, dx) (we don't clip for min slope!)
     width : section width in m
     flux : mass flux in m3 s-1
     shape : 'rectangular' or 'parabolic'
     glen_a : Glen A, defaults to PARAMS
     fs : sliding, defaults to PARAMS
     shape_factor: for lateral drag
+    min_slope: sensitive parameter. could be different for ice caps, here
+               we use cfg.PARAMS['min_slope']
 
     Returns
     -------
@@ -307,12 +309,6 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     # Ice flow params
     fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     rho = cfg.PARAMS['ice_density']
-
-    # Clip the slope, in rad
-    clip_angle = np.deg2rad(cfg.PARAMS['min_slope'])
-
-    # Clip slope to avoid negative and small slopes
-    slope = utils.clip_array(slope, clip_angle, np.pi / 2.)
 
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
@@ -456,7 +452,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         sf_func = utils.shape_factor_huss
 
     # Clip the slope, in rad
-    clip_angle = np.deg2rad(cfg.PARAMS['min_slope'])
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
 
     out_volume = 0.
 
@@ -464,7 +461,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
-        slope = utils.clip_array(slope, clip_angle, np.pi/2.)
+        slope = utils.clip_array(slope, min_slope, np.pi/2.)
 
         # Glacier width
         w = cl['width']
