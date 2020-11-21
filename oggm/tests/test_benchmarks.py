@@ -222,7 +222,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Loose tests based on correlations
         cf = df.corr()
-        assert cf.loc['slope', 'slope_factor'] < -0.9
+        assert cf.loc['slope', 'slope_factor'] < -0.85
         assert cf.loc['slope', 'thick'] < -0.4
         assert cf.loc['dis_from_border', 'thick'] > 0.2
         assert cf.loc['oggm_mb_above_z', 'thick'] > 0.5

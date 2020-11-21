@@ -2301,7 +2301,7 @@ class TestInversion(unittest.TestCase):
         df = workflow.calibrate_inversion_from_consensus_estimate(gdir,
                                                                   a_bounds=a,
                                                                   error_on_mismatch=False)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.06)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.07)
 
     def test_invert_hef_shapes(self):
 
@@ -2836,7 +2836,7 @@ class TestColumbiaCalving(unittest.TestCase):
         cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving(gdir)
 
-        assert df['calving_flux'] > 0.5
+        assert df['calving_flux'] > 0.2
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
 
