@@ -74,7 +74,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      centerlines_only=False, max_level=4,
+                      match_zemp=False, centerlines_only=False, max_level=4,
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -385,9 +385,39 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
 
-    # We match the consensus
+    # Do we want to match Zemp et al?
+    if match_zemp:
+        df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
+        df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+        dfs = utils.compile_glacier_statistics(gdirs, path=False)
+        odf = pd.DataFrame(df.loc[2006:2016].mean(), columns=['SMB'])
+        odf['AREA'] = dfs.rgi_area_km2
+
+        area_oggm = odf['AREA'].sum()
+        smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
+
+        df = pd.read_csv(utils.get_demo_file('zemp_ref_2006_2016.csv'),
+                         index_col=0)
+        area_zemp = df.loc[int(rgi_reg), 'Area']
+        smb_zemp = df.loc[int(rgi_reg), 'SMB'] * 1000
+        if not np.allclose(area_oggm, area_zemp, rtol=0.05):
+            log.warning('OGGM regional area and Zemp regional area differ '
+                        'by more than 5%.')
+        residual = smb_zemp - smb_oggm
+        log.workflow('Shifting regional bias by {}'.format(residual))
+        for gdir in gdirs:
+            try:
+                df = gdir.read_json('local_mustar')
+                df['bias'] = df['bias'] - residual
+                gdir.write_json(df, 'local_mustar')
+            except FileNotFoundError:
+                pass
+
+    # Inversion: we match the consensus
+    workflow.execute_entity_task(tasks.prepare_for_inversion, gdirs)
     workflow.calibrate_inversion_from_consensus(gdirs,
-                                                apply_fs_on_mismatch=True)
+                                                apply_fs_on_mismatch=True,
+                                                error_on_mismatch=False)
 
     # We get ready for modelling
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
@@ -399,6 +429,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
     opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
     utils.compile_climate_statistics(gdirs, path=opath)
+    opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
+    utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
 
     # L3 OK - compress all in output directory
     log.workflow('L3 done. Writing to tar...')
@@ -464,7 +496,16 @@ def parse_args(args):
                              'WORKFLOW).')
     parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the Huss&Hock '
-                             '2015 method instead of the OGGM one.')
+                             '2015 ethod instead of the OGGM default, which is '
+                             'a mix of elev_bands and centerlines.')
+    parser.add_argument('--centerlines-only', nargs='?', const=True, default=False,
+                        help='compute the flowlines based on the OGGM '
+                             'centerline(s) method instead of the OGGM '
+                             'default, which is a mix of elev_bands and '
+                             'centerlines.')
+    parser.add_argument('--match-zemp', nargs='?', const=True, default=False,
+                        help='match regional SMB values to Zemp et al., 2019 '
+                             'by shifting the SMB residual.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -532,6 +573,8 @@ def parse_args(args):
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
+                centerlines_only=args.centerlines_only,
+                match_zemp=args.match_zemp,
                 disable_dl_verify=args.disable_dl_verify
                 )
 

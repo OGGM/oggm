@@ -781,6 +781,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
+        assert not kwargs['match_zemp']
+        assert not kwargs['centerlines_only']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -805,6 +807,8 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
+                                           '--centerlines-only',
+                                           '--match-zemp',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -816,6 +820,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
+        assert kwargs['match_zemp']
+        assert kwargs['centerlines_only']
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -867,8 +873,11 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof)
+                          test_topofile=topof, match_zemp=True)
 
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1980-2010_avg_prcp' in df
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
@@ -882,11 +891,22 @@ class TestPreproCLI(unittest.TestCase):
         assert 'main_flowline_length' in df
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
-                                      'glacier_statistics_11.csv'))
+                                      'glacier_statistics_11.csv'), index_col=0)
         assert 'inv_volume_km3' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
-                                      'climate_statistics_11.csv'))
-        assert '1980-2010_avg_prcp' in df
+
+        dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                       'fixed_geometry_mass_balance_11.csv'),
+                          index_col=0)
+        dfm = dfm.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        odf = pd.DataFrame(dfm.loc[2006:2016].mean(), columns=['SMB'])
+        odf['AREA'] = df.rgi_area_km2
+        smb_oggm = np.average(odf['SMB'], weights=odf['AREA']) / 1000
+
+        dfz = pd.read_csv(utils.get_demo_file('zemp_ref_2006_2016.csv'),
+                         index_col=0)
+        smb_zemp = dfz.loc[11, 'SMB']
+        np.testing.assert_allclose(smb_oggm, smb_zemp)
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -900,7 +920,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm import tasks
         from oggm.core.flowline import FlowlineModel
         cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[0]
+        rid = df.index[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L1
