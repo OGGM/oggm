@@ -334,7 +334,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(task, gdirs)
 
     # We match the consensus
-    workflow.calibrate_inversion_from_consensus_estimate(gdirs)
+    workflow.calibrate_inversion_from_consensus(gdirs,
+                                                apply_fs_on_mismatch=True)
 
     # We get ready for modelling
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)

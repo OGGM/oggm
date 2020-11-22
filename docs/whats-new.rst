@@ -78,7 +78,7 @@ Enhancements
   :py:func:`tasks.elevation_band_flowline` and
   :py:func:`tasks.fixed_dx_elevation_band_flowline`.
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Added a `calibrate_inversion_from_consensus_estimate` global task which
+- Added a `calibrate_inversion_from_consensus` global task which
   calibrates Glen A so that the volume of glaciers in a selection is
   matched (:pull:`1043`).
   By `Fabien Maussion <https://github.com/fmaussion>`_

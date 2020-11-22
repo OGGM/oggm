@@ -2289,19 +2289,26 @@ class TestInversion(unittest.TestCase):
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
-        df = workflow.calibrate_inversion_from_consensus_estimate(gdir)
+        df = workflow.calibrate_inversion_from_consensus(gdir)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
         # Make it fail
         with pytest.raises(ValueError):
             a = (0.1, 3)
-            workflow.calibrate_inversion_from_consensus_estimate(gdir,
-                                                                 a_bounds=a)
+            workflow.calibrate_inversion_from_consensus(gdir,
+                                                        a_bounds=a)
 
         a = (0.1, 5)
-        df = workflow.calibrate_inversion_from_consensus_estimate(gdir,
-                                                                  a_bounds=a,
-                                                                  error_on_mismatch=False)
+        df = workflow.calibrate_inversion_from_consensus(gdir,
+                                                         a_bounds=a,
+                                                         error_on_mismatch=False)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.07)
+
+        # With fs it can work
+        a = (0.1, 3)
+        df = workflow.calibrate_inversion_from_consensus(gdir,
+                                                         a_bounds=a,
+                                                         apply_fs_on_mismatch=True)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
 
     def test_invert_hef_shapes(self):
 

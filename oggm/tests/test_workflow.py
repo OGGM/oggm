@@ -197,8 +197,8 @@ class TestFullRun(unittest.TestCase):
     def test_calibrate_inversion_from_consensus(self):
 
         gdirs = up_to_inversion()
-        df = workflow.calibrate_inversion_from_consensus_estimate(gdirs,
-                                                                  ignore_missing=True)
+        df = workflow.calibrate_inversion_from_consensus(gdirs,
+                                                         ignore_missing=True)
         df = df.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
