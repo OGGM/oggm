@@ -74,8 +74,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      max_level=4, logging_level='WORKFLOW',
-                      disable_dl_verify=False):
+                      centerlines_only=False, max_level=4,
+                      logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
     Parameters
@@ -110,6 +110,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     disable_mp : bool
         disable multiprocessing
+    elev_bands : bool
+        compute all flowlines based on the Huss&Hock 2015 method instead
+        of the OGGM default, which is a mix of elev_bands and centerlines.
+    centerlines_only : bool
+        compute all flowlines based on the OGGM centerline(s) method instead
+        of the OGGM default, which is a mix of elev_bands and centerlines.
     max_level : int
         the maximum pre-processing level before stopping
     logging_level : str
@@ -192,6 +198,24 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgif = utils.get_rgi_intersects_region_file(rgi_reg,
                                                     version=rgi_version)
         cfg.set_intersects_db(rgif)
+
+        # Some RGI input quality checks - this is based on visual checks
+        # of large glaciers in the RGI
+        ids_to_ice_cap = [
+            'RGI60-05.10315',  # huge Greenland ice cap
+            'RGI60-03.01466',  # strange thing next to Devon
+            'RGI60-09.00918',  # Academy of sciences Ice cap
+            'RGI60-09.00969',
+            'RGI60-09.00958',
+            'RGI60-09.00957',
+        ]
+        rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
+
+        # Not that in matters much but in AA almost all large ice bodies
+        # are actually ice caps
+        if rgi_reg == '19':
+            rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
+
     else:
         rgidf = test_rgidf
         cfg.set_intersects_db(test_intersects_file)
@@ -219,6 +243,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L0 OK - compress all in output directory
+    log.workflow('L0 done. Writing to tar...')
     l_base_dir = os.path.join(base_dir, 'L0')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
@@ -271,6 +296,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L1 OK - compress all in output directory
+    log.workflow('L1 done. Writing to tar...')
     l_base_dir = os.path.join(base_dir, 'L1')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
@@ -280,32 +306,57 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L2 - Tasks
+    # Check which glaciers will be processed as what
     if elev_bands:
-        # HH2015 method
-        task_list = [
-            tasks.simple_glacier_masks,
-            tasks.elevation_band_flowline,
-            tasks.fixed_dx_elevation_band_flowline,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-        ]
-        for task in task_list:
-            workflow.execute_entity_task(task, gdirs)
+        gdirs_band = gdirs
+        gdirs_cent = []
+    elif centerlines_only:
+        gdirs_band = []
+        gdirs_cent = gdirs
     else:
-        # Default OGGM
-        task_list = [
-            tasks.glacier_masks,
-            tasks.compute_centerlines,
-            tasks.initialize_flowlines,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-            tasks.catchment_area,
-            tasks.catchment_intersections,
-            tasks.catchment_width_geom,
-            tasks.catchment_width_correction,
-        ]
-        for task in task_list:
-            workflow.execute_entity_task(task, gdirs)
+        # Default is to mix
+        if rgi_reg == '19':
+            gdirs_band = gdirs
+            gdirs_cent = []
+        else:
+            gdirs_band = []
+            gdirs_cent = []
+            for gdir in gdirs:
+                if gdir.is_icecap:
+                    gdirs_band.append(gdir)
+                else:
+                    gdirs_cent.append(gdir)
+
+    log.workflow('Start flowline processing with: '
+                 'N centerline type: {}, '
+                 'N elev bands type: {}.'
+                 ''.format(len(gdirs_cent), len(gdirs_band)))
+
+    # HH2015 method
+    task_list = [
+        tasks.simple_glacier_masks,
+        tasks.elevation_band_flowline,
+        tasks.fixed_dx_elevation_band_flowline,
+        tasks.compute_downstream_line,
+        tasks.compute_downstream_bedshape,
+    ]
+    for task in task_list:
+        workflow.execute_entity_task(task, gdirs_band)
+
+    # Centerlines OGGM
+    task_list = [
+        tasks.glacier_masks,
+        tasks.compute_centerlines,
+        tasks.initialize_flowlines,
+        tasks.compute_downstream_line,
+        tasks.compute_downstream_bedshape,
+        tasks.catchment_area,
+        tasks.catchment_intersections,
+        tasks.catchment_width_geom,
+        tasks.catchment_width_correction,
+    ]
+    for task in task_list:
+        workflow.execute_entity_task(task, gdirs_cent)
 
     # Glacier stats
     sum_dir = os.path.join(base_dir, 'L2', 'summary')
@@ -314,6 +365,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L2 OK - compress all in output directory
+    log.workflow('L2 done. Writing to tar...')
     l_base_dir = os.path.join(base_dir, 'L2')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
@@ -349,6 +401,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_climate_statistics(gdirs, path=opath)
 
     # L3 OK - compress all in output directory
+    log.workflow('L3 done. Writing to tar...')
     l_base_dir = os.path.join(base_dir, 'L3')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                  base_dir=l_base_dir)
@@ -364,6 +417,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # Copy mini data to new dir
+    log.workflow('L4 done. Writing to tar...')
     base_dir = os.path.join(base_dir, 'L4')
     mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
                                               base_dir=base_dir)

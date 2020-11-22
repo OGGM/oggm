@@ -1712,6 +1712,7 @@ def initialize_flowlines(gdir):
 
     # Write the data
     gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.add_to_diagnostics('flowline_type', 'centerlines')
     if do_filter:
         out = diag_n_bad_slopes/diag_n_pix
         gdir.add_to_diagnostics('perc_invalid_flowline', out)
@@ -2240,3 +2241,4 @@ def fixed_dx_elevation_band_flowline(gdir):
     fl.is_trapezoid = np.ones(nx, dtype=bool)
 
     gdir.write_pickle([fl], 'inversion_flowlines')
+    gdir.add_to_diagnostics('flowline_type', 'elevation_band')
