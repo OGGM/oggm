@@ -632,9 +632,9 @@ class compile_to_netcdf(object):
                 if path is not True:
                     raise InvalidParamsError('With glaciers from both '
                                              'hemispheres, set `path=True`.')
-                self.log.warning('compile_*: you gave me a list of gdirs from '
-                                 'both hemispheres. I am going to write two '
-                                 'files out of it with _sh and _nh suffixes.')
+                self.log.workflow('compile_*: you gave me a list of gdirs from '
+                                  'both hemispheres. I am going to write two '
+                                  'files out of it with _sh and _nh suffixes.')
                 _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
                 _compile_to_netcdf(_gdirs,
                                    input_filesuffix=input_filesuffix,

@@ -652,7 +652,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     def to_minimize(x):
         log.info('Consensus estimate optimisation with '
-                 'A factor: {}'.format(x))
+                 'A factor: {} and fs: {}'.format(x, fs))
         odf = compute_vol(x)
         return odf.vol_itmix_m3.sum() - odf.oggm.sum()
 
@@ -670,7 +670,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         # Ok can't find an A. Log for debug:
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
-        msg = ('calibration fom consensus estimate cannot converge with fs={}.\n'
+        msg = ('calibration fom consensus estimate CANT converge with fs={}.\n'
                'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
                'Ref={:.3f} OGGM={:.3f} for A factor {}'
                ''.format(fs,
@@ -687,9 +687,9 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
         out_fac = a_bounds[int(abs(odf1.vol_itmix_m3 - odf1.oggm) >
                                abs(odf2.vol_itmix_m3 - odf2.oggm))]
-        log.warning(msg)
-        log.warning('We use A factor = {} and fs = {} and move on.'
-                    ''.format(out_fac, fs))
+        log.workflow(msg)
+        log.workflow('We use A factor = {} and fs = {} and move on.'
+                     ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A
     execute_entity_task(tasks.mass_conservation_inversion,

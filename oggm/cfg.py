@@ -129,8 +129,8 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                          'in your call to '
                                          '`process_climate_data`.')
 
-            log.warning('WARNING: adding an unknown parameter '
-                        '`{}`:`{}` to PARAMS.'.format(key, value))
+            log.workflow('WARNING: adding an unknown parameter '
+                         '`{}`:`{}` to PARAMS.'.format(key, value))
             return
 
         if prev == value:

@@ -216,6 +216,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if rgi_reg == '19':
             rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
 
+        # For greenland we omit connectivity level 2
+        if rgi_reg == '05':
+            rgidf = rgidf.loc[rgidf['Connect'] == 2]
+
+        # For all regions let's also omit nominal glaciers
+        rgidf = rgidf.loc[rgidf['Status'] != 2]
+
     else:
         rgidf = test_rgidf
         cfg.set_intersects_db(test_intersects_file)
@@ -401,8 +408,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         area_zemp = df.loc[int(rgi_reg), 'Area']
         smb_zemp = df.loc[int(rgi_reg), 'SMB'] * 1000
         if not np.allclose(area_oggm, area_zemp, rtol=0.05):
-            log.warning('OGGM regional area and Zemp regional area differ '
-                        'by more than 5%.')
+            log.workflow('WARNING: OGGM regional area and Zemp regional area '
+                         'differ by more than 5%.')
         residual = smb_zemp - smb_oggm
         log.workflow('Shifting regional bias by {}'.format(residual))
         for gdir in gdirs:
