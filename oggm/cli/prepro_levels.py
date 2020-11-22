@@ -218,7 +218,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # For greenland we omit connectivity level 2
         if rgi_reg == '05':
-            rgidf = rgidf.loc[rgidf['Connect'] == 2]
+            rgidf = rgidf.loc[rgidf['Connect'] != 2]
 
         # For all regions let's also omit nominal glaciers
         rgidf = rgidf.loc[rgidf['Status'] != 2]
