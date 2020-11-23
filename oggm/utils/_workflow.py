@@ -1782,7 +1782,10 @@ class GlacierDirectory(object):
         self.is_icecap = self.glacier_type == 'Ice cap'
 
         # Hemisphere
-        self.hemisphere = 'sh' if self.cenlat < 0 else 'nh'
+        if self.cenlat < 0 or self.rgi_region == '16':
+            self.hemisphere = 'sh'
+        else:
+            self.hemisphere = 'nh'
 
         # convert the date
         rgi_date = int(rgi_datestr[0:4])
