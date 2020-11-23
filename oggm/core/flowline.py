@@ -1721,7 +1721,7 @@ class FileModel(object):
         """Reset the initial model time"""
 
         if y0 is None:
-            y0 = self.dss[0].time[0]
+            y0 = float(self.dss[0].time[0])
         self.y0 = y0
         self.yr = y0
 
@@ -1851,7 +1851,8 @@ def glacier_from_netcdf(path):
 
 def calving_glacier_downstream_line(line, n_points):
     """Extends a calving glacier flowline past the terminus."""
-
+    if line is None:
+        return None
     x, y = line.coords.xy
     dx = x[-1] - x[-2]
     dy = y[-1] - y[-2]
@@ -2333,7 +2334,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 
 @entity_task(log)
-def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
+def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_monthly_step=False,
                           climate_filename='climate_historical',
                           climate_input_filesuffix='', output_filesuffix='',
@@ -2357,7 +2358,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         end year of the model run (no default: needs to be set)
     min_ys : int
         if you want to impose a minimum start year, regardless if the glacier
-        inventory date is later.
+        inventory date is earlier (e.g. if climate data does not reach).
+    max_ys : int
+        if you want to impose a maximum start year, regardless if the glacier
+        inventory date is later (e.g. if climate data does not reach).
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -2401,7 +2405,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
     if ye is None:
         raise InvalidParamsError('Need to set the `ye` kwarg!')
     if min_ys is not None:
-        ys = ys if ys < min_ys else min_ys
+        ys = ys if ys > min_ys else min_ys
+    if max_ys is not None:
+        ys = ys if ys < max_ys else max_ys
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)

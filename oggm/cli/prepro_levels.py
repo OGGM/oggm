@@ -7,6 +7,7 @@ Type `$ oggm_prepro -h` for help
 # External modules
 import os
 import sys
+import shutil
 import argparse
 import time
 import logging
@@ -74,7 +75,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      match_zemp=False, centerlines_only=False, max_level=4,
+                      match_zemp=False, centerlines_only=False, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -129,8 +130,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     # Input check
-    if max_level not in [1, 2, 3, 4]:
-        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4]')
+    if max_level not in [1, 2, 3, 4, 5]:
+        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
 
     # Time
     start = time.time()
@@ -178,13 +179,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
-    rgi_dir_name = 'RGI{}'.format(rgi_version)
-    border_dir_name = 'b_{:03d}'.format(border)
-    base_dir = os.path.join(output_folder, rgi_dir_name, border_dir_name)
+    output_base_dir = os.path.join(output_folder,
+                                   'RGI{}'.format(rgi_version),
+                                   'b_{:03d}'.format(border))
 
     # Add a package version file
-    utils.mkdir(base_dir)
-    opath = os.path.join(base_dir, 'package_versions.txt')
+    utils.mkdir(output_base_dir)
+    opath = os.path.join(output_base_dir, 'package_versions.txt')
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
@@ -244,17 +245,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L0', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L0', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L0 OK - compress all in output directory
     log.workflow('L0 done. Writing to tar...')
-    l_base_dir = os.path.join(base_dir, 'L0')
+    level_base_dir = os.path.join(output_base_dir, 'L0')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 0:
         _time_log()
         return
@@ -281,10 +282,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      gdirs, source='ALL')
 
         # Compress all in output directory
-        l_base_dir = os.path.join(base_dir, 'L1')
+        level_base_dir = os.path.join(output_base_dir, 'L1')
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=l_base_dir)
-        utils.base_dir_to_tar(l_base_dir)
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
 
         _time_log()
         return
@@ -297,17 +298,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  source=source)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L1', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L1 OK - compress all in output directory
     log.workflow('L1 done. Writing to tar...')
-    l_base_dir = os.path.join(base_dir, 'L1')
+    level_base_dir = os.path.join(output_base_dir, 'L1')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 1:
         _time_log()
         return
@@ -366,17 +367,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(task, gdirs_cent)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L2', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L2 OK - compress all in output directory
     log.workflow('L2 done. Writing to tar...')
-    l_base_dir = os.path.join(base_dir, 'L2')
+    level_base_dir = os.path.join(output_base_dir, 'L2')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 2:
         _time_log()
         return
@@ -430,7 +431,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L3', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
@@ -441,29 +442,81 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L3 OK - compress all in output directory
     log.workflow('L3 done. Writing to tar...')
-    l_base_dir = os.path.join(base_dir, 'L3')
+    level_base_dir = os.path.join(output_base_dir, 'L3')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 3:
         _time_log()
         return
 
     # L4 - No tasks: add some stats for consistency and make the dirs small
-    sum_dir = os.path.join(base_dir, 'L4', 'summary')
+    sum_dir_L3 = sum_dir
+    sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
     utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
+
+    # Copy L3 files for consistency
+    for bn in ['glacier_statistics', 'climate_statistics',
+               'fixed_geometry_mass_balance']:
+        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+        shutil.copyfile(ipath, opath)
 
     # Copy mini data to new dir
-    log.workflow('L4 done. Writing to tar...')
-    base_dir = os.path.join(base_dir, 'L4')
+    mini_base_dir = os.path.join(working_dir, 'mini_perglacier')
     mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
-                                              base_dir=base_dir)
+                                              base_dir=mini_base_dir)
 
     # L4 OK - compress all in output directory
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
-    utils.base_dir_to_tar(base_dir)
+    log.workflow('L4 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L4')
+    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
+    if max_level == 4:
+        _time_log()
+        return
+
+    # L5 - spinup run in mini gdirs
+    gdirs = mini_gdirs
+
+    # Get end date. The first gdir might have blown up, try some others
+    i = 0
+    while True:
+        if i >= len(gdirs):
+            raise RuntimeError('Found no valid glaciers!')
+        try:
+            y0 = gdirs[i].get_climate_info()['baseline_hydro_yr_0']
+            # One adds 1 because the run ends at the end of the year
+            ye = gdirs[i].get_climate_info()['baseline_hydro_yr_1'] + 1
+            break
+        except BaseException:
+            i += 1
+
+    # OK - run
+    workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
+                                 min_ys=y0, ye=ye,
+                                 output_filesuffix='_historical')
+
+    # Now compile the output
+    sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
+    utils.mkdir(sum_dir)
+    opath = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
+
+    # Other stats for consistency
+    for bn in ['glacier_statistics', 'climate_statistics',
+               'fixed_geometry_mass_balance']:
+        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+        shutil.copyfile(ipath, opath)
+
+    # L5 OK - compress all in output directory
+    log.workflow('L5 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L5')
+    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
 
     _time_log()
 
@@ -484,9 +537,9 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
-    parser.add_argument('--max-level', type=int, default=4,
+    parser.add_argument('--max-level', type=int, default=5,
                         help='the maximum level you want to run the '
-                             'pre-processing for (1, 2, 3 or 3).')
+                             'pre-processing for (1, 2, 3, 4 or 5).')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '

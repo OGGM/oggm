@@ -762,7 +762,7 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['is_test']
         assert kwargs['demo']
         assert not kwargs['disable_mp']
-        assert kwargs['max_level'] == 4
+        assert kwargs['max_level'] == 5
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -914,11 +914,11 @@ class TestPreproCLI(unittest.TestCase):
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
 
         # See if we can start from all levs
         from oggm import tasks
-        from oggm.core.flowline import FlowlineModel
+        from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
         rid = df.index[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
@@ -957,6 +957,19 @@ class TestPreproCLI(unittest.TestCase):
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_run',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
     @pytest.mark.slow
@@ -1009,11 +1022,11 @@ class TestPreproCLI(unittest.TestCase):
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
 
         # See if we can start from L3 and L4
         from oggm import tasks
-        from oggm.core.flowline import FlowlineModel
+        from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
@@ -1034,6 +1047,20 @@ class TestPreproCLI(unittest.TestCase):
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_run',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
     def test_source_run(self):

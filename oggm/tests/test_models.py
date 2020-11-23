@@ -2640,7 +2640,6 @@ class TestHEF:
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
 
-
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
 
@@ -2730,7 +2729,7 @@ class TestHEF:
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
-    def test_start_from_spinup_min_ys(self, hef_gdir):
+    def test_start_from_spinup_minmax_ys(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
 
@@ -2743,7 +2742,7 @@ class TestHEF:
         assert hef_gdir.rgi_date == 2003
 
         # Make a dummy run for 0 years
-        run_from_climate_data(hef_gdir, ye=2002, min_ys=2002,
+        run_from_climate_data(hef_gdir, ye=2002, max_ys=2002,
                               output_filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
@@ -2753,10 +2752,19 @@ class TestHEF:
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
-        run_from_climate_data(hef_gdir, ys=2002, ye=2003,
-                              init_model_filesuffix='_1',
+        run_from_climate_data(hef_gdir, ye=2005, min_ys=2005,
                               output_filesuffix='_2')
         fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area)
+            np.testing.assert_allclose(fmod.volume_km3, vol)
+
+        # Again
+        run_from_climate_data(hef_gdir, ys=2002, ye=2003,
+                              init_model_filesuffix='_1',
+                              output_filesuffix='_3')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_3')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)

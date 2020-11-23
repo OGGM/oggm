@@ -64,7 +64,7 @@ from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 
-# Default RGI date (median per region)
+# Default RGI date (median per region in RGI6)
 RGI_DATE = {'01': 2009,
             '02': 2004,
             '03': 1999,
@@ -730,14 +730,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
 
+    # To find the longest time, sort the gdirs by date
+    sorted_gdir = sorted(gdirs, key=lambda gdir: gdir.rgi_date)
     # The first gdir might have blown up, try some others
     i = 0
     while True:
-        if i >= len(gdirs):
+        if i >= len(sorted_gdir):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('model_diagnostics',
-                                          filesuffix=input_filesuffix)
+            ppath = sorted_gdir[i].get_filepath('model_diagnostics',
+                                                filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
                 ds_diag.time.values
             break
@@ -777,10 +779,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
     shape = (len(time), len(rgi_ids))
     # These variables are always available
-    vol = np.zeros(shape)
-    area = np.zeros(shape)
-    length = np.zeros(shape)
-    ela = np.zeros(shape)
+    vol = np.full(shape, np.nan)
+    area = np.full(shape, np.nan)
+    length = np.full(shape, np.nan)
+    ela = np.full(shape, np.nan)
     # These are not
     calving_m3 = None
     calving_rate_myr = None
@@ -791,31 +793,29 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                vol[:, i] = ds_diag.volume_m3.values
-                area[:, i] = ds_diag.area_m2.values
-                length[:, i] = ds_diag.length_m.values
-                ela[:, i] = ds_diag.ela_m.values
+                nt = - len(ds_diag.volume_m3.values)
+                vol[nt:, i] = ds_diag.volume_m3.values
+                area[nt:, i] = ds_diag.area_m2.values
+                length[nt:, i] = ds_diag.length_m.values
+                ela[nt:, i] = ds_diag.ela_m.values
                 if 'calving_m3' in ds_diag:
                     if calving_m3 is None:
-                        calving_m3 = np.zeros(shape) * np.NaN
-                    calving_m3[:, i] = ds_diag.calving_m3.values
+                        calving_m3 = np.full(shape, np.nan)
+                    calving_m3[nt:, i] = ds_diag.calving_m3.values
                 if 'calving_rate_myr' in ds_diag:
                     if calving_rate_myr is None:
-                        calving_rate_myr = np.zeros(shape) * np.NaN
-                    calving_rate_myr[:, i] = ds_diag.calving_rate_myr.values
+                        calving_rate_myr = np.full(shape, np.nan)
+                    calving_rate_myr[nt:, i] = ds_diag.calving_rate_myr.values
                 if 'volume_bsl_m3' in ds_diag:
                     if volume_bsl_m3 is None:
-                        volume_bsl_m3 = np.zeros(shape) * np.NaN
-                    volume_bsl_m3[:, i] = ds_diag.volume_bsl_m3.values
+                        volume_bsl_m3 = np.full(shape, np.nan)
+                    volume_bsl_m3[nt:, i] = ds_diag.volume_bsl_m3.values
                 if 'volume_bwl_m3' in ds_diag:
                     if volume_bwl_m3 is None:
-                        volume_bwl_m3 = np.zeros(shape) * np.NaN
-                    volume_bwl_m3[:, i] = ds_diag.volume_bwl_m3.values
+                        volume_bwl_m3 = np.full(shape, np.nan)
+                    volume_bwl_m3[nt:, i] = ds_diag.volume_bwl_m3.values
         except BaseException:
-            vol[:, i] = np.NaN
-            area[:, i] = np.NaN
-            length[:, i] = np.NaN
-            ela[:, i] = np.NaN
+            pass
 
     ds['volume'] = (('time', 'rgi_id'), vol)
     ds['volume'].attrs['description'] = 'Total glacier volume'
