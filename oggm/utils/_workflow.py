@@ -1269,6 +1269,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
 
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
+                                        use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None):
     """Compiles a table of specific mass-balance timeseries for all glaciers.
 
@@ -1281,6 +1282,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
     path : str, bool
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    use_inversion_flowlines : bool
+        whether to use the inversion flowlines or the model flowlines
     ys : int
         start year of the model run (default: from the climate file)
         date)
@@ -1293,6 +1296,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years)
 
     for idx, s in enumerate(out_df):
