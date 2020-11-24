@@ -2462,6 +2462,19 @@ def gdir_sh(request, test_dir, hef_gdir):
 
 
 @pytest.fixture(scope='class')
+def gdir_calving(request, test_dir, hef_gdir):
+    dir_sh = os.path.join(test_dir, request.cls.__name__ + '_calving')
+    utils.mkdir(dir_sh, reset=True)
+    gdir_sh = tasks.copy_to_basedir(hef_gdir, base_dir=dir_sh,
+                                    setup='all')
+    gdir_sh.is_tidewater = True
+    yield gdir_sh
+    # teardown
+    if os.path.exists(dir_sh):
+        shutil.rmtree(dir_sh)
+
+
+@pytest.fixture(scope='class')
 def with_class_wd(request, test_dir, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
@@ -2698,6 +2711,33 @@ class TestHEF:
         f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
         with xr.open_dataset(f) as ds:
             assert ds.calendar_month[0] == 10
+
+    @pytest.mark.slow
+    def test_compile_calving(self, hef_gdir, gdir_calving):
+
+        # This works because no calving output
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(gdir_calving)
+        run_constant_climate(hef_gdir, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        run_constant_climate(gdir_calving, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        utils.compile_run_output([gdir_calving, hef_gdir],
+                                 input_filesuffix='_def',
+                                 tmp_file_size=1)
+
+        # This DOESNT because bad programming
+        # cfg.PARAMS['use_kcalving_for_run'] = True
+        # init_present_time_glacier(hef_gdir)
+        # init_present_time_glacier(gdir_calving)
+        # run_constant_climate(hef_gdir, nyears=10,
+        #                      bias=0, output_filesuffix='_def')
+        # run_constant_climate(gdir_calving, nyears=10, water_level=0,
+        #                      bias=0, output_filesuffix='_def')
+        # utils.compile_run_output([gdir_calving, hef_gdir],
+        #                          input_filesuffix='_def',
+        #                          tmp_file_size=1)
 
     def test_start_from_spinup(self, hef_gdir):
 

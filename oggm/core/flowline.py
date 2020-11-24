@@ -942,7 +942,7 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
         diag_ds['volume_m3'].attrs['unit'] = 'm 3'
-        if self.is_marine_terminating:
+        if getattr(self, 'do_calving', False):
             diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
                                                              'below '
@@ -964,7 +964,7 @@ class FlowlineModel(object):
         diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
                                                  'Altitude  (ELA)')
         diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
-        if self.is_tidewater:
+        if getattr(self, 'do_calving', False):
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
                                                           'calving flux')
@@ -1000,7 +1000,7 @@ class FlowlineModel(object):
                 # We really don't want to stop the model for some ELA issues
                 diag_ds['ela_m'].data[i] = np.NaN
 
-            if self.is_tidewater:
+            if getattr(self, 'do_calving', False):
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
                 if self.is_marine_terminating:
@@ -1024,7 +1024,7 @@ class FlowlineModel(object):
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            if self.is_tidewater:
+            if getattr(self, 'do_calving', False):
                 ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
                                                           coords=varcoords)
             run_ds.append(ds)
