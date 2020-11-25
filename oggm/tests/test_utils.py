@@ -13,6 +13,7 @@ from unittest import mock
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from numpy.testing import assert_array_equal, assert_allclose
 
 salem = pytest.importorskip('salem')
@@ -956,6 +957,9 @@ class TestPreproCLI(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            # cannot be the same after tuning
+            assert ds.glen_a != cfg.PARAMS['glen_a']
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 

@@ -924,6 +924,8 @@ class FlowlineModel(object):
                                                   gmtime())
         diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
         diag_ds.attrs['water_level'] = self.water_level
+        diag_ds.attrs['glen_a'] = self.glen_a
+        diag_ds.attrs['fs'] = self.fs
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)

@@ -292,19 +292,13 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
             raise ValueError("Need to set cfg.PATHS['cmip5_precip_file']")
         fpath_precip = cfg.PATHS['cmip5_precip_file']
 
-    # This was for old xarray versions I think we can remove soon
-    with utils.ncDataset(fpath_temp, mode='r') as nc:
-        time_units = nc.variables['time'].units
-        calendar = nc.variables['time'].calendar
-        time = netCDF4.num2date(nc.variables['time'][:], time_units, calendar)
-
     # Glacier location
     glon = gdir.cenlon
     glat = gdir.cenlat
 
     # Read the GCM files
-    with xr.open_dataset(fpath_temp, decode_times=False) as tempds, \
-          xr.open_dataset(fpath_precip, decode_times=False) as precipds:
+    with xr.open_dataset(fpath_temp, decode_times=True) as tempds, \
+          xr.open_dataset(fpath_precip, decode_times=True) as precipds:
 
         # Check longitude conventions
         if tempds.lon.min() >= 0 and glon <= 0:
@@ -315,11 +309,6 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
         temp = tempds.tas.sel(lat=glat, lon=glon, method='nearest')
         precip = precipds.pr.sel(lat=glat, lon=glon, method='nearest')
 
-        # Time needs a set to start of month
-        time = [datetime(t.year, t.month, 1) for t in time]
-        temp['time'] = time
-        precip['time'] = time
-
         # Back to [-180, 180] for OGGM
         temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
         precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
@@ -329,7 +318,8 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
 
         ny, r = divmod(len(temp), 12)
         assert r == 0
-        precip = precip * precip.time.dt.days_in_month * (60 * 60 * 24)
+        dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
+        precip = precip * dimo * (60 * 60 * 24)
 
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
                      source=filesuffix, **kwargs)
