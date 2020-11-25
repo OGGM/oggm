@@ -416,6 +416,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for gdir in gdirs:
             try:
                 df = gdir.read_json('local_mustar')
+                gdir.add_to_diagnostics('bias_before_zemp', df['bias'])
                 df['bias'] = df['bias'] - residual
                 gdir.write_json(df, 'local_mustar')
             except FileNotFoundError:
