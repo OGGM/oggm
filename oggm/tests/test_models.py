@@ -2810,6 +2810,15 @@ class TestHEF:
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
             np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
 
+        # Again to check that time is correct
+        run_from_climate_data(hef_gdir, ys=None, ye=None,
+                              init_model_filesuffix='_1',
+                              output_filesuffix='_4')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_4')
+        with FileModel(fp) as fmod:
+            assert fmod.y0 == 2002
+            assert fmod.last_yr == 2003
+
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
 

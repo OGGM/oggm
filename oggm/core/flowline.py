@@ -2353,9 +2353,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         the glacier directory to process
     ys : int
         start year of the model run (default: from the glacier geometry
-        date)
+        date if init_model_filesuffix is None, else init_model_yr)
     ye : int
-        end year of the model run (no default: needs to be set)
+        end year of the model run (default: last year of the provided
+        climate file)
     min_ys : int
         if you want to impose a minimum start year, regardless if the glacier
         inventory date is earlier (e.g. if climate data does not reach).
@@ -2376,7 +2377,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         if you want to start from a previous model run state. Can be
         combined with `init_model_yr`
     init_model_yr : int
-        the year of the initial run you want to starte from. The default
+        the year of the initial run you want to start from. The default
         is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
@@ -2392,6 +2393,17 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         kwargs to pass to the FluxBasedModel instance
     """
 
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
+        with FileModel(fp) as fmod:
+            if init_model_yr is None:
+                init_model_yr = fmod.last_yr
+            fmod.run_until(init_model_yr)
+            init_model_fls = fmod.fls
+            if ys is None:
+                ys = init_model_yr
+
+    # Take from rgi date if not set yet
     if ys is None:
         try:
             ys = gdir.rgi_date.year
@@ -2402,24 +2414,20 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         # in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
         ys += 1
-    if ye is None:
-        raise InvalidParamsError('Need to set the `ye` kwarg!')
+
+    # Final crop
     if min_ys is not None:
         ys = ys if ys > min_ys else min_ys
     if max_ys is not None:
         ys = ys if ys < max_ys else max_ys
 
-    if init_model_filesuffix is not None:
-        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
-        with FileModel(fp) as fmod:
-            if init_model_yr is None:
-                init_model_yr = fmod.last_yr
-            fmod.run_until(init_model_yr)
-            init_model_fls = fmod.fls
-
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
+
+    if ye is None:
+        # Decide from climate
+        ye = mb.flowline_mb_models[0].ye
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb, ys=ys, ye=ye,
