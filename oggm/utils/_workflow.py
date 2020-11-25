@@ -1117,115 +1117,118 @@ def glacier_statistics(gdir, inversion_only=False):
     # The rest is less certain. We put these in a try block and see
     # We're good with any error - we store the dict anyway below
     # TODO: should be done with more preselected errors
-    try:
-        # Inversion
-        if gdir.has_file('inversion_output'):
-            vol = []
-            cl = gdir.read_pickle('inversion_output')
-            for c in cl:
-                vol.extend(c['volume'])
-            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
-            area = gdir.rgi_area_km2
-            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-            d['vas_volume_km3'] = 0.034 * (area ** 1.375)
-            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
-    except BaseException:
-        pass
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-    try:
-        # Diagnostics
-        diags = gdir.get_diagnostics()
-        for k, v in diags.items():
-            d[k] = v
-    except BaseException:
-        pass
+        try:
+            # Inversion
+            if gdir.has_file('inversion_output'):
+                vol = []
+                cl = gdir.read_pickle('inversion_output')
+                for c in cl:
+                    vol.extend(c['volume'])
+                d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+                area = gdir.rgi_area_km2
+                d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
+                d['vas_volume_km3'] = 0.034 * (area ** 1.375)
+                d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+        except BaseException:
+            pass
 
-    if inversion_only:
-        return d
+        try:
+            # Diagnostics
+            diags = gdir.get_diagnostics()
+            for k, v in diags.items():
+                d[k] = v
+        except BaseException:
+            pass
 
-    try:
-        # Error log
-        errlog = gdir.get_error_log()
-        if errlog is not None:
-            d['error_task'] = errlog.split(';')[-2]
-            d['error_msg'] = errlog.split(';')[-1]
-        else:
-            d['error_task'] = None
-            d['error_msg'] = None
-    except BaseException:
-        pass
+        if inversion_only:
+            return d
 
-    try:
-        # Masks related stuff
-        fpath = gdir.get_filepath('gridded_data')
-        with ncDataset(fpath) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-        d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-        d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
-        d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-        d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-    except BaseException:
-        pass
+        try:
+            # Error log
+            errlog = gdir.get_error_log()
+            if errlog is not None:
+                d['error_task'] = errlog.split(';')[-2]
+                d['error_msg'] = errlog.split(';')[-1]
+            else:
+                d['error_task'] = None
+                d['error_msg'] = None
+        except BaseException:
+            pass
 
-    try:
-        # Ext related stuff
-        fpath = gdir.get_filepath('gridded_data')
-        with ncDataset(fpath) as nc:
-            ext = nc.variables['glacier_ext'][:]
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-        d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
-        d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
-        a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
-        d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
-    except BaseException:
-        pass
+        try:
+            # Masks related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with ncDataset(fpath) as nc:
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
+            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
+            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+        except BaseException:
+            pass
 
-    try:
-        # Centerlines
-        cls = gdir.read_pickle('centerlines')
-        longuest = 0.
-        for cl in cls:
-            longuest = np.max([longuest, cl.dis_on_line[-1]])
-        d['n_centerlines'] = len(cls)
-        d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
-    except BaseException:
-        pass
+        try:
+            # Ext related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with ncDataset(fpath) as nc:
+                ext = nc.variables['glacier_ext'][:]
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
+            d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
+            d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
+            a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
+            d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
+        except BaseException:
+            pass
 
-    try:
-        # Flowline related stuff
-        h = np.array([])
-        widths = np.array([])
-        slope = np.array([])
-        fls = gdir.read_pickle('inversion_flowlines')
-        dx = fls[0].dx * gdir.grid.dx
-        for fl in fls:
-            hgt = fl.surface_h
-            h = np.append(h, hgt)
-            widths = np.append(widths, fl.widths * gdir.grid.dx)
-            slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
-            length = len(hgt) * dx
-        d['main_flowline_length'] = length
-        d['inv_flowline_glacier_area'] = np.sum(widths * dx)
-        d['flowline_mean_elev'] = np.average(h, weights=widths)
-        d['flowline_max_elev'] = np.max(h)
-        d['flowline_min_elev'] = np.min(h)
-        d['flowline_avg_width'] = np.mean(widths)
-        d['flowline_avg_slope'] = np.mean(slope)
-    except BaseException:
-        pass
+        try:
+            # Centerlines
+            cls = gdir.read_pickle('centerlines')
+            longuest = 0.
+            for cl in cls:
+                longuest = np.max([longuest, cl.dis_on_line[-1]])
+            d['n_centerlines'] = len(cls)
+            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+        except BaseException:
+            pass
 
-    try:
-        # MB calib
-        df = gdir.read_json('local_mustar')
-        d['t_star'] = df['t_star']
-        d['mu_star_glacierwide'] = df['mu_star_glacierwide']
-        d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
-        d['mu_star_allsame'] = df['mu_star_allsame']
-        d['mb_bias'] = df['bias']
-    except BaseException:
-        pass
+        try:
+            # Flowline related stuff
+            h = np.array([])
+            widths = np.array([])
+            slope = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines')
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * gdir.grid.dx)
+                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+                length = len(hgt) * dx
+            d['main_flowline_length'] = length
+            d['inv_flowline_glacier_area'] = np.sum(widths * dx)
+            d['flowline_mean_elev'] = np.average(h, weights=widths)
+            d['flowline_max_elev'] = np.max(h)
+            d['flowline_min_elev'] = np.min(h)
+            d['flowline_avg_width'] = np.mean(widths)
+            d['flowline_avg_slope'] = np.mean(slope)
+        except BaseException:
+            pass
+
+        try:
+            # MB calib
+            df = gdir.read_json('local_mustar')
+            d['t_star'] = df['t_star']
+            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
+            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
+            d['mu_star_allsame'] = df['mu_star_allsame']
+            d['mb_bias'] = df['bias']
+        except BaseException:
+            pass
 
     return d
 
@@ -1252,10 +1255,8 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     """
     from oggm.workflow import execute_entity_task
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-        out_df = execute_entity_task(glacier_statistics, gdirs,
-                                     inversion_only=inversion_only)
+    out_df = execute_entity_task(glacier_statistics, gdirs,
+                                 inversion_only=inversion_only)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
@@ -1349,94 +1350,95 @@ def climate_statistics(gdir, add_climate_period=1995):
     d['status'] = gdir.status
 
     # The rest is less certain
-
-    try:
-        # Flowline related stuff
-        h = np.array([])
-        widths = np.array([])
-        fls = gdir.read_pickle('inversion_flowlines')
-        dx = fls[0].dx * gdir.grid.dx
-        for fl in fls:
-            hgt = fl.surface_h
-            h = np.append(h, hgt)
-            widths = np.append(widths, fl.widths * dx)
-        d['flowline_mean_elev'] = np.average(h, weights=widths)
-        d['flowline_max_elev'] = np.max(h)
-        d['flowline_min_elev'] = np.min(h)
-    except BaseException:
-        pass
-
-    try:
-        # Climate and MB at t*
-        mbcl = ConstantMassBalance
-        mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                            bias=0,
-                                            use_inversion_flowlines=True)
-        h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-        mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
-        pacc = np.where(mbh >= 0)
-        pab = np.where(mbh < 0)
-        d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         try:
-            # Try to get the slope
-            mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-            d['tstar_mb_grad'] = mb_slope
+            # Flowline related stuff
+            h = np.array([])
+            widths = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines')
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * dx)
+            d['flowline_mean_elev'] = np.average(h, weights=widths)
+            d['flowline_max_elev'] = np.max(h)
+            d['flowline_min_elev'] = np.min(h)
         except BaseException:
-            # we don't mind if something goes wrong
-            d['tstar_mb_grad'] = np.NaN
-        d['tstar_ela_h'] = mbmod.get_ela()
-        # Climate
-        t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-            [d['tstar_ela_h'],
-             d['flowline_mean_elev'],
-             d['flowline_max_elev'],
-             d['flowline_min_elev']])
-        for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-            d['tstar_avg_' + n + '_ela_h'] = v[0]
-            d['tstar_avg_' + n + '_mean_elev'] = v[1]
-            d['tstar_avg_' + n + '_max_elev'] = v[2]
-            d['tstar_avg_' + n + '_min_elev'] = v[3]
-        d['tstar_avg_prcp'] = p[0]
-    except BaseException:
-        pass
+            pass
 
-    # Climate and MB at specified dates
-    add_climate_period = tolist(add_climate_period)
-    for y0 in add_climate_period:
         try:
-            fs = '{}-{}'.format(y0 - 15, y0 + 15)
-
+            # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                y0=y0,
+                                                bias=0,
                                                 use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
-            d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
+            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
             try:
                 # Try to get the slope
                 mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-                d[fs + '_mb_grad'] = mb_slope
+                d['tstar_mb_grad'] = mb_slope
             except BaseException:
                 # we don't mind if something goes wrong
-                d[fs + '_mb_grad'] = np.NaN
-            d[fs + '_ela_h'] = mbmod.get_ela()
+                d['tstar_mb_grad'] = np.NaN
+            d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
             t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-                [d[fs + '_ela_h'],
+                [d['tstar_ela_h'],
                  d['flowline_mean_elev'],
                  d['flowline_max_elev'],
                  d['flowline_min_elev']])
             for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-                d[fs + '_avg_' + n + '_ela_h'] = v[0]
-                d[fs + '_avg_' + n + '_mean_elev'] = v[1]
-                d[fs + '_avg_' + n + '_max_elev'] = v[2]
-                d[fs + '_avg_' + n + '_min_elev'] = v[3]
-            d[fs + '_avg_prcp'] = p[0]
+                d['tstar_avg_' + n + '_ela_h'] = v[0]
+                d['tstar_avg_' + n + '_mean_elev'] = v[1]
+                d['tstar_avg_' + n + '_max_elev'] = v[2]
+                d['tstar_avg_' + n + '_min_elev'] = v[3]
+            d['tstar_avg_prcp'] = p[0]
         except BaseException:
             pass
+
+        # Climate and MB at specified dates
+        add_climate_period = tolist(add_climate_period)
+        for y0 in add_climate_period:
+            try:
+                fs = '{}-{}'.format(y0 - 15, y0 + 15)
+
+                mbcl = ConstantMassBalance
+                mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                                    y0=y0,
+                                                    use_inversion_flowlines=True)
+                h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+                mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+                pacc = np.where(mbh >= 0)
+                pab = np.where(mbh < 0)
+                d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
+                try:
+                    # Try to get the slope
+                    mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
+                    d[fs + '_mb_grad'] = mb_slope
+                except BaseException:
+                    # we don't mind if something goes wrong
+                    d[fs + '_mb_grad'] = np.NaN
+                d[fs + '_ela_h'] = mbmod.get_ela()
+                # Climate
+                t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                    [d[fs + '_ela_h'],
+                     d['flowline_mean_elev'],
+                     d['flowline_max_elev'],
+                     d['flowline_min_elev']])
+                for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
+                    d[fs + '_avg_' + n + '_ela_h'] = v[0]
+                    d[fs + '_avg_' + n + '_mean_elev'] = v[1]
+                    d[fs + '_avg_' + n + '_max_elev'] = v[2]
+                    d[fs + '_avg_' + n + '_min_elev'] = v[3]
+                d[fs + '_avg_prcp'] = p[0]
+            except BaseException:
+                pass
 
     return d
 
@@ -1463,10 +1465,8 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
     """
     from oggm.workflow import execute_entity_task
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-        out_df = execute_entity_task(climate_statistics, gdirs,
-                                     add_climate_period=add_climate_period)
+    out_df = execute_entity_task(climate_statistics, gdirs,
+                                 add_climate_period=add_climate_period)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
     if path:
