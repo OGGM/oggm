@@ -676,7 +676,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                ''.format(fs,
                          odf1.vol_itmix_m3, odf1.oggm, a_bounds[0],
                          odf2.vol_itmix_m3, odf2.oggm, a_bounds[1]))
-        if apply_fs_on_mismatch and fs == 0:
+        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > odf2.vol_itmix_m3:
             return calibrate_inversion_from_consensus(gdirs,
                                                       ignore_missing=ignore_missing,
                                                       fs=5.7e-20, a_bounds=a_bounds,

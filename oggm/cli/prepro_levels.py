@@ -416,7 +416,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for gdir in gdirs:
             try:
                 df = gdir.read_json('local_mustar')
-                gdir.add_to_diagnostics('bias_before_zemp', df['bias'])
+                gdir.add_to_diagnostics('mb_bias_before_zemp', df['bias'])
                 df['bias'] = df['bias'] - residual
                 gdir.write_json(df, 'local_mustar')
             except FileNotFoundError:
@@ -505,9 +505,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     opath = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
     utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
 
+    # Glacier statistics we recompute here for error analysis
+    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    utils.compile_glacier_statistics(gdirs, path=opath)
+
     # Other stats for consistency
-    for bn in ['glacier_statistics', 'climate_statistics',
-               'fixed_geometry_mass_balance']:
+    for bn in ['climate_statistics', 'fixed_geometry_mass_balance']:
         ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
         opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
         shutil.copyfile(ipath, opath)
