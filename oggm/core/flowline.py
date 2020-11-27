@@ -1382,7 +1382,9 @@ class FluxBasedModel(FlowlineModel):
                         raise RuntimeError(
                             'CFL error: required time step smaller '
                             'than the minimum allowed: '
-                            '{:.1f}s vs {:.1f}s.'.format(cfl_dt, self.min_dt))
+                            '{:.1f}s vs {:.1f}s. Happening at '
+                            'simulation year {:.1f} and fl_id {}.'
+                            ''.format(cfl_dt, self.min_dt, self.yr, fl_id))
 
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0

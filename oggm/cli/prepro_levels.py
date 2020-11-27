@@ -210,19 +210,34 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             'RGI60-09.00958',
             'RGI60-09.00957',
         ]
+
+        # Curated list of large (> 50 km2) glaciers that don't run
+        # (CFL error) mostly because the centerlines are crap
+        # This is a really temporary fix until we have some better
+        # solution here
+        ids_to_ice_cap.extend(
+            ['RGI60-01.13696', 'RGI60-03.01710', 'RGI60-01.13635',
+             'RGI60-01.14443', 'RGI60-03.01678', 'RGI60-03.03274',
+             'RGI60-01.17566', 'RGI60-03.02849', 'RGI60-01.16201',
+             'RGI60-01.14683', 'RGI60-07.01506', 'RGI60-07.01559',
+             'RGI60-03.02687', 'RGI60-17.00172', 'RGI60-01.23649',
+             'RGI60-09.00077', 'RGI60-03.00994', 'RGI60-01.26738',
+             'RGI60-03.00283', 'RGI60-01.16121', 'RGI60-01.27108',
+             'RGI60-09.00132', 'RGI60-13.43483', 'RGI60-09.00069',
+             'RGI60-14.04404', 'RGI60-17.01218', 'RGI60-17.15877',
+             'RGI60-13.30888', 'RGI60-17.13796', 'RGI60-17.15825',
+             'RGI60-01.09783'])
         rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
 
-        # Not that in matters much but in AA almost all large ice bodies
+        # In AA almost all large ice bodies
         # are actually ice caps
+        # As of now ice caps are "squeezed" flowlines
         if rgi_reg == '19':
             rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
 
         # For greenland we omit connectivity level 2
         if rgi_reg == '05':
             rgidf = rgidf.loc[rgidf['Connect'] != 2]
-
-        # For all regions let's also omit nominal glaciers
-        rgidf = rgidf.loc[rgidf['Status'] != 2]
 
     else:
         rgidf = test_rgidf
@@ -233,9 +248,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
-
-    # Sort for more efficient parallel computing
-    rgidf = rgidf.sort_values('Area', ascending=False)
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
@@ -418,6 +430,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 df = gdir.read_json('local_mustar')
                 gdir.add_to_diagnostics('mb_bias_before_zemp', df['bias'])
                 df['bias'] = df['bias'] - residual
+                gdir.add_to_diagnostics('mb_bias_after_zemp', df['bias'])
                 gdir.write_json(df, 'local_mustar')
             except FileNotFoundError:
                 pass
