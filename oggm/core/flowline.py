@@ -1699,7 +1699,12 @@ class FileModel(object):
             ds.load()
             dss.append(ds)
 
-        self.last_yr = ds.year.values[-1]
+        try:
+            self.last_yr = ds.year.values[-1]
+        except AttributeError:
+            raise InvalidWorkflowError('The provided model output file is '
+                                       'incomplete (likely when the previous '
+                                       'run failed) or corrupt.')
         self.dss = dss
 
         # Calving diags

@@ -297,8 +297,8 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
     glat = gdir.cenlat
 
     # Read the GCM files
-    with xr.open_dataset(fpath_temp, decode_times=True) as tempds, \
-          xr.open_dataset(fpath_precip, decode_times=True) as precipds:
+    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
+          xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
 
         # Check longitude conventions
         if tempds.lon.min() >= 0 and glon <= 0:
