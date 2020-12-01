@@ -500,7 +500,7 @@ class entity_task(object):
 
                 if self.fallback is not None:
                     self.fallback(gdir)
-            if self.return_value:
+            if return_value:
                 return out
 
         _entity_task.__dict__['is_entity_task'] = True
