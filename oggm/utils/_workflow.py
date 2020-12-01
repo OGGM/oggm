@@ -411,7 +411,7 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, log, writes=[], fallback=None):
+    def __init__(self, log, writes=[], fallback=None, return_value=True):
         """Decorator syntax: ``@oggm_task(log, writes=['dem', 'outlines'])``
 
         Parameters
@@ -423,10 +423,16 @@ class entity_task(object):
             available in ``cfg.BASENAMES``)
         fallback: python function
             will be executed on gdir if entity_task fails
+        return_value: bool
+            whether the return value from the task should be passed over
+            to the caller or not. In general you will always want this to
+            be true, but sometimes the task return things which are not
+            useful in production and my use a lot of memory, etc,
         """
         self.log = log
         self.writes = writes
         self.fallback = fallback
+        self.return_value = return_value
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -494,7 +500,8 @@ class entity_task(object):
 
                 if self.fallback is not None:
                     self.fallback(gdir)
-            return out
+            if self.return_value:
+                return out
 
         _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
