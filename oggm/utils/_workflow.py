@@ -411,7 +411,7 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, log, writes=[], fallback=None, return_value=True):
+    def __init__(self, log, writes=[], fallback=None):
         """Decorator syntax: ``@oggm_task(log, writes=['dem', 'outlines'])``
 
         Parameters
@@ -432,7 +432,6 @@ class entity_task(object):
         self.log = log
         self.writes = writes
         self.fallback = fallback
-        self.return_value = return_value
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -452,7 +451,8 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
+        def _entity_task(gdir, *, reset=None, print_log=True,
+                         return_value=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
