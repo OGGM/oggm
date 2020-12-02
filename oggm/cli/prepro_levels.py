@@ -75,7 +75,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      match_zemp=False, centerlines_only=False, max_level=5,
+                      match_geodetic_mb=False, centerlines_only=False, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -117,6 +117,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     centerlines_only : bool
         compute all flowlines based on the OGGM centerline(s) method instead
         of the OGGM default, which is a mix of elev_bands and centerlines.
+    match_geodetic_mb : bool
+        match the regional mass-balance estimates at the regional level
+        (currently Hugonnet et al., 2020).
     max_level : int
         the maximum pre-processing level before stopping
     logging_level : str
@@ -405,32 +408,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
 
-    # Do we want to match Zemp et al?
-    if match_zemp:
+    # Do we want to match geodetic estimates?
+    if match_geodetic_mb:
         df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
         df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
         dfs = utils.compile_glacier_statistics(gdirs, path=False)
-        odf = pd.DataFrame(df.loc[2006:2016].mean(), columns=['SMB'])
+        odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
         odf['AREA'] = dfs.rgi_area_km2
 
-        area_oggm = odf['AREA'].sum()
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        df = pd.read_csv(utils.get_demo_file('zemp_ref_2006_2016.csv'),
-                         index_col=0)
-        area_zemp = df.loc[int(rgi_reg), 'Area']
-        smb_zemp = df.loc[int(rgi_reg), 'SMB'] * 1000
-        if not np.allclose(area_oggm, area_zemp, rtol=0.05):
-            log.workflow('WARNING: OGGM regional area and Zemp regional area '
-                         'differ by more than 5%.')
-        residual = smb_zemp - smb_oggm
-        log.workflow('Shifting regional bias by {}'.format(residual))
+        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        df = pd.read_csv(utils.get_demo_file(df))
+        df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+
+        smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+        residual = smb_ref - smb_oggm
+        log.workflow('Shifting regional MB bias by {}'.format(residual))
         for gdir in gdirs:
             try:
                 df = gdir.read_json('local_mustar')
-                gdir.add_to_diagnostics('mb_bias_before_zemp', df['bias'])
+                gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
                 df['bias'] = df['bias'] - residual
-                gdir.add_to_diagnostics('mb_bias_after_zemp', df['bias'])
                 gdir.write_json(df, 'local_mustar')
             except FileNotFoundError:
                 pass
@@ -580,8 +579,9 @@ def parse_args(args):
                              'centerline(s) method instead of the OGGM '
                              'default, which is a mix of elev_bands and '
                              'centerlines.')
-    parser.add_argument('--match-zemp', nargs='?', const=True, default=False,
-                        help='match regional SMB values to Zemp et al., 2019 '
+    parser.add_argument('--match-geodetic-mb', nargs='?', const=True, default=False,
+                        help='match regional SMB values to geodetic estimates '
+                             '(currently Hugonnet et al., 2020) '
                              'by shifting the SMB residual.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
@@ -651,7 +651,7 @@ def parse_args(args):
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
                 centerlines_only=args.centerlines_only,
-                match_zemp=args.match_zemp,
+                match_geodetic_mb=args.match_geodetic_mb,
                 disable_dl_verify=args.disable_dl_verify
                 )
 

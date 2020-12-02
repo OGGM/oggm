@@ -782,7 +782,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
-        assert not kwargs['match_zemp']
+        assert not kwargs['match_geodetic_mb']
         assert not kwargs['centerlines_only']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -821,7 +821,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
-        assert kwargs['match_zemp']
+        assert kwargs['match_geodetic_mb']
         assert kwargs['centerlines_only']
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
@@ -874,7 +874,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_zemp=True)
+                          test_topofile=topof, match_geodetic_mb=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
@@ -894,6 +894,7 @@ class TestPreproCLI(unittest.TestCase):
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)
         assert 'inv_volume_km3' in df
+        assert 'mb_bias_before_geodetic_corr' in df
 
         dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                        'fixed_geometry_mass_balance_11.csv'),
@@ -902,12 +903,13 @@ class TestPreproCLI(unittest.TestCase):
 
         odf = pd.DataFrame(dfm.loc[2006:2016].mean(), columns=['SMB'])
         odf['AREA'] = df.rgi_area_km2
-        smb_oggm = np.average(odf['SMB'], weights=odf['AREA']) / 1000
+        smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfz = pd.read_csv(utils.get_demo_file('zemp_ref_2006_2016.csv'),
-                         index_col=0)
-        smb_zemp = dfz.loc[11, 'SMB']
-        np.testing.assert_allclose(smb_oggm, smb_zemp)
+        dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        dfh = pd.read_csv(utils.get_demo_file(dfh))
+        dfh = dfh.loc[dfh.period == '2006-01-01_2019-01-01'].set_index('reg')
+        smb_ref = dfh.loc[11, 'dmdtda']
+        np.testing.assert_allclose(smb_oggm, smb_ref)
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
