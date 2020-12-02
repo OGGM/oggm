@@ -47,7 +47,6 @@ log = logging.getLogger(__name__)
 class Flowline(Centerline):
     """Common logic for different types of flowlines used as input to the model
 
-
     """
 
     def __init__(self, line=None, dx=1, map_dx=None,

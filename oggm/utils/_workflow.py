@@ -1221,8 +1221,11 @@ def glacier_statistics(gdir, inversion_only=False):
             d['flowline_mean_elev'] = np.average(h, weights=widths)
             d['flowline_max_elev'] = np.max(h)
             d['flowline_min_elev'] = np.min(h)
-            d['flowline_avg_width'] = np.mean(widths)
             d['flowline_avg_slope'] = np.mean(slope)
+            d['flowline_avg_width'] = np.mean(widths)
+            d['flowline_last_width'] = fls[-1].widths[-1] * gdir.grid.dx
+            d['flowline_last_5_widths'] = np.mean(fls[-1].widths[-5:] *
+                                                  gdir.grid.dx)
         except BaseException:
             pass
 
