@@ -809,7 +809,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--output', '/local/out',
                                            '--elev-bands',
                                            '--centerlines-only',
-                                           '--match-zemp',
+                                           '--match-geodetic-mb',
                                            '--working-dir', '/local/work',
                                            ])
 

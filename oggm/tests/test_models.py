@@ -2727,17 +2727,17 @@ class TestHEF:
                                  input_filesuffix='_def',
                                  tmp_file_size=1)
 
-        # This DOESNT because bad programming
-        # cfg.PARAMS['use_kcalving_for_run'] = True
-        # init_present_time_glacier(hef_gdir)
-        # init_present_time_glacier(gdir_calving)
-        # run_constant_climate(hef_gdir, nyears=10,
-        #                      bias=0, output_filesuffix='_def')
-        # run_constant_climate(gdir_calving, nyears=10, water_level=0,
-        #                      bias=0, output_filesuffix='_def')
-        # utils.compile_run_output([gdir_calving, hef_gdir],
-        #                          input_filesuffix='_def',
-        #                          tmp_file_size=1)
+        # This should work although one calves the other not
+        cfg.PARAMS['use_kcalving_for_run'] = True
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(gdir_calving)
+        run_constant_climate(hef_gdir, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        run_constant_climate(gdir_calving, nyears=10, water_level=0,
+                             bias=0, output_filesuffix='_def')
+        utils.compile_run_output([gdir_calving, hef_gdir],
+                                 input_filesuffix='_def',
+                                 tmp_file_size=1)
 
     def test_start_from_spinup(self, hef_gdir):
 

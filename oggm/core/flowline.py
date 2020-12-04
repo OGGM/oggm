@@ -912,7 +912,7 @@ class FlowlineModel(object):
         nm = len(monthly_time)
         sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
         widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
-        bucket = [(np.zeros(ny) * np.NaN) for _ in self.fls]
+        bucket = [np.zeros(ny) for _ in self.fls]
         diag_ds = xr.Dataset()
 
         # Global attributes
@@ -943,36 +943,40 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
         diag_ds['volume_m3'].attrs['unit'] = 'm 3'
-        if getattr(self, 'do_calving', False):
-            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'below '
-                                                             'sea-level')
-            diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
-            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'below '
-                                                             'water-level')
-            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
+                                                         'below '
+                                                         'sea-level')
+        diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
+                                                         'below '
+                                                         'water-level')
+        diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
         diag_ds['area_m2'].attrs['unit'] = 'm 2'
+
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['length_m'].attrs['description'] = 'Glacier length'
         diag_ds['length_m'].attrs['unit'] = 'm 3'
+
         diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
                                                  'Altitude  (ELA)')
         diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
-        if getattr(self, 'do_calving', False):
-            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
-                                                          'calving flux')
-            diag_ds['calving_m3'].attrs['unit'] = 'm 3'
-            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
-            diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
+
+        diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
+                                                      'calving flux')
+        diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
+        diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
         # Run
         j = 0
@@ -989,10 +993,12 @@ class FlowlineModel(object):
                         except AttributeError:
                             pass
                 j += 1
+
             # Diagnostics
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
+
             try:
                 ela_m = self.mb_model.get_ela(year=yr, fls=self.fls,
                                               fl_id=len(self.fls)-1)
@@ -1001,12 +1007,10 @@ class FlowlineModel(object):
                 # We really don't want to stop the model for some ELA issues
                 diag_ds['ela_m'].data[i] = np.NaN
 
-            if getattr(self, 'do_calving', False):
-                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
-                diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
-                if self.is_marine_terminating:
-                    diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
-                    diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+            diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+            diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+            diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
+            diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
 
         # to datasets
         run_ds = []
@@ -1025,9 +1029,8 @@ class FlowlineModel(object):
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            if getattr(self, 'do_calving', False):
-                ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
-                                                          coords=varcoords)
+            ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
+                                                      coords=varcoords)
             run_ds.append(ds)
 
         # write output?

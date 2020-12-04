@@ -755,11 +755,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
     # OK found it, open it and prepare the output
     with xr.open_dataset(ppath) as ds_diag:
-        time = ds_diag.time.values
-        yrs = ds_diag.hydro_year.values
-        months = ds_diag.hydro_month.values
-        cyrs = ds_diag.calendar_year.values
-        cmonths = ds_diag.calendar_month.values
 
         # Prepare output
         ds = xr.Dataset()
@@ -770,98 +765,73 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds.attrs['calendar'] = '365-day no leap'
         ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
-        # Coordinates
+        # Copy coordinates
+        time = ds_diag.time.values
         ds.coords['time'] = ('time', time)
-        ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
-        ds.coords['hydro_year'] = ('time', yrs)
-        ds.coords['hydro_month'] = ('time', months)
-        ds.coords['calendar_year'] = ('time', cyrs)
-        ds.coords['calendar_month'] = ('time', cmonths)
         ds['time'].attrs['description'] = 'Floating hydrological year'
+        # New coord
+        ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
         ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
-        ds['hydro_year'].attrs['description'] = 'Hydrological year'
-        ds['hydro_month'].attrs['description'] = 'Hydrological month'
-        ds['calendar_year'].attrs['description'] = 'Calendar year'
-        ds['calendar_month'].attrs['description'] = 'Calendar month'
+        # This is just taken from there
+        for cn in ['hydro_year', 'hydro_month',
+                   'calendar_year', 'calendar_month']:
+            ds.coords[cn] = ('time', ds_diag[cn].values)
+            ds[cn].attrs['description'] = ds_diag[cn].attrs['description']
 
-    shape = (len(time), len(rgi_ids))
-    # These variables are always available
-    vol = np.full(shape, np.nan)
-    area = np.full(shape, np.nan)
-    length = np.full(shape, np.nan)
-    ela = np.full(shape, np.nan)
-    # These are not
-    calving_m3 = None
-    calving_rate_myr = None
-    volume_bsl_m3 = None
-    volume_bwl_m3 = None
+        # Prepare the 2D variables
+        shape = (len(time), len(rgi_ids))
+        out_2d = dict()
+        for vn in ds_diag.data_vars:
+            var = dict()
+            var['data'] = np.full(shape, np.nan)
+            var['attrs'] = ds_diag[vn].attrs
+            out_2d[vn] = var
+
+        # 1D Variables
+        out_1d = dict()
+        for vn, attrs in [('water_level', {'description': 'Calving water level',
+                                           'units': 'm'}),
+                          ('glen_a', {'description': 'Simulation Glen A',
+                                      'units': ''}),
+                          ('fs', {'description': 'Simulation sliding parameter',
+                                  'units': ''}),
+                          ]:
+            var = dict()
+            var['data'] = np.full(len(rgi_ids), np.nan)
+            var['attrs'] = attrs
+            out_1d[vn] = var
+
+    # Read out
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
                 nt = - len(ds_diag.volume_m3.values)
-                vol[nt:, i] = ds_diag.volume_m3.values
-                area[nt:, i] = ds_diag.area_m2.values
-                length[nt:, i] = ds_diag.length_m.values
-                ela[nt:, i] = ds_diag.ela_m.values
-                if 'calving_m3' in ds_diag:
-                    if calving_m3 is None:
-                        calving_m3 = np.full(shape, np.nan)
-                    calving_m3[nt:, i] = ds_diag.calving_m3.values
-                if 'calving_rate_myr' in ds_diag:
-                    if calving_rate_myr is None:
-                        calving_rate_myr = np.full(shape, np.nan)
-                    calving_rate_myr[nt:, i] = ds_diag.calving_rate_myr.values
-                if 'volume_bsl_m3' in ds_diag:
-                    if volume_bsl_m3 is None:
-                        volume_bsl_m3 = np.full(shape, np.nan)
-                    volume_bsl_m3[nt:, i] = ds_diag.volume_bsl_m3.values
-                if 'volume_bwl_m3' in ds_diag:
-                    if volume_bwl_m3 is None:
-                        volume_bwl_m3 = np.full(shape, np.nan)
-                    volume_bwl_m3[nt:, i] = ds_diag.volume_bwl_m3.values
+                for vn, var in out_2d.items():
+                    var['data'][nt:, i] = ds_diag[vn].values
+                for vn, var in out_1d.items():
+                    var['data'][i] = ds_diag.attrs[vn]
         except BaseException:
             pass
 
-    ds['volume'] = (('time', 'rgi_id'), vol)
-    ds['volume'].attrs['description'] = 'Total glacier volume'
-    ds['volume'].attrs['units'] = 'm 3'
-    ds['area'] = (('time', 'rgi_id'), area)
-    ds['area'].attrs['description'] = 'Total glacier area'
-    ds['area'].attrs['units'] = 'm 2'
-    ds['length'] = (('time', 'rgi_id'), length)
-    ds['length'].attrs['description'] = 'Glacier length'
-    ds['length'].attrs['units'] = 'm'
-    ds['ela'] = (('time', 'rgi_id'), ela)
-    ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
-    ds['ela'].attrs['units'] = 'm a.s.l'
-    if calving_m3 is not None:
-        ds['calving'] = (('time', 'rgi_id'), calving_m3)
-        ds['calving'].attrs['description'] = ('Total calving volume since '
-                                              'simulation start')
-        ds['calving'].attrs['units'] = 'm3'
-    if calving_rate_myr is not None:
-        ds['calving_rate'] = (('time', 'rgi_id'), calving_rate_myr)
-        ds['calving_rate'].attrs['description'] = 'Instantaneous calving rate'
-        ds['calving_rate'].attrs['units'] = 'm yr-1'
-    if volume_bsl_m3 is not None:
-        ds['volume_bsl'] = (('time', 'rgi_id'), volume_bsl_m3)
-        ds['volume_bsl'].attrs['description'] = ('Total glacier volume below '
-                                                 'sea level')
-        ds['volume_bsl'].attrs['units'] = 'm3'
-    if volume_bwl_m3 is not None:
-        ds['volume_bwl'] = (('time', 'rgi_id'), volume_bwl_m3)
-        ds['volume_bwl'].attrs['description'] = ('Total glacier volume below '
-                                                 'water level')
-        ds['volume_bwl'].attrs['units'] = 'm3'
+    # To xarray
+    for vn, var in out_2d.items():
+        # Backwards compatibility to remove one day...
+        vn = vn.replace('_m3', '').replace('_m2', '').replace('_m', '')
+        ds[vn] = (('time', 'rgi_id'), var['data'])
+        ds[vn].attrs = var['attrs']
+    for vn, var in out_1d.items():
+        ds[vn] = (('rgi_id', ), var['data'])
+        ds[vn].attrs = var['attrs']
 
+    # To file?
     if path:
         enc_var = {'dtype': 'float32'}
         if use_compression:
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
-        encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
+        encoding = {v: enc_var for v in ds.data_vars}
         ds.to_netcdf(path, encoding=encoding)
 
     return ds
