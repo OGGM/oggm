@@ -817,8 +817,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
     # To xarray
     for vn, var in out_2d.items():
-        # Backwards compatibility to remove one day...
-        vn = vn.replace('_m3', '').replace('_m2', '').replace('_m', '')
+        # Backwards compatibility - to remove one day...
+        for r in ['_m3', '_m2', '_myr', '_m']:
+            # Order matters
+            vn = vn.replace(r, '')
         ds[vn] = (('time', 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_1d.items():
