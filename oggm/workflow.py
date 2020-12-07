@@ -438,7 +438,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                         border=prepro_border,
                                         prepro_level=from_prepro_level,
                                         rgi_version=prepro_rgi_version)
-        if not utils.url_exists(url):
+        if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
 
