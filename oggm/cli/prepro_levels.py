@@ -75,7 +75,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      match_geodetic_mb=False, centerlines_only=False, max_level=5,
+                      match_geodetic_mb=False, centerlines_only=False,
+                      add_consensus=False, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -120,6 +121,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     match_geodetic_mb : bool
         match the regional mass-balance estimates at the regional level
         (currently Hugonnet et al., 2020).
+    add_consensus : bool
+        adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
     max_level : int
         the maximum pre-processing level before stopping
     logging_level : str
@@ -352,10 +356,33 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                  ''.format(len(gdirs_cent), len(gdirs_band)))
 
     # HH2015 method
+    workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
+
+    # Centerlines OGGM
+    workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
+
+    if add_consensus:
+        from oggm.shop.bedtopo import add_consensus_thickness
+        workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
+        workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+
+        # Elev bands with var data
+        vn = 'consensus_ice_thickness'
+        workflow.execute_entity_task(tasks.elevation_band_flowline,
+                                     gdirs_band, bin_variables=vn)
+        workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
+                                     gdirs_band, bin_variables=vn)
+    else:
+        # HH2015 method without it
+        task_list = [
+            tasks.elevation_band_flowline,
+            tasks.fixed_dx_elevation_band_flowline,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs_band)
+
+    # HH2015 method
     task_list = [
-        tasks.simple_glacier_masks,
-        tasks.elevation_band_flowline,
-        tasks.fixed_dx_elevation_band_flowline,
         tasks.compute_downstream_line,
         tasks.compute_downstream_bedshape,
     ]
@@ -364,7 +391,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Centerlines OGGM
     task_list = [
-        tasks.glacier_masks,
         tasks.compute_centerlines,
         tasks.initialize_flowlines,
         tasks.compute_downstream_line,
@@ -588,6 +614,11 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
+    parser.add_argument('--add-consensus', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the consensus estimates '
+                             'thickness to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -648,6 +679,7 @@ def parse_args(args):
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
                 centerlines_only=args.centerlines_only,
                 match_geodetic_mb=args.match_geodetic_mb,
+                add_consensus=args.add_consensus,
                 disable_dl_verify=args.disable_dl_verify
                 )
 
