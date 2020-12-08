@@ -2276,6 +2276,8 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
 
     # Additional vars
     if bin_variables is not None:
+        bin_variables = utils.tolist(bin_variables)
+
         # Check if there and do not raise when not available
         keep = []
         for var in bin_variables:
@@ -2286,7 +2288,6 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
                             ''.format(gdir.rgi_id, var))
         bin_variables = keep
 
-        bin_variables = utils.tolist(bin_variables)
         preserve_totals = utils.tolist(preserve_totals,
                                        length=len(bin_variables))
         odf = pd.DataFrame(index=dis_along_flowline)
