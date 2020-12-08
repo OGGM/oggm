@@ -2076,7 +2076,7 @@ def intersect_downstream_lines(gdir, candidates=None):
 
 
 @entity_task(log, writes=['elevation_band_flowline'])
-def elevation_band_flowline(gdir):
+def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
 
     This writes out a table of along glacier bins, strictly following the
@@ -2097,13 +2097,25 @@ def elevation_band_flowline(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    bin_variables : str or list of str
+        variables to add to the binned flowline
+    preserve_totals : bool or list of bool
+        wether or not to preserve the variables totals (e.g. volume)
     """
 
     # Variables
+    bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
+    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
+    out_vars = []
+    out_totals = []
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:] == 1
         topo = nc.variables['topo_smoothed'][:]
+        for var in bin_variables:
+            data = nc.variables[var][:]
+            out_totals.append(np.nansum(data) * gdir.grid.dx ** 2)
+            out_vars.append(data[glacier_mask])
 
     # Slope
     sy, sx = np.gradient(topo, gdir.grid.dx)
@@ -2168,6 +2180,10 @@ def elevation_band_flowline(gdir):
         else:
             df.loc[bi, 'slope'] = np.mean(sel_s_bin)
 
+        # Binned variables
+        for var, data in zip(bin_variables, out_vars):
+            df.loc[bi, var] = np.nanmean(data[bin_coords])
+
     # The grid point's grid spacing and widths
     df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
     df['dx'] = bsize / np.tan(df['slope'])
@@ -2175,6 +2191,14 @@ def elevation_band_flowline(gdir):
 
     # Remove possible NaNs from above
     df = df.dropna()
+
+    # Check for binned vars
+    for var, data, in_total, do_p in zip(bin_variables,  out_vars, out_totals,
+                                         preserve_totals):
+        if do_p:
+            out_total = np.nansum(df[var] * df['area'])
+            if out_total > 0:
+                df[var] *= in_total / out_total
 
     # In OGGM we go from top to bottom
     df = df[::-1]
@@ -2191,7 +2215,8 @@ def elevation_band_flowline(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def fixed_dx_elevation_band_flowline(gdir):
+def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
+                                     preserve_totals=True):
     """Converts the "collapsed" flowline into a regular "inversion flowline".
 
     You need to run `tasks.elevation_band_flowline` first. It then interpolates
@@ -2202,6 +2227,12 @@ def fixed_dx_elevation_band_flowline(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    bin_variables : str or list of str
+        variables to add to the interpolated flowline (will be stored in a new
+        csv file: gdir.get_filepath('elevation_band_flowline',
+        filesuffix='_fixed_dx').
+    preserve_totals : bool or list of bool
+        wether or not to preserve the variables totals (e.g. volume)
     """
 
     df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
@@ -2231,6 +2262,25 @@ def fixed_dx_elevation_band_flowline(gdir):
     fac = gdir.rgi_area_m2 / area
     log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
     widths_m *= fac
+
+    # Additional vars
+    if bin_variables is not None:
+        bin_variables = utils.tolist(bin_variables)
+        preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
+        odf = pd.DataFrame(index=dis_along_flowline)
+        odf.index.name = 'dis_along_flowline'
+        odf['widths_m'] = widths_m
+        odf['area_m2'] = widths_m * dx_meter
+        for var, do_p in zip(bin_variables, preserve_totals):
+            interp = np.interp(dis_along_flowline, df.index, df[var])
+            if do_p:
+                in_total = np.nansum(df[var] * df['area'])
+                out_total = np.nansum(interp * widths_m * dx_meter)
+                if out_total > 0:
+                    interp *= in_total / out_total
+            odf[var] = interp
+        odf.to_csv(gdir.get_filepath('elevation_band_flowline',
+                                     filesuffix='_fixed_dx'))
 
     # Write as a Centerline object
     fl = Centerline(None, dx=dx, surface_h=hgts, rgi_id=gdir.rgi_id,
