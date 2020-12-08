@@ -2105,17 +2105,28 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
 
     # Variables
     bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
-    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
     out_vars = []
     out_totals = []
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:] == 1
         topo = nc.variables['topo_smoothed'][:]
+
+        # Check if there and do not raise when not available
+        keep = []
+        for var in bin_variables:
+            if var in nc.variables:
+                keep.append(var)
+            else:
+                log.warning('{}: var `{}` not found in gridded_data.'
+                            ''.format(gdir.rgi_id, var))
+        bin_variables = keep
         for var in bin_variables:
             data = nc.variables[var][:]
             out_totals.append(np.nansum(data) * gdir.grid.dx ** 2)
             out_vars.append(data[glacier_mask])
+
+    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
 
     # Slope
     sy, sx = np.gradient(topo, gdir.grid.dx)
@@ -2265,8 +2276,19 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
 
     # Additional vars
     if bin_variables is not None:
+        # Check if there and do not raise when not available
+        keep = []
+        for var in bin_variables:
+            if var in df:
+                keep.append(var)
+            else:
+                log.warning('{}: var `{}` not found in gridded_data.'
+                            ''.format(gdir.rgi_id, var))
+        bin_variables = keep
+
         bin_variables = utils.tolist(bin_variables)
-        preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
+        preserve_totals = utils.tolist(preserve_totals,
+                                       length=len(bin_variables))
         odf = pd.DataFrame(index=dis_along_flowline)
         odf.index.name = 'dis_along_flowline'
         odf['widths_m'] = widths_m

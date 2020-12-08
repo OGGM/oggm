@@ -455,8 +455,9 @@ class Test_bedtopo:
         np.testing.assert_allclose(my_vol, ref_vol)
 
         # Now check the rest of the workflow
+        # Check that no error when var not there
         vn = 'consensus_ice_thickness'
-        centerlines.elevation_band_flowline(gdir, bin_variables=vn)
+        centerlines.elevation_band_flowline(gdir, bin_variables=[vn, 'foo'])
 
         # Check vol
         df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'),
@@ -464,7 +465,8 @@ class Test_bedtopo:
         my_vol = (df[vn] * df['area']).sum()
         np.testing.assert_allclose(my_vol, ref_vol)
 
-        centerlines.fixed_dx_elevation_band_flowline(gdir, bin_variables=vn)
+        centerlines.fixed_dx_elevation_band_flowline(gdir,
+                                                     bin_variables=[vn, 'foo'])
         fdf = pd.read_csv(gdir.get_filepath('elevation_band_flowline',
                                             filesuffix='_fixed_dx'),
                           index_col=0)
