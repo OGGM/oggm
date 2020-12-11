@@ -409,7 +409,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
 
 def init_columbia(reset=False):
 
-    from oggm.core import gis, climate, centerlines
+    from oggm.core import gis, centerlines
     import geopandas as gpd
 
     # test directory
@@ -439,6 +439,38 @@ def init_columbia(reset=False):
     centerlines.catchment_intersections(gdir)
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
+    tasks.process_dummy_cru_file(gdir, seed=0)
+    return gdir
+
+
+def init_columbia_eb(reset=False):
+
+    from oggm.core import gis, centerlines
+    import geopandas as gpd
+
+    # test directory
+    testdir = os.path.join(get_test_dir(), 'tmp_columbia_eb')
+    if not os.path.exists(testdir):
+        os.makedirs(testdir)
+        reset = True
+
+    # Init
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = testdir
+    cfg.PARAMS['use_intersects'] = False
+    cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+    cfg.PARAMS['border'] = 10
+
+    entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
+    gdir = oggm.GlacierDirectory(entity, reset=reset)
+    if gdir.has_file('climate_historical'):
+        return gdir
+
+    gis.define_glacier_region(gdir)
+    gis.simple_glacier_masks(gdir)
+    centerlines.elevation_band_flowline(gdir)
+    centerlines.fixed_dx_elevation_band_flowline(gdir)
+    centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
     return gdir
 

@@ -558,8 +558,10 @@ def climate_tasks(gdirs):
     execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 
-def inversion_tasks(gdirs):
+def inversion_tasks(gdirs, glen_a=None, fs=None):
     """Shortcut function: run all ice thickness inversion tasks.
+
+    Quite useful to deal with calving glaciers as well.
 
     Parameters
     ----------
@@ -579,14 +581,17 @@ def inversion_tasks(gdirs):
 
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
-            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
+                                glen_a=glen_a, fs=fs)
             execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
-            execute_entity_task(tasks.find_inversion_calving, gdirs_c)
+            execute_entity_task(tasks.find_inversion_calving, gdirs_c,
+                                glen_a=glen_a, fs=fs)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
-        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                            glen_a=glen_a, fs=fs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
@@ -642,12 +647,9 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     def_a = cfg.PARAMS['inversion_glen_a']
 
     def compute_vol(x):
-        execute_entity_task(tasks.mass_conservation_inversion, gdirs,
-                            glen_a=x * def_a,
-                            fs=fs)
-        vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
+        inversion_tasks(gdirs, glen_a=x*def_a, fs=fs)
         odf = df.copy()
-        odf['oggm'] = vols
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
         return odf.dropna()
 
     def to_minimize(x):
@@ -692,11 +694,55 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                      ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A
-    execute_entity_task(tasks.mass_conservation_inversion,
-                        gdirs, glen_a=out_fac*def_a, fs=fs)
-    vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
-    df['vol_oggm_m3'] = vols
+    inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
     return df
+
+
+def match_regional_geodetic_mb(gdirs, rgi_reg):
+    """Regional correction of MB residuals to match observations.
+
+    This is useful for operational runs, but also quite hacky. Let's hope
+    we won't need this for too long.
+
+    Parameters
+    ----------
+    gdirs : the list of gdirs (ideally the entire region_
+    rgi_reg : str
+       the rgi region to match
+    """
+
+    # Get the mass-balance OGGM would give out of the box
+    df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
+    df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+    # And also the Area and calving fluxes
+    dfs = utils.compile_glacier_statistics(gdirs, path=False)
+    odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
+    odf['AREA'] = dfs.rgi_area_km2
+
+    # Total MB OGGM
+    smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
+
+    # Total MB Reference
+    df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+    df = pd.read_csv(utils.get_demo_file(df))
+    df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+    smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+
+    # Diff between the two
+    residual = smb_ref - smb_oggm
+
+    # Let's just shift
+    log.workflow('Shifting regional MB bias by {}'.format(residual))
+    for gdir in gdirs:
+        try:
+            df = gdir.read_json('local_mustar')
+            gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
+            df['bias'] = df['bias'] - residual
+            gdir.write_json(df, 'local_mustar')
+        except FileNotFoundError:
+            pass
 
 
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,

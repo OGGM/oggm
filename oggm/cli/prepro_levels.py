@@ -425,42 +425,20 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         tasks.historical_climate_qc,
         tasks.local_t_star,
         tasks.mu_star_calibration,
-        tasks.prepare_for_inversion,
     ]
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
 
-    # Do we want to match geodetic estimates?
-    if match_geodetic_mb:
-        df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
-        df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
-        dfs = utils.compile_glacier_statistics(gdirs, path=False)
-        odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
-        odf['AREA'] = dfs.rgi_area_km2
-
-        smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
-
-        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        df = pd.read_csv(utils.get_demo_file(df))
-        df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
-
-        smb_ref = df.loc[int(rgi_reg), 'dmdtda']
-        residual = smb_ref - smb_oggm
-        log.workflow('Shifting regional MB bias by {}'.format(residual))
-        for gdir in gdirs:
-            try:
-                df = gdir.read_json('local_mustar')
-                gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
-                df['bias'] = df['bias'] - residual
-                gdir.write_json(df, 'local_mustar')
-            except FileNotFoundError:
-                pass
-
     # Inversion: we match the consensus
-    workflow.execute_entity_task(tasks.prepare_for_inversion, gdirs)
     workflow.calibrate_inversion_from_consensus(gdirs,
                                                 apply_fs_on_mismatch=True,
                                                 error_on_mismatch=False)
+
+    # Do we want to match geodetic estimates?
+    # This affects only the bias so we can actually do this *after*
+    # the inversion, but we really want to take calving into account here
+    if match_geodetic_mb:
+        workflow.match_regional_geodetic_mb(gdirs, rgi_reg)
 
     # We get ready for modelling
     workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)

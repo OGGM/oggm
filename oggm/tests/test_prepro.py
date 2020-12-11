@@ -23,9 +23,9 @@ from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import get_test_dir, init_columbia
+from oggm.tests.funcs import get_test_dir, init_columbia, init_columbia_eb
 from oggm import workflow
-from oggm.exceptions import InvalidWorkflowError
+from oggm.exceptions import InvalidWorkflowError, MassBalanceCalibrationError
 
 pytestmark = pytest.mark.test_env("prepro")
 
@@ -1682,6 +1682,12 @@ class TestClimate(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'],
                                         glacierwide=True)
+
+        cfg.PARAMS['min_mu_star'] = 10
+        with pytest.raises(MassBalanceCalibrationError):
+            climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
+
+        cfg.PARAMS['min_mu_star'] = 5
         climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
         climate.mu_star_calibration(gdir)
 
@@ -2245,6 +2251,7 @@ class TestInversion(unittest.TestCase):
             v += np.nansum(cl['volume'])
         np.testing.assert_allclose(242, maxs, atol=40)
         np.testing.assert_allclose(ref_v, v)
+        np.testing.assert_allclose(ref_v, inversion.get_inversion_volume(gdir))
 
         # Sanity check - velocities
         inv = gdir.read_pickle('inversion_output')[-1]
@@ -2796,13 +2803,13 @@ class TestCoxeCalving(unittest.TestCase):
 
 class TestColumbiaCalving(unittest.TestCase):
 
-    def setUp(self):
-        self.gdir = init_columbia()
-
     @pytest.mark.slow
-    def test_find_calving(self):
+    def test_find_calving_full_fl(self):
 
-        gdir = self.gdir
+        gdir = init_columbia()
+
+        # For these tests we allow mu to 0
+        cfg.PARAMS['calving_min_mu_star_frac'] = 0
 
         # Test default k (it overshoots)
         df = inversion.find_inversion_calving(gdir)
@@ -2875,6 +2882,63 @@ class TestColumbiaCalving(unittest.TestCase):
                                                inversion_only=True).iloc[0]
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
         np.testing.assert_allclose(odf.calving_front_water_depth, water_depth)
+
+    def test_find_calving_eb(self):
+
+        gdir = init_columbia_eb()
+
+        # Test default k (it overshoots)
+        df = inversion.find_inversion_calving(gdir)
+
+        mu_bef = gdir.get_diagnostics()['mu_star_before_calving']
+        frac = cfg.PARAMS['calving_min_mu_star_frac']
+        assert df['calving_mu_star'] == mu_bef * frac
+        assert df['calving_flux'] > 1
+
+        # Test that new MB equal flux
+        mbmod = massbalance.MultipleFlowlineMassBalance
+        mb = mbmod(gdir, use_inversion_flowlines=True,
+                   mb_model_class=massbalance.ConstantMassBalance,
+                   bias=0)
+
+        rho = cfg.PARAMS['ice_density']
+        flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
+        np.testing.assert_allclose(flux_mb, df['calving_flux'],
+                                   atol=0.001)
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
+        assert odf.calving_front_water_depth > 500
+
+        # Test with smaller k (no overshoot)
+        cfg.PARAMS['inversion_calving_k'] = 0.5
+        df = inversion.find_inversion_calving(gdir)
+
+        assert df['calving_flux'] > 0.5
+        assert df['calving_mu_star'] > mu_bef * frac
+
+    def test_find_calving_workflow(self):
+
+        gdir = init_columbia_eb()
+
+        # Check that all this also works with
+        cfg.PARAMS['continue_on_error'] = True
+
+        # Just a standard run
+        workflow.calibrate_inversion_from_consensus([gdir])
+        diag = gdir.get_diagnostics()
+        assert diag['calving_law_flux'] > 0
+        assert diag['calving_mu_star'] < diag['mu_star_before_calving']
+
+        tasks.init_present_time_glacier(gdir)
+        flowline.run_constant_climate(gdir, nyears=100)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            assert ds.calving_m3.data[-1] > 0
+            np.testing.assert_allclose(ds.volume_m3.data[0],
+                                       ds.volume_m3.data[-1],
+                                       rtol=0.1)
 
 
 class TestGrindelInvert(unittest.TestCase):

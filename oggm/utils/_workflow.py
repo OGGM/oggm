@@ -452,10 +452,14 @@ class entity_task(object):
 
         @wraps(task_func)
         def _entity_task(gdir, *, reset=None, print_log=True,
-                         return_value=True, **kwargs):
+                         return_value=True, continue_on_error=None,
+                         **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
+
+            if continue_on_error is None:
+                continue_on_error = cfg.PARAMS['continue_on_error']
 
             task_name = task_func.__name__
 
@@ -495,7 +499,7 @@ class entity_task(object):
                     self.log.error('%s occurred during task %s on %s: %s',
                                    type(err).__name__, task_name,
                                    gdir.rgi_id, str(err))
-                if not cfg.PARAMS['continue_on_error']:
+                if not continue_on_error:
                     raise
 
                 if self.fallback is not None:
