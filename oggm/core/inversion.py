@@ -288,8 +288,6 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     glen_a : Glen A, defaults to PARAMS
     fs : sliding, defaults to PARAMS
     shape_factor: for lateral drag
-    min_slope: sensitive parameter. could be different for ice caps, here
-               we use cfg.PARAMS['min_slope']
 
     Returns
     -------
@@ -1098,6 +1096,12 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     cls = gdir.read_pickle('inversion_input')[-1]
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
+
+    # Stupidly enough the slope is clipped in the OGGM inversion, not
+    # in prepro - clip here
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
     # Check that water level is within given bounds
     if water_level is None:

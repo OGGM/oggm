@@ -2313,5 +2313,9 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
     fl.is_rectangular = np.zeros(nx, dtype=bool)
     fl.is_trapezoid = np.ones(nx, dtype=bool)
 
+    if gdir.is_tidewater:
+        fl.is_rectangular[-5:] = True
+        fl.is_trapezoid[-5:] = False
+
     gdir.write_pickle([fl], 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'elevation_band')

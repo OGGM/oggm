@@ -2853,6 +2853,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] > 0.2
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
         # Test with fixed water depth and high k
         water_depth = 275.282
@@ -2876,6 +2877,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
         assert df['calving_front_water_depth'] == water_depth
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
         # Test glacier stats
         odf = utils.compile_glacier_statistics([gdir],
@@ -2917,6 +2919,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         assert df['calving_flux'] > 0.5
         assert df['calving_mu_star'] > mu_bef * frac
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
     def test_find_calving_workflow(self):
 
@@ -2930,15 +2933,32 @@ class TestColumbiaCalving(unittest.TestCase):
         diag = gdir.get_diagnostics()
         assert diag['calving_law_flux'] > 0
         assert diag['calving_mu_star'] < diag['mu_star_before_calving']
+        np.testing.assert_allclose(diag['calving_flux'], diag['calving_law_flux'])
 
+        # Where we also match MB
+        workflow.match_regional_geodetic_mb([gdir], '01')
+
+        # Check OGGM part
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2006:2018].mean()
+        rho = cfg.PARAMS['ice_density']
+        cal = diag['calving_flux'] * 1e9 * rho / gdir.rgi_area_m2
+
+        # Ref part
+        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        df = pd.read_csv(utils.get_demo_file(df))
+        df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+        smb_ref = df.loc[int('01'), 'dmdtda']
+        np.testing.assert_allclose(mb - cal, smb_ref)
+
+        # But we don't care for the run haha
         tasks.init_present_time_glacier(gdir)
-        flowline.run_constant_climate(gdir, nyears=100)
-
+        flowline.run_constant_climate(gdir, bias=0, nyears=100)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3.data[-1] > 0
             np.testing.assert_allclose(ds.volume_m3.data[0],
                                        ds.volume_m3.data[-1],
-                                       rtol=0.1)
+                                       rtol=0.05)
 
 
 class TestGrindelInvert(unittest.TestCase):

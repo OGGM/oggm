@@ -700,10 +700,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 def match_regional_geodetic_mb(gdirs, rgi_reg):
-    """Regional correction of MB residuals to match observations.
+    """Regional shift of the mass-balance residual to match observations.
 
-    This is useful for operational runs, but also quite hacky. Let's hope
-    we won't need this for too long.
+    This is useful for operational runs, but also quite hacky.
+    Let's hope we won't need this for too long.
 
     Parameters
     ----------
@@ -719,10 +719,16 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
     # And also the Area and calving fluxes
     dfs = utils.compile_glacier_statistics(gdirs, path=False)
     odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
-    odf['AREA'] = dfs.rgi_area_km2
+    odf['AREA'] = dfs.rgi_area_km2 * 1e6
+    # Just take the calving rate and change its units
+    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
+    rho = cfg.PARAMS['ice_density']
+    odf['CALVING'] = dfs['calving_flux'] * 1e9 * rho / odf['AREA']
 
     # Total MB OGGM
-    smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
+    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
+    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
+    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
 
     # Total MB Reference
     df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
@@ -735,6 +741,9 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
 
     # Let's just shift
     log.workflow('Shifting regional MB bias by {}'.format(residual))
+    log.workflow('Observations give {}'.format(smb_ref))
+    log.workflow('OGGM SMB gives {}'.format(out_smb))
+    log.workflow('OGGM frontal ablation gives {}'.format(out_cal))
     for gdir in gdirs:
         try:
             df = gdir.read_json('local_mustar')
