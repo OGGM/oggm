@@ -2748,7 +2748,8 @@ class TestCoxeCalving(unittest.TestCase):
         inversion.mass_conservation_inversion(gdir)
         fls1 = gdir.read_pickle('inversion_flowlines')
         cls1 = gdir.read_pickle('inversion_output')
-
+        # Increase calving for this one
+        cfg.PARAMS['inversion_calving_k'] = 1
         out = inversion.find_inversion_calving(gdir)
         fls2 = gdir.read_pickle('inversion_flowlines')
         cls2 = gdir.read_pickle('inversion_output')
@@ -2895,7 +2896,7 @@ class TestColumbiaCalving(unittest.TestCase):
         mu_bef = gdir.get_diagnostics()['mu_star_before_calving']
         frac = cfg.PARAMS['calving_min_mu_star_frac']
         assert df['calving_mu_star'] == mu_bef * frac
-        assert df['calving_flux'] > 1
+        assert df['calving_flux'] > 0.5
 
         # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
