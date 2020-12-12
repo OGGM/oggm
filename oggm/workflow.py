@@ -723,7 +723,10 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
     # Just take the calving rate and change its units
     # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
     rho = cfg.PARAMS['ice_density']
-    odf['CALVING'] = dfs['calving_flux'] * 1e9 * rho / odf['AREA']
+    if 'calving_flux' in dfs:
+        odf['CALVING'] = dfs['calving_flux'] * 1e9 * rho / odf['AREA']
+    else:
+        odf['CALVING'] = 0
 
     # Total MB OGGM
     out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
