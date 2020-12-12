@@ -298,6 +298,7 @@ class TestFullRun(unittest.TestCase):
         df['y0_len'] = ds.length.sel(rgi_id=df.index, time=0)
         assert_allclose(df['rgi_area_km2'], df['y0_area'], 0.06)
         assert_allclose(df['inv_volume_km3'], df['y0_vol'], 0.04)
+        assert_allclose(df['inv_volume_bsl_km3'], 0)
         assert_allclose(df['main_flowline_length'], df['y0_len'])
 
         # Calving stuff

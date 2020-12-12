@@ -1107,14 +1107,21 @@ def glacier_statistics(gdir, inversion_only=False):
             # Inversion
             if gdir.has_file('inversion_output'):
                 vol = []
+                vol_bsl = []
+                vol_bwl = []
                 cl = gdir.read_pickle('inversion_output')
                 for c in cl:
                     vol.extend(c['volume'])
+                    vol_bsl.extend(c.get('volume_bsl', [0]))
+                    vol_bwl.extend(c.get('volume_bwl', [0]))
                 d['inv_volume_km3'] = np.nansum(vol) * 1e-9
                 area = gdir.rgi_area_km2
                 d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
                 d['vas_volume_km3'] = 0.034 * (area ** 1.375)
                 d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
+                # BSL / BWL
+                d['inv_volume_bsl_km3'] = np.nansum(vol_bsl) * 1e-9
+                d['inv_volume_bwl_km3'] = np.nansum(vol_bwl) * 1e-9
         except BaseException:
             pass
 
