@@ -579,6 +579,10 @@ def inversion_tasks(gdirs, glen_a=None, fs=None):
             else:
                 gdirs_nc.append(gd)
 
+        log.workflow('Starting inversion tasks for {} tidewater and {} '
+                     'non-tidewater glaciers.'.format(len(gdirs_c),
+                                                      len(gdirs_nc)))
+
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
@@ -727,6 +731,17 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
         odf['CALVING'] = dfs['calving_flux'] * 1e9 * rho / odf['AREA']
     else:
         odf['CALVING'] = 0
+
+    # We have to drop nans here, which occur when calving glaciers fail to run
+    odf = odf.dropna()
+
+    # Compare area with total RGI area
+    rdf = 'rgi62_areas.csv'
+    rdf = pd.read_csv(utils.get_demo_file(rdf), dtype={'O1Region': str})
+    ref_area = rdf.loc[rdf['O1Region'] == rgi_reg].iloc[0]['AreaNoC2NoNominal']
+    diff = (1 - odf['AREA'].sum() * 1e-6 / ref_area) * 100
+    msg = 'Applying geodetic MB correction on RGI reg {}. Diff area: {:.2f}%'
+    log.workflow(msg.format(rgi_reg, diff))
 
     # Total MB OGGM
     out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
