@@ -728,7 +728,7 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
     # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
     rho = cfg.PARAMS['ice_density']
     if 'calving_flux' in dfs:
-        odf['CALVING'] = dfs['calving_flux'] * 1e9 * rho / odf['AREA']
+        odf['CALVING'] = dfs['calving_flux'].fillna(0) * 1e9 * rho / odf['AREA']
     else:
         odf['CALVING'] = 0
 
