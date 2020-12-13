@@ -527,6 +527,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
         shutil.copyfile(ipath, opath)
 
+    # Add the extended files
+    pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
+    sf = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
+    opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
+    utils.extend_past_climate_run(past_run_file=pf,
+                                  fixed_geometry_mb_file=mf,
+                                  glacier_statistics_file=sf,
+                                  path=opath)
+
     # L5 OK - compress all in output directory
     log.workflow('L5 done. Writing to tar...')
     level_base_dir = os.path.join(output_base_dir, 'L5')

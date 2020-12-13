@@ -1183,7 +1183,8 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         try:
             climate.local_t_star(gdir, clip_mu_star=False,
                                  min_mu_star=min_mu_star,
-                                 continue_on_error=False)
+                                 continue_on_error=False,
+                                 add_to_log_file=False)
             df = gdir.read_json('local_mustar')
         except MassBalanceCalibrationError as e:
             assert 'mu* out of specified bounds' in str(e)

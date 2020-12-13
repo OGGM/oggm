@@ -2779,6 +2779,9 @@ class TestCoxeCalving(unittest.TestCase):
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
 
+        cfg.PARAMS['inversion_calving_k'] = 1
+        cfg.PARAMS['run_calving_k'] = 1
+
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
@@ -2807,7 +2810,7 @@ class TestColumbiaCalving(unittest.TestCase):
     @pytest.mark.slow
     def test_find_calving_full_fl(self):
 
-        gdir = init_columbia()
+        gdir = init_columbia(reset=True)
 
         # For these tests we allow mu to 0
         cfg.PARAMS['calving_min_mu_star_frac'] = 0
@@ -2886,6 +2889,10 @@ class TestColumbiaCalving(unittest.TestCase):
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
         np.testing.assert_allclose(odf.calving_front_water_depth, water_depth)
 
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+
     def test_find_calving_eb(self):
 
         gdir = init_columbia_eb()
@@ -2922,6 +2929,10 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_mu_star'] > mu_bef * frac
         np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+
     def test_find_calving_workflow(self):
 
         gdir = init_columbia_eb()
@@ -2952,14 +2963,54 @@ class TestColumbiaCalving(unittest.TestCase):
         smb_ref = df.loc[int('01'), 'dmdtda']
         np.testing.assert_allclose(mb - cal, smb_ref)
 
-        # But we don't care for the run haha
+        # OK - run
         tasks.init_present_time_glacier(gdir)
-        flowline.run_constant_climate(gdir, bias=0, nyears=100)
-        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
-            assert ds.calving_m3.data[-1] > 0
-            np.testing.assert_allclose(ds.volume_m3.data[0],
-                                       ds.volume_m3.data[-1],
-                                       rtol=0.05)
+        tasks.run_from_climate_data(gdir, min_ys=1980, ye=2019,
+                                    output_filesuffix='_hist')
+
+        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
+        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
+        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir], path=stats_file)
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+        assert df.loc[gdir.rgi_id, 'is_tidewater']
+
+        # Compile stuff
+        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
+        utils.compile_run_output([gdir], path=past_run_file,
+                                 input_filesuffix='_hist')
+
+        # Extend
+        utils.extend_past_climate_run(past_run_file=past_run_file,
+                                      fixed_geometry_mb_file=mb_file,
+                                      glacier_statistics_file=stats_file,
+                                      path=out_path)
+
+        with xr.open_dataset(out_path) as ods, \
+                xr.open_dataset(past_run_file) as ds:
+
+            ref = ds.volume
+            new = ods.volume_ext
+            for y in [2010, 2012, 2019]:
+                assert new.sel(time=y).data == ref.sel(time=y).data
+
+            new = ods.volume_fixed_geom_ext
+            np.testing.assert_allclose(new.sel(time=2019), ref.sel(time=2019),
+                                       rtol=0.01)
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['volume', 'calving', 'volume_bsl', 'volume_bwl']:
+                rtol = 0.3
+                if 'bsl' in vn or 'bwl' in vn:
+                    rtol = 0.55
+                np.testing.assert_allclose(ods[vn+'_ext'].sel(time=2010) -
+                                           ods[vn+'_ext'].sel(time=2002),
+                                           ods[vn+'_ext'].sel(time=2018) -
+                                           ods[vn+'_ext'].sel(time=2010),
+                                           rtol=rtol)
 
 
 class TestGrindelInvert(unittest.TestCase):

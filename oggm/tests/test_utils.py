@@ -978,6 +978,26 @@ class TestPreproCLI(unittest.TestCase):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
+        # Extended file
+        fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
+                          'historical_run_output_extended_11.nc')
+        with xr.open_dataset(fp) as ods:
+
+            ref = ods.volume_ext
+            new = ods.volume_fixed_geom_ext
+            np.testing.assert_allclose(new.isel(time=-1),
+                                       ref.isel(time=-1),
+                                       rtol=0.02)
+
+            vn = 'volume'
+            np.testing.assert_allclose(ods[vn + '_ext'].sel(time=1990),
+                                       ods[vn + '_ext'].sel(time=2015),
+                                       rtol=0.2)
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['calving', 'volume_bsl', 'volume_bwl']:
+                np.testing.assert_allclose(ods[vn+'_ext'].sel(time=1990), 0)
+
     @pytest.mark.slow
     def test_elev_bands_run(self):
 

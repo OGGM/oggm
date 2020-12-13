@@ -453,7 +453,7 @@ class entity_task(object):
         @wraps(task_func)
         def _entity_task(gdir, *, reset=None, print_log=True,
                          return_value=True, continue_on_error=None,
-                         **kwargs):
+                         add_to_log_file=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
@@ -493,8 +493,9 @@ class entity_task(object):
             except Exception as err:
                 # Something happened
                 out = None
-                gdir.log(task_name, err=err)
-                pipe_log(gdir, task_name, err=err)
+                if add_to_log_file:
+                    gdir.log(task_name, err=err)
+                    pipe_log(gdir, task_name, err=err)
                 if print_log:
                     self.log.error('%s occurred during task %s on %s: %s',
                                    type(err).__name__, task_name,
@@ -1093,8 +1094,10 @@ def glacier_statistics(gdir, inversion_only=False):
     d['cenlon'] = gdir.cenlon
     d['cenlat'] = gdir.cenlat
     d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['rgi_year'] = gdir.rgi_date
     d['glacier_type'] = gdir.glacier_type
     d['terminus_type'] = gdir.terminus_type
+    d['is_tidewater'] = gdir.is_tidewater
     d['status'] = gdir.status
 
     # The rest is less certain. We put these in a try block and see
@@ -1116,9 +1119,7 @@ def glacier_statistics(gdir, inversion_only=False):
                     vol_bwl.extend(c.get('volume_bwl', [0]))
                 d['inv_volume_km3'] = np.nansum(vol) * 1e-9
                 area = gdir.rgi_area_km2
-                d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
                 d['vas_volume_km3'] = 0.034 * (area ** 1.375)
-                d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
                 # BSL / BWL
                 d['inv_volume_bsl_km3'] = np.nansum(vol_bsl) * 1e-9
                 d['inv_volume_bwl_km3'] = np.nansum(vol_bwl) * 1e-9
@@ -1470,6 +1471,141 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
         else:
             out.to_csv(path)
     return out
+
+
+def extend_past_climate_run(past_run_file=None,
+                            fixed_geometry_mb_file=None,
+                            glacier_statistics_file=None,
+                            path=False,
+                            use_compression=True):
+    """Utility function to extend past MB runs prior to the RGI date.
+
+    We use a fixed geometry (and a fixed calving rate) for all dates prior
+    to the RGI date.
+
+    Parameters
+    ----------
+    past_run_file : str
+        path to the historical run (nc)
+    fixed_geometry_mb_file : str
+        path to the MB file (csv)
+    glacier_statistics_file : str
+        path to the glacier stats file (csv)
+    path : str
+        where to store the file
+    use_compression : bool
+
+    Returns
+    -------
+    the extended dataset
+    """
+
+    fixed_geometry_mb_df = pd.read_csv(fixed_geometry_mb_file, index_col=0)
+    stats_df = pd.read_csv(glacier_statistics_file, index_col=0)
+
+    with xr.open_dataset(past_run_file) as past_ds:
+
+        y0_run = int(past_ds.time[0])
+        y1_run = int(past_ds.time[-1])
+        if (y1_run - y0_run + 1) != len(past_ds.time):
+            raise NotImplementedError('Currently only supporting annual outputs')
+        y0_clim = int(fixed_geometry_mb_df.index[0])
+        y1_clim = int(fixed_geometry_mb_df.index[-1])
+        if y0_clim >= y0_run or y1_clim < y0_run:
+            raise InvalidWorkflowError('Dates do not match.')
+        if y1_clim != y1_run - 1:
+            raise InvalidWorkflowError('Dates do not match.')
+        if len(past_ds.rgi_id) != len(fixed_geometry_mb_df.columns):
+            raise InvalidWorkflowError('Nb of glaciers do not match.')
+        if len(past_ds.rgi_id) != len(stats_df.index):
+            raise InvalidWorkflowError('Nb of glaciers do not match.')
+
+        # Make sure we agree on order
+        df = fixed_geometry_mb_df[past_ds.rgi_id]
+
+        # Output data
+        years = np.arange(y0_clim, y1_run+1)
+        ods = past_ds.reindex({'time': years})
+
+        # Time
+        ods['hydro_year'].data[:] = years
+        ods['hydro_month'].data[:] = ods['hydro_month'][-1]
+        ods['calendar_year'].data[:] = years - 1
+        ods['calendar_month'].data[:] = ods['calendar_month'][-1]
+        for vn in ['hydro_year', 'hydro_month',
+                   'calendar_year', 'calendar_month']:
+            ods[vn] = ods[vn].astype(int)
+
+        # New vars
+        for vn in ['volume', 'volume_bsl', 'volume_bwl', 'area', 'calving']:
+            ods[vn + '_ext'] = ods[vn].copy(deep=True)
+            ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
+
+        vn = 'volume_fixed_geom_ext'
+        ods[vn] = ods['volume'].copy(deep=True)
+        ods[vn].attrs['description'] += ' (replaced with fixed geom data)'
+
+        rho = cfg.PARAMS['ice_density']
+        # Loop over the ids
+        for i, rid in enumerate(ods.rgi_id.data):
+            # Both do not need to be same length but they need to start same
+            mb_ts = df.values[:, i]
+            orig_vol_ts = ods.volume_ext.data[:, i]
+            if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
+                continue
+            orig_area_ts = ods.area_ext.data[:, i]
+            orig_calv_ts = ods.calving_ext.data[:, i]
+            # First valid id
+            fid = np.argmax(np.isfinite(orig_vol_ts))
+            # Fill area which stays constant
+            orig_area_ts[:fid] = orig_area_ts[fid]
+
+            # Add calving flux to the mix
+            try:
+                calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
+            except KeyError:
+                calv_flux = 0
+            if not np.isfinite(calv_flux):
+                calv_flux = 0
+
+            # We convert SMB to volume
+            mb_vol_ts = (mb_ts / rho * orig_area_ts[fid] - calv_flux).cumsum()
+            calv_ts = (mb_ts * 0 + calv_flux).cumsum()
+
+            # The -1 is because the volume change is known at end of year
+            mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
+            calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
+
+            # Now back to netcdf
+            ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
+            ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
+            ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+            ods.area_ext.data[:, i] = orig_area_ts
+
+            # Extend vol bsl by assuming that % stays constant
+            bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
+            bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
+            ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
+            ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+
+        # Remove old vars
+        for vn in list(ods.data_vars):
+            if '_ext' not in vn:
+                del ods[vn]
+
+        # Remove t0 (which is NaN)
+        ods = ods.isel(time=slice(1, None))
+
+        # To file?
+        if path:
+            enc_var = {'dtype': 'float32'}
+            if use_compression:
+                enc_var['complevel'] = 5
+                enc_var['zlib'] = True
+            encoding = {v: enc_var for v in ods.data_vars}
+            ods.to_netcdf(path, encoding=encoding)
+
+    return ods
 
 
 def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
