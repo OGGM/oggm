@@ -423,6 +423,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         df = utils.compile_glacier_statistics(gdirs)
+        df['inv_thickness_m'] = df['inv_volume_km3'] / df['rgi_area_km2'] * 1e3
         assert df.inv_thickness_m[0] < 100
 
         df = utils.compile_fixed_geometry_mass_balance(gdirs)
