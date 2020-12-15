@@ -1511,7 +1511,7 @@ def extend_past_climate_run(past_run_file=None,
             raise NotImplementedError('Currently only supporting annual outputs')
         y0_clim = int(fixed_geometry_mb_df.index[0])
         y1_clim = int(fixed_geometry_mb_df.index[-1])
-        if y0_clim >= y0_run or y1_clim < y0_run:
+        if y0_clim > y0_run or y1_clim < y0_run:
             raise InvalidWorkflowError('Dates do not match.')
         if y1_clim != y1_run - 1:
             raise InvalidWorkflowError('Dates do not match.')
@@ -1552,6 +1552,10 @@ def extend_past_climate_run(past_run_file=None,
             mb_ts = df.values[:, i]
             orig_vol_ts = ods.volume_ext.data[:, i]
             if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
+                # Not a valid glacier
+                continue
+            if np.isfinite(orig_vol_ts[0]):
+                # Nothing to extend, really
                 continue
             orig_area_ts = ods.area_ext.data[:, i]
             orig_calv_ts = ods.calving_ext.data[:, i]
