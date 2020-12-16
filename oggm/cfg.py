@@ -45,8 +45,8 @@ CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 CONFIG_MODIFIED = False
 
 # Share state accross processes
-DL_VERIFIED = Manager().dict()
-DEM_SOURCE_TABLE = Manager().dict()
+DL_VERIFIED = dict()
+DEM_SOURCE_TABLE = dict()
 
 # Machine epsilon
 FLOAT_EPS = np.finfo(float).eps
@@ -779,7 +779,10 @@ def pack_config():
         'PATHS': PATHS,
         'LRUHANDLERS': LRUHANDLERS,
         'DATA': DATA,
-        'BASENAMES': dict(BASENAMES)
+        'BASENAMES': dict(BASENAMES),
+
+        'DL_VERIFIED': DL_VERIFIED,
+        'DEM_SOURCE_TABLE': DEM_SOURCE_TABLE
     }
 
 
@@ -787,6 +790,7 @@ def unpack_config(cfg_dict):
     """Unpack and apply the config packed via pack_config."""
 
     global IS_INITIALIZED, PARAMS, PATHS, BASENAMES, LRUHANDLERS, DATA
+    global DL_VERIFIED, DEM_SOURCE_TABLE
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
     PARAMS = cfg_dict['PARAMS']
@@ -799,6 +803,27 @@ def unpack_config(cfg_dict):
     BASENAMES = DocumentedDict()
     for k in cfg_dict['BASENAMES']:
         BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')
+
+    DL_VERIFIED = cfg_dict['DL_VERIFIED']
+    DEM_SOURCE_TABLE = cfg_dict['DEM_SOURCE_TABLE']
+
+
+def set_manager(manager):
+    """Sets a multiprocessing manager to use for shared dicts"""
+
+    global DL_VERIFIED, DEM_SOURCE_TABLE
+
+    if manager:
+        new_dict = manager.dict()
+        new_dict.update(DL_VERIFIED)
+        DL_VERIFIED = new_dict
+
+        new_dict = manager.dict()
+        new_dict.update(DEM_SOURCE_TABLE)
+        DEM_SOURCE_TABLE = new_dict
+    else:
+        DL_VERIFIED = dict(DL_VERIFIED)
+        DEM_SOURCE_TABLE = dict(DEM_SOURCE_TABLE)
 
 
 def add_to_basenames(basename, filename, docstr=''):

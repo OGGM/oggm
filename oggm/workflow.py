@@ -27,6 +27,7 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # Multiprocessing Pool
+_mp_manager = None
 _mp_pool = None
 
 
@@ -37,22 +38,30 @@ def _init_pool_globals(_cfg_contents, global_lock):
 
 def init_mp_pool(reset=False):
     """Necessary because at import time, cfg might be uninitialized"""
-    global _mp_pool
-    if _mp_pool and not reset:
+    global _mp_manager, _mp_pool
+    if _mp_pool and _mp_manager and not reset:
         return _mp_pool
 
     cfg.CONFIG_MODIFIED = False
-    if _mp_pool and reset:
+    if _mp_pool:
         _mp_pool.terminate()
         _mp_pool = None
+    if _mp_manager:
+        cfg.set_manager(None)
+        _mp_manager.shutdown()
+        _mp_manager = None
 
     if cfg.PARAMS['use_mp_spawn']:
         mp = multiprocessing.get_context('spawn')
     else:
         mp = multiprocessing
 
+    _mp_manager = mp.Manager()
+
+    cfg.set_manager(_mp_manager)
     cfg_contents = cfg.pack_config()
-    global_lock = mp.Manager().Lock()
+
+    global_lock = _mp_manager.Lock()
 
     mpp = cfg.PARAMS['mp_processes']
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
