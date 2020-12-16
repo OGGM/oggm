@@ -202,6 +202,9 @@ def get_dl_verify_data(section):
 
     def verify_file():
         """Check the hash file's own hash"""
+        if not cfg.PARAMS['has_internet']:
+            return
+
         logger.info('Checking the download verification file checksum...')
         try:
             with requests.get(CHECKSUM_VALIDATION_URL) as req:
@@ -228,6 +231,9 @@ def get_dl_verify_data(section):
         verify_file()
 
     if not os.path.isfile(verify_file_path):
+        if not cfg.PARAMS['has_internet']:
+            return pd.DataFrame()
+
         logger.info('Downloading %s to %s...'
                     % (CHECKSUM_URL, verify_file_path))
 
