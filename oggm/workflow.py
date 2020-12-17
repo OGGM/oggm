@@ -657,8 +657,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         return odf.dropna()
 
     def to_minimize(x):
-        log.info('Consensus estimate optimisation with '
-                 'A factor: {} and fs: {}'.format(x, fs))
+        log.workflow('Consensus estimate optimisation with '
+                     'A factor: {} and fs: {}'.format(x, fs))
         odf = compute_vol(x)
         return odf.vol_itmix_m3.sum() - odf.oggm.sum()
 

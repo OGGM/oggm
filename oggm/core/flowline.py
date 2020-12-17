@@ -2095,8 +2095,8 @@ def init_present_time_glacier(gdir):
 
 
 def robust_model_run(*args, **kwargs):
-    warnings.warn('The task `robust_model_run` is deprecated. It should '
-                  'only be used for testing.', DeprecationWarning)
+    warnings.warn('The task `robust_model_run` is deprecated.',
+                  DeprecationWarning)
     return flowline_model_run(*args, **kwargs)
 
 

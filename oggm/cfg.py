@@ -45,8 +45,10 @@ CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 CONFIG_MODIFIED = False
 
 # Share state accross processes
-DL_VERIFIED = Manager().dict()
-DEM_SOURCE_TABLE = Manager().dict()
+# DL_VERIFIED = Manager().dict()
+# DEM_SOURCE_TABLE = Manager().dict()
+DL_VERIFIED = dict()
+DEM_SOURCE_TABLE = dict()
 
 # Machine epsilon
 FLOAT_EPS = np.finfo(float).eps
