@@ -173,6 +173,7 @@ def get_env_info():
         ("pyproj", lambda mod: mod.__version__),
         ("shapely", lambda mod: mod.__version__),
         ("xarray", lambda mod: mod.__version__),
+        ("dask", lambda mod: mod.__version__),
         ("salem", lambda mod: mod.__version__),
     ]
 
@@ -704,11 +705,14 @@ class compile_to_netcdf(object):
             try:
                 with xr.open_mfdataset(tmp_paths, combine='nested',
                                        concat_dim='rgi_id') as ds:
-                    # the .load() is actually quite uncool
+                    # the .load() is actually quite uncool here, but it solves
+                    # an unbelievable stalling problem in multiproc
                     ds.load().to_netcdf(path)
             except TypeError:
                 # xr < v 0.13
                 with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
+                    # the .load() is actually quite uncool here, but it solves
+                    # an unbelievable stalling problem in multiproc
                     ds.load().to_netcdf(path)
 
             # We can't return the dataset without loading it, so we don't
