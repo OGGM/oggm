@@ -11,6 +11,7 @@ import json
 from collections import OrderedDict
 from multiprocessing import Manager
 from distutils.util import strtobool
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -45,10 +46,8 @@ CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.oggm_config')
 CONFIG_MODIFIED = False
 
 # Share state accross processes
-# DL_VERIFIED = Manager().dict()
-# DEM_SOURCE_TABLE = Manager().dict()
-DL_VERIFIED = dict()
-DEM_SOURCE_TABLE = dict()
+DL_VERIFIED = Manager().dict()
+DEM_SOURCE_TABLE = Manager().dict()
 
 # Machine epsilon
 FLOAT_EPS = np.finfo(float).eps
@@ -292,7 +291,7 @@ _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 
 
-def set_logging_config(logging_level='INFO'):
+def set_logging_config(logging_level='INFO', future=False):
     """Set the global logger parameters.
 
     Logging levels:
@@ -321,6 +320,8 @@ def set_logging_config(logging_level='INFO'):
         the logging level. See description above for a list of options. Setting
         to `None` is equivalent to `'CRITICAL'`, i.e. no log output will be
         generated.
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
 
     # Add a custom level - just for us
@@ -350,13 +351,34 @@ def set_logging_config(logging_level='INFO'):
     # Basic config
     if logging_level is None:
         logging_level = 'CRITICAL'
+
     logging_level = logging_level.upper()
+
+    # Deprecation warning
+    if logging_level == 'WORKFLOW' and not future:
+
+        msg = ('In future versions of OGGM, the logging config WORKFLOW '
+               'will no longer print ERROR or WARNING messages, but only high '
+               'level information (i.e. hiding potential errors in your code '
+               'but also avoiding cluttered log files for runs with '
+               'many expected errors, e.g. global runs). If you want to obtain '
+               'a similar logger behavior as before, set '
+               "`logging_level='WARNING'`, which will print high level info "
+               "as well as errors and warnings during the run. If you "
+               "want to use the new behavior and suppress this warning, "
+               "set `logging_level='WORKFLOW'` and `future=True`.")
+        warnings.warn(msg, category=FutureWarning)
+
+        # Set old behavior
+        logging_level = 'WARNING'
+
     logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
                         level=getattr(logging, logging_level))
 
 
-def initialize_minimal(file=None, logging_level='INFO', params=None):
+def initialize_minimal(file=None, logging_level='INFO', params=None,
+                       future=False):
     """Same as initialise() but without requiring any download of data.
 
     This is useful for "flowline only" OGGM applications
@@ -369,12 +391,14 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
     global IS_INITIALIZED
     global PARAMS
     global PATHS
 
-    set_logging_config(logging_level=logging_level)
+    set_logging_config(logging_level=logging_level, future=future)
 
     is_default = False
     if file is None:

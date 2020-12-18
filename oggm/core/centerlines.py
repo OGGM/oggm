@@ -2204,7 +2204,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     df = df.dropna()
 
     # Check for binned vars
-    for var, data, in_total, do_p in zip(bin_variables,  out_vars, out_totals,
+    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
                                          preserve_totals):
         if do_p:
             out_total = np.nansum(df[var] * df['area'])

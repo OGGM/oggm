@@ -16,7 +16,7 @@ start = time.time()
 log = logging.getLogger(__name__)
 
 # Initialize OGGM and set up the default run parameters
-cfg.initialize(logging_level='WORKFLOW')
+cfg.initialize(logging_level='ERROR')
 rgi_version = '61'
 rgi_region = '11'  # Region Central Europe
 

@@ -159,7 +159,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Initialize OGGM and set up the run parameters
     cfg.initialize(file=params_file, params=params,
-                   logging_level=logging_level)
+                   logging_level=logging_level,
+                   future=True)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp

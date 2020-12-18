@@ -26,7 +26,7 @@ rgi_version = '62'
 reset = False
 
 # Initialize OGGM and set up the run parameters
-cfg.initialize(logging_level='WORKFLOW')
+cfg.initialize(logging_level='ERROR')
 
 # Local paths (where to write the OGGM run output)
 dirname = 'OGGM_ref_mb_RGIV{}_OGGM{}'.format(rgi_version, oggm.__version__)
