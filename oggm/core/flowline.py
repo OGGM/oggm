@@ -902,6 +902,7 @@ class FlowlineModel(object):
 
         # init output
         if run_path is not None:
+            log.info('run_until_and_store: writing skeleton file: %s', run_path)
             self.to_netcdf(run_path)
         ny = len(yearly_time)
         if ny == 1:
@@ -980,6 +981,7 @@ class FlowlineModel(object):
 
         # Run
         j = 0
+        log.info('run_until_and_store (%s). Start run...', run_path)
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
             self.run_until(yr)
             # Model run
@@ -1012,6 +1014,7 @@ class FlowlineModel(object):
             diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
 
+        log.info('run_until_and_store (%s). Ended run. Now appending to Dataset...', run_path)
         # to datasets
         run_ds = []
         for (s, w, b) in zip(sects, widths, bucket):
@@ -1035,6 +1038,7 @@ class FlowlineModel(object):
 
         # write output?
         if run_path is not None:
+            log.info('run_until_and_store (%s). Writing to file...', run_path)
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
                       }
@@ -1045,6 +1049,7 @@ class FlowlineModel(object):
             diag_ds.to_netcdf(run_path, 'a')
 
         if diag_path is not None:
+            log.info('run_until_and_store (%s). Writing to diag file...', run_path)
             diag_ds.to_netcdf(diag_path)
 
         return run_ds, diag_ds
@@ -2187,9 +2192,11 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
         np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+        log.info('(%s) Now starting run_until_and_store', gdir.rgi_id)
         model.run_until_and_store(ye, run_path=run_path,
                                   diag_path=diag_path,
                                   store_monthly_step=store_monthly_step)
+        log.info('(%s) Done with run_until_and_store', gdir.rgi_id)
 
     return model
 
