@@ -4,7 +4,7 @@
 Version history
 ===============
 
-v1.3.X (unreleased)
+v1.4.0 (unreleased)
 -------------------
 
 Breaking changes
@@ -59,6 +59,9 @@ Breaking changes
 - new options to compute the length of a glacier during a run:
   `PARAMS['min_ice_thick_for_length']` and `PARAMS['glacier_length_method']`
   (:pull:`1069`). By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- several further important changes to be documented later in
+  (:pull:`1099`). By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 
 Enhancements

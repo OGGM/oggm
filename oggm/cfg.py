@@ -578,7 +578,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     IS_INITIALIZED = True
 
 
-def initialize(file=None, logging_level='INFO', params=None):
+def initialize(file=None, logging_level='INFO', params=None, future=False):
     """Read the configuration file containing the run's parameters.
 
     This should be the first call, before using any of the other OGGM modules
@@ -592,11 +592,14 @@ def initialize(file=None, logging_level='INFO', params=None):
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
     global PARAMS
     global DATA
 
-    initialize_minimal(file=file, logging_level=logging_level, params=params)
+    initialize_minimal(file=file, logging_level=logging_level, params=params,
+                       future=future)
 
     # Do not spam
     PARAMS.do_log = False
