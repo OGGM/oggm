@@ -616,7 +616,6 @@ class compile_to_netcdf(object):
             number of glacier directories per temporary files
         """
         self.log = log
-        self.log.info('compile_to_netcdf: initializing decorator')
 
     def __call__(self, task_func):
         """Decorate."""
@@ -626,8 +625,6 @@ class compile_to_netcdf(object):
                                output_filesuffix='', path=True,
                                tmp_file_size=1000,
                                **kwargs):
-
-            self.log.info('compile_to_netcdf: in task')
 
             # Check input
             if filesuffix:
@@ -644,7 +641,6 @@ class compile_to_netcdf(object):
 
             hemisphere = [gd.hemisphere for gd in gdirs]
             if len(np.unique(hemisphere)) == 2:
-                self.log.info('compile_to_netcdf: two hemispheres')
                 if path is not True:
                     raise InvalidParamsError('With glaciers from both '
                                              'hemispheres, set `path=True`.')
@@ -693,7 +689,6 @@ class compile_to_netcdf(object):
 
             try:
                 for spath, sgdirs in zip(tmp_paths, sub_gdirs):
-                    self.log.info('compile_to_netcdf: {}'.format(spath))
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
             except BaseException:
@@ -707,17 +702,14 @@ class compile_to_netcdf(object):
 
             # Ok, now merge and return
             try:
-                self.log.info('compile_to_netcdf: opening xarray mf dataset new.')
                 with xr.open_mfdataset(tmp_paths, combine='nested',
                                        concat_dim='rgi_id') as ds:
-                    self.log.info('compile_to_netcdf: writing xarray mf dataset: {}'.format(path))
-                    ds.to_netcdf(path)
+                    # the .load() is actually quite uncool
+                    ds.load().to_netcdf(path)
             except TypeError:
                 # xr < v 0.13
-                self.log.info('compile_to_netcdf: opening xarray mf dataset old.')
                 with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
-                    self.log.info('compile_to_netcdf: writing xarray mf dataset: {}'.format(path))
-                    ds.to_netcdf(path)
+                    ds.load().to_netcdf(path)
 
             # We can't return the dataset without loading it, so we don't
             return None
@@ -768,7 +760,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             i += 1
 
     # OK found it, open it and prepare the output
-    log.info('compile_run_output: prepare output')
     with xr.open_dataset(ppath) as ds_diag:
 
         # Prepare output
@@ -817,7 +808,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             out_1d[vn] = var
 
     # Read out
-    log.info('compile_run_output: loop over gdirs')
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
@@ -850,7 +840,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
         encoding = {v: enc_var for v in ds.data_vars}
-        log.info('compile_run_output: write to {}'.format(path))
         ds.to_netcdf(path, encoding=encoding)
 
     return ds
