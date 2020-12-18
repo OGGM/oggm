@@ -498,6 +498,7 @@ class TestGIS(unittest.TestCase):
         assert gridded_ds.salem.grid == gtiff_ds.salem.grid
         assert np.allclose(gridded_topo.data, gtiff_ds.data)
 
+
 class TestCenterlines(unittest.TestCase):
 
     def setUp(self):
