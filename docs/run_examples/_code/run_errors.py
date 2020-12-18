@@ -13,7 +13,7 @@ start = time.time()
 log = logging.getLogger(__name__)
 
 # Initialize OGGM and set up the default run parameters
-cfg.initialize(logging_level='WORKFLOW')
+cfg.initialize(logging_level='ERROR')
 
 # Here we override some of the default parameters
 # How many grid points around the glacier?

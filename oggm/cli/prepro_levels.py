@@ -7,9 +7,11 @@ Type `$ oggm_prepro -h` for help
 # External modules
 import os
 import sys
+import shutil
 import argparse
 import time
 import logging
+import pandas as pd
 import numpy as np
 import geopandas as gpd
 
@@ -73,8 +75,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      max_level=4, logging_level='WORKFLOW',
-                      disable_dl_verify=False):
+                      match_geodetic_mb=False, centerlines_only=False,
+                      add_consensus=False, max_level=5,
+                      logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
     Parameters
@@ -109,6 +112,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     disable_mp : bool
         disable multiprocessing
+    elev_bands : bool
+        compute all flowlines based on the Huss&Hock 2015 method instead
+        of the OGGM default, which is a mix of elev_bands and centerlines.
+    centerlines_only : bool
+        compute all flowlines based on the OGGM centerline(s) method instead
+        of the OGGM default, which is a mix of elev_bands and centerlines.
+    match_geodetic_mb : bool
+        match the regional mass-balance estimates at the regional level
+        (currently Hugonnet et al., 2020).
+    add_consensus : bool
+        adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
     max_level : int
         the maximum pre-processing level before stopping
     logging_level : str
@@ -122,8 +137,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     # Input check
-    if max_level not in [1, 2, 3, 4]:
-        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4]')
+    if max_level not in [1, 2, 3, 4, 5]:
+        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
 
     # Time
     start = time.time()
@@ -144,7 +159,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Initialize OGGM and set up the run parameters
     cfg.initialize(file=params_file, params=params,
-                   logging_level=logging_level)
+                   logging_level=logging_level,
+                   future=True)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp
@@ -161,18 +177,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # takes a long time, so deactivating this can make sense
     cfg.PARAMS['dl_verify'] = not disable_dl_verify
 
-    # For statistics
-    climate_periods = [1920, 1960, 2000]
+    # Log the parameters
+    msg = '# OGGM Run parameters:'
+    for k, v in cfg.PARAMS.items():
+        if type(v) in [pd.DataFrame, dict]:
+            continue
+        msg += '\n    {}: {}'.format(k, v)
+    log.workflow(msg)
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
-    rgi_dir_name = 'RGI{}'.format(rgi_version)
-    border_dir_name = 'b_{:03d}'.format(border)
-    base_dir = os.path.join(output_folder, rgi_dir_name, border_dir_name)
+    output_base_dir = os.path.join(output_folder,
+                                   'RGI{}'.format(rgi_version),
+                                   'b_{:03d}'.format(border))
 
     # Add a package version file
-    utils.mkdir(base_dir)
-    opath = os.path.join(base_dir, 'package_versions.txt')
+    utils.mkdir(output_base_dir)
+    opath = os.path.join(output_base_dir, 'package_versions.txt')
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
@@ -186,6 +207,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgif = utils.get_rgi_intersects_region_file(rgi_reg,
                                                     version=rgi_version)
         cfg.set_intersects_db(rgif)
+
+        # Some RGI input quality checks - this is based on visual checks
+        # of large glaciers in the RGI
+        ids_to_ice_cap = [
+            'RGI60-05.10315',  # huge Greenland ice cap
+            'RGI60-03.01466',  # strange thing next to Devon
+            'RGI60-09.00918',  # Academy of sciences Ice cap
+            'RGI60-09.00969',
+            'RGI60-09.00958',
+            'RGI60-09.00957',
+        ]
+        rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
+
+        # In AA almost all large ice bodies are actually ice caps
+        if rgi_reg == '19':
+            rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
+
+        # For greenland we omit connectivity level 2
+        if rgi_reg == '05':
+            rgidf = rgidf.loc[rgidf['Connect'] != 2]
     else:
         rgidf = test_rgidf
         cfg.set_intersects_db(test_intersects_file)
@@ -196,9 +237,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             rgidf = rgidf.sample(4)
 
-    # Sort for more efficient parallel computing
-    rgidf = rgidf.sort_values('Area', ascending=False)
-
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
@@ -207,16 +245,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L0', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L0', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L0 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L0')
+    log.workflow('L0 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L0')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 0:
         _time_log()
         return
@@ -243,10 +282,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      gdirs, source='ALL')
 
         # Compress all in output directory
-        l_base_dir = os.path.join(base_dir, 'L1')
+        level_base_dir = os.path.join(output_base_dir, 'L1')
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=l_base_dir)
-        utils.base_dir_to_tar(l_base_dir)
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
 
         _time_log()
         return
@@ -259,59 +298,124 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  source=source)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L1', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L1 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L1')
+    log.workflow('L1 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L1')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 1:
         _time_log()
         return
 
     # L2 - Tasks
+    # Check which glaciers will be processed as what
     if elev_bands:
-        # HH2015 method
+        gdirs_band = gdirs
+        gdirs_cent = []
+    elif centerlines_only:
+        gdirs_band = []
+        gdirs_cent = gdirs
+    else:
+        # Default is to mix
+        # Curated list of large (> 50 km2) glaciers that don't run
+        # (CFL error) mostly because the centerlines are crap
+        # This is a really temporary fix until we have some better
+        # solution here
+        ids_to_bands = [
+            'RGI60-01.13696', 'RGI60-03.01710', 'RGI60-01.13635',
+            'RGI60-01.14443', 'RGI60-03.01678', 'RGI60-03.03274',
+            'RGI60-01.17566', 'RGI60-03.02849', 'RGI60-01.16201',
+            'RGI60-01.14683', 'RGI60-07.01506', 'RGI60-07.01559',
+            'RGI60-03.02687', 'RGI60-17.00172', 'RGI60-01.23649',
+            'RGI60-09.00077', 'RGI60-03.00994', 'RGI60-01.26738',
+            'RGI60-03.00283', 'RGI60-01.16121', 'RGI60-01.27108',
+            'RGI60-09.00132', 'RGI60-13.43483', 'RGI60-09.00069',
+            'RGI60-14.04404', 'RGI60-17.01218', 'RGI60-17.15877',
+            'RGI60-13.30888', 'RGI60-17.13796', 'RGI60-17.15825',
+            'RGI60-01.09783']
+        if rgi_reg == '19':
+            gdirs_band = gdirs
+            gdirs_cent = []
+        else:
+            gdirs_band = []
+            gdirs_cent = []
+            for gdir in gdirs:
+                if gdir.is_icecap or gdir.rgi_id in ids_to_bands:
+                    gdirs_band.append(gdir)
+                else:
+                    gdirs_cent.append(gdir)
+
+    log.workflow('Start flowline processing with: '
+                 'N centerline type: {}, '
+                 'N elev bands type: {}.'
+                 ''.format(len(gdirs_cent), len(gdirs_band)))
+
+    # HH2015 method
+    workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
+
+    # Centerlines OGGM
+    workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
+
+    if add_consensus:
+        from oggm.shop.bedtopo import add_consensus_thickness
+        workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
+        workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+
+        # Elev bands with var data
+        vn = 'consensus_ice_thickness'
+        workflow.execute_entity_task(tasks.elevation_band_flowline,
+                                     gdirs_band, bin_variables=vn)
+        workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
+                                     gdirs_band, bin_variables=vn)
+    else:
+        # HH2015 method without it
         task_list = [
-            tasks.simple_glacier_masks,
             tasks.elevation_band_flowline,
             tasks.fixed_dx_elevation_band_flowline,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
         ]
         for task in task_list:
-            workflow.execute_entity_task(task, gdirs)
-    else:
-        # Default OGGM
-        task_list = [
-            tasks.glacier_masks,
-            tasks.compute_centerlines,
-            tasks.initialize_flowlines,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-            tasks.catchment_area,
-            tasks.catchment_intersections,
-            tasks.catchment_width_geom,
-            tasks.catchment_width_correction,
-        ]
-        for task in task_list:
-            workflow.execute_entity_task(task, gdirs)
+            workflow.execute_entity_task(task, gdirs_band)
+
+    # HH2015 method
+    task_list = [
+        tasks.compute_downstream_line,
+        tasks.compute_downstream_bedshape,
+    ]
+    for task in task_list:
+        workflow.execute_entity_task(task, gdirs_band)
+
+    # Centerlines OGGM
+    task_list = [
+        tasks.compute_centerlines,
+        tasks.initialize_flowlines,
+        tasks.compute_downstream_line,
+        tasks.compute_downstream_bedshape,
+        tasks.catchment_area,
+        tasks.catchment_intersections,
+        tasks.catchment_width_geom,
+        tasks.catchment_width_correction,
+    ]
+    for task in task_list:
+        workflow.execute_entity_task(task, gdirs_cent)
 
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L2', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
     # L2 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L2')
+    log.workflow('L2 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L2')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 2:
         _time_log()
         return
@@ -319,48 +423,127 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # L3 - Tasks
     task_list = [
         tasks.process_climate_data,
+        tasks.historical_climate_qc,
         tasks.local_t_star,
         tasks.mu_star_calibration,
-        tasks.prepare_for_inversion,
-        tasks.mass_conservation_inversion,
-        tasks.filter_inversion_output,
-        tasks.init_present_time_glacier,
     ]
     for task in task_list:
         workflow.execute_entity_task(task, gdirs)
 
+    # Inversion: we match the consensus
+    workflow.calibrate_inversion_from_consensus(gdirs,
+                                                apply_fs_on_mismatch=True,
+                                                error_on_mismatch=False)
+
+    # Do we want to match geodetic estimates?
+    # This affects only the bias so we can actually do this *after*
+    # the inversion, but we really want to take calving into account here
+    if match_geodetic_mb:
+        workflow.match_regional_geodetic_mb(gdirs, rgi_reg)
+
+    # We get ready for modelling
+    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+
     # Glacier stats
-    sum_dir = os.path.join(base_dir, 'L3', 'summary')
+    sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
     utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
     opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_climate_statistics(gdirs, add_climate_period=climate_periods,
-                                     path=opath)
+    utils.compile_climate_statistics(gdirs, path=opath)
+    opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
+    utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
 
     # L3 OK - compress all in output directory
-    l_base_dir = os.path.join(base_dir, 'L3')
+    log.workflow('L3 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L3')
     workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=l_base_dir)
-    utils.base_dir_to_tar(l_base_dir)
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
     if max_level == 3:
         _time_log()
         return
 
     # L4 - No tasks: add some stats for consistency and make the dirs small
-    sum_dir = os.path.join(base_dir, 'L4', 'summary')
+    sum_dir_L3 = sum_dir
+    sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
     utils.mkdir(sum_dir)
+
+    # Copy L3 files for consistency
+    for bn in ['glacier_statistics', 'climate_statistics',
+               'fixed_geometry_mass_balance']:
+        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+        shutil.copyfile(ipath, opath)
+
+    # Copy mini data to new dir
+    mini_base_dir = os.path.join(working_dir, 'mini_perglacier')
+    mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
+                                              base_dir=mini_base_dir)
+
+    # L4 OK - compress all in output directory
+    log.workflow('L4 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L4')
+    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
+    if max_level == 4:
+        _time_log()
+        return
+
+    # L5 - spinup run in mini gdirs
+    gdirs = mini_gdirs
+
+    # Get end date. The first gdir might have blown up, try some others
+    i = 0
+    while True:
+        if i >= len(gdirs):
+            raise RuntimeError('Found no valid glaciers!')
+        try:
+            y0 = gdirs[i].get_climate_info()['baseline_hydro_yr_0']
+            # One adds 1 because the run ends at the end of the year
+            ye = gdirs[i].get_climate_info()['baseline_hydro_yr_1'] + 1
+            break
+        except BaseException:
+            i += 1
+
+    # OK - run
+    workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
+                                 min_ys=y0, ye=ye,
+                                 output_filesuffix='_historical')
+
+    # Now compile the output
+    sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
+    utils.mkdir(sum_dir)
+    opath = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
+
+    # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
 
-    # Copy mini data to new dir
-    base_dir = os.path.join(base_dir, 'L4')
-    mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
-                                              base_dir=base_dir)
+    # Other stats for consistency
+    for bn in ['climate_statistics', 'fixed_geometry_mass_balance']:
+        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+        shutil.copyfile(ipath, opath)
 
-    # L4 OK - compress all in output directory
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=True)
-    utils.base_dir_to_tar(base_dir)
+    # Add the extended files
+    pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
+    sf = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
+    opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
+    utils.extend_past_climate_run(past_run_file=pf,
+                                  fixed_geometry_mb_file=mf,
+                                  glacier_statistics_file=sf,
+                                  path=opath)
+
+    # L5 OK - compress all in output directory
+    log.workflow('L5 done. Writing to tar...')
+    level_base_dir = os.path.join(output_base_dir, 'L5')
+    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                 base_dir=level_base_dir)
+    utils.base_dir_to_tar(level_base_dir)
 
     _time_log()
 
@@ -381,9 +564,9 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
-    parser.add_argument('--max-level', type=int, default=4,
+    parser.add_argument('--max-level', type=int, default=5,
                         help='the maximum level you want to run the '
-                             'pre-processing for (1, 2, 3 or 3).')
+                             'pre-processing for (1, 2, 3, 4 or 5).')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -400,7 +583,17 @@ def parse_args(args):
                              'WORKFLOW).')
     parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the Huss&Hock '
-                             '2015 method instead of the OGGM one.')
+                             '2015 ethod instead of the OGGM default, which is '
+                             'a mix of elev_bands and centerlines.')
+    parser.add_argument('--centerlines-only', nargs='?', const=True, default=False,
+                        help='compute the flowlines based on the OGGM '
+                             'centerline(s) method instead of the OGGM '
+                             'default, which is a mix of elev_bands and '
+                             'centerlines.')
+    parser.add_argument('--match-geodetic-mb', nargs='?', const=True, default=False,
+                        help='match regional SMB values to geodetic estimates '
+                             '(currently Hugonnet et al., 2020) '
+                             'by shifting the SMB residual.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -410,6 +603,11 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
+    parser.add_argument('--add-consensus', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the consensus estimates '
+                             'thickness to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -468,6 +666,9 @@ def parse_args(args):
                 demo=args.demo, dem_source=args.dem_source,
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
+                centerlines_only=args.centerlines_only,
+                match_geodetic_mb=args.match_geodetic_mb,
+                add_consensus=args.add_consensus,
                 disable_dl_verify=args.disable_dl_verify
                 )
 

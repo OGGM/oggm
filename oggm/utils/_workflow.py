@@ -64,7 +64,7 @@ from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 
-# Default RGI date (median per region)
+# Default RGI date (median per region in RGI6)
 RGI_DATE = {'01': 2009,
             '02': 2004,
             '03': 1999,
@@ -211,21 +211,21 @@ def show_versions(logger=None):
     the output string
     """
 
-    _print = print if logger is None else logger.workflow
-
     sys_info = get_sys_info()
     deps_blob = get_env_info()
 
-    out = ["# System info:"]
+    out = ['# OGGM environment: ']
+    out.append("## System info:")
     for k, stat in sys_info:
-        out.append("%s: %s" % (k, stat))
-    out.append("# Packages info:")
+        out.append("    %s: %s" % (k, stat))
+    out.append("## Packages info:")
     for k, stat in deps_blob:
-        out.append("%s: %s" % (k, stat))
-    out.append("# OGGM git identifier:")
-    out.append(get_git_ident())
-    for l in out:
-        _print(l)
+        out.append("    %s: %s" % (k, stat))
+    out.append("    OGGM git identifier: " + get_git_ident())
+
+    if logger is not None:
+        logger.workflow('\n'.join(out))
+
     return '\n'.join(out)
 
 
@@ -423,6 +423,11 @@ class entity_task(object):
             available in ``cfg.BASENAMES``)
         fallback: python function
             will be executed on gdir if entity_task fails
+        return_value: bool
+            whether the return value from the task should be passed over
+            to the caller or not. In general you will always want this to
+            be true, but sometimes the task return things which are not
+            useful in production and my use a lot of memory, etc,
         """
         self.log = log
         self.writes = writes
@@ -446,10 +451,15 @@ class entity_task(object):
         task_func.__doc__ = '\n'.join((task_func.__doc__, self.iodoc))
 
         @wraps(task_func)
-        def _entity_task(gdir, *, reset=None, print_log=True, **kwargs):
+        def _entity_task(gdir, *, reset=None, print_log=True,
+                         return_value=True, continue_on_error=None,
+                         add_to_log_file=True, **kwargs):
 
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
+
+            if continue_on_error is None:
+                continue_on_error = cfg.PARAMS['continue_on_error']
 
             task_name = task_func.__name__
 
@@ -483,18 +493,20 @@ class entity_task(object):
             except Exception as err:
                 # Something happened
                 out = None
-                gdir.log(task_name, err=err)
-                pipe_log(gdir, task_name, err=err)
+                if add_to_log_file:
+                    gdir.log(task_name, err=err)
+                    pipe_log(gdir, task_name, err=err)
                 if print_log:
                     self.log.error('%s occurred during task %s on %s: %s',
                                    type(err).__name__, task_name,
                                    gdir.rgi_id, str(err))
-                if not cfg.PARAMS['continue_on_error']:
+                if not continue_on_error:
                     raise
 
                 if self.fallback is not None:
                     self.fallback(gdir)
-            return out
+            if return_value:
+                return out
 
         _entity_task.__dict__['is_entity_task'] = True
         return _entity_task
@@ -632,9 +644,9 @@ class compile_to_netcdf(object):
                 if path is not True:
                     raise InvalidParamsError('With glaciers from both '
                                              'hemispheres, set `path=True`.')
-                self.log.warning('compile_*: you gave me a list of gdirs from '
-                                 'both hemispheres. I am going to write two '
-                                 'files out of it with _sh and _nh suffixes.')
+                self.log.workflow('compile_*: you gave me a list of gdirs from '
+                                  'both hemispheres. I am going to write two '
+                                  'files out of it with _sh and _nh suffixes.')
                 _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
                 _compile_to_netcdf(_gdirs,
                                    input_filesuffix=input_filesuffix,
@@ -730,14 +742,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
 
+    # To find the longest time, sort the gdirs by date
+    sorted_gdir = sorted(gdirs, key=lambda gdir: gdir.rgi_date)
     # The first gdir might have blown up, try some others
     i = 0
     while True:
-        if i >= len(gdirs):
+        if i >= len(sorted_gdir):
             raise RuntimeError('Found no valid glaciers!')
         try:
-            ppath = gdirs[i].get_filepath('model_diagnostics',
-                                          filesuffix=input_filesuffix)
+            ppath = sorted_gdir[i].get_filepath('model_diagnostics',
+                                                filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
                 ds_diag.time.values
             break
@@ -746,11 +760,6 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
     # OK found it, open it and prepare the output
     with xr.open_dataset(ppath) as ds_diag:
-        time = ds_diag.time.values
-        yrs = ds_diag.hydro_year.values
-        months = ds_diag.hydro_month.values
-        cyrs = ds_diag.calendar_year.values
-        cmonths = ds_diag.calendar_month.values
 
         # Prepare output
         ds = xr.Dataset()
@@ -761,100 +770,75 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds.attrs['calendar'] = '365-day no leap'
         ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
-        # Coordinates
+        # Copy coordinates
+        time = ds_diag.time.values
         ds.coords['time'] = ('time', time)
-        ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
-        ds.coords['hydro_year'] = ('time', yrs)
-        ds.coords['hydro_month'] = ('time', months)
-        ds.coords['calendar_year'] = ('time', cyrs)
-        ds.coords['calendar_month'] = ('time', cmonths)
         ds['time'].attrs['description'] = 'Floating hydrological year'
+        # New coord
+        ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
         ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
-        ds['hydro_year'].attrs['description'] = 'Hydrological year'
-        ds['hydro_month'].attrs['description'] = 'Hydrological month'
-        ds['calendar_year'].attrs['description'] = 'Calendar year'
-        ds['calendar_month'].attrs['description'] = 'Calendar month'
+        # This is just taken from there
+        for cn in ['hydro_year', 'hydro_month',
+                   'calendar_year', 'calendar_month']:
+            ds.coords[cn] = ('time', ds_diag[cn].values)
+            ds[cn].attrs['description'] = ds_diag[cn].attrs['description']
 
-    shape = (len(time), len(rgi_ids))
-    # These variables are always available
-    vol = np.zeros(shape)
-    area = np.zeros(shape)
-    length = np.zeros(shape)
-    ela = np.zeros(shape)
-    # These are not
-    calving_m3 = None
-    calving_rate_myr = None
-    volume_bsl_m3 = None
-    volume_bwl_m3 = None
+        # Prepare the 2D variables
+        shape = (len(time), len(rgi_ids))
+        out_2d = dict()
+        for vn in ds_diag.data_vars:
+            var = dict()
+            var['data'] = np.full(shape, np.nan)
+            var['attrs'] = ds_diag[vn].attrs
+            out_2d[vn] = var
+
+        # 1D Variables
+        out_1d = dict()
+        for vn, attrs in [('water_level', {'description': 'Calving water level',
+                                           'units': 'm'}),
+                          ('glen_a', {'description': 'Simulation Glen A',
+                                      'units': ''}),
+                          ('fs', {'description': 'Simulation sliding parameter',
+                                  'units': ''}),
+                          ]:
+            var = dict()
+            var['data'] = np.full(len(rgi_ids), np.nan)
+            var['attrs'] = attrs
+            out_1d[vn] = var
+
+    # Read out
     for i, gdir in enumerate(gdirs):
         try:
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                vol[:, i] = ds_diag.volume_m3.values
-                area[:, i] = ds_diag.area_m2.values
-                length[:, i] = ds_diag.length_m.values
-                ela[:, i] = ds_diag.ela_m.values
-                if 'calving_m3' in ds_diag:
-                    if calving_m3 is None:
-                        calving_m3 = np.zeros(shape) * np.NaN
-                    calving_m3[:, i] = ds_diag.calving_m3.values
-                if 'calving_rate_myr' in ds_diag:
-                    if calving_rate_myr is None:
-                        calving_rate_myr = np.zeros(shape) * np.NaN
-                    calving_rate_myr[:, i] = ds_diag.calving_rate_myr.values
-                if 'volume_bsl_m3' in ds_diag:
-                    if volume_bsl_m3 is None:
-                        volume_bsl_m3 = np.zeros(shape) * np.NaN
-                    volume_bsl_m3[:, i] = ds_diag.volume_bsl_m3.values
-                if 'volume_bwl_m3' in ds_diag:
-                    if volume_bwl_m3 is None:
-                        volume_bwl_m3 = np.zeros(shape) * np.NaN
-                    volume_bwl_m3[:, i] = ds_diag.volume_bwl_m3.values
+                nt = - len(ds_diag.volume_m3.values)
+                for vn, var in out_2d.items():
+                    var['data'][nt:, i] = ds_diag[vn].values
+                for vn, var in out_1d.items():
+                    var['data'][i] = ds_diag.attrs[vn]
         except BaseException:
-            vol[:, i] = np.NaN
-            area[:, i] = np.NaN
-            length[:, i] = np.NaN
-            ela[:, i] = np.NaN
+            pass
 
-    ds['volume'] = (('time', 'rgi_id'), vol)
-    ds['volume'].attrs['description'] = 'Total glacier volume'
-    ds['volume'].attrs['units'] = 'm 3'
-    ds['area'] = (('time', 'rgi_id'), area)
-    ds['area'].attrs['description'] = 'Total glacier area'
-    ds['area'].attrs['units'] = 'm 2'
-    ds['length'] = (('time', 'rgi_id'), length)
-    ds['length'].attrs['description'] = 'Glacier length'
-    ds['length'].attrs['units'] = 'm'
-    ds['ela'] = (('time', 'rgi_id'), ela)
-    ds['ela'].attrs['description'] = 'Glacier Equilibrium Line Altitude (ELA)'
-    ds['ela'].attrs['units'] = 'm a.s.l'
-    if calving_m3 is not None:
-        ds['calving'] = (('time', 'rgi_id'), calving_m3)
-        ds['calving'].attrs['description'] = ('Total calving volume since '
-                                              'simulation start')
-        ds['calving'].attrs['units'] = 'm3'
-    if calving_rate_myr is not None:
-        ds['calving_rate'] = (('time', 'rgi_id'), calving_rate_myr)
-        ds['calving_rate'].attrs['description'] = 'Instantaneous calving rate'
-        ds['calving_rate'].attrs['units'] = 'm yr-1'
-    if volume_bsl_m3 is not None:
-        ds['volume_bsl'] = (('time', 'rgi_id'), volume_bsl_m3)
-        ds['volume_bsl'].attrs['description'] = ('Total glacier volume below '
-                                                 'sea level')
-        ds['volume_bsl'].attrs['units'] = 'm3'
-    if volume_bwl_m3 is not None:
-        ds['volume_bwl'] = (('time', 'rgi_id'), volume_bwl_m3)
-        ds['volume_bwl'].attrs['description'] = ('Total glacier volume below '
-                                                 'water level')
-        ds['volume_bwl'].attrs['units'] = 'm3'
+    # To xarray
+    for vn, var in out_2d.items():
+        # Backwards compatibility - to remove one day...
+        for r in ['_m3', '_m2', '_myr', '_m']:
+            # Order matters
+            vn = vn.replace(r, '')
+        ds[vn] = (('time', 'rgi_id'), var['data'])
+        ds[vn].attrs = var['attrs']
+    for vn, var in out_1d.items():
+        ds[vn] = (('rgi_id', ), var['data'])
+        ds[vn].attrs = var['attrs']
 
+    # To file?
     if path:
         enc_var = {'dtype': 'float32'}
         if use_compression:
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
-        encoding = {v: enc_var for v in ['volume', 'area', 'length', 'ela']}
+        encoding = {v: enc_var for v in ds.data_vars}
         ds.to_netcdf(path, encoding=encoding)
 
     return ds
@@ -1110,122 +1094,135 @@ def glacier_statistics(gdir, inversion_only=False):
     d['cenlon'] = gdir.cenlon
     d['cenlat'] = gdir.cenlat
     d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['rgi_year'] = gdir.rgi_date
     d['glacier_type'] = gdir.glacier_type
     d['terminus_type'] = gdir.terminus_type
+    d['is_tidewater'] = gdir.is_tidewater
     d['status'] = gdir.status
 
     # The rest is less certain. We put these in a try block and see
     # We're good with any error - we store the dict anyway below
     # TODO: should be done with more preselected errors
-    try:
-        # Inversion
-        if gdir.has_file('inversion_output'):
-            vol = []
-            cl = gdir.read_pickle('inversion_output')
-            for c in cl:
-                vol.extend(c['volume'])
-            d['inv_volume_km3'] = np.nansum(vol) * 1e-9
-            area = gdir.rgi_area_km2
-            d['inv_thickness_m'] = d['inv_volume_km3'] / area * 1000
-            d['vas_volume_km3'] = 0.034 * (area ** 1.375)
-            d['vas_thickness_m'] = d['vas_volume_km3'] / area * 1000
-    except BaseException:
-        pass
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-    try:
-        # Diagnostics
-        diags = gdir.get_diagnostics()
-        for k, v in diags.items():
-            d[k] = v
-    except BaseException:
-        pass
+        try:
+            # Inversion
+            if gdir.has_file('inversion_output'):
+                vol = []
+                vol_bsl = []
+                vol_bwl = []
+                cl = gdir.read_pickle('inversion_output')
+                for c in cl:
+                    vol.extend(c['volume'])
+                    vol_bsl.extend(c.get('volume_bsl', [0]))
+                    vol_bwl.extend(c.get('volume_bwl', [0]))
+                d['inv_volume_km3'] = np.nansum(vol) * 1e-9
+                area = gdir.rgi_area_km2
+                d['vas_volume_km3'] = 0.034 * (area ** 1.375)
+                # BSL / BWL
+                d['inv_volume_bsl_km3'] = np.nansum(vol_bsl) * 1e-9
+                d['inv_volume_bwl_km3'] = np.nansum(vol_bwl) * 1e-9
+        except BaseException:
+            pass
 
-    if inversion_only:
-        return d
+        try:
+            # Diagnostics
+            diags = gdir.get_diagnostics()
+            for k, v in diags.items():
+                d[k] = v
+        except BaseException:
+            pass
 
-    try:
-        # Error log
-        errlog = gdir.get_error_log()
-        if errlog is not None:
-            d['error_task'] = errlog.split(';')[-2]
-            d['error_msg'] = errlog.split(';')[-1]
-        else:
-            d['error_task'] = None
-            d['error_msg'] = None
-    except BaseException:
-        pass
+        if inversion_only:
+            return d
 
-    try:
-        # Masks related stuff
-        fpath = gdir.get_filepath('gridded_data')
-        with ncDataset(fpath) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-        d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-        d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
-        d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-        d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
-    except BaseException:
-        pass
+        try:
+            # Error log
+            errlog = gdir.get_error_log()
+            if errlog is not None:
+                d['error_task'] = errlog.split(';')[-2]
+                d['error_msg'] = errlog.split(';')[-1]
+            else:
+                d['error_task'] = None
+                d['error_msg'] = None
+        except BaseException:
+            pass
 
-    try:
-        # Ext related stuff
-        fpath = gdir.get_filepath('gridded_data')
-        with ncDataset(fpath) as nc:
-            ext = nc.variables['glacier_ext'][:]
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo'][:]
-        d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
-        d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
-        a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
-        d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
-    except BaseException:
-        pass
+        try:
+            # Masks related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with ncDataset(fpath) as nc:
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
+            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
+            d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
+            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
+            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+        except BaseException:
+            pass
 
-    try:
-        # Centerlines
-        cls = gdir.read_pickle('centerlines')
-        longuest = 0.
-        for cl in cls:
-            longuest = np.max([longuest, cl.dis_on_line[-1]])
-        d['n_centerlines'] = len(cls)
-        d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
-    except BaseException:
-        pass
+        try:
+            # Ext related stuff
+            fpath = gdir.get_filepath('gridded_data')
+            with ncDataset(fpath) as nc:
+                ext = nc.variables['glacier_ext'][:]
+                mask = nc.variables['glacier_mask'][:]
+                topo = nc.variables['topo'][:]
+            d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
+            d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
+            a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
+            d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
+        except BaseException:
+            pass
 
-    try:
-        # Flowline related stuff
-        h = np.array([])
-        widths = np.array([])
-        slope = np.array([])
-        fls = gdir.read_pickle('inversion_flowlines')
-        dx = fls[0].dx * gdir.grid.dx
-        for fl in fls:
-            hgt = fl.surface_h
-            h = np.append(h, hgt)
-            widths = np.append(widths, fl.widths * gdir.grid.dx)
-            slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
-            length = len(hgt) * dx
-        d['main_flowline_length'] = length
-        d['inv_flowline_glacier_area'] = np.sum(widths * dx)
-        d['flowline_mean_elev'] = np.average(h, weights=widths)
-        d['flowline_max_elev'] = np.max(h)
-        d['flowline_min_elev'] = np.min(h)
-        d['flowline_avg_width'] = np.mean(widths)
-        d['flowline_avg_slope'] = np.mean(slope)
-    except BaseException:
-        pass
+        try:
+            # Centerlines
+            cls = gdir.read_pickle('centerlines')
+            longuest = 0.
+            for cl in cls:
+                longuest = np.max([longuest, cl.dis_on_line[-1]])
+            d['n_centerlines'] = len(cls)
+            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+        except BaseException:
+            pass
 
-    try:
-        # MB calib
-        df = gdir.read_json('local_mustar')
-        d['t_star'] = df['t_star']
-        d['mu_star_glacierwide'] = df['mu_star_glacierwide']
-        d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
-        d['mu_star_allsame'] = df['mu_star_allsame']
-        d['mb_bias'] = df['bias']
-    except BaseException:
-        pass
+        try:
+            # Flowline related stuff
+            h = np.array([])
+            widths = np.array([])
+            slope = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines')
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * gdir.grid.dx)
+                slope = np.append(slope, np.arctan(-np.gradient(hgt, dx)))
+                length = len(hgt) * dx
+            d['main_flowline_length'] = length
+            d['inv_flowline_glacier_area'] = np.sum(widths * dx)
+            d['flowline_mean_elev'] = np.average(h, weights=widths)
+            d['flowline_max_elev'] = np.max(h)
+            d['flowline_min_elev'] = np.min(h)
+            d['flowline_avg_slope'] = np.mean(slope)
+            d['flowline_avg_width'] = np.mean(widths)
+            d['flowline_last_width'] = fls[-1].widths[-1] * gdir.grid.dx
+            d['flowline_last_5_widths'] = np.mean(fls[-1].widths[-5:] *
+                                                  gdir.grid.dx)
+        except BaseException:
+            pass
+
+        try:
+            # MB calib
+            df = gdir.read_json('local_mustar')
+            d['t_star'] = df['t_star']
+            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
+            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
+            d['mu_star_allsame'] = df['mu_star_allsame']
+            d['mb_bias'] = df['bias']
+        except BaseException:
+            pass
 
     return d
 
@@ -1267,6 +1264,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
 
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
+                                        use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None):
     """Compiles a table of specific mass-balance timeseries for all glaciers.
 
@@ -1279,6 +1277,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
     path : str, bool
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    use_inversion_flowlines : bool
+        whether to use the inversion flowlines or the model flowlines
     ys : int
         start year of the model run (default: from the climate file)
         date)
@@ -1291,6 +1291,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years)
 
     for idx, s in enumerate(out_df):
@@ -1298,6 +1299,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
             out_df[idx] = pd.Series(np.NaN)
 
     out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
+    out = out.dropna(axis=0, how='all')
 
     if path:
         if path is True:
@@ -1342,94 +1344,95 @@ def climate_statistics(gdir, add_climate_period=1995):
     d['status'] = gdir.status
 
     # The rest is less certain
-
-    try:
-        # Flowline related stuff
-        h = np.array([])
-        widths = np.array([])
-        fls = gdir.read_pickle('inversion_flowlines')
-        dx = fls[0].dx * gdir.grid.dx
-        for fl in fls:
-            hgt = fl.surface_h
-            h = np.append(h, hgt)
-            widths = np.append(widths, fl.widths * dx)
-        d['flowline_mean_elev'] = np.average(h, weights=widths)
-        d['flowline_max_elev'] = np.max(h)
-        d['flowline_min_elev'] = np.min(h)
-    except BaseException:
-        pass
-
-    try:
-        # Climate and MB at t*
-        mbcl = ConstantMassBalance
-        mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                            bias=0,
-                                            use_inversion_flowlines=True)
-        h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-        mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
-        pacc = np.where(mbh >= 0)
-        pab = np.where(mbh < 0)
-        d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         try:
-            # Try to get the slope
-            mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-            d['tstar_mb_grad'] = mb_slope
+            # Flowline related stuff
+            h = np.array([])
+            widths = np.array([])
+            fls = gdir.read_pickle('inversion_flowlines')
+            dx = fls[0].dx * gdir.grid.dx
+            for fl in fls:
+                hgt = fl.surface_h
+                h = np.append(h, hgt)
+                widths = np.append(widths, fl.widths * dx)
+            d['flowline_mean_elev'] = np.average(h, weights=widths)
+            d['flowline_max_elev'] = np.max(h)
+            d['flowline_min_elev'] = np.min(h)
         except BaseException:
-            # we don't mind if something goes wrong
-            d['tstar_mb_grad'] = np.NaN
-        d['tstar_ela_h'] = mbmod.get_ela()
-        # Climate
-        t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-            [d['tstar_ela_h'],
-             d['flowline_mean_elev'],
-             d['flowline_max_elev'],
-             d['flowline_min_elev']])
-        for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-            d['tstar_avg_' + n + '_ela_h'] = v[0]
-            d['tstar_avg_' + n + '_mean_elev'] = v[1]
-            d['tstar_avg_' + n + '_max_elev'] = v[2]
-            d['tstar_avg_' + n + '_min_elev'] = v[3]
-        d['tstar_avg_prcp'] = p[0]
-    except BaseException:
-        pass
+            pass
 
-    # Climate and MB at specified dates
-    add_climate_period = tolist(add_climate_period)
-    for y0 in add_climate_period:
         try:
-            fs = '{}-{}'.format(y0 - 15, y0 + 15)
-
+            # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                y0=y0,
+                                                bias=0,
                                                 use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
             pab = np.where(mbh < 0)
-            d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
+            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
             try:
                 # Try to get the slope
                 mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-                d[fs + '_mb_grad'] = mb_slope
+                d['tstar_mb_grad'] = mb_slope
             except BaseException:
                 # we don't mind if something goes wrong
-                d[fs + '_mb_grad'] = np.NaN
-            d[fs + '_ela_h'] = mbmod.get_ela()
+                d['tstar_mb_grad'] = np.NaN
+            d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
             t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
-                [d[fs + '_ela_h'],
+                [d['tstar_ela_h'],
                  d['flowline_mean_elev'],
                  d['flowline_max_elev'],
                  d['flowline_min_elev']])
             for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-                d[fs + '_avg_' + n + '_ela_h'] = v[0]
-                d[fs + '_avg_' + n + '_mean_elev'] = v[1]
-                d[fs + '_avg_' + n + '_max_elev'] = v[2]
-                d[fs + '_avg_' + n + '_min_elev'] = v[3]
-            d[fs + '_avg_prcp'] = p[0]
+                d['tstar_avg_' + n + '_ela_h'] = v[0]
+                d['tstar_avg_' + n + '_mean_elev'] = v[1]
+                d['tstar_avg_' + n + '_max_elev'] = v[2]
+                d['tstar_avg_' + n + '_min_elev'] = v[3]
+            d['tstar_avg_prcp'] = p[0]
         except BaseException:
             pass
+
+        # Climate and MB at specified dates
+        add_climate_period = tolist(add_climate_period)
+        for y0 in add_climate_period:
+            try:
+                fs = '{}-{}'.format(y0 - 15, y0 + 15)
+
+                mbcl = ConstantMassBalance
+                mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
+                                                    y0=y0,
+                                                    use_inversion_flowlines=True)
+                h, w, mbh = mbmod.get_annual_mb_on_flowlines()
+                mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+                pacc = np.where(mbh >= 0)
+                pab = np.where(mbh < 0)
+                d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
+                try:
+                    # Try to get the slope
+                    mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
+                    d[fs + '_mb_grad'] = mb_slope
+                except BaseException:
+                    # we don't mind if something goes wrong
+                    d[fs + '_mb_grad'] = np.NaN
+                d[fs + '_ela_h'] = mbmod.get_ela()
+                # Climate
+                t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                    [d[fs + '_ela_h'],
+                     d['flowline_mean_elev'],
+                     d['flowline_max_elev'],
+                     d['flowline_min_elev']])
+                for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
+                    d[fs + '_avg_' + n + '_ela_h'] = v[0]
+                    d[fs + '_avg_' + n + '_mean_elev'] = v[1]
+                    d[fs + '_avg_' + n + '_max_elev'] = v[2]
+                    d[fs + '_avg_' + n + '_min_elev'] = v[3]
+                d[fs + '_avg_prcp'] = p[0]
+            except BaseException:
+                pass
 
     return d
 
@@ -1468,6 +1471,145 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
         else:
             out.to_csv(path)
     return out
+
+
+def extend_past_climate_run(past_run_file=None,
+                            fixed_geometry_mb_file=None,
+                            glacier_statistics_file=None,
+                            path=False,
+                            use_compression=True):
+    """Utility function to extend past MB runs prior to the RGI date.
+
+    We use a fixed geometry (and a fixed calving rate) for all dates prior
+    to the RGI date.
+
+    Parameters
+    ----------
+    past_run_file : str
+        path to the historical run (nc)
+    fixed_geometry_mb_file : str
+        path to the MB file (csv)
+    glacier_statistics_file : str
+        path to the glacier stats file (csv)
+    path : str
+        where to store the file
+    use_compression : bool
+
+    Returns
+    -------
+    the extended dataset
+    """
+
+    fixed_geometry_mb_df = pd.read_csv(fixed_geometry_mb_file, index_col=0)
+    stats_df = pd.read_csv(glacier_statistics_file, index_col=0)
+
+    with xr.open_dataset(past_run_file) as past_ds:
+
+        y0_run = int(past_ds.time[0])
+        y1_run = int(past_ds.time[-1])
+        if (y1_run - y0_run + 1) != len(past_ds.time):
+            raise NotImplementedError('Currently only supporting annual outputs')
+        y0_clim = int(fixed_geometry_mb_df.index[0])
+        y1_clim = int(fixed_geometry_mb_df.index[-1])
+        if y0_clim > y0_run or y1_clim < y0_run:
+            raise InvalidWorkflowError('Dates do not match.')
+        if y1_clim != y1_run - 1:
+            raise InvalidWorkflowError('Dates do not match.')
+        if len(past_ds.rgi_id) != len(fixed_geometry_mb_df.columns):
+            raise InvalidWorkflowError('Nb of glaciers do not match.')
+        if len(past_ds.rgi_id) != len(stats_df.index):
+            raise InvalidWorkflowError('Nb of glaciers do not match.')
+
+        # Make sure we agree on order
+        df = fixed_geometry_mb_df[past_ds.rgi_id]
+
+        # Output data
+        years = np.arange(y0_clim, y1_run+1)
+        ods = past_ds.reindex({'time': years})
+
+        # Time
+        ods['hydro_year'].data[:] = years
+        ods['hydro_month'].data[:] = ods['hydro_month'][-1]
+        ods['calendar_year'].data[:] = years - 1
+        ods['calendar_month'].data[:] = ods['calendar_month'][-1]
+        for vn in ['hydro_year', 'hydro_month',
+                   'calendar_year', 'calendar_month']:
+            ods[vn] = ods[vn].astype(int)
+
+        # New vars
+        for vn in ['volume', 'volume_bsl', 'volume_bwl', 'area', 'calving']:
+            ods[vn + '_ext'] = ods[vn].copy(deep=True)
+            ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
+
+        vn = 'volume_fixed_geom_ext'
+        ods[vn] = ods['volume'].copy(deep=True)
+        ods[vn].attrs['description'] += ' (replaced with fixed geom data)'
+
+        rho = cfg.PARAMS['ice_density']
+        # Loop over the ids
+        for i, rid in enumerate(ods.rgi_id.data):
+            # Both do not need to be same length but they need to start same
+            mb_ts = df.values[:, i]
+            orig_vol_ts = ods.volume_ext.data[:, i]
+            if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
+                # Not a valid glacier
+                continue
+            if np.isfinite(orig_vol_ts[0]):
+                # Nothing to extend, really
+                continue
+            orig_area_ts = ods.area_ext.data[:, i]
+            orig_calv_ts = ods.calving_ext.data[:, i]
+            # First valid id
+            fid = np.argmax(np.isfinite(orig_vol_ts))
+            # Fill area which stays constant
+            orig_area_ts[:fid] = orig_area_ts[fid]
+
+            # Add calving flux to the mix
+            try:
+                calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
+            except KeyError:
+                calv_flux = 0
+            if not np.isfinite(calv_flux):
+                calv_flux = 0
+
+            # We convert SMB to volume
+            mb_vol_ts = (mb_ts / rho * orig_area_ts[fid] - calv_flux).cumsum()
+            calv_ts = (mb_ts * 0 + calv_flux).cumsum()
+
+            # The -1 is because the volume change is known at end of year
+            mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
+            calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
+
+            # Now back to netcdf
+            ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
+            ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
+            ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+            ods.area_ext.data[:, i] = orig_area_ts
+
+            # Extend vol bsl by assuming that % stays constant
+            bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
+            bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
+            ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
+            ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+
+        # Remove old vars
+        for vn in list(ods.data_vars):
+            if '_ext' not in vn:
+                del ods[vn]
+
+        # Remove t0 (which is NaN)
+        ods = ods.isel(time=slice(1, None))
+
+        # To file?
+        if path:
+            enc_var = {'dtype': 'float32'}
+            if use_compression:
+                enc_var['complevel'] = 5
+                enc_var['zlib'] = True
+            encoding = {v: enc_var for v in ods.data_vars}
+            ods.to_netcdf(path, encoding=encoding)
+
+    return ods
 
 
 def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
@@ -1770,14 +1912,20 @@ class GlacierDirectory(object):
         self.terminus_type = ttkeys[gtype[1]]
         self.status = stkeys['{}'.format(gstatus)]
         self.is_tidewater = self.terminus_type in ['Marine-terminating',
-                                                   'Lake-terminating']
+                                                   'Lake-terminating',
+                                                   'Shelf-terminating']
         self.is_lake_terminating = self.terminus_type == 'Lake-terminating'
+        self.is_marine_terminating = self.terminus_type == 'Marine-terminating'
+        self.is_shelf_terminating = self.terminus_type == 'Shelf-terminating'
         self.is_nominal = self.status == 'Nominal glacier'
         self.inversion_calving_rate = 0.
         self.is_icecap = self.glacier_type == 'Ice cap'
 
         # Hemisphere
-        self.hemisphere = 'sh' if self.cenlat < 0 else 'nh'
+        if self.cenlat < 0 or self.rgi_region == '16':
+            self.hemisphere = 'sh'
+        else:
+            self.hemisphere = 'nh'
 
         # convert the date
         rgi_date = int(rgi_datestr[0:4])
@@ -2465,22 +2613,39 @@ class GlacierDirectory(object):
         mb_df.index.name = 'YEAR'
         self._mbdf = mb_df
 
-    def get_ref_mb_data(self):
+    def get_ref_mb_data(self, y0=None, y1=None):
         """Get the reference mb data from WGMS (for some glaciers only!).
 
         Raises an Error if it isn't a reference glacier at all.
+
+        Parameters
+        ----------
+        y0 : int
+            override the default behavior which is to check the available
+            climate data (or PARAMS['ref_mb_valid_window']) and decide
+        y1 : int
+            override the default behavior which is to check the available
+            climate data (or PARAMS['ref_mb_valid_window']) and decide
         """
 
         if self._mbdf is None:
             self.set_ref_mb_data()
 
         # logic for period
-        ci = self.get_climate_info()
-        if 'baseline_hydro_yr_0' not in ci:
-            raise InvalidWorkflowError('Please process some climate data '
-                                       'before call')
-        y0 = ci['baseline_hydro_yr_0']
-        y1 = ci['baseline_hydro_yr_1']
+        t0, t1 = cfg.PARAMS['ref_mb_valid_window']
+        if t0 > 0 and y0 is None:
+            y0 = t0
+        if t1 > 0 and y1 is None:
+            y1 = t1
+
+        if y0 is None or y1 is None:
+            ci = self.get_climate_info()
+            if 'baseline_hydro_yr_0' not in ci:
+                raise InvalidWorkflowError('Please process some climate data '
+                                           'before call')
+            y0 = ci['baseline_hydro_yr_0'] if y0 is None else y0
+            y1 = ci['baseline_hydro_yr_1'] if y1 is None else y1
+
         if len(self._mbdf) > 1:
             out = self._mbdf.loc[y0:y1]
         else:
@@ -2708,13 +2873,13 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'local_mustar', 'climate_historical',
-                 'gcm_data', 'climate_info']
+                 'gcm_data', 'climate_info', 'diagnostics']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
-                 'inversion_flowlines', 'glacier_grid',
+                 'inversion_flowlines', 'glacier_grid', 'diagnostics',
                  'local_mustar', 'climate_historical', 'gridded_data',
                  'gcm_data', 'climate_info']
         paths = ('*' + p + '*' for p in paths)

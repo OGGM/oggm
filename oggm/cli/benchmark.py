@@ -71,7 +71,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level='WORKFLOW', params=params)
+    cfg.initialize(logging_level='WORKFLOW', params=params, future=True)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = True

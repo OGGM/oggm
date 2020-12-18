@@ -721,7 +721,8 @@ def glacier_mu_candidates(gdir):
 
 
 @entity_task(log)
-def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
+def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
+                      min_mu_star=None, max_mu_star=None):
     """Computes the ref t* for the glacier, given a series of MB measurements.
 
     Parameters
@@ -746,6 +747,12 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
     # Reference time series
     if mbdf is None:
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+
+    # mu* constraints
+    if min_mu_star is None:
+        min_mu_star = cfg.PARAMS['min_mu_star']
+    if max_mu_star is None:
+        max_mu_star = cfg.PARAMS['max_mu_star']
 
     # which years to look at
     ref_years = mbdf.index.values
@@ -805,7 +812,9 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None):
             try:
                 # TODO: this is slow and can be highly optimised
                 # it reads the same data over and over again
-                _recursive_mu_star_calibration(gdir, fls, y, first_call=True)
+                _recursive_mu_star_calibration(gdir, fls, y, first_call=True,
+                                               min_mu_star=min_mu_star,
+                                               max_mu_star=max_mu_star)
                 # Compute the MB with it
                 mb_mod = MultipleFlowlineMassBalance(gdir, fls, bias=0,
                                                      check_calib_params=False)
@@ -880,7 +889,8 @@ def _fallback_local_t_star(gdir):
 
 @entity_task(log, writes=['local_mustar', 'climate_info'],
              fallback=_fallback_local_t_star)
-def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
+def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
+                 clip_mu_star=None, min_mu_star=None, max_mu_star=None):
     """Compute the local t* and associated glacier-wide mu*.
 
     If ``tstar`` and ``bias`` are not provided, they will be interpolated from
@@ -899,6 +909,12 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         the year where the glacier should be equilibrium
     bias: float, optional
         the associated reference bias
+    clip_mu_star: bool, optional
+        defaults to cfg.PARAMS['clip_mu_star']
+    min_mu_star: bool, optional
+        defaults to cfg.PARAMS['min_mu_star']
+    max_mu_star: bool, optional
+        defaults to cfg.PARAMS['max_mu_star']
     """
 
     # Relevant mb params
@@ -980,12 +996,20 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None):
         raise MassBalanceCalibrationError('{} has a non finite '
                                           'mu'.format(gdir.rgi_id))
 
+    # mu* constraints
+    if clip_mu_star is None:
+        clip_mu_star = cfg.PARAMS['clip_mu_star']
+    if min_mu_star is None:
+        min_mu_star = cfg.PARAMS['min_mu_star']
+    if max_mu_star is None:
+        max_mu_star = cfg.PARAMS['max_mu_star']
+
     # Clip it?
-    if cfg.PARAMS['clip_mu_star']:
-        mustar = utils.clip_min(mustar, 0)
+    if clip_mu_star:
+        mustar = utils.clip_min(mustar, min_mu_star)
 
     # If mu out of bounds, raise
-    if not (cfg.PARAMS['min_mu_star'] <= mustar <= cfg.PARAMS['max_mu_star']):
+    if not (min_mu_star <= mustar <= max_mu_star):
         raise MassBalanceCalibrationError('{}: mu* out of specified bounds: '
                                           '{:.2f}'.format(gdir.rgi_id, mustar))
 
@@ -1033,7 +1057,8 @@ def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
 
 
 def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
-                                   force_mu=None):
+                                   force_mu=None, min_mu_star=None,
+                                   max_mu_star=None):
 
     # Do we have a calving glacier? This is only for the first call!
     # The calving mass-balance is distributed over the valid tributaries of the
@@ -1058,16 +1083,15 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
     if force_mu is None:
         try:
             mu_star = optimize.brentq(_mu_star_per_minimization,
-                                      cfg.PARAMS['min_mu_star'],
-                                      cfg.PARAMS['max_mu_star'],
+                                      min_mu_star, max_mu_star,
                                       args=(fls, cmb, temp, prcp, widths),
                                       xtol=_brentq_xtol)
         except ValueError:
             # This happens in very rare cases
-            _mu_lim = _mu_star_per_minimization(cfg.PARAMS['min_mu_star'],
-                                                fls, cmb, temp, prcp, widths)
-            if _mu_lim < 0 and np.allclose(_mu_lim, 0):
-                mu_star = 0.
+            _mu_lim = _mu_star_per_minimization(min_mu_star, fls, cmb, temp,
+                                                prcp, widths)
+            if _mu_lim < min_mu_star and np.allclose(_mu_lim, min_mu_star):
+                mu_star = min_mu_star
             else:
                 raise MassBalanceCalibrationError('{} mu* out of specified '
                                                   'bounds.'.format(gdir.rgi_id)
@@ -1109,7 +1133,9 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
             # We find a new mu for these in a recursive call
             # TODO: this is where a flux kwarg can passed to tributaries
             _recursive_mu_star_calibration(gdir, inflows, t_star,
-                                           first_call=False)
+                                           first_call=False,
+                                           min_mu_star=min_mu_star,
+                                           max_mu_star=max_mu_star)
 
             # At this stage we should be ok
             assert np.all([~ fl.flux_needs_correction for fl in inflows])
@@ -1118,7 +1144,9 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 
             # After the above are OK we have to recalibrate all below
             _recursive_mu_star_calibration(gdir, fls, t_star,
-                                           first_call=first_call)
+                                           first_call=first_call,
+                                           min_mu_star=min_mu_star,
+                                           max_mu_star=max_mu_star)
 
     # At this stage we are good
     for fl in fls:
@@ -1150,7 +1178,7 @@ def _fallback_mu_star_calibration(gdir):
 
 @entity_task(log, writes=['inversion_flowlines'],
              fallback=_fallback_mu_star_calibration)
-def mu_star_calibration(gdir):
+def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
     """Compute the flowlines' mu* and the associated apparent mass-balance.
 
     If low lying tributaries have a non-physically consistent Mass-balance
@@ -1161,6 +1189,10 @@ def mu_star_calibration(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    min_mu_star: bool, optional
+        defaults to cfg.PARAMS['min_mu_star']
+    max_mu_star: bool, optional
+        defaults to cfg.PARAMS['max_mu_star']
     """
 
     # Interpolated data
@@ -1168,16 +1200,24 @@ def mu_star_calibration(gdir):
     t_star = df['t_star']
     bias = df['bias']
 
+    # mu* constraints
+    if min_mu_star is None:
+        min_mu_star = cfg.PARAMS['min_mu_star']
+    if max_mu_star is None:
+        max_mu_star = cfg.PARAMS['max_mu_star']
+
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
     # If someone calls the task a second time we need to reset this
     for fl in fls:
         fl.mu_star_is_valid = False
 
-    force_mu = 0 if df['mu_star_glacierwide'] == 0 else None
+    force_mu = min_mu_star if df['mu_star_glacierwide'] == min_mu_star else None
 
     # Let's go
-    _recursive_mu_star_calibration(gdir, fls, t_star, force_mu=force_mu)
+    _recursive_mu_star_calibration(gdir, fls, t_star, force_mu=force_mu,
+                                   min_mu_star=min_mu_star,
+                                   max_mu_star=max_mu_star)
 
     # If the user wants to filter the bad ones we remove them and start all
     # over again until all tributaries are physically consistent with one mu
@@ -1357,10 +1397,6 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 @global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers and writes them to disk
-
-    This task will be needed for mass balance calibration of custom climate
-    data. For CRU and HISTALP baseline climate a precalibrated list is
-    available and should be used instead.
 
     Parameters
     ----------

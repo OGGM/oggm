@@ -4,7 +4,7 @@
 Version history
 ===============
 
-v1.3.X (unreleased)
+v1.4.0 (unreleased)
 -------------------
 
 Breaking changes
@@ -59,6 +59,9 @@ Breaking changes
 - new options to compute the length of a glacier during a run:
   `PARAMS['min_ice_thick_for_length']` and `PARAMS['glacier_length_method']`
   (:pull:`1069`). By `Matthias Dusch <https://github.com/matthiasdusch>`_.
+- several further important changes to be documented later in
+  (:pull:`1099`). By `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 
 Enhancements
@@ -78,7 +81,7 @@ Enhancements
   :py:func:`tasks.elevation_band_flowline` and
   :py:func:`tasks.fixed_dx_elevation_band_flowline`.
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Added a `calibrate_inversion_from_consensus_estimate` global task which
+- Added a `calibrate_inversion_from_consensus` global task which
   calibrates Glen A so that the volume of glaciers in a selection is
   matched (:pull:`1043`).
   By `Fabien Maussion <https://github.com/fmaussion>`_

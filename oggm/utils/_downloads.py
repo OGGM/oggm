@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'd6f23678780a118db2f6a8e86109dd1b0ac11634'
+SAMPLE_DATA_COMMIT = 'cf08f50c68dc5d260fe8ecc6d2848c1f07f15884'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
@@ -2358,7 +2358,7 @@ def get_ref_mb_glaciers_candidates(rgi_version=None):
     return cfg.DATA[key]
 
 
-def get_ref_mb_glaciers(gdirs):
+def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
     """Get the list of glaciers we have valid mass balance measurements for.
 
     To be valid glaciers must have more than 5 years of measurements and
@@ -2370,6 +2370,12 @@ def get_ref_mb_glaciers(gdirs):
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         list of glaciers to check for valid reference mass balance data
+    y0 : int
+        override the default behavior which is to check the available
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
+    y1 : int
+        override the default behavior which is to check the available
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
 
     Returns
     -------
@@ -2390,7 +2396,7 @@ def get_ref_mb_glaciers(gdirs):
         if g.rgi_id not in ref_ids or g.is_tidewater:
             continue
         try:
-            mbdf = g.get_ref_mb_data()
+            mbdf = g.get_ref_mb_data(y0=y0, y1=y1)
             if len(mbdf) >= 5:
                 ref_gdirs.append(g)
         except RuntimeError as e:

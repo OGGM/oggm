@@ -468,7 +468,7 @@ def _filter_lines(lines, heads, k, r):
     return olines, oheads
 
 
-def _filter_lines_slope(lines, heads, topo, gdir):
+def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     """Filter the centerline candidates by slope: if they go up, remove
 
     Kienholz et al. (2014), Ch. 4.3.1
@@ -479,6 +479,7 @@ def _filter_lines_slope(lines, heads, topo, gdir):
         The lines to filter out (in raster coordinates).
     topo : the glacier topogaphy
     gdir : the glacier directory for simplicity
+    min_slope: rad
 
     Returns
     -------
@@ -488,9 +489,6 @@ def _filter_lines_slope(lines, heads, topo, gdir):
     dx_cls = cfg.PARAMS['flowline_dx']
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     sw = cfg.PARAMS['flowline_height_smooth']
-
-    # Here we use a conservative value
-    min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
 
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
@@ -845,6 +843,8 @@ def compute_centerlines(gdir, heads=None):
     # Params
     single_fl = not cfg.PARAMS['use_multiple_flowlines']
     do_filter_slope = cfg.PARAMS['filter_min_slope']
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
 
     # Force single flowline for ice caps
     if gdir.is_icecap:
@@ -900,7 +900,8 @@ def compute_centerlines(gdir, heads=None):
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
-        olines, oheads = _filter_lines_slope(olines, oheads, topo, gdir)
+        olines, oheads = _filter_lines_slope(olines, oheads, topo,
+                                             gdir, min_slope)
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
@@ -1331,12 +1332,11 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     return width, line
 
 
-def _filter_small_slopes(hgt, dx, min_slope=0):
+def _filter_small_slopes(hgt, dx, min_slope):
     """Masks out slopes with NaN until the slope if all valid points is at
-    least min_slope (in degrees).
+    least min_slope (in radians).
     """
 
-    min_slope = np.deg2rad(min_slope)
     slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
     # slope at the end always OK
     slope[-1] = min_slope
@@ -1626,6 +1626,9 @@ def initialize_flowlines(gdir):
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
     do_filter = cfg.PARAMS['filter_min_slope']
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []
 
@@ -1674,7 +1677,7 @@ def initialize_flowlines(gdir):
         # Check for min slope issues and correct if needed
         if do_filter:
             # Correct only where glacier
-            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx)
+            hgts = _filter_small_slopes(hgts, dx*gdir.grid.dx, min_slope)
             isfin = np.isfinite(hgts)
             if not np.any(isfin):
                 raise GeometryError('This centerline has no positive slopes')
@@ -1709,6 +1712,7 @@ def initialize_flowlines(gdir):
 
     # Write the data
     gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.add_to_diagnostics('flowline_type', 'centerlines')
     if do_filter:
         out = diag_n_bad_slopes/diag_n_pix
         gdir.add_to_diagnostics('perc_invalid_flowline', out)
@@ -2072,7 +2076,7 @@ def intersect_downstream_lines(gdir, candidates=None):
 
 
 @entity_task(log, writes=['elevation_band_flowline'])
-def elevation_band_flowline(gdir):
+def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
 
     This writes out a table of along glacier bins, strictly following the
@@ -2093,13 +2097,36 @@ def elevation_band_flowline(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    bin_variables : str or list of str
+        variables to add to the binned flowline
+    preserve_totals : bool or list of bool
+        wether or not to preserve the variables totals (e.g. volume)
     """
 
     # Variables
+    bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
+    out_vars = []
+    out_totals = []
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:] == 1
         topo = nc.variables['topo_smoothed'][:]
+
+        # Check if there and do not raise when not available
+        keep = []
+        for var in bin_variables:
+            if var in nc.variables:
+                keep.append(var)
+            else:
+                log.warning('{}: var `{}` not found in gridded_data.'
+                            ''.format(gdir.rgi_id, var))
+        bin_variables = keep
+        for var in bin_variables:
+            data = nc.variables[var][:]
+            out_totals.append(np.nansum(data) * gdir.grid.dx ** 2)
+            out_vars.append(data[glacier_mask])
+
+    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
 
     # Slope
     sy, sx = np.gradient(topo, gdir.grid.dx)
@@ -2164,6 +2191,10 @@ def elevation_band_flowline(gdir):
         else:
             df.loc[bi, 'slope'] = np.mean(sel_s_bin)
 
+        # Binned variables
+        for var, data in zip(bin_variables, out_vars):
+            df.loc[bi, var] = np.nanmean(data[bin_coords])
+
     # The grid point's grid spacing and widths
     df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
     df['dx'] = bsize / np.tan(df['slope'])
@@ -2171,6 +2202,14 @@ def elevation_band_flowline(gdir):
 
     # Remove possible NaNs from above
     df = df.dropna()
+
+    # Check for binned vars
+    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
+                                         preserve_totals):
+        if do_p:
+            out_total = np.nansum(df[var] * df['area'])
+            if out_total > 0:
+                df[var] *= in_total / out_total
 
     # In OGGM we go from top to bottom
     df = df[::-1]
@@ -2187,7 +2226,8 @@ def elevation_band_flowline(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def fixed_dx_elevation_band_flowline(gdir):
+def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
+                                     preserve_totals=True):
     """Converts the "collapsed" flowline into a regular "inversion flowline".
 
     You need to run `tasks.elevation_band_flowline` first. It then interpolates
@@ -2198,6 +2238,12 @@ def fixed_dx_elevation_band_flowline(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    bin_variables : str or list of str
+        variables to add to the interpolated flowline (will be stored in a new
+        csv file: gdir.get_filepath('elevation_band_flowline',
+        filesuffix='_fixed_dx').
+    preserve_totals : bool or list of bool
+        wether or not to preserve the variables totals (e.g. volume)
     """
 
     df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
@@ -2228,6 +2274,37 @@ def fixed_dx_elevation_band_flowline(gdir):
     log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
     widths_m *= fac
 
+    # Additional vars
+    if bin_variables is not None:
+        bin_variables = utils.tolist(bin_variables)
+
+        # Check if there and do not raise when not available
+        keep = []
+        for var in bin_variables:
+            if var in df:
+                keep.append(var)
+            else:
+                log.warning('{}: var `{}` not found in gridded_data.'
+                            ''.format(gdir.rgi_id, var))
+        bin_variables = keep
+
+        preserve_totals = utils.tolist(preserve_totals,
+                                       length=len(bin_variables))
+        odf = pd.DataFrame(index=dis_along_flowline)
+        odf.index.name = 'dis_along_flowline'
+        odf['widths_m'] = widths_m
+        odf['area_m2'] = widths_m * dx_meter
+        for var, do_p in zip(bin_variables, preserve_totals):
+            interp = np.interp(dis_along_flowline, df.index, df[var])
+            if do_p:
+                in_total = np.nansum(df[var] * df['area'])
+                out_total = np.nansum(interp * widths_m * dx_meter)
+                if out_total > 0:
+                    interp *= in_total / out_total
+            odf[var] = interp
+        odf.to_csv(gdir.get_filepath('elevation_band_flowline',
+                                     filesuffix='_fixed_dx'))
+
     # Write as a Centerline object
     fl = Centerline(None, dx=dx, surface_h=hgts, rgi_id=gdir.rgi_id,
                     map_dx=map_dx)
@@ -2236,4 +2313,9 @@ def fixed_dx_elevation_band_flowline(gdir):
     fl.is_rectangular = np.zeros(nx, dtype=bool)
     fl.is_trapezoid = np.ones(nx, dtype=bool)
 
+    if gdir.is_tidewater:
+        fl.is_rectangular[-5:] = True
+        fl.is_trapezoid[-5:] = False
+
     gdir.write_pickle([fl], 'inversion_flowlines')
+    gdir.add_to_diagnostics('flowline_type', 'elevation_band')

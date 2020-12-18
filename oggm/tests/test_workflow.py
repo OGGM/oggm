@@ -197,8 +197,8 @@ class TestFullRun(unittest.TestCase):
     def test_calibrate_inversion_from_consensus(self):
 
         gdirs = up_to_inversion()
-        df = workflow.calibrate_inversion_from_consensus_estimate(gdirs,
-                                                                  ignore_missing=True)
+        df = workflow.calibrate_inversion_from_consensus(gdirs,
+                                                         ignore_missing=True)
         df = df.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
@@ -298,6 +298,7 @@ class TestFullRun(unittest.TestCase):
         df['y0_len'] = ds.length.sel(rgi_id=df.index, time=0)
         assert_allclose(df['rgi_area_km2'], df['y0_area'], 0.06)
         assert_allclose(df['inv_volume_km3'], df['y0_vol'], 0.04)
+        assert_allclose(df['inv_volume_bsl_km3'], 0)
         assert_allclose(df['main_flowline_length'], df['y0_len'])
 
         # Calving stuff
@@ -307,7 +308,7 @@ class TestFullRun(unittest.TestCase):
         assert ds.isel(rgi_id=0).volume_bwl[-1] > 0
         assert ds.isel(rgi_id=1).calving[-1] > 0
         assert ds.isel(rgi_id=1).calving_rate[-1] > 0
-        assert not np.isfinite(ds.isel(rgi_id=1).volume_bsl[-1])
+        assert ds.isel(rgi_id=1).volume_bsl[-1] == 0
 
 
 @pytest.mark.slow

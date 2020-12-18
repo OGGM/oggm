@@ -11,6 +11,7 @@ import json
 from collections import OrderedDict
 from multiprocessing import Manager
 from distutils.util import strtobool
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -129,8 +130,8 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                          'in your call to '
                                          '`process_climate_data`.')
 
-            log.warning('WARNING: adding an unknown parameter '
-                        '`{}`:`{}` to PARAMS.'.format(key, value))
+            log.workflow('WARNING: adding an unknown parameter '
+                         '`{}`:`{}` to PARAMS.'.format(key, value))
             return
 
         if prev == value:
@@ -271,9 +272,6 @@ BASENAMES['inversion_input'] = ('inversion_input.pkl', _doc)
 _doc = 'List of dicts containing the output data from the inversion.'
 BASENAMES['inversion_output'] = ('inversion_output.pkl', _doc)
 
-_doc = 'Dict of fs and fd as computed by the inversion optimisation.'
-BASENAMES['inversion_params'] = ('inversion_params.pkl', _doc)
-
 _doc = 'List of flowlines ready to be run by the model.'
 BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 
@@ -293,7 +291,7 @@ _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 
 
-def set_logging_config(logging_level='INFO'):
+def set_logging_config(logging_level='INFO', future=False):
     """Set the global logger parameters.
 
     Logging levels:
@@ -307,11 +305,12 @@ def set_logging_config(logging_level='INFO'):
     WARNING
         Indication that something unexpected happened on a glacier,
         but that OGGM is still working on this glacier.
+    ERROR
+        Print workflow messages and errors only, e.g. when a glacier cannot
+        run properly.
     WORKFLOW
         Print only high level, workflow information (typically, one message
-        per task). Errors and warnings will still be printed.
-    ERROR
-        Print errors only, e.g. when a glacier cannot run properly.
+        per task). Errors and warnings will NOT be printed.
     CRITICAL
         Print nothing but fatal errors.
 
@@ -321,18 +320,20 @@ def set_logging_config(logging_level='INFO'):
         the logging level. See description above for a list of options. Setting
         to `None` is equivalent to `'CRITICAL'`, i.e. no log output will be
         generated.
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
 
     # Add a custom level - just for us
-    logging.addLevelName(25, 'WORKFLOW')
+    logging.addLevelName(45, 'WORKFLOW')
 
     def workflow(self, message, *args, **kws):
         """Standard log message with a custom level."""
-        if self.isEnabledFor(25):
+        if self.isEnabledFor(45):
             # Yes, logger takes its '*args' as 'args'.
-            self._log(25, message, args, **kws)
+            self._log(45, message, args, **kws)
 
-    logging.WORKFLOW = 25
+    logging.WORKFLOW = 45
     logging.Logger.workflow = workflow
 
     # Remove all handlers associated with the root logger object.
@@ -350,13 +351,34 @@ def set_logging_config(logging_level='INFO'):
     # Basic config
     if logging_level is None:
         logging_level = 'CRITICAL'
+
     logging_level = logging_level.upper()
+
+    # Deprecation warning
+    if logging_level == 'WORKFLOW' and not future:
+
+        msg = ('In future versions of OGGM, the logging config WORKFLOW '
+               'will no longer print ERROR or WARNING messages, but only high '
+               'level information (i.e. hiding potential errors in your code '
+               'but also avoiding cluttered log files for runs with '
+               'many expected errors, e.g. global runs). If you want to obtain '
+               'a similar logger behavior as before, set '
+               "`logging_level='WARNING'`, which will print high level info "
+               "as well as errors and warnings during the run. If you "
+               "want to use the new behavior and suppress this warning, "
+               "set `logging_level='WORKFLOW'` and `future=True`.")
+        warnings.warn(msg, category=FutureWarning)
+
+        # Set old behavior
+        logging_level = 'WARNING'
+
     logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
                         level=getattr(logging, logging_level))
 
 
-def initialize_minimal(file=None, logging_level='INFO', params=None):
+def initialize_minimal(file=None, logging_level='INFO', params=None,
+                       future=False):
     """Same as initialise() but without requiring any download of data.
 
     This is useful for "flowline only" OGGM applications
@@ -369,12 +391,14 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
     global IS_INITIALIZED
     global PARAMS
     global PATHS
 
-    set_logging_config(logging_level=logging_level)
+    set_logging_config(logging_level=logging_level, future=future)
 
     is_default = False
     if file is None:
@@ -488,10 +512,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
-    k = 'use_kcalving_for_inversion'
-    PARAMS[k] = cp.as_bool(k)
+    PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
+    PARAMS['use_inversion_params_for_run'] = cp.as_bool('use_inversion_params_for_run')
     k = 'error_when_glacier_reaches_boundaries'
     PARAMS[k] = cp.as_bool(k)
 
@@ -506,6 +530,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
+    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
+    k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
@@ -537,7 +563,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
-           'error_when_glacier_reaches_boundaries', 'glacier_length_method']
+           'error_when_glacier_reaches_boundaries', 'glacier_length_method',
+           'use_inversion_params_for_run', 'ref_mb_valid_window']
     for k in ltr:
         cp.pop(k, None)
 
@@ -551,7 +578,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     IS_INITIALIZED = True
 
 
-def initialize(file=None, logging_level='INFO', params=None):
+def initialize(file=None, logging_level='INFO', params=None, future=False):
     """Read the configuration file containing the run's parameters.
 
     This should be the first call, before using any of the other OGGM modules
@@ -565,11 +592,14 @@ def initialize(file=None, logging_level='INFO', params=None):
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
+    future : bool
+        use the new behavior of logging='WORKFLOW'.
     """
     global PARAMS
     global DATA
 
-    initialize_minimal(file=file, logging_level=logging_level, params=params)
+    initialize_minimal(file=file, logging_level=logging_level, params=params,
+                       future=future)
 
     # Do not spam
     PARAMS.do_log = False

@@ -222,7 +222,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Loose tests based on correlations
         cf = df.corr()
-        assert cf.loc['slope', 'slope_factor'] < -0.9
+        assert cf.loc['slope', 'slope_factor'] < -0.85
         assert cf.loc['slope', 'thick'] < -0.4
         assert cf.loc['dis_from_border', 'thick'] > 0.2
         assert cf.loc['oggm_mb_above_z', 'thick'] > 0.5
@@ -423,6 +423,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
         df = utils.compile_glacier_statistics(gdirs)
+        df['inv_thickness_m'] = df['inv_volume_km3'] / df['rgi_area_km2'] * 1e3
         assert df.inv_thickness_m[0] < 100
 
         df = utils.compile_fixed_geometry_mass_balance(gdirs)
