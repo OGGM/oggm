@@ -9,6 +9,7 @@ from oggm.core.gis import glacier_masks
 from oggm.core.gis import simple_glacier_masks
 from oggm.core.gis import gridded_attributes
 from oggm.core.gis import gridded_mb_attributes
+from oggm.core.gis import gridded_data_var_to_geotiff
 from oggm.core.centerlines import compute_centerlines
 from oggm.core.centerlines import compute_downstream_line
 from oggm.core.centerlines import compute_downstream_bedshape

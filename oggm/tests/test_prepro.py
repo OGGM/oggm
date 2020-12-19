@@ -481,6 +481,24 @@ class TestGIS(unittest.TestCase):
         gdir.write_pickle(out, 'mybn')
         assert gdir.read_pickle('mybn') == out
 
+    def test_gridded_data_var_to_geotiff(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        target_var = 'topo'
+        gis.gridded_data_var_to_geotiff(gdir, varname=target_var)
+        gtiff_path = os.path.join(gdir.dir, target_var+'.tif')
+        assert os.path.exists(gtiff_path)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            gridded_topo = ds[target_var]
+            gtiff_ds = salem.open_xr_dataset(gtiff_path)
+            assert ds.salem.grid == gtiff_ds.salem.grid
+            assert np.allclose(gridded_topo.data, gtiff_ds.data)
+
 
 class TestCenterlines(unittest.TestCase):
 

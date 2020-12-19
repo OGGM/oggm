@@ -13,6 +13,7 @@ from functools import partial
 import numpy as np
 import shapely.ops
 import pandas as pd
+import xarray as xr
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
@@ -1487,3 +1488,51 @@ def merged_glacier_masks(gdir, geometry):
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
     gdir.write_pickle(geometries, 'geometries')
+
+
+@entity_task(log)
+def gridded_data_var_to_geotiff(gdir, varname, fname=None):
+    """Writes a NetCDF variable to a georeferenced geotiff file.
+
+    The geotiff file will be written in the gdir directory.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    varname : str
+        variable name in gridded_data.nc
+    fname : str
+        output file name (should end with `tif`), default is `varname.tif`
+    """
+
+    # Assign the output path
+    if fname is None:
+        fname = varname+'.tif'
+    outpath = os.path.join(gdir.dir, fname)
+
+    # Locate gridded_data.nc file and read it
+    nc_path = gdir.get_filepath('gridded_data')
+    with xr.open_dataset(nc_path) as ds:
+
+        # Prepare the profile dict
+        crs = ds.pyproj_srs
+        var = ds[varname]
+        grid = ds.salem.grid
+        data = var.data
+        data_type = data.dtype.name
+        height, width = var.data.shape
+        dx, dy = grid.dx, grid.dy
+        x0, y0 = grid.x0, grid.y0
+
+        profile = {'driver': 'GTiff', 'dtype': data_type, 'nodata': None,
+                   'width': width, 'height': height, 'count': 1,
+                   'crs': crs,
+                   'transform': rasterio.Affine(dx, 0.0, x0,
+                                                0.0, dy, y0),
+                   'tiled': True,
+                   'interleave': 'band'}
+
+        # Write GeoTiff file
+        with rasterio.open(outpath, 'w', **profile) as dst:
+            dst.write(data, 1)

@@ -85,6 +85,10 @@ Enhancements
   calibrates Glen A so that the volume of glaciers in a selection is
   matched (:pull:`1043`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added support for writing a NetCDF variable in ``gridded_data.nc`` file to
+  a georeferenced GeoTiff file (:pull:`1116`). The new task are
+  :py:func:`tasks.gridded_data_var_to_geotiff`. 
+  By `Li Fei <https://github.com/Keeptg>`_
 
 
 Bug fixes
