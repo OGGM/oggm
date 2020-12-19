@@ -13,6 +13,7 @@ from functools import partial
 import numpy as np
 import shapely.ops
 import pandas as pd
+import xarray as xr
 import shapely.geometry as shpg
 import scipy.signal
 from scipy.ndimage.measurements import label
@@ -1505,33 +1506,33 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None):
         output file name (should end with `tif`), default is `varname.tif`
     """
 
-    # Locate gridded_data.nc file and read it
-    nc_path = gdir.get_filepath('gridded_data')
-    gridded_data = salem.open_xr_dataset(nc_path)
-
     # Assign the output path
     if fname is None:
         fname = varname+'.tif'
     outpath = os.path.join(gdir.dir, fname)
 
-    # Prepare the profile dict
-    crs = gridded_data.pyproj_srs
-    var = gridded_data[varname]
-    grid = var.salem.grid
-    data = var.data
-    data_type = data.dtype.name
-    height, width = var.data.shape
-    dx, dy = var.salem.grid.dx, var.salem.grid.dy
-    x0, y0 = grid.x0, grid.y0
+    # Locate gridded_data.nc file and read it
+    nc_path = gdir.get_filepath('gridded_data')
+    with xr.open_dataset(nc_path) as ds:
 
-    profile = {'driver': 'GTiff', 'dtype': data_type, 'nodata': None,
-               'width': width, 'height': height, 'count': 1,
-               'crs': crs,
-               'transform': rasterio.Affine(dx, 0.0, x0,
-                                            0.0, dy, y0),
-               'tiled': True,
-               'interleave': 'band'}
+        # Prepare the profile dict
+        crs = ds.pyproj_srs
+        var = ds[varname]
+        grid = ds.salem.grid
+        data = var.data
+        data_type = data.dtype.name
+        height, width = var.data.shape
+        dx, dy = grid.dx, grid.dy
+        x0, y0 = grid.x0, grid.y0
 
-    # Write GeoTiff file
-    with rasterio.open(outpath, 'w', **profile) as dst:
-        dst.write(data, 1)
+        profile = {'driver': 'GTiff', 'dtype': data_type, 'nodata': None,
+                   'width': width, 'height': height, 'count': 1,
+                   'crs': crs,
+                   'transform': rasterio.Affine(dx, 0.0, x0,
+                                                0.0, dy, y0),
+                   'tiled': True,
+                   'interleave': 'band'}
+
+        # Write GeoTiff file
+        with rasterio.open(outpath, 'w', **profile) as dst:
+            dst.write(data, 1)

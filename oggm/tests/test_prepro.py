@@ -492,11 +492,12 @@ class TestGIS(unittest.TestCase):
         gis.gridded_data_var_to_geotiff(gdir, varname=target_var)
         gtiff_path = os.path.join(gdir.dir, target_var+'.tif')
         assert os.path.exists(gtiff_path)
-        gridded_ds = salem.open_xr_dataset(gdir.get_filepath('gridded_data'))
-        gridded_topo = gridded_ds[target_var]
-        gtiff_ds = salem.open_xr_dataset(gtiff_path)
-        assert gridded_ds.salem.grid == gtiff_ds.salem.grid
-        assert np.allclose(gridded_topo.data, gtiff_ds.data)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            gridded_topo = ds[target_var]
+            gtiff_ds = salem.open_xr_dataset(gtiff_path)
+            assert ds.salem.grid == gtiff_ds.salem.grid
+            assert np.allclose(gridded_topo.data, gtiff_ds.data)
 
 
 class TestCenterlines(unittest.TestCase):
