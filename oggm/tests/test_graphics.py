@@ -354,7 +354,7 @@ def test_chhota_shigri():
 
 
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_ice_cap():
 
     testdir = os.path.join(get_test_dir(), 'tmp_icecap')
@@ -369,6 +369,7 @@ def test_ice_cap():
     df = gpd.read_file(get_demo_file('divides_RGI50-05.08389.shp'))
     df['Area'] = df.Area * 1e-6  # cause it was in m2
     df['RGIId'] = ['RGI50-05.08389_d{:02d}'.format(d+1) for d in df.index]
+    df['GlacType'] = '1099'  # Make an ice cap
 
     gdirs = workflow.init_glacier_directories(df)
     workflow.gis_prepro_tasks(gdirs)

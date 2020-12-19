@@ -94,8 +94,8 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         utils.clip_min(flux, 0, out=flux)
 
         if np.sum(flux <= 0) > 1 and len(fls) == 1:
-            raise RuntimeError("More than one grid point has zero or "
-                               "negative flux: this should not happen.")
+            log.warning("More than one grid point has zero or "
+                        "negative flux: this should not happen.")
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
             if not np.allclose(flux[-1], 0., atol=0.1):
@@ -281,7 +281,7 @@ def sia_thickness(slope, width, flux, shape='rectangular',
 
     Parameters
     ----------
-    slope : -np.gradient(hgt, dx)
+    slope : -np.gradient(hgt, dx) (we don't clip for min slope!)
     width : section width in m
     flux : mass flux in m3 s-1
     shape : 'rectangular' or 'parabolic'
@@ -307,12 +307,6 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     # Ice flow params
     fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     rho = cfg.PARAMS['ice_density']
-
-    # Clip the slope, in degrees
-    clip_angle = cfg.PARAMS['min_slope']
-
-    # Clip slope to avoid negative and small slopes
-    slope = utils.clip_array(slope, np.deg2rad(clip_angle), np.pi / 2.)
 
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
@@ -455,8 +449,9 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     elif use_sf == 'Huss':
         sf_func = utils.shape_factor_huss
 
-    # Clip the slope, in degrees
-    clip_angle = cfg.PARAMS['min_slope']
+    # Clip the slope, in rad
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
 
     out_volume = 0.
 
@@ -464,7 +459,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
-        slope = utils.clip_array(slope, np.deg2rad(clip_angle), np.pi/2.)
+        slope = utils.clip_array(slope, min_slope, np.pi/2.)
 
         # Glacier width
         w = cl['width']
@@ -535,8 +530,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
         # Sanity check
         if np.any(out_thick <= 0):
-            raise RuntimeError("Found zero or negative thickness: "
-                               "this should not happen.")
+            log.warning("Found zero or negative thickness: "
+                        "this should not happen.")
 
         if write:
             cl['is_trapezoid'] = is_trap
@@ -646,6 +641,13 @@ def filter_inversion_output(gdir):
     gdir.write_pickle(cls, 'inversion_output')
 
     # Return volume for convenience
+    return np.sum([np.sum(cl['volume']) for cl in cls])
+
+
+@entity_task(log)
+def get_inversion_volume(gdir):
+    """Small utility task to get to the volume od all glaciers."""
+    cls = gdir.read_pickle('inversion_output')
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
@@ -1036,17 +1038,9 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
             'free_board': free_board}
 
 
-def _calving_fallback(gdir):
-    """Restore defaults in case we exit with error"""
-
-    # Bounds on mu*
-    cfg.PARAMS['min_mu_star'] = 1.
-    # Whether to clip mu to a min of zero (only recommended for calving exps)
-    cfg.PARAMS['clip_mu_star'] = False
-
-
-@entity_task(log, writes=['diagnostics'], fallback=_calving_fallback)
-def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
+@entity_task(log, writes=['diagnostics'])
+def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
+                           glen_a=None, fs=None, min_mu_star_frac=None):
     """Optimized search for a calving flux compatible with the bed inversion.
 
     See Recinos et al 2019 for details.
@@ -1064,6 +1058,11 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     fixed_water_depth : float
         fix the water depth to an observed value and let the free board vary
         instead.
+    glen_a : float, optional
+    fs : float, optional
+    min_mu_star_frac : float, optional
+        fraction of the original (non-calving) mu* you are ready to allow
+        for. Defaults cfg.PARAMS['calving_min_mu_star_frac'].
     """
     from oggm.core import climate
     from oggm.exceptions import MassBalanceCalibrationError
@@ -1072,6 +1071,9 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         # Do nothing
         return
 
+    if min_mu_star_frac is None:
+        min_mu_star_frac = cfg.PARAMS['calving_min_mu_star_frac']
+
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
 
@@ -1079,15 +1081,27 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         prepare_for_inversion(gdir)
-        v_ref = mass_conservation_inversion(gdir, water_level=water_level)
+        v_ref = mass_conservation_inversion(gdir, water_level=water_level,
+                                            glen_a=glen_a, fs=fs)
+
+    # We have a stop condition on mu*
+    prev_params = gdir.read_json('local_mustar')
+    mu_star_orig = np.min(prev_params['mu_star_per_flowline'])
 
     # Store for statistics
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
+    gdir.add_to_diagnostics('mu_star_before_calving', mu_star_orig)
 
     # Get the relevant variables
     cls = gdir.read_pickle('inversion_input')[-1]
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
+
+    # Stupidly enough the slope is clipped in the OGGM inversion, not
+    # in prepro - clip here
+    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
+    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
     # Check that water level is within given bounds
     if water_level is None:
@@ -1111,7 +1125,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
                                          water_depth=h)
 
         flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
-        sia_thick = sia_thickness(slope, width, flux)
+        sia_thick = sia_thickness(slope, width, flux, glen_a=glen_a, fs=fs)
         return fl['thick'] - sia_thick
 
     abs_min = optimize.minimize(to_minimize, [1], bounds=((1e-4, 1e4), ),
@@ -1163,23 +1177,26 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
 
     with utils.DisableLogger():
         # We accept values down to zero before stopping
-        cfg.PARAMS['min_mu_star'] = 0
-        cfg.PARAMS['clip_mu_star'] = False
+        min_mu_star = mu_star_orig * min_mu_star_frac
 
         # At this step we might raise a MassBalanceCalibrationError
         try:
-            climate.local_t_star(gdir)
+            climate.local_t_star(gdir, clip_mu_star=False,
+                                 min_mu_star=min_mu_star,
+                                 continue_on_error=False,
+                                 add_to_log_file=False)
             df = gdir.read_json('local_mustar')
         except MassBalanceCalibrationError as e:
             assert 'mu* out of specified bounds' in str(e)
-            # When this happens we clip mu* to zero
-            cfg.PARAMS['clip_mu_star'] = True
-            climate.local_t_star(gdir)
+            # When this happens we clip mu*
+            climate.local_t_star(gdir, clip_mu_star=True,
+                                 min_mu_star=min_mu_star)
             df = gdir.read_json('local_mustar')
 
-        climate.mu_star_calibration(gdir)
+        climate.mu_star_calibration(gdir, min_mu_star=min_mu_star)
         prepare_for_inversion(gdir)
-        mass_conservation_inversion(gdir, water_level=water_level)
+        mass_conservation_inversion(gdir, water_level=water_level,
+                                    glen_a=glen_a, fs=fs)
 
     if fixed_water_depth is not None:
         out = calving_flux_from_depth(gdir, water_level=water_level,
@@ -1206,10 +1223,5 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None):
     odf['calving_front_width'] = out['width']
     for k, v in odf.items():
         gdir.add_to_diagnostics(k, v)
-
-    # Restore defaults
-    with utils.DisableLogger():
-        cfg.PARAMS['min_mu_star'] = 1.
-        cfg.PARAMS['clip_mu_star'] = False
 
     return odf

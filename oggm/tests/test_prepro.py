@@ -23,9 +23,9 @@ from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import get_test_dir, init_columbia
+from oggm.tests.funcs import get_test_dir, init_columbia, init_columbia_eb
 from oggm import workflow
-from oggm.exceptions import InvalidWorkflowError
+from oggm.exceptions import InvalidWorkflowError, MassBalanceCalibrationError
 
 pytestmark = pytest.mark.test_env("prepro")
 
@@ -1699,6 +1699,12 @@ class TestClimate(unittest.TestCase):
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'],
                                         glacierwide=True)
+
+        cfg.PARAMS['min_mu_star'] = 10
+        with pytest.raises(MassBalanceCalibrationError):
+            climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
+
+        cfg.PARAMS['min_mu_star'] = 5
         climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
         climate.mu_star_calibration(gdir)
 
@@ -2260,8 +2266,9 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
             v += np.nansum(cl['volume'])
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=40)
         np.testing.assert_allclose(ref_v, v)
+        np.testing.assert_allclose(ref_v, inversion.get_inversion_volume(gdir))
 
         # Sanity check - velocities
         inv = gdir.read_pickle('inversion_output')[-1]
@@ -2283,12 +2290,6 @@ class TestInversion(unittest.TestCase):
         inv = gdir.read_pickle('inversion_output')[-1]
 
         np.testing.assert_allclose(velocity, inv['u_integrated'])
-
-        # In the middle section the velocities look OK and should be close
-        # to the no sliding assumption
-        np.testing.assert_allclose(inv['u_surface'][20:60],
-                                   inv['u_integrated'][20:60] / 0.8,
-                                   rtol=0.17)
 
     def test_invert_hef_from_consensus(self):
 
@@ -2312,7 +2313,25 @@ class TestInversion(unittest.TestCase):
         climate.local_t_star(gdir, tstar=t_star, bias=bias)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
-        df = workflow.calibrate_inversion_from_consensus_estimate(gdir)
+        df = workflow.calibrate_inversion_from_consensus(gdir)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
+        # Make it fail
+        with pytest.raises(ValueError):
+            a = (0.1, 3)
+            workflow.calibrate_inversion_from_consensus(gdir,
+                                                        a_bounds=a)
+
+        a = (0.1, 5)
+        df = workflow.calibrate_inversion_from_consensus(gdir,
+                                                         a_bounds=a,
+                                                         error_on_mismatch=False)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.07)
+
+        # With fs it can work
+        a = (0.1, 3)
+        df = workflow.calibrate_inversion_from_consensus(gdir,
+                                                         a_bounds=a,
+                                                         apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
 
     def test_invert_hef_shapes(self):
@@ -2468,7 +2487,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
             v += np.nansum(cl['volume'])
-        np.testing.assert_allclose(242, maxs, atol=25)
+        np.testing.assert_allclose(242, maxs, atol=50)
         np.testing.assert_allclose(ref_v, v)
 
     def test_invert_hef_from_any_mb(self):
@@ -2746,7 +2765,8 @@ class TestCoxeCalving(unittest.TestCase):
         inversion.mass_conservation_inversion(gdir)
         fls1 = gdir.read_pickle('inversion_flowlines')
         cls1 = gdir.read_pickle('inversion_output')
-
+        # Increase calving for this one
+        cfg.PARAMS['inversion_calving_k'] = 1
         out = inversion.find_inversion_calving(gdir)
         fls2 = gdir.read_pickle('inversion_flowlines')
         cls2 = gdir.read_pickle('inversion_output')
@@ -2776,6 +2796,9 @@ class TestCoxeCalving(unittest.TestCase):
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
 
+        cfg.PARAMS['inversion_calving_k'] = 1
+        cfg.PARAMS['run_calving_k'] = 1
+
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
@@ -2801,13 +2824,13 @@ class TestCoxeCalving(unittest.TestCase):
 
 class TestColumbiaCalving(unittest.TestCase):
 
-    def setUp(self):
-        self.gdir = init_columbia()
-
     @pytest.mark.slow
-    def test_find_calving(self):
+    def test_find_calving_full_fl(self):
 
-        gdir = self.gdir
+        gdir = init_columbia(reset=True)
+
+        # For these tests we allow mu to 0
+        cfg.PARAMS['calving_min_mu_star_frac'] = 0
 
         # Test default k (it overshoots)
         df = inversion.find_inversion_calving(gdir)
@@ -2848,9 +2871,10 @@ class TestColumbiaCalving(unittest.TestCase):
         cfg.PARAMS['inversion_calving_k'] = 0.2
         df = inversion.find_inversion_calving(gdir)
 
-        assert df['calving_flux'] > 0.5
+        assert df['calving_flux'] > 0.2
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
         # Test with fixed water depth and high k
         water_depth = 275.282
@@ -2874,12 +2898,136 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_flux'] < 1
         assert df['calving_mu_star'] > 0
         assert df['calving_front_water_depth'] == water_depth
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
         # Test glacier stats
         odf = utils.compile_glacier_statistics([gdir],
                                                inversion_only=True).iloc[0]
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
         np.testing.assert_allclose(odf.calving_front_water_depth, water_depth)
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+
+    def test_find_calving_eb(self):
+
+        gdir = init_columbia_eb()
+
+        # Test default k (it overshoots)
+        df = inversion.find_inversion_calving(gdir)
+
+        mu_bef = gdir.get_diagnostics()['mu_star_before_calving']
+        frac = cfg.PARAMS['calving_min_mu_star_frac']
+        assert df['calving_mu_star'] == mu_bef * frac
+        assert df['calving_flux'] > 0.5
+
+        # Test that new MB equal flux
+        mbmod = massbalance.MultipleFlowlineMassBalance
+        mb = mbmod(gdir, use_inversion_flowlines=True,
+                   mb_model_class=massbalance.ConstantMassBalance,
+                   bias=0)
+
+        rho = cfg.PARAMS['ice_density']
+        flux_mb = (mb.get_specific_mb() * gdir.rgi_area_m2) * 1e-9 / rho
+        np.testing.assert_allclose(flux_mb, df['calving_flux'],
+                                   atol=0.001)
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
+        assert odf.calving_front_water_depth > 500
+
+        # Test with smaller k (no overshoot)
+        cfg.PARAMS['inversion_calving_k'] = 0.5
+        df = inversion.find_inversion_calving(gdir)
+
+        assert df['calving_flux'] > 0.5
+        assert df['calving_mu_star'] > mu_bef * frac
+        np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir])
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+
+    def test_find_calving_workflow(self):
+
+        gdir = init_columbia_eb()
+
+        # Check that all this also works with
+        cfg.PARAMS['continue_on_error'] = True
+
+        # Just a standard run
+        workflow.calibrate_inversion_from_consensus([gdir])
+        diag = gdir.get_diagnostics()
+        assert diag['calving_law_flux'] > 0
+        assert diag['calving_mu_star'] < diag['mu_star_before_calving']
+        np.testing.assert_allclose(diag['calving_flux'], diag['calving_law_flux'])
+
+        # Where we also match MB
+        workflow.match_regional_geodetic_mb([gdir], '01')
+
+        # Check OGGM part
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2006:2018].mean()
+        rho = cfg.PARAMS['ice_density']
+        cal = diag['calving_flux'] * 1e9 * rho / gdir.rgi_area_m2
+
+        # Ref part
+        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        df = pd.read_csv(utils.get_demo_file(df))
+        df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+        smb_ref = df.loc[int('01'), 'dmdtda']
+        np.testing.assert_allclose(mb - cal, smb_ref)
+
+        # OK - run
+        tasks.init_present_time_glacier(gdir)
+        tasks.run_from_climate_data(gdir, min_ys=1980, ye=2019,
+                                    output_filesuffix='_hist')
+
+        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
+        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
+        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir], path=stats_file)
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+        assert df.loc[gdir.rgi_id, 'is_tidewater']
+
+        # Compile stuff
+        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
+        utils.compile_run_output([gdir], path=past_run_file,
+                                 input_filesuffix='_hist')
+
+        # Extend
+        utils.extend_past_climate_run(past_run_file=past_run_file,
+                                      fixed_geometry_mb_file=mb_file,
+                                      glacier_statistics_file=stats_file,
+                                      path=out_path)
+
+        with xr.open_dataset(out_path) as ods, \
+                xr.open_dataset(past_run_file) as ds:
+
+            ref = ds.volume
+            new = ods.volume_ext
+            for y in [2010, 2012, 2019]:
+                assert new.sel(time=y).data == ref.sel(time=y).data
+
+            new = ods.volume_fixed_geom_ext
+            np.testing.assert_allclose(new.sel(time=2019), ref.sel(time=2019),
+                                       rtol=0.01)
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['volume', 'calving', 'volume_bsl', 'volume_bwl']:
+                rtol = 0.3
+                if 'bsl' in vn or 'bwl' in vn:
+                    rtol = 0.55
+                np.testing.assert_allclose(ods[vn+'_ext'].sel(time=2010) -
+                                           ods[vn+'_ext'].sel(time=2002),
+                                           ods[vn+'_ext'].sel(time=2018) -
+                                           ods[vn+'_ext'].sel(time=2010),
+                                           rtol=rtol)
 
 
 class TestGrindelInvert(unittest.TestCase):

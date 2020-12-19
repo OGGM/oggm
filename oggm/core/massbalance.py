@@ -1103,10 +1103,16 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         mbs = []
         widths = []
-        for fl, mb_mod in zip(self.fls, self.flowline_mb_models):
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year)
+        for i, (fl, mb_mod) in enumerate(zip(self.fls, self.flowline_mb_models)):
+            _widths = fl.widths
+            try:
+                # For rect and parabola don't compute spec mb
+                _widths = np.where(fl.thick > 0, _widths, 0)
+            except AttributeError:
+                pass
+            widths = np.append(widths, _widths)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
-            widths = np.append(widths, fl.widths)
 
         return np.average(mbs, weights=widths)
 
@@ -1132,13 +1138,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 @entity_task(log)
 def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 monthly_step=False,
+                                use_inversion_flowlines=True,
                                 climate_filename='climate_historical',
                                 climate_input_filesuffix=''):
-    """Runs a glacier with climate input from e.g. CRU or a GCM.
-
-    This will initialize a
-    :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    """Computes the mass-balance with climate input from e.g. CRU or a GCM.
 
     Parameters
     ----------
@@ -1154,6 +1157,8 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
+    use_inversion_flowlines : bool
+        whether to use the inversion flowlines or the model flowlines
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -1164,15 +1169,10 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     if monthly_step:
         raise NotImplementedError('monthly_step not implemented yet')
 
-    try:
-        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                         filename=climate_filename,
-                                         input_filesuffix=climate_input_filesuffix)
-    except InvalidWorkflowError:
-        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                         filename=climate_filename,
-                                         use_inversion_flowlines=True,
-                                         input_filesuffix=climate_input_filesuffix)
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                     filename=climate_filename,
+                                     use_inversion_flowlines=use_inversion_flowlines,
+                                     input_filesuffix=climate_input_filesuffix)
 
     if years is None:
         if ys is None:

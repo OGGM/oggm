@@ -69,9 +69,10 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
 
     # Standard sanity checks
     months = temp['time.month']
-    if (months[0] != 1) or (months[-1] != 12):
-        raise ValueError('We expect the files to start in January and end in '
-                         'December!')
+    if months[0] != 1:
+        raise ValueError('We expect the files to start in January!')
+    if months[-1] < 10:
+        raise ValueError('We expect the files to end in December!')
 
     if (np.abs(temp['lon']) > 180) or (np.abs(prcp['lon']) > 180):
         raise ValueError('We expect the longitude coordinates to be within '
@@ -81,6 +82,9 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     prcp = prcp[sm-1:sm-13].load()
     temp = temp[sm-1:sm-13].load()
+
+    assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didnt get full years'
+    assert len(temp) // 12 == len(temp) / 12, 'Somehow we didnt get full years'
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_historical')
@@ -288,50 +292,34 @@ def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
             raise ValueError("Need to set cfg.PATHS['cmip5_precip_file']")
         fpath_precip = cfg.PATHS['cmip5_precip_file']
 
+    # Glacier location
+    glon = gdir.cenlon
+    glat = gdir.cenlat
+
     # Read the GCM files
-    tempds = xr.open_dataset(fpath_temp, decode_times=False)
-    precipds = xr.open_dataset(fpath_precip, decode_times=False)
+    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
+            xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
 
-    with utils.ncDataset(fpath_temp, mode='r') as nc:
-        time_units = nc.variables['time'].units
-        calendar = nc.variables['time'].calendar
-        time = netCDF4.num2date(nc.variables['time'][:], time_units)
+        # Check longitude conventions
+        if tempds.lon.min() >= 0 and glon <= 0:
+            glon += 360
 
-    # Select for location
-    lon = gdir.cenlon
-    lat = gdir.cenlat
+        # Take the closest to the glacier
+        # Should we consider GCM interpolation?
+        temp = tempds.tas.sel(lat=glat, lon=glon, method='nearest')
+        precip = precipds.pr.sel(lat=glat, lon=glon, method='nearest')
 
-    # Conversion of the longitude
-    if lon <= 0:
-        lon += 360
+        # Back to [-180, 180] for OGGM
+        temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
+        precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
 
-    # Take the closest to the glacier
-    # Should we consider GCM interpolation?
-    temp = tempds.tas.sel(lat=lat, lon=lon, method='nearest')
-    precip = precipds.pr.sel(lat=lat, lon=lon, method='nearest')
+        # Convert kg m-2 s-1 to mm mth-1 => 1 kg m-2 = 1 mm !!!
+        assert 'kg m-2 s-1' in precip.units, 'Precip units not understood'
 
-    # Time needs a set to start of month
-    time = [datetime(t.year, t.month, 1) for t in time]
-    temp['time'] = time
-    precip['time'] = time
+        ny, r = divmod(len(temp), 12)
+        assert r == 0
+        dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
+        precip = precip * dimo * (60 * 60 * 24)
 
-    temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
-    precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
-
-    # Convert kg m-2 s-1 to mm mth-1 => 1 kg m-2 = 1 mm !!!
-    if temp.time[0].dt.month != 1:
-        raise ValueError('We expect the files to start in January!')
-
-    ny, r = divmod(len(temp), 12)
-    assert r == 0
-    precip = precip * precip.time.dt.days_in_month * (60 * 60 * 24)
-
-    tempds.close()
-    precipds.close()
-
-    # Here:
-    # - time_unit='days since 1870-01-15 12:00:00'
-    # - calendar='standard'
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
-                     time_unit=time_units, calendar=calendar, source='CESM',
-                     **kwargs)
+                     source=filesuffix, **kwargs)

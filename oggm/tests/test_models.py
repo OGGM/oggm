@@ -2462,6 +2462,19 @@ def gdir_sh(request, test_dir, hef_gdir):
 
 
 @pytest.fixture(scope='class')
+def gdir_calving(request, test_dir, hef_gdir):
+    dir_sh = os.path.join(test_dir, request.cls.__name__ + '_calving')
+    utils.mkdir(dir_sh, reset=True)
+    gdir_sh = tasks.copy_to_basedir(hef_gdir, base_dir=dir_sh,
+                                    setup='all')
+    gdir_sh.is_tidewater = True
+    yield gdir_sh
+    # teardown
+    if os.path.exists(dir_sh):
+        shutil.rmtree(dir_sh)
+
+
+@pytest.fixture(scope='class')
 def with_class_wd(request, test_dir, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
@@ -2475,7 +2488,8 @@ def with_class_wd(request, test_dir, hef_gdir):
 
 @pytest.fixture(scope='class')
 def inversion_params(hef_gdir):
-    return hef_gdir.read_pickle('inversion_params')
+    diag = hef_gdir.get_diagnostics()
+    return {k: diag[k] for k in ('inversion_glen_a', 'inversion_fs')}
 
 
 @pytest.mark.usefixtures('with_class_wd')
@@ -2490,8 +2504,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'],
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
@@ -2521,8 +2535,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'],
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'],
                                mb_elev_feedback='never')
 
         ref_vol = model.volume_km3
@@ -2572,8 +2586,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'])
 
         ref_area = model.area_km2
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
@@ -2589,8 +2603,8 @@ class TestHEF:
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['fs'],
-                               glen_a=inversion_params['glen_a'])
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'])
 
         ref_vol = model.volume_km3
         ref_area = model.area_km2
@@ -2618,12 +2632,12 @@ class TestHEF:
 
         init_present_time_glacier(hef_gdir)
         run_random_climate(hef_gdir, nyears=100, seed=6,
-                           fs=inversion_params['fs'],
-                           glen_a=inversion_params['glen_a'],
+                           fs=inversion_params['inversion_fs'],
+                           glen_a=inversion_params['inversion_glen_a'],
                            bias=0, output_filesuffix='_rdn')
         run_constant_climate(hef_gdir, nyears=100,
-                             fs=inversion_params['fs'],
-                             glen_a=inversion_params['glen_a'],
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct')
 
         paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
@@ -2638,7 +2652,6 @@ class TestHEF:
                                            rtol=0.12)
                 np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                            rtol=0.1)
-
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
@@ -2699,6 +2712,33 @@ class TestHEF:
         with xr.open_dataset(f) as ds:
             assert ds.calendar_month[0] == 10
 
+    @pytest.mark.slow
+    def test_compile_calving(self, hef_gdir, gdir_calving):
+
+        # This works because no calving output
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(gdir_calving)
+        run_constant_climate(hef_gdir, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        run_constant_climate(gdir_calving, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        utils.compile_run_output([gdir_calving, hef_gdir],
+                                 input_filesuffix='_def',
+                                 tmp_file_size=1)
+
+        # This should work although one calves the other not
+        cfg.PARAMS['use_kcalving_for_run'] = True
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(gdir_calving)
+        run_constant_climate(hef_gdir, nyears=10,
+                             bias=0, output_filesuffix='_def')
+        run_constant_climate(gdir_calving, nyears=10, water_level=0,
+                             bias=0, output_filesuffix='_def')
+        utils.compile_run_output([gdir_calving, hef_gdir],
+                                 input_filesuffix='_def',
+                                 tmp_file_size=1)
+
     def test_start_from_spinup(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
@@ -2729,7 +2769,7 @@ class TestHEF:
             np.testing.assert_allclose(fmod.area_km2, area)
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
-    def test_start_from_spinup_min_ys(self, hef_gdir):
+    def test_start_from_spinup_minmax_ys(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
 
@@ -2742,7 +2782,7 @@ class TestHEF:
         assert hef_gdir.rgi_date == 2003
 
         # Make a dummy run for 0 years
-        run_from_climate_data(hef_gdir, ye=2002, min_ys=2002,
+        run_from_climate_data(hef_gdir, ye=2002, max_ys=2002,
                               output_filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
@@ -2752,14 +2792,32 @@ class TestHEF:
             np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
-        run_from_climate_data(hef_gdir, ys=2002, ye=2003,
-                              init_model_filesuffix='_1',
+        run_from_climate_data(hef_gdir, ye=2005, min_ys=2005,
                               output_filesuffix='_2')
         fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
+            np.testing.assert_allclose(fmod.area_km2, area)
+            np.testing.assert_allclose(fmod.volume_km3, vol)
+
+        # Again
+        run_from_climate_data(hef_gdir, ys=2002, ye=2003,
+                              init_model_filesuffix='_1',
+                              output_filesuffix='_3')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_3')
+        with FileModel(fp) as fmod:
+            fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
             np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
+
+        # Again to check that time is correct
+        run_from_climate_data(hef_gdir, ys=None, ye=None,
+                              init_model_filesuffix='_1',
+                              output_filesuffix='_4')
+        fp = hef_gdir.get_filepath('model_run', filesuffix='_4')
+        with FileModel(fp) as fmod:
+            assert fmod.y0 == 2002
+            assert fmod.last_yr == 2003
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
@@ -2858,8 +2916,8 @@ class TestHEF:
                               output_filesuffix='_afterspinup')
         ds3 = utils.compile_run_output([gdir], path=False,
                                        input_filesuffix='_afterspinup')
-        assert (ds1.volume.isel(rgi_id=0, time=-1) <
-                0.7*ds3.volume.isel(rgi_id=0, time=-1))
+        assert (ds1.volume.isel(rgi_id=0, time=-1).data <
+                0.75*ds3.volume.isel(rgi_id=0, time=-1).data)
         ds3.close()
 
         # Try the compile optimisation
@@ -2896,8 +2954,9 @@ class TestHEF:
         assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
         assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
         assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
-        # Except for "never", where things are different
-        assert out[3].volume.mean() < out[2].volume.mean()
+        # Except for "never", where things are different and less variable
+        assert out[3].volume.min() > out[2].volume.min()
+        assert out[3].volume.max() < out[2].volume.max()
 
         if do_plot:
             plt.figure()

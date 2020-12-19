@@ -10,6 +10,7 @@ from functools import partial
 from time import gmtime, strftime
 import os
 import shutil
+import warnings
 
 # External libs
 import numpy as np
@@ -45,7 +46,6 @@ log = logging.getLogger(__name__)
 
 class Flowline(Centerline):
     """Common logic for different types of flowlines used as input to the model
-
 
     """
 
@@ -912,7 +912,7 @@ class FlowlineModel(object):
         nm = len(monthly_time)
         sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
         widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
-        bucket = [(np.zeros(ny) * np.NaN) for _ in self.fls]
+        bucket = [np.zeros(ny) for _ in self.fls]
         diag_ds = xr.Dataset()
 
         # Global attributes
@@ -923,6 +923,8 @@ class FlowlineModel(object):
                                                   gmtime())
         diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
         diag_ds.attrs['water_level'] = self.water_level
+        diag_ds.attrs['glen_a'] = self.glen_a
+        diag_ds.attrs['fs'] = self.fs
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)
@@ -941,36 +943,40 @@ class FlowlineModel(object):
         diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
         diag_ds['volume_m3'].attrs['unit'] = 'm 3'
-        if self.is_marine_terminating:
-            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'below '
-                                                             'sea-level')
-            diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
-            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'below '
-                                                             'water-level')
-            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
+                                                         'below '
+                                                         'sea-level')
+        diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
+                                                         'below '
+                                                         'water-level')
+        diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
         diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
         diag_ds['area_m2'].attrs['unit'] = 'm 2'
+
         diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['length_m'].attrs['description'] = 'Glacier length'
         diag_ds['length_m'].attrs['unit'] = 'm 3'
+
         diag_ds['ela_m'] = ('time', np.zeros(nm) * np.NaN)
         diag_ds['ela_m'].attrs['description'] = ('Annual Equilibrium Line '
                                                  'Altitude  (ELA)')
         diag_ds['ela_m'].attrs['unit'] = 'm a.s.l'
-        if self.is_tidewater:
-            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
-                                                          'calving flux')
-            diag_ds['calving_m3'].attrs['unit'] = 'm 3'
-            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
-            diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
+
+        diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
+                                                      'calving flux')
+        diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+
+        diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
+        diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
+        diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
         # Run
         j = 0
@@ -987,10 +993,12 @@ class FlowlineModel(object):
                         except AttributeError:
                             pass
                 j += 1
+
             # Diagnostics
             diag_ds['volume_m3'].data[i] = self.volume_m3
             diag_ds['area_m2'].data[i] = self.area_m2
             diag_ds['length_m'].data[i] = self.length_m
+
             try:
                 ela_m = self.mb_model.get_ela(year=yr, fls=self.fls,
                                               fl_id=len(self.fls)-1)
@@ -999,12 +1007,10 @@ class FlowlineModel(object):
                 # We really don't want to stop the model for some ELA issues
                 diag_ds['ela_m'].data[i] = np.NaN
 
-            if self.is_tidewater:
-                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
-                diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
-                if self.is_marine_terminating:
-                    diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
-                    diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+            diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+            diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+            diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
+            diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
 
         # to datasets
         run_ds = []
@@ -1023,9 +1029,8 @@ class FlowlineModel(object):
                                             coords=varcoords)
             ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
                                             coords=varcoords)
-            if self.is_tidewater:
-                ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
-                                                          coords=varcoords)
+            ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
+                                                      coords=varcoords)
             run_ds.append(ds)
 
         # write output?
@@ -1176,7 +1181,7 @@ class FluxBasedModel(FlowlineModel):
             it is inferred from PARAMS['free_board_lake_terminating'].
             The best way to set the water level for real glaciers is to use
             the same as used for the inversion (this is what
-            `robust_model_run` does for you)
+            `flowline_model_run` does for you)
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -1379,7 +1384,9 @@ class FluxBasedModel(FlowlineModel):
                         raise RuntimeError(
                             'CFL error: required time step smaller '
                             'than the minimum allowed: '
-                            '{:.1f}s vs {:.1f}s.'.format(cfl_dt, self.min_dt))
+                            '{:.1f}s vs {:.1f}s. Happening at '
+                            'simulation year {:.1f} and fl_id {}.'
+                            ''.format(cfl_dt, self.min_dt, self.yr, fl_id))
 
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
@@ -1694,7 +1701,12 @@ class FileModel(object):
             ds.load()
             dss.append(ds)
 
-        self.last_yr = ds.year.values[-1]
+        try:
+            self.last_yr = ds.year.values[-1]
+        except AttributeError:
+            raise InvalidWorkflowError('The provided model output file is '
+                                       'incomplete (likely when the previous '
+                                       'run failed) or corrupt.')
         self.dss = dss
 
         # Calving diags
@@ -1720,7 +1732,7 @@ class FileModel(object):
         """Reset the initial model time"""
 
         if y0 is None:
-            y0 = self.dss[0].time[0]
+            y0 = float(self.dss[0].time[0])
         self.y0 = y0
         self.yr = y0
 
@@ -1850,7 +1862,8 @@ def glacier_from_netcdf(path):
 
 def calving_glacier_downstream_line(line, n_points):
     """Extends a calving glacier flowline past the terminus."""
-
+    if line is None:
+        return None
     x, y = line.coords.xy
     dx = x[-1] - x[-2]
     dy = y[-1] - y[-2]
@@ -2081,11 +2094,18 @@ def init_present_time_glacier(gdir):
     gdir.write_pickle(new_fls, 'model_flowlines')
 
 
-def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
-                     ys=None, ye=None, zero_initial_glacier=False,
-                     init_model_fls=None, store_monthly_step=False,
-                     water_level=None,
-                     **kwargs):
+def robust_model_run(*args, **kwargs):
+    warnings.warn('The task `robust_model_run` is deprecated.',
+                  DeprecationWarning)
+    return flowline_model_run(*args, **kwargs)
+
+
+@entity_task(log)
+def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
+                       ys=None, ye=None, zero_initial_glacier=False,
+                       init_model_fls=None, store_monthly_step=False,
+                       water_level=None,
+                       **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
     Parameters
@@ -2120,8 +2140,16 @@ def robust_model_run(gdir, output_filesuffix=None, mb_model=None,
         kwargs to pass to the FluxBasedModel instance
      """
 
-    kwargs.setdefault('fs', cfg.PARAMS['fs'])
-    kwargs.setdefault('glen_a', cfg.PARAMS['glen_a'])
+    if cfg.PARAMS['use_inversion_params_for_run']:
+        diag = gdir.get_diagnostics()
+        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+    else:
+        fs = cfg.PARAMS['fs']
+        glen_a = cfg.PARAMS['glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
 
     run_path = gdir.get_filepath('model_run', filesuffix=output_filesuffix,
                                  delete=True)
@@ -2180,7 +2208,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2238,12 +2266,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=0, ye=nyears,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=0, ye=nyears,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 @entity_task(log)
@@ -2260,7 +2288,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2308,16 +2336,16 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=0, ye=nyears,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=0, ye=nyears,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 @entity_task(log)
-def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
+def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_monthly_step=False,
                           climate_filename='climate_historical',
                           climate_input_filesuffix='', output_filesuffix='',
@@ -2328,7 +2356,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
-    and run a :py:func:`oggm.core.flowline.robust_model_run`.
+    and run a :py:func:`oggm.core.flowline.flowline_model_run`.
 
     Parameters
     ----------
@@ -2336,12 +2364,16 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         the glacier directory to process
     ys : int
         start year of the model run (default: from the glacier geometry
-        date)
+        date if init_model_filesuffix is None, else init_model_yr)
     ye : int
-        end year of the model run (no default: needs to be set)
+        end year of the model run (default: last year of the provided
+        climate file)
     min_ys : int
         if you want to impose a minimum start year, regardless if the glacier
-        inventory date is later.
+        inventory date is earlier (e.g. if climate data does not reach).
+    max_ys : int
+        if you want to impose a maximum start year, regardless if the glacier
+        inventory date is later (e.g. if climate data does not reach).
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -2356,7 +2388,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         if you want to start from a previous model run state. Can be
         combined with `init_model_yr`
     init_model_yr : int
-        the year of the initial run you want to starte from. The default
+        the year of the initial run you want to start from. The default
         is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
@@ -2372,6 +2404,17 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         kwargs to pass to the FluxBasedModel instance
     """
 
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
+        with FileModel(fp) as fmod:
+            if init_model_yr is None:
+                init_model_yr = fmod.last_yr
+            fmod.run_until(init_model_yr)
+            init_model_fls = fmod.fls
+            if ys is None:
+                ys = init_model_yr
+
+    # Take from rgi date if not set yet
     if ys is None:
         try:
             ys = gdir.rgi_date.year
@@ -2382,29 +2425,27 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None,
         # in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
         ys += 1
-    if ye is None:
-        raise InvalidParamsError('Need to set the `ye` kwarg!')
-    if min_ys is not None:
-        ys = ys if ys < min_ys else min_ys
 
-    if init_model_filesuffix is not None:
-        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
-        with FileModel(fp) as fmod:
-            if init_model_yr is None:
-                init_model_yr = fmod.last_yr
-            fmod.run_until(init_model_yr)
-            init_model_fls = fmod.fls
+    # Final crop
+    if min_ys is not None:
+        ys = ys if ys > min_ys else min_ys
+    if max_ys is not None:
+        ys = ys if ys < max_ys else max_ys
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename, bias=bias,
                                      input_filesuffix=climate_input_filesuffix)
 
-    return robust_model_run(gdir, output_filesuffix=output_filesuffix,
-                            mb_model=mb, ys=ys, ye=ye,
-                            store_monthly_step=store_monthly_step,
-                            init_model_fls=init_model_fls,
-                            zero_initial_glacier=zero_initial_glacier,
-                            **kwargs)
+    if ye is None:
+        # Decide from climate
+        ye = mb.flowline_mb_models[0].ye
+
+    return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
+                              mb_model=mb, ys=ys, ye=ye,
+                              store_monthly_step=store_monthly_step,
+                              init_model_fls=init_model_fls,
+                              zero_initial_glacier=zero_initial_glacier,
+                              **kwargs)
 
 
 def merge_to_one_glacier(main, tribs, filename='climate_historical',

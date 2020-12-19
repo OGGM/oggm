@@ -3,11 +3,6 @@ import warnings
 warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import pytest
-pytest.importorskip('geopandas')
-pytest.importorskip('rasterio')
-pytest.importorskip('salem')
-
-
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
@@ -17,8 +12,8 @@ import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo
-from oggm.core import gis
+from oggm.shop import its_live, rgitopo, bedtopo
+from oggm.core import gis, centerlines
 from oggm import cfg, tasks, workflow
 
 pytestmark = pytest.mark.test_env("utils")
@@ -407,3 +402,75 @@ class Test_climate_datasets:
             # Fake tests, the plots look plausible
             np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
+
+
+class Test_bedtopo:
+
+    def test_add_consensus(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+
+        entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp'))
+        entity['RGIId'] = 'RGI60-11.00897'
+        gdir = workflow.init_glacier_directories(entity)[0]
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        ft = utils.get_demo_file('RGI60-11.00897_thickness.tif')
+        monkeypatch.setattr(utils, 'file_downloader', lambda x: ft)
+        bedtopo.add_consensus_thickness(gdir)
+
+        # Check with rasterio
+        cfg.add_to_basenames('consensus', 'consensus.tif')
+        gis.rasterio_to_gdir(gdir, ft, 'consensus', resampling='bilinear')
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mine = ds.consensus_ice_thickness
+
+        with xr.open_rasterio(gdir.get_filepath('consensus')) as ds:
+            ref = ds.isel(band=0)
+
+        # Check area
+        my_area = np.sum(np.isfinite(mine.data)) * gdir.grid.dx**2
+        np.testing.assert_allclose(my_area, gdir.rgi_area_m2, rtol=0.07)
+
+        rio_area = np.sum(ref.data > 0) * gdir.grid.dx**2
+        np.testing.assert_allclose(rio_area, gdir.rgi_area_m2, rtol=0.15)
+        np.testing.assert_allclose(my_area, rio_area, rtol=0.15)
+
+        # They are not same:
+        # - interpolation not 1to1 same especially at borders
+        # - we preserve total volume
+        np.testing.assert_allclose(mine.sum(), ref.sum(), rtol=0.01)
+        assert utils.rmsd(ref, mine) < 2
+
+        # Check vol
+        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
+        my_vol = mine.sum() * gdir.grid.dx**2
+        np.testing.assert_allclose(my_vol, ref_vol)
+
+        # Now check the rest of the workflow
+        # Check that no error when var not there
+        vn = 'consensus_ice_thickness'
+        centerlines.elevation_band_flowline(gdir, bin_variables=[vn, 'foo'])
+
+        # Check vol
+        df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'),
+                         index_col=0)
+        my_vol = (df[vn] * df['area']).sum()
+        np.testing.assert_allclose(my_vol, ref_vol)
+
+        centerlines.fixed_dx_elevation_band_flowline(gdir,
+                                                     bin_variables=[vn, 'foo'])
+        fdf = pd.read_csv(gdir.get_filepath('elevation_band_flowline',
+                                            filesuffix='_fixed_dx'),
+                          index_col=0)
+
+        # Check vol
+        my_vol = (fdf[vn] * fdf['area_m2']).sum()
+        np.testing.assert_allclose(my_vol, ref_vol)

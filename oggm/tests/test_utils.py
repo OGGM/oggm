@@ -13,6 +13,7 @@ from unittest import mock
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from numpy.testing import assert_array_equal, assert_allclose
 
 salem = pytest.importorskip('salem')
@@ -762,7 +763,7 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['is_test']
         assert kwargs['demo']
         assert not kwargs['disable_mp']
-        assert kwargs['max_level'] == 4
+        assert kwargs['max_level'] == 5
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -781,6 +782,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
+        assert not kwargs['match_geodetic_mb']
+        assert not kwargs['centerlines_only']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -805,6 +808,8 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
+                                           '--centerlines-only',
+                                           '--match-geodetic-mb',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -816,6 +821,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
+        assert kwargs['match_geodetic_mb']
+        assert kwargs['centerlines_only']
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -863,11 +870,15 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof)
+                          test_topofile=topof, match_geodetic_mb=True)
 
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1980-2010_avg_prcp' in df
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
@@ -881,11 +892,24 @@ class TestPreproCLI(unittest.TestCase):
         assert 'main_flowline_length' in df
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
-                                      'glacier_statistics_11.csv'))
+                                      'glacier_statistics_11.csv'), index_col=0)
         assert 'inv_volume_km3' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
-                                      'climate_statistics_11.csv'))
-        assert '1945-1975_avg_prcp' in df
+        assert 'mb_bias_before_geodetic_corr' in df
+
+        dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                       'fixed_geometry_mass_balance_11.csv'),
+                          index_col=0)
+        dfm = dfm.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        odf = pd.DataFrame(dfm.loc[2006:2016].mean(), columns=['SMB'])
+        odf['AREA'] = df.rgi_area_km2
+        smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
+
+        dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        dfh = pd.read_csv(utils.get_demo_file(dfh))
+        dfh = dfh.loc[dfh.period == '2006-01-01_2019-01-01'].set_index('reg')
+        smb_ref = dfh.loc[11, 'dmdtda']
+        np.testing.assert_allclose(smb_oggm, smb_ref)
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -893,13 +917,13 @@ class TestPreproCLI(unittest.TestCase):
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
 
         # See if we can start from all levs
         from oggm import tasks
-        from oggm.core.flowline import FlowlineModel
+        from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[0]
+        rid = df.index[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L1
@@ -935,8 +959,44 @@ class TestPreproCLI(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            # cannot be the same after tuning
+            assert ds.glen_a != cfg.PARAMS['glen_a']
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_run',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+        # Extended file
+        fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
+                          'historical_run_output_extended_11.nc')
+        with xr.open_dataset(fp) as ods:
+
+            ref = ods.volume_ext
+            new = ods.volume_fixed_geom_ext
+            np.testing.assert_allclose(new.isel(time=-1),
+                                       ref.isel(time=-1),
+                                       rtol=0.02)
+
+            vn = 'volume'
+            np.testing.assert_allclose(ods[vn + '_ext'].sel(time=1990),
+                                       ods[vn + '_ext'].sel(time=2015),
+                                       rtol=0.2)
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['calving', 'volume_bsl', 'volume_bwl']:
+                np.testing.assert_allclose(ods[vn+'_ext'].sel(time=1990), 0)
 
     @pytest.mark.slow
     def test_elev_bands_run(self):
@@ -957,6 +1017,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -979,7 +1040,7 @@ class TestPreproCLI(unittest.TestCase):
         assert 'inv_volume_km3' in df
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
-        assert '1945-1975_avg_prcp' in df
+        assert '1980-2010_avg_prcp' in df
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -987,11 +1048,11 @@ class TestPreproCLI(unittest.TestCase):
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
 
         # See if we can start from L3 and L4
         from oggm import tasks
-        from oggm.core.flowline import FlowlineModel
+        from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
@@ -1012,6 +1073,20 @@ class TestPreproCLI(unittest.TestCase):
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_run',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
     def test_source_run(self):
@@ -1035,6 +1110,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -1194,6 +1270,7 @@ class TestBenchmarkCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,

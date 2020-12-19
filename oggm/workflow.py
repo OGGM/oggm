@@ -27,6 +27,7 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # Multiprocessing Pool
+_mp_manager = None
 _mp_pool = None
 
 
@@ -37,22 +38,30 @@ def _init_pool_globals(_cfg_contents, global_lock):
 
 def init_mp_pool(reset=False):
     """Necessary because at import time, cfg might be uninitialized"""
-    global _mp_pool
-    if _mp_pool and not reset:
+    global _mp_manager, _mp_pool
+    if _mp_pool and _mp_manager and not reset:
         return _mp_pool
 
     cfg.CONFIG_MODIFIED = False
-    if _mp_pool and reset:
+    if _mp_pool:
         _mp_pool.terminate()
         _mp_pool = None
+    if _mp_manager:
+        cfg.set_manager(None)
+        _mp_manager.shutdown()
+        _mp_manager = None
 
     if cfg.PARAMS['use_mp_spawn']:
         mp = multiprocessing.get_context('spawn')
     else:
         mp = multiprocessing
 
+    _mp_manager = mp.Manager()
+
+    cfg.set_manager(_mp_manager)
     cfg_contents = cfg.pack_config()
-    global_lock = mp.Manager().Lock()
+
+    global_lock = _mp_manager.Lock()
 
     mpp = cfg.PARAMS['mp_processes']
     _mp_pool = mp.Pool(mpp, initializer=_init_pool_globals,
@@ -558,8 +567,10 @@ def climate_tasks(gdirs):
     execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 
-def inversion_tasks(gdirs):
+def inversion_tasks(gdirs, glen_a=None, fs=None):
     """Shortcut function: run all ice thickness inversion tasks.
+
+    Quite useful to deal with calving glaciers as well.
 
     Parameters
     ----------
@@ -577,20 +588,30 @@ def inversion_tasks(gdirs):
             else:
                 gdirs_nc.append(gd)
 
+        log.workflow('Starting inversion tasks for {} tidewater and {} '
+                     'non-tidewater glaciers.'.format(len(gdirs_c),
+                                                      len(gdirs_nc)))
+
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
-            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc)
+            execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
+                                glen_a=glen_a, fs=fs)
             execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
-            execute_entity_task(tasks.find_inversion_calving, gdirs_c)
+            execute_entity_task(tasks.find_inversion_calving, gdirs_c,
+                                glen_a=glen_a, fs=fs)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
-        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
+        execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                            glen_a=glen_a, fs=fs)
         execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
-def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
+def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
+                                       fs=0, a_bounds=(0.1, 10),
+                                       apply_fs_on_mismatch=False,
+                                       error_on_mismatch=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -603,6 +624,17 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the consensus estimate.
+    fs : float
+        invert with sliding (default: no)
+    a_bounds: tuple
+        factor to apply to default A
+    apply_fs_on_mismatch: false
+        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
+        Oerlemans) and try to otpimize A again.
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
 
     Returns
     -------
@@ -624,35 +656,129 @@ def calibrate_inversion_from_consensus_estimate(gdirs, ignore_missing=False):
 
     df = df.reindex(rids)
 
-    def_a = cfg.PARAMS['inversion_glen_a']
-    a_bounds = [0.1, 10]
-
     # Optimize the diff to ref
+    def_a = cfg.PARAMS['inversion_glen_a']
+
+    def compute_vol(x):
+        inversion_tasks(gdirs, glen_a=x*def_a, fs=fs)
+        odf = df.copy()
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+        return odf.dropna()
+
     def to_minimize(x):
+        log.workflow('Consensus estimate optimisation with '
+                     'A factor: {} and fs: {}'.format(x, fs))
+        odf = compute_vol(x)
+        return odf.vol_itmix_m3.sum() - odf.oggm.sum()
 
-        cfg.PARAMS['inversion_glen_a'] = x * def_a
-        execute_entity_task(tasks.mass_conservation_inversion, gdirs)
-        vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
-        _df = df.copy()
-        _df['oggm'] = vols
-        _df = _df.dropna()
-        return _df.vol_itmix_m3.sum() - _df.oggm.sum()
+    try:
+        out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
+                                         full_output=True)
+        if r.converged:
+            log.workflow('calibrate_inversion_from_consensus '
+                         'converged after {} iterations and fs={}. The '
+                         'resulting Glen A factor is {}.'
+                         ''.format(r.iterations, fs, out_fac))
+        else:
+            raise ValueError('Unexpected error in optimization.brentq')
+    except ValueError:
+        # Ok can't find an A. Log for debug:
+        odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
+        odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
+        msg = ('calibration fom consensus estimate CANT converge with fs={}.\n'
+               'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
+               'Ref={:.3f} OGGM={:.3f} for A factor {}'
+               ''.format(fs,
+                         odf1.vol_itmix_m3, odf1.oggm, a_bounds[0],
+                         odf2.vol_itmix_m3, odf2.oggm, a_bounds[1]))
+        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > odf2.vol_itmix_m3:
+            return calibrate_inversion_from_consensus(gdirs,
+                                                      ignore_missing=ignore_missing,
+                                                      fs=5.7e-20, a_bounds=a_bounds,
+                                                      apply_fs_on_mismatch=False,
+                                                      error_on_mismatch=error_on_mismatch)
+        if error_on_mismatch:
+            raise ValueError(msg)
 
-    out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
-                                     full_output=True)
-    if r.converged:
-        log.workflow('calibrate_inversion_from_consensus_estimate '
-                     'converged after {} iterations. The resulting Glen A '
-                     'factor is {}.'.format(r.iterations, out_fac))
-    else:
-        raise RuntimeError('Unexpected error')
+        out_fac = a_bounds[int(abs(odf1.vol_itmix_m3 - odf1.oggm) >
+                               abs(odf2.vol_itmix_m3 - odf2.oggm))]
+        log.workflow(msg)
+        log.workflow('We use A factor = {} and fs = {} and move on.'
+                     ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A
-    cfg.PARAMS['inversion_glen_a'] = out_fac * def_a
-    execute_entity_task(tasks.mass_conservation_inversion, gdirs)
-    vols = execute_entity_task(tasks.filter_inversion_output, gdirs)
-    df['vol_oggm_m3'] = vols
+    inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
     return df
+
+
+def match_regional_geodetic_mb(gdirs, rgi_reg):
+    """Regional shift of the mass-balance residual to match observations.
+
+    This is useful for operational runs, but also quite hacky.
+    Let's hope we won't need this for too long.
+
+    Parameters
+    ----------
+    gdirs : the list of gdirs (ideally the entire region_
+    rgi_reg : str
+       the rgi region to match
+    """
+
+    # Get the mass-balance OGGM would give out of the box
+    df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
+    df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+    # And also the Area and calving fluxes
+    dfs = utils.compile_glacier_statistics(gdirs, path=False)
+    odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
+    odf['AREA'] = dfs.rgi_area_km2 * 1e6
+    # Just take the calving rate and change its units
+    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
+    rho = cfg.PARAMS['ice_density']
+    if 'calving_flux' in dfs:
+        odf['CALVING'] = dfs['calving_flux'].fillna(0) * 1e9 * rho / odf['AREA']
+    else:
+        odf['CALVING'] = 0
+
+    # We have to drop nans here, which occur when calving glaciers fail to run
+    odf = odf.dropna()
+
+    # Compare area with total RGI area
+    rdf = 'rgi62_areas.csv'
+    rdf = pd.read_csv(utils.get_demo_file(rdf), dtype={'O1Region': str})
+    ref_area = rdf.loc[rdf['O1Region'] == rgi_reg].iloc[0]['AreaNoC2NoNominal']
+    diff = (1 - odf['AREA'].sum() * 1e-6 / ref_area) * 100
+    msg = 'Applying geodetic MB correction on RGI reg {}. Diff area: {:.2f}%'
+    log.workflow(msg.format(rgi_reg, diff))
+
+    # Total MB OGGM
+    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
+    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
+    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
+
+    # Total MB Reference
+    df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+    df = pd.read_csv(utils.get_demo_file(df))
+    df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+    smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+
+    # Diff between the two
+    residual = smb_ref - smb_oggm
+
+    # Let's just shift
+    log.workflow('Shifting regional MB bias by {}'.format(residual))
+    log.workflow('Observations give {}'.format(smb_ref))
+    log.workflow('OGGM SMB gives {}'.format(out_smb))
+    log.workflow('OGGM frontal ablation gives {}'.format(out_cal))
+    for gdir in gdirs:
+        try:
+            df = gdir.read_json('local_mustar')
+            gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
+            df['bias'] = df['bias'] - residual
+            gdir.write_json(df, 'local_mustar')
+        except FileNotFoundError:
+            pass
 
 
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
