@@ -77,7 +77,7 @@ GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
 DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
 
-CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/'
+CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng/'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -2316,7 +2316,7 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
 def get_cmip5_file(filename, reset=False):
     """Download a global CMIP5 file.
 
-    List of files: https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng/
+    List of files: https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng/
 
     Parameters
     ----------
