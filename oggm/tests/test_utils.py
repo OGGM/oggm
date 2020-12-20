@@ -1835,7 +1835,7 @@ class TestFakeDownloads(unittest.TestCase):
         fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng'
                         '/pr/pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)
             return True
@@ -1846,7 +1846,7 @@ class TestFakeDownloads(unittest.TestCase):
         fn = 'tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc'
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~nicolas/cmip5-ng'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng'
                         '/tas/tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc')
             self.assertEqual(url, expected)
             return True
