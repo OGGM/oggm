@@ -96,7 +96,7 @@ Bug fixes
 
 - Maintainance updates for upstream libraries and various small bug fixes
   (:pull:`957`, :pull:`967`, :pull:`968`, :pull:`958`, :pull:`974`, :pull:`977`,
-  :pull:`976`, :pull:`1119`).
+  :pull:`976`, :pull:`1124`).
   By `Fabien Maussion <https://github.com/fmaussion>`_,
   `Matthias Dusch <https://github.com/matthiasdusch>`_ and 
   `Li Fei <https://github.com/Keeptg>`_.
