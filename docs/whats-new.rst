@@ -86,7 +86,7 @@ Enhancements
   matched (:pull:`1043`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added support for writing a NetCDF variable in ``gridded_data.nc`` file to
-  a georeferenced GeoTiff file (:pull:`1116`). The new task are
+  a georeferenced GeoTiff file (:pull:`1118`). The new task are
   :py:func:`tasks.gridded_data_var_to_geotiff`. 
   By `Li Fei <https://github.com/Keeptg>`_
 
@@ -96,9 +96,10 @@ Bug fixes
 
 - Maintainance updates for upstream libraries and various small bug fixes
   (:pull:`957`, :pull:`967`, :pull:`968`, :pull:`958`, :pull:`974`, :pull:`977`,
-  :pull:`976`).
-  By `Fabien Maussion <https://github.com/fmaussion>`_ and
-  `Matthias Dusch <https://github.com/matthiasdusch>`_.
+  :pull:`976`, :pull:`1124`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_,
+  `Matthias Dusch <https://github.com/matthiasdusch>`_ and 
+  `Li Fei <https://github.com/Keeptg>`_.
 
 
 v1.3.1 (16.02.2020)
