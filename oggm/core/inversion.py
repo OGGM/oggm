@@ -1262,7 +1262,6 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     fs : float, optional
     """
     from oggm.core import climate
-    from oggm.exceptions import MassBalanceCalibrationError
 
     if not gdir.is_tidewater or not cfg.PARAMS['use_kcalving_for_inversion']:
         # Do nothing

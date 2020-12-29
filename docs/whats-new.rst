@@ -89,6 +89,9 @@ Enhancements
   a georeferenced GeoTiff file (:pull:`1118`). The new task are
   :py:func:`tasks.gridded_data_var_to_geotiff`. 
   By `Li Fei <https://github.com/Keeptg>`_
+- Added a `find_inversion_calving_from_any_mb` task which uses the Recinos et
+  al. approach, but on any mass-balance profile (:pull:`1043`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes
