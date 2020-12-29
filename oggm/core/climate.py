@@ -1347,7 +1347,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
-        the mass-balance model to use (superseedes mb_list)
+        the mass-balance model to use
     mb_years : array
         the array of years from which you want to average the MB for (for
         mb_model only).
@@ -1359,10 +1359,11 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
 
-    def to_minimize(residual):
-        smb = mb_model.get_specific_mb(fls=fls, year=mb_years)
-        smb = np.mean(smb) + residual
-        return smb - cmb
+    # Unchanged SMB
+    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
+
+    def to_minimize(residual_to_opt):
+        return o_smb + residual_to_opt - cmb
 
     residual = optimize.brentq(to_minimize, -1e5, 1e5, xtol=_brentq_xtol)
 
@@ -1391,6 +1392,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                .format(gdir.rgi_id, aflux))
         raise MassBalanceCalibrationError(msg)
+    gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
