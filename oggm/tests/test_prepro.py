@@ -3030,6 +3030,41 @@ class TestColumbiaCalving(unittest.TestCase):
                                            ods[vn+'_ext'].sel(time=2010),
                                            rtol=rtol)
 
+    def test_find_calving_any_mb(self):
+
+        gdir = init_columbia_eb()
+
+        # Test default k
+        mb = massbalance.LinearMassBalance(ela_h=2000)
+        df = inversion.find_inversion_calving_from_any_mb(gdir, mb_model=mb,
+                                                          mb_years=[2000])
+
+        diag = gdir.get_diagnostics()
+        assert diag['calving_flux'] > 0.9
+
+        # Test that new MB equal flux
+        rho = cfg.PARAMS['ice_density']
+        fls = gdir.read_pickle('inversion_flowlines')
+        mb_ref = mb.get_specific_mb(fls=fls)
+        mb_shift = diag['apparent_mb_from_any_mb_residual']
+        flux_mb = ((mb_ref + mb_shift) * gdir.rgi_area_m2) * 1e-9 / rho
+        np.testing.assert_allclose(flux_mb, df['calving_flux'],
+                                   atol=0.001)
+
+        # Test glacier stats
+        odf = utils.compile_glacier_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
+        assert odf.calving_front_water_depth > 500
+
+        # Test with larger k
+        cfg.PARAMS['inversion_calving_k'] = 1
+        df_ = inversion.find_inversion_calving_from_any_mb(gdir, mb_model=mb,
+                                                           mb_years=[2000])
+
+        assert df_['calving_flux'] > df['calving_flux']
+        np.testing.assert_allclose(df_['calving_flux'],
+                                   df_['calving_law_flux'])
+
 
 class TestGrindelInvert(unittest.TestCase):
 
