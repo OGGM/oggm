@@ -1505,8 +1505,13 @@ def extend_past_climate_run(past_run_file=None,
     the extended dataset
     """
 
-    fixed_geometry_mb_df = pd.read_csv(fixed_geometry_mb_file, index_col=0)
-    stats_df = pd.read_csv(glacier_statistics_file, index_col=0)
+    log.workflow('Applying extend_past_climate_run on '
+                 '{}'.format(past_run_file))
+
+    fixed_geometry_mb_df = pd.read_csv(fixed_geometry_mb_file, index_col=0,
+                                       low_memory=False)
+    stats_df = pd.read_csv(glacier_statistics_file, index_col=0,
+                           low_memory=False)
 
     with xr.open_dataset(past_run_file) as past_ds:
 
