@@ -471,7 +471,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
             mpp = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
             log.workflow('Multiprocessing: using slurm allocated '
                          'processors (N={})'.format(mpp))
-        except KeyError, ValueError:
+        except (KeyError, ValueError):
             import multiprocessing
             mpp = multiprocessing.cpu_count()
             log.workflow('Multiprocessing: using all available '
