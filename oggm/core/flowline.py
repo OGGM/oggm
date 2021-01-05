@@ -1385,8 +1385,11 @@ class FluxBasedModel(FlowlineModel):
                             'CFL error: required time step smaller '
                             'than the minimum allowed: '
                             '{:.1f}s vs {:.1f}s. Happening at '
-                            'simulation year {:.1f} and fl_id {}.'
-                            ''.format(cfl_dt, self.min_dt, self.yr, fl_id))
+                            'simulation year {:.1f}, fl_id {}, '
+                            'bin_id {} and max_u {:.3f} m yr-1.'
+                            ''.format(cfl_dt, self.min_dt, self.yr, fl_id,
+                                      np.argmax(np.abs(u_stag)),
+                                      maxu * cfg.SEC_IN_YEAR))
 
             # Since we are in this loop, reset the tributary flux
             trib_flux[:] = 0
@@ -1491,11 +1494,15 @@ class FluxBasedModel(FlowlineModel):
                                             / fl.dx_meter)
                 fl.calving_bucket_m3 = 0
 
-            # The rest of the bucket might calve an entire grid point
+            # The rest of the bucket might calve an entire grid point (or more?)
             vol_last = section[last_above_wl] * fl.dx_meter
-            if fl.calving_bucket_m3 > vol_last:
+            while fl.calving_bucket_m3 > vol_last:
                 fl.calving_bucket_m3 -= vol_last
                 section[last_above_wl] = 0
+
+                # OK check if we need to continue (unlikely)
+                last_above_wl -= 1
+                vol_last = section[last_above_wl] * fl.dx_meter
 
             # We update the glacier with our changes
             fl.section = section

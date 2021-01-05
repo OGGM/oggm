@@ -1014,7 +1014,7 @@ class TestIdealisedCases(unittest.TestCase):
             plt.show()
 
     @pytest.mark.slow
-    def test_boundaries(self):
+    def test_raise_on_boundary(self):
 
         fls = dummy_constant_bed()
         mb = LinearMassBalance(2000.)
@@ -1024,6 +1024,19 @@ class TestIdealisedCases(unittest.TestCase):
         with pytest.raises(RuntimeError) as excinfo:
             model.run_until(300)
         assert 'exceeds domain boundaries' in str(excinfo.value)
+
+    def test_raise_cfl(self):
+
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2000.)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               cfl_number=1e-7,
+                               min_dt=cfg.SEC_IN_YEAR,
+                               glen_a=self.glen_a,
+                               fs=self.fs)
+        with pytest.raises(RuntimeError) as excinfo:
+            model.run_until(300)
+        assert 'required time step smaller than' in str(excinfo.value)
 
 
 class TestFluxGate(unittest.TestCase):
