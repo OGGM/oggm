@@ -44,6 +44,7 @@ jobs:
         if: ${{ !contains(matrix.container, 'py3') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_SERVICE_NAME: github
           COVERALLS_PARALLEL: true
         run: coveralls
   finish-coveralls:
@@ -55,6 +56,7 @@ jobs:
     - name: Coveralls Finished
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COVERALLS_SERVICE_NAME: github
       run: |
         pip3 install --upgrade coveralls &&
         coveralls --finish
