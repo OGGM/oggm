@@ -758,7 +758,6 @@ def glacier_masks(gdir):
         v[:] = glacier_ext
 
         dem = nc.variables['topo'][:]
-        valid_mask = nc.variables['topo_valid_mask'][:]
 
         # Last sanity check based on the masked dem
         tmp_max = np.max(dem[np.where(glacier_mask == 1)])
