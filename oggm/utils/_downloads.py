@@ -1259,24 +1259,6 @@ def _download_mapzen_file_unlocked(zone):
     return file_downloader(url, timeout=180)
 
 
-def _get_centerline_lonlat(gdir):
-    """Quick n dirty solution to write the centerlines as a shapefile"""
-
-    cls = gdir.read_pickle('centerlines')
-    olist = []
-    for j, cl in enumerate(cls[::-1]):
-        mm = 1 if j == 0 else 0
-        gs = gpd.GeoSeries()
-        gs['RGIID'] = gdir.rgi_id
-        gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-        gs['MAIN'] = mm
-        tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
-        gs['geometry'] = shp_trafo(tra_func, cl.line)
-        olist.append(gs)
-
-    return olist
-
-
 def get_prepro_gdir(rgi_version, rgi_id, border, prepro_level, base_url=None):
     with get_lock():
         return _get_prepro_gdir_unlocked(rgi_version, rgi_id, border,

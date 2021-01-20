@@ -758,6 +758,11 @@ def glacier_masks(gdir):
         v[:] = glacier_ext
 
         dem = nc.variables['topo'][:]
+
+        if 'topo_valid_mask' not in nc.variables:
+            msg = ('You seem to be running from old preprocessed directories. '
+                   'See https://github.com/OGGM/oggm/issues/1095 for a fix.')
+            raise InvalidWorkflowError(msg)
         valid_mask = nc.variables['topo_valid_mask'][:]
 
         # Last sanity check based on the masked dem
@@ -877,6 +882,10 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
         v[:] = glacier_ext
 
         # Log DEM that needed processing within the glacier mask
+        if 'topo_valid_mask' not in nc.variables:
+            msg = ('You seem to be running from old preprocessed directories. '
+                   'See https://github.com/OGGM/oggm/issues/1095 for a fix.')
+            raise InvalidWorkflowError(msg)
         valid_mask = nc.variables['topo_valid_mask'][:]
         if gdir.get_diagnostics().get('dem_needed_interpolation', False):
             pnan = (valid_mask == 0) & glacier_mask
