@@ -109,7 +109,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_custom_climate_data
     tasks.process_gcm_data
     tasks.process_cesm_data
-    tasks.process_cmip5_data
+    tasks.process_cmip_data
     tasks.local_t_star
     tasks.mu_star_calibration
     tasks.apparent_mb_from_linear_mb
