@@ -2883,7 +2883,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'local_mustar', 'climate_historical',
-                 'gcm_data', 'climate_info', 'diagnostics']
+                 'gcm_data', 'climate_info', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
@@ -2891,7 +2891,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
                  'local_mustar', 'climate_historical', 'gridded_data',
-                 'gcm_data', 'climate_info']
+                 'gcm_data', 'climate_info', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))

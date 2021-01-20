@@ -99,8 +99,9 @@ Trapezoidal
 
 
 Trapezoidal shape with two degrees of freedom. The width change with thickness
-depends on :math:`\lambda`. [Golledge_Levy_2011]_ uses :math:`\lambda = 1`
-(a 45° wall angle).
+depends on :math:`\lambda`. [Golledge_Levy_2011]_ uses :math:`\lambda = 2`
+(a 45° wall angle), the current default in OGGM is :math:`\lambda = 1`
+(a 63° wall angle).
 
 
 Parabolic
