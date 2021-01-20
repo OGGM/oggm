@@ -1921,9 +1921,20 @@ class GlacierDirectory(object):
         self.glacier_type = gtkeys[gtype[0]]
         self.terminus_type = ttkeys[gtype[1]]
         self.status = stkeys['{}'.format(gstatus)]
-        self.is_tidewater = self.terminus_type in ['Marine-terminating',
-                                                   'Lake-terminating',
-                                                   'Shelf-terminating']
+
+        # Decide what is a tidewater glacier
+        user = cfg.PARAMS['tidewater_type']
+        if user == 1:
+            sel = ['Marine-terminating']
+        elif user == 2:
+            sel = ['Marine-terminating', 'Shelf-terminating']
+        elif user == 3:
+            sel = ['Marine-terminating', 'Lake-terminating']
+        elif user == 4:
+            sel = ['Marine-terminating', 'Lake-terminating', 'Shelf-terminating']
+        else:
+            raise InvalidParamsError("PARAMS['tidewater_type'] not understood")
+        self.is_tidewater = self.terminus_type in sel
         self.is_lake_terminating = self.terminus_type == 'Lake-terminating'
         self.is_marine_terminating = self.terminus_type == 'Marine-terminating'
         self.is_shelf_terminating = self.terminus_type == 'Shelf-terminating'
