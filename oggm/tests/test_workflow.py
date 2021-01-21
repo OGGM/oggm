@@ -67,6 +67,7 @@ def up_to_climate(reset=False):
     rgidf = gpd.read_file(rgi_file)
 
     # Make a fake marine and lake terminating glacier
+    cfg.PARAMS['tidewater_type'] = 4  # make lake also calve
     rgidf.loc[0, 'GlacType'] = '0199'
     rgidf.loc[1, 'GlacType'] = '0299'
 

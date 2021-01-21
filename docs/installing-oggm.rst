@@ -130,10 +130,10 @@ Feeling adventurous? Try mamba
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The conda package manager has recently been criticized for being slow (it *is*
-quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://github.com/mamba-org/mamba>`_.
+quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://mamba.readthedocs.io>`_.
 Mamba is a drop-in replacement for all conda commands.
-If you feel like it, install mamba in your conda environment (`conda install -c conda-forge mamba`)
-and replace all occurrences of `conda` with `mamba` in the instructions below.
+If you feel like it, install mamba in your conda environment (``conda install -c conda-forge mamba``)
+and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
 
 Dependencies
@@ -300,25 +300,23 @@ might be necessary. Errors like ``segmentation fault`` or ``Proj Error``
 are frequent and point to errors in upstream packages, rarely in OGGM itself.
 
 If you are having troubles, installing the packages manually from a fresh
-environment might help. At the time of writing (13.06.2020), creating an
-environment from this environment.yml file used to work (see the
-`conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
-for more information about how to create an environment from a yml file)::
+environment might help. At the time of writing (20.01.2021), creating an
+environment from the following ``environment.yml`` file used to work::
 
     name: oggm_env
     channels:
       - conda-forge
     dependencies:
-      - python=3.7
+      - python=3.8
       - jupyter
       - jupyterlab
-      - numpy=1.16.5
-      - scipy=1.4.1
-      - pandas=0.25.3
+      - numpy
+      - scipy
+      - pandas
       - shapely
       - matplotlib
       - Pillow
-      - netcdf4=1.5.3
+      - netcdf4
       - scikit-image
       - scikit-learn
       - configobj
@@ -326,13 +324,13 @@ for more information about how to create an environment from a yml file)::
       - pytest
       - dask
       - bottleneck
-      - pyproj=2.2.2
-      - cartopy=0.17.0
-      - geopandas=0.7.0
-      - rasterio=1.1.2
+      - pyproj
+      - cartopy
+      - geopandas
+      - rasterio
       - descartes
       - seaborn
-      - pytables=3.6.1
+      - pytables
       - pip
       - pip:
         - joblib
@@ -342,6 +340,13 @@ for more information about how to create an environment from a yml file)::
         - git+https://github.com/retostauffer/python-colorspace
         - git+https://github.com/OGGM/pytest-mpl
         - git+https://github.com/OGGM/oggm
+
+
+See the
+`conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
+for more information about how to create an environment from a ``yml`` file, OR
+you can do what I usually do (much faster): install `mamba`_
+first, then run ``mamba env create -f environment.yml``.
 
 
 .. _virtualenv-install:

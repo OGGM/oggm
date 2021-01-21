@@ -547,6 +547,9 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'glacier_length_method'
     PARAMS[k] = cp[k]
 
+    # Others
+    PARAMS['tidewater_type'] = cp.as_int('tidewater_type')
+
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
@@ -564,7 +567,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
-           'use_inversion_params_for_run', 'ref_mb_valid_window']
+           'use_inversion_params_for_run', 'ref_mb_valid_window',
+           'tidewater_type']
     for k in ltr:
         cp.pop(k, None)
 

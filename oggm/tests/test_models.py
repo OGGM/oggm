@@ -1595,6 +1595,8 @@ class TestIO():
 
         new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
                                          setup='run')
+        task_status = new_gdir.get_task_status('init_present_time_glacier')
+        assert task_status == 'SUCCESS'
         run_random_climate(new_gdir, nyears=10)
         shutil.rmtree(new_dir)
 

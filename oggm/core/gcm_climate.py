@@ -2,7 +2,7 @@
 # Built ins
 import logging
 from distutils.version import LooseVersion
-from datetime import datetime
+import warnings
 
 # External libs
 import numpy as np
@@ -261,15 +261,24 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_cmip5_data(gdir, filesuffix='', fpath_temp=None,
+def process_cmip5_data(*args, **kwargs):
+    """Renamed to process_cmip_data.
+    """
+    warnings.warn('The task `process_cmip5_data` is deprecated and renamed '
+                  'to `process_cmip_data`.', DeprecationWarning)
+    process_cmip_data(*args, **kwargs)
+
+
+@entity_task(log, writes=['gcm_data'])
+def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
                        fpath_precip=None, **kwargs):
-    """Read, process and store the CMIP5 climate data data for this glacier.
+    """Read, process and store the CMIP5 and CMIP6 climate data for this glacier.
 
     It stores the data in a format that can be used by the OGGM mass balance
     model and in the glacier directory.
 
-    Currently, this function is built for the CMIP5 projection simulation
-    (https://pcmdi.llnl.gov/mips/cmip5/) from Taylor et al. (2012).
+    Currently, this function is built for the CMIP5 and CMIP6 projection
+    simulations that are on the OGGM servers.
 
     Parameters
     ----------
