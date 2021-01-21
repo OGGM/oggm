@@ -2322,12 +2322,11 @@ class GlacierDirectory(object):
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function handling some backwards compat aspects"""
             
-        # LILY: this is not good but I don't know another way right now, 
+        # I don't know another way right now, 
         # as I was not able to get the input_filesuffix 
         # to those functions that use get_climate_info 
         if cfg.PARAMS['baseline_climate'] == 'ERA5_daily':
              input_filesuffix = '_daily'
-        ### LILY: end       
         
         try:
             out = self.read_json('climate_info')
@@ -2526,7 +2525,6 @@ class GlacierDirectory(object):
             nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
                                        ref_pix_lon, ref_pix_lat)
             nc.climate_source = source
-            # LILY
             # hydro_year corresponds to the last month of the data 
             if time[0].month == 1:
                 # if first_month =1, last_month = 12, so y0 is hydro_yr_0
@@ -2534,7 +2532,6 @@ class GlacierDirectory(object):
             else:
                 # if first_month>1, then the last_month is in the next year,
                 nc.hydro_yr_0 = y0 + 1
-            # LILY end
             nc.hydro_yr_1 = y1
 
             nc.createDimension('time', None)
@@ -2563,7 +2560,7 @@ class GlacierDirectory(object):
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
             v.units = 'kg m-2'
 
-            # LILY: check if prcp has really monthly format 
+            # check if prcp has really monthly format 
             if len(prcp)==(nc.hydro_yr_1-nc.hydro_yr_0+1)*12:
                 v.long_name = 'total monthly precipitation amount'
             else:
@@ -2571,7 +2568,6 @@ class GlacierDirectory(object):
                 import warnings
                 warnings.warn("there might be a conflict in the prcp"
                               "timeseries, please check!")
-            # LILY: end
             
             v[:] = prcp
 
