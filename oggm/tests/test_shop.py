@@ -402,6 +402,135 @@ class Test_climate_datasets:
             # Fake tests, the plots look plausible
             np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
+            
+   
+
+    def test_hydro_month_changes(self, hef_gdir):
+        # LILY: test for HEF if applying different hydro_months does the right thing
+        # check if mb of neighbouring hydro_months correlate
+        # do this for different climate scenarios 
+        
+        # maybe there is already somewhere an overview or a better way to get
+        # these dates, but I did not find it
+        base_data_time= {'CRU':{'start_year':1901,'end_year':2014},
+         'ERA5':{'start_year':1979,'end_year':2018},
+         'ERA5dr':{'start_year':1979,'end_year':2019},
+         'HISTALP':{'start_year':1850,'end_year':2014},
+          'CERA':{'start_year':1901,'end_year':2010},
+         'ERA5L':{'start_year':1981,'end_year':2018},
+        }
+        
+        gdir = hef_gdir
+        # this workkaround needed to get h,w because no fls there apparently
+        # maybe there is something easier in the testing environment
+        oggm.core.flowline.init_present_time_glacier(gdir)
+        mb_mod = oggm.core.massbalance.PastMassBalance(gdir)
+        fls = gdir.read_pickle('model_flowlines')
+        glacier = oggm.core.flowline.FlowlineModel(fls)
+        h = np.array([])
+        w = np.array([])
+        for fl in glacier.fls:
+            h = np.concatenate((h, fl.surface_h))
+            w = np.concatenate((w, fl.widths_m))
+        
+        exps = ['ERA5dr', 'CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']  
+        
+        for base in exps:
+            # this does not need to be the best one,
+            # just for comparison between different hydro months
+            mu_opt = 213.54 
+        
+            files = []
+            ref_hgts = []
+            dft = []
+            dfp = []
+            tot_mbs = []
+            cfg.PARAMS['baseline_climate'] = base
+            
+            for m in np.arange(1,13):    
+                cfg.PARAMS['hydro_month_nh'] = m
+                tasks.process_climate_data(gdir,
+                                           output_filesuffix='_{}_{}'.format(base, m))
+                files.append(gdir.get_filepath('climate_historical',
+                                               filesuffix ='_{}_{}'.format(base,m)
+                                             ))
+        
+                with xr.open_dataset(files[-1]) as ds:
+                    ref_hgts.append(ds.ref_hgt)
+                    dft.append(ds.temp.to_series())
+                    dfp.append(ds.prcp.to_series())
+        
+                    ci = gdir.get_climate_info(input_filesuffix = '_{}_{}'.format(base,m))
+                    
+                    # check if the right climate source is used
+                    assert base in ci['baseline_climate_source']
+                    mm = str(m) if m>9 else str(0)+str(m)
+                    mm_e = str(m-1) if (m-1)>9 else str(0)+str(m-1)
+        
+                    assert ds.time[0] == np.datetime64('{}-{}-01'.format(base_data_time[base]['start_year'], mm))
+                    if m ==1:
+                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year']
+                        if base == 'ERA5dr':
+                            # do not have full 2019
+                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year'] -1
+                        else:
+                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']
+        
+        
+                    elif m<7 and base == 'ERA5dr':
+                        # have data till 2019-05 for ERA5dr
+                        assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year'], mm_e))
+                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year']+1
+                        assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']
+        
+                    else:
+                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year'] +1
+                        if base == 'ERA5dr':
+                            # do not have full 2019
+                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year']-1, mm_e))
+                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year'] -1
+                        else:
+                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']   
+                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year'], mm_e))
+        
+                    
+                    mb_mod = oggm.core.massbalance.PastMassBalance(gdir,
+                                                                   mu_star = mu_opt, input_filesuffix = '_{}_{}'.format(base, m),
+                                                         bias = 0,
+                                                         check_calib_params=False)
+            
+                    tot_mbs.append(pd.Series(mb_mod.get_specific_mb(heights = h,
+                                                            widths = w, 
+                                                            year = np.arange(ds.hydro_yr_0, ds.hydro_yr_1+1)) ) )
+            # check if all ref_hgts are equal
+            # means that we likely compare same glacier and climate dataset 
+            assert len(np.unique(ref_hgts)) == 1
+            
+            
+            dft = pd.concat(dft, axis=1, keys=np.arange(1,13) )
+            dfp = pd.concat(dfp, axis=1, keys=np.arange(1,13) )   
+            # Common period
+            dft_na = dft.dropna().iloc[1:]
+            dfp_na = dfp.dropna().iloc[1:]
+        
+            # check if the common period of temperatureprcp
+            # series is equal for all starting hydromonth dates
+            assert np.all(dft_na.eq(dft_na.iloc[:, 0], axis=0).all(1))
+            assert np.all(dfp_na.eq(dfp_na.iloc[:, 0], axis=0).all(1))
+        
+        
+            # mass balance of different years, 
+            pd_tot_mbs = pd.concat(tot_mbs, axis=1, keys=np.arange(1,13))
+            pd_tot_mbs = pd_tot_mbs.dropna()
+        
+            corrs =[]
+            for m in np.arange(1,12):
+                # check if correlation between time series of hydro_month =1,
+                # is high to hydro_month = 2 and so on
+                corrs.append(pd_tot_mbs.corr().loc[m, m+1])
+                # would be better if for hydro_month =12,
+                # correlation is tested to next year
+            assert np.mean(corrs) > 0.9
 
 
 class Test_bedtopo:
