@@ -130,10 +130,10 @@ Feeling adventurous? Try mamba
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The conda package manager has recently been criticized for being slow (it *is*
-quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://github.com/mamba-org/mamba>`_.
+quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://mamba.readthedocs.io>`_.
 Mamba is a drop-in replacement for all conda commands.
-If you feel like it, install mamba in your conda environment (`conda install -c conda-forge mamba`)
-and replace all occurrences of `conda` with `mamba` in the instructions below.
+If you feel like it, install mamba in your conda environment (``conda install -c conda-forge mamba``)
+and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
 
 Dependencies
@@ -345,7 +345,7 @@ environment from the following ``environment.yml`` file used to work::
 See the
 `conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
 for more information about how to create an environment from a ``yml`` file, OR
-you can do what I usually do: install [mamba](https://mamba.readthedocs.io)
+you can do what I usually do (much faster): install `mamba`_
 first, then run ``mamba env create -f environment.yml``.
 
 
