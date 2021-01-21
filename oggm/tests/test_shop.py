@@ -406,7 +406,7 @@ class Test_climate_datasets:
    
 
     def test_hydro_month_changes(self, hef_gdir):
-        # LILY: test for HEF if applying different hydro_months does the right thing
+        # test for HEF if applying different hydro_months does the right thing
         # check if mb of neighbouring hydro_months correlate
         # do this for different climate scenarios 
         
