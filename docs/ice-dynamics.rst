@@ -99,7 +99,15 @@ Trapezoidal
 
 
 Trapezoidal shape with two degrees of freedom. The width change with thickness
-depends on :math:`\lambda`. [Golledge_Levy_2011]_ uses :math:`\lambda = 2`
+depends on :math:`\lambda`. The angle :math:`\beta` of the side wall
+(as defined from the horizontal plane, i.e.
+:math:`\lambda = 0 \rightarrow \beta = 90^{\circ}``) is defined by:
+
+.. math::
+
+    \beta = atan \frac{2}{\lambda}
+
+[Golledge_Levy_2011]_ uses :math:`\lambda = 2`
 (a 45° wall angle), the current default in OGGM is :math:`\lambda = 1`
 (a 63° wall angle).
 

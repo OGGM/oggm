@@ -262,7 +262,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
 
 @entity_task(log, writes=['gcm_data'])
 def process_cmip5_data(*args, **kwargs):
-    """Renamed to process_cmip_data."""
+    """Renamed to process_cmip_data.
+    """
     warnings.warn('The task `process_cmip5_data` is deprecated and renamed '
                   'to `process_cmip_data`.', DeprecationWarning)
     process_cmip_data(*args, **kwargs)
