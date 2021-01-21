@@ -24,10 +24,11 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - oggm/untested_base:20201101
+          - oggm/untested_base:20210120
           - oggm/untested_base:py36
+          - oggm/untested_base:py37
         include:
-          - container: python:3.7-slim
+          - container: python:3.8-slim
             test-env: minimal
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
