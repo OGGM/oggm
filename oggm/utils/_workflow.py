@@ -2332,13 +2332,10 @@ class GlacierDirectory(object):
 
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function handling some backwards compat aspects"""
-            
-        # I don't know another way right now, 
-        # as I was not able to get the input_filesuffix 
-        # to those functions that use get_climate_info 
-        if cfg.PARAMS['baseline_climate'] == 'ERA5_daily':
-             input_filesuffix = '_daily'
-        
+
+        # I don't see another way to ensure that the right climate is used
+        if not input_filesuffix and (cfg.PARAMS['baseline_climate'] == 'ERA5_daily'):
+            input_filesuffix = '_daily'
         try:
             out = self.read_json('climate_info')
         except FileNotFoundError:
@@ -2355,7 +2352,6 @@ class GlacierDirectory(object):
             pass
 
         return out
-
 
     def read_text(self, filename, filesuffix=''):
         """Reads a text file located in the directory.
@@ -2536,7 +2532,7 @@ class GlacierDirectory(object):
             nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
                                        ref_pix_lon, ref_pix_lat)
             nc.climate_source = source
-            # hydro_year corresponds to the last month of the data 
+            # hydro_year corresponds to the last month of the data
             if time[0].month == 1:
                 # if first_month =1, last_month = 12, so y0 is hydro_yr_0
                 nc.hydro_yr_0 = y0
@@ -2570,16 +2566,8 @@ class GlacierDirectory(object):
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
             v.units = 'kg m-2'
+            v.long_name = 'total monthly precipitation amount'
 
-            # check if prcp has really monthly format 
-            if len(prcp)==(nc.hydro_yr_1-nc.hydro_yr_0+1)*12:
-                v.long_name = 'total monthly precipitation amount'
-            else:
-                v.long_name = 'total monthly precipitation amount'
-                import warnings
-                warnings.warn("there might be a conflict in the prcp"
-                              "timeseries, please check!")
-            
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
@@ -2696,7 +2684,7 @@ class GlacierDirectory(object):
             out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
-    def get_ref_mb_profile(self, check = True):
+    def get_ref_mb_profile(self, check=True):
         """Get the reference mb profile data from WGMS (if available!).
 
         Returns None if this glacier has no profile and an Error if it isn't
@@ -2719,13 +2707,14 @@ class GlacierDirectory(object):
                 return None
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
-        
+     
         # somehow that does not work with the HUSS flowlines ?!
         # check = False for HUSS flowlines
         if check:
             # logic for period
             if not self.has_file('climate_info'):
-                raise RuntimeError('Please process some climate data before call')
+                raise RuntimeError('Please process some climate'
+                                   ' data before call')
         ci = self.get_climate_info()
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
