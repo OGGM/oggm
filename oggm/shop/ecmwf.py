@@ -2,6 +2,7 @@ import logging
 import warnings
 
 # External libs
+import numpy as np
 import xarray as xr
 
 # Optional libs
@@ -148,7 +149,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         except ValueError:
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         temp = ds['t2m'].data - 273.15
         time = ds.time.data
         ref_lon = float(ds['longitude'])

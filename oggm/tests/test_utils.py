@@ -277,8 +277,8 @@ class TestFuncs(unittest.TestCase):
         s1 = 'import numpy as np; a = np.arange(50) - 5'
         s2 = 'from oggm import utils; import numpy as np; a = np.arange(50)-5'
 
-        t1 = timeit.timeit('np.clip(a, 0, 10)', number=n, setup=s1)
-        t2 = timeit.timeit('utils.clip_array(a, 0, 10)', number=n, setup=s2)
+        # t1 = timeit.timeit('np.clip(a, 0, 10)', number=n, setup=s1)
+        # t2 = timeit.timeit('utils.clip_array(a, 0, 10)', number=n, setup=s2)
         # This usually fails as advertised by numpy
         # (although with np 1.17 not)
         # assert t2 < t1
@@ -393,7 +393,7 @@ class TestStartFromTar(unittest.TestCase):
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
-        self.rgidf = gpd.read_file(rgi_file)
+        self.rgidf = gpd.read_file(rgi_file).sample(4)
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
@@ -408,6 +408,7 @@ class TestStartFromTar(unittest.TestCase):
     def clean_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
+    @pytest.mark.slow
     def test_to_and_from_tar(self):
 
         # Go - initialize working directories
@@ -432,6 +433,7 @@ class TestStartFromTar(unittest.TestCase):
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
 
+    @pytest.mark.slow
     def test_to_and_from_basedir_tar(self):
 
         # Go - initialize working directories
@@ -457,6 +459,7 @@ class TestStartFromTar(unittest.TestCase):
             assert gdir.has_file('gridded_data')
             assert os.path.exists(gdir.dir + '.tar.gz')
 
+    @pytest.mark.slow
     def test_to_and_from_tar_new_dir(self):
 
         # Go - initialize working directories
@@ -852,6 +855,7 @@ class TestPreproCLI(unittest.TestCase):
             assert kwargs['rgi_reg'] == '12'
             assert kwargs['border'] == 120
 
+    @pytest.mark.slow
     def test_full_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
@@ -1250,6 +1254,7 @@ class TestBenchmarkCLI(unittest.TestCase):
             assert kwargs['rgi_reg'] == '12'
             assert kwargs['border'] == 120
 
+    @pytest.mark.slow
     def test_full_run(self):
 
         from oggm.cli.benchmark import run_benchmark

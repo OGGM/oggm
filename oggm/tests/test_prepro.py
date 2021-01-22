@@ -1943,6 +1943,7 @@ class TestClimate(unittest.TestCase):
         ref_gd = utils.get_ref_mb_glaciers([gdir2])
         assert len(ref_gd) == 1
 
+    @pytest.mark.slow
     def test_automated_workflow(self):
 
         cfg.PARAMS['run_mb_calibration'] = False
@@ -2292,6 +2293,7 @@ class TestInversion(unittest.TestCase):
 
         np.testing.assert_allclose(velocity, inv['u_integrated'])
 
+    @pytest.mark.slow
     def test_invert_hef_from_consensus(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2335,6 +2337,7 @@ class TestInversion(unittest.TestCase):
                                                          apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
 
+    @pytest.mark.slow
     def test_invert_hef_shapes(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2377,6 +2380,7 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(vt1/vr, 0.93, atol=0.02)
         np.testing.assert_allclose(vt2/vr, 0.98, atol=0.01)
 
+    @pytest.mark.slow
     def test_invert_hef_water_level(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2405,6 +2409,7 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(v, v_bwl)
         assert n_trap > 10
 
+    @pytest.mark.slow
     def test_invert_hef_from_linear_mb(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2743,6 +2748,7 @@ class TestCoxeCalving(unittest.TestCase):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
 
+    @pytest.mark.slow
     def test_inversion_with_calving(self):
 
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
@@ -2792,6 +2798,7 @@ class TestCoxeCalving(unittest.TestCase):
         np.testing.assert_allclose(v_new_bsl, v_new_bsl_g)
         np.testing.assert_allclose(v_new_bwl, v_new_bwl_g)
 
+    @pytest.mark.slow
     def test_inversion_and_run_with_calving(self):
 
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
@@ -2913,7 +2920,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
     def test_find_calving_eb(self):
 
-        gdir = init_columbia_eb()
+        gdir = init_columbia_eb('test_find_calving_eb')
 
         # Test default k (it overshoots)
         df = inversion.find_inversion_calving(gdir)
@@ -2951,9 +2958,10 @@ class TestColumbiaCalving(unittest.TestCase):
         df = utils.compile_glacier_statistics([gdir])
         assert df.loc[gdir.rgi_id, 'error_task'] is None
 
+    @pytest.mark.slow
     def test_find_calving_workflow(self):
 
-        gdir = init_columbia_eb()
+        gdir = init_columbia_eb('test_find_calving_workflow')
 
         # Check that all this also works with
         cfg.PARAMS['continue_on_error'] = True
@@ -3032,7 +3040,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
     def test_find_calving_any_mb(self):
 
-        gdir = init_columbia_eb()
+        gdir = init_columbia_eb('test_find_calving_any_mb')
 
         # Test default k
         mb = massbalance.LinearMassBalance(ela_h=2000)

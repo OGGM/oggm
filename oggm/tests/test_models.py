@@ -2179,6 +2179,7 @@ class TestIdealisedInversion():
         if do_plot:  # pragma: no cover
             self.simple_plot(model, inversion_gdir)
 
+    @pytest.mark.slow
     def test_inversion_noisy_sf_adhikari(self, inversion_gdir):
         old_model_sf = cfg.PARAMS['use_shape_factor_for_fluxbasedmodel']
         old_inversion_sf = cfg.PARAMS['use_shape_factor_for_inversion']

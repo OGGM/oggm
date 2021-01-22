@@ -390,7 +390,7 @@ class TestIdealisedCases(unittest.TestCase):
         # Karthaus is even worse
         assert volume[0][-1] > volume[1][-1]
 
-        if False:
+        if False:  # pragma: no cover
             # TODO: this will always fail so ignore it for now
             np.testing.assert_almost_equal(lens[0][-1], lens[1][-1])
             np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=2e-3)
@@ -504,6 +504,7 @@ class TestIdealisedCases(unittest.TestCase):
         assert utils.rmsd(surface_h[0], surface_h[1]) < 5
         assert utils.rmsd(surface_h[1], surface_h[2]) < 5
 
+    @pytest.mark.slow
     def test_adaptive_ts(self):
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
@@ -1112,6 +1113,7 @@ class TestFluxGate(unittest.TestCase):
                                model.fls[1].surface_h), 'b')
             plt.show()
 
+    @pytest.mark.slow
     def test_flux_gate_with_calving(self):
 
         mb = ScalarMassBalance()
@@ -1148,6 +1150,7 @@ def default_calving():
 @pytest.mark.usefixtures('default_calving')
 class TestKCalving():
 
+    @pytest.mark.slow
     def test_limiter(self, default_calving):
 
         _, ds1, df_diag1 = default_calving
