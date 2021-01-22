@@ -2333,6 +2333,10 @@ class GlacierDirectory(object):
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function handling some backwards compat aspects"""
 
+        # I don't see another way to ensure that the right climate is used
+        if not input_filesuffix and (cfg.PARAMS['baseline_climate'] == 'ERA5_daily'):
+            input_filesuffix = '_daily'
+
         try:
             out = self.read_json('climate_info')
         except FileNotFoundError:
@@ -2529,7 +2533,14 @@ class GlacierDirectory(object):
             nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
                                        ref_pix_lon, ref_pix_lat)
             nc.climate_source = source
-            nc.hydro_yr_0 = y0 + 1
+
+            # hydro_year corresponds to the last month of the data
+            if time[0].month == 1:
+                # if first_month =1, last_month = 12, so y0 is hydro_yr_0
+                nc.hydro_yr_0 = y0
+            else:
+                # if first_month>1, then the last_month is in the next year,
+                nc.hydro_yr_0 = y0 + 1
             nc.hydro_yr_1 = y1
 
             nc.createDimension('time', None)
@@ -2558,6 +2569,7 @@ class GlacierDirectory(object):
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
             v.units = 'kg m-2'
             v.long_name = 'total monthly precipitation amount'
+
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
@@ -2698,10 +2710,9 @@ class GlacierDirectory(object):
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
 
-        # logic for period
-        if not self.has_file('climate_info'):
-            raise RuntimeError('Please process some climate data before call')
         ci = self.get_climate_info()
+        if 'baseline_hydro_yr_0' not in ci:
+            raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
         if len(self._mbprofdf) > 1:

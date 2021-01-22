@@ -253,6 +253,13 @@ BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 _doc = 'The historical monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
 
+# so far, this is only ERA5_daily and does not work with the default OGGM
+# mass balance module
+_doc = ('The historical daily climate timeseries stored in a netCDF file.'
+        '(only temperature is really changing on daily basis,'
+        'precipitation is just assumed constant for every day')
+BASENAMES['climate_historical_daily'] = ('climate_historical_daily.nc', _doc)
+
 _doc = 'Deprecated: old name for `climate_historical`.'
 BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
 
