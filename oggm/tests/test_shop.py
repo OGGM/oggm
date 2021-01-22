@@ -449,7 +449,7 @@ class Test_climate_datasets:
                     dfp.append(ds.prcp.to_series())
 
                     ci = gdir.get_climate_info(input_filesuffix=fsuff)
-                    
+
                     # check if the right climate source is used
                     assert base in ci['baseline_climate_source']
                     mm = str(m) if m > 9 else str(0)+str(m)
@@ -463,7 +463,7 @@ class Test_climate_datasets:
                         assert ci['baseline_hydro_yr_0'] == b_s_y
                         if base == 'ERA5dr':
                             # do not have full 2019
-                            assert ci['baseline_hydro_yr_1'] == b_e_y -1
+                            assert ci['baseline_hydro_yr_1'] == b_e_y - 1
                         else:
                             assert ci['baseline_hydro_yr_1'] == b_e_y
 
