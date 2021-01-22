@@ -23,6 +23,7 @@ from oggm.core.massbalance import ConstantMassBalance
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
 
+
 class TestSouthGlacier(unittest.TestCase):
 
     # Test case optained from ITMIX

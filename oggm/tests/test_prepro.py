@@ -1204,6 +1204,7 @@ class TestClimate(unittest.TestCase):
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
+    @pytest.mark.slow
     def test_distribute_climate_grad(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1334,7 +1335,8 @@ class TestClimate(unittest.TestCase):
                 an2 = nc_c.prcp.groupby('time.month').mean()
                 np.testing.assert_allclose(an1, an2, rtol=0.2)
 
-    def test_distribute_climate_historicalalp_new(self):
+    @pytest.mark.slow
+    def test_distribute_climate_historical_alps_new(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1855,6 +1857,7 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
 
+    @pytest.mark.slow
     def test_local_t_star_fallback(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -2030,6 +2033,7 @@ class TestFilterNegFlux(unittest.TestCase):
         assert len(fls) < len(fls1)
         assert not np.any([fl.flux_needs_correction for fl in fls])
 
+    @pytest.mark.slow
     def test_correct(self):
 
         entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
@@ -2093,6 +2097,7 @@ class TestFilterNegFlux(unittest.TestCase):
 
         np.testing.assert_allclose(mb_mod.get_specific_mb(), 0, atol=1e-1)
 
+    @pytest.mark.slow
     def test_and_compare_two_methods(self):
 
         entity = gpd.read_file(get_demo_file('rgi_oetztal.shp'))
@@ -3074,6 +3079,7 @@ class TestColumbiaCalving(unittest.TestCase):
                                    df_['calving_law_flux'])
 
 
+@pytest.mark.slow
 class TestGrindelInvert(unittest.TestCase):
 
     def setUp(self):

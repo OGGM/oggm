@@ -1082,6 +1082,7 @@ class TestFluxGate(unittest.TestCase):
             plt.plot(model.fls[-1].surface_h, 'b')
             plt.show()
 
+    @pytest.mark.slow
     def test_flux_gate_with_trib(self):
 
         mb = ScalarMassBalance()

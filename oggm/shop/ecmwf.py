@@ -166,7 +166,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         except ValueError:
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         assert ds.longitude.min() >= 0
@@ -176,7 +176,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         except ValueError:
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         hgt = ds['z'].data / cfg.G
 
     gradient = None
