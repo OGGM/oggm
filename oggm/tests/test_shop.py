@@ -13,7 +13,7 @@ import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo, bedtopo
-from oggm.core import gis, centerlines
+from oggm.core import gis, centerlines, massbalance
 from oggm import cfg, tasks, workflow
 
 pytestmark = pytest.mark.test_env("utils")
@@ -418,8 +418,6 @@ class Test_climate_datasets:
                           'ERA5L': {'start_year': 1981, 'end_year': 2018}}
 
         gdir = hef_gdir
-        # this workkaround needed to get h,w because no fls there apparently
-        # maybe there is something easier in the testing environment
         oggm.core.flowline.init_present_time_glacier(gdir)
         mb_mod = oggm.core.massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
@@ -456,42 +454,46 @@ class Test_climate_datasets:
                     assert base in ci['baseline_climate_source']
                     mm = str(m) if m > 9 else str(0)+str(m)
                     mm_e = str(m-1) if (m-1) > 9 else str(0)+str(m-1)
+                    b_s_y = base_data_time[base]['start_year']
+                    b_e_y = base_data_time[base]['end_year']
 
-                    assert ds.time[0] == np.datetime64('{}-{}-01'.format(base_data_time[base]['start_year'], mm))
+                    assert ds.time[0] == np.datetime64('{}-{}-01'.format(b_s_y,
+                                                                         mm))
                     if m == 1:
-                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year']
+                        assert ci['baseline_hydro_yr_0'] == b_s_y
                         if base == 'ERA5dr':
                             # do not have full 2019
-                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year'] -1
+                            assert ci['baseline_hydro_yr_1'] == b_e_y -1
                         else:
-                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']
+                            assert ci['baseline_hydro_yr_1'] == b_e_y
 
                     elif m < 7 and base == 'ERA5dr':
                         # have data till 2019-05 for ERA5dr
-                        assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year'], mm_e))
-                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year']+1
-                        assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']
-        
+                        assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y, mm_e))
+                        assert ci['baseline_hydro_yr_0'] == b_s_y + 1
+                        assert ci['baseline_hydro_yr_1'] == b_e_y
+
                     else:
-                        assert ci['baseline_hydro_yr_0'] == base_data_time[base]['start_year'] +1
+                        assert ci['baseline_hydro_yr_0'] == b_s_y + 1
                         if base == 'ERA5dr':
                             # do not have full 2019
-                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year']-1, mm_e))
-                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year'] -1
+                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y-1, mm_e))
+                            assert ci['baseline_hydro_yr_1'] == b_e_y - 1
                         else:
-                            assert ci['baseline_hydro_yr_1'] == base_data_time[base]['end_year']   
-                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(base_data_time[base]['end_year'], mm_e))
+                            assert ci['baseline_hydro_yr_1'] == b_e_y
+                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y,
+                                                                                  mm_e))
         
                     
-                    mb_mod = oggm.core.massbalance.PastMassBalance(gdir,
-                                                                   mu_star = mu_opt,
-                                                                   input_filesuffix = '_{}_{}'.format(base, m),
+                    mb_mod = massbalance.PastMassBalance(gdir,
+                                                         mu_star = mu_opt,
+                                                         input_filesuffix = '_{}_{}'.format(base, m),
                                                          bias = 0,
                                                          check_calib_params=False)
             
                     tot_mbs.append(pd.Series(mb_mod.get_specific_mb(heights = h,
                                                             widths = w, 
-                                                            year = np.arange(ds.hydro_yr_0, ds.hydro_yr_1+1)) ) )
+                                                            year = np.arange(ds.hydro_yr_0, ds.hydro_yr_1 + 1)) ) )
             # check if all ref_hgts are equal
             # means that we likely compare same glacier and climate dataset
             assert len(np.unique(ref_hgts)) == 1
