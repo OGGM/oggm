@@ -304,13 +304,9 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         prepro_border = int(cfg.PARAMS['border'])
 
     if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
-        # does not work for HUSS flowlines ... 
-        # but this is deprecated, so we don't need to change
-        # if ('test' not in utils._downloads.GDIR_URL) and (prepro_base_url!='https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/prepro_l2_202010/elevbands_fl'):
         if 'test' not in utils._downloads.GDIR_URL:
             raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
                                      "should be one of: 10, 80, 160, 250.")
-
 
     # if reset delete also the log directory
     if reset:

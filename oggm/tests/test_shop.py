@@ -403,6 +403,7 @@ class Test_climate_datasets:
             np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
 
+    @pytest.mark.slow
     def test_hydro_month_changes(self, hef_gdir):
         # test for HEF if applying different hydro_months does the right thing
         # check if mb of neighbouring hydro_months correlate
@@ -437,18 +438,17 @@ class Test_climate_datasets:
 
             for m in np.arange(1, 13):
                 cfg.PARAMS['hydro_month_nh'] = m
-                tasks.process_climate_data(gdir,
-                                           output_filesuffix='_{}_{}'.format(base, m))
+                fsuff = '_{}_{}'.format(base, m)
+                tasks.process_climate_data(gdir, output_filesuffix=fsuff)
                 files.append(gdir.get_filepath('climate_historical',
-                                               filesuffix='_{}_{}'.format(base, m)
-                                               ))
+                                               filesuffix=fsuff))
 
                 with xr.open_dataset(files[-1]) as ds:
                     ref_hgts.append(ds.ref_hgt)
                     dft.append(ds.temp.to_series())
                     dfp.append(ds.prcp.to_series())
 
-                    ci = gdir.get_climate_info(input_filesuffix='_{}_{}'.format(base, m))
+                    ci = gdir.get_climate_info(input_filesuffix=fsuff)
                     
                     # check if the right climate source is used
                     assert base in ci['baseline_climate_source']
@@ -457,8 +457,8 @@ class Test_climate_datasets:
                     b_s_y = base_data_time[base]['start_year']
                     b_e_y = base_data_time[base]['end_year']
 
-                    assert ds.time[0] == np.datetime64('{}-{}-01'.format(b_s_y,
-                                                                         mm))
+                    stime = '{}-{}-01'.format(b_s_y, mm)
+                    assert ds.time[0] == np.datetime64(stime)
                     if m == 1:
                         assert ci['baseline_hydro_yr_0'] == b_s_y
                         if base == 'ERA5dr':
@@ -469,7 +469,8 @@ class Test_climate_datasets:
 
                     elif m < 7 and base == 'ERA5dr':
                         # have data till 2019-05 for ERA5dr
-                        assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y, mm_e))
+                        stime = '{}-{}-01'.format(b_e_y, mm_e)
+                        assert ds.time[-1] == np.datetime64(stime)
                         assert ci['baseline_hydro_yr_0'] == b_s_y + 1
                         assert ci['baseline_hydro_yr_1'] == b_e_y
 
@@ -477,23 +478,25 @@ class Test_climate_datasets:
                         assert ci['baseline_hydro_yr_0'] == b_s_y + 1
                         if base == 'ERA5dr':
                             # do not have full 2019
-                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y-1, mm_e))
+                            stime = '{}-{}-01'.format(b_e_y-1, mm_e)
+                            assert ds.time[-1] == np.datetime64(stime)
                             assert ci['baseline_hydro_yr_1'] == b_e_y - 1
                         else:
                             assert ci['baseline_hydro_yr_1'] == b_e_y
-                            assert ds.time[-1] == np.datetime64('{}-{}-01'.format(b_e_y,
-                                                                                  mm_e))
-        
-                    
+                            stime = '{}-{}-01'.format(b_e_y, mm_e)
+                            assert ds.time[-1] == np.datetime64(stime)
+
                     mb_mod = massbalance.PastMassBalance(gdir,
-                                                         mu_star = mu_opt,
-                                                         input_filesuffix = '_{}_{}'.format(base, m),
-                                                         bias = 0,
+                                                         mu_star=mu_opt,
+                                                         input_filesuffix=fsuff,
+                                                         bias=0,
                                                          check_calib_params=False)
-            
-                    tot_mbs.append(pd.Series(mb_mod.get_specific_mb(heights = h,
-                                                            widths = w, 
-                                                            year = np.arange(ds.hydro_yr_0, ds.hydro_yr_1 + 1)) ) )
+
+                    years = np.arange(ds.hydro_yr_0, ds.hydro_yr_1 + 1)
+                    mb_ts = mb_mod.get_specific_mb(heights=h, widths=w,
+                                                   year=years)
+                    tot_mbs.append(pd.Series(mb_ts))
+
             # check if all ref_hgts are equal
             # means that we likely compare same glacier and climate dataset
             assert len(np.unique(ref_hgts)) == 1
@@ -504,7 +507,7 @@ class Test_climate_datasets:
             dft_na = dft.dropna().iloc[1:]
             dfp_na = dfp.dropna().iloc[1:]
 
-            # check if the common period of temperatureprcp
+            # check if the common period of temperature prcp
             # series is equal for all starting hydromonth dates
             assert np.all(dft_na.eq(dft_na.iloc[:, 0], axis=0).all(1))
             assert np.all(dfp_na.eq(dfp_na.iloc[:, 0], axis=0).all(1))
@@ -512,13 +515,14 @@ class Test_climate_datasets:
             # mass balance of different years
             pd_tot_mbs = pd.concat(tot_mbs, axis=1, keys=np.arange(1, 13))
             pd_tot_mbs = pd_tot_mbs.dropna()
+
             # compute correlations
             corrs = []
             for m in np.arange(1, 12):
                 # check if correlation between time series of hydro_month =1,
                 # is high to hydro_month = 2 and so on
                 corrs.append(pd_tot_mbs.corr().loc[m, m+1])
-                # would be better if for hydro_month =12,
+                # would be better if for hydro_month=12,
                 # correlation is tested to next year
             assert np.mean(corrs) > 0.9
 
