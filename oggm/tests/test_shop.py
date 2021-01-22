@@ -23,6 +23,7 @@ DO_PLOT = False
 
 class Test_its_live:
 
+    @pytest.mark.slow
     def test_repro_to_glacier(self, class_case_dir, monkeypatch):
 
         # Init
@@ -290,6 +291,7 @@ class Test_ecmwf:
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = class_case_dir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['use_multiprocessing'] = False
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]

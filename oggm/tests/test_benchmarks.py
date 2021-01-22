@@ -23,6 +23,7 @@ from oggm.core.massbalance import ConstantMassBalance
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
 
+
 class TestSouthGlacier(unittest.TestCase):
 
     # Test case optained from ITMIX
@@ -303,6 +304,7 @@ class TestSouthGlacier(unittest.TestCase):
             plt.tight_layout()
             plt.show()
 
+    @pytest.mark.slow
     def test_optimize_inversion(self):
 
         # Download the RGI file for the run
@@ -436,6 +438,7 @@ class TestSouthGlacier(unittest.TestCase):
             plt.show()
 
 
+@pytest.mark.slow
 class TestCoxeGlacier(unittest.TestCase):
 
     # Test case for a tidewater glacier

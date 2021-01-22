@@ -443,16 +443,14 @@ def init_columbia(reset=False):
     return gdir
 
 
-def init_columbia_eb(reset=False):
+def init_columbia_eb(dir_name, reset=False):
 
     from oggm.core import gis, centerlines
     import geopandas as gpd
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_columbia_eb')
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
-        reset = True
+    testdir = os.path.join(get_test_dir(), dir_name)
+    mkdir(testdir, reset=reset)
 
     # Init
     cfg.initialize()
@@ -462,7 +460,7 @@ def init_columbia_eb(reset=False):
     cfg.PARAMS['border'] = 10
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
-    gdir = oggm.GlacierDirectory(entity, reset=reset)
+    gdir = oggm.GlacierDirectory(entity)
     if gdir.has_file('climate_historical'):
         return gdir
 

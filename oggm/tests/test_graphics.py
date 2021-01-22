@@ -160,6 +160,7 @@ def test_inversion():
     return fig
 
 
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_multiple_inversion():
@@ -239,6 +240,7 @@ def test_modeloutput_map():
     return fig
 
 
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_multiple_models():
@@ -312,6 +314,7 @@ def test_catch_areas():
     return fig
 
 
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare()
 def test_chhota_shigri():
@@ -353,6 +356,7 @@ def test_chhota_shigri():
     return fig
 
 
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_ice_cap():
@@ -387,7 +391,7 @@ def test_ice_cap():
     return fig
 
 
-@pytest.mark.xfail
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_coxe():
