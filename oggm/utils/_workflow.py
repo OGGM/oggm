@@ -1268,10 +1268,14 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     return out
 
 
-def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
+def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
+                                        path=True, csv=False,
                                         use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None):
     """Compiles a table of specific mass-balance timeseries for all glaciers.
+
+    The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
+    to open it.
 
     Parameters
     ----------
@@ -1281,7 +1285,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
         add suffix to output file
     path : str, bool
         Set to "True" in order  to store the info in the working directory
-        Set to a path to store the file to your chosen location
+        Set to a path to store the file to your chosen location (file
+        extension matters)
+    csv: bool
+        Set to store the data in csv instead of hdf.
     use_inversion_flowlines : bool
         whether to use the inversion flowlines or the model flowlines
     ys : int
@@ -1308,11 +1315,18 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='', path=True,
 
     if path:
         if path is True:
-            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                                    ('fixed_geometry_mass_balance' +
-                                     filesuffix + '.csv')))
+            fpath = os.path.join(cfg.PATHS['working_dir'],
+                                 'fixed_geometry_mass_balance' + filesuffix)
+            if csv:
+                out.to_csv(fpath + '.csv')
+            else:
+                out.to_hdf(fpath + '.hdf', key='df')
         else:
-            out.to_csv(path)
+            ext = os.path.splitext(path)[-1]
+            if ext.lower() == '.csv':
+                out.to_csv(path)
+            elif ext.lower() == '.hdf':
+                out.to_hdf(path, key='df')
     return out
 
 
@@ -1488,6 +1502,8 @@ def extend_past_climate_run(past_run_file=None,
     We use a fixed geometry (and a fixed calving rate) for all dates prior
     to the RGI date.
 
+    This is not parallelized, i.e a bit slow.
+
     Parameters
     ----------
     past_run_file : str
@@ -1518,7 +1534,7 @@ def extend_past_climate_run(past_run_file=None,
         y0_run = int(past_ds.time[0])
         y1_run = int(past_ds.time[-1])
         if (y1_run - y0_run + 1) != len(past_ds.time):
-            raise NotImplementedError('Currently only supporting annual outputs')
+            raise NotImplementedError('Currently only supports annual outputs')
         y0_clim = int(fixed_geometry_mb_df.index[0])
         y1_clim = int(fixed_geometry_mb_df.index[-1])
         if y0_clim > y0_run or y1_clim < y0_run:
@@ -1547,7 +1563,8 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_bsl', 'volume_bwl', 'area', 'calving']:
+        for vn in ['volume', 'volume_bsl', 'volume_bwl',
+                   'area', 'length', 'calving', 'calving_rate']:
             ods[vn + '_ext'] = ods[vn].copy(deep=True)
             ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
 
@@ -1568,19 +1585,29 @@ def extend_past_climate_run(past_run_file=None,
                 # Nothing to extend, really
                 continue
             orig_area_ts = ods.area_ext.data[:, i]
+            orig_length_ts = ods.length_ext.data[:, i]
             orig_calv_ts = ods.calving_ext.data[:, i]
+            orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
             # First valid id
             fid = np.argmax(np.isfinite(orig_vol_ts))
-            # Fill area which stays constant
+            # Fill area and length which stays constant
             orig_area_ts[:fid] = orig_area_ts[fid]
+            orig_length_ts[:fid] = orig_length_ts[fid]
 
-            # Add calving flux to the mix
+            # Add calving to the mix
             try:
                 calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
+                calv_rate = stats_df.loc[rid, 'calving_rate_myr']
             except KeyError:
                 calv_flux = 0
+                calv_rate = 0
             if not np.isfinite(calv_flux):
                 calv_flux = 0
+            if not np.isfinite(calv_rate):
+                calv_rate = 0
+
+            # +1 because calving rate at year 0 is unkown from the dyns model
+            orig_calv_rate_ts[:fid+1] = calv_rate
 
             # We convert SMB to volume
             mb_vol_ts = (mb_ts / rho * orig_area_ts[fid] - calv_flux).cumsum()
@@ -1595,6 +1622,8 @@ def extend_past_climate_run(past_run_file=None,
             ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
             ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
             ods.area_ext.data[:, i] = orig_area_ts
+            ods.length_ext.data[:, i] = orig_length_ts
+            ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
 
             # Extend vol bsl by assuming that % stays constant
             bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
@@ -1604,8 +1633,12 @@ def extend_past_climate_run(past_run_file=None,
 
         # Remove old vars
         for vn in list(ods.data_vars):
-            if '_ext' not in vn:
+            if '_ext' not in vn and 'time' in ods[vn].dims:
                 del ods[vn]
+
+        # Rename vars to their old names
+        ods = ods.rename(dict((o, o.replace('_ext', ''))
+                              for o in ods.data_vars))
 
         # Remove t0 (which is NaN)
         ods = ods.isel(time=slice(1, None))

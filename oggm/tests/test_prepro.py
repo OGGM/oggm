@@ -2849,6 +2849,7 @@ class TestColumbiaCalving(unittest.TestCase):
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 2
+        assert df['calving_rate_myr'] > 500
         assert df['calving_mu_star'] == 0
 
         # Test that new MB equal flux
@@ -2886,6 +2887,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         assert df['calving_flux'] > 0.2
         assert df['calving_flux'] < 1
+        assert df['calving_rate_myr'] < 200
         assert df['calving_mu_star'] > 0
         np.testing.assert_allclose(df['calving_flux'], df['calving_law_flux'])
 
@@ -2934,6 +2936,7 @@ class TestColumbiaCalving(unittest.TestCase):
         frac = cfg.PARAMS['calving_min_mu_star_frac']
         assert df['calving_mu_star'] == mu_bef * frac
         assert df['calving_flux'] > 0.5
+        assert df['calving_rate_myr'] > 400
 
         # Test that new MB equal flux
         mbmod = massbalance.MultipleFlowlineMassBalance
@@ -2970,6 +2973,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Check that all this also works with
         cfg.PARAMS['continue_on_error'] = True
+        cfg.PARAMS['use_multiprocessing'] = False
 
         # Just a standard run
         workflow.calibrate_inversion_from_consensus([gdir])
@@ -3023,24 +3027,50 @@ class TestColumbiaCalving(unittest.TestCase):
         with xr.open_dataset(out_path) as ods, \
                 xr.open_dataset(past_run_file) as ds:
 
+            del ds['ela']  # needs removed anyway
+
             ref = ds.volume
-            new = ods.volume_ext
+            new = ods.volume
             for y in [2010, 2012, 2019]:
                 assert new.sel(time=y).data == ref.sel(time=y).data
 
-            new = ods.volume_fixed_geom_ext
+            new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.sel(time=2019), ref.sel(time=2019),
                                        rtol=0.01)
+
+            del ods['volume_fixed_geom']
+            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+
+            for vn in ['area', 'length', 'calving_rate']:
+                ref = ds[vn]
+                new = ods[vn]
+                for y in [2010, 2012, 2019]:
+                    if y == 2010 and vn == 'calving_rate':
+                        assert ref.sel(time=y).data == 0
+                        assert new.sel(time=y).data == new.sel(time=y-1).data
+                    else:
+                        assert new.sel(time=y).data == ref.sel(time=y).data
+                assert new.sel(time=1950).data == new.sel(time=2000).data
+
+            # just some common sense
+            assert ods['calving_rate'].sel(time=1950).data < 1000
+            assert ods['calving_rate'].sel(time=1950).data > 10
+            import matplotlib.pyplot as plt
+            plt.figure()
+            ods['calving'].plot(hue='rgi_id')
+            plt.figure()
+            ods['calving_rate'].plot(hue='rgi_id')
+            plt.show()
 
             # We pick symmetry around rgi date so show that somehow it works
             for vn in ['volume', 'calving', 'volume_bsl', 'volume_bwl']:
                 rtol = 0.3
                 if 'bsl' in vn or 'bwl' in vn:
                     rtol = 0.55
-                np.testing.assert_allclose(ods[vn+'_ext'].sel(time=2010) -
-                                           ods[vn+'_ext'].sel(time=2002),
-                                           ods[vn+'_ext'].sel(time=2018) -
-                                           ods[vn+'_ext'].sel(time=2010),
+                np.testing.assert_allclose(ods[vn].sel(time=2010) -
+                                           ods[vn].sel(time=2002),
+                                           ods[vn].sel(time=2018) -
+                                           ods[vn].sel(time=2010),
                                            rtol=rtol)
 
     def test_find_calving_any_mb(self):
@@ -3054,6 +3084,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         diag = gdir.get_diagnostics()
         assert diag['calving_flux'] > 0.9
+        assert df['calving_rate_myr'] > 500
 
         # Test that new MB equal flux
         rho = cfg.PARAMS['ice_density']
