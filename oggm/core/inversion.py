@@ -1145,6 +1145,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
         odf = dict()
         odf['calving_flux'] = 0
+        odf['calving_rate_myr'] = 0
         odf['calving_mu_star'] = df['mu_star_glacierwide']
         odf['calving_law_flux'] = out['flux']
         odf['calving_water_level'] = out['water_level']
@@ -1218,6 +1219,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     # Store results
     odf = dict()
     odf['calving_flux'] = f_calving
+    odf['calving_rate_myr'] = f_calving * 1e9 / (out['thick'] * out['width'])
     odf['calving_mu_star'] = df['mu_star_glacierwide']
     odf['calving_law_flux'] = out['flux']
     odf['calving_water_level'] = out['water_level']
@@ -1325,6 +1327,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
         odf = dict()
         odf['calving_flux'] = 0
+        odf['calving_rate_myr'] = 0
         odf['calving_law_flux'] = out['flux']
         odf['calving_water_level'] = out['water_level']
         odf['calving_inversion_k'] = out['inversion_calving_k']
@@ -1367,6 +1370,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     # Store results
     odf = dict()
     odf['calving_flux'] = f_calving
+    odf['calving_rate_myr'] = f_calving * 1e9 / (out['thick'] * out['width'])
     odf['calving_law_flux'] = out['flux']
     odf['calving_water_level'] = out['water_level']
     odf['calving_inversion_k'] = out['inversion_calving_k']
