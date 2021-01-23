@@ -648,8 +648,8 @@ def process_dem(gdir):
         v[:] = valid_mask.astype(int)
 
         # add some meta stats and close
-        nc.max_h_dem = np.max(dem)
-        nc.min_h_dem = np.min(dem)
+        nc.max_h_dem = np.nanmax(dem)
+        nc.min_h_dem = np.nanmin(dem)
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
@@ -780,8 +780,8 @@ def glacier_masks(gdir):
 
         # add some meta stats and close
         dem_on_g = dem[np.where(glacier_mask)]
-        nc.max_h_glacier = np.max(dem_on_g)
-        nc.min_h_glacier = np.min(dem_on_g)
+        nc.max_h_glacier = np.nanmax(dem_on_g)
+        nc.min_h_glacier = np.nanmin(dem_on_g)
 
 
 @entity_task(log, writes=['gridded_data', 'hypsometry'])
@@ -854,8 +854,8 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     dem = read_geotiff_dem(gdir)
 
     # Last sanity check based on the masked dem
-    tmp_max = np.max(dem[glacier_mask])
-    tmp_min = np.min(dem[glacier_mask])
+    tmp_max = np.nanmax(dem[glacier_mask])
+    tmp_min = np.nanmin(dem[glacier_mask])
     if tmp_max < (tmp_min + 1):
         raise InvalidDEMError('({}) min equal max in the masked DEM.'
                               .format(gdir.rgi_id))
@@ -893,11 +893,11 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
                                     np.sum(pnan) / np.sum(glacier_mask))
 
         # add some meta stats and close
-        nc.max_h_dem = np.max(dem)
-        nc.min_h_dem = np.min(dem)
+        nc.max_h_dem = np.nanmax(dem)
+        nc.min_h_dem = np.nanmin(dem)
         dem_on_g = dem[np.where(glacier_mask)]
-        nc.max_h_glacier = np.max(dem_on_g)
-        nc.min_h_glacier = np.min(dem_on_g)
+        nc.max_h_glacier = np.nanmax(dem_on_g)
+        nc.min_h_glacier = np.nanmin(dem_on_g)
 
         # Last sanity check
         if nc.max_h_glacier < (nc.min_h_glacier + 1):
@@ -1486,8 +1486,8 @@ def merged_glacier_masks(gdir, geometry):
         v[:] = glacier_ext
 
         # add some meta stats and close
-        nc.max_h_dem = np.max(dem)
-        nc.min_h_dem = np.min(dem)
+        nc.max_h_dem = np.nanmax(dem)
+        nc.min_h_dem = np.nanmin(dem)
         dem_on_g = dem[np.where(glacier_mask)]
         nc.max_h_glacier = np.max(dem_on_g)
         nc.min_h_glacier = np.min(dem_on_g)
