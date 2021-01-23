@@ -19,6 +19,7 @@ from oggm import entity_task
 # Module logger
 log = logging.getLogger(__name__)
 
+
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Common logic for the mass balance models.
 

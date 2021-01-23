@@ -421,14 +421,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
 
     # L3 - Tasks
-    task_list = [
-        tasks.process_climate_data,
-        tasks.historical_climate_qc,
-        tasks.local_t_star,
-        tasks.mu_star_calibration,
-    ]
-    for task in task_list:
-        workflow.execute_entity_task(task, gdirs)
+    # Climate
+    workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+    if cfg.PARAMS['climate_qc_months'] > 0:
+        workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
+    workflow.execute_entity_task(tasks.local_t_star, gdirs)
+    workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
 
     # Inversion: we match the consensus
     workflow.calibrate_inversion_from_consensus(gdirs,

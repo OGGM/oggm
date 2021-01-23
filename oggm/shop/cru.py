@@ -22,10 +22,10 @@ from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
 # Module logger
 log = logging.getLogger(__name__)
 
-CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.03/'
-              'cruts.1905011326.v4.03/')
+CRU_SERVER = ('https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.04/'
+              'cruts.2004151855.v4.04/')
 
-CRU_BASE = 'cru_ts4.03.1901.2018.{}.dat.nc'
+CRU_BASE = 'cru_ts4.04.1901.2019.{}.dat.nc'
 
 CRU_CL = ('https://cluster.klima.uni-bremen.de/~oggm/climate/cru/'
           'cru_cl2.nc.zip')
