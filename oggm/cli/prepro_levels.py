@@ -76,7 +76,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
                       match_geodetic_mb=False, centerlines_only=False,
-                      add_consensus=False, max_level=5,
+                      add_consensus=False, start_level=None,
+                      start_base_url=None, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -124,6 +125,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
+    start_level : int
+        the pre-processed level to start from (default is to start from
+        scratch). If set, you'll need to indicate start_base_url as well.
+    start_base_url : str
+        the pre-processed base-url to fetch the data from.
     max_level : int
         the maximum pre-processing level before stopping
     logging_level : str
@@ -139,6 +145,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Input check
     if max_level not in [1, 2, 3, 4, 5]:
         raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
+
+    if start_level is not None:
+        if start_level not in [0, 1, 2]:
+            raise InvalidParamsError('start_level should be one of [0, 1, 2]')
+        if start_level > 0 and start_base_url is None:
+            raise InvalidParamsError('With start_level, please also indicate '
+                                     'start_base_url')
+    else:
+        start_level = 0
 
     # Time
     start = time.time()
@@ -242,183 +257,193 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
     # L0 - go
-    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+    if start_level == 0:
+        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
 
-    # Glacier stats
-    sum_dir = os.path.join(output_base_dir, 'L0', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
+        # Glacier stats
+        sum_dir = os.path.join(output_base_dir, 'L0', 'summary')
+        utils.mkdir(sum_dir)
+        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        utils.compile_glacier_statistics(gdirs, path=opath)
 
-    # L0 OK - compress all in output directory
-    log.workflow('L0 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L0')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
-    if max_level == 0:
-        _time_log()
-        return
+        # L0 OK - compress all in output directory
+        log.workflow('L0 done. Writing to tar...')
+        level_base_dir = os.path.join(output_base_dir, 'L0')
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
+        if max_level == 0:
+            _time_log()
+            return
+    else:
+        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
+                                                  from_prepro_level=start_level,
+                                                  prepro_border=border,
+                                                  prepro_rgi_version=rgi_version,
+                                                  prepro_base_url=start_base_url
+                                                  )
 
     # L1 - Add dem files
-    if test_topofile:
-        cfg.PATHS['dem_file'] = test_topofile
+    if start_level == 0:
+        if test_topofile:
+            cfg.PATHS['dem_file'] = test_topofile
 
-    # Which DEM source?
-    if dem_source.upper() == 'ALL':
-        # This is the complex one, just do the job and leave
-        log.workflow('Running prepro on ALL sources')
-        for i, s in enumerate(utils.DEM_SOURCES):
-            rs = i == 0
-            log.workflow('Running prepro on sources: {}'.format(s))
-            gdirs = workflow.init_glacier_directories(rgidf, reset=rs,
-                                                      force=rs)
-            workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
-                                         source=s)
-            workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
+        # Which DEM source?
+        if dem_source.upper() == 'ALL':
+            # This is the complex one, just do the job and leave
+            log.workflow('Running prepro on ALL sources')
+            for i, s in enumerate(utils.DEM_SOURCES):
+                rs = i == 0
+                log.workflow('Running prepro on sources: {}'.format(s))
+                gdirs = workflow.init_glacier_directories(rgidf, reset=rs,
+                                                          force=rs)
+                workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
+                                             source=s)
+                workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
 
-        # make a GeoTiff mask of the glacier, choose any source
-        workflow.execute_entity_task(gis.rasterio_glacier_mask,
-                                     gdirs, source='ALL')
+            # make a GeoTiff mask of the glacier, choose any source
+            workflow.execute_entity_task(gis.rasterio_glacier_mask,
+                                         gdirs, source='ALL')
 
-        # Compress all in output directory
+            # Compress all in output directory
+            level_base_dir = os.path.join(output_base_dir, 'L1')
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
+
+            _time_log()
+            return
+
+        # Force a given source
+        source = dem_source.upper() if dem_source else None
+
+        # L1 - go
+        workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
+                                     source=source)
+
+        # Glacier stats
+        sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
+        utils.mkdir(sum_dir)
+        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        utils.compile_glacier_statistics(gdirs, path=opath)
+
+        # L1 OK - compress all in output directory
+        log.workflow('L1 done. Writing to tar...')
         level_base_dir = os.path.join(output_base_dir, 'L1')
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
-
-        _time_log()
-        return
-
-    # Force a given source
-    source = dem_source.upper() if dem_source else None
-
-    # L1 - go
-    workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
-                                 source=source)
-
-    # Glacier stats
-    sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-
-    # L1 OK - compress all in output directory
-    log.workflow('L1 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L1')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
-    if max_level == 1:
-        _time_log()
-        return
+        if max_level == 1:
+            _time_log()
+            return
 
     # L2 - Tasks
-    # Check which glaciers will be processed as what
-    if elev_bands:
-        gdirs_band = gdirs
-        gdirs_cent = []
-    elif centerlines_only:
-        gdirs_band = []
-        gdirs_cent = gdirs
-    else:
-        # Default is to mix
-        # Curated list of large (> 50 km2) glaciers that don't run
-        # (CFL error) mostly because the centerlines are crap
-        # This is a really temporary fix until we have some better
-        # solution here
-        ids_to_bands = [
-            'RGI60-01.13696', 'RGI60-03.01710', 'RGI60-01.13635',
-            'RGI60-01.14443', 'RGI60-03.01678', 'RGI60-03.03274',
-            'RGI60-01.17566', 'RGI60-03.02849', 'RGI60-01.16201',
-            'RGI60-01.14683', 'RGI60-07.01506', 'RGI60-07.01559',
-            'RGI60-03.02687', 'RGI60-17.00172', 'RGI60-01.23649',
-            'RGI60-09.00077', 'RGI60-03.00994', 'RGI60-01.26738',
-            'RGI60-03.00283', 'RGI60-01.16121', 'RGI60-01.27108',
-            'RGI60-09.00132', 'RGI60-13.43483', 'RGI60-09.00069',
-            'RGI60-14.04404', 'RGI60-17.01218', 'RGI60-17.15877',
-            'RGI60-13.30888', 'RGI60-17.13796', 'RGI60-17.15825',
-            'RGI60-01.09783']
-        if rgi_reg == '19':
+    if start_level <= 1:
+        # Check which glaciers will be processed as what
+        if elev_bands:
             gdirs_band = gdirs
             gdirs_cent = []
-        else:
+        elif centerlines_only:
             gdirs_band = []
-            gdirs_cent = []
-            for gdir in gdirs:
-                if gdir.is_icecap or gdir.rgi_id in ids_to_bands:
-                    gdirs_band.append(gdir)
-                else:
-                    gdirs_cent.append(gdir)
+            gdirs_cent = gdirs
+        else:
+            # Default is to mix
+            # Curated list of large (> 50 km2) glaciers that don't run
+            # (CFL error) mostly because the centerlines are crap
+            # This is a really temporary fix until we have some better
+            # solution here
+            ids_to_bands = [
+                'RGI60-01.13696', 'RGI60-03.01710', 'RGI60-01.13635',
+                'RGI60-01.14443', 'RGI60-03.01678', 'RGI60-03.03274',
+                'RGI60-01.17566', 'RGI60-03.02849', 'RGI60-01.16201',
+                'RGI60-01.14683', 'RGI60-07.01506', 'RGI60-07.01559',
+                'RGI60-03.02687', 'RGI60-17.00172', 'RGI60-01.23649',
+                'RGI60-09.00077', 'RGI60-03.00994', 'RGI60-01.26738',
+                'RGI60-03.00283', 'RGI60-01.16121', 'RGI60-01.27108',
+                'RGI60-09.00132', 'RGI60-13.43483', 'RGI60-09.00069',
+                'RGI60-14.04404', 'RGI60-17.01218', 'RGI60-17.15877',
+                'RGI60-13.30888', 'RGI60-17.13796', 'RGI60-17.15825',
+                'RGI60-01.09783']
+            if rgi_reg == '19':
+                gdirs_band = gdirs
+                gdirs_cent = []
+            else:
+                gdirs_band = []
+                gdirs_cent = []
+                for gdir in gdirs:
+                    if gdir.is_icecap or gdir.rgi_id in ids_to_bands:
+                        gdirs_band.append(gdir)
+                    else:
+                        gdirs_cent.append(gdir)
 
-    log.workflow('Start flowline processing with: '
-                 'N centerline type: {}, '
-                 'N elev bands type: {}.'
-                 ''.format(len(gdirs_cent), len(gdirs_band)))
+        log.workflow('Start flowline processing with: '
+                     'N centerline type: {}, '
+                     'N elev bands type: {}.'
+                     ''.format(len(gdirs_cent), len(gdirs_band)))
 
-    # HH2015 method
-    workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
+        # HH2015 method
+        workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
 
-    # Centerlines OGGM
-    workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
+        # Centerlines OGGM
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
-    if add_consensus:
-        from oggm.shop.bedtopo import add_consensus_thickness
-        workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
-        workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+        if add_consensus:
+            from oggm.shop.bedtopo import add_consensus_thickness
+            workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
+            workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
 
-        # Elev bands with var data
-        vn = 'consensus_ice_thickness'
-        workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                     gdirs_band, bin_variables=vn)
-        workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                     gdirs_band, bin_variables=vn)
-    else:
-        # HH2015 method without it
+            # Elev bands with var data
+            vn = 'consensus_ice_thickness'
+            workflow.execute_entity_task(tasks.elevation_band_flowline,
+                                         gdirs_band, bin_variables=vn)
+            workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
+                                         gdirs_band, bin_variables=vn)
+        else:
+            # HH2015 method without it
+            task_list = [
+                tasks.elevation_band_flowline,
+                tasks.fixed_dx_elevation_band_flowline,
+            ]
+            for task in task_list:
+                workflow.execute_entity_task(task, gdirs_band)
+
+        # HH2015 method
         task_list = [
-            tasks.elevation_band_flowline,
-            tasks.fixed_dx_elevation_band_flowline,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
         ]
         for task in task_list:
             workflow.execute_entity_task(task, gdirs_band)
 
-    # HH2015 method
-    task_list = [
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-    ]
-    for task in task_list:
-        workflow.execute_entity_task(task, gdirs_band)
+        # Centerlines OGGM
+        task_list = [
+            tasks.compute_centerlines,
+            tasks.initialize_flowlines,
+            tasks.compute_downstream_line,
+            tasks.compute_downstream_bedshape,
+            tasks.catchment_area,
+            tasks.catchment_intersections,
+            tasks.catchment_width_geom,
+            tasks.catchment_width_correction,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs_cent)
 
-    # Centerlines OGGM
-    task_list = [
-        tasks.compute_centerlines,
-        tasks.initialize_flowlines,
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-        tasks.catchment_area,
-        tasks.catchment_intersections,
-        tasks.catchment_width_geom,
-        tasks.catchment_width_correction,
-    ]
-    for task in task_list:
-        workflow.execute_entity_task(task, gdirs_cent)
+        # Glacier stats
+        sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
+        utils.mkdir(sum_dir)
+        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        utils.compile_glacier_statistics(gdirs, path=opath)
 
-    # Glacier stats
-    sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
-    utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-
-    # L2 OK - compress all in output directory
-    log.workflow('L2 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L2')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
-    if max_level == 2:
-        _time_log()
-        return
+        # L2 OK - compress all in output directory
+        log.workflow('L2 done. Writing to tar...')
+        level_base_dir = os.path.join(output_base_dir, 'L2')
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
+        if max_level == 2:
+            _time_log()
+            return
 
     # L3 - Tasks
     # Climate
@@ -437,6 +462,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # This affects only the bias so we can actually do this *after*
     # the inversion, but we really want to take calving into account here
     if match_geodetic_mb:
+        opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
+                                      'before_match_{}.csv'.format(rgi_reg))
+        utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
         workflow.match_regional_geodetic_mb(gdirs, rgi_reg)
 
     # We get ready for modelling
@@ -563,6 +591,13 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
+    parser.add_argument('--start-level', type=int, default=0,
+                        help='the pre-processed level to start from (default '
+                             'is to start from 0). If set, you will need to '
+                             'indicate --start-base-url as well.')
+    parser.add_argument('--start-base-url', type=str,
+                        help=' the pre-processed base-url to fetch the data '
+                             'from.')
     parser.add_argument('--max-level', type=int, default=5,
                         help='the maximum level you want to run the '
                              'pre-processing for (1, 2, 3, 4 or 5).')
@@ -663,6 +698,7 @@ def parse_args(args):
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
                 demo=args.demo, dem_source=args.dem_source,
+                start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
                 centerlines_only=args.centerlines_only,
