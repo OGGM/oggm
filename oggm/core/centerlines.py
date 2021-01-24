@@ -1143,7 +1143,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
             bed.append(np.NaN)
 
     bed = np.asarray(bed)
-    assert len(bed) == idl.nx
+    assert len(bed) == idl.nx, 'len(bed) == idl.nx'
     pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
     log.debug('(%s) percentage of valid parabolas in downstream: %d',
               gdir.rgi_id, int(pvalid))
@@ -1196,13 +1196,13 @@ def compute_downstream_bedshape(gdir):
     interpolator = RegularGridInterpolator(xy, topo)
 
     bs = _parabolic_bed_from_topo(gdir, cl, interpolator)
-    assert len(bs) == cl.nx
-    assert np.all(np.isfinite(bs))
+    assert len(bs) == cl.nx, 'len(bs) == cl.nx'
+    assert np.all(np.isfinite(bs)), 'np.all(np.isfinite(bs))'
 
     # Interpolate heights for later
     xx, yy = cl.line.xy
     hgts = interpolator((yy, xx))
-    assert len(hgts) >= 5
+    assert len(hgts) >= 5, 'len(hgts) >= 5'
 
     # If smoothing, this is the moment
     hgts = gaussian_filter1d(hgts, cfg.PARAMS['flowline_height_smooth'])
@@ -1626,8 +1626,7 @@ def initialize_flowlines(gdir):
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
     do_filter = cfg.PARAMS['filter_min_slope']
-    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
-    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    min_slope = np.deg2rad(cfg.PARAMS['min_slope_flowline_filter'])
 
     lid = int(cfg.PARAMS['flowline_junction_pix'])
     fls = []

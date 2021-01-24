@@ -1482,13 +1482,9 @@ def copdem_zone(lon_ex, lat_ex):
     p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
     gdf = gdf.loc[gdf.intersects(p)]
 
-    # COPDEM is global, if we miss any tile it is worth an error
-    if (len(gdf) == 0) or (not unary_union(gdf.geometry).contains(p)):
-        raise InvalidDEMError('Could not find all necessary Copernicus DEM '
-                              'tiles. This should not happen in a global DEM. '
-                              'Check the RGI-CopernicusDEM lookup shapefile '
-                              'for this particular glacier!')
-
+    # COPDEM is global, if we miss all tiles it is worth an error
+    if len(gdf) == 0:
+        raise InvalidDEMError('Could not find any Copernicus DEM tile.')
     flist = []
     for _, g in gdf.iterrows():
         cpp = g['CPP File']

@@ -623,6 +623,7 @@ class TestCenterlines(unittest.TestCase):
         self.assertEqual(
             len(d['full_line'].coords) - len(d['downstream_line'].coords),
             cl.nx)
+        assert d['downstream_line'].length > 11
 
     def test_downstream_bedshape(self):
 
@@ -941,6 +942,10 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         centerlines.compute_downstream_line(gdir)
+
+        dl = gdir.read_pickle('downstream_line')
+        assert dl['downstream_line'].length > 13
+
         centerlines.compute_downstream_bedshape(gdir)
         climate.process_custom_climate_data(gdir)
         mbdf = gdir.get_ref_mb_data()
