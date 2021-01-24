@@ -71,7 +71,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '759c2de19b7370d64b600fb89dd52c4c0581d1f0'
+SAMPLE_DATA_COMMIT = '69c8c376a75c5eb53fa2c657948e837f2b3a1d6e'
 
 GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
 DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
@@ -1482,13 +1482,9 @@ def copdem_zone(lon_ex, lat_ex):
     p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
     gdf = gdf.loc[gdf.intersects(p)]
 
-    # COPDEM is global, if we miss any tile it is worth an error
-    if (len(gdf) == 0) or (not unary_union(gdf.geometry).contains(p)):
-        raise InvalidDEMError('Could not find all necessary Copernicus DEM '
-                              'tiles. This should not happen in a global DEM. '
-                              'Check the RGI-CopernicusDEM lookup shapefile '
-                              'for this particular glacier!')
-
+    # COPDEM is global, if we miss all tiles it is worth an error
+    if len(gdf) == 0:
+        raise InvalidDEMError('Could not find any Copernicus DEM tile.')
     flist = []
     for _, g in gdf.iterrows():
         cpp = g['CPP File']

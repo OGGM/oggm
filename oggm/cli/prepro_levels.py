@@ -407,20 +407,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             for task in task_list:
                 workflow.execute_entity_task(task, gdirs_band)
 
-        # HH2015 method
-        task_list = [
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
-        ]
-        for task in task_list:
-            workflow.execute_entity_task(task, gdirs_band)
-
         # Centerlines OGGM
         task_list = [
             tasks.compute_centerlines,
             tasks.initialize_flowlines,
-            tasks.compute_downstream_line,
-            tasks.compute_downstream_bedshape,
             tasks.catchment_area,
             tasks.catchment_intersections,
             tasks.catchment_width_geom,
@@ -428,6 +418,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         ]
         for task in task_list:
             workflow.execute_entity_task(task, gdirs_cent)
+
+        # Same for all glaciers
+        if border >= 20:
+            task_list = [
+                tasks.compute_downstream_line,
+                tasks.compute_downstream_bedshape,
+            ]
+            for task in task_list:
+                workflow.execute_entity_task(task, gdirs)
+        else:
+            log.workflow('L2: for map border values < 20, wont compute '
+                         'downstream lines.')
 
         # Glacier stats
         sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
