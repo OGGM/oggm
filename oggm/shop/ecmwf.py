@@ -24,9 +24,9 @@ ECMWF_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
 BASENAMES = {
     'ERA5': {
-        'inv': 'era5/monthly/v1.0/era5_invariant.nc',
-        'pre': 'era5/monthly/v1.0/era5_monthly_prcp_1979-2018.nc',
-        'tmp': 'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'
+        'inv': 'era5/monthly/v1.1/era5_invariant.nc',
+        'pre': 'era5/monthly/v1.1/era5_monthly_prcp_1979-2019.nc',
+        'tmp': 'era5/monthly/v1.1/era5_monthly_t2m_1979-2019.nc'
     },
     'ERA5L': {
         'inv': 'era5-land/monthly/v1.0/era5_land_invariant_flat.nc',

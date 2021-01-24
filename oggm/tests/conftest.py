@@ -108,6 +108,33 @@ def patch_data_urls(monkeypatch):
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
     monkeypatch.setattr(ecmwf, 'ECMWF_SERVER', url)
 
+    basenames = {
+        'ERA5': {
+            'inv': 'era5/monthly/v1.0/era5_invariant.nc',
+            'pre': 'era5/monthly/v1.0/era5_monthly_prcp_1979-2018.nc',
+            'tmp': 'era5/monthly/v1.0/era5_monthly_t2m_1979-2018.nc'
+        },
+        'ERA5L': {
+            'inv': 'era5-land/monthly/v1.0/era5_land_invariant_flat.nc',
+            'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018_flat'
+                   '.nc',
+            'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018_flat.nc'
+        },
+        'CERA': {
+            'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
+            'pre': 'cera-20c/monthly/v1.0/cera-20c_pcp_1901-2010.nc',
+            'tmp': 'cera-20c/monthly/v1.0/cera-20c_t2m_1901-2010.nc'
+        },
+        'ERA5dr': {
+            'inv': 'era5/monthly/vdr/ERA5_geopotential_monthly.nc',
+            'lapserates': 'era5/monthly/vdr/ERA5_lapserates_monthly.nc',
+            'tmp': 'era5/monthly/vdr/ERA5_temp_monthly.nc',
+            'tempstd': 'era5/monthly/vdr/ERA5_tempstd_monthly.nc',
+            'pre': 'era5/monthly/vdr/ERA5_totalprecip_monthly.nc',
+        }
+    }
+    monkeypatch.setattr(ecmwf, 'BASENAMES', basenames)
+
 
 def secure_url_retrieve(url, *args, **kwargs):
     """A simple patch to OGGM's download function to make sure we don't

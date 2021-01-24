@@ -710,6 +710,18 @@ class TestPreproCLI(unittest.TestCase):
     def reset_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
+    def _read_shp(self):
+        # Read in the RGI file
+        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_1]
+        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                            for rid in inter.RGIId_2]
+        return inter, rgidf
+
     def test_parse_args(self):
 
         from oggm.cli import prepro_levels
@@ -723,6 +735,21 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--start-level', '2',
+                                           '--start-base-url', 'http://foo',
+                                           ])
+
+        assert 'working_dir' in kwargs
+        assert 'output_folder' in kwargs
+        assert kwargs['rgi_version'] is None
+        assert kwargs['params_file'] is None
+        assert kwargs['rgi_reg'] == '01'
+        assert kwargs['border'] == 160
+        assert kwargs['start_level'] == 2
+        assert kwargs['start_base_url'] == 'http://foo'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -860,15 +887,7 @@ class TestPreproCLI(unittest.TestCase):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
+        inter, rgidf = self._read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -1008,14 +1027,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
+        inter, rgidf = self._read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -1093,6 +1105,46 @@ class TestPreproCLI(unittest.TestCase):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
+    def test_start_from_prepro(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
+                    'oggm_v1.1/')
+
+        # Read in the RGI file
+        inter, rgidf = self._read_shp()
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        np.random.seed(0)
+        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+                          disable_mp=True,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf, test_intersects_file=inter,
+                          start_level=1, start_base_url=base_url,
+                          max_level=5)
+
+        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'main_flowline_length' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'), index_col=0)
+        assert 'inv_volume_km3' in df
+
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir, is_test=True,
+                              test_rgidf=rgidf, test_intersects_file=inter,
+                              start_level=2, max_level=4)
+
     def test_source_run(self):
 
         self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
@@ -1100,14 +1152,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
+        inter, rgidf = self._read_shp()
         rgidf = rgidf.iloc[:4]
 
         wdir = os.path.join(self.testdir, 'wd')

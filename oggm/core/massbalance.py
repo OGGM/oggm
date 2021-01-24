@@ -19,6 +19,7 @@ from oggm import entity_task
 # Module logger
 log = logging.getLogger(__name__)
 
+
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Common logic for the mass balance models.
 
@@ -541,7 +542,11 @@ class ConstantMassBalance(MassBalanceModel):
         except FileNotFoundError:
             # in case we don't have them
             with ncDataset(gdir.get_filepath('gridded_data')) as nc:
-                zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
+                if np.isfinite(nc.min_h_dem):
+                    # a bug sometimes led to non-finite
+                    zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
+                else:
+                    zminmax = [nc.min_h_glacier-1250, nc.max_h_glacier+1500]
         self.hbins = np.arange(*zminmax, step=10)
         self.valid_bounds = self.hbins[[0, -1]]
         self.y0 = y0
