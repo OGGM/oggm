@@ -425,6 +425,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             return
 
     # L3 - Tasks
+    sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
+    utils.mkdir(sum_dir)
+
     # Climate
     workflow.execute_entity_task(tasks.process_climate_data, gdirs)
     if cfg.PARAMS['climate_qc_months'] > 0:
@@ -453,8 +456,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         log.workflow('L3: for map border values < 20, wont initalize glaciers '
                      'for the run.')
     # Glacier stats
-    sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
-    utils.mkdir(sum_dir)
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
     utils.compile_glacier_statistics(gdirs, path=opath)
     opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
