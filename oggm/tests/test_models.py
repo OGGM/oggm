@@ -1410,7 +1410,6 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
         np.testing.assert_allclose(ds_diag.area_m2, a_diag)
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
-        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
         fls = dummy_constant_bed()
         run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
@@ -1536,7 +1535,6 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
         np.testing.assert_allclose(ds_diag.area_m2, a_diag)
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
-        np.testing.assert_allclose(ds_diag.ela_m, ela_diag)
 
         fls = dummy_constant_bed()
         run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
@@ -2908,8 +2906,6 @@ class TestHEF:
         assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
                         ds2.volume.isel(rgi_id=0, time=-1),
                         rtol=0.1)
-        # ELA should be close
-        assert_allclose(ds1.ela.mean(), ds2.ela.mean(), atol=50)
 
         # Do a spinup run
         run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,

@@ -2315,7 +2315,7 @@ class GlacierDirectory(object):
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with _open(fp, 'wb') as f:
-            pickle.dump(var, f, protocol=-1)
+            pickle.dump(var, f, protocol=4)
 
     def read_json(self, filename, filesuffix=''):
         """Reads a JSON file located in the directory.
