@@ -347,34 +347,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             gdirs_band = []
             gdirs_cent = gdirs
         else:
-            # Default is to mix
-            # Curated list of large (> 50 km2) glaciers that don't run
-            # (CFL error) mostly because the centerlines are crap
-            # This is a really temporary fix until we have some better
-            # solution here
-            ids_to_bands = [
-                'RGI60-01.13696', 'RGI60-03.01710', 'RGI60-01.13635',
-                'RGI60-01.14443', 'RGI60-03.01678', 'RGI60-03.03274',
-                'RGI60-01.17566', 'RGI60-03.02849', 'RGI60-01.16201',
-                'RGI60-01.14683', 'RGI60-07.01506', 'RGI60-07.01559',
-                'RGI60-03.02687', 'RGI60-17.00172', 'RGI60-01.23649',
-                'RGI60-09.00077', 'RGI60-03.00994', 'RGI60-01.26738',
-                'RGI60-03.00283', 'RGI60-01.16121', 'RGI60-01.27108',
-                'RGI60-09.00132', 'RGI60-13.43483', 'RGI60-09.00069',
-                'RGI60-14.04404', 'RGI60-17.01218', 'RGI60-17.15877',
-                'RGI60-13.30888', 'RGI60-17.13796', 'RGI60-17.15825',
-                'RGI60-01.09783']
-            if rgi_reg == '19':
-                gdirs_band = gdirs
-                gdirs_cent = []
-            else:
-                gdirs_band = []
-                gdirs_cent = []
-                for gdir in gdirs:
-                    if gdir.is_icecap or gdir.rgi_id in ids_to_bands:
-                        gdirs_band.append(gdir)
-                    else:
-                        gdirs_cent.append(gdir)
+            # Default is to centerlines_only, but it used to be a mix
+            # (e.g. bands for ice caps, etc)
+            # I still keep this logic here in case we want to mix again
+            gdirs_band = []
+            gdirs_cent = gdirs
 
         log.workflow('Start flowline processing with: '
                      'N centerline type: {}, '
@@ -470,8 +447,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.match_regional_geodetic_mb(gdirs, rgi_reg)
 
     # We get ready for modelling
-    workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-
+    if border >= 20:
+        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+    else:
+        log.workflow('L3: for map border values < 20, wont initalize glaciers '
+                     'for the run.')
     # Glacier stats
     sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
     utils.mkdir(sum_dir)
@@ -490,6 +470,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.base_dir_to_tar(level_base_dir)
     if max_level == 3:
         _time_log()
+        return
+    if border < 20:
+        log.workflow('L3: for map border values < 20, wont compute L4 and L5.')
         return
 
     # L4 - No tasks: add some stats for consistency and make the dirs small
