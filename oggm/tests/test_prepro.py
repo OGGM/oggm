@@ -3032,8 +3032,6 @@ class TestColumbiaCalving(unittest.TestCase):
         with xr.open_dataset(out_path) as ods, \
                 xr.open_dataset(past_run_file) as ds:
 
-            del ds['ela']  # needs removed anyway
-
             ref = ds.volume
             new = ods.volume
             for y in [2010, 2012, 2019]:
