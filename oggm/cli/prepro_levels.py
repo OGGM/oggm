@@ -473,6 +473,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         return
     if border < 20:
         log.workflow('L3: for map border values < 20, wont compute L4 and L5.')
+        _time_log()
         return
 
     # L4 - No tasks: add some stats for consistency and make the dirs small
