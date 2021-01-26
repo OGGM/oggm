@@ -1169,7 +1169,6 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
-        cfg.PARAMS['run_mb_calibration'] = True
         cfg.PARAMS['baseline_climate'] = ''
 
     def tearDown(self):
@@ -1954,7 +1953,6 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_automated_workflow(self):
 
-        cfg.PARAMS['run_mb_calibration'] = False
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -1968,16 +1966,15 @@ class TestClimate(unittest.TestCase):
         assert gdir.rgi_version == '50'
         gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
-        workflow.climate_tasks([gdir])
 
-        hef_file = get_demo_file('Hintereisferner_RGI6.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir)
-        assert gdir.rgi_version == '60'
-        workflow.gis_prepro_tasks([gdir])
+        # We copy the files
+        shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4.csv'),
+                        os.path.join(cfg.PATHS['working_dir'],
+                                     'ref_tstars.csv'))
+        shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4_calib_params.json'),
+                        os.path.join(cfg.PATHS['working_dir'],
+                                     'ref_tstars_params.json'))
         workflow.climate_tasks([gdir])
-        cfg.PARAMS['run_mb_calibration'] = True
 
 
 class TestFilterNegFlux(unittest.TestCase):

@@ -2662,7 +2662,6 @@ class TestHEF:
 
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        cfg.PARAMS['run_mb_calibration'] = True
         tasks.process_cru_data(gdir_sh)
         climate.compute_ref_t_stars([gdir_sh])
         climate.local_t_star(gdir_sh)

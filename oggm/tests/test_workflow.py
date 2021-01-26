@@ -80,7 +80,6 @@ def up_to_climate(reset=False):
     # Params
     cfg.PARAMS['border'] = 70
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
-    cfg.PARAMS['run_mb_calibration'] = True
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)

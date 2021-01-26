@@ -3,6 +3,7 @@
 import logging
 import os
 import datetime
+import json
 import warnings
 
 # External libs
@@ -24,7 +25,8 @@ from oggm import cfg
 from oggm import utils
 from oggm.core import centerlines
 from oggm import entity_task, global_task
-from oggm.exceptions import MassBalanceCalibrationError, InvalidParamsError
+from oggm.exceptions import (MassBalanceCalibrationError, InvalidParamsError,
+                             InvalidWorkflowError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -924,34 +926,28 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     if tstar is None or bias is None:
         # Do our own interpolation
         if ref_df is None:
-            if not cfg.PARAMS['run_mb_calibration']:
-                # Make some checks and use the default one
-                climate_info = gdir.get_climate_info()
-                source = climate_info['baseline_climate_source']
-                ok_source = ['CRU TS4.01', 'CRU TS3.23', 'HISTALP']
-                if not np.any(s in source.upper() for s in ok_source):
-                    msg = ('If you are using a custom climate file you should '
-                           'run your own MB calibration.')
-                    raise MassBalanceCalibrationError(msg)
-                v = gdir.rgi_version[0]  # major version relevant
-
-                # Check that the params are fine
-                s = 'cru4' if 'CRU' in source else 'histalp'
-                vn = 'oggm_ref_tstars_rgi{}_{}_calib_params'.format(v, s)
-                # This is for as long as the old files are around
-                if 'climate_qc_months' not in cfg.PARAMS[vn]:
-                    params.remove('climate_qc_months')
-                for k in params:
-                    if cfg.PARAMS[k] != cfg.PARAMS[vn][k]:
-                        msg = ('The reference t* you are trying to use was '
-                               'calibrated with different MB parameters. You '
-                               'might have to run the calibration manually.')
-                        raise MassBalanceCalibrationError(msg)
-                ref_df = cfg.PARAMS['oggm_ref_tstars_rgi{}_{}'.format(v, s)]
-            else:
-                # Use the the local calibration
-                fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+            # Use the the local calibration
+            fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+            try:
                 ref_df = pd.read_csv(fp)
+            except FileNotFoundError:
+                raise InvalidWorkflowError('If ref_df is not given, provide '
+                                           'ref_tstars.csv in the working '
+                                           'directory')
+            # Check that the params are fine
+            fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json')
+            try:
+                with open(fp, 'r') as fp:
+                    ref_params = json.load(fp)
+            except FileNotFoundError:
+                raise InvalidWorkflowError('If ref_df is not given, provide '
+                                           'ref_tstars_params.json in the working '
+                                           'directory')
+            for k, v in ref_params.items():
+                if cfg.PARAMS[k] != v:
+                    msg = ('The reference t* list you are trying to use was '
+                           'calibrated with different MB parameters.')
+                    raise MassBalanceCalibrationError(msg)
 
         # Compute the distance to each glacier
         distances = utils.haversine(gdir.cenlon, gdir.cenlat,
@@ -1450,3 +1446,9 @@ def compute_ref_t_stars(gdirs):
     df['n_mb_years'] = df['n_mb_years'].astype(int)
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
+    # We store the associated params
+    mb_calib = gdirs[0].get_climate_info()['mb_calib_params']
+    params_file = os.path.join(cfg.PATHS['working_dir'],
+                               'ref_tstars_params.json')
+    with open(params_file, 'w') as fp:
+        json.dump(mb_calib, fp)

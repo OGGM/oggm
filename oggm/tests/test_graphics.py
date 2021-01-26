@@ -176,7 +176,6 @@ def test_multiple_inversion():
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
-    cfg.PARAMS['run_mb_calibration'] = True
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PATHS['working_dir'] = testdir
 
@@ -256,7 +255,6 @@ def test_multiple_models():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
-    cfg.PARAMS['run_mb_calibration'] = True
     cfg.PARAMS['border'] = 40
 
     # Get the RGI ID
