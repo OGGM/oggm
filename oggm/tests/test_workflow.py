@@ -21,7 +21,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import get_test_dir, use_multiprocessing, apply_test_ref_tstars
+from oggm.tests.funcs import get_test_dir, use_multiprocessing
 from oggm.shop import cru
 from oggm.core import flowline
 from oggm import tasks
@@ -80,6 +80,8 @@ def up_to_climate(reset=False):
     # Params
     cfg.PARAMS['border'] = 70
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
+    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['temp_melt'] = -1.75
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
@@ -116,6 +118,7 @@ def up_to_inversion(reset=False):
         # Use histalp for the actual inversion test
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
+        utils.apply_test_ref_tstars('histalp')
         workflow.climate_tasks(gdirs)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
@@ -186,7 +189,7 @@ class TestFullRun(unittest.TestCase):
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs)
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
-        assert np.all(dfc.t_star > 1900)
+        assert np.all(dfc.t_star > 1850)
         dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]

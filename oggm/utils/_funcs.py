@@ -207,17 +207,18 @@ def interp_nans(array, default=None):
     return _tmp
 
 
-def apply_test_ref_tstars():
+def apply_test_ref_tstars(baseline='cru4'):
     """Copy the testing ref tstars to the current working directory.
 
     Used mostly for testing.
     """
     if not os.path.exists(cfg.PATHS['working_dir']):
         raise RuntimeError('Need a valid working_dir')
-    shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4.csv'),
+    shutil.copyfile(get_demo_file(f'oggm_ref_tstars_rgi5_{baseline}.csv'),
                     os.path.join(cfg.PATHS['working_dir'],
                                  'ref_tstars.csv'))
-    shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4_calib_params.json'),
+    shutil.copyfile(get_demo_file(f'oggm_ref_tstars_rgi5_{baseline}_calib_'
+                                  f'params.json'),
                     os.path.join(cfg.PATHS['working_dir'],
                                  'ref_tstars_params.json'))
 
