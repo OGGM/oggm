@@ -122,7 +122,7 @@ is computed as:
 
 where :math:`P_i^{Solid}` is the monthly solid precipitation, :math:`T_i`
 the monthly temperature and :math:`T_{Melt}` is the monthly mean air
-temperature above which ice melt is assumed to occur (0°C per default).
+temperature above which ice melt is assumed to occur (-1°C per default).
 Solid precipitation is computed out of the total precipitation. The fraction of
 solid precipitation is based on the monthly mean temperature: all solid below
 ``temp_all_solid`` (default: 0°C) all liquid above ``temp_all_liq``
