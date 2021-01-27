@@ -7,6 +7,7 @@ import sys
 import math
 import logging
 import warnings
+import shutil
 from distutils.version import LooseVersion
 
 # External libs
@@ -204,6 +205,21 @@ def interp_nans(array, default=None):
         _tmp[nans] = np.interp(x(nans), x(~nans), array[~nans])
 
     return _tmp
+
+
+def apply_test_ref_tstars():
+    """Copy the testing ref tstars to the current working directory.
+
+    Used mostly for testing.
+    """
+    if not os.path.exists(cfg.PATHS['working_dir']):
+        raise RuntimeError('Need a valid working_dir')
+    shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4.csv'),
+                    os.path.join(cfg.PATHS['working_dir'],
+                                 'ref_tstars.csv'))
+    shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4_calib_params.json'),
+                    os.path.join(cfg.PATHS['working_dir'],
+                                 'ref_tstars_params.json'))
 
 
 def smooth1d(array, window_size=None, kernel='gaussian'):

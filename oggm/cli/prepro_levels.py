@@ -251,6 +251,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
+        # Also use ref tstars
+        utils.apply_test_ref_tstars()
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))

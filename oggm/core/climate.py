@@ -34,6 +34,10 @@ log = logging.getLogger(__name__)
 # Parameters
 _brentq_xtol = 2e-12
 
+# Climate relevant params
+MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
+             'temp_melt', 'prcp_scaling_factor', 'climate_qc_months']
+
 
 @entity_task(log, writes=['climate_historical'])
 def process_custom_climate_data(gdir, y0=None, y1=None,
@@ -919,30 +923,25 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
         defaults to cfg.PARAMS['max_mu_star']
     """
 
-    # Relevant mb params
-    params = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
-              'temp_melt', 'prcp_scaling_factor', 'climate_qc_months']
-
     if tstar is None or bias is None:
         # Do our own interpolation
         if ref_df is None:
             # Use the the local calibration
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
-            try:
-                ref_df = pd.read_csv(fp)
-            except FileNotFoundError:
+            if not os.path.exists(fp):
                 raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           'ref_tstars.csv in the working '
+                                           '`ref_tstars.csv` in the working '
                                            'directory')
+            ref_df = pd.read_csv(fp)
+
             # Check that the params are fine
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json')
-            try:
-                with open(fp, 'r') as fp:
-                    ref_params = json.load(fp)
-            except FileNotFoundError:
+            if not os.path.exists(fp):
                 raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           'ref_tstars_params.json in the working '
-                                           'directory')
+                                           '`ref_tstars_params.json` in the '
+                                           'working directory')
+            with open(fp, 'r') as fp:
+                ref_params = json.load(fp)
             for k, v in ref_params.items():
                 if cfg.PARAMS[k] != v:
                     msg = ('The reference t* list you are trying to use was '
@@ -969,7 +968,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
     out = gdir.get_climate_info()
-    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in params}
+    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in MB_PARAMS}
     gdir.write_json(out, 'climate_info')
 
     # We compute the overall mu* here but this is mostly for testing
@@ -1446,9 +1445,10 @@ def compute_ref_t_stars(gdirs):
     df['n_mb_years'] = df['n_mb_years'].astype(int)
     file = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
     df.sort_index().to_csv(file)
-    # We store the associated params
-    mb_calib = gdirs[0].get_climate_info()['mb_calib_params']
+    # We store the associated params to make sure
+    # other tools cannot fool around without re-calibration
+
     params_file = os.path.join(cfg.PATHS['working_dir'],
                                'ref_tstars_params.json')
     with open(params_file, 'w') as fp:
-        json.dump(mb_calib, fp)
+        json.dump({k: cfg.PARAMS[k] for k in MB_PARAMS}, fp)

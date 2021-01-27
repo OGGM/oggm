@@ -23,7 +23,8 @@ from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import get_test_dir, init_columbia, init_columbia_eb
+from oggm.tests.funcs import (get_test_dir, init_columbia, init_columbia_eb,
+                              apply_test_ref_tstars)
 from oggm import workflow
 from oggm.exceptions import InvalidWorkflowError, MassBalanceCalibrationError
 
@@ -1671,6 +1672,7 @@ class TestClimate(unittest.TestCase):
         self.assertTrue(t_star >= 1902)
 
         # test distribute
+        cfg.PARAMS['run_mb_calibration'] = True
         climate.compute_ref_t_stars([gdir])
         climate.local_t_star(gdir)
         cfg.PARAMS['tstar_search_window'] = [0, 0]
@@ -1967,14 +1969,17 @@ class TestClimate(unittest.TestCase):
         gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
 
+        with pytest.raises(InvalidWorkflowError):
+            workflow.climate_tasks([gdir])
+
         # We copy the files
-        shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4.csv'),
-                        os.path.join(cfg.PATHS['working_dir'],
-                                     'ref_tstars.csv'))
-        shutil.copyfile(get_demo_file('oggm_ref_tstars_rgi5_cru4_calib_params.json'),
-                        os.path.join(cfg.PATHS['working_dir'],
-                                     'ref_tstars_params.json'))
+        apply_test_ref_tstars()
         workflow.climate_tasks([gdir])
+
+        # This raises
+        cfg.PARAMS['prcp_scaling_factor'] = 1.8
+        with pytest.raises(MassBalanceCalibrationError):
+            workflow.climate_tasks([gdir])
 
 
 class TestFilterNegFlux(unittest.TestCase):
@@ -2746,6 +2751,7 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.initialize()
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
 
     def tearDown(self):
@@ -2773,6 +2779,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
+        apply_test_ref_tstars()
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2826,6 +2833,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
+        apply_test_ref_tstars()
         inversion.find_inversion_calving(gdir)
 
         # Test make a run

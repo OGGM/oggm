@@ -21,7 +21,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import get_test_dir, use_multiprocessing
+from oggm.tests.funcs import get_test_dir, use_multiprocessing, apply_test_ref_tstars
 from oggm.shop import cru
 from oggm.core import flowline
 from oggm import tasks
