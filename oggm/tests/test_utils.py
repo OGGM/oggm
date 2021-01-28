@@ -453,11 +453,15 @@ class TestStartFromTar(unittest.TestCase):
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        utils.base_dir_to_tar()
 
-        gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True)
+        tar_dir = os.path.join(self.testdir, 'new_dir')
+        shutil.copytree(os.path.join(cfg.PATHS['working_dir'],
+                                     'per_glacier'), tar_dir)
+
+        gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=tar_dir)
         for gdir in gdirs:
             assert gdir.has_file('gridded_data')
-            assert os.path.exists(gdir.dir + '.tar.gz')
 
     @pytest.mark.slow
     def test_to_and_from_tar_new_dir(self):
