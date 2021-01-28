@@ -220,6 +220,20 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
+def gdir_from_tar(entity, from_tar):
+
+    try:
+        rgi_id = entity.RGIId
+    except AttributeError:
+        rgi_id = entity
+
+    from_tar = os.path.join(from_tar, '{}'.format(rgi_id[:8]),
+                            '{}.tar' .format(rgi_id[:11]))
+    assert os.path.exists(from_tar), 'tarfile does not exist'
+    from_tar = os.path.join(from_tar.replace('.tar', ''), rgi_id + '.tar.gz')
+    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+
 def _check_duplicates(rgidf=None):
     """Complain if the input has duplicates."""
 
@@ -383,7 +397,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False, base_dir=None,
+                             from_tar=False, delete_tar=False,
                              use_demo_glaciers=None):
     """Initializes the list of Glacier Directories for this run.
 
@@ -418,13 +432,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         whether to check the demo glaciers for download (faster than the
         standard prepro downloads). The default is to decide whether or
         not to check based on simple criteria such as glacier list size.
-    from_tar : bool, default=False
+    from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
-    base_dir : str
-        if from_tar=True, path to the directory where to open the gdir.
-        Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
-    delete_tar : bool, default=False
         delete the original tar file after extraction.
 
     Returns
@@ -516,11 +526,15 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                 except AttributeError:
                     # List of str
                     pass
-            gdirs = execute_entity_task(utils.GlacierDirectory, entities,
-                                        reset=reset,
-                                        base_dir=base_dir,
-                                        from_tar=from_tar,
-                                        delete_tar=delete_tar)
+
+            if os.path.isdir(from_tar):
+                gdirs = execute_entity_task(gdir_from_tar, entities,
+                                            from_tar=from_tar)
+            else:
+                gdirs = execute_entity_task(utils.GlacierDirectory, entities,
+                                            reset=reset,
+                                            from_tar=from_tar,
+                                            delete_tar=delete_tar)
 
     return gdirs
 
