@@ -383,7 +383,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False,
+                             from_tar=False, delete_tar=False, base_dir=None,
                              use_demo_glaciers=None):
     """Initializes the list of Glacier Directories for this run.
 
@@ -421,6 +421,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
+    base_dir : str
+        if from_tar=True, path to the directory where to open the gdir.
+        Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
     delete_tar : bool, default=False
         delete the original tar file after extraction.
 
@@ -501,7 +504,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         else:
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and
-                    len(cfg.PARAMS['intersects_gdf']) == 0):
+                    len(cfg.PARAMS['intersects_gdf']) == 0 and
+                        from_tar is None):
                 try:
                     rgi_ids = np.unique(np.sort([entity.RGIId for entity in
                                                  entities]))
@@ -512,9 +516,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                 except AttributeError:
                     # List of str
                     pass
-
             gdirs = execute_entity_task(utils.GlacierDirectory, entities,
                                         reset=reset,
+                                        base_dir=base_dir,
                                         from_tar=from_tar,
                                         delete_tar=delete_tar)
 
