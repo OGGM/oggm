@@ -119,9 +119,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     centerlines_only : bool
         compute all flowlines based on the OGGM centerline(s) method instead
         of the OGGM default, which is a mix of elev_bands and centerlines.
-    match_geodetic_mb : bool
+    match_geodetic_mb : str
         match the regional mass-balance estimates at the regional level
-        (currently Hugonnet et al., 2020).
+        ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -449,7 +449,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
                                       'before_match_{}.csv'.format(rgi_reg))
         utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
-        workflow.match_regional_geodetic_mb(gdirs, rgi_reg)
+        workflow.match_regional_geodetic_mb(gdirs, rgi_reg,
+                                            dataset=match_geodetic_mb)
 
     # We get ready for modelling
     if border >= 20:
@@ -613,9 +614,10 @@ def parse_args(args):
                              'centerline(s) method instead of the OGGM '
                              'default, which is a mix of elev_bands and '
                              'centerlines.')
-    parser.add_argument('--match-geodetic-mb', nargs='?', const=True, default=False,
+    parser.add_argument('--match-geodetic-mb', type=str, default='',
                         help='match regional SMB values to geodetic estimates '
-                             '(currently Hugonnet et al., 2020) '
+                             '(currently hugonnet: Hugonnet et al., 2020, or '
+                             'zemp: Zemp et al, 2019) '
                              'by shifting the SMB residual.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
