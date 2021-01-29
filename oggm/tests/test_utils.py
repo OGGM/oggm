@@ -928,13 +928,13 @@ class TestPreproCLI(unittest.TestCase):
                           index_col=0)
         dfm = dfm.dropna(axis=0, how='all').dropna(axis=1, how='all')
 
-        odf = pd.DataFrame(dfm.loc[2006:2016].mean(), columns=['SMB'])
+        odf = pd.DataFrame(dfm.loc[2000:2019].mean(), columns=['SMB'])
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
         dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
         dfh = pd.read_csv(utils.get_demo_file(dfh))
-        dfh = dfh.loc[dfh.period == '2006-01-01_2019-01-01'].set_index('reg')
+        dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda']
         np.testing.assert_allclose(smb_oggm, smb_ref)
 
@@ -1019,9 +1019,8 @@ class TestPreproCLI(unittest.TestCase):
             vn = 'volume'
             np.testing.assert_allclose(ods[vn].sel(time=1990),
                                        ods[vn].sel(time=2015),
-                                       rtol=0.2)
+                                       rtol=0.3)
 
-            # We pick symmetry around rgi date so show that somehow it works
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
