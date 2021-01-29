@@ -30,10 +30,10 @@ from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
 from oggm.shop.histalp import process_histalp_data
 from oggm.shop.ecmwf import process_ecmwf_data
-from oggm.core.gcm_climate import process_gcm_data
-from oggm.core.gcm_climate import process_cesm_data
-from oggm.core.gcm_climate import process_cmip5_data
-from oggm.core.gcm_climate import process_cmip_data
+from oggm.shop.gcm_climate import process_gcm_data
+from oggm.shop.gcm_climate import process_cesm_data
+from oggm.shop.gcm_climate import process_cmip5_data
+from oggm.shop.gcm_climate import process_cmip_data
 from oggm.core.climate import local_t_star
 from oggm.core.climate import mu_star_calibration
 from oggm.core.climate import apparent_mb_from_linear_mb

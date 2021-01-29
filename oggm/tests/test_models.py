@@ -18,7 +18,8 @@ from oggm.core import massbalance
 from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
-from oggm.core import gcm_climate, climate, inversion, centerlines
+from oggm.core import climate, inversion, centerlines
+from oggm.shop import gcm_climate
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
