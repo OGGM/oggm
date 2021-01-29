@@ -18,8 +18,9 @@ gpd = pytest.importorskip('geopandas')
 
 # Local imports
 import oggm
-from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
+from oggm.core import (gis, inversion, climate, centerlines,
                        flowline, massbalance)
+from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
