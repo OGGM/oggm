@@ -271,7 +271,7 @@ def process_cmip5_data(*args, **kwargs):
 
 @entity_task(log, writes=['gcm_data'])
 def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
-                       fpath_precip=None, **kwargs):
+                      fpath_precip=None, **kwargs):
     """Read, process and store the CMIP5 and CMIP6 climate data for this glacier.
 
     It stores the data in a format that can be used by the OGGM mass balance
