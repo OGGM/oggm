@@ -843,7 +843,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--output', '/local/out',
                                            '--elev-bands',
                                            '--centerlines-only',
-                                           '--match-geodetic-mb',
+                                           '--match-geodetic-mb', 'zemp',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -855,7 +855,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
-        assert kwargs['match_geodetic_mb']
+        assert kwargs['match_geodetic_mb'] == 'zemp'
         assert kwargs['centerlines_only']
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
@@ -901,7 +901,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_geodetic_mb=True)
+                          test_topofile=topof, match_geodetic_mb='hugonnet')
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))

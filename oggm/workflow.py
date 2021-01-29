@@ -730,7 +730,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     return df
 
 
-def match_regional_geodetic_mb(gdirs, rgi_reg):
+def match_regional_geodetic_mb(gdirs, rgi_reg, dataset='hugonnet',
+                               period='2000-01-01_2020-01-01'):
     """Regional shift of the mass-balance residual to match observations.
 
     This is useful for operational runs, but also quite hacky.
@@ -741,6 +742,15 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
     gdirs : the list of gdirs (ideally the entire region_
     rgi_reg : str
        the rgi region to match
+    dataset : str
+       'hugonnet', or 'zemp'
+    period : str
+       for 'hugonnet' only. One of
+       '2000-01-01_2010-01-01',
+       '2010-01-01_2020-01-01',
+       '2006-01-01_2019-01-01',
+       '2000-01-01_2020-01-01'.
+       For 'zemp', the period is always 2006-2016.
     """
 
     # Get the mass-balance OGGM would give out of the box
@@ -749,7 +759,15 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
 
     # And also the Area and calving fluxes
     dfs = utils.compile_glacier_statistics(gdirs, path=False)
-    odf = pd.DataFrame(df.loc[2006:2018].mean(), columns=['SMB'])
+
+    if dataset == 'hugonnet':
+        y0 = int(period.split('_')[0].split('-')[0])
+        y1 = int(period.split('_')[1].split('-')[0]) - 1
+    elif dataset == 'zemp':
+        y0, y1 = 2006, 2015
+
+    odf = pd.DataFrame(df.loc[y0:y1].mean(), columns=['SMB'])
+
     odf['AREA'] = dfs.rgi_area_km2 * 1e6
     # Just take the calving rate and change its units
     # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
@@ -776,10 +794,15 @@ def match_regional_geodetic_mb(gdirs, rgi_reg):
     smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
 
     # Total MB Reference
-    df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-    df = pd.read_csv(utils.get_demo_file(df))
-    df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
-    smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+    if dataset == 'hugonnet':
+        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        df = pd.read_csv(utils.get_demo_file(df))
+        df = df.loc[df.period == period].set_index('reg')
+        smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+    elif dataset == 'zemp':
+        df = 'zemp_ref_2006_2016.csv'
+        df = pd.read_csv(utils.get_demo_file(df), index_col=0)
+        smb_ref = df.loc[int(rgi_reg), 'SMB'] * 1000
 
     # Diff between the two
     residual = smb_ref - smb_oggm

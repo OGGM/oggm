@@ -1799,6 +1799,7 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.9
+        cfg.PARAMS['use_multiprocessing'] = False
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
@@ -1975,6 +1976,25 @@ class TestClimate(unittest.TestCase):
         # We copy the files
         apply_test_ref_tstars()
         workflow.climate_tasks([gdir])
+
+        # Test match geod
+        workflow.match_regional_geodetic_mb([gdir], '11',
+                                            period='2000-01-01_2010-01-01')
+        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        df = pd.read_csv(utils.get_demo_file(df))
+        df = df.loc[df.period == '2000-01-01_2010-01-01'].set_index('reg')
+        smb_ref = df.loc[int('11'), 'dmdtda']
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2000:2009].mean()
+        np.testing.assert_allclose(mb, smb_ref)
+
+        workflow.match_regional_geodetic_mb([gdir], '11', dataset='zemp')
+        df = 'zemp_ref_2006_2016.csv'
+        df = pd.read_csv(utils.get_demo_file(df), index_col=0)
+        smb_ref = df.loc[int('11'), 'SMB'] * 1000
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2006:2015].mean()
+        np.testing.assert_allclose(mb, smb_ref)
 
         # This raises
         cfg.PARAMS['prcp_scaling_factor'] = 1.8
@@ -2997,14 +3017,14 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Check OGGM part
         df = utils.compile_fixed_geometry_mass_balance([gdir])
-        mb = df.loc[2006:2018].mean()
+        mb = df.loc[2000:2019].mean()
         rho = cfg.PARAMS['ice_density']
         cal = diag['calving_flux'] * 1e9 * rho / gdir.rgi_area_m2
 
         # Ref part
         df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
         df = pd.read_csv(utils.get_demo_file(df))
-        df = df.loc[df.period == '2006-01-01_2019-01-01'].set_index('reg')
+        df = df.loc[df.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = df.loc[int('01'), 'dmdtda']
         np.testing.assert_allclose(mb - cal, smb_ref)
 
@@ -3063,18 +3083,12 @@ class TestColumbiaCalving(unittest.TestCase):
             # just some common sense
             assert ods['calving_rate'].sel(time=1950).data < 1000
             assert ods['calving_rate'].sel(time=1950).data > 10
-            import matplotlib.pyplot as plt
-            plt.figure()
-            ods['calving'].plot(hue='rgi_id')
-            plt.figure()
-            ods['calving_rate'].plot(hue='rgi_id')
-            plt.show()
 
             # We pick symmetry around rgi date so show that somehow it works
             for vn in ['volume', 'calving', 'volume_bsl', 'volume_bwl']:
                 rtol = 0.3
                 if 'bsl' in vn or 'bwl' in vn:
-                    rtol = 0.55
+                    rtol = 0.6
                 np.testing.assert_allclose(ods[vn].sel(time=2010) -
                                            ods[vn].sel(time=2002),
                                            ods[vn].sel(time=2018) -
