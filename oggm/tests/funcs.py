@@ -11,7 +11,7 @@ from scipy import optimize as optimization
 import oggm
 import oggm.cfg as cfg
 from oggm.utils import (get_demo_file, mkdir, get_git_ident, get_sys_info,
-                        get_env_info)
+                        get_env_info, apply_test_ref_tstars)
 from oggm.workflow import execute_entity_task
 from oggm.core import flowline
 from oggm import tasks
@@ -440,6 +440,7 @@ def init_columbia(reset=False):
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
+    apply_test_ref_tstars()
     return gdir
 
 
@@ -470,6 +471,7 @@ def init_columbia_eb(dir_name, reset=False):
     centerlines.fixed_dx_elevation_band_flowline(gdir)
     centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
+    apply_test_ref_tstars()
     return gdir
 
 

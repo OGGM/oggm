@@ -13,7 +13,7 @@ gpd = pytest.importorskip('geopandas')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import init_hef, get_test_dir
+from oggm.tests.funcs import init_hef, get_test_dir, apply_test_ref_tstars
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -176,9 +176,9 @@ def test_multiple_inversion():
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
-    cfg.PARAMS['run_mb_calibration'] = True
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PATHS['working_dir'] = testdir
+    apply_test_ref_tstars()
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
@@ -256,8 +256,8 @@ def test_multiple_models():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
-    cfg.PARAMS['run_mb_calibration'] = True
     cfg.PARAMS['border'] = 40
+    apply_test_ref_tstars()
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))

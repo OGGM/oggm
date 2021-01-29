@@ -19,10 +19,10 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import gcm_climate, climate, inversion, centerlines
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, apply_test_ref_tstars
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed, bu_tidewater_bed,
@@ -2968,9 +2968,6 @@ class TestHEF:
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):
-    # setup logging
-    import logging
-    log = logging.getLogger(__name__)
 
     # Init
     cfg.initialize()
@@ -2985,6 +2982,7 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_multiprocessing'] = False
+    cfg.PARAMS['run_mb_calibration'] = True
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

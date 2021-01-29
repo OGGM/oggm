@@ -125,6 +125,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     # Input
     if test_topofile:
         cfg.PATHS['dem_file'] = test_topofile
+    utils.apply_test_ref_tstars()
 
     # Initialize working directories
     start = time.time()

@@ -15,7 +15,7 @@ gpd = pytest.importorskip('geopandas')
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir
+from oggm.tests.funcs import get_test_dir, apply_test_ref_tstars
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
@@ -51,6 +51,7 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
         cfg.PARAMS['border'] = 10
+        apply_test_ref_tstars()
 
         self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
         self.pf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.pre.dat.nc')
@@ -458,6 +459,8 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
         cfg.PARAMS['border'] = 40
+        cfg.PATHS['working_dir'] = self.testdir
+        apply_test_ref_tstars()
 
     def tearDown(self):
         self.rm_dir()

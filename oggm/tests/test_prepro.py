@@ -23,7 +23,8 @@ from oggm.core import (gis, inversion, gcm_climate, climate, centerlines,
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int
-from oggm.tests.funcs import get_test_dir, init_columbia, init_columbia_eb
+from oggm.tests.funcs import (get_test_dir, init_columbia, init_columbia_eb,
+                              apply_test_ref_tstars)
 from oggm import workflow
 from oggm.exceptions import InvalidWorkflowError, MassBalanceCalibrationError
 
@@ -1169,7 +1170,6 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
-        cfg.PARAMS['run_mb_calibration'] = True
         cfg.PARAMS['baseline_climate'] = ''
 
     def tearDown(self):
@@ -1672,6 +1672,7 @@ class TestClimate(unittest.TestCase):
         self.assertTrue(t_star >= 1902)
 
         # test distribute
+        cfg.PARAMS['run_mb_calibration'] = True
         climate.compute_ref_t_stars([gdir])
         climate.local_t_star(gdir)
         cfg.PARAMS['tstar_search_window'] = [0, 0]
@@ -1954,7 +1955,6 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_automated_workflow(self):
 
-        cfg.PARAMS['run_mb_calibration'] = False
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -1968,16 +1968,18 @@ class TestClimate(unittest.TestCase):
         assert gdir.rgi_version == '50'
         gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
+
+        with pytest.raises(InvalidWorkflowError):
+            workflow.climate_tasks([gdir])
+
+        # We copy the files
+        apply_test_ref_tstars()
         workflow.climate_tasks([gdir])
 
-        hef_file = get_demo_file('Hintereisferner_RGI6.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir)
-        assert gdir.rgi_version == '60'
-        workflow.gis_prepro_tasks([gdir])
-        workflow.climate_tasks([gdir])
-        cfg.PARAMS['run_mb_calibration'] = True
+        # This raises
+        cfg.PARAMS['prcp_scaling_factor'] = 1.8
+        with pytest.raises(MassBalanceCalibrationError):
+            workflow.climate_tasks([gdir])
 
 
 class TestFilterNegFlux(unittest.TestCase):
@@ -2749,6 +2751,7 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.initialize()
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
 
     def tearDown(self):
@@ -2776,6 +2779,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
+        apply_test_ref_tstars()
         climate.local_t_star(gdir)
         climate.mu_star_calibration(gdir)
         inversion.prepare_for_inversion(gdir)
@@ -2829,6 +2833,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
+        apply_test_ref_tstars()
         inversion.find_inversion_calving(gdir)
 
         # Test make a run
