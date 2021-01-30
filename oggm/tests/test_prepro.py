@@ -926,8 +926,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             ds2 = ds.load()
 
-        # Total volume is different at only 10%
-        np.testing.assert_allclose(v1, v2, rtol=0.1)
+        # Total volume is different at only 15%
+        np.testing.assert_allclose(v1, v2, rtol=0.15)
 
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
@@ -2402,7 +2402,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt1 = inversion.mass_conservation_inversion(gdir)
 
-        cfg.PARAMS['trapezoid_lambdas'] = 0.2
+        cfg.PARAMS['trapezoid_lambdas'] = 1
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt2 = inversion.mass_conservation_inversion(gdir)
 
@@ -2410,8 +2410,8 @@ class TestInversion(unittest.TestCase):
         vr = inversion.mass_conservation_inversion(gdir)
 
         np.testing.assert_allclose(vp/vr, 0.75, atol=0.02)
-        np.testing.assert_allclose(vt1/vr, 0.93, atol=0.02)
-        np.testing.assert_allclose(vt2/vr, 0.98, atol=0.01)
+        np.testing.assert_allclose(vt1/vr, 0.86, atol=0.02)
+        np.testing.assert_allclose(vt2/vr, 0.93, atol=0.02)
 
     @pytest.mark.slow
     def test_invert_hef_water_level(self):

@@ -343,6 +343,7 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['baseline_climate'] = ''
     cfg.PATHS['working_dir'] = testdir
+    cfg.PARAMS['trapezoid_lambdas'] = 2
     cfg.PARAMS['border'] = border
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
