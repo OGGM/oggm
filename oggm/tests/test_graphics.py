@@ -177,7 +177,7 @@ def test_multiple_inversion():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
-    cfg.PARAMS['trapezoid_lambdas'] = 2
+    cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PATHS['working_dir'] = testdir
     apply_test_ref_tstars()
 
@@ -257,7 +257,7 @@ def test_multiple_models():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
-    cfg.PARAMS['trapezoid_lambdas'] = 2
+    cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['border'] = 40
     apply_test_ref_tstars()
 
@@ -330,7 +330,7 @@ def test_chhota_shigri():
     cfg.PARAMS['border'] = 80
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['working_dir'] = testdir
-    cfg.PARAMS['trapezoid_lambdas'] = 2
+    cfg.PARAMS['trapezoid_lambdas'] = 1
 
     hef_file = get_demo_file('divides_RGI50-14.15990.shp')
     df = gpd.read_file(hef_file)
@@ -372,7 +372,7 @@ def test_ice_cap():
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-05.08389.tif')
     cfg.PARAMS['border'] = 60
     cfg.PATHS['working_dir'] = testdir
-    cfg.PARAMS['trapezoid_lambdas'] = 2
+    cfg.PARAMS['trapezoid_lambdas'] = 1
 
     df = gpd.read_file(get_demo_file('divides_RGI50-05.08389.shp'))
     df['Area'] = df.Area * 1e-6  # cause it was in m2
@@ -412,7 +412,7 @@ def test_coxe():
     cfg.PARAMS['use_multiple_flowlines'] = False
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
-    cfg.PARAMS['trapezoid_lambdas'] = 2
+    cfg.PARAMS['trapezoid_lambdas'] = 1
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
     entity = gpd.read_file(hef_file).iloc[0]
