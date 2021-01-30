@@ -556,15 +556,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         utils.mkdir(self.dldir, reset=True)
 
-    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
                                                   from_prepro_level=1,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=20,
-                                                  use_demo_glaciers=False)
+                                                  prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -572,7 +572,8 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
@@ -580,8 +581,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_directories(entitites,
                                                   prepro_rgi_version='61',
-                                                  from_prepro_level=1,
-                                                  use_demo_glaciers=False)
+                                                  from_prepro_level=1)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -593,8 +593,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_directories('RGI60-11.00897',
                                                   prepro_rgi_version='61',
-                                                  from_prepro_level=1,
-                                                  use_demo_glaciers=False)
+                                                  from_prepro_level=1)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -602,15 +601,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
                                                   from_prepro_level=2,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=20,
-                                                  use_demo_glaciers=False)
+                                                  prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -619,15 +618,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
                                                   from_prepro_level=3,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=20,
-                                                  use_demo_glaciers=False)
+                                                  prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -657,38 +656,30 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_4(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=20,
-                                                  use_demo_glaciers=False)
+                                                  prepro_border=20)
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
-    def test_start_from_demo(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(['kwf', 'hef'],
-                                                  from_prepro_level=4,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=10)
-        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                     nyears=10)
-
+    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
+    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_corrupted_file(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(['hef'],
+        gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=10)
+                                                  prepro_border=20)
 
-        cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 10, 4,
-                                      base_url=utils.DEMO_GDIR_URL)
+        cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 20, 4,
+                                      base_url=TEST_GDIR_URL)
         assert 'cluster.klima.uni-bremen.de/~oggm/' in cfile
 
         # Replace with a dummy file
@@ -698,17 +689,17 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
-            gdirs = workflow.init_glacier_directories(['hef'],
+            gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
                                                       from_prepro_level=4,
                                                       prepro_rgi_version='61',
-                                                      prepro_border=10)
+                                                      prepro_border=20)
 
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
-        gdirs = workflow.init_glacier_directories(['hef'],
+        gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=10)
+                                                  prepro_border=20)
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -1899,30 +1890,6 @@ class TestFakeDownloads(unittest.TestCase):
         self.assertTrue('TDM1_DEM__30_N60W146_DEM.tif' in files)
         self.assertFalse('TDM1_DEM__30_N60W145_DEM.tif' in files)
 
-    def test_cmip5(self):
-
-        fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
-
-        def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng'
-                        '/pr/pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc')
-            self.assertEqual(url, expected)
-            return True
-
-        with FakeDownloadManager('file_downloader', down_check):
-            assert utils.get_cmip5_file(fn)
-
-        fn = 'tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc'
-
-        def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng'
-                        '/tas/tas_mon_CCSM4_historicalNat_r1i1p1_g025.nc')
-            self.assertEqual(url, expected)
-            return True
-
-        with FakeDownloadManager('file_downloader', down_check):
-            assert utils.get_cmip5_file(fn)
-
 
 class TestDataFiles(unittest.TestCase):
 
@@ -2544,12 +2511,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertRaises(URLError, _download_aw3d30_file, zone)
 
     @pytest.mark.download
-    def test_download_cmip5(self):
-        fn = 'pr_mon_NorESM1-M_historicalNat_r1i1p1_g025.nc'
-        fp = utils.get_cmip5_file(fn)
-        self.assertTrue(os.path.isfile(fp))
-
-    @pytest.mark.download
     def test_from_prepro(self):
 
         # Read in the RGI file
@@ -2562,8 +2523,7 @@ class TestDataFiles(unittest.TestCase):
         gdirs = workflow.init_glacier_directories(rgidf.iloc[:2],
                                                   from_prepro_level=1,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=10,
-                                                  use_demo_glaciers=False)
+                                                  prepro_border=10)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')

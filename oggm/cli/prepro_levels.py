@@ -446,9 +446,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
 
     # Inversion: we match the consensus
+    filter = border >= 20
     workflow.calibrate_inversion_from_consensus(gdirs,
                                                 apply_fs_on_mismatch=True,
-                                                error_on_mismatch=False)
+                                                error_on_mismatch=False,
+                                                filter_inversion_output=filter)
 
     # Do we want to match geodetic estimates?
     # This affects only the bias so we can actually do this *after*
