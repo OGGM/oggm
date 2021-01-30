@@ -77,7 +77,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None, elev_bands=False,
                       match_geodetic_mb=False, centerlines_only=False,
                       add_consensus=False, start_level=None,
-                      start_base_url=None, max_level=5,
+                      start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False):
     """Does the actual job.
 
@@ -95,6 +95,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         which DEM source to use: default, SOURCE_NAME or ALL
     working_dir : str
         path to the OGGM working directory
+    ref_tstars_base_url : str
+        url where to find the pre-calibrated reference tstar list.
+        Required as of v1.4.
     params_file : str
         path to the OGGM parameter file (to override defaults)
     is_test : bool
@@ -253,6 +256,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rgidf = rgidf.sample(4)
         # Also use ref tstars
         utils.apply_test_ref_tstars()
+    else:
+        workflow.download_ref_tstars(base_url=ref_tstars_base_url)
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
@@ -586,8 +591,8 @@ def parse_args(args):
                              'is to start from 0). If set, you will need to '
                              'indicate --start-base-url as well.')
     parser.add_argument('--start-base-url', type=str,
-                        help=' the pre-processed base-url to fetch the data '
-                             'from.')
+                        help='the pre-processed base-url to fetch the data '
+                             'from when starting from level > 0.')
     parser.add_argument('--max-level', type=int, default=5,
                         help='the maximum level you want to run the '
                              'pre-processing for (1, 2, 3, 4 or 5).')
@@ -598,6 +603,9 @@ def parse_args(args):
     parser.add_argument('--params-file', type=str,
                         help='path to the OGGM parameter file to use in place '
                              'of the default one.')
+    parser.add_argument('--ref-tstars-base-url', type=str,
+                        help='the url where to find the pre-calibrated '
+                             'reference tstar list. Required as of v1.4.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -695,7 +703,8 @@ def parse_args(args):
                 centerlines_only=args.centerlines_only,
                 match_geodetic_mb=args.match_geodetic_mb,
                 add_consensus=args.add_consensus,
-                disable_dl_verify=args.disable_dl_verify
+                disable_dl_verify=args.disable_dl_verify,
+                ref_tstars_base_url=args.ref_tstars_base_url,
                 )
 
 

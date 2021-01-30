@@ -2,7 +2,7 @@
 # Built ins
 import logging
 import os
-from shutil import rmtree
+import shutil
 from collections.abc import Sequence
 # External libs
 import multiprocessing
@@ -326,7 +326,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     if reset:
         fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
         if os.path.exists(fpath):
-            rmtree(fpath)
+            shutil.rmtree(fpath)
 
     gdirs = []
     new_gdirs = []
@@ -468,7 +468,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     if reset:
         fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
         if os.path.exists(fpath):
-            rmtree(fpath)
+            shutil.rmtree(fpath)
 
     if rgidf is None:
         # Infer the glacier directories from folders available in working dir
@@ -564,13 +564,32 @@ def gis_prepro_tasks(gdirs):
         execute_entity_task(task, gdirs)
 
 
-def climate_tasks(gdirs):
+def download_ref_tstars(base_url=None):
+    """Downloads and copies the reference list of t* to the working directory.
+
+    Example url:
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/RGIV62/CRU/centerlines/qc3/pcp2.5
+
+    Parameters
+    ----------
+    base_url : str
+        url of the params file.
+    """
+    shutil.copyfile(utils.file_downloader(base_url + '/ref_tstars.csv'),
+                    os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv'))
+    shutil.copyfile(utils.file_downloader(base_url + '/ref_tstars_params.json'),
+                    os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json'))
+
+
+def climate_tasks(gdirs, base_url=None):
     """Shortcut function: run all climate related tasks.
 
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    base_url : str, optional
+        url of the params file.
     """
 
     # Process climate data
@@ -579,6 +598,8 @@ def climate_tasks(gdirs):
     # Then, calibration?
     if cfg.PARAMS['run_mb_calibration']:
         tasks.compute_ref_t_stars(gdirs)
+    elif base_url:
+        download_ref_tstars(base_url=base_url)
 
     # Mustar and the apparent mass-balance
     execute_entity_task(tasks.local_t_star, gdirs)
