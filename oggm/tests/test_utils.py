@@ -380,6 +380,18 @@ class TestWorkflowTools(unittest.TestCase):
         assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
         assert utils.demo_glacier_id('Mer Glace') is None
 
+    def test_download_ref_tstars(self):
+
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = self.testdir
+        url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/RGIV62'
+               '/CRU/centerlines/qc3/pcp2.5/')
+        workflow.download_ref_tstars(url)
+        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
+                                           'ref_tstars.csv'))
+        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
+                                           'ref_tstars_params.json'))
+
 
 class TestStartFromTar(unittest.TestCase):
 
@@ -744,6 +756,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--start-level', '2',
                                            '--start-base-url', 'http://foo',
+                                           '--ref-tstars-base-url', 'http://bar',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -754,6 +767,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert kwargs['start_level'] == 2
         assert kwargs['start_base_url'] == 'http://foo'
+        assert kwargs['ref_tstars_base_url'] == 'http://bar'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])

@@ -141,6 +141,7 @@ def secure_url_retrieve(url, *args, **kwargs):
     download elsewhere than expected."""
 
     assert ('github' in url or
+            'cluster.klima.uni-bremen.de/~oggm/ref_mb_params' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
