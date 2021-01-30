@@ -1120,8 +1120,9 @@ class TestFluxGate(unittest.TestCase):
         mb = ScalarMassBalance()
         model = FluxBasedModel(dummy_constant_bed(), mb_model=mb,
                                flux_gate_thickness=150, flux_gate_build_up=50,
-                               water_level=2000,
-                               is_tidewater=True)
+                               water_level=2000, do_kcalving=True,
+                               is_tidewater=True,
+                               )
         model.run_until(2000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)

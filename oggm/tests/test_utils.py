@@ -579,6 +579,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         entitites = self.rgidf.iloc[:2].RGIId
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_directories(entitites,
+                                                  prepro_rgi_version='61',
                                                   from_prepro_level=1,
                                                   use_demo_glaciers=False)
         n_intersects = 0
@@ -591,6 +592,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # One string
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_directories('RGI60-11.00897',
+                                                  prepro_rgi_version='61',
                                                   from_prepro_level=1,
                                                   use_demo_glaciers=False)
         n_intersects = 0
@@ -912,7 +914,7 @@ class TestPreproCLI(unittest.TestCase):
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof, match_geodetic_mb='hugonnet')
@@ -1051,7 +1053,7 @@ class TestPreproCLI(unittest.TestCase):
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof, elev_bands=True)
@@ -1135,7 +1137,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
-        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           disable_mp=True,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -1177,7 +1179,7 @@ class TestPreproCLI(unittest.TestCase):
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof, dem_source='ALL')

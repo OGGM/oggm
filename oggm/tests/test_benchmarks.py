@@ -460,6 +460,8 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
         cfg.PARAMS['border'] = 40
         cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['use_kcalving_for_inversion'] = True
+        cfg.PARAMS['use_kcalving_for_run'] = True
         apply_test_ref_tstars()
 
     def tearDown(self):

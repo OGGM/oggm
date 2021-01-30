@@ -2788,6 +2788,9 @@ class TestCoxeCalving(unittest.TestCase):
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
 
+        cfg.PARAMS['use_kcalving_for_inversion'] = True
+        cfg.PARAMS['use_kcalving_for_run'] = True
+
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
@@ -2839,6 +2842,8 @@ class TestCoxeCalving(unittest.TestCase):
         coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
         entity = gpd.read_file(coxe_file).iloc[0]
 
+        cfg.PARAMS['use_kcalving_for_inversion'] = True
+        cfg.PARAMS['use_kcalving_for_run'] = True
         cfg.PARAMS['inversion_calving_k'] = 1
         cfg.PARAMS['run_calving_k'] = 1
 

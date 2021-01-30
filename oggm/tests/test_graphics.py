@@ -406,6 +406,8 @@ def test_coxe():
     cfg.PARAMS['border'] = 40
     cfg.PARAMS['clip_tidewater_border'] = False
     cfg.PARAMS['use_multiple_flowlines'] = False
+    cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['use_kcalving_for_run'] = True
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
     entity = gpd.read_file(hef_file).iloc[0]

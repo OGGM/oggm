@@ -424,6 +424,8 @@ def init_columbia(reset=False):
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
     cfg.PARAMS['border'] = 10
+    cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['use_kcalving_for_run'] = True
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -459,6 +461,8 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
     cfg.PARAMS['border'] = 10
+    cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['use_kcalving_for_run'] = True
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)
