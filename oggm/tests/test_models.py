@@ -2501,7 +2501,7 @@ class TestHEF:
     def test_equilibrium(self, hef_gdir, inversion_params):
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        assert cfg.PARAMS['trapezoid_lambdas'] == 1
+        cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
 
         mb_mod = massbalance.ConstantMassBalance(hef_gdir)
@@ -2532,7 +2532,7 @@ class TestHEF:
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        assert cfg.PARAMS['trapezoid_lambdas'] == 1
+        cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
 
         cl = massbalance.ConstantMassBalance
@@ -2566,7 +2566,7 @@ class TestHEF:
     def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        assert cfg.PARAMS['trapezoid_lambdas'] == 1
+        cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
 
         mb_mod = massbalance.ScalarMassBalance()
@@ -2589,7 +2589,7 @@ class TestHEF:
     def test_commitment(self, hef_gdir, inversion_params):
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        assert cfg.PARAMS['trapezoid_lambdas'] == 1
+        cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
 
         mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2003 - 15)
