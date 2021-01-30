@@ -2144,6 +2144,10 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     minb = utils.nicenumber(np.min(topo), bsize, lower=True)
     bins = np.arange(minb, maxb + 0.01, bsize)
 
+    # Some useful constants
+    min_alpha = np.deg2rad(0.4)
+    max_alpha = np.deg2rad(60)
+
     if len(bins) < 3:
         # Very low elevation range
         bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
@@ -2186,9 +2190,12 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         sel_s_bin = s_bin[(s_bin >= qmin) & (s_bin <= qmax)]
         if len(sel_s_bin) == 0:
             # This can happen when n pix is small. In this case we just avg
-            df.loc[bi, 'slope'] = np.mean(s_bin)
+            avg_s = np.mean(s_bin)
         else:
-            df.loc[bi, 'slope'] = np.mean(sel_s_bin)
+            avg_s = np.mean(sel_s_bin)
+
+        # Final clip as in Werder et al 2019
+        df.loc[bi, 'slope'] = utils.clip_scalar(avg_s, min_alpha, max_alpha)
 
         # Binned variables
         for var, data in zip(bin_variables, out_vars):
