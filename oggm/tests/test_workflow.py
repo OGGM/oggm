@@ -82,6 +82,8 @@ def up_to_climate(reset=False):
     cfg.PARAMS['tstar_search_window'] = [1902, 0]
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
+    cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['use_kcalving_for_run'] = True
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
