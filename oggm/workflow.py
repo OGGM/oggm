@@ -736,7 +736,7 @@ def match_regional_geodetic_mb(gdirs, rgi_reg, dataset='hugonnet',
 
     Parameters
     ----------
-    gdirs : the list of gdirs (ideally the entire region_
+    gdirs : the list of gdirs (ideally the entire region)
     rgi_reg : str
        the rgi region to match
     dataset : str

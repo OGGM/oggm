@@ -25,22 +25,15 @@ Tools to set-up and run OGGM.
     cfg.set_logging_config
     cfg.set_intersects_db
     cfg.reset_working_dir
+    cfg.add_to_basenames
     workflow.init_glacier_directories
-    workflow.init_glacier_regions
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.climate_tasks
     workflow.inversion_tasks
     workflow.merge_glacier_tasks
-    utils.compile_glacier_statistics
-    utils.compile_run_output
-    utils.compile_climate_input
-    utils.compile_task_log
-    utils.compile_task_time
-    utils.copy_to_basedir
-    utils.gdir_to_tar
-    utils.base_dir_to_tar
-
+    workflow.calibrate_inversion_from_consensus
+    workflow.match_regional_geodetic_mb
 
 Troubleshooting
 ===============
@@ -68,17 +61,39 @@ Input/Output
     utils.get_rgi_intersects_entities
     utils.get_ref_mb_glaciers
     utils.write_centerlines_to_shape
+    utils.compile_glacier_statistics
+    utils.compile_run_output
+    utils.compile_climate_input
+    utils.compile_task_log
+    utils.compile_task_time
+    utils.compile_fixed_geometry_mass_balance
+    utils.compile_climate_statistics
+    utils.copy_to_basedir
+    utils.gdir_to_tar
+    utils.base_dir_to_tar
 
 OGGM Shop
 =========
-
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
     shop.cru.get_cru_file
+    shop.cru.process_cru_data
+    shop.cru.process_dummy_cru_file
+    shop.ecmwf.get_ecmwf_file
+    shop.ecmwf.process_ecmwf_data
     shop.histalp.get_histalp_file
+    shop.histalp.process_histalp_data
+    shop.gcm_climate.process_gcm_data
+    shop.gcm_climate.process_cesm_data
+    shop.gcm_climate.process_cmip_data
+    shop.bedtopo.add_consensus_thickness
+    shop.its_live.velocity_to_gdir
+    shop.rgitopo.init_glacier_directories_from_rgitopo
+    shop.rgitopo.select_dem_from_dir
+    shop.rgitopo.dem_quality_check
 
 .. _apientitytasks:
 
@@ -95,34 +110,58 @@ the majority of OGGM's tasks). They are parallelizable.
     :nosignatures:
 
     tasks.define_glacier_region
+    tasks.process_dem
     tasks.glacier_masks
+    tasks.simple_glacier_masks
+    tasks.rasterio_glacier_mask
+    tasks.gridded_attributes
+    tasks.gridded_mb_attributes
+    tasks.gridded_data_var_to_geotiff
     tasks.compute_centerlines
-    tasks.initialize_flowlines
     tasks.compute_downstream_line
     tasks.compute_downstream_bedshape
     tasks.catchment_area
     tasks.catchment_intersections
+    tasks.initialize_flowlines
     tasks.catchment_width_geom
     tasks.catchment_width_correction
-    tasks.process_cru_data
-    tasks.process_histalp_data
+    tasks.terminus_width_correction
+    tasks.elevation_band_flowline
+    tasks.fixed_dx_elevation_band_flowline
+    tasks.glacier_mu_candidates
+    tasks.process_climate_data
     tasks.process_custom_climate_data
-    tasks.process_gcm_data
-    tasks.process_cesm_data
-    tasks.process_cmip_data
+    tasks.historical_delta_method
+    tasks.historical_climate_qc
     tasks.local_t_star
     tasks.mu_star_calibration
     tasks.apparent_mb_from_linear_mb
-    tasks.glacier_mu_candidates
+    tasks.apparent_mb_from_any_mb
+    tasks.fixed_geometry_mass_balance
+    tasks.process_cru_data
+    tasks.process_dummy_cru_file
+    tasks.process_histalp_data
+    tasks.process_ecmwf_data
+    tasks.process_gcm_data
+    tasks.process_cesm_data
+    tasks.process_cmip5_data
+    tasks.process_cmip_data
     tasks.prepare_for_inversion
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
+    tasks.get_inversion_volume
+    tasks.compute_velocities
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
+    tasks.find_inversion_calving
+    tasks.find_inversion_calving_from_any_mb
     tasks.init_present_time_glacier
+    tasks.flowline_model_run
     tasks.run_random_climate
-    tasks.run_constant_climate
     tasks.run_from_climate_data
+    tasks.run_constant_climate
+    tasks.copy_to_basedir
+    tasks.gdir_to_tar
 
 Global tasks
 ============
@@ -135,12 +174,17 @@ but might use multiprocessing internally.
     :toctree: generated/
     :nosignatures:
 
-    tasks.compute_ref_t_stars
-    tasks.compile_glacier_statistics
-    tasks.compile_run_output
-    tasks.compile_climate_input
-    tasks.compile_task_log
-    tasks.compile_task_time
+    core.climate.compute_ref_t_stars
+    utils.compile_glacier_statistics
+    utils.compile_run_output
+    utils.compile_climate_input
+    utils.compile_task_log
+    utils.compile_task_time
+    utils.compile_fixed_geometry_mass_balance
+    utils.compile_climate_statistics
+    workflow.calibrate_inversion_from_consensus
+    workflow.match_regional_geodetic_mb
+    workflow.merge_glacier_tasks
 
 Classes
 =======
@@ -266,7 +310,6 @@ the floating year can be used for conversion to months and years:
 Interface
 ---------
 
-
 .. currentmodule:: oggm.core.massbalance
 
 .. autosummary::
@@ -364,8 +407,8 @@ including the model flowlines. This is achieved by choosing preprocessing level
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
-                                              from_prepro_level=4,
-                                              prepro_border=10)
+                                              from_prepro_level=5,
+                                              prepro_border=80)
     gdir = gdirs[0]  # init_glacier_directories always returns a list
 
     fls = gdir.read_pickle('model_flowlines')

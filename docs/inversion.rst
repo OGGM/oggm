@@ -87,6 +87,8 @@ affecting the ice thickness. Therefore, we cannot make any recommendation for
 the "best" parameter. Global sensitivity analyses show that the default value
 is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev.net/12/909/2019/>`_)
 
+As of OGGM v1.4
+
 *Note*: for `ITMIX <https://www.the-cryosphere.net/11/949/2017/>`_, :math:`f_{inv}`
 was set to a value of approximately 3 (which was too high and underestimated
 ice thickness in most cases with the exception of the European Alps).

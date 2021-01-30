@@ -2251,7 +2251,7 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
     You need to run `tasks.elevation_band_flowline` first. It then interpolates
     onto a regular grid with the same dx as the one that OGGM would choose
     (cfg.PARAMS['flowline_dx'] * map_dx).
-.
+
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`

@@ -227,7 +227,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
                             output_filesuffix='', ref_year_range=None,
                             delete_input_files=True, scale_stddev=True,
                             replace_with_ref_data=True):
-    """Applies the anomaly method to historical climate data
+    """Applies the anomaly method to historical climate data.
 
     This function can be used to prolongate historical time series,
     for example by bias-correcting CERA-20C to ERA5 or ERA5-Land.
@@ -249,7 +249,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     ref_year_range : tuple of str
         the year range for which you want to compute the anomalies. The
         default is to take the entire reference data period, but you could
-         also choose `('1961', '1990')` for example
+        also choose `('1961', '1990')` for example
     delete_input_files : bool
         delete the input files after use - useful for operational runs
         where you don't want to carry too many files

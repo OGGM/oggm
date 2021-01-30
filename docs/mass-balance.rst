@@ -11,6 +11,16 @@ While the equation governing the mass-balance is that of a traditional
 temperature index model, our special approach to calibration requires
 that we spend some time describing it.
 
+.. note::
+
+    OGGM v1.4 will probably be the last model version relying on this
+    mass-balance model only. Considerable development efforts are made
+    to give more options to the user (see e.g. the
+    `mass-balance sandbox <https://github.com/OGGM/massbalance-sandbox>`_
+    or `PyGem <https://github.com/drounce/PyGEM>`_, which is close to be
+    fully compatible with OGGM).
+
+
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 .. ipython:: python
@@ -54,6 +64,11 @@ scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
+ERA5 and CERA
+~~~~~~~~~~~~~
+
+See the OGGM-shop documentation (in construction).
+
 HISTALP
 ~~~~~~~
 
@@ -71,8 +86,6 @@ recommend to use data from 1850 onwards.
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
 
-
-
 User-provided dataset
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -88,13 +101,8 @@ GCM data
 OGGM can also use climate model output to drive the mass-balance model. In
 this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
-period (currently: 1961-1990). This method is often called the
+period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-
-Currently we can process data from the
-`CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
-project (see :py:func:`tasks.process_cesm_data`) only, but adding other models
-will be available `soon <https://github.com/OGGM/oggm/issues/469>`_.
 
 
 Elevation dependency
@@ -250,6 +258,11 @@ fixing a :math:`t^*` for all glaciers in a region (or even worldwide). The
 resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
+
+Regional calibration
+--------------------
+
+As of version 1.4,
 
 References
 ----------

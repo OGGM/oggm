@@ -108,8 +108,8 @@ depends on :math:`\lambda`. The angle :math:`\beta` of the side wall
     \beta = atan \frac{2}{\lambda}
 
 [Golledge_Levy_2011]_ uses :math:`\lambda = 2`
-(a 45° wall angle), the current default in OGGM is :math:`\lambda = 1`
-(a 63° wall angle).
+(a 45° wall angle) which is the default in OGGM as of version 1.4
+(it used to be :math:`\lambda = 1`, a 63° wall angle).
 
 
 Parabolic
@@ -141,8 +141,12 @@ Mixed
 ~~~~~
 
 A combination of rectangular, trapezoidal and parabolic shapes.
-The default is parabolic, but can be adapted in two cases:
+The default in OGGM is mixed, following these rules:
 
+- elevation-band flowlines have a trapezoid bed everywhere, except on the glacier
+  forefront where the bed is parabolic (computed from the valley topography).
+- geometrical centerlines have a parabolic bed shape, with the two exceptions
+  below.
 - if the glacier section touches an ice-divide or a neighboring tributary
   catchment outline, the bed is considered to be rectangular;
 - if the parabolic shape parameter :math:`P_s` is below a certain threshold,
@@ -186,9 +190,8 @@ MUSCLSuperBeeModel
 ~~~~~~~~~~~~~~~~~~
 
 A shallow ice model with improved numerics ensuring mass-conservation in
-very steep walls [Jarosch_etal_2013]_. The model is currently in
-development to account for various bed shapes and tributaries and will
-likely become the default in OGGM.
+very steep walls [Jarosch_etal_2013]_. The model is currently used only as
+reference benchmark for the FluxBasedModel.
 
 
 Glacier tributaries
