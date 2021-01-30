@@ -1994,9 +1994,6 @@ def init_present_time_glacier(gdir):
         the glacier directory to process
     """
 
-    if gdir.rgi_id == 'RGI60-11.00746':
-        t = 1
-
     # Some vars
     invs = gdir.read_pickle('inversion_output')
     if invs[0].get('is_trapezoid', None) is None:
