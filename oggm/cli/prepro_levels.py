@@ -503,7 +503,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         shutil.copyfile(ipath, opath)
 
     # Copy mini data to new dir
-    mini_base_dir = os.path.join(working_dir, 'mini_perglacier')
+    mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
+                                 'RGI{}'.format(rgi_version),
+                                 'b_{:03d}'.format(border))
     mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
                                               base_dir=mini_base_dir)
 
