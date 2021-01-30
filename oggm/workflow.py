@@ -196,7 +196,7 @@ def execute_parallel_tasks(gdir, tasks):
 
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
-                     check_demo_glacier=False, base_url=None):
+                     base_url=None):
 
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
@@ -206,13 +206,6 @@ def gdir_from_prepro(entity, from_prepro_level=None,
         rid = entity.RGIId
     except AttributeError:
         rid = entity
-
-    if check_demo_glacier and base_url is None:
-        demo_id = utils.demo_glacier_id(rid)
-        if demo_id is not None:
-            rid = demo_id
-            entity = demo_id
-            base_url = utils.DEMO_GDIR_URL
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
@@ -253,8 +246,7 @@ def _check_duplicates(rgidf=None):
 def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                          from_prepro_level=None, prepro_border=None,
                          prepro_rgi_version=None, prepro_base_url=None,
-                         from_tar=False, delete_tar=False,
-                         use_demo_glaciers=None):
+                         from_tar=False, delete_tar=False):
     """DEPRECATED: Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -284,10 +276,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         URL from which to download the gdirs. Default currently is
         https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/
-    use_demo_glaciers : bool
-        whether to check the demo glaciers for download (faster than the
-        standard prepro downloads). The default is to decide whether or
-        not to check based on simple criteria such as glacier list size.
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -317,11 +305,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
 
-    if from_prepro_level and prepro_border not in [10, 80, 160, 250]:
-        if 'test' not in utils._downloads.GDIR_URL:
-            raise InvalidParamsError("prepro_border or cfg.PARAMS['border'] "
-                                     "should be one of: 10, 80, 160, 250.")
-
     # if reset delete also the log directory
     if reset:
         fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
@@ -350,10 +333,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         except AttributeError:
             entities = utils.tolist(rgidf)
 
-        # Check demo
-        if use_demo_glaciers is None:
-            use_demo_glaciers = len(entities) < 100
-
         if from_prepro_level is not None:
             log.workflow('init_glacier_regions from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
@@ -365,7 +344,6 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version,
-                                        check_demo_glacier=use_demo_glaciers,
                                         base_url=prepro_base_url)
         else:
             # We can set the intersects file automatically here
@@ -397,8 +375,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False,
-                             use_demo_glaciers=None):
+                             from_tar=False, delete_tar=False):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -428,10 +405,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         URL from which to download the gdirs. Default currently is
         https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/
-    use_demo_glaciers : bool
-        whether to check the demo glaciers for download (faster than the
-        standard prepro downloads). The default is to decide whether or
-        not to check based on simple criteria such as glacier list size.
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -494,10 +467,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         except AttributeError:
             entities = utils.tolist(rgidf)
 
-        # Check demo
-        if use_demo_glaciers is None:
-            use_demo_glaciers = len(entities) < 100
-
         if from_prepro_level is not None:
             log.workflow('init_glacier_directories from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
@@ -509,7 +478,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version,
-                                        check_demo_glacier=use_demo_glaciers,
                                         base_url=prepro_base_url)
         else:
             # We can set the intersects file automatically here
@@ -606,7 +574,7 @@ def climate_tasks(gdirs, base_url=None):
     execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 
-def inversion_tasks(gdirs, glen_a=None, fs=None):
+def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
     """Shortcut function: run all ice thickness inversion tasks.
 
     Quite useful to deal with calving glaciers as well.
@@ -635,7 +603,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None):
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
                                 glen_a=glen_a, fs=fs)
-            execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
+            if filter_inversion_output:
+                execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c,
@@ -644,13 +613,15 @@ def inversion_tasks(gdirs, glen_a=None, fs=None):
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                             glen_a=glen_a, fs=fs)
-        execute_entity_task(tasks.filter_inversion_output, gdirs)
+        if filter_inversion_output:
+            execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
 def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        fs=0, a_bounds=(0.1, 10),
                                        apply_fs_on_mismatch=False,
-                                       error_on_mismatch=True):
+                                       error_on_mismatch=True,
+                                       filter_inversion_output=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -674,6 +645,9 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         sometimes the given bounds do not allow to find a zero mismatch:
         this will normally raise an error, but you can switch this off,
         use the closest value instead and move on.
+    filter_inversion_output : bool
+        wether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
 
     Returns
     -------
@@ -699,7 +673,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     def_a = cfg.PARAMS['inversion_glen_a']
 
     def compute_vol(x):
-        inversion_tasks(gdirs, glen_a=x*def_a, fs=fs)
+        inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
+                        filter_inversion_output=filter_inversion_output)
         odf = df.copy()
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
         return odf.dropna()
@@ -746,7 +721,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                      ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A
-    inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs)
+    inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
+                    filter_inversion_output=filter_inversion_output)
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
     return df
 

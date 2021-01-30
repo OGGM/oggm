@@ -27,8 +27,6 @@ import tarfile
 # External libs
 import pandas as pd
 import numpy as np
-from shapely.ops import transform as shp_trafo
-from shapely.ops import unary_union
 import shapely.geometry as shpg
 import requests
 
@@ -73,11 +71,11 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 SAMPLE_DATA_COMMIT = 'b885e9acc48037a030decb7daf73d44b4398e5e1'
 
-GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/'
-DEMO_GDIR_URL = 'https://cluster.klima.uni-bremen.de/~oggm/demo_gdirs/'
+GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                 'L1-L2_files/centerlines/')
+GDIR_L3L5_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                 'L3-L5_files/RGIV62_fleb_qc3_CRU_pcp2.5/')
 DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
-
-CMIP5_URL = 'https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng/'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1270,7 +1268,10 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     """Extended base url where to find the desired gdirs."""
 
     if base_url is None:
-        base_url = GDIR_URL
+        if prepro_level <= 2:
+            base_url = GDIR_L1L2_URL
+        else:
+            base_url = GDIR_L3L5_URL
 
     if not base_url.endswith('/'):
         base_url += '/'
@@ -2289,29 +2290,6 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
         raise InvalidDEMError('Source: {2} no topography file available for '
                               'extent lat:{0}, lon:{1}!'.
                               format(lat_ex, lon_ex, source))
-
-
-def get_cmip5_file(filename, reset=False):
-    """Download a global CMIP5 file.
-
-    List of files: https://cluster.klima.uni-bremen.de/~oggm/cmip5-ng/
-
-    Parameters
-    ----------
-    filename : str
-        the file to download, e.g 'pr_ann_ACCESS1-3_rcp85_r1i1p1_g025.nc'
-        or 'tas_ann_ACCESS1-3_rcp45_r1i1p1_g025.nc'
-    reset : bool
-        force re-download of an existing file
-
-    Returns
-    -------
-    the path to the netCDF file
-    """
-
-    prefix = filename.split('_')[0]
-    dfile = CMIP5_URL + prefix + '/' + filename
-    return file_downloader(dfile, reset=reset)
 
 
 def get_ref_mb_glaciers_candidates(rgi_version=None):
