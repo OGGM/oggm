@@ -254,9 +254,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
-        # Also use ref tstars
-        utils.apply_test_ref_tstars()
-    else:
+
+        if max_level > 2:
+            # Also use ref tstars
+            utils.apply_test_ref_tstars()
+
+    if max_level > 2 and ref_tstars_base_url:
         workflow.download_ref_tstars(base_url=ref_tstars_base_url)
 
     log.workflow('Starting prepro run for RGI reg: {} '
