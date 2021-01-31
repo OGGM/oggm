@@ -28,7 +28,7 @@ below. "1.5D" here is used to emphasize that although glacier ice can flow
 only in one direction along the flowline, each point of the glacier has
 a geometrical width. This width means that flowline glaciers are able to match
 the observed area-elevation distribution of true glaciers, and can parametrize
-the change in glacier width with ice thickness change.
+the changes in glacier width with thickness changes.
 
     .. figure:: _static/hef_flowline.jpg
         :width: 80%
@@ -36,14 +36,14 @@ the change in glacier width with ice thickness change.
         Example of a glacier flowline. Background image from
         http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
 
-Since version 1.4, OGGM has two main ways to convert real 2D glacier outlines
+**Since version 1.4, OGGM has two different ways** to convert a 2D glacier
 into a 1.5 flowline glacier:
 
-- via **geometrical centerlines**, which are computed from the glacier geometry
-  and routing algorithms. This was the only option in OGGM before v1.4.
-- via binned **elevation bands flowlines**, which are computed by the binning and
-  averaging of 2D slopes into a "bulk" flowline glacier. This is the method
-  first developped and applied by [Huss_Hock_2015]_
+1. via **geometrical centerlines**, which are computed from the glacier geometry
+   and routing algorithms. This was the only option in OGGM before v1.4.
+2. via binned **elevation bands flowlines**, which are computed by the binning and
+   averaging of 2D slopes into a "bulk" flowline glacier. This is the method
+   first developped and applied by [Huss_Farinotti_2012]_
 
 Both methods have strengths and weaknesses, which we discuss in more depth
 below. First, let's have a look at how they work.
@@ -73,7 +73,10 @@ elevation gain and (ii) the distance from the glacier outline:
     graphics.plot_centerlines(gdir)
 
 The glacier has a major centerline (the longest one), and
-tributary branches (in this case: two).
+tributary branches (in this case: two). The Hintereisferner glacier is a
+good example of a wrongly outlined glacier: the two northern branches
+should have been classified as independant entities since they do not flow
+to the main flowline (more on this below).
 
 At this stage, the centerlines are still not fully suitable
 for modelling. Therefore, a rather simple
@@ -91,7 +94,7 @@ according to a distance threshold rule:
 Downstream lines
 ~~~~~~~~~~~~~~~~
 
-For the glacier to be able to grow we need to determine the flowlines
+For the glacier to be able to grow, we need to determine the flowlines
 downstream of the current glacier geometry:
 
 .. ipython:: python
@@ -145,8 +148,9 @@ distribution of the glacier using its full 2D geometry:
     @savefig plot_fls_width_cor.png width=80%
     graphics.plot_catchment_width(gdir, corrected=True)
 
-Note that a perfect match is not possible since the sample size is
-not the same between the "1.5D" and the 2D representation of the glacier.
+Note that a *perfect* match is not possible since the sample size is
+not the same between the "1.5D" and the 2D representation of the glacier,
+but it's close enough.
 
 
 Elevation bands flowlines
@@ -155,41 +159,43 @@ Elevation bands flowlines
 "Elevation bands flowlines" are another way to transform a glacier into a
 flowline. The implementation is considerably easier as the geometrical
 centerlines, and is explained in [Huss_Farinotti_2012]_ as well as
-[Werder_etal_2019]_ (in greater detail in the later). We follow the
+[Werder_etal_2019]_ (in greater detail in the latter). We follow the
 exact same methodology.
 
 The elevation range of the glacier is divided into N equal bands,
-each spanning an elevation difference of :math:`\Delta z` = 30 m. The area of
-each band is calculated by summing the areas of all cells in the band.
+each spanning an elevation difference of :math:`\Delta z` = 30 m (this
+parameter can be changed). The area of each band is calculated by
+summing the areas of all cells in the band.
 A representative slope angle for each band is needed for estimating
 the ice flow. This calculation is also critical as it will determine the
 horizontal length of an elevation band and hence the overall glacier length.
 This slope is computed as the mean of all cell slopes over a certain
-quantile range (see [Werder_etal_2019]_ for details), chose to remove
+quantile range (see [Werder_etal_2019]_ for details), chosen to remove
 outliers and to return a slope angle that is both representative of the
 main trunk of the glacier and somewhat consistent with its real length.
 
 The flowlines obtained this way have an irregular spacing, dependant on the
 bin size and slope. For OGGM, we then convert this first flowline to a regularly
 space one by interpolating to the target resolution, which is the same
-as the geometrical centerlines (default: 2 dx).
+as the geometrical centerlines (default: 2 dx of the underlying map).
 
-The resulting flowline glaciers can be understood as an average "bulk"
-geometry of the glacier, representing the average size and slope of each
+The resulting flowline glaciers can be understood as a "bulk" representation
+of the glacier, representing the average size and slope of each
 elevation band.
 
 Compatibility within the OGGM framework
 ---------------------------------------
 
-Both methods are creating a "1.5D" glacier, and after computation,
-**both representations are equivalent** for the inversion and
+Both methods are creating a "1.5D" glacier. After computation,
+**both representations are strictly equivalent** for the inversion and
 ice dynamics models. The are both stored as a list of
 :py:class:`~oggm.Centerline` objects. Glaciers can have only one
-elevation-band flowline per glacier, while there can be many geometrical
-centerlines. The downstream lines are computed the same way for both flowline
-types.
+elevation-band flowline per glacier, while there can be several geometrical
+centerlines. The downstream lines are computed the same way for both the
+elevation-band and geometrical flowlines.
 
-Both flowline types are available for download and for use.
+Both flowline types are available for download and for use in the OGGM
+framework.
 
 Pros and cons of both methods
 -----------------------------

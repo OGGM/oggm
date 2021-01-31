@@ -13,7 +13,7 @@ from scipy import optimize as optimization
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
-from oggm.core import centerlines, flowline
+from oggm.core import centerlines, flowline, climate
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # MPI
@@ -565,7 +565,7 @@ def climate_tasks(gdirs, base_url=None):
 
     # Then, calibration?
     if cfg.PARAMS['run_mb_calibration']:
-        tasks.compute_ref_t_stars(gdirs)
+        climate.compute_ref_t_stars(gdirs)
     elif base_url:
         download_ref_tstars(base_url=base_url)
 
