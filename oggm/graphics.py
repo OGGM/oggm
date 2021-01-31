@@ -690,7 +690,20 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
 
 
 def plot_modeloutput_section(model=None, ax=None, title=''):
-    """Plots the result of the model output along the flowline."""
+    """Plots the result of the model output along the flowline.
+
+    Parameters
+    ----------
+    model: obj
+        either a FlowlineModel or a list of model flowlines.
+    fig
+    title
+    """
+
+    try:
+        fls = model.fls
+    except AttributeError:
+        fls = model
 
     if ax is None:
         fig = plt.figure(figsize=(12, 6))
@@ -702,7 +715,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     area = np.array([])
     height = np.array([])
     bed = np.array([])
-    for cls in model.fls:
+    for cls in fls:
         a = cls.widths_m * cls.dx_meter * 1e-6
         a = np.where(cls.thick > 0, a, 0)
         area = np.concatenate((area, a))
@@ -729,7 +742,7 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     axh.axhline(y=ylim[1], color='black', alpha=1)  # qick n dirty trick
 
     # plot Centerlines
-    cls = model.fls[-1]
+    cls = fls[-1]
     x = np.arange(cls.nx) * cls.dx * cls.map_dx
 
     # Plot the bed
@@ -763,7 +776,6 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
     if getattr(model, 'do_calving', False):
         ax.hlines(model.water_level, x[0], x[-1], linestyles=':', color='C0')
 
-
     ax.set_ylim(ylim)
 
     ax.spines['top'].set_color('none')
@@ -783,9 +795,22 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
 
 
 def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
-    """Plots the result of the model output along the flowline."""
+    """Plots the result of the model output along the flowline.
 
-    n_tribs = len(model.fls) - 1
+    Parameters
+    ----------
+    model: obj
+        either a FlowlineModel or a list of model flowlines.
+    fig
+    title
+    """
+
+    try:
+        fls = model.fls
+    except AttributeError:
+        fls = model
+
+    n_tribs = len(fls) - 1
 
     axs = []
     if n_tribs == 0:
@@ -811,7 +836,7 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
     else:
         raise NotImplementedError()
 
-    for i, cls in enumerate(model.fls):
+    for i, cls in enumerate(fls):
         if i == n_tribs:
             ax = axmaj
         else:

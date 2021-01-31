@@ -169,7 +169,7 @@ Here is an example with the Hintereisferner in the Alps:
 .. ipython:: python
 
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
-    for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 250]):
+    for ax, border in zip(np.array(axs).flatten(), [10, 40, 80, 160]):
         gdir = workflow.init_glacier_directories('RGI60-11.00897',
                                                  from_prepro_level=1,
                                                  prepro_border=border)
@@ -484,7 +484,7 @@ have access to the timeseries through the glacier directory:
 .. ipython:: python
 
     gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                             from_prepro_level=4,
+                                             from_prepro_level=3,
                                              prepro_border=10)[0]
     mb = gdir.get_ref_mb_data()
     @savefig plot_ref_mbdata.png width=100%
