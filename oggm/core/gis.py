@@ -228,46 +228,8 @@ def _polygon_to_pix(polygon):
     return tmp
 
 
-@entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
-def define_glacier_region(gdir, entity=None, source=None):
-    """Very first task after initialization: define the glacier's local grid.
-
-    Defines the local projection (Transverse Mercator), centered on the
-    glacier. There is some options to set the resolution of the local grid.
-    It can be adapted depending on the size of the glacier with::
-
-        dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
-
-    or be set to a fixed value. See ``params.cfg`` for setting these options.
-    Default values of the adapted mode lead to a resolution of 50 m for
-    Hintereisferner, which is approx. 8 km2 large.
-    After defining the grid, the topography and the outlines of the glacier
-    are transformed into the local projection. The default interpolation for
-    the topography is `cubic`.
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        where to write the data
-    entity : geopandas.GeoSeries
-        the glacier geometry to process - DEPRECATED. It is now ignored
-    source : str or list of str, optional
-        If you want to force the use of a certain DEM source. Available are:
-          - 'USER' : file set in cfg.PATHS['dem_file']
-          - 'SRTM' : http://srtm.csi.cgiar.org/
-          - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
-          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
-          - 'REMA' : https://www.pgc.umn.edu/data/rema/
-          - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
-          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
-          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
-          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
-          - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
-          - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
-          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
-          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
-    """
+def glacier_grid_params(gdir):
+    """Define the glacier grid map based on the user params."""
 
     # Get the local map proj params and glacier extent
     gdf = gdir.read_shapefile('outlines')
@@ -319,6 +281,52 @@ def define_glacier_region(gdir, entity=None, source=None):
     nx = np.int((lrx - ulx) / dx)
     ny = np.int((uly - lry) / dx)
 
+    return utm_proj, nx, ny, ulx, uly, dx
+
+
+@entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
+def define_glacier_region(gdir, entity=None, source=None):
+    """Very first task after initialization: define the glacier's local grid.
+
+    Defines the local projection (Transverse Mercator), centered on the
+    glacier. There is some options to set the resolution of the local grid.
+    It can be adapted depending on the size of the glacier with::
+
+        dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
+
+    or be set to a fixed value. See ``params.cfg`` for setting these options.
+    Default values of the adapted mode lead to a resolution of 50 m for
+    Hintereisferner, which is approx. 8 km2 large.
+    After defining the grid, the topography and the outlines of the glacier
+    are transformed into the local projection. The default interpolation for
+    the topography is `cubic`.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    entity : geopandas.GeoSeries
+        the glacier geometry to process - DEPRECATED. It is now ignored
+    source : str or list of str, optional
+        If you want to force the use of a certain DEM source. Available are:
+          - 'USER' : file set in cfg.PATHS['dem_file']
+          - 'SRTM' : http://srtm.csi.cgiar.org/
+          - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
+          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'REMA' : https://www.pgc.umn.edu/data/rema/
+          - 'DEM3' : http://viewfinderpanoramas.org/
+          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
+          - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
+          - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
+          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
+          - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
+          - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
+          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
+          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
+    """
+
+    utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(gdir)
+
     # Back to lon, lat for DEM download/preparation
     tmp_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
@@ -328,7 +336,8 @@ def define_glacier_region(gdir, entity=None, source=None):
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
         log.warning('Source: {} may not be available for glacier {} with '
-                    'border {}'.format(source, gdir.rgi_id, border))
+                    'border {}'.format(source, gdir.rgi_id,
+                                       cfg.PARAMS['border']))
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_id=gdir.rgi_id,
                                          dx_meter=dx,

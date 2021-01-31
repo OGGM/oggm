@@ -57,7 +57,7 @@ except ImportError:
 from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
-                               haversine, multipolygon_to_polygon)
+                               haversine, multipolygon_to_polygon, clip_scalar)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
@@ -2097,10 +2097,25 @@ class GlacierDirectory(object):
                     "cfg.PARAMS['use_intersects'] = False to "
                     "suppress this error.")
 
+    def grid_from_params(self):
+        """If the glacier_grid.json file is lost, reconstruct it."""
+        from oggm.core.gis import glacier_grid_params
+        utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(self)
+        x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
+        return salem.Grid(proj=utm_proj, nxny=(nx, ny), dxdy=(dx, -dx),
+                          x0y0=x0y0)
+
     @lazy_property
     def grid(self):
         """A ``salem.Grid`` handling the georeferencing of the local grid"""
-        return salem.Grid.from_json(self.get_filepath('glacier_grid'))
+        try:
+            return salem.Grid.from_json(self.get_filepath('glacier_grid'))
+        except FileNotFoundError:
+            raise InvalidWorkflowError('This glacier directory seems to '
+                                       'have lost its glacier_grid.json file.'
+                                       'Use .grid_from_params(), but make sure'
+                                       'that the PARAMS are the ones you '
+                                       'want.')
 
     @lazy_property
     def rgi_area_km2(self):
@@ -2937,7 +2952,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_historical',
+                 'local_mustar', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'climate_info', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
