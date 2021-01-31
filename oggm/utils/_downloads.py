@@ -74,8 +74,9 @@ SAMPLE_DATA_COMMIT = 'b885e9acc48037a030decb7daf73d44b4398e5e1'
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
 GDIR_L3L5_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'L3-L5_files/RGIV62_fleb_qc3_CRU_pcp2.5/')
-DEMS_GDIR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v0/'
+                 'L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/')
+DEMS_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                 'rgitopo/')
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
