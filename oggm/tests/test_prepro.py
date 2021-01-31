@@ -109,6 +109,7 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
         # This is not guaranteed to be equal because of projection issues
         np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
+        assert gdir.grid == gdir.grid_from_params()
 
         # Change area
         prev_area = gdir.rgi_area_km2
