@@ -197,6 +197,16 @@ elevation-band and geometrical flowlines.
 Both flowline types are available for download and for use in the OGGM
 framework.
 
+
+    .. figure:: _static/eb_vs_cl.png
+        :width: 100%
+
+        Cross-sections of the two flowline types at the example Hintereisferner
+        with OGGM version 1.4. Note the different lengths. The main flowline in
+        the geometrical centerline case does not reach as high here because
+        other flowlines (tributaries) are higher for this glacier.
+
+
 Pros and cons of both methods
 -----------------------------
 
@@ -209,7 +219,8 @@ results can be large, but our own quick assessment shows that at the global
 scale the differences are rather small (yet to be quantified with more
 precision).
 
-**Geometrical centerlines**
+Geometrical centerlines
+~~~~~~~~~~~~~~~~~~~~~~~
 
 - Pros:
 
@@ -244,7 +255,8 @@ For mountain glaciers (e.g. Alps, Himalayas).
 **When not to use:** for ice caps, badly outlined glaciers, very large and
 flat glaciers, for global applications where geometrical details matters less.
 
-**Elevation-band flowlines**
+Elevation-band flowlines
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Pros:
 
