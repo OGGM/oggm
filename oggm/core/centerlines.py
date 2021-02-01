@@ -800,7 +800,13 @@ def _line_extend(uline, dline, dx):
 
     # First points is easy
     points = [shpg.Point(c) for c in uline.coords]
-    dpoints = []
+
+    if len(points) == 0:
+        # eb flowline
+        dpoints = [shpg.Point(dline.coords[0])]
+        points = [shpg.Point(dline.coords[0])]
+    else:
+        dpoints = []
 
     # Continue as long as line is not finished
     while True:
@@ -1005,7 +1011,9 @@ def compute_downstream_line(gdir):
         lline, dline = _line_extend(cl.line, line, cl.dx)
         out = dict(full_line=lline, downstream_line=dline)
     else:
-        out = dict(full_line=None, downstream_line=line)
+        # Eb flowlines - we trick
+        _, dline = _line_extend(shpg.LineString(), line, cl.dx)
+        out = dict(full_line=None, downstream_line=dline)
 
     gdir.write_pickle(out, 'downstream_line')
 
