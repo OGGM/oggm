@@ -36,17 +36,19 @@ the changes in glacier width with thickness changes.
         Example of a glacier flowline. Background image from
         http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
 
-**Since version 1.4, OGGM has two different ways to convert a 2D glacier
-into a 1.5 flowline glacier**:
+.. admonition:: **New in version 1.4!**
 
-1. via **geometrical centerlines**, which are computed from the glacier geometry
-   and routing algorithms. This was the single option in OGGM before v1.4.
-2. via binned **elevation bands flowlines**, which are computed by the binning and
-   averaging of 2D slopes into a "bulk" flowline glacier. This is the method
-   first developed and applied by [Huss_Farinotti_2012]_
+   Since v1.4, OGGM now has two different ways to convert a
+   2D glacier into a 1.5 flowline glacier:
 
-Both methods have strengths and weaknesses, which we discuss in more depth
-below. First, let's have a look at how they work.
+   1. via **geometrical centerlines**, which are computed from the glacier geometry
+      and routing algorithms. This was the single option in OGGM before v1.4.
+   2. via binned **elevation bands flowlines**, which are computed by the binning and
+      averaging of 2D slopes into a "bulk" flowline glacier. This is the method
+      first developed and applied by [Huss_Farinotti_2012]_
+
+   Both methods have strengths and weaknesses, which we discuss in more depth
+   below. First, let's have a look at how they work.
 
 
 Geometrical centerlines
@@ -249,11 +251,13 @@ Geometrical centerlines
      inversion (leading to multiple temperature sensitivity parameters
      for large glaciers).
 
-**When to use:** when geometry matters, and when length is a important variable.
-For mountain glaciers (e.g. Alps, Himalayas).
+.. admonition:: **Summary**
 
-**When not to use:** for ice caps, badly outlined glaciers, very large and
-flat glaciers, for global applications where geometrical details matters less.
+   **When to use:** when geometry matters, and when length is a important variable.
+   For mountain glaciers (e.g. Alps, Himalayas).
+
+   **When not to use:** for ice caps, badly outlined glaciers, very large and
+   flat glaciers, for global applications where geometrical details matters less.
 
 Elevation-band flowlines
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -274,10 +278,13 @@ Elevation-band flowlines
      chosen quantiles is a good idea.
    - Only one flowline.
 
-**When to use:** when true geometry does not matter. When doing simulations
-at large scales and robustness to bad data / uncertainties is important.
+.. admonition:: **Summary**
 
-**When not to use:** when glacier geometry or (absolute) length matters.
+   **When to use:** when true geometry does not matter. When doing simulations
+   at large scales, and when robustness to bad / uncertain boundary conditions
+   is important.
+
+   **When not to use:** when glacier geometry or (absolute) length matters.
 
 As of OGGM v1.4, the OGGM developers use both representations:
 elevation bands at the global scale, and geometrical centerlines for simulations

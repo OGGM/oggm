@@ -64,10 +64,16 @@ scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
-ERA5 and CERA
-~~~~~~~~~~~~~
+ERA5 and CERA-20C
+~~~~~~~~~~~~~~~~~
 
-See the OGGM-shop documentation (in construction).
+Since OGGM v1.4, users can also use reanalysis data from the ECMWF. OGGM
+can also use the
+`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
+`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
+datasets as baseline. One can also apply a combination of both, for example
+by applying the CERA-20C anomalies to the reference ERA5 for example
+(useful only in certain circumstances).
 
 HISTALP
 ~~~~~~~
@@ -103,6 +109,7 @@ this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
 period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+Visit our online tutorials to see how this can be done.
 
 
 Elevation dependency
@@ -126,7 +133,7 @@ is computed as:
 
 .. math::
 
-    B_i(z) = P_i^{Solid}(z) - \mu ^{*} \, max \left( T_i(z) - T_{Melt}, 0 \right)
+    B_i(z) = P_i^{Solid}(z) - \mu ^{*} \, max \left( T_i(z) - T_{Melt}, 0 \right) + \epsilon
 
 where :math:`P_i^{Solid}` is the monthly solid precipitation, :math:`T_i`
 the monthly temperature and :math:`T_{Melt}` is the monthly mean air
@@ -137,7 +144,8 @@ solid precipitation is based on the monthly mean temperature: all solid below
 (default: 2°C), linear in between.
 
 The parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
-glacier, and it needs to be calibrated.
+glacier, and it needs to be calibrated. :math:`\epsilon` is a residual, to be
+determined at the calibration step.
 
 Calibration
 -----------
@@ -262,7 +270,16 @@ however, play a major role for the assessment of model uncertainty.
 Regional calibration
 --------------------
 
-As of version 1.4,
+.. admonition:: **New in version 1.4!**
+
+   As of version 1.4, we now also offer to calibrate the mass-balance at the
+   regional level (RGI regions) based on geodetic mass-balance products
+   ([Zemp_etal_2019]_ or [Hugonnet_etal_2020]_). This is done by correcting
+   (shifting) the residual for each glacier (:math:`\epsilon` in the equation
+   above) by a constant value so that the regional estimates match the
+   observations. This is not applied per default, as it might lead to
+   unrealistic results at the single glacier scale (but it is very useful
+   for global studies).
 
 References
 ----------
@@ -271,6 +288,14 @@ References
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
    623–642. https://doi.org/10.1002/joc.3711
+
+.. [Hugonnet_etal_2020] Hugonnet et al., accepted.
+
+.. [Zemp_etal_2019] Zemp, M., Huss, M., Thibert, E., Eckert, N., McNabb, R.,
+   Huber, J., Barandun, M., Machguth, H., Nussbaumer, S. U., Gärtner-Roer, I.,
+   Thomson, L., Paul, F., Maussion, F., Kutuzov, S. and Cogley, J. G.:
+   Global glacier mass changes and their contributions to sea-level rise from
+   1961 to 2016, Nature, 568(7752), 382–386, doi:10.1038/s41586-019-1071-0, 2019.
 
 Implementation details
 ----------------------

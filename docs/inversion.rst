@@ -86,12 +86,17 @@ uncertainty in the "true" :math:`A` parameter as well as in all other processes
 affecting the ice thickness. Therefore, we cannot make any recommendation for
 the "best" parameter. Global sensitivity analyses show that the default value
 is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev.net/12/909/2019/>`_)
+but very likely leads to overestimated ice volume.
 
-As of OGGM v1.4
+.. admonition:: **New in version 1.4!**
 
-*Note*: for `ITMIX <https://www.the-cryosphere.net/11/949/2017/>`_, :math:`f_{inv}`
-was set to a value of approximately 3 (which was too high and underestimated
-ice thickness in most cases with the exception of the European Alps).
+   As of OGGM v1.4, the user can choose to calibrate :math:`A` to match the
+   consensus volume estimate from [Farinotti_etal_2019]_ on any number
+   of glaciers. We recommend to use a large number of glaciers (we match
+   at the regional level) in order to allow some freedom to the model
+   (it is not guaranteed that the consensus really is better for each glacier),
+   but we assume that it is more accurate at large scales.
+
 
 Distributed ice thickness
 -------------------------
@@ -106,3 +111,17 @@ step in OGGM is currently very simple, but provides nice looking maps:
     tasks.catchment_area(gdir)
     @savefig plot_distributed_thickness.png width=80%
     graphics.plot_distributed_thickness(gdir)
+
+
+References
+----------
+
+.. [Farinotti_etal_2009] Farinotti, D., Huss, M., Bauder, A., Funk, M., &
+    Truffer, M. (2009). A method to estimate the ice volume and
+    ice-thickness distribution of alpine glaciers. Journal of Glaciology, 55
+    (191), 422–430.
+
+.. [Farinotti_etal_2019] Farinotti, D., Huss, M., Fürst, J. J., Landmann, J.,
+   Machguth, H., Maussion, F. and Pandit, A.: A consensus estimate for the
+   ice thickness distribution of all glaciers on Earth, Nat. Geosci., 12(3),
+   168–173, doi:10.1038/s41561-019-0300-3, 2019.

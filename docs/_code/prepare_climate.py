@@ -6,7 +6,7 @@ import pandas as pd
 import xarray as xr
 
 import oggm
-from oggm import cfg, tasks
+from oggm import cfg, tasks, graphics
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb,
                                local_t_star, mu_star_calibration)
