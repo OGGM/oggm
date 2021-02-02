@@ -1905,6 +1905,9 @@ class GlacierDirectory(object):
             if from_tar:
                 _dir = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
                                     rgi_entity)
+                # Avoid bad surprises
+                if os.path.exists(_dir):
+                    shutil.rmtree(_dir)
                 if from_tar is True:
                     from_tar = _dir + '.tar.gz'
                 robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
