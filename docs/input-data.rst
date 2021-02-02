@@ -13,7 +13,7 @@ open-access data that can be downloaded automatically for the user**. We like
 to see this service as a "shop", allowing users to define a "shopping list"
 of data that users can add to their :ref:`glacierdir`.
 
-This page explains the various "shelves" or sections of this shop.
+This page describes the various products you will find ind this shop.
 
 .. important::
 
@@ -33,8 +33,8 @@ and various model set-ups.
 
 The default directories have been generated with the default parameters
 of the current stable OGGM version and combinations hereof. If you want to
-change some of the these parameters, you *may* have to do a run from scratch
-using the :ref:`rawdata`. Whether or not this is necessary depends on the
+change some of these parameters, you *may* have to start a run from a lower
+processing level. Whether or not this is necessary depends on the
 stage of the workflow you'd like your computations to diverge from the
 defaults (we provide example use cases below).
 
@@ -70,12 +70,16 @@ Currently, there are five available levels of pre-processing:
   The state of the glacier as month 01, year 2020 can then be used for
   future projections.
 
-In practice, most users are going to use level 2, 3 or level 5 files. Here
+In practice, most users are going to use level 2, level 3 or level 5 files. Here
 are some example use cases:
 
-
-
-
+1. *Running OGGM with the default settings and with GCM / RCM data*: start at level 5
+2. *Using OGGM's flowlines but running your own flavor of the baseline climate,
+   mass-balance or ice thickness inversion models*: start at level 2 (and maybe
+   use OGGM's workflow again for the ice dynamics?).
+3. *Run sensitivity experiments for the ice thickness inversion*: start at level
+   3 (with climate data available) and re-run the inversion steps.
+4. *Implement and test a new calving parameterisation*: start at level 3
 
 
 Map size

@@ -12,21 +12,23 @@ available data for calibration and validation, and encourage re-mix and re-use,
 i.e. we fully support external modelling efforts based on the OGGM workflow.
 
 
-If you have 15 minutes time, here is a recent (2020) general introduction
-presentation about OGGM (starting at minute 20):
+**This webpage is for the software documentation: for general information about the
+OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+
+.. include:: _generated/version_text.txt
+
+
+IARPC presentation (April 2020)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are new to OGGM and have 15 mins time, here is a recent
+presentation about the project:
 
 .. raw:: html
 
     <iframe width="672" height="378" src="https://www.youtube.com/embed/ttJMxcwXUjw?start=1270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 *Slides available* `here <https://oggm.org/framework_talk>`_
-
-
-**This webpage is for the software documentation: for general information about the
-OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
-
-.. include:: _generated/version_text.txt
-
 
 Principles
 ^^^^^^^^^^
