@@ -821,7 +821,7 @@ def _line_extend(uline, dline, dx):
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = dline.project(pref)
         tdis = np.array([dline.project(pb) for pb in pbs])
-        p = np.where(tdis >= refdis)[0]
+        p = np.where(tdis > refdis)[0]
         if len(p) == 0:
             break
         points.append(pbs[int(p[0])])
