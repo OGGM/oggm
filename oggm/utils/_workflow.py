@@ -1209,7 +1209,7 @@ def glacier_statistics(gdir, inversion_only=False):
             fpath = gdir.get_filepath('gridded_data')
             with ncDataset(fpath) as nc:
                 mask = nc.variables['glacier_mask'][:] == 1
-                topo = nc.variables['topo'][mask]
+                topo = nc.variables['topo'][:][mask]
             d['dem_mean_elev'] = np.mean(topo)
             d['dem_med_elev'] = np.median(topo)
             d['dem_min_elev'] = np.min(topo)
