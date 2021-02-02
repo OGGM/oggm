@@ -1208,12 +1208,12 @@ def glacier_statistics(gdir, inversion_only=False):
             # Masks related stuff
             fpath = gdir.get_filepath('gridded_data')
             with ncDataset(fpath) as nc:
-                mask = nc.variables['glacier_mask'][:]
-                topo = nc.variables['topo'][:]
-            d['dem_mean_elev'] = np.mean(topo[np.where(mask == 1)])
-            d['dem_med_elev'] = np.median(topo[np.where(mask == 1)])
-            d['dem_min_elev'] = np.min(topo[np.where(mask == 1)])
-            d['dem_max_elev'] = np.max(topo[np.where(mask == 1)])
+                mask = nc.variables['glacier_mask'][:] == 1
+                topo = nc.variables['topo'][mask]
+            d['dem_mean_elev'] = np.mean(topo)
+            d['dem_med_elev'] = np.median(topo)
+            d['dem_min_elev'] = np.min(topo)
+            d['dem_max_elev'] = np.max(topo)
         except BaseException:
             pass
 
@@ -1221,13 +1221,18 @@ def glacier_statistics(gdir, inversion_only=False):
             # Ext related stuff
             fpath = gdir.get_filepath('gridded_data')
             with ncDataset(fpath) as nc:
-                ext = nc.variables['glacier_ext'][:]
-                mask = nc.variables['glacier_mask'][:]
+                ext = nc.variables['glacier_ext'][:] == 1
+                mask = nc.variables['glacier_mask'][:] == 1
                 topo = nc.variables['topo'][:]
-            d['dem_max_elev_on_ext'] = np.max(topo[np.where(ext == 1)])
-            d['dem_min_elev_on_ext'] = np.min(topo[np.where(ext == 1)])
+            d['dem_max_elev_on_ext'] = np.max(topo[ext])
+            d['dem_min_elev_on_ext'] = np.min(topo[ext])
             a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
             d['dem_perc_area_above_max_elev_on_ext'] = a / np.sum(mask)
+            # Terminus loc
+            j, i = np.nonzero((topo[ext].min() == topo) & ext)
+            lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
+            d['terminus_lon'] = lon
+            d['terminus_lat'] = lat
         except BaseException:
             pass
 

@@ -609,6 +609,11 @@ class TestCenterlines(unittest.TestCase):
 
         self.assertEqual(set(cls), set(centerlines.line_inflows(cls[-1])))
 
+        df = utils.glacier_statistics(gdir)
+        # From google map checks
+        np.testing.assert_allclose(df['terminus_lon'], 10.80, atol=0.01)
+        np.testing.assert_allclose(df['terminus_lat'], 46.81, atol=0.01)
+
     def test_downstream(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
