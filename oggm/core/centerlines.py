@@ -812,8 +812,12 @@ def _line_extend(uline, dline, dx):
     while True:
         pref = points[-1]
         pbs = pref.buffer(dx).boundary.intersection(dline)
+        if pbs.type in ['LineString', 'GeometryCollection']:
+            # Very rare
+            pbs = pref.buffer(dx+1e-12).boundary.intersection(dline)
         if pbs.type == 'Point':
             pbs = [pbs]
+
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = dline.project(pref)
         tdis = np.array([dline.project(pb) for pb in pbs])
@@ -1934,7 +1938,7 @@ def catchment_width_correction(gdir):
             bsize += 5
 
             # Add a security for infinite loops
-            if bsize > 500:
+            if bsize > 600:
                 nmin -= 1
                 bsize = cfg.PARAMS['base_binsize']
                 log.info('(%s) reduced min n per bin to %d', gdir.rgi_id,
@@ -1942,7 +1946,7 @@ def catchment_width_correction(gdir):
                 if nmin == 0:
                     raise GeometryError('({}) no binsize could be chosen '
                                         .format(gdir.rgi_id))
-        if bsize > 150:
+        if bsize > 300:
             log.info('(%s) chosen binsize %d', gdir.rgi_id, bsize)
         else:
             log.debug('(%s) chosen binsize %d', gdir.rgi_id, bsize)
