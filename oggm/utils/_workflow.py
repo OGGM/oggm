@@ -543,22 +543,72 @@ def _get_centerline_lonlat(gdir):
     return olist
 
 
-def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
+def _write_shape_to_disk(gdf, fpath, to_tar=False):
+    """Write a shapefile to disk with optional compression
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        the data to write
+    fpath : str
+        where to writ the file - should be ending in shp
+    to_tar : bool
+        put the files in a .tar file. If cfg.PARAMS['use_compression'],
+        also compress to .gz
+    """
+
+    if '.shp' not in fpath:
+        raise ValueError('File ending should be .shp')
+
+    gdf.to_file(fpath)
+
+    if not to_tar:
+        # Done here
+        return
+
+    # Write them in tar
+    fpath = fpath.replace('.shp', '.tar')
+    mode = 'w'
+    if cfg.PARAMS['use_compression']:
+        fpath += '.gz'
+        mode += ':gz'
+    if os.path.exists(fpath):
+        os.remove(fpath)
+
+    # List all files that were written as shape
+    fs = glob.glob(fpath.replace('.gz', '').replace('.tar', '.*'))
+    # Add them to tar
+    with tarfile.open(fpath, mode=mode) as tf:
+        for ff in fs:
+            tf.add(ff, arcname=os.path.basename(ff))
+
+    # Delete the old ones
+    for ff in fs:
+        os.remove(ff)
+
+
+def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
+                               filesuffix=''):
     """Write the centerlines in a shapefile.
 
     Parameters
     ----------
     gdirs: the list of GlacierDir to process.
-    filesuffix : str
-        add suffix to output file
     path:
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    to_tar : bool
+        put the files in a .tar file. If cfg.PARAMS['use_compression'],
+        also compress to .gz
+    filesuffix : str
+        add suffix to output file
     """
 
     if path is True:
         path = os.path.join(cfg.PATHS['working_dir'],
                             'glacier_centerlines' + filesuffix + '.shp')
+
+    log.workflow('write_centerlines_to_shape on {} ...'.format(path))
 
     olist = []
     for gdir in gdirs:
@@ -570,7 +620,7 @@ def write_centerlines_to_shape(gdirs, filesuffix='', path=True):
     odf = gpd.GeoDataFrame(olist)
     odf = odf.sort_values(by='RGIID')
     odf.crs = {'init': 'epsg:4326'}
-    odf.to_file(path)
+    _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
 def demo_glacier_id(key):
@@ -2472,33 +2522,7 @@ class GlacierDirectory(object):
             append a suffix to the filename (useful for experiments).
         """
         fp = self.get_filepath(filename, filesuffix=filesuffix)
-        if '.shp' not in fp:
-            raise ValueError('File ending not that of a shapefile')
-        var.to_file(fp)
-
-        if not cfg.PARAMS['use_tar_shapefiles']:
-            # Done here
-            return
-
-        # Write them in tar
-        fp = fp.replace('.shp', '.tar')
-        mode = 'w'
-        if cfg.PARAMS['use_compression']:
-            fp += '.gz'
-            mode += ':gz'
-        if os.path.exists(fp):
-            os.remove(fp)
-
-        # List all files that were written as shape
-        fs = glob.glob(fp.replace('.gz', '').replace('.tar', '.*'))
-        # Add them to tar
-        with tarfile.open(fp, mode=mode) as tf:
-            for ff in fs:
-                tf.add(ff, arcname=os.path.basename(ff))
-
-        # Delete the old ones
-        for ff in fs:
-            os.remove(ff)
+        _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
 
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,

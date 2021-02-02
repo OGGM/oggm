@@ -424,6 +424,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
 
+        # And for level 2: shapes
+        if len(gdirs_cent) > 0:
+            opath = os.path.join(sum_dir, 'centerlines_{}.shp'.format(rgi_reg))
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             path=opath)
+
         # L2 OK - compress all in output directory
         log.workflow('L2 done. Writing to tar...')
         level_base_dir = os.path.join(output_base_dir, 'L2')

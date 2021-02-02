@@ -924,6 +924,8 @@ class TestPreproCLI(unittest.TestCase):
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'main_flowline_length' in df
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'centerlines_11.tar.gz'))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)
