@@ -44,6 +44,7 @@ Troubleshooting
 
     utils.show_versions
 
+.. _api-io:
 
 Input/Output
 ============

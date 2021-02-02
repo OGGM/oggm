@@ -85,7 +85,7 @@ there is no "optimum" :math:`f_{inv}` parameter in the model. There is a high
 uncertainty in the "true" :math:`A` parameter as well as in all other processes
 affecting the ice thickness. Therefore, we cannot make any recommendation for
 the "best" parameter. Global sensitivity analyses show that the default value
-is a good compromise (`Maussion et al., 2018 <https://www.geosci-model-dev.net/12/909/2019/>`_)
+is a good compromise ([Maussion_etal_2019]_)
 but very likely leads to overestimated ice volume.
 
 .. admonition:: **New in version 1.4!**
@@ -125,3 +125,9 @@ References
    Machguth, H., Maussion, F. and Pandit, A.: A consensus estimate for the
    ice thickness distribution of all glaciers on Earth, Nat. Geosci., 12(3),
    168–173, doi:10.1038/s41561-019-0300-3, 2019.
+
+.. [Maussion_etal_2019] Maussion, F., Butenko, A., Champollion, N., Dusch, M.,
+   Eis, J., Fourteau, K., Gregor, P., Jarosch, A. H., Landmann, J.,
+   Oesterle, F., Recinos, B., Rothenpieler, T., Vlug, A., Wild, C. T. and
+   Marzeion, B.: The Open Global Glacier Model (OGGM) v1.1, Geosci. Model Dev.,
+   12(3), 909–931, doi:10.5194/gmd-12-909-2019, 2019.

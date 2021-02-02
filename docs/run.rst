@@ -1,7 +1,7 @@
-.. _run-set-up:
+.. _tutorials:
 
-Set-up an OGGM run
-==================
+Tutorials
+=========
 
 These examples will show you some example scripts to realise regional or
 global runs with OGGM. The examples can be run on a laptop within a
@@ -12,7 +12,7 @@ For region-wide or global simulations, we recommend to use a cluster
 environment. OGGM should work well on cloud computing services like Amazon
 or Google Cloud, and we are in the process of testing such a deployment.
 
-**Before you start, make sure you had a look at the** :ref:`input-data` **section.**
+**Before you start, make sure you had a look at the** :ref:`getting-started` **section.**
 
 .. toctree::
     :maxdepth: 1

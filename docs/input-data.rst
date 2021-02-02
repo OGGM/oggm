@@ -1,109 +1,25 @@
-.. _input-data:
+.. _shop:
 
 .. currentmodule:: oggm
 
-Input data
-==========
+OGGM Shop
+=========
 
-OGGM needs various data files to run. Currently, **we rely exclusively on
-open-access data that are all downloaded automatically for the user**. This
-page explains the various ways OGGM uses to get to the data it needs.
+    .. figure:: _static/logos/logo_shop.png
+        :width: 100%
 
-First, you will have to set-up your :ref:`system-settings` (you'll need to
-do this only once per computer). Then, we recommend to start your runs from
-:ref:`preprodir`: these are ready-to-run :ref:`glacierdir` at various levels
-of pre-processing state, thus reducing the amount of pre-processing you'll
-have to do yourself. It is also possible to do a full run "from scratch", in
-which case OGGM will download the :ref:`rawdata` for you as well.
+OGGM needs various data files to run. **We rely exclusively on
+open-access data that can be downloaded automatically for the user**. We like
+to see this service as a "shop", allowing users to define a "shopping list"
+of data that users can add to their :ref:`glacierdir`.
 
+This page explains the various "shelves" or sections of this shop.
 
-.. _system-settings:
+.. important::
 
-System settings
----------------
-
-OGGM implements a bunch of tools to make access to the input data as painless
-as possible for you, including the automated download of all the required files.
-This requires you to tell OGGM where to store these data.
-
-
-Calibration data and testing: the ``~/.oggm`` directory
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-At the first import, OGGM will create a cached ``.oggm`` directory in your
-``$HOME`` folder. This directory contains all data obtained from the
-`oggm sample data`_ repository. It contains several files needed only for
-testing, but also some important files needed for calibration and validation
-(e.g. the `reference mass-balance data`_ from WGMS with
-`links to the respective RGI polygons`_).
-
-.. _oggm sample data: https://github.com/OGGM/oggm-sample-data
-.. _reference mass-balance data: https://github.com/OGGM/oggm-sample-data/tree/master/wgms
-.. _links to the respective RGI polygons: http://fabienmaussion.info/2017/02/19/wgms-rgi-links/
-
-The ``~/.oggm`` directory should be updated automatically when you update OGGM,
-but if you encounter any problems with it, simply delete the directory (it will
-be re-downloaded automatically at the next import).
-
-.. _oggm-config:
-
-All other data: auto-downloads and the ``~/.oggm_config`` file
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Unlike runtime parameters (such as physical constants or working directories),
-the input data is shared across runs and even across computers if you want
-to. Therefore, the paths to previously downloaded data are stored in a
-configuration file that you'll find in your ``$HOME`` folder:
-the ``~/.oggm_config`` file.
-
-The file should look like::
-
-    dl_cache_dir = /path/to/download_cache
-    dl_cache_readonly = False
-    tmp_dir = /path/to/tmp_dir
-    rgi_dir = /path/to/rgi_dir
-    test_dir = /path/to/test_dir
-    has_internet = True
-
-Some explanations:
-
-- ``dl_cache_dir`` is a path to a directory where *all* the files you
-  downloaded will be cached for later use. Most of the users won't need to
-  explore this folder (it is organized as a list of urls) but you have to make
-  sure to set this path to a folder with sufficient disk space available. This
-  folder can be shared across compute nodes if needed (it is even recommended
-  for HPC setups). Once a file is stored in this cache folder (e.g. a specific
-  DEM tile), OGGM won't download it again.
-- ``dl_cache_readonly`` indicates if writing is allowed in this folder (this is
-  the default). Setting this to ``True`` will prevent any further download in
-  this directory (useful for cluster environments, where this data might be
-  available on a readonly folder): in this case, OGGM will use a fall back
-  directory in your current working directory.
-- ``tmp_dir`` is a path to OGGM's temporary directory. Most of the
-  files used by OGGM are downloaded and cached in a compressed format (zip,
-  bz, gz...).
-  These files are extracted in ``tmp_dir`` before use. OGGM will never allow more
-  than 100 ``.tif`` (or 100 ``.nc``) files to exist in this directory by
-  deleting the oldest ones
-  following the rule of the `Least Recently Used (LRU)`_ item. Nevertheless,
-  this directory might still grow to quite a large size. Simply delete it
-  if you want to get this space back.
-- ``rgi_dir`` is the location where the RGI shapefiles are extracted.
-- ``test_dir`` is the location where OGGM will write some of its output during
-  tests. It can be set to ``tmp_dir`` if you want to, but it can also be
-  another directory (for example a fast SSD disk). This folder shouldn't take
-  too much disk space but here again, don't hesitate to delete it if you need to.
-
-.. note::
-
-  For advanced users or cluster configuration: the user's
-  ``tmp_dir`` and ``rgi_dir`` settings can be overridden and set to a
-  specific directory by defining an environment variable ``OGGM_EXTRACT_DIR``
-  to a directory path. Similarly, the environment variables
-  ``OGGM_DOWNLOAD_CACHE`` and ``OGGM_DOWNLOAD_CACHE_RO`` override the
-  ``dl_cache_dir`` and ``dl_cache_readonly`` settings.
-
-.. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
+    Don't forget to set-up or check your :ref:`system-settings` before
+    downloading new data! (you'll need to
+    do this only once per computer)
 
 .. _preprodir:
 
@@ -112,36 +28,55 @@ Pre-processed directories
 
 The simplest way to run OGGM is to rely on :ref:`glacierdir` which have been
 prepared for you by the OGGM developers. Depending on your use case,
-you can start from various levels of pre-processing, and various map sizes.
+you can start from various stages in the processing chain, various map sizes,
+and various model set-ups.
 
-All these directories have been generated with the default parameters
-of the current stable OGGM version. If you want to change these parameters,
-you'll have to do a full run from scratch using the :ref:`rawdata`.
+The default directories have been generated with the default parameters
+of the current stable OGGM version and combinations hereof. If you want to
+change some of the these parameters, you *may* have to do a run from scratch
+using the :ref:`rawdata`. Whether or not this is necessary depends on the
+stage of the workflow you'd like your computations to diverge from the
+defaults (we provide example use cases below).
 
 To start from a pre-processed state, simply use the
 :py:func:`workflow.init_glacier_directories` function with the
 ``from_prepro_level`` and ``prepro_border`` keyword arguments set to the
-values of your choice.
+values of your choice. This will fetch the default directories: there are
+more options to that, which we explain below.
 
 Processing levels
 ~~~~~~~~~~~~~~~~~
 
 Currently, there are five available levels of pre-processing:
 
-- **Level 1**: the lowest level, with directories containing the glacier
-  topography and glacier outlines only.
-- **Level 2**, adding the baseline climate timeseries (CRU, see below) to this
-  folder.
-- **Level 3**, adding the output of all necessary pre-processing tasks
-  for a dynamical run, including the bed inversion using the default
-  parameters.
-- **Level 4**, same as level 3 but with all intermediate ouptut files removed.
+- **Level 0**: the lowest level, with directories containing the glacier
+  outlines only.
+- **Level 1**: directories now contain the glacier topography data as well.
+- **Level 2**: at this stage, the flowlines and their downstream lines are
+  computed and ready to be used.
+- **Level 3**: adding the baseline climate timeseries (CRU or ERA5, see below)
+  to the directories. Adding all necessary pre-processing tasks
+  for a dynamical run, including the mass-balance calibration, bed inversion,
+  etc. up to the `init_present_time_glacier` (included). These directories
+  still contain all gridded data, i.e. they are the largest in size but the
+  most flexible.
+- **Level 4**: same as level 3 but with all intermediate ouptut files removed.
   The strong advantage of level 4 files is that their size is considerably
   reduced, at the cost that certain operations (like plotting on maps or
-  running the bed inversion algorithm again) are not possible.
+  running the bed inversion algorithm again) are not possible anymore.
+- **Level 5**: on top of level 4, an additional historical simulation is run
+  from the RGI date to the last possible date of the baseline climate file
+  (for example, CRU in the Alps mean a 2003-2019 simulation for most glaciers).
+  The state of the glacier as month 01, year 2020 can then be used for
+  future projections.
 
-In practice, most users are going to use level 3 or level 4 files, with some
-use cases relying on lower levels.
+In practice, most users are going to use level 2, 3 or level 5 files. Here
+are some example use cases:
+
+
+
+
+
 
 Map size
 ~~~~~~~~
@@ -210,6 +145,17 @@ for your research question, and to start your runs from level 4 if possible.
   The data download of the preprocessed directories will occur one single time
   only: after the first download, the data will be cached in OGGM's
   ``dl_cache_dir`` folder (see above).
+
+
+Available pre-processed configurations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. admonition:: **New in version 1.4!**
+
+    OGGM now has several configurations and directories to choose from,
+    and the list is getting larger. Don't hestitate to ask us if you think
+    we should add more!
+
 
 
 .. _rawdata:

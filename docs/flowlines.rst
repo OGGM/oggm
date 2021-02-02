@@ -160,8 +160,8 @@ Elevation bands flowlines
 
 "Elevation bands flowlines" are another way to transform a glacier into a
 flowline. The implementation is considerably easier as the geometrical
-centerlines, and is explained in [Huss_Farinotti_2012]_ as well as
-[Werder_etal_2019]_ (in greater detail in the latter). We follow the
+centerlines, and is used in [Huss_Farinotti_2012]_,
+[Huss_Hock_2015]_ as well as [Werder_etal_2019]_. We follow the
 exact same methodology.
 
 The elevation range of the glacier is divided into N equal bands,

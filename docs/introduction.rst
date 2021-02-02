@@ -51,5 +51,11 @@ Glacier evolution
 .. _RGI: https://www.glims.org/RGI/
 
 
+.. admonition:: **New in version 1.4!**
+
+   Since v1.4, OGGM now has another way to compute flowlines via
+   **binned elevation bands** ([Huss_Farinotti_2012]_). See
+   :ref:`flowlines` for more details.
+
 .. figure:: _static/ex_workflow.png
     :width: 100%

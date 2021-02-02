@@ -228,11 +228,6 @@ References
 .. [Cuffey_Paterson_2010] Cuffey, K., and W. S. B. Paterson (2010).
     The Physics of Glaciers, Butterworth‐Heinemann, Oxford, U.K.
 
-.. [Farinotti_etal_2009] Farinotti, D., Huss, M., Bauder, A., Funk, M., &
-    Truffer, M. (2009). A method to estimate the ice volume and
-    ice-thickness distribution of alpine glaciers. Journal of Glaciology, 55
-    (191), 422–430.
-
 .. [Golledge_Levy_2011] Golledge, N. R., and Levy, R. H. (2011).
     Geometry and dynamics of an East Antarctic Ice Sheet outlet glacier, under
     past and present climates. Journal of Geophysical Research:
