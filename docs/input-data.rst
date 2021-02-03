@@ -47,7 +47,7 @@ more options to that, which we explain below.
 Processing levels
 ~~~~~~~~~~~~~~~~~
 
-Currently, there are five available levels of pre-processing:
+Currently, there are six available levels of pre-processing:
 
 - **Level 0**: the lowest level, with directories containing the glacier
   outlines only.
@@ -79,19 +79,18 @@ are some example use cases:
    use OGGM's workflow again for the ice dynamics?).
 3. *Run sensitivity experiments for the ice thickness inversion*: start at level
    3 (with climate data available) and re-run the inversion steps.
-4. *Implement and test a new calving parameterisation*: start at level 3
 
 
-Map size
-~~~~~~~~
+Glacier map size: the prepro_border argument
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The size of the local glacier map is given in number of grid points *outside*
 the glacier boundaries. The larger the map, the largest the glacier can
 become. Therefore, user should choose the map border parameter depending
 on the expected glacier growth in their simulations: for most cases,
-a border value of 80 or 160 should be enough.
+a border value of 40 or 80 should be enough.
 
-Here is an example with the Hintereisferner in the Alps:
+Here is an example with Hintereisferner in the Alps:
 
 .. ipython:: python
    :suppress:
@@ -118,37 +117,37 @@ Here is an example with the Hintereisferner in the Alps:
     @savefig plot_border_size.png width=100%
     plt.tight_layout(); plt.show()
 
-
-For runs into the Little Ice Age, a border value of 160 is more than enough.
-For simulations into the 21st century, a border value of 80 is
-sufficient.
+For runs into the Little Ice Age, a border value of 160 should be enough.
+For simulations into the 21st century, a border value of 40 is
+sufficient, but 80 is safer in case scenarios are stabilizing.
 
 Users should be aware that the amount of data to download isn't small,
-especially for full directories at levels 3. Here is an indicative
-table for the total amount of data for all 18 RGI regions
-(excluding Antarctica):
+especially for full directories at processing level 3. Here is an indicative
+table for the total amount of data for all 19 RGI regions:
 
 ======  =====  =====  =====  =====
-Level   B  10  B  80  B 160  B 250
+Level   B  10  B  40  B  80  B 160
 ======  =====  =====  =====  =====
-**L1**  2.4G   11G    29G    63G
-**L2**  5.1G   14G    32G    65G
-**L3**  13G    44G    115G   244G
-**L4**  4.2G   4.5G   4.8G   5.3G
+**L0**  927M   927M   927M   927M
+**L1**  3.2G   7.3G   17G    47G
+**L2**  11G    23G    51G    144G
+**L3**
+**L4**
+**L5**
 ======  =====  =====  =====  =====
 
 Certain regions are much smaller than others of course. As an indication,
-with prepro level 3 and a map border of 160, the Alps are 2G large, Greenland
-11G, and Iceland 334M.
+with prepro level 3 and a map border of 160, the Alps are 2.1G large, Greenland
+21G, and Iceland 664M.
 
 Therefore, it is recommended to always pick the smallest border value suitable
-for your research question, and to start your runs from level 4 if possible.
+for your research question, and to start your runs from level 5 if possible.
 
 .. note::
 
   The data download of the preprocessed directories will occur one single time
   only: after the first download, the data will be cached in OGGM's
-  ``dl_cache_dir`` folder (see above).
+  ``dl_cache_dir`` folder (see :ref:`system-settings`).
 
 
 Available pre-processed configurations
@@ -160,9 +159,64 @@ Available pre-processed configurations
     and the list is getting larger. Don't hestitate to ask us if you think
     we should add more!
 
+Default
+^^^^^^^
+
+If not provided with a specific `prepro_base_url` argument,
+:py:func:`workflow.init_glacier_directories` will download glacier dirctories
+from the default urls:
+
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/ for level 1 and level 2
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/ for level 3 to 5
+
+I recommend to explore these directories for their content. Of course, OGGM
+will know where to find the respective files automatically, but is is good
+to understand how this works. The `summary` folders
+(`example <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/RGI62/b_080/L2/summary/>`_)
+folder contains diagnostic files which can be useful as well.
+
+Geometrical centerlines or elevation band flowlines
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The type of flowline (see :ref:`flowlines`) is decided at level 2 already.
+Therefore, these are already available at level 2 from these urls:
+
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/ for centerlines
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/ for elevation bands
+
+And for example, if you want to pick from the CRU default configuration at higher
+levels:
+
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/
+
+Baseline climate data
+^^^^^^^^^^^^^^^^^^^^^
+
+For the two most important default configurations (CRU or ERA5 as baseline climate),
+we provide all levels for both the geometrical centerlines or the elevation band
+flowlines:
+
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/ for default CRU + centerlines
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/ for default CRU + elevation bands
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match/ for default ERA5 + centerlines
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match/ for default ERA5 + elevation bands
+
+Further set-ups
+^^^^^^^^^^^^^^^
+
+For additional set-ups, we might not provide all levels. Here is the current list of available configurations:
 
 
-.. _rawdata:
+RGI TOPO
+--------
+
+ITS LIVE
+--------
+
+Ice thickness
+-------------
+
 
 Raw data sources
 ----------------

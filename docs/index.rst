@@ -21,8 +21,8 @@ OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 IARPC presentation (April 2020)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you are new to OGGM and have 15 mins time, here is a recent
-presentation about the project:
+If you are new to OGGM would like a short introduction, here is a recent
+15' presentation about the project:
 
 .. raw:: html
 
