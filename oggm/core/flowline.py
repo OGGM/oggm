@@ -2427,8 +2427,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                                      input_filesuffix=climate_input_filesuffix)
 
     if ye is None:
-        # Decide from climate
-        ye = mb.flowline_mb_models[0].ye
+        # Decide from climate (we can run the last year with data as well)
+        ye = mb.flowline_mb_models[0].ye + 1
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb, ys=ys, ye=ye,

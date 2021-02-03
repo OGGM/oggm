@@ -2828,7 +2828,7 @@ class TestHEF:
         fp = hef_gdir.get_filepath('model_run', filesuffix='_4')
         with FileModel(fp) as fmod:
             assert fmod.y0 == 2002
-            assert fmod.last_yr == 2003
+            assert fmod.last_yr == 2004
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
