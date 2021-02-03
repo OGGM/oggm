@@ -11,7 +11,6 @@ includes an explicit ice dynamics module.  We rely exclusively on publicly
 available data for calibration and validation, and encourage re-mix and re-use,
 i.e. we fully support external modelling efforts based on the OGGM workflow.
 
-
 **This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 

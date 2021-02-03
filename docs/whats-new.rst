@@ -4,8 +4,28 @@
 Version history
 ===============
 
-v1.4.0 (unreleased)
--------------------
+v1.4.0 (pre-release)
+--------------------
+
+.. admonition:: **New in version 1.4! (pre-release, Feb 03 2021)**
+
+    There have been a large number of additions too long to be summarized,
+    and the list below is far from complete (we have waited way too long for
+    this release). Here are the highlights:
+
+       - new option to compute centerlines: "elevation band flowlines"
+       - new option to calibrate OGGM mass-balance regionally to geodetic
+         estimates
+       - new option to calibrate OGGM ice thickness to the Farinotti et al. (2019)
+         consensus
+       - users can now choose from a variety of pre-processed directories,
+         including with new climate data (e.g. ERA5)
+       - OGGM now has a calving parameterization (switched off per default)
+       - OGGM shop
+       - Historical runs ("spin-up") are now available per default and can
+         be readily used for projections
+       - and much much more....
+
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

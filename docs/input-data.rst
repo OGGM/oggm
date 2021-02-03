@@ -207,16 +207,48 @@ Further set-ups
 
 For additional set-ups, we might not provide all levels. Here is the current list of available configurations:
 
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/ for CERA+ERA5 climate data on elevation bands flowlines
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/ for CERA+ERA5 climate data on elevation bands flowlines matched on regional geodetic mass-balances
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/ for CRU climate data on elevation bands flowlines matched on regional geodetic mass-balances
+- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp2.5/match_geod/ for ERA5 climate data on elevation bands flowlines matched on regional geodetic mass-balances
 
-RGI TOPO
+RGI-TOPO
 --------
 
-ITS LIVE
+The `RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ dataset
+provides a local topography map for each single glacier in the RGI. It was
+generated with OGGM, and can be used very easily from the OGGM-Shop (visit
+our :ref:`tutorials` if you are interested!).
+
+    .. figure:: _static/malaspina_topo.png
+        :width: 100%
+
+        Example of the various RGI-TOPO products at Malaspina glacier
+
+
+ITS_LIVE
 --------
+
+The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
+can be downloaded and reprojected to the glacier directory
+(visit our :ref:`tutorials` if you are interested!).
+
+    .. figure:: _static/malaspina_itslive.png
+        :width: 80%
+
+        Example of the reprojected ITS_LIVE products at Malaspina glacier
 
 Ice thickness
 -------------
 
+The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`_
+ice thickness products can be downloaded and reprojected to the glacier directory
+(visit our :ref:`tutorials` if you are interested!).
+
+    .. figure:: _static/malaspina_thick.png
+        :width: 80%
+
+        Example of the reprojected ice thickness products at Malaspina glacier
 
 Raw data sources
 ----------------
