@@ -395,7 +395,7 @@ class DisableLogger():
     """Context manager to temporarily disable all loggers."""
 
     def __enter__(self):
-        logging.disable(logging.ERROR)
+        logging.disable(logging.CRITICAL)
 
     def __exit__(self, a, b, c):
         logging.disable(logging.NOTSET)

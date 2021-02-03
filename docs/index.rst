@@ -2,18 +2,32 @@
 A modular open source glacier model in Python
 ---------------------------------------------
 
+OGGM is a **modular modelling framework** able to simulate past and
+future mass-balance, volume and geometry of (almost) any glacier in the world,
+in a fully automated and extensible workflow.
+
 The model accounts for glacier geometry (including contributory branches) and
-includes an explicit ice dynamics module. It can simulate past and
-future mass-balance, volume and geometry of (almost) any glacier in the world
-in a fully automated and extensible workflow. We rely exclusively on publicly
-available data for calibration and validation.
+includes an explicit ice dynamics module.  We rely exclusively on publicly
+available data for calibration and validation, and encourage re-mix and re-use,
+i.e. we fully support external modelling efforts based on the OGGM workflow.
 
-**This is the software documentation: for general information about the
+**This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
-
 
 .. include:: _generated/version_text.txt
 
+
+IARPC presentation (April 2020)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are new to OGGM would like a short introduction, here is a recent
+15' presentation about the project:
+
+.. raw:: html
+
+    <iframe width="672" height="378" src="https://www.youtube.com/embed/ttJMxcwXUjw?start=1270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+*Slides available* `here <https://oggm.org/framework_talk>`_
 
 Principles
 ^^^^^^^^^^
@@ -132,7 +146,7 @@ copy or modify its code at your wish, under certain conditions:
    or promote products derived from this software without specific prior
    written permission. This does not mean that you need our written permission
    to work with OGGM or publish results based on OGGM: it simply means that
-   the OGGM developers are not accountable for your use of the tool
+   the OGGM developers are not accountable for what you do with the tool
    (`more info <https://opensource.stackexchange.com/a/9137>`_).
 
 See the `OGGM license`_ for more information.

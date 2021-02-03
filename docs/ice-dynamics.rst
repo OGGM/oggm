@@ -108,8 +108,8 @@ depends on :math:`\lambda`. The angle :math:`\beta` of the side wall
     \beta = atan \frac{2}{\lambda}
 
 [Golledge_Levy_2011]_ uses :math:`\lambda = 2`
-(a 45° wall angle), the current default in OGGM is :math:`\lambda = 1`
-(a 63° wall angle).
+(a 45° wall angle) which is the default in OGGM as of version 1.4
+(it used to be :math:`\lambda = 1`, a 63° wall angle).
 
 
 Parabolic
@@ -141,13 +141,20 @@ Mixed
 ~~~~~
 
 A combination of rectangular, trapezoidal and parabolic shapes.
-The default is parabolic, but can be adapted in two cases:
 
-- if the glacier section touches an ice-divide or a neighboring tributary
-  catchment outline, the bed is considered to be rectangular;
-- if the parabolic shape parameter :math:`P_s` is below a certain threshold,
-  a trapezoidal shape is used. Indeed, flat parabolas tend to be very
-  sensitive to small changes in :math:`h`, which is undesired.
+.. note::
+
+    The default in OGGM is to used mixed flowlines, following these rules:
+
+        - **elevation-band flowlines** have a trapezoid bed everywhere, except on the glacier
+          forefront where the bed is parabolic (computed from the valley topography).
+        - **geometrical centerlines** have a parabolic bed shape, with two exceptions:
+
+            - if the glacier section touches an ice-divide or a neighboring tributary
+              catchment outline, the bed is considered to be rectangular;
+            - if the parabolic shape parameter :math:`P_s` is below a certain threshold,
+              a trapezoidal shape is used. Indeed, flat parabolas tend to be very
+              sensitive to small changes in :math:`h`, which is undesired.
 
 
 Numerics
@@ -186,9 +193,8 @@ MUSCLSuperBeeModel
 ~~~~~~~~~~~~~~~~~~
 
 A shallow ice model with improved numerics ensuring mass-conservation in
-very steep walls [Jarosch_etal_2013]_. The model is currently in
-development to account for various bed shapes and tributaries and will
-likely become the default in OGGM.
+very steep walls [Jarosch_etal_2013]_. The model is currently used only as
+reference benchmark for the FluxBasedModel.
 
 
 Glacier tributaries
@@ -221,11 +227,6 @@ References
 
 .. [Cuffey_Paterson_2010] Cuffey, K., and W. S. B. Paterson (2010).
     The Physics of Glaciers, Butterworth‐Heinemann, Oxford, U.K.
-
-.. [Farinotti_etal_2009] Farinotti, D., Huss, M., Bauder, A., Funk, M., &
-    Truffer, M. (2009). A method to estimate the ice volume and
-    ice-thickness distribution of alpine glaciers. Journal of Glaciology, 55
-    (191), 422–430.
 
 .. [Golledge_Levy_2011] Golledge, N. R., and Levy, R. H. (2011).
     Geometry and dynamics of an East Antarctic Ice Sheet outlet glacier, under

@@ -11,6 +11,16 @@ While the equation governing the mass-balance is that of a traditional
 temperature index model, our special approach to calibration requires
 that we spend some time describing it.
 
+.. note::
+
+    OGGM v1.4 will probably be the last model version relying on this
+    mass-balance model only. Considerable development efforts are made
+    to give more options to the user (see e.g. the
+    `mass-balance sandbox <https://github.com/OGGM/massbalance-sandbox>`_
+    or `PyGem <https://github.com/drounce/PyGEM>`_, which is close to be
+    fully compatible with OGGM).
+
+
 .. _Marzeion et al., (2012): http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 .. ipython:: python
@@ -54,6 +64,17 @@ scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
+ERA5 and CERA-20C
+~~~~~~~~~~~~~~~~~
+
+Since OGGM v1.4, users can also use reanalysis data from the ECMWF. OGGM
+can also use the
+`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
+`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
+datasets as baseline. One can also apply a combination of both, for example
+by applying the CERA-20C anomalies to the reference ERA5 for example
+(useful only in certain circumstances).
+
 HISTALP
 ~~~~~~~
 
@@ -71,8 +92,6 @@ recommend to use data from 1850 onwards.
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
 
-
-
 User-provided dataset
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -88,13 +107,9 @@ GCM data
 OGGM can also use climate model output to drive the mass-balance model. In
 this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
-period (currently: 1961-1990). This method is often called the
+period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-
-Currently we can process data from the
-`CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
-project (see :py:func:`tasks.process_cesm_data`) only, but adding other models
-will be available `soon <https://github.com/OGGM/oggm/issues/469>`_.
+Visit our online tutorials to see how this can be done.
 
 
 Elevation dependency
@@ -118,7 +133,7 @@ is computed as:
 
 .. math::
 
-    B_i(z) = P_i^{Solid}(z) - \mu ^{*} \, max \left( T_i(z) - T_{Melt}, 0 \right)
+    B_i(z) = P_i^{Solid}(z) - \mu ^{*} \, max \left( T_i(z) - T_{Melt}, 0 \right) + \epsilon
 
 where :math:`P_i^{Solid}` is the monthly solid precipitation, :math:`T_i`
 the monthly temperature and :math:`T_{Melt}` is the monthly mean air
@@ -129,7 +144,8 @@ solid precipitation is based on the monthly mean temperature: all solid below
 (default: 2°C), linear in between.
 
 The parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
-glacier, and it needs to be calibrated.
+glacier, and it needs to be calibrated. :math:`\epsilon` is a residual, to be
+determined at the calibration step.
 
 Calibration
 -----------
@@ -251,6 +267,20 @@ resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
 
+Regional calibration
+--------------------
+
+.. admonition:: **New in version 1.4!**
+
+   As of version 1.4, we now also offer to calibrate the mass-balance at the
+   regional level (RGI regions) based on geodetic mass-balance products
+   ([Zemp_etal_2019]_ or [Hugonnet_etal_2020]_). This is done by correcting
+   (shifting) the residual for each glacier (:math:`\epsilon` in the equation
+   above) by a constant value so that the regional estimates match the
+   observations. This is not applied per default, as it might lead to
+   unrealistic results at the single glacier scale (but it is very useful
+   for global studies).
+
 References
 ----------
 
@@ -258,6 +288,14 @@ References
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
    623–642. https://doi.org/10.1002/joc.3711
+
+.. [Hugonnet_etal_2020] Hugonnet et al., accepted.
+
+.. [Zemp_etal_2019] Zemp, M., Huss, M., Thibert, E., Eckert, N., McNabb, R.,
+   Huber, J., Barandun, M., Machguth, H., Nussbaumer, S. U., Gärtner-Roer, I.,
+   Thomson, L., Paul, F., Maussion, F., Kutuzov, S. and Cogley, J. G.:
+   Global glacier mass changes and their contributions to sea-level rise from
+   1961 to 2016, Nature, 568(7752), 382–386, doi:10.1038/s41586-019-1071-0, 2019.
 
 Implementation details
 ----------------------

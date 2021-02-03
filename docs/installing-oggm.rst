@@ -13,14 +13,14 @@ are not trivial to install. The instructions below provide all the required
 detail and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python version 3.6 and 3.7 on Linux.
-OGGM doesn't work with Python 2. We do not test OGGM on Mac OS, but it
-should probably run fine.
+OGGM is fully `tested`_ with Python version 3.6, 3.7 and 3.8 on Linux.
+OGGM doesn't work with Python 2. We do not test OGGM automatically on
+Mac OSX, but it should probably run fine there as well.
 
 .. warning::
 
     OGGM does not work on Windows. If you are using Windows 10,
-    we strongly recommend to install the free
+    we recommend to install the free
     `Windows subsytem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
     and install and run OGGM from there.
 

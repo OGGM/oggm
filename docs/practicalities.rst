@@ -104,8 +104,8 @@ Installation
 The installation procedure explained in :ref:`installing.oggm` should also
 work in cluster environments. If you don't have admin rights,
 installing with conda in your ``$HOME`` probably is the easiest option.
-Once OGGM is installed, you can use your scripts (like the ones provided in
-:ref:`run-set-up`). But you probably want to check if the tests pass and our
+Once OGGM is installed, you can use your scripts (like the ones provided in the
+:ref:`tutorials`). But you probably want to check if the tests pass and our
 `Data storage`_ section below first!
 
 
@@ -221,7 +221,7 @@ Data storage
 
 **‣ Input**
 
-OGGM needs a certain amount of data to run (see :ref:`input-data`). Regardless
+OGGM needs a certain amount of data to run (see :ref:`shop`). Regardless
 if you are using pre-processed directories or raw data, you will need to have
 access to them from your environment. The default in OGGM is to download
 the data and store it in a folder, specified in the ``$HOME/.oggm_config``
@@ -251,7 +251,7 @@ you have to deal with:
 
 - the easiest way is to simply delete the glacier directories after a run
   and keep only the aggregated statistics files generated with the ``compile_``
-  tasks (see :ref:`api-workflow`). A typical workflow would be to start from
+  tasks (see :ref:`api-io`). A typical workflow would be to start from
   pre-processed directories, do the run, aggregate the results, copy the
   aggregated files for long term storage, and delete the working directory.
 - the method above does not allow to go back to a single glacier
@@ -262,7 +262,8 @@ you have to deal with:
   :py:func:`utils.gdir_to_tar` and :py:func:`utils.base_dir_to_tar` functions
   to create compressed, aggregated files of your directories. You can
   later initialize new directories from these tar files with the `from_tar`
-  keyword argument in :py:func:`workflow.init_glacier_directories`.
+  keyword argument in :py:func:`workflow.init_glacier_directories`. See our
+  dedicated :ref:`tutorials` on the topic.
 
 
 Run per RGI region, not globally

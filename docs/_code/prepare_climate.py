@@ -6,7 +6,7 @@ import pandas as pd
 import xarray as xr
 
 import oggm
-from oggm import cfg, tasks
+from oggm import cfg, tasks, graphics
 from oggm.core.climate import (mb_yearly_climate_on_glacier,
                                t_star_from_refmb,
                                local_t_star, mu_star_calibration)
@@ -22,7 +22,7 @@ histalp.set_histalp_url('https://cluster.klima.uni-bremen.de/~oggm/'
 
 base_dir = gettempdir('Climate_docs')
 cfg.PATHS['working_dir'] = base_dir
-entity = gpd.read_file(get_demo_file('HEF_MajDivide.shp')).iloc[0]
+entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
 gdir = oggm.GlacierDirectory(entity, base_dir=base_dir, reset=True)
 
 tasks.define_glacier_region(gdir)

@@ -51,10 +51,10 @@ class TestIdealisedCases(unittest.TestCase):
     def setUp(self):
         N = 3
         cfg.initialize()
-        self.glen_a = 2.4e-24    # Modern style Glen parameter A
+        self.glen_a = 2.4e-24  # Modern style Glen parameter A
         self.aglen_old = (N + 2) * 1.9e-24 / 2.  # outdated value
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
-        self.fs = 0             # set slidin
+        self.fs = 0  # set slidin
         self.fs_old = 5.7e-20  # outdated value
 
     def tearDown(self):
@@ -240,7 +240,7 @@ class TestIdealisedCases(unittest.TestCase):
         """
 
         models = [KarthausModel, FluxBasedModel, MUSCLSuperBeeModel]
-        kwargs = [{'fixed_dt': 3*SEC_IN_DAY}, {}, {}]
+        kwargs = [{'fixed_dt': 3 * SEC_IN_DAY}, {}, {}]
         lens = []
         surface_h = []
         volume = []
@@ -336,7 +336,7 @@ class TestIdealisedCases(unittest.TestCase):
             mb = LinearMassBalance(2600.)
 
             model = model(fls, mb_model=mb, y0=0., glen_a=self.glen_a,
-                          fs=self.fs, fixed_dt=2*SEC_IN_DAY)
+                          fs=self.fs, fixed_dt=2 * SEC_IN_DAY)
 
             length = yrs * 0.
             vol = yrs * 0.
@@ -846,12 +846,12 @@ class TestIdealisedCases(unittest.TestCase):
 
         tb = dummy_trapezoidal_bed()[0]
         np.testing.assert_almost_equal(tb._w0_m, tb.widths_m)
-        np.testing.assert_almost_equal(tb.section, tb. widths_m * 0)
+        np.testing.assert_almost_equal(tb.section, tb.widths_m * 0)
         np.testing.assert_almost_equal(tb.area_km2, 0)
 
         tb.section = tb.section
         np.testing.assert_almost_equal(tb._w0_m, tb.widths_m)
-        np.testing.assert_almost_equal(tb.section, tb. widths_m * 0)
+        np.testing.assert_almost_equal(tb.section, tb.widths_m * 0)
         np.testing.assert_almost_equal(tb.area_km2, 0)
 
         h = 50.
@@ -1248,7 +1248,7 @@ class TestKCalving():
             f, ax = plt.subplots(1, 1, figsize=(12, 5))
             df_diag[['surface_h', 'bed_h']].plot(ax=ax, color=['C3', 'k'])
             plt.hlines(1000, 0, 60000, color='C0', linestyles=':')
-            plt.ylim(1000-350, 1000+800)
+            plt.ylim(1000 - 350, 1000 + 800)
             plt.ylabel('Altitude [m]')
             plt.show()
 
@@ -1375,7 +1375,7 @@ class TestSia2d(unittest.TestCase):
         assert_allclose(sdmodel.area_km2 / 3, flmodel.area_km2, atol=2e-3)
 
         # Store
-        run_ds = sdmodel.run_until_and_store(sdmodel.yr+50)
+        run_ds = sdmodel.run_until_and_store(sdmodel.yr + 50)
         ts = run_ds['ice_thickness'].mean(dim=['y', 'x'])
         assert_allclose(ts, ts.values[0], atol=1)
 
