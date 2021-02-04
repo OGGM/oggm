@@ -16,6 +16,7 @@ import datetime
 import logging
 import pickle
 import warnings
+import itertools
 from collections import OrderedDict
 from functools import partial, wraps
 from time import gmtime, strftime
@@ -525,20 +526,55 @@ def global_task(task_func):
     return task_func
 
 
-def _get_centerline_lonlat(gdir):
+@entity_task(log)
+def _get_centerline_lonlat(gdir, flowlines_output=False,
+                           geometrical_widths_output=False,
+                           corrected_widths_output=False):
     """Quick n dirty solution to write the centerlines as a shapefile"""
 
-    cls = gdir.read_pickle('centerlines')
+    if flowlines_output or geometrical_widths_output or corrected_widths_output:
+        cls = gdir.read_pickle('inversion_flowlines')
+    else:
+        cls = gdir.read_pickle('centerlines')
+
+    tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
+
     olist = []
-    for j, cl in enumerate(cls[::-1]):
-        mm = 1 if j == 0 else 0
-        gs = dict()
-        gs['RGIID'] = gdir.rgi_id
-        gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-        gs['MAIN'] = mm
-        tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
-        gs['geometry'] = shp_trafo(tra_func, cl.line)
-        olist.append(gs)
+    for j, cl in enumerate(cls):
+        mm = 1 if j == (len(cls)-1) else 0
+        if corrected_widths_output:
+            le_segment = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            for wi, cur, (n1, n2), wi_m in zip(cl.widths, cl.line.coords,
+                                               cl.normals, cl.widths_m):
+                _l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
+                                      shpg.Point(cur + wi / 2. * n2)])
+                gs = dict()
+                gs['RGIID'] = gdir.rgi_id
+                gs['SEGMENT_ID'] = j
+                gs['LE_SEGMENT'] = le_segment
+                gs['MAIN'] = mm
+                gs['WIDTH_m'] = wi_m
+                gs['geometry'] = shp_trafo(tra_func, _l)
+                olist.append(gs)
+        elif geometrical_widths_output:
+            le_segment = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            for _l, wi_m in zip(cl.geometrical_widths, cl.widths_m):
+                gs = dict()
+                gs['RGIID'] = gdir.rgi_id
+                gs['SEGMENT_ID'] = j
+                gs['LE_SEGMENT'] = le_segment
+                gs['MAIN'] = mm
+                gs['WIDTH_m'] = wi_m
+                gs['geometry'] = shp_trafo(tra_func, _l)
+                olist.append(gs)
+        else:
+            gs = dict()
+            gs['RGIID'] = gdir.rgi_id
+            gs['SEGMENT_ID'] = j
+            gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
+            gs['MAIN'] = mm
+            gs['geometry'] = shp_trafo(tra_func, cl.line)
+            olist.append(gs)
 
     return olist
 
@@ -588,7 +624,10 @@ def _write_shape_to_disk(gdf, fpath, to_tar=False):
 
 
 def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
-                               filesuffix=''):
+                               filesuffix='', flowlines_output=False,
+                               geometrical_widths_output=False,
+                               corrected_widths_output=False,
+                               out_crs=None):
     """Write the centerlines in a shapefile.
 
     Parameters
@@ -602,7 +641,14 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         also compress to .gz
     filesuffix : str
         add suffix to output file
+    flowlines_output : bool
+        output the flowlines instead of the centerlines
+    geometrical_widths_output : bool
+        output the geometrical widths instead of the centerlines
+    corrected_widths_output : bool
+        output the corrected widths instead of the centerlines
     """
+    from oggm.workflow import execute_entity_task
 
     if path is True:
         path = os.path.join(cfg.PATHS['working_dir'],
@@ -610,14 +656,11 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
 
     log.workflow('write_centerlines_to_shape on {} ...'.format(path))
 
-    olist = []
-    for gdir in gdirs:
-        try:
-            olist.extend(_get_centerline_lonlat(gdir))
-        except FileNotFoundError:
-            pass
-
-    odf = gpd.GeoDataFrame(olist)
+    olist = execute_entity_task(_get_centerline_lonlat, gdirs,
+                                flowlines_output=flowlines_output,
+                                geometrical_widths_output=geometrical_widths_output,
+                                corrected_widths_output=corrected_widths_output)
+    odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
     odf = odf.sort_values(by='RGIID')
     odf.crs = {'init': 'epsg:4326'}
     _write_shape_to_disk(odf, path, to_tar=to_tar)
