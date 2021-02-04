@@ -212,7 +212,6 @@ class TestFullRun(unittest.TestCase):
 
     @pytest.mark.slow
     def test_shapefile_output(self):
-
         # Just to increase coveralls, hehe
         gdirs = up_to_climate()
         fpath = os.path.join(_TEST_DIR, 'centerlines.shp')
@@ -224,6 +223,32 @@ class TestFullRun(unittest.TestCase):
         shp = shp.loc[shp.RGIID == 'RGI60-11.00897']
         self.assertEqual(len(shp), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
+
+        fpath = os.path.join(_TEST_DIR, 'flowlines.shp')
+        write_centerlines_to_shape(gdirs, path=fpath, flowlines_output=True)
+        shp_f = salem.read_shapefile(fpath)
+        self.assertTrue(shp_f is not None)
+        shp_f = shp_f.loc[shp_f.RGIID == 'RGI60-11.00897']
+        self.assertEqual(len(shp_f), 3)
+        self.assertEqual(shp_f.loc[shp_f.LE_SEGMENT.idxmax()].MAIN, 1)
+        # The flowline is cut so shorter
+        assert shp_f.LE_SEGMENT.max() < shp.LE_SEGMENT.max() * 0.8
+
+        fpath = os.path.join(_TEST_DIR, 'widths_geom.shp')
+        write_centerlines_to_shape(gdirs, path=fpath, geometrical_widths_output=True)
+        # Salem can't read it
+        shp_w = gpd.read_file(fpath)
+        self.assertTrue(shp_w is not None)
+        shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
+        self.assertEqual(len(shp_w), 90)
+
+        fpath = os.path.join(_TEST_DIR, 'widths_corr.shp')
+        write_centerlines_to_shape(gdirs, path=fpath, corrected_widths_output=True)
+        # Salem can't read it
+        shp_w = gpd.read_file(fpath)
+        self.assertTrue(shp_w is not None)
+        shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
+        self.assertEqual(len(shp_w), 90)
 
     @pytest.mark.slow
     def test_random(self):
