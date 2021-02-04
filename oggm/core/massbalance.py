@@ -13,7 +13,7 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries, ncDataset,
                         tolist, clip_min, clip_max, clip_array)
-from oggm.exceptions import InvalidWorkflowError
+from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 from oggm import entity_task
 
 # Module logger
@@ -336,6 +336,9 @@ class PastMassBalance(MassBalanceModel):
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
         prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+        # check if valid prcp_fac is used
+        if prcp_fac <= 0:
+            raise InvalidParamsError('prcp_fac has to be above zero!')
         default_grad = cfg.PARAMS['temp_default_gradient']
 
         # Check the climate related params to the GlacierDir to make sure
@@ -355,6 +358,14 @@ class PastMassBalance(MassBalanceModel):
         self.prcp_bias = 1.
         self.repeat = repeat
 
+        # Private attrs
+        # to allow prcp_fac to be changed after instantiation
+        # prescribe the prcp_fac as it is instantiated
+        self._prcp_fac = prcp_fac
+        # need to ckeck this when prcp_fac should be updated
+        # normally should also be checked when mu_star is updated?
+        self.check_calib_params = check_calib_params
+
         # Read file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
@@ -371,7 +382,7 @@ class PastMassBalance(MassBalanceModel):
             self.months = np.tile(np.arange(1, 13), ny)
             # Read timeseries
             self.temp = nc.variables['temp'][:]
-            self.prcp = nc.variables['prcp'][:] * prcp_fac
+            self.prcp = nc.variables['prcp'][:] * self._prcp_fac
             if 'gradient' in nc.variables:
                 grad = nc.variables['gradient'][:]
                 # Security for stuff that can happen with local gradients
@@ -384,6 +395,31 @@ class PastMassBalance(MassBalanceModel):
             self.ref_hgt = nc.ref_hgt
             self.ys = self.years[0] if ys is None else ys
             self.ye = self.years[-1] if ye is None else ye
+
+    # adds the possibility of changing prcp_fac
+    # after instantiation with properly changing the prcp time series
+    @property
+    def prcp_fac(self):
+        return self._prcp_fac
+
+    @prcp_fac.setter
+    def prcp_fac(self, new_prcp_fac):
+        # OK, this could get problematic when mass balance is calibrated
+        # to other values
+        # Check the climate related params to the GlacierDir to make sure
+        if self.check_calib_params:
+            msg = ('You want to change the precipitation scaling'
+                   'factor which was used for calibration. Set '
+                   '`check_calib_params=False` to ignore this '
+                   'warning.')
+            raise InvalidWorkflowError(msg)
+        # just to check that no invalid prcp_factors are used
+        if new_prcp_fac <= 0:
+            raise InvalidParamsError('prcp_fac has to be above zero!')
+        self.prcp = self.prcp * new_prcp_fac / self._prcp_fac
+        # update old prcp_fac in order that it can be updated
+        # again ...
+        self._prcp_fac = new_prcp_fac
 
     def get_monthly_climate(self, heights, year=None):
         """Monthly climate information at given heights.
