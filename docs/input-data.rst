@@ -123,7 +123,7 @@ sufficient, but 80 is safer in case scenarios are stabilizing.
 
 Users should be aware that the amount of data to download isn't small,
 especially for full directories at processing level 3. Here is an indicative
-table for the total amount of data for all 19 RGI regions:
+table for the total amount of data with ERA5 centerlines for all 19 RGI regions:
 
 ======  =====  =====  =====  =====
 Level   B  10  B  40  B  80  B 160
@@ -131,10 +131,13 @@ Level   B  10  B  40  B  80  B 160
 **L0**  927M   927M   927M   927M
 **L1**  3.2G   7.3G   17G    47G
 **L2**  11G    23G    51G    144G
-**L3**
-**L4**
-**L5**
+**L3**  13G    26G    54G    147G
+**L4**         3.5G   3.7G   4.1G
+**L5**         7.2G   7.5G   8.3G
 ======  =====  =====  =====  =====
+
+*L4 and L5 data are not available for border 10 (the domain is too small for
+the downstream lines)*.
 
 Certain regions are much smaller than others of course. As an indication,
 with prepro level 3 and a map border of 160, the Alps are 2.1G large, Greenland
@@ -163,11 +166,13 @@ Default
 ^^^^^^^
 
 If not provided with a specific `prepro_base_url` argument,
-:py:func:`workflow.init_glacier_directories` will download glacier dirctories
+:py:func:`workflow.init_glacier_directories` will download the glacier directories
 from the default urls:
 
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/ for level 1 and level 2
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/ for level 3 to 5
+`https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ + :
+
+- `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for level 1 and level 2
+- `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for level 3 to 5
 
 I recommend to explore these directories for their content. Of course, OGGM
 will know where to find the respective files automatically, but is is good
@@ -175,20 +180,21 @@ to understand how this works. The `summary` folders
 (`example <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/RGI62/b_080/L2/summary/>`_)
 folder contains diagnostic files which can be useful as well.
 
+From now on we omit the
+
 Geometrical centerlines or elevation band flowlines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The type of flowline (see :ref:`flowlines`) is decided at level 2 already.
 Therefore, these are already available at level 2 from these urls:
 
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/ for centerlines
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/ for elevation bands
+- `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for centerlines
+- `L1-L2_files/elev_bands <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/>`_ for elevation bands
 
-And for example, if you want to pick from the CRU default configuration at higher
-levels:
+And for Levels 3-5 with the example of CRU:
 
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/
+- `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for centerlines
+- `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/>`_ for elevation bands
 
 Baseline climate data
 ^^^^^^^^^^^^^^^^^^^^^
@@ -197,20 +203,23 @@ For the two most important default configurations (CRU or ERA5 as baseline clima
 we provide all levels for both the geometrical centerlines or the elevation band
 flowlines:
 
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/ for default CRU + centerlines
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/ for default CRU + elevation bands
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match/ for default ERA5 + centerlines
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match/ for default ERA5 + elevation bands
+- `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for CRU + centerlines
+- `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/>`_ for CRU + elevation bands
+- `L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match/>`_ for ERA5 + centerlines
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for ERA5 + elevation bands
 
 Further set-ups
 ^^^^^^^^^^^^^^^
 
 For additional set-ups, we might not provide all levels. Here is the current list of available configurations:
 
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/ for CERA+ERA5 climate data on elevation bands flowlines
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/ for CERA+ERA5 climate data on elevation bands flowlines matched on regional geodetic mass-balances
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/ for CRU climate data on elevation bands flowlines matched on regional geodetic mass-balances
-- https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp2.5/match_geod/ for ERA5 climate data on elevation bands flowlines matched on regional geodetic mass-balances
+- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for CERA+ERA5 + elevation bands
+- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands + matched on regional geodetic mass-balances
+- `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands + matched on regional geodetic mass-balances
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands + matched on regional geodetic mass-balances
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + precipitation factor 1.8
+- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + no climate quality check
+- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match/>`_ for CRU + elevation bands flowlines + no climate quality check
 
 RGI-TOPO
 --------
