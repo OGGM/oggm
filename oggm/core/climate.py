@@ -387,12 +387,19 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
 @entity_task(log, writes=['climate_historical'])
 def historical_climate_qc(gdir):
-    """"Check the "quality" of climate data and correct it if needed.
+    """Check the "quality" of the basline climate data and correct if needed.
 
-    This forces the climate data to have at least one month of melt per year
-    at the terminus of the glacier (i.e. simply shifting temperatures up
-    when necessary), and at least one month where accumulation is possible
-    at the glacier top (i.e. shifting the temperatures down).
+    This forces the climate data to have at least N months
+    (``cfg.PARAMS['climate_qc_months']``) of melt per year
+    at the terminus of the glacier (i.e. it simply shifts temperatures up
+    until this condition is reached), and at least N months where accumulation
+    is possible at the glacier top (i.e. shifting the temperatures down,
+    only happening if the temperatures were not shifted upwards before).
+
+    In practice, this relatively aggressive shift will be compensated by the
+    calibration, and sensitivity analyses show that the effect is positive
+    (i.e. less failing glaciers and more realistic temperature sensitivity
+    parameters) while not affecting the regional results too much.
     """
 
     # Parameters

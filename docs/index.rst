@@ -41,6 +41,7 @@ For more detailed information, we recommend to read the OGGM
 * :doc:`mass-balance`
 * :doc:`ice-dynamics`
 * :doc:`inversion`
+* :doc:`frontal-ablation`
 
 .. toctree::
     :maxdepth: 1
@@ -52,6 +53,7 @@ For more detailed information, we recommend to read the OGGM
     mass-balance.rst
     ice-dynamics.rst
     inversion.rst
+    frontal-ablation.rst
 
 Using OGGM
 ^^^^^^^^^^
@@ -67,6 +69,7 @@ How to use the model, with concrete python code examples.
 * :doc:`api`
 * :doc:`faq`
 * :doc:`pitfalls`
+* :doc:`assets`
 * :doc:`whats-new`
 
 .. toctree::
@@ -83,6 +86,7 @@ How to use the model, with concrete python code examples.
     practicalities.rst
     faq.rst
     pitfalls.rst
+    assets.rst
     whats-new.rst
 
 Contributing

@@ -2,8 +2,8 @@
 
 .. _getting-started:
 
-Getting started and important system settings
-=============================================
+Getting started
+===============
 
 .. ipython:: python
    :suppress:
