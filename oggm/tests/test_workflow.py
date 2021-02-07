@@ -212,7 +212,7 @@ class TestFullRun(unittest.TestCase):
 
     @pytest.mark.slow
     def test_shapefile_output(self):
-        # Just to increase coveralls, hehe
+
         gdirs = up_to_climate()
         fpath = os.path.join(_TEST_DIR, 'centerlines.shp')
         write_centerlines_to_shape(gdirs, path=fpath)
@@ -249,6 +249,15 @@ class TestFullRun(unittest.TestCase):
         self.assertTrue(shp_w is not None)
         shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
         self.assertEqual(len(shp_w), 90)
+
+        # Test that one wrong glacier still works
+        base_dir = os.path.join(cfg.PATHS['working_dir'], 'dummy_pergla')
+        utils.mkdir(base_dir, reset=True)
+        gdirs = workflow.execute_entity_task(utils.copy_to_basedir, gdirs,
+                                             base_dir=base_dir, setup='all')
+        os.remove(gdirs[0].get_filepath('centerlines'))
+        cfg.PARAMS['continue_on_error'] = True
+        write_centerlines_to_shape(gdirs)
 
     @pytest.mark.slow
     def test_random(self):
