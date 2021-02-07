@@ -50,7 +50,7 @@ reasons why making your own repository could be useful:
 
 
 To help you in this project we have set-up a
-`template repository <https://github.com/OGGM/dummy-module>`_ from which you can
+`template repository <https://github.com/OGGM/oggmcontrib>`_ from which you can
 build upon.
 
 Before writing your own module we recommend to contact us to discuss

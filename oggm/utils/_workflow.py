@@ -626,8 +626,7 @@ def _write_shape_to_disk(gdf, fpath, to_tar=False):
 def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                filesuffix='', flowlines_output=False,
                                geometrical_widths_output=False,
-                               corrected_widths_output=False,
-                               out_crs=None):
+                               corrected_widths_output=False):
     """Write the centerlines in a shapefile.
 
     Parameters

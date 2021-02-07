@@ -10,10 +10,10 @@ OGGM Shop
 
 OGGM needs various data files to run. **We rely exclusively on
 open-access data that can be downloaded automatically for the user**. We like
-to see this service as a "shop", allowing users to define a "shopping list"
-of data that users can add to their :ref:`glacierdir`.
+to see this service as a "shop", allowing users to define a shopping list
+of data that they wish to add to their :ref:`glacierdir`.
 
-This page describes the various products you will find ind this shop.
+This page describes the various products you will find in the shop.
 
 .. important::
 
@@ -28,21 +28,22 @@ Pre-processed directories
 
 The simplest way to run OGGM is to rely on :ref:`glacierdir` which have been
 prepared for you by the OGGM developers. Depending on your use case,
-you can start from various stages in the processing chain, various map sizes,
-and various model set-ups.
+you can start from various stages in the processing chain, map sizes,
+and model set-ups.
 
 The default directories have been generated with the default parameters
-of the current stable OGGM version and combinations hereof. If you want to
-change some of these parameters, you *may* have to start a run from a lower
-processing level. Whether or not this is necessary depends on the
-stage of the workflow you'd like your computations to diverge from the
-defaults (we provide example use cases below).
+of the current stable OGGM version (and a few alternative combinations).
+If you want to change some of these parameters, you *may* have to start a
+run from a lower processing level and re-run the processsing tasks.
+Whether or not this is necessary depends on the stage of the workflow
+you'd like your computations to diverge from the
+defaults (this will become more clear a we provide example use cases below).
 
 To start from a pre-processed state, simply use the
 :py:func:`workflow.init_glacier_directories` function with the
 ``from_prepro_level`` and ``prepro_border`` keyword arguments set to the
 values of your choice. This will fetch the default directories: there are
-more options to that, which we explain below.
+more options to these, which we explain below.
 
 Processing levels
 ~~~~~~~~~~~~~~~~~
@@ -57,26 +58,28 @@ Currently, there are six available levels of pre-processing:
 - **Level 3**: adding the baseline climate timeseries (CRU or ERA5, see below)
   to the directories. Adding all necessary pre-processing tasks
   for a dynamical run, including the mass-balance calibration, bed inversion,
-  etc. up to the `init_present_time_glacier` (included). These directories
-  still contain all gridded data, i.e. they are the largest in size but the
-  most flexible.
-- **Level 4**: same as level 3 but with all intermediate ouptut files removed.
+  up to the :py:func:`tasks.init_present_time_glacier` task included.
+  These directories still contain all data that was necessary for the processing,
+  i.e. they are the largest in size. They are also the most flexible since
+  the processing chain can be re-run from any stage in them.
+- **Level 4**: same as level 3 but with all intermediate output files removed.
   The strong advantage of level 4 files is that their size is considerably
   reduced, at the cost that certain operations (like plotting on maps or
   running the bed inversion algorithm again) are not possible anymore.
 - **Level 5**: on top of level 4, an additional historical simulation is run
   from the RGI date to the last possible date of the baseline climate file
-  (for example, CRU in the Alps mean a 2003-2019 simulation for most glaciers).
-  The state of the glacier as month 01, year 2020 can then be used for
-  future projections.
+  (for example end of 2019 for CRU and ERA5).
+  The state of the glacier as month 01, (hydrological) year 2020 can then be
+  used for future projections.
 
 In practice, most users are going to use level 2, level 3 or level 5 files. Here
 are some example use cases:
 
-1. *Running OGGM with the default settings and with GCM / RCM data*: start at level 5
-2. *Using OGGM's flowlines but running your own flavor of the baseline climate,
+1. *Running OGGM from GCM / RCM data with the default settings*: start at level 5
+2. *Using OGGM's flowlines but running your own baseline climate,
    mass-balance or ice thickness inversion models*: start at level 2 (and maybe
-   use OGGM's workflow again for the ice dynamics?).
+   use OGGM's workflow again for the ice dynamics?). This is the workflow used
+   by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
 3. *Run sensitivity experiments for the ice thickness inversion*: start at level
    3 (with climate data available) and re-run the inversion steps.
 
@@ -86,11 +89,7 @@ Glacier map size: the prepro_border argument
 
 The size of the local glacier map is given in number of grid points *outside*
 the glacier boundaries. The larger the map, the largest the glacier can
-become. Therefore, user should choose the map border parameter depending
-on the expected glacier growth in their simulations: for most cases,
-a border value of 40 or 80 should be enough.
-
-Here is an example with Hintereisferner in the Alps:
+become. Here is an example with Hintereisferner in the Alps:
 
 .. ipython:: python
    :suppress:
@@ -117,9 +116,13 @@ Here is an example with Hintereisferner in the Alps:
     @savefig plot_border_size.png width=100%
     plt.tight_layout(); plt.show()
 
-For runs into the Little Ice Age, a border value of 160 should be enough.
-For simulations into the 21st century, a border value of 40 is
-sufficient, but 80 is safer in case scenarios are stabilizing.
+
+Users should choose the map border parameter depending
+on the expected glacier growth in their simulations. For simulations into
+the 21st century, a border value of 40 is
+sufficient, but 80 is safer in case temperature is stabilizing or cooling in
+certaion regions / scenarios.
+For runs into the Little Ice Age, a border value of 160 is recommended.
 
 Users should be aware that the amount of data to download isn't small,
 especially for full directories at processing level 3. Here is an indicative
@@ -159,39 +162,52 @@ Available pre-processed configurations
 .. admonition:: **New in version 1.4!**
 
     OGGM now has several configurations and directories to choose from,
-    and the list is getting larger. Don't hestitate to ask us if you think
-    we should add more!
+    and the list is getting larger. Don't hesitate to ask us if you are
+    unsure about which to use, or if you'd like to have more configurations
+    to choose from!
 
 Default
 ^^^^^^^
 
 If not provided with a specific `prepro_base_url` argument,
-:py:func:`workflow.init_glacier_directories` will download the glacier directories
-from the default urls:
+:py:func:`workflow.init_glacier_directories` will download the glacier
+directories from the default urls. Here is a summary of the default configuration:
+
+- model parameters as of the ``oggm/params.cfg`` file at the published model version
+- flowline glaciers computed from the geometrical centerlines (including tributaries)
+- baseline climate from CRU (i.e. not available for Antarctica)
+- baseline climate quality checked with :py:func:`tasks.historical_climate_qc` with ``N=3``
+- mass-balance parameters calibrated with the standard OGGM procedure. No calibration
+  against geodetic MB (see options below for regional calibration)
+- ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
+  **at the RGI region level**, i.e. glacier estimates might differ
+- frontal ablation by calving (at inversion and for the dynamical runs) is switched off
+
+The urls used by OGGM per default are listed here:
 
 `https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ + :
 
 - `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for level 1 and level 2
 - `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for level 3 to 5
 
-I recommend to explore these directories for their content. Of course, OGGM
-will know where to find the respective files automatically, but is is good
-to understand how this works. The `summary` folders
+If you are new to this, I recommend to explore these directories to familiarize yourself
+to their content. Of course, OGGM will know where to find the respective files
+automatically, but is is good to understand how they are structured. The `summary` folder
 (`example <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/RGI62/b_080/L2/summary/>`_)
 folder contains diagnostic files which can be useful as well.
 
-From now on we omit the
 
-Geometrical centerlines or elevation band flowlines
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Option: Geometrical centerlines or elevation band flowlines
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The type of flowline (see :ref:`flowlines`) is decided at level 2 already.
-Therefore, these are already available at level 2 from these urls:
+The type of flowline to use (see :ref:`flowlines`) can be decided at level 2 already.
+Therefore, the two configurations available at level 2 from these urls:
 
 - `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for centerlines
 - `L1-L2_files/elev_bands <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands/>`_ for elevation bands
 
-And for Levels 3-5 with the example of CRU:
+The default pre-processing set-ups are also available with each of these
+flowline types. For example with CRU:
 
 - `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for centerlines
 - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/>`_ for elevation bands
@@ -211,7 +227,7 @@ flowlines:
 Further set-ups
 ^^^^^^^^^^^^^^^
 
-For additional set-ups, we might not provide all levels. Here is the current list of available configurations:
+Here is the current list of available configurations at the time of writing (explore the server for more!):
 
 - `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for CERA+ERA5 + elevation bands
 - `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands + matched on regional geodetic mass-balances
@@ -220,6 +236,9 @@ For additional set-ups, we might not provide all levels. Here is the current lis
 - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + precipitation factor 1.8
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + no climate quality check
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match/>`_ for CRU + elevation bands flowlines + no climate quality check
+
+Note: the additional set-ups might not always have all map sizes available. Please
+get in touch if you have interest in a specific set-up.
 
 RGI-TOPO
 --------
@@ -477,6 +496,24 @@ International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
+**‣ ECMWF (ERA5, CERA, ERA5-Land)**
+
+The data from ECMWF are used "as is", i.e. without any further downscaling.
+We propose several datasets (see :py:func:`oggm.shop.ecmwf.process_ecmwf_data`)
+and, with the task :py:func:`oggm.tasks.historical_delta_method`, also
+allow for combinations of them.
+
+**When using these data, please refer to the original provider:**
+
+For example for ERA5:
+
+Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A.,
+Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I.,
+Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2019):
+ERA5 monthly averaged data on single levels from 1979 to present.
+Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
+(Accessed on < 01-12-2020 >), 10.24381/cds.f17050d7
+
 
 **‣ User-provided dataset**
 
@@ -496,8 +533,8 @@ period. This method is sometimes called the
 
 Currently we can process data from the
 `CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
-project (see :py:func:`tasks.process_cesm_data`), but adding other models
-should be relatively easy.
+project (see :py:func:`tasks.process_cesm_data`), and CMIP5/CMIP6
+(:py:func:`tasks.process_cmip_data`).
 
 
 Mass-balance data

@@ -11,8 +11,8 @@ of potential misuse or misunderstandings about what OGGM can and cannot do.
 Refer to our :ref:`faq` for a general introduction. Here, we discuss
 specific pitfalls in more details.
 
-The default ice dynamics parameter "Glen A" is not calibrated
-=============================================================
+The default ice dynamics parameter "Glen A" is roughly calibrated
+=================================================================
 
 Out-of-the box OGGM will uses fixed values for the creep parameter
 :math:`A` and the sliding parameter :math:`f_s`:
@@ -32,11 +32,18 @@ in the absence of sliding parameter, it is recommended to set :math:`A` to a
 higher value to compensate for this missing process (effectively making ice
 "less stiff").
 
+.. admonition:: **New in version 1.4!**
+
+   Since v1.4, OGGM can now calibrate :math:`A`
+   based on the consensus from [Farinotti_etal_2019]_ on any number
+   of glaciers. We recommend to use a large number of glaciers: OGGM's default
+   glacier directories are calibrated at the RGI region level. This
+   value is the also used by the forward dynamical model for consistency,
+   according to the parameter `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
+
 There is a way to calibrate :math:`A` for the ice thickness inversion
 procedure based on observations of ice thickness (see
 `this blog post about g2ti <https://oggm.org/2018/05/21/g2ti/>`_ for an example).
-Unfortunately, this does not mean that this calibrated
-:math:`A` can be applied as is to the forward model.
 At the global scale, a value in the range of [1.1-1.5] times the default value
 gives volume estimates close to [Farinotti_etal_2019]_. At regional scale, these
 values can differ, with a value closer to a factor 3 e.g. for the Alps. Note
@@ -71,8 +78,9 @@ Now, what you are probably asking yourself: **how to choose the "best A" for my 
 Sorry, but we don't know yet. We are working on it though! At the moment,
 what we recommend to do is to calibrate :math:`A` do that the regional 
 (or even local) estimates match the volume consensus of 
-`Farinotti et al. (2019) <https://www.nature.com/articles/s41561-019-0300-3>`_.
-We will offer tools to help you do that in the near future.
+`Farinotti et al. (2019) <https://www.nature.com/articles/s41561-019-0300-3>`_
+using the :py:func:`workflow.calibrate_inversion_from_consensus` global
+task.
 
 
 .. _pitfalls.numerics:
@@ -94,8 +102,8 @@ it in detail, for a summary:
   becomes unstable it should stop.
 
 
-The mass-balance model of OGGM is not calibrated with remote sensing data
-=========================================================================
+The mass-balance model of OGGM is not calibrated with remote sensing data on a glacier per glacier basis
+========================================================================================================
 
 Currently, the values for the mass-balance parameters such as the
 temperature sensitivity, the precipitation correction factor, etc. are
@@ -111,6 +119,12 @@ to calibrate their model.
 
 We are looking for people to help us with this task: join us! See
 e.g. :ref:`oep0003` for a discussion document.
+
+.. admonition:: **New in version 1.4!**
+
+   Since v1.4, OGGM can now calibrate the mass-balance model at the regional
+   level based on available estimates. See :py:func:`workflow.match_regional_geodetic_mb`
+   for more info.
 
 
 References

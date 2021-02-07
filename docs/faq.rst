@@ -22,7 +22,7 @@ There are plenty of established ice dynamics models, and some of them are
 
 The purpose of OGGM is to be an *easy to use*, *fully automated*
 **global glacier model**, i.e. applicable to any glacier in the
-world without specific tuning or tweaking. Therefore, it does not attempt to
+world with or without specific tuning or tweaking. Therefore, it does not attempt to
 replace (and even less compete with) these established ice dynamics models:
 it can be seen as a "framework", a
 set of unified tools with eases the process of working with many mountain
@@ -83,7 +83,7 @@ usage questions on `github issues <https://github.com/OGGM/oggm/issues>`_
 so that everybody can learn from all questions and their answers.
 You can also join our Slack discussion channel if you want a 
 more interactive forum. Keep in touch with us per email if you'd 
-like to join!
+like to join, we are a very open community!
 
 
 Usage
@@ -93,7 +93,22 @@ Can I export OGGM centerlines to a shapefile?
 ---------------------------------------------
 
 Yes! There is a function to do exactly that:
-:py:func:`utils.write_centerlines_to_shape`.
+:py:func:`utils.write_centerlines_to_shape`. We also provide some already
+processed ones in :ref:`assets`.
+
+
+Can I export OGGM's <special variable> to <another programme>?
+--------------------------------------------------------------
+
+Yes! Although it might make you have to write some code. The developers
+cannot think of all the great ideas/potential applications you have for the
+model. We also do a lot of work *within* the OGGM framework, i.e. most of the
+data we need is already there. Some variables are hidden, see
+e.g.
+`here <https://github.com/OGGM/oggm/issues/1096>`_ and
+`there <https://github.com/OGGM/oggm/issues/1136>`_ for discussions on github.
+
+If you need some specific variables, please write on GitHub and we can discuss.
 
 Troubleshooting
 ===============
@@ -138,17 +153,16 @@ increases as well). We do not recommend to go larger than 250, however:
 for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.
 
-What does the "`NaN in numerical solution`" error mean?
--------------------------------------------------------
+What does the "CFL  error" mean?
+--------------------------------
 
 This happens when the ice dynamics simulation is unstable. In OGGM we use an
 adaptive time stepping scheme (which should avoid these kind of situations),
 but we also implemented thresholds for small time steps: i.e. if a simulation
-requires very small time steps we still use a larger one to avoid extremely
-slow runs. These thresholds are "bad practice" but required for operational
-reasons: when this happens, it is likely that the simulations blow up with
-a numerical error. There is not much you can do here, unless maybe set your
-own thresholds for small time steps (at the cost of computation time).
+requires very small time steps we exit with an error in order to avoid extremely
+slow runs. There is not much you can do here, unless maybe use a lower
+`CFL value <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L298>`_,
+or set your own thresholds for small time steps (at the cost of computation time).
 
 Can I use my own Glacier inventory and outlines in OGGM?
 --------------------------------------------------------
@@ -163,5 +177,4 @@ If you decide to use your own inventory (e.g. maybe because it has a better glac
 encourage you to contact the `GLIMPS core team <https://www.glims.org/maps/contact_info.html>`_
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
-have a look at our
-`online tutorial <https://mybinder.org/v2/gh/OGGM/binder/master?urlpath=git-pull?repo=https://github.com/OGGM/oggm-edu-notebooks%26amp%3Bbranch=master%26amp%3Burlpath=lab/tree/oggm-edu-notebooks/oggm-tuto/welcome.ipynb%3Fautodecode>`_!
+have a look at our :ref:`tutorials`!

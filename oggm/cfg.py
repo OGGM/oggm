@@ -147,11 +147,13 @@ class ParamsLoggingDict(ResettingOrderedDict):
             if value == -1:
                 import multiprocessing
                 value = multiprocessing.cpu_count()
-                log.workflow('Multiprocessing: using all available '
-                             'processors (N={})'.format(value))
+                if PARAMS.get('use_multiprocessing', False):
+                    log.workflow('Multiprocessing: using all available '
+                                 'processors (N={})'.format(value))
             else:
-                log.workflow('Multiprocessing: using the requested number of '
-                             'processors (N={})'.format(value))
+                if PARAMS.get('use_multiprocessing', False):
+                    log.workflow('Multiprocessing: using the requested number '
+                                 'of processors (N={})'.format(value))
             return
 
         log.workflow("PARAMS['{}'] changed from `{}` to `{}`.".format(key,
