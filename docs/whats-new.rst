@@ -7,7 +7,7 @@ Version history
 v1.4.0 (pre-release)
 --------------------
 
-.. admonition:: **New in version 1.4! (pre-release, Feb 03 2021)**
+.. admonition:: **New in version 1.4! (pre-release, Feb 07 2021)**
 
     There have been a large number of additions too long to be summarized,
     and the list below is far from complete (we have waited way too long for
