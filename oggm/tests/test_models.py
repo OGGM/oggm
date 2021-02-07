@@ -2991,7 +2991,6 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['border'] = 100
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
-    cfg.PARAMS['use_multiprocessing'] = False
     cfg.PARAMS['run_mb_calibration'] = True
 
 

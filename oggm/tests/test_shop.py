@@ -114,7 +114,6 @@ class Test_rgitopo:
         # Init
         cfg.initialize()
         cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['border'] = 10
 
         monkeypatch.setattr(rgitopo, 'DEMS_URL', 'https://cluster.klima.uni-br'
@@ -137,7 +136,6 @@ class Test_rgitopo:
         # Init
         cfg.initialize()
         cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['border'] = 10
 
         monkeypatch.setattr(rgitopo, 'DEMS_URL', 'https://cluster.klima.uni-br'
@@ -291,7 +289,6 @@ class Test_ecmwf:
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = class_case_dir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PARAMS['use_multiprocessing'] = False
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]

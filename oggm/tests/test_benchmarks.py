@@ -46,7 +46,6 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Init
         cfg.initialize()
-        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
