@@ -660,6 +660,8 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                 flowlines_output=flowlines_output,
                                 geometrical_widths_output=geometrical_widths_output,
                                 corrected_widths_output=corrected_widths_output)
+    # filter for none
+    olist = [o for o in olist if o is not None]
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
     odf = odf.sort_values(by='RGIID')
     odf.crs = {'init': 'epsg:4326'}
