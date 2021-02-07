@@ -53,6 +53,13 @@ The default in OGGM is:
 
 ``-1`` means that all available processors will be used.
 
+The following environment variables will override these settings:
+
+- ``OGGM_USE_MULTIPROCESSING`` can be set to ``1``/``True`` or ``0``/``False``
+  to override the param files at initialisation
+- ``OGGM_TEST_MULTIPROC`` is used to run the workflow tests with or without
+  multiprocessing (default: False)
+
 .. _multiprocessing: https://docs.python.org/3.6/library/multiprocessing.html
 
 MPI

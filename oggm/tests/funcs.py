@@ -297,9 +297,9 @@ def patch_minimal_download_oggm_files(*args, **kwargs):
 
 def use_multiprocessing():
     try:
-        return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "True"))
+        return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "False"))
     except BaseException:
-        return True
+        return False
 
 
 def get_test_dir():

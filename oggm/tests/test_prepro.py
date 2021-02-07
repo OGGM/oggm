@@ -1806,7 +1806,6 @@ class TestClimate(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
 
         cfg.PARAMS['prcp_scaling_factor'] = 2.9
-        cfg.PARAMS['use_multiprocessing'] = False
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
@@ -3015,7 +3014,6 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Check that all this also works with
         cfg.PARAMS['continue_on_error'] = True
-        cfg.PARAMS['use_multiprocessing'] = False
 
         # Just a standard run
         workflow.calibrate_inversion_from_consensus([gdir])
@@ -3660,7 +3658,6 @@ class TestCatching(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
-        cfg.PARAMS['use_multiprocessing'] = False
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
         self.log_dir = os.path.join(self.testdir, 'log')
