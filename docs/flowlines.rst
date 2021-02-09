@@ -92,9 +92,10 @@ of before reaching the flowline they are tributing to:
     @savefig plot_fls_flowlines.png width=80%
     graphics.plot_centerlines(gdir, use_flowlines=True)
 
-This step is needed to avoid sections along the flowline to be accounted for twice. The empty circles on the main
-flowline indicate the location where the respective tributary is connected (e.g. where the ice flux that is originating
-from the tributary at the will be added when running the model dynamics).
+This step is needed to avoid sections along the flowline to be accounted for twice.
+The empty circles on the main flowline indicate the location where the respective
+tributary is connected (e.g. where the ice flux that is originating from the
+tributary at the will be added when running the model dynamics).
 
 
 Downstream lines
