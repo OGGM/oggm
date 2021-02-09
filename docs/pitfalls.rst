@@ -110,7 +110,7 @@ temperature sensitivity, the precipitation correction factor, etc. are
 calibrated based on the in-situ measurements provided by the WGMS
 (traditional mass-balance data). For more information about the procedure,
 see [Maussion_etal_2019]_ and our
-`performance monitoring website <https://cluster.klima.uni-bremen.de/~github/crossval/>`_.
+`performance monitoring website <https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html>`_.
 
 This, however, is not really "state of the art" anymore. Other recent
 studies by e.g. [Huss_Hock_2015]_ and [Zekollari_etal_2019]_

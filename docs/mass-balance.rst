@@ -255,10 +255,8 @@ necessarily the case, as other factors than climate (such as the glacier size)
 will influence :math:`t^*` too. Our results (and the arguments listed above)
 show however that this is an approximation we can cope with.
 
-In a final note, it is important to mention that the :math:`\mu^*` and
-:math:`t^*` should not be over-interpreted in terms of "real"
-temperature sensitivities or "real" response time of the glacier.
-This procedure is primarily a calibration method, and as such it can be
+In a final note, it is important to mention that this procedure
+is primarily a calibration method, and as such it can be
 statistically scrutinized (for example with cross-validation).
 It can also be noted that the MB observations play a
 relatively minor role in the calibration: they could be entirely avoided by
@@ -279,7 +277,9 @@ Regional calibration
    above) by a constant value so that the regional estimates match the
    observations. This is not applied per default, as it might lead to
    unrealistic results at the single glacier scale (but it is very useful
-   for global studies).
+   for global studies). An overview of the regional shifts for all regions
+   and presently available set-ups can be assessed via
+   `this notebook <https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/compare_with_geod.html>`_.
 
 References
 ----------
