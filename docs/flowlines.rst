@@ -92,7 +92,7 @@ of before reaching the flowline they are tributing to:
     @savefig plot_fls_flowlines.png width=80%
     graphics.plot_centerlines(gdir, use_flowlines=True)
 
-This step is needed to avoid sections along the flowline to be accounted for twice.
+This step is needed to better represent glacier widths at flowline junctions.
 The empty circles on the main flowline indicate the location where the respective
 tributary is connected (e.g. where the ice flux that is originating from the
 tributary at the will be added when running the model dynamics).
@@ -317,5 +317,4 @@ Implementation details
 Shared setup for these examples:
 
 .. literalinclude:: _code/prepare_centerlines.py
-
 
