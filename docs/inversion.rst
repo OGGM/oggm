@@ -85,7 +85,7 @@ there is no "optimum" :math:`f_{inv}` parameter in the model. There is a high
 uncertainty in the "true" :math:`A` parameter as well as in all other processes
 affecting the ice thickness. Therefore, we cannot make any recommendation for
 the "best" parameter. Global sensitivity analyses show that the default value
-is a good compromise ([Maussion_etal_2019]_)
+is a good compromise ([Maussion_etal_2019]_),
 but very likely leads to overestimated ice volume.
 
 .. admonition:: **New in version 1.4!**

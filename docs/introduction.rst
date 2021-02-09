@@ -8,12 +8,12 @@ Here we describe shortly the purpose of each processing step, while more
 details are provided in the other sections:
 
 Preprocessing
-  The glacier outlines extracted from a reference dataset (`RGI`_)
-  and are projected onto a local
+  The glacier outlines are extracted from a reference dataset (`RGI`_)
+  and projected onto a local
   gridded map of the glacier (**Fig. a**). Depending on the
   glacier location, a suitable source for the topographical data is
   downloaded automatically and interpolated to the local grid.
-  The map spatial resolution depends on the size of the glacier.
+  The spatial resolution of the map depends on the size of the glacier.
 
 Flowlines
   The glacier centerlines are computed using a geometrical routing algorithm
@@ -38,7 +38,7 @@ Climate data and mass-balance
 Ice thickness inversion
   Using the mass-balance data computed above and relying on mass-conservation
   considerations, an estimate of the ice flux along each glacier cross-section
-  can be computed. by making assumptions about the shape of the cross-section
+  can be computed, by making assumptions about the shape of the cross-section
   (parabolic or rectangular) and using the physics of ice flow, the model
   computes the thickness of the glacier along the flowlines and the total
   volume of the glacier (**Fig. e**).

@@ -116,9 +116,9 @@ Elevation dependency
 ~~~~~~~~~~~~~~~~~~~~
 
 OGGM needs to compute the temperature and precipitation at the altitude
-of the glacier grid points. The default is to use a fixed gradient of
+of the glacier grid points. The default is to use a fixed lapse rate of
 -6.5K km :math:`^{-1}` and no gradient for precipitation. However, OGGM
-also implements an optional algorithm which computes the local gradient by linear
+also contains an optional algorithm which computes the local gradient by linear
 regression of the 9 surrounding grid points. This method requires that the
 near-surface temperature lapse-rates provided by the climate dataset are good
 (i.e.: in most of the cases, you should probably use the simple fixed gradient
@@ -141,7 +141,7 @@ temperature above which ice melt is assumed to occur (-1°C per default).
 Solid precipitation is computed out of the total precipitation. The fraction of
 solid precipitation is based on the monthly mean temperature: all solid below
 ``temp_all_solid`` (default: 0°C) all liquid above ``temp_all_liq``
-(default: 2°C), linear in between.
+(default: 2°C), linear change in between.
 
 The parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
 glacier, and it needs to be calibrated. :math:`\epsilon` is a residual, to be
@@ -172,7 +172,7 @@ observations of the annual specific mass-balance SMB. We use the `WGMS FoG`_
 For each of these glaciers, time-dependent "candidate" temperature sensitivities
 :math:`\mu (t)` are estimated by requiring that the average specific
 mass-balance :math:`B_{31}` is equal to zero. :math:`B_{31}` is computed
-for a 31 yr period centered around the year :math:`t` **and for a constant
+for a 31-year period centered around the year :math:`t` **and for a constant
 glacier geometry fixed at the RGI date** (e.g. 2003 for most glaciers in the
 European Alps).
 
