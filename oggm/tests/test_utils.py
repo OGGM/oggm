@@ -384,8 +384,8 @@ class TestWorkflowTools(unittest.TestCase):
 
         cfg.initialize()
         cfg.PATHS['working_dir'] = self.testdir
-        url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/RGIV62'
-               '/CRU/centerlines/qc3/pcp2.5/')
+        url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
+               'oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5/')
         workflow.download_ref_tstars(url)
         assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
                                            'ref_tstars.csv'))

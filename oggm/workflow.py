@@ -536,7 +536,7 @@ def download_ref_tstars(base_url=None):
     """Downloads and copies the reference list of t* to the working directory.
 
     Example url:
-    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/RGIV62/CRU/centerlines/qc3/pcp2.5
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5
 
     Parameters
     ----------
