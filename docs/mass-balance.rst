@@ -141,7 +141,7 @@ temperature above which ice melt is assumed to occur (-1°C per default).
 Solid precipitation is computed out of the total precipitation. The fraction of
 solid precipitation is based on the monthly mean temperature: all solid below
 ``temp_all_solid`` (default: 0°C) all liquid above ``temp_all_liq``
-(default: 2°C), linear chancing in between.
+(default: 2°C), linear change in between.
 
 The parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
 glacier, and it needs to be calibrated. :math:`\epsilon` is a residual, to be
