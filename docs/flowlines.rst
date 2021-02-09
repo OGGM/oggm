@@ -67,7 +67,7 @@ of certain parameters), we stayed close to the original algorithm.
 The basic idea is to find the terminus of the glacier (its lowest point) and
 a series of flowline "heads" (local elevation maxima). The centerlines are then
 computed with a least cost routing algorithm minimizing both (i) the total
-elevation gain and (ii) the distance from the glacier outline:
+elevation gain and (ii) the distance to the glacier terminus:
 
 .. ipython:: python
 
@@ -83,14 +83,18 @@ to the main flowline (more on this below).
 At this stage, the centerlines are still not fully suitable
 for modelling. Therefore, a rather simple
 procedure converts them to "flowlines", which
-now have a regular coordinate spacing (which they will
+now have a regular grid spacing (which they will
 keep for the rest of the workflow). The tail of the tributaries are cut
-according to a distance threshold rule:
+of before reaching the flowline they are tributing to:
 
 .. ipython:: python
 
     @savefig plot_fls_flowlines.png width=80%
     graphics.plot_centerlines(gdir, use_flowlines=True)
+
+This step is needed to avoid sections along the flowline to be accounted for twice. The empty circles on the main
+flowline indicate the location where the respective tributary is connected (e.g. where the ice flux that is originating
+from the tributary at the will be added when running the model dynamics).
 
 
 Downstream lines
@@ -104,7 +108,7 @@ downstream of the current glacier geometry:
     @savefig plot_fls_downstream.png width=80%
     graphics.plot_centerlines(gdir, use_flowlines=True, add_downstream=True)
 
-The downsteam lines area also computed using a routing algorithm minimizing
+The downsteam lines area is also computed using a routing algorithm minimizing
 the distance between the glacier terminus and the border of the map as well
 as the total elevation gain, therefore following the valley floor.
 
@@ -190,7 +194,7 @@ Compatibility within the OGGM framework
 
 Both methods are creating a "1.5D" glacier. After computation,
 **both representations are strictly equivalent** for the inversion and
-ice dynamics models. The are both stored as a list of
+ice dynamics models. They are both stored as a list of
 :py:class:`~oggm.Centerline` objects. Glaciers can have only one
 elevation-band flowline per glacier, while there can be several geometrical
 centerlines. The downstream lines are computed the same way for both the

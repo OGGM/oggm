@@ -5,7 +5,7 @@ The glaciers in OGGM are represented by a depth integrated flowline
 model. The equations for the isothermal shallow ice are solved along
 the glacier centerline, computed to represent best the flow of ice
 along the glacier (see for example `antarcticglaciers.org`_ for a general
-introduction about the various type of glacier models).
+introduction about the various types of glacier models).
 
 .. _antarcticglaciers.org: http://www.antarcticglaciers.org/glaciers-and-climate/numerical-ice-sheet-models/hierarchy-ice-sheet-models-introduction/
 
@@ -174,9 +174,9 @@ The OGGM "flux based" model solves for the :math:`\nabla \cdot q` term
 (hence the name). The strong advantage of this method is that
 the numerical equations are the same for *any* bed shape, considerably
 simplifying the implementation. Similar to the "diffusion approach", the
-model is not mass-conserving in very steep slopes ([Jarosch_etal_2013]_).
+model is not mass-conserving in very steep slopes [Jarosch_etal_2013]_.
 
-The numerical scheme implemented in OGGM is tested against A. Jarosch's
+The numerical scheme implemented in OGGM is tested against  Alex Jarosch's
 MUSCLSuperBee Model (see below) and Hans Oerleman's diffusion model for
 various idealized cases. For all cases but the steep slope, the model
 performs very well.

@@ -117,7 +117,7 @@ Get in touch
 - View the source code `on GitHub`_.
 - Report bugs or share your ideas on the `issue tracker`_, and improve
   the model by submitting a `pull request`_.
-- Chat with us on `Slack`_! (just send us an email so we can add you)
+- Chat with us on `Slack`_! (just send us an `e-mail`_ so we can add you)
 - Follow us on `Twitter`_.
 - Or you can always send us an `e-mail`_ the good old way.
 
