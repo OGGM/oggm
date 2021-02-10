@@ -34,11 +34,12 @@ find this  `introduction to interactive notebooks`_ quite useful.
 .. _hub.oggm.org: https://hub.oggm.org
 
 
-
 Hub or Binder?
 ~~~~~~~~~~~~~~
+
 We provide two solutions to try OGGM online, without local installation.  
 Which is best for you?  Here is a quick comparison.
+
 .. list-table:: Binder vs. OGGM-Hub
    :widths: 20 20
    :header-rows: 1
@@ -117,11 +118,11 @@ your hub:
     of the original file/folder before working on it (right-click -> rename).
 
     The full set of rules used by `nbgitpuller` while pulling is explained
-    `here <https://jupyterhub.github.io/nbgitpuller/topic/automatic-merging.html>`_
+    `here <https://jupyterhub.github.io/nbgitpuller/topic/automatic-merging.html>`_.
 
 
 Top tip: copy-pasting text with the mouse in JupyterLab
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Copying to and from JupyterLab can be annoying at times
 (`context <https://github.com/jupyterlab/jupyterlab/issues/3011>`_).
