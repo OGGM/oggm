@@ -1,8 +1,7 @@
 .. _citing-oggm:
 
-***********
 Citing OGGM
-***********
+===========
 
 Publication
 -----------

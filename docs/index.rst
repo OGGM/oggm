@@ -70,6 +70,7 @@ How to use the model, with concrete python code examples.
 * :doc:`faq`
 * :doc:`pitfalls`
 * :doc:`assets`
+* :doc:`hub`
 * :doc:`whats-new`
 
 .. toctree::
@@ -87,6 +88,7 @@ How to use the model, with concrete python code examples.
     faq.rst
     pitfalls.rst
     assets.rst
+    hub.rst
     whats-new.rst
 
 Contributing
