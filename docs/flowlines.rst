@@ -45,7 +45,7 @@ the changes in glacier width with thickness changes.
       and routing algorithms. This was the single option in OGGM before v1.4.
    2. via binned **elevation bands flowlines**, which are computed by the binning and
       averaging of 2D slopes into a "bulk" flowline glacier. This is the method
-      first developed and applied by [Huss_Farinotti_2012]_
+      first developed and applied by [Huss_Farinotti_2012]_.
 
    Both methods have strengths and weaknesses, which we discuss in more depth
    below. First, let's have a look at how they work.
@@ -59,13 +59,13 @@ Centerline determination
 
 Our algorithm is an implementation of the procedure described by
 `Kienholz et al., (2014)`_. Appart from some minor changes (mostly the choice
-of certain parameters), we stayed close to the original algorithm.
+of some parameters), we stay close to the original algorithm.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
 
 
 The basic idea is to find the terminus of the glacier (its lowest point) and
-a series of flowline "heads" (local elevation maxima). The centerlines are then
+a series of centerline "heads" (local elevation maxima). The centerlines are then
 computed with a least cost routing algorithm minimizing both (i) the total
 elevation gain and (ii) the distance to the glacier terminus:
 
@@ -76,7 +76,7 @@ elevation gain and (ii) the distance to the glacier terminus:
 
 The glacier has a major centerline (the longest one), and
 tributary branches (in this case: two). The Hintereisferner glacier is a
-good example of a wrongly outlined glacier: the two northern branches
+good example of a wrongly outlined glacier: the two northern glacier sub-catchments
 should have been classified as independant entities since they do not flow
 to the main flowline (more on this below).
 
@@ -94,8 +94,8 @@ of before reaching the flowline they are tributing to:
 
 This step is needed to better represent glacier widths at flowline junctions.
 The empty circles on the main flowline indicate the location where the respective
-tributary is connected (e.g. where the ice flux that is originating from the
-tributary at the will be added when running the model dynamics).
+tributaries are connected (i.e. where the ice flux that is originating from the
+tributary will be added to the main flux when running the model dynamic).
 
 
 Downstream lines
@@ -120,8 +120,8 @@ Catchment areas
 Each flowline has its own "catchment area". These areas are computed
 using similar flow routing methods as the one used for determining the
 flowlines. Their purpose is to attribute each glacier pixel to the right
-tributory in order to compute mass gain and loss for each tributary.
-This will also influence the later computation of the glacier widths).
+tributary in order to compute mass gain and loss for each tributary.
+This will also influence the later computation of the glacier widths:
 
 .. ipython:: python
 
@@ -147,7 +147,10 @@ the glacier outlines or (ii) the catchment boundaries:
 
 Then, these geometrical widths are corrected so that the altitude-area
 distribution of the "flowline-glacier" is as close as possible as the actual
-distribution of the glacier using its full 2D geometry:
+distribution of the glacier using its full 2D geometry. This correction is responsible
+for the large widths of the main red flowline in its upper part.
+This width increase comes from the two northern glacier sub-catchments that are not
+included in the main flowline:
 
 .. ipython:: python
 
@@ -163,10 +166,10 @@ but it's close enough.
 Elevation bands flowlines
 -------------------------
 
-"Elevation bands flowlines" are another way to transform a glacier into a
+"Elevation bands flowlines" method is another way to transform a glacier into a
 flowline. The implementation is considerably easier as the geometrical
 centerlines, and is used in [Huss_Farinotti_2012]_,
-[Huss_Hock_2015]_ as well as [Werder_etal_2019]_. We follow the
+[Huss_Hock_2015]_ as well as [Werder_et_al_2019]_. We follow the
 exact same methodology.
 
 The elevation range of the glacier is divided into N equal bands,
@@ -186,7 +189,7 @@ bin size and slope. For OGGM, we then convert this first flowline to a regularly
 space one by interpolating to the target resolution, which is the same
 as the geometrical centerlines (default: 2 dx of the underlying map).
 
-The resulting flowline glaciers can be understood as a "bulk" representation
+The resulting glacier flowlines can be understood as a "bulk" representation
 of the glacier, representing the average size and slope of each
 elevation band.
 
@@ -194,7 +197,7 @@ Compatibility within the OGGM framework
 ---------------------------------------
 
 Both methods are creating a "1.5D" glacier. After computation,
-**both representations are strictly equivalent** for the inversion and
+**both representations are strictly equivalent** for the ice thickness inversion and
 ice dynamics models. They are both stored as a list of
 :py:class:`~oggm.Centerline` objects. Glaciers can have only one
 elevation-band flowline per glacier, while there can be several geometrical
@@ -217,10 +220,10 @@ framework.
 Pros and cons of both methods
 -----------------------------
 
-Since the flowline representation of the glacier is *always* a simplification,
+Since the flowline representation of the glacier is **always** a simplification,
 it is impossible to say which method "is best".
 
-This list below  tries to be as objective as possible and help you decide on
+This list below  tries to be as objective as possible and can help you decide on
 which to pick. At the individual glacier scale, the impact on the
 results can be large, but our own quick assessment shows that at the global
 scale the differences are rather small (yet to be quantified with more
@@ -231,7 +234,7 @@ Geometrical centerlines
 
 - Pros:
 
-   - Closer to the "true" length of the glacier
+   - Closer to the "true" length of the glacier.
    - Grid points along the centerlines preserve their geometrical information,
      i.e. one can compute the exact location of ice thickness change.
    - It is possibile to have different model parameters for each flowline (e.g.
@@ -278,14 +281,14 @@ Elevation-band flowlines
 - Cons:
 
    - Geometry is lost, glaciers cannot be plotted on a map anymore.
-   - Glacier "length" is not the true length.
+   - Glacier lengt is not the "true" length.
    - Somewhat arbitrary: it's not clear why averaging the slopes with subjectively
      chosen quantiles is a good idea.
    - Only one flowline.
 
 .. admonition:: **Summary**
 
-   **When to use:** when true geometry does not matter. When doing simulations
+   **When to use:** when "true" geometry does not matter. When doing simulations
    at large scales, and when robustness to bad / uncertain boundary conditions
    is important.
 
@@ -306,7 +309,7 @@ References
    change and sea-level rise, Front. Earth Sci., 3(September), 1–22,
    doi:10.3389/feart.2015.00054, 2015.
 
-.. [Werder_etal_2019] Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
+.. [Werder_et_al_2019] Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
    Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
    applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
 
