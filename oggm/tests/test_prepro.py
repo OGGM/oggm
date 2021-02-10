@@ -70,6 +70,7 @@ class TestGIS(unittest.TestCase):
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
+        cfg.PARAMS['border'] = 20
 
     def tearDown(self):
         self.rm_dir()
