@@ -41,7 +41,7 @@ basal shear stress :math:`\tau`:
     u = u_d + u_s = f_d h \tau^n + f_s \frac{\tau^n}{h}
 
 wehere u_d and u_s are respectively the speed of ice coming from its deformation and sliding
-(`n` is equal to 3). Thus, the first term is for ice deformations and the second term 
+(`n` is equal to 3). Thus, the first term is for ice deformation and the second term 
 is to account for basal sliding, see e.g. [Oerlemans_1997]_ or
 [Golledge_Levy_2011]_. It introduces an additional free parameter :math:`f_s`
 and will therefore be ignored in a first approach. The deformation parameter
