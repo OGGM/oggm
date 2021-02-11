@@ -7,7 +7,7 @@ future mass-balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
 The model accounts for glacier geometry (including contributory branches) and
-includes an explicit ice dynamic module and a calving parametrization.  We rely exclusively on publicly
+includes an explicit ice dynamics module and a calving parametrization.  We rely exclusively on publicly
 available data for calibration and validation, and encourage re-mix and re-use,
 i.e. we fully support external modelling efforts based on the OGGM workflow.
 
