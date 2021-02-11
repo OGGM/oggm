@@ -7,7 +7,7 @@ future mass-balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
 The model accounts for glacier geometry (including contributory branches) and
-includes an explicit ice dynamics module.  We rely exclusively on publicly
+includes an explicit ice dynamics module and a calving parametrization.  We rely exclusively on publicly
 available data for calibration and validation, and encourage re-mix and re-use,
 i.e. we fully support external modelling efforts based on the OGGM workflow.
 
@@ -94,7 +94,7 @@ How to use the model, with concrete python code examples.
 Contributing
 ^^^^^^^^^^^^
 
-Do you want to contribute to the model? This is the right place to start.
+Do you want to contribute to the model? You are more than welcome to do so and this is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`
@@ -121,6 +121,7 @@ Get in touch
   the model by submitting a `pull request`_.
 - Chat with us on `Slack`_! (just send us an `e-mail`_ so we can add you)
 - Follow us on `Twitter`_.
+- Participate to our regular `meeting`_. (`reach out`_  if you want to join in)
 - Or you can always send us an `e-mail`_ the good old way.
 
 .. _e-mail: info@oggm.org
@@ -129,6 +130,8 @@ Get in touch
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
 .. _Twitter: https://twitter.com/OGGM1
+.. _meeting: https://oggm.org/meetings/
+.. _reach out: info@oggm.org
 
 
 License and citation
@@ -138,8 +141,8 @@ OGGM is available under the open source `3-Clause BSD License`_.
 
 .. _3-Clause BSD License: https://opensource.org/licenses/BSD-3-Clause
 
-OGGM is free software. This implies that you are free to use the model and
-copy or modify its code at your wish, under certain conditions:
+OGGM is a free software. This implies that you are free to use the model and
+copy, modify or redistribute its code at your wish, under certain conditions:
 
 1. When using this software, please acknowledge the original authors of this
    contribution by using our logo, referring to our website or using an
