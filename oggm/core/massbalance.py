@@ -416,7 +416,7 @@ class PastMassBalance(MassBalanceModel):
         # just to check that no invalid prcp_factors are used
         if new_prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')
-        self.prcp = self.prcp * new_prcp_fac / self._prcp_fac
+        self.prcp *= new_prcp_fac / self._prcp_fac
         # update old prcp_fac in order that it can be updated
         # again ...
         self._prcp_fac = new_prcp_fac
