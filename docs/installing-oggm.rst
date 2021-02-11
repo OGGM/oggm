@@ -10,7 +10,7 @@ Installing OGGM
 
 OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
-detail and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
+details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
 OGGM is fully `tested`_ with Python version 3.6, 3.7 and 3.8 on Linux.
@@ -30,7 +30,7 @@ Linux users with experience with `pip`_ can follow
 :ref:`these instructions <virtualenv-install>` to install OGGM in a pyenv environment with pip.
 
 .. _tested: https://travis-ci.org/OGGM/oggm
-.. _conda: http://conda.pydata.org/docs/using/index.html
+.. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _strongly recommend: http://python3statement.github.io/
 
@@ -123,11 +123,11 @@ Don't forget to activate it before going on::
     source activate oggm_env
 
 
-.. _environment: http://conda.pydata.org/docs/using/envs.html
+.. _environment: https://conda.io/projects/conda/en/latest/user-guide/concepts/environments.html
 
 
-Feeling adventurous? Try mamba
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Feeling adventurous? Try mamba (optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The conda package manager has recently been criticized for being slow (it *is*
 quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://mamba.readthedocs.io>`_.
@@ -136,8 +136,8 @@ If you feel like it, install mamba in your conda environment (``conda install -c
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
 
-Dependencies
-~~~~~~~~~~~~
+Install dependencies
+~~~~~~~~~~~~~~~~~~~~
 
 Install all OGGM dependencies from the ``conda-forge`` and ``oggm`` conda channels::
 
@@ -175,7 +175,7 @@ Install OGGM itself
 First, choose which version of OGGM you would like to install:
 
 - **stable**: this is the latest version officially released and has a fixed
-  version number (e.g. v1.1). As of today (Sept 2020), we do *not* recommend to
+  version number (e.g. v1.1). As of today (Feb 2021), we do *not* recommend to
   install the stable version which is quite outdated. We are in the process
   of releasing a new stable version soon(ish).
 - **dev**: this is the development version. It might contain new
@@ -366,14 +366,14 @@ Install with pyenv (Linux)
 Linux packages
 ~~~~~~~~~~~~~~
 
-Run the following commands to install required linux packages.
+Run the following commands to install the required linux packages.
 
 For building python and stuff::
 
     $ sudo apt-get install --no-install-recommends make build-essential git \
         libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget \
         curl llvm libncurses5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev \
-        libffi-dev liblzma-dev`
+        libffi-dev liblzma-dev
 
 For NetCDF and HDF::
 
@@ -393,7 +393,7 @@ Be sure to be on the working environment::
 
     $ pyenv activate oggm_env
 
-Update pip (important!)::
+Update pip (**important!**)::
 
     $ pip install --upgrade pip
 
@@ -413,8 +413,8 @@ Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries
     $ pip install git+https://github.com/fmaussion/salem.git
     $ pip install git+https://github.com/retostauffer/python-colorspace.git
 
-OGGM and tests
-~~~~~~~~~~~~~~
+Install OGGM and run tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Refer to `Install OGGM itself`_ above.
 
@@ -437,6 +437,7 @@ install this shorter list:
 - pytables
 
 Installing them with pip or conda should be much easier.
+`Install OGGM itself`_ then as above.
 
 Running the tests in this minimal environment works the same. Simply run
 from a terminal::
