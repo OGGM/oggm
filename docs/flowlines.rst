@@ -281,7 +281,7 @@ Elevation-band flowlines
 - Cons:
 
    - Geometry is lost, glaciers cannot be plotted on a map anymore.
-   - Glacier lengt is not the "true" length.
+   - Glacier length is not the "true" length.
    - Somewhat arbitrary: it's not clear why averaging the slopes with subjectively
      chosen quantiles is a good idea.
    - Only one flowline.
