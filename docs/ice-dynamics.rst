@@ -1,4 +1,4 @@
-Ice dynamic
+Ice dynamics
 ============
 
 The glaciers in OGGM are represented by a depth-integrated flowline
