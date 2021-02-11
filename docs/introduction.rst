@@ -42,7 +42,7 @@ Ice thickness inversion
   Using the mass-balance data computed above and relying on mass-conservation
   considerations, an estimate of the ice flux along each glacier grid point cross-section
   is computed by making assumptions about the shape of the cross-section
-  (parabolic or rectangular). Using the physics of ice flow and the shallow ice approximation, 
+  (parabolic, rectangular or trapezoid). Using the physics of ice flow and the shallow ice approximation, 
   the model then computes the thickness of the glacier along the flowlines and the total
   volume of the glacier (**Fig. e**).
 
