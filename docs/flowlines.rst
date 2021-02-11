@@ -150,7 +150,7 @@ distribution of the "flowline-glacier" is as close as possible as the actual
 distribution of the glacier using its full 2D geometry. This correction is responsible
 for the large widths of the main red flowline in its upper part.
 This width increase comes from the two northern glacier sub-catchments that are not
-included in the main flowline:
+included in the main flowline.
 
 .. ipython:: python
 
@@ -320,4 +320,3 @@ Implementation details
 Shared setup for these examples:
 
 .. literalinclude:: _code/prepare_centerlines.py
-
