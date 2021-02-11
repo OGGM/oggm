@@ -81,10 +81,10 @@ To update this branch, you need to retrieve the changes from the master branch::
     git fetch upstream
     git rebase upstream/master
 
-This will replay your commits on top of the lastest oggm git master.  If this
+This will replay your commits on top of the latest oggm git master. If this
 leads to merge conflicts, you must resolve these before submitting your pull
-request.  If you have uncommitted changes, you will need to ``stash`` them prior
-to updating.  This will effectively store your changes and they can be reapplied
+request. If you have uncommitted changes, you will need to ``stash`` them prior
+to updating. This will effectively store your changes and they can be reapplied
 after updating.
 
 .. _contributing.dev_env:
@@ -92,7 +92,7 @@ after updating.
 Creating a development environment
 ----------------------------------
 
-An easy way to create a OGGM development environment is explained in
+An easy way to create an OGGM development environment is explained in
 :ref:`installing.oggm`.
 
 
@@ -129,7 +129,7 @@ The tests can then be run directly inside your Git clone by typing::
 
     pytest .
 
-The tests can run for several minutes. If everything worked fine, you
+Running the tests will take several minutes. If everything worked fine, you
 should see something like::
 
     ==== test session starts ====
@@ -181,7 +181,7 @@ Some other important things to know about the docs:
   itself and the docs in this folder ``oggm/docs/``.
 
   The docstrings *should* provide a clear explanation of the usage of the
-  individual functions (currently this is not the case everywhere, ufortunately),
+  individual functions (currently this is not the case everywhere, unfortunately),
   while the documentation in this folder consists of tutorial-like
   overviews per topic together with some other information (what's new,
   installation, etc).

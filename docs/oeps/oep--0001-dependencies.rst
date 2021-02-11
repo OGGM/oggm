@@ -164,7 +164,7 @@ Docker image built with the standard dependency list**. Optionally,
 we will monitor the tests on the latest image as well, but the tests are 
 not guaranteed to pass ("allowed failures").
 
-**The main OGGM reporistory will not test on other platforms than Linux**. 
+**The main OGGM repository will not test on other platforms than Linux**.
 We might run the tests for other platforms as well, but this is without 
 guarantee and should happen on a separate repository (e.g. on 
 `<https://github.com/OGGM/OGGM-dependency-list>`_).
@@ -194,6 +194,6 @@ of OGGM:
 
 - `pytest --pyargs oggm --run-slow --mpl` will run the test suite. This test
   suite does not contain quantitative tests, i.e. it does not guarantee
-  consistency of model results accross platforms
+  consistency of model results across platforms
 - `oggm.check_install()` will be a top level function performing quantitative 
   tests to see if user results are consistent with the benchmark container.
