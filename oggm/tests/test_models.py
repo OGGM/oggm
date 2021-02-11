@@ -359,7 +359,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.PastMassBalance(gdir, bias=0,
                                              check_calib_params=False)
         # save old precipitation time series
-        prcp_old = mb_mod.prcp
+        prcp_old = mb_mod.prcp.copy()
         prcp_fac_old = cfg.PARAMS['prcp_scaling_factor']
         # basic checks
         assert mb_mod.prcp_fac == prcp_fac_old
