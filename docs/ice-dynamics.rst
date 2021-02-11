@@ -52,7 +52,7 @@ temperature‐dependent creep parameter :math:`A`:
 
     f_d = \frac{2 A}{n + 2}
 
-The basal shear stress :math:`\tau` depends for examle on the geometry of the bed
+The basal shear stress :math:`\tau` depends for example on the geometry of the bed
 [Cuffey_Paterson_2010]_. Currently it is assumed to be
 equal to the driving stress :math:`\tau_d`:
 
