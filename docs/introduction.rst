@@ -4,7 +4,7 @@ Introduction
 
 We illustrate with an example how the OGGM workflow is applied to the
 Tasman Glacier in New Zealand (see figure below).
-Here we describe shortly the purpose of each processing steps, while more
+Here we describe shortly the purpose of each processing step, while more
 details are provided in the other sections and the theory of glacier physic
 can for example be found in `Cuffey and Paterson, (2010)`_.:
 
