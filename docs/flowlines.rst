@@ -166,7 +166,7 @@ but it's close enough.
 Elevation bands flowlines
 -------------------------
 
-"Elevation bands flowlines" method is another way to transform a glacier into a
+The "elevation bands flowlines" method is another way to transform a glacier into a
 flowline. The implementation is considerably easier as the geometrical
 centerlines, and is used in [Huss_Farinotti_2012]_,
 [Huss_Hock_2015]_ as well as [Werder_et_al_2019]_. We follow the
