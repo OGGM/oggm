@@ -197,7 +197,7 @@ Compatibility within the OGGM framework
 ---------------------------------------
 
 Both methods are creating a "1.5D" glacier. After computation,
-**both representations are strictly equivalent** for the ice thickness inversion and
+**both representations are programmatically equivalent** for the ice thickness inversion and
 ice dynamics models. They are both stored as a list of
 :py:class:`~oggm.Centerline` objects. Glaciers can have only one
 elevation-band flowline per glacier, while there can be several geometrical
