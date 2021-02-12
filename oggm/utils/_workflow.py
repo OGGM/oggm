@@ -3151,7 +3151,9 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
-                           filename='climate_historical', input_filesuffix=''):
+                           filename='climate_historical',
+                           input_filesuffix='',
+                           dem_source=None):
     """Creats a new GlacierDirectory if tributaries are merged to a glacier
 
     This function should be called after centerlines.intersect_downstream_lines
@@ -3171,6 +3173,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
         Baseline climate file
     input_filesuffix: str
         Filesuffix to the climate file
+    dem_source: str
+        the DEM source to use
     Returns
     -------
     merged : oggm.GlacierDirectory
@@ -3232,7 +3236,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
 
     # run define_glacier_region to get a fitting DEM and proper grid
-    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0],
+                          source=dem_source)
 
     # write gridded data and geometries for visualization
     merged_glacier_masks(merged, merged_geometry)

@@ -828,64 +828,6 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
             pass
 
 
-def _recursive_merging(gdirs, gdir_main, glcdf=None,
-                       filename='climate_historical', input_filesuffix=''):
-    """ Recursive function to merge all tributary glaciers.
-
-    This function should start with the largest glacier and then be called
-    upon all smaller glaciers.
-
-    Parameters
-    ----------
-    gdirs : list of :py:class:`oggm.GlacierDirectory`
-        all glaciers, main and tributary. Preprocessed and initialised
-    gdir_main: :py:class:`oggm.GlacierDirectory`
-        the current main glacier where the others are merge to
-    glcdf: geopandas.GeoDataFrame
-        which contains the main glaciers, will be downloaded if None
-    filename: str
-        Baseline climate file
-    input_filesuffix: str
-        Filesuffix to the climate file
-
-    Returns
-    -------
-    merged_gdir: :py:class:`oggm.GlacierDirectory`
-        the mergeed current main glacier
-    gdirs : list of :py:class:`oggm.GlacierDirectory`
-        updated list of glaciers, removed the already merged ones
-    """
-    # find glaciers which intersect with the main
-    tributaries = centerlines.intersect_downstream_lines(gdir_main,
-                                                         candidates=gdirs)
-    if len(tributaries) == 0:
-        # if no tributaries: nothing to do
-        return gdir_main, gdirs
-
-    # seperate those glaciers which are not already found to be a tributary
-    gdirs = [gd for gd in gdirs if gd not in tributaries]
-
-    gdirs_to_merge = []
-
-    for trib in tributaries:
-        # for each tributary: check if we can merge additional glaciers to it
-        merged, gdirs = _recursive_merging(gdirs, trib, glcdf=glcdf,
-                                           filename=filename,
-                                           input_filesuffix=input_filesuffix)
-        gdirs_to_merge.append(merged)
-
-    # create merged glacier directory
-    gdir_merged = utils.initialize_merged_gdir(
-        gdir_main, tribs=gdirs_to_merge, glcdf=glcdf, filename=filename,
-        input_filesuffix=input_filesuffix)
-
-    flowline.merge_to_one_glacier(gdir_merged, gdirs_to_merge,
-                                  filename=filename,
-                                  input_filesuffix=input_filesuffix)
-
-    return gdir_merged, gdirs
-
-
 @global_task(log)
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
                         **kwargs):
@@ -947,3 +889,64 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     merged_gdirs = merged_gdirs + gdirs
 
     return merged_gdirs
+
+
+def _recursive_merging(gdirs, gdir_main, glcdf=None, dem_source=None,
+                       filename='climate_historical', input_filesuffix=''):
+    """ Recursive function to merge all tributary glaciers.
+
+    This function should start with the largest glacier and then be called
+    upon all smaller glaciers.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        all glaciers, main and tributary. Preprocessed and initialised
+    gdir_main: :py:class:`oggm.GlacierDirectory`
+        the current main glacier where the others are merge to
+    glcdf: geopandas.GeoDataFrame
+        which contains the main glaciers, will be downloaded if None
+    filename: str
+        Baseline climate file
+    dem_source: str
+        the DEM source to use
+    input_filesuffix: str
+        Filesuffix to the climate file
+
+    Returns
+    -------
+    merged_gdir: :py:class:`oggm.GlacierDirectory`
+        the mergeed current main glacier
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        updated list of glaciers, removed the already merged ones
+    """
+    # find glaciers which intersect with the main
+    tributaries = centerlines.intersect_downstream_lines(gdir_main,
+                                                         candidates=gdirs)
+    if len(tributaries) == 0:
+        # if no tributaries: nothing to do
+        return gdir_main, gdirs
+
+    # seperate those glaciers which are not already found to be a tributary
+    gdirs = [gd for gd in gdirs if gd not in tributaries]
+
+    gdirs_to_merge = []
+
+    for trib in tributaries:
+        # for each tributary: check if we can merge additional glaciers to it
+        merged, gdirs = _recursive_merging(gdirs, trib, glcdf=glcdf,
+                                           filename=filename,
+                                           input_filesuffix=input_filesuffix,
+                                           dem_source=dem_source)
+        gdirs_to_merge.append(merged)
+
+    # create merged glacier directory
+    gdir_merged = utils.initialize_merged_gdir(
+        gdir_main, tribs=gdirs_to_merge, glcdf=glcdf, filename=filename,
+        input_filesuffix=input_filesuffix, dem_source=dem_source)
+
+    flowline.merge_to_one_glacier(gdir_merged, gdirs_to_merge,
+                                  filename=filename,
+                                  input_filesuffix=input_filesuffix)
+
+    return gdir_merged, gdirs
