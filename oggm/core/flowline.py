@@ -45,8 +45,7 @@ log = logging.getLogger(__name__)
 
 
 class Flowline(Centerline):
-    """Common logic for different types of flowlines used as input to the model
-
+    """A Centerline with additional properties: input to the FlowlineModel
     """
 
     def __init__(self, line=None, dx=1, map_dx=None,
@@ -496,7 +495,7 @@ class MixedBedFlowline(Flowline):
 
 
 class FlowlineModel(object):
-    """Interface to the actual model"""
+    """Interface to OGGM's flowline models"""
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=None, inplace=False, smooth_trib_influx=True,
@@ -1674,7 +1673,7 @@ class KarthausModel(FlowlineModel):
 
 
 class FileModel(object):
-    """Duck FlowlineModel which actually reads the stuff out of a nc file."""
+    """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
         """ Instanciate.

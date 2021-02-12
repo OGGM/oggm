@@ -81,7 +81,7 @@ HISTALP
 
 If required by the user, OGGM can also automatically
 download and use the data from the `HISTALP`_ dataset (available only 
-for the European Alps region, more details in [Chimani_et_al_2012] .
+for the European Alps region, more details in [Chimani_et_al_2012]_.
 The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
 However, the data is considered spurious before 1850. Therefore, we
 recommend to use data from 1850 onwards.
@@ -96,7 +96,7 @@ recommend to use data from 1850 onwards.
     example_plot_temp_ts()  # the code for these examples is posted below
 
 User-provided climate dataset
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can provide any other dataset to OGGM. See the `HISTALP_oetztal.nc` data
 file in the OGGM `sample-data`_ folder for an example format.
@@ -288,6 +288,10 @@ Regional calibration
 References
 ----------
 
+.. [Chimani_et_al_2012] Chimani, B., Matulla, C., Böhm, R., Hofstätter, M.:
+   A new high resolution absolute Temperature Grid for the Greater Alpine Region
+   back to 1780, Int. J. Climatol., 33(9), 2129–2141, DOI 10.1002/joc.3574, 2012.
+
 .. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
@@ -300,10 +304,7 @@ References
    Thomson, L., Paul, F., Maussion, F., Kutuzov, S. and Cogley, J. G.:
    Global glacier mass changes and their contributions to sea-level rise from
    1961 to 2016, Nature, 568(7752), 382–386, doi:10.1038/s41586-019-1071-0, 2019.
-   
-.. [Chimani_et_al_2012] Chimani, B., Matulla, C., Böhm, R., Hofstätter, M.:
-   A new high resolution absolute Temperature Grid for the Greater Alpine Region
-   back to 1780, Int. J. Climatol., 33(9), 2129–2141, DOI 10.1002/joc.3574, 2012.
+
 
 Implementation details
 ----------------------

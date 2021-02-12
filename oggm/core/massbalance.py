@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
-    """Common logic for the mass balance models.
+    """Interface and common logic for all mass balance models used in OGGM.
 
     All mass-balance models should implement this interface.
 

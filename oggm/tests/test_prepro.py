@@ -1985,7 +1985,7 @@ class TestClimate(unittest.TestCase):
         workflow.climate_tasks([gdir])
 
         # Test match geod
-        workflow.match_regional_geodetic_mb([gdir], '11',
+        workflow.match_regional_geodetic_mb([gdir], rgi_reg='11',
                                             period='2000-01-01_2010-01-01')
         df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
         df = pd.read_csv(utils.get_demo_file(df))
@@ -1995,7 +1995,8 @@ class TestClimate(unittest.TestCase):
         mb = df.loc[2000:2009].mean()
         np.testing.assert_allclose(mb, smb_ref)
 
-        workflow.match_regional_geodetic_mb([gdir], '11', dataset='zemp')
+        workflow.match_regional_geodetic_mb(gdir, rgi_reg='11',
+                                            dataset='zemp')
         df = 'zemp_ref_2006_2016.csv'
         df = pd.read_csv(utils.get_demo_file(df), index_col=0)
         smb_ref = df.loc[int('11'), 'SMB'] * 1000
@@ -3024,7 +3025,7 @@ class TestColumbiaCalving(unittest.TestCase):
         np.testing.assert_allclose(diag['calving_flux'], diag['calving_law_flux'])
 
         # Where we also match MB
-        workflow.match_regional_geodetic_mb([gdir], '01')
+        workflow.match_regional_geodetic_mb(gdir, rgi_reg='01')
 
         # Check OGGM part
         df = utils.compile_fixed_geometry_mass_balance([gdir])

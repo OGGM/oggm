@@ -180,7 +180,7 @@ A representative slope angle for each band is needed for estimating
 the ice flow. This calculation is also critical as it will determine the
 horizontal length of an elevation band and hence the overall glacier length.
 This slope is computed as the mean of all cell slopes over a certain
-quantile range (see [Werder_etal_2019]_ for details), chosen to remove
+quantile range (see [Werder_et_al_2019]_ for details), chosen to remove
 outliers and to return a slope angle that is both representative of the
 main trunk of the glacier and somewhat consistent with its real length.
 
@@ -205,7 +205,8 @@ centerlines. The downstream lines are computed the same way for both the
 elevation-band and geometrical flowlines.
 
 Both flowline types are available for download and for use in the OGGM
-framework.
+framework. The plot below has been obtained from the
+`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_.
 
 
     .. figure:: _static/eb_vs_cl.png

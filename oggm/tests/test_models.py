@@ -3036,6 +3036,7 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
+    cfg.PARAMS['use_multiprocessing'] = True
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
@@ -3059,29 +3060,26 @@ class TestMergedHEF():
         workflow.inversion_tasks(gdirs)
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-        # store HEF
-        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
-
         # merge, but with 0 buffer, should not do anything
-        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge0 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=0)
         assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
                                               merge0.read_pickle(
                                                   'model_flowlines')])[0]
-        gdirs += hef
 
         # merge, but with 50 buffer. overlapping glaciers should be excluded
-        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge1 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=50)
         assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
         assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
 
-        gdirs += hef
-
         # merge HEF and Vernagt, include Gepatsch but it should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        gdir_merged = workflow.merge_glacier_tasks(gdirs,
+                                                   main_rgi_id='RGI50-11.00897',
                                                    glcdf=glcdf)
 
         # test flowlines
@@ -3102,8 +3100,6 @@ class TestMergedHEF():
         assert fls1[0].flows_to == fls1[-1]
         assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
         assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
-
-        gdirs += hef
 
         # run parameters
         years = 200  # arbitrary

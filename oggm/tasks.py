@@ -1,9 +1,8 @@
-"""OGGM tasks.
+"""OGGM entity tasks.
 
 This module is simply a shortcut to the core functions
 """
 # flake8: noqa
-# Entity tasks
 from oggm.core.gis import define_glacier_region
 from oggm.core.gis import process_dem
 from oggm.core.gis import glacier_masks

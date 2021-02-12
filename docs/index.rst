@@ -2,14 +2,15 @@
 A modular open source glacier model in Python
 ---------------------------------------------
 
-OGGM is a **modular modelling framework** able to simulate past and
+**OGGM is an open source modelling framework** able to simulate past and
 future mass-balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
 The model accounts for glacier geometry (including contributory branches) and
-includes an explicit ice dynamics module and a calving parametrization.  We rely exclusively on publicly
-available data for calibration and validation, and encourage re-mix and re-use,
-i.e. we fully support external modelling efforts based on the OGGM workflow.
+includes an explicit ice dynamics module. We rely exclusively on publicly
+available data for calibration and validation. **OGGM is modular and
+supports novel modelling workflows**: it LOVES to be remixed and reused!
+
 
 **This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
