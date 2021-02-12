@@ -648,13 +648,13 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         factor to apply to default A
     apply_fs_on_mismatch: false
         on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
-        Oerlemans) and try to otpimize A again.
+        Oerlemans) and try to optimize A again.
     error_on_mismatch: bool
         sometimes the given bounds do not allow to find a zero mismatch:
         this will normally raise an error, but you can switch this off,
         use the closest value instead and move on.
     filter_inversion_output : bool
-        wether or not to apply terminus thickness filtering on the inversion
+        whether or not to apply terminus thickness filtering on the inversion
         output (needs the downstream lines to work).
 
     Returns
@@ -841,7 +841,7 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
         RGI ID of the main glacier of interest. If None is provided merging
         will start based uppon the largest glacier
     return_all : bool
-        if main_rgi_id is given and return_all = False: only the main glaicer
+        if main_rgi_id is given and return_all = False: only the main glacier
         is returned
         if main_rgi_is given and return_all = True, the main glacier and every
         remaining glacier from the initial gdirs list is returned, possible

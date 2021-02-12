@@ -3,7 +3,7 @@
 Assets & downloads
 ==================
 
-This page lists some datasets that are either generated or use by OGGM and
+This page lists some datasets that are either generated or used by OGGM and
 that can be useful to others.
 
 

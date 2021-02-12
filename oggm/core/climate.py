@@ -387,7 +387,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
 @entity_task(log, writes=['climate_historical'])
 def historical_climate_qc(gdir):
-    """Check the "quality" of the basline climate data and correct if needed.
+    """Check the "quality" of the baseline climate data and correct if needed.
 
     This forces the climate data to have at least N months
     (``cfg.PARAMS['climate_qc_months']``) of melt per year

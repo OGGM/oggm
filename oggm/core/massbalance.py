@@ -80,7 +80,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the atitudes at which the mass-balance will be computed
+            the altitudes at which the mass-balance will be computed
         year: float, optional
             the time (in the "floating year" convention)
         fl_id: float, optional
@@ -106,7 +106,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the atitudes at which the mass-balance will be computed.
+            the altitudes at which the mass-balance will be computed.
             Overridden by ``fls`` if provided
         widths: ndarray
             the widths of the flowline (necessary for the weighted average).
