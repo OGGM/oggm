@@ -205,7 +205,8 @@ centerlines. The downstream lines are computed the same way for both the
 elevation-band and geometrical flowlines.
 
 Both flowline types are available for download and for use in the OGGM
-framework.
+framework. The plot below has been obtained from the
+`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_.
 
 
     .. figure:: _static/eb_vs_cl.png

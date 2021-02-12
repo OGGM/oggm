@@ -166,10 +166,18 @@ Available pre-processed configurations
     unsure about which to use, or if you'd like to have more configurations
     to choose from!
 
+    To choose from a specific model configuration, use the ``prepro_base_url``
+    argument in your call to :py:func:`workflow.init_glacier_directories`,
+    and set it to one of the urls listed below.
+
+    See `this tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_
+    for an example.
+
+
 Default
 ^^^^^^^
 
-If not provided with a specific `prepro_base_url` argument,
+If not provided with a specific ``prepro_base_url`` argument,
 :py:func:`workflow.init_glacier_directories` will download the glacier
 directories from the default urls. Here is a summary of the default configuration:
 
