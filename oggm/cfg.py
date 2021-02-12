@@ -184,7 +184,7 @@ for ks in [5, 7, 9]:
     GAUSSIAN_KERNEL[ks] = kernel / kernel.sum()
 
 _doc = ('A geotiff file containing the DEM (reprojected into the local grid).'
-        'This DEM is not smoothed or gap filles, and is the closest to the '
+        'This DEM is not smoothed or gap files, and is the closest to the '
         'original DEM source.')
 BASENAMES['dem'] = ('dem.tif', _doc)
 
@@ -206,7 +206,7 @@ _doc = ('Each flowline has a catchment area computed from flow routing '
         'local map projection (Transverse Mercator).')
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
-_doc = ('The intersections between cathments (shapefile) in the local map '
+_doc = ('The intersections between catchments (shapefile) in the local map '
         'projection (Transverse Mercator).')
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
@@ -232,7 +232,7 @@ _doc = ('A dictionary containing the shapely.Polygons of a glacier. The '
         'the centerlines catchment area.')
 BASENAMES['geometries'] = ('geometries.pkl', _doc)
 
-_doc = ('A dictionary containing the downsteam line geometry as well as the '
+_doc = ('A dictionary containing the downstream line geometry as well as the '
         'bed shape computed from a parabolic fit.')
 BASENAMES['downstream_line'] = ('downstream_line.pkl', _doc)
 

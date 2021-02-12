@@ -628,7 +628,7 @@ def parse_args(args):
                              'WORKFLOW).')
     parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the Huss&Hock '
-                             '2015 ethod instead of the OGGM default, which is '
+                             '2015 method instead of the OGGM default, which is '
                              'a mix of elev_bands and centerlines.')
     parser.add_argument('--centerlines-only', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '

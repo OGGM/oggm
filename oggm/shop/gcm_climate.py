@@ -83,8 +83,8 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     prcp = prcp[sm-1:sm-13].load()
     temp = temp[sm-1:sm-13].load()
 
-    assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didnt get full years'
-    assert len(temp) // 12 == len(temp) / 12, 'Somehow we didnt get full years'
+    assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didn\'t get full years'
+    assert len(temp) // 12 == len(temp) / 12, 'Somehow we didn\'t get full years'
 
     # Get CRU to apply the anomaly to
     fpath = gdir.get_filepath('climate_historical')

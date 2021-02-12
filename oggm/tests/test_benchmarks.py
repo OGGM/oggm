@@ -26,7 +26,7 @@ do_plot = False
 
 class TestSouthGlacier(unittest.TestCase):
 
-    # Test case optained from ITMIX
+    # Test case obtained from ITMIX
     # Data available at:
     # oggm-sample-data/tree/master/benchmarks/south_glacier
     #

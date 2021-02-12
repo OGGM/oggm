@@ -397,8 +397,8 @@ model flowlines
    :py:class:`Flowline` for all simulations. These flowlines are created by
    :py:func:`init_present_time_glacier`, which combines information from
    several preprocessing steps, the downstream line and the bed inversion.
-   From a user prespective, especially if preprocessed directories are used,
-   these model flowlines are the most importent ones and further informations
+   From a user perspective, especially if preprocessed directories are used,
+   these model flowlines are the most important ones and further informations
    on the class interface and attributes are given below.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
@@ -430,7 +430,7 @@ including the model flowlines. This is achieved by choosing preprocessing level
     [fl.order for fl in fls]
 
 This glacier has three flowlines of type `MixedBedFlowline` provided as a list.
-And the flowlines are orderd by ascending Strahler numbers, where the last entry
+And the flowlines are ordered by ascending Strahler numbers, where the last entry
 in the list is always the longest and very often most relevant flowline of
 that glacier.
 

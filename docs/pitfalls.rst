@@ -38,7 +38,7 @@ higher value to compensate for this missing process (effectively making ice
    based on the consensus from [Farinotti_etal_2019]_ on any number
    of glaciers. We recommend to use a large number of glaciers: OGGM's default
    glacier directories are calibrated at the RGI region level. This
-   value is the also used by the forward dynamical model for consistency,
+   value is also used by the forward dynamical model for consistency,
    according to the parameter `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
 
 There is a way to calibrate :math:`A` for the ice thickness inversion
@@ -63,7 +63,7 @@ default :math:`A`). This is best shown by this figure from
 .. figure:: _static/global_volume_mau2019.png
     :width: 100%
 
-    Global volume estimates as a function of the multiplication factor
+    Global volume estimated as a function of the multiplication factor
     applied to the ice creep parameter A, with five different setups:
     defaults, with sliding velocity, with lateral drag, and with rectangular
     and parabolic bed shapes only (instead of the default mixed
@@ -98,7 +98,7 @@ it in detail, for a summary:
 - the previous algorithm was flawed, but did not result in significant errors
   at large scales.
 - the new algorithm is faster and more likely to be stable
-- we don't guarantee statibility in 100% of the cases, but when the model
+- we don't guarantee stability in 100% of the cases, but when the model
   becomes unstable it should stop.
 
 

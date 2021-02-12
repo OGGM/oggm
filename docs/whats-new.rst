@@ -137,7 +137,7 @@ Enhancements
 - After a recent change in multiprocessing, creating a pool of workers became
   very slow. This change was necessary because of race conditions in GDAL,
   but these conditions are rarely relevant to users. We now make this
-  change in multiprocession optional (:pull:`937`)
+  change in multiprocessing optional (:pull:`937`)
 - various improvements and changes in the dynamical model - mass-balance model
   API. These were necessary to allow compatibility with the PyGEM model
   (:pull:`938`, :pull:`946`, :pull:`949`, :pull:`953`, :pull:`951`).
@@ -438,10 +438,10 @@ Breaking changes
   `compile_glacier_statistics` (:pull:`571`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ``process_cesm_data`` task has been been moved to `gcm_climate.py`
-  adressing: :issue:`469` & :pull:`582`.
+  addressing: :issue:`469` & :pull:`582`.
   By `Anouk Vlug <https://github.com/anoukvlug>`_.
 - The shapefiles are now stored in the glacier directories as compressed
-  tar files, adressing :issue:`367` & :issue:`615`. This option can be
+  tar files, addressing :issue:`367` & :issue:`615`. This option can be
   turned off with `cfg.PARAMS['use_tar_shapefiles'] = False`.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 
@@ -515,13 +515,13 @@ Enhancements
   By `Sadie Bartholomew <https://github.com/sadielbartholomew>`_.
 - Added a workflow ``merge_glacier_tasks`` which merges tributary/surrounding
   glaciers to a main glacier, allowing mass exchange between them. This is
-  helpfull/neccessary/intended for growing glacier experiments (e.g.
+  helpful/necessary/intended for growing glacier experiments (e.g.
   paleoglaciology) (:pull:`624`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 - New ``oggm_prepro`` command line tool to run the OGGM preprocessing tasks
   and compress the directories (:pull:`648`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- `init_glacier_regions` task now accepts RGI Ids strongs as input instead of
+- `init_glacier_regions` task now accepts RGI Ids strings as input instead of
   only Geodataframes previously (:pull:`656`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ``entity_task`` decorator now accepts a fallback-function which will be

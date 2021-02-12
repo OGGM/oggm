@@ -522,7 +522,7 @@ class FlowlineModel(object):
             time by the model (can help to spare memory)
         smooth_trib_influx : bool
             whether to smooth the mass influx from the incoming tributary.
-            The fefault is to use a gaussian kernel on a 9 grid points
+            The default is to use a gaussian kernel on a 9 grid points
             window.
         is_tidewater: bool, default: False
             is this a tidewater glacier?
@@ -867,7 +867,7 @@ class FlowlineModel(object):
         run_ds : xarray.Dataset
             stores the entire glacier geometry. It is useful to visualize the
             glacier geometry or to restart a new run from a modelled geometry.
-            The glacier state is stored at the begining of each hydrological
+            The glacier state is stored at the beginning of each hydrological
             year (not in between in order to spare disk space).
         diag_ds : xarray.Dataset
             stores a few diagnostic variables such as the volume, area, length
@@ -1093,7 +1093,7 @@ class FluxBasedModel(FlowlineModel):
         ----------
         flowlines : list
             the glacier flowlines
-        mb_model : MassBakanceModel
+        mb_model : MassBalanceModel
             the mass-balance model
         y0 : int
             initial year of the simulation
@@ -2124,7 +2124,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         - lake terminating glaciers
         - other uncertainties
         The default is to take the water level obtained from the ice
-        thickness inverion.
+        thickness inversion.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
@@ -2216,8 +2216,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         to zero
     seed : int
         seed for the random generator. If you ignore this, the runs will be
-        different each time. Setting it to a fixed seed accross glaciers can
-        be usefull if you want to have the same climate years for all of them
+        different each time. Setting it to a fixed seed across glaciers can
+        be useful if you want to have the same climate years for all of them
     temperature_bias : float
         add a bias to the temperature timeseries
     store_monthly_step : bool
@@ -2445,8 +2445,8 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
     and write modified `model_flowlines` to the main GlacierDirectory.
     The provided tributaries must have an intersecting downstream line.
     To be sure about this, use `intersect_downstream_lines` first.
-    This function is mainly responsible to reporject the flowlines, set
-    flowline attributes and to copy additional files, like the necessary climat
+    This function is mainly responsible to reproject the flowlines, set
+    flowline attributes and to copy additional files, like the necessary climate
     files.
 
     Parameters
@@ -2544,7 +2544,7 @@ def clean_merged_flowlines(gdir, buffer=None):
     After matching flowlines were found and merged to one glacier directory
     this function makes them nice:
     There should only be one flowline per bed, so overlapping lines have to be
-    cut, attributed to a another flowline and orderd.
+    cut, attributed to a another flowline and ordered.
 
     Parameters
     ----------

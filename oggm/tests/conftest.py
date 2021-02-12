@@ -43,7 +43,7 @@ def pytest_addoption(parser):
     parser.addoption("--run-download", action="store_true", default=False,
                      help="Run download tests")
     parser.addoption("--run-creds", action="store_true", default=False,
-                     help="Run download tests requiring credentians")
+                     help="Run download tests requiring credentials")
     parser.addoption("--run-test-env", metavar="ENVNAME", default="",
                      help="Run only specified test env")
     parser.addoption("--no-run-internet", action="store_true", default=False,
