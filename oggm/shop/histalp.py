@@ -140,7 +140,7 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
                                                               'metres',
                                                               'metre']
     assert nc_ts_tmp._nc.variables['T_2M'].units.lower() in ['degc', 'degrees',
-                                                             'degrees celsius',
+                                                             'degrees celcius',
                                                              'degree', 'c']
     assert nc_ts_pre._nc.variables['TOT_PREC'].units.lower() in ['kg m-2',
                                                                  'l m-2', 'mm',
