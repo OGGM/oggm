@@ -3063,7 +3063,8 @@ class TestMergedHEF():
         hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
 
         # merge, but with 0 buffer, should not do anything
-        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge0 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=0)
         assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
                                               merge0.read_pickle(
@@ -3071,7 +3072,8 @@ class TestMergedHEF():
         gdirs += hef
 
         # merge, but with 50 buffer. overlapping glaciers should be excluded
-        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge1 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=50)
         assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
@@ -3081,7 +3083,8 @@ class TestMergedHEF():
         gdirs += hef
 
         # merge HEF and Vernagt, include Gepatsch but it should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        gdir_merged = workflow.merge_glacier_tasks(gdirs,
+                                                   main_rgi_id='RGI50-11.00897',
                                                    glcdf=glcdf)
 
         # test flowlines

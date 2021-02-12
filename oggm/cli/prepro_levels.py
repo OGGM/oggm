@@ -465,7 +465,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
                                       'before_match_{}.csv'.format(rgi_reg))
         utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
-        workflow.match_regional_geodetic_mb(gdirs, rgi_reg,
+        workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
                                             dataset=match_geodetic_mb)
 
     # We get ready for modelling
