@@ -1398,7 +1398,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
-@global_task
+@global_task(log)
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers and writes them to disk
 
@@ -1416,9 +1416,6 @@ def compute_ref_t_stars(gdirs):
                                  '`run_mb_calibration` parameter to `True`.')
 
     log.info('Compute the reference t* and mu* for WGMS glaciers')
-
-    # Should be iterable
-    gdirs = utils.tolist(gdirs)
 
     # Reference glaciers only if in the list and period is good
     ref_gdirs = utils.get_ref_mb_glaciers(gdirs)

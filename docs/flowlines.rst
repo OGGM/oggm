@@ -180,7 +180,7 @@ A representative slope angle for each band is needed for estimating
 the ice flow. This calculation is also critical as it will determine the
 horizontal length of an elevation band and hence the overall glacier length.
 This slope is computed as the mean of all cell slopes over a certain
-quantile range (see [Werder_etal_2019]_ for details), chosen to remove
+quantile range (see [Werder_et_al_2019]_ for details), chosen to remove
 outliers and to return a slope angle that is both representative of the
 main trunk of the glacier and somewhat consistent with its real length.
 

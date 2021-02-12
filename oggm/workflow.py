@@ -15,6 +15,7 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.utils import global_task
 
 # MPI
 try:
@@ -128,17 +129,20 @@ def execute_entity_task(task, gdirs, **kwargs):
         the glacier directories to process
     """
 
+    if task.__dict__.get('is_global_task', False):
+        raise InvalidWorkflowError('execute_entity_task cannot be used on '
+                                   'global tasks.')
+
     # Should be iterable
     gdirs = utils.tolist(gdirs)
 
     if len(gdirs) == 0:
+        log.workflow('Called entity task %s on 0 glaciers. Returning...',
+                     task.__name__)
         return
 
     log.workflow('Execute entity task %s on %d glaciers',
                  task.__name__, len(gdirs))
-
-    if task.__dict__.get('global_task', False):
-        return task(gdirs, **kwargs)
 
     pc = _pickle_copier(task, kwargs)
 
@@ -507,8 +511,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     return gdirs
 
 
+@global_task(log)
 def gis_prepro_tasks(gdirs):
-    """Shortcut function: run all flowline preprocessing tasks.
+    """Run all flowline preprocessing tasks on a list of glaciers.
 
     Parameters
     ----------
@@ -549,8 +554,9 @@ def download_ref_tstars(base_url=None):
                     os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json'))
 
 
+@global_task(log)
 def climate_tasks(gdirs, base_url=None):
-    """Shortcut function: run all climate related tasks.
+    """Run all climate related entity tasks on a list of glaciers.
 
     Parameters
     ----------
@@ -574,8 +580,9 @@ def climate_tasks(gdirs, base_url=None):
     execute_entity_task(tasks.mu_star_calibration, gdirs)
 
 
+@global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
-    """Shortcut function: run all ice thickness inversion tasks.
+    """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
 
@@ -617,6 +624,7 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
             execute_entity_task(tasks.filter_inversion_output, gdirs)
 
 
+@global_task(log)
 def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        fs=0, a_bounds=(0.1, 10),
                                        apply_fs_on_mismatch=False,
@@ -727,7 +735,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     return df
 
 
-def match_regional_geodetic_mb(gdirs, rgi_reg, dataset='hugonnet',
+@global_task(log)
+def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
                                period='2000-01-01_2020-01-01'):
     """Regional shift of the mass-balance residual to match observations.
 
@@ -819,6 +828,65 @@ def match_regional_geodetic_mb(gdirs, rgi_reg, dataset='hugonnet',
             pass
 
 
+def _recursive_merging(gdirs, gdir_main, glcdf=None,
+                       filename='climate_historical', input_filesuffix=''):
+    """ Recursive function to merge all tributary glaciers.
+
+    This function should start with the largest glacier and then be called
+    upon all smaller glaciers.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        all glaciers, main and tributary. Preprocessed and initialised
+    gdir_main: :py:class:`oggm.GlacierDirectory`
+        the current main glacier where the others are merge to
+    glcdf: geopandas.GeoDataFrame
+        which contains the main glaciers, will be downloaded if None
+    filename: str
+        Baseline climate file
+    input_filesuffix: str
+        Filesuffix to the climate file
+
+    Returns
+    -------
+    merged_gdir: :py:class:`oggm.GlacierDirectory`
+        the mergeed current main glacier
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        updated list of glaciers, removed the already merged ones
+    """
+    # find glaciers which intersect with the main
+    tributaries = centerlines.intersect_downstream_lines(gdir_main,
+                                                         candidates=gdirs)
+    if len(tributaries) == 0:
+        # if no tributaries: nothing to do
+        return gdir_main, gdirs
+
+    # seperate those glaciers which are not already found to be a tributary
+    gdirs = [gd for gd in gdirs if gd not in tributaries]
+
+    gdirs_to_merge = []
+
+    for trib in tributaries:
+        # for each tributary: check if we can merge additional glaciers to it
+        merged, gdirs = _recursive_merging(gdirs, trib, glcdf=glcdf,
+                                           filename=filename,
+                                           input_filesuffix=input_filesuffix)
+        gdirs_to_merge.append(merged)
+
+    # create merged glacier directory
+    gdir_merged = utils.initialize_merged_gdir(
+        gdir_main, tribs=gdirs_to_merge, glcdf=glcdf, filename=filename,
+        input_filesuffix=input_filesuffix)
+
+    flowline.merge_to_one_glacier(gdir_merged, gdirs_to_merge,
+                                  filename=filename,
+                                  input_filesuffix=input_filesuffix)
+
+    return gdir_merged, gdirs
+
+
+@global_task(log)
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
@@ -879,61 +947,3 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     merged_gdirs = merged_gdirs + gdirs
 
     return merged_gdirs
-
-
-def _recursive_merging(gdirs, gdir_main, glcdf=None,
-                       filename='climate_historical', input_filesuffix=''):
-    """ Recursive function to merge all tributary glaciers.
-
-    This function should start with the largest glacier and then be called
-    upon all smaller glaciers.
-
-    Parameters
-    ----------
-    gdirs : list of :py:class:`oggm.GlacierDirectory`
-        all glaciers, main and tributary. Preprocessed and initialised
-    gdir_main: :py:class:`oggm.GlacierDirectory`
-        the current main glacier where the others are merge to
-    glcdf: geopandas.GeoDataFrame
-        which contains the main glaciers, will be downloaded if None
-    filename: str
-        Baseline climate file
-    input_filesuffix: str
-        Filesuffix to the climate file
-
-    Returns
-    -------
-    merged_gdir: :py:class:`oggm.GlacierDirectory`
-        the mergeed current main glacier
-    gdirs : list of :py:class:`oggm.GlacierDirectory`
-        updated list of glaciers, removed the already merged ones
-    """
-    # find glaciers which intersect with the main
-    tributaries = centerlines.intersect_downstream_lines(gdir_main,
-                                                         candidates=gdirs)
-    if len(tributaries) == 0:
-        # if no tributaries: nothing to do
-        return gdir_main, gdirs
-
-    # seperate those glaciers which are not already found to be a tributary
-    gdirs = [gd for gd in gdirs if gd not in tributaries]
-
-    gdirs_to_merge = []
-
-    for trib in tributaries:
-        # for each tributary: check if we can merge additional glaciers to it
-        merged, gdirs = _recursive_merging(gdirs, trib, glcdf=glcdf,
-                                           filename=filename,
-                                           input_filesuffix=input_filesuffix)
-        gdirs_to_merge.append(merged)
-
-    # create merged glacier directory
-    gdir_merged = utils.initialize_merged_gdir(
-        gdir_main, tribs=gdirs_to_merge, glcdf=glcdf, filename=filename,
-        input_filesuffix=input_filesuffix)
-
-    flowline.merge_to_one_glacier(gdir_merged, gdirs_to_merge,
-                                  filename=filename,
-                                  input_filesuffix=input_filesuffix)
-
-    return gdir_merged, gdirs

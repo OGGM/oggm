@@ -67,9 +67,7 @@ LABEL_STRUCT = np.array([[0, 1, 0],
 
 
 class Centerline(object, metaclass=SuperclassMeta):
-    """A Centerline has geometrical and flow rooting properties.
-
-    It is instanciated and updated by _join_lines() exclusively
+    """Geometry (line and widths) and flow rooting properties, but no thickness
     """
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None,
