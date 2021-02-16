@@ -147,9 +147,10 @@ OGGM workflow
 For a step by step tutorial of the entire OGGM workflow, download and run
 the
 :download:`getting started <https://raw.githubusercontent.com/OGGM/tutorials/master/notebooks/getting_started.ipynb>`
-jupyter notebook (right-click -> "Save link as") using the following command:
+jupyter notebook (right-click -> "Save link as") using the following command
+(from the directory where you downloaded the tutorial):
 
-    conda create --name oggm_env python=3.X
+    jupyter notebook getting_started.ipynb 
 
 
 Alternatively, you can try OGGM directly in your browser without having
@@ -159,7 +160,6 @@ to install anything! Visit our tutorials for more info.
 OGGM tutorials
 --------------
 
-Refer to our :ref:`tutorials` for real-world applications.
+Refer to our `tutorials`_ for real-world applications.
 
-https://oggm.org/tutorials/notebooks/welcome.html
-.. _oggm sample data: https://github.com/OGGM/oggm-sample-data
+.. _tutorials: https://oggm.org/tutorials/notebooks/welcome.html
