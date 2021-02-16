@@ -21,7 +21,7 @@ v1.4.0 (pre-release)
        - users can now choose from a variety of pre-processed directories,
          including with new climate data (e.g. ERA5)
        - OGGM now has a calving parameterization (switched off per default)
-       - OGGM shop
+       - OGGM shop to the download ony the data you wish
        - Historical runs ("spin-up") are now available per default and can
          be readily used for projections
        - and much much more....
@@ -73,13 +73,13 @@ Breaking changes
   not volume. This also is a step towards more physical consistency between
   inverse and forward model.
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- the `vascaling` module has been removed from oggm core (:pull:`1065`). It
+- The `vascaling` module has been removed from oggm core (:pull:`1065`). It
   is now available via a separate package (`oggm-vas <https://github.com/OGGM/oggm-vas>`_,
   maintained by Moritz Oberrauch).
-- new options to compute the length of a glacier during a run:
+- New options to compute the length of a glacier during a run:
   `PARAMS['min_ice_thick_for_length']` and `PARAMS['glacier_length_method']`
   (:pull:`1069`). By `Matthias Dusch <https://github.com/matthiasdusch>`_.
-- several further important changes to be documented later in
+- Several further important changes to be documented later in
   (:pull:`1099`). By `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
