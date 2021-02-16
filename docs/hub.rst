@@ -50,8 +50,8 @@ Which is best for you?  Here is a quick comparison.
      - Files saved between sessions
    * - Limited computational resources
      - Dedicated processing and space on OGGM servers
-   * - Use cases: Quick tests and demos
-     - Use cases: Deeper explorations and teaching
+   * - Use cases: quick tests and demos
+     - Use cases: deeper explorations and teaching
    * - No registration required
      - Contact us to register
    * - Free!
@@ -62,7 +62,7 @@ How does this work?
 ~~~~~~~~~~~~~~~~~~~
 
 We use a single compute node located in Bremen to welcome the hub users.
-Currently---we are still trying things out---each user gets enough CPUs and
+Currently (we are still trying things out), each user gets enough CPUs and
 enough RAM to run OGGM on several glaciers at once.
 This is not enough to do heavy work, but will get you through the exploratory
 phase or even small regional runs. Each user also gets a persistent 16Gb disk
@@ -70,8 +70,8 @@ to save output data, notebooks and scripts. The OGGM-specific input data
 (i.e. everything that is downloaded automatically between users, see
 :ref:`system settings <system-settings>`) is shared among
 users (the ``shared`` folder in your ``$HOME``). The first time you run a
-new glacier, OGGM will first check if the data is available in the ``shared`` folder,
-and if not it will download it for you and the other users.
+new glacier, OGGM will first check if the data are available in the ``shared`` folder,
+and if not it will download them for you and the other users.
 
 The environment you have access to has a recent version of OGGM installed in
 it (updated every few weeks). Starting with OGGM v1.4, we will also provide
@@ -91,17 +91,18 @@ You can execute this command in your JupyterHub terminal (`Launcher -> Start a t
     $ gitpuller https://github.com/OGGM/tutorials master tutorials
 
 
-to copy the notebooks into the ``tutorials`` folder
-in your home directory. You can use a similar command to pull content from other repositories as well (e.g. the
+That will copy the notebooks into the ``tutorials`` folder
+in your home directory (on OGGM-Hub not your local machien).
+You can use a similar command to pull content from other repositories as well (e.g. the
 `OGGM-Edu notebooks <https://github.com/OGGM/oggm-edu-notebooks>`_).
 
 
 Another way to pull content into your hub is to use a special weblink.
 Say, for example, that you would like to download the content of Lizz's
 `glacier course <https://github.com/ehultee/CdeC-glaciologia>`_
-(Spanish notebooks) into your lab as well. You can use the Jupyter
-`link generator <https://jupyterhub.github.io/nbgitpuller/link>`_
-to create the following link which, once clicked, will open your workspace
+(Spanish notebooks) into your lab as well. You can use the
+`nbgitpuller link generator <https://jupyterhub.github.io/nbgitpuller/link>`_
+to create the following links which, once clicked, will open your workspace
 with the new notebooks in it. Here are some useful links to add notebooks to
 your hub:
 
@@ -126,8 +127,8 @@ Top tip: copy-pasting text with the mouse in JupyterLab
 
 Copying to and from JupyterLab can be annoying at times
 (`context <https://github.com/jupyterlab/jupyterlab/issues/3011>`_).
-This is one of the most frequent issue hitting users of JupyterLab, when
-working in a terminal (`Launcher -> Start a terminal`) or when selecting text from
+This is one of the most frequent issue hitting users of JupyterLab when
+working in a terminal or when selecting text from
 notebook cells.
 
 In these cases, press ``shift + right click`` to experience a standard
