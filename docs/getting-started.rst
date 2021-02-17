@@ -12,8 +12,8 @@ Getting started
     import numpy as np
     np.set_printoptions(threshold=10)
 
-Although largely automatised, the OGGM model still requires some python
-scripting to prepare and run a simulation. The tutorials will guide you
+Although largely automated, OGGM model still requires some python
+scripting to prepare and run a simulation. This section will guide you
 through several examples to get you started.
 
 .. important::
@@ -26,7 +26,7 @@ through several examples to get you started.
 First step: system settings for input data
 ------------------------------------------
 
-OGGM needs various data files to run. Currently, **we rely exclusively on
+OGGM needs various input data files to run. Currently, **we rely exclusively on
 open-access data that are all downloaded automatically for the user**.
 OGGM implements a bunch of tools to make access to input data as painless
 as possible for you, including the automated download of all the required files.
@@ -41,7 +41,7 @@ Let's start by opening a python interpreter and type:
 At your very first import, this will do two things:
 
 1. It will download a small subset of data used for testing and calibration.
-   This data is located in your home directory, in a hidden folder
+   Those data are located in your home directory, in a hidden folder
    called `.oggm`.
 2. It will create a configuration file in your home folder, where you can
    indicate where you want to store further input data. This configuration
@@ -86,7 +86,7 @@ All other data: auto-downloads and the ``~/.oggm_config`` file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Unlike runtime parameters (such as physical constants or working directories),
-the input data is shared across runs and even across computers if you want
+input data are shared across runs and even across computers if you want
 to. Therefore, the paths to previously downloaded data are stored in a
 configuration file that you'll find in your ``$HOME`` folder:
 the ``~/.oggm_config`` file.
@@ -144,10 +144,14 @@ Some explanations:
 OGGM workflow
 -------------
 
-For a step by step tutorial of the entire OGGM workflow, download and run
+For a step by step tutorial of the entire OGGM workflow, download
 the
 :download:`getting started <https://raw.githubusercontent.com/OGGM/tutorials/master/notebooks/getting_started.ipynb>`
-jupyter notebook (right-click -> "Save link as").
+jupyter notebook (right-click -> "Save link as")  and run it using the following command
+(from the directory where you downloaded the tutorial)::
+
+    $ jupyter-notebook getting_started.ipynb
+
 
 Alternatively, you can try OGGM directly in your browser without having
 to install anything! Visit our tutorials for more info.
@@ -156,4 +160,6 @@ to install anything! Visit our tutorials for more info.
 OGGM tutorials
 --------------
 
-Refer to our :ref:`tutorials` for real-world applications.
+Refer to our `tutorials`_ for real-world applications.
+
+.. _tutorials: https://oggm.org/tutorials

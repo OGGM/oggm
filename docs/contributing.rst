@@ -7,13 +7,13 @@ Contributing to OGGM
 All contributions, bug reports, bug fixes, documentation improvements,
 enhancements and ideas are welcome! OGGM is still in an early development phase,
 so most things are not written in stone and can probably be
-enhanced/corrected/meliorated by anyone!
+enhanced/corrected/ameliorated by anyone!
 
 You can report issues or discuss OGGM on the
 `issue tracker <https://github.com/OGGM/oggm/issues>`_.
 
 **Copyright note**: this page is a shorter version of the excellent
-`pandas <http://pandas.pydata.org/pandas-docs/stable/contributing.html>`_
+`pandas <https://pandas.pydata.org/pandas-docs/stable/development/contributing.html>`_
 documentation.
 
 Working with the code
@@ -33,7 +33,7 @@ version control to allow many people to work together on the project.
 Some great resources for learning Git:
 
 * the `GitHub help pages <http://help.github.com/>`_.
-* the `NumPy's documentation <http://docs.scipy.org/doc/numpy/dev/index.html>`_.
+* the `NumPy's documentation <https://numpy.org/doc/stable/dev/index.html>`_.
 * Matthew Brett's `Pydagogue <http://matthew-brett.github.com/pydagogue/>`_.
 
 Getting started with Git
@@ -51,12 +51,13 @@ You will need your own fork to work on the code. Go to the `OGGM project
 page <https://github.com/OGGM/oggm>`_ and hit the ``Fork`` button. You will
 want to clone your fork to your machine::
 
-    git clone git@github.com:your-user-name/oggm.git oggm-yourname
+    git clone git@github.com:your-GitHub-username/oggm.git oggm-yourname
     cd oggm-yourname
     git remote add upstream git://github.com/OGGM/oggm.git
 
 This creates the directory `oggm-yourname` and connects your repository to
-the upstream (main project) oggm repository.
+the upstream (main project) oggm repository (with the `your-GitHub-username`
+the user name of your GitHub account).
 
 Creating a branch
 -----------------
@@ -104,7 +105,8 @@ Code standards
 
 OGGM uses the `PEP8 <http://www.python.org/dev/peps/pep-0008/>`_ standard.
 There are several tools to ensure you abide by this standard,
-and some IDE (for example PyCharm) will warn you if you don't follow PEP8.
+and some Integrated Development Environment (IDE, for example PyCharm)
+will warn you if you don't follow PEP8.
 
 Test-driven development/code writing
 ------------------------------------
@@ -147,7 +149,8 @@ should see something like::
     ===== 57 passed, 35 skipped in 102.50 seconds ====
 
 
-You can safely ignore deprecation warnings and other DLL messages as long as
+You can safely ignore deprecation warnings and other
+Dynamic Link Library (DLL) messages as long as
 the tests end with ``OK``.
 
 Often it is worth running only a subset of tests first around your changes
@@ -170,9 +173,10 @@ About the documentation
 -----------------------
 
 The documentation is written in **reStructuredText**, which is almost like writing
-in plain English, and built using `Sphinx <http://sphinx.pocoo.org/>`__. The
-Sphinx Documentation has an excellent `introduction to reST
-<http://sphinx.pocoo.org/rest.html>`__. Review the Sphinx docs to perform more
+in plain English, and built using `Sphinx <https://www.sphinx-doc.org/en/master>`_. The
+Sphinx documentation has an excellent `introduction to reST
+<https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_.
+Review the Sphinx docs to perform more
 complex changes to the documentation as well.
 
 Some other important things to know about the docs:
@@ -180,16 +184,16 @@ Some other important things to know about the docs:
 - The OGGM documentation consists of two parts: the docstrings in the code
   itself and the docs in this folder ``oggm/docs/``.
 
-  The docstrings *should* provide a clear explanation of the usage of the
+  The docstrings *should* provide a clear explanation of the usage of
   individual functions (currently this is not the case everywhere, unfortunately),
-  while the documentation in this folder consists of tutorial-like
+  while the ``oggm/docs/`` folder consists of tutorial-like
   overviews per topic together with some other information (what's new,
   installation, etc).
 
 - The docstrings follow the **Numpy Docstring Standard**, which is used widely
   in the Scientific Python community. This standard specifies the format of
   the different sections of the docstring. See `this document
-  <https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt>`_
+  <https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard>`_
   for a detailed explanation, or look at some of the existing functions to
   extend it in a similar manner.
 
@@ -244,7 +248,8 @@ just built::
 
     oggm/docs/_build/html/index.html
 
-And you'll have the satisfaction of seeing your new and improved documentation!
+If you performed some changes in the documentation or even created new pages/sections (the ``.rst`` files),
+you'll have the satisfaction of seeing your new and improved documentation!
 
 
 Contributing your changes
@@ -309,7 +314,7 @@ again make sure that you have followed all the guidelines outlined in this docum
 regarding code style, tests, and documentation. You should also
 double check your branch changes against the branch it was based on:
 
-#. Navigate to your repository on GitHub -- https://github.com/your-user-name/oggm
+#. Navigate to your repository on GitHub -- https://github.com/your-GitHub-user-name/oggm
 #. Click on ``Branches``
 #. Click on the ``Compare`` button for your feature branch
 #. Select the ``base`` and ``compare`` branches, if necessary. This will be ``master`` and
@@ -338,8 +343,7 @@ updated.  Pushing them to GitHub again is done by::
 
     git push -f origin shiny-new-feature
 
-This will automatically update your pull request with the latest code and restart the
-Travis-CI tests.
+This will automatically update your pull request with the latest code.
 
 
 Delete your merged branch (optional)

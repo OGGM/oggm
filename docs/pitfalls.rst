@@ -14,8 +14,8 @@ specific pitfalls in more details.
 The default ice dynamics parameter "Glen A" is roughly calibrated
 =================================================================
 
-Out-of-the box OGGM will uses fixed values for the creep parameter
-:math:`A` and the sliding parameter :math:`f_s`:
+Out-of-the box, non-preprocessed OGGM will use fixed values for the creep
+parameter :math:`A` and the sliding parameter :math:`f_s`:
 
 .. ipython:: python
 
@@ -34,26 +34,31 @@ higher value to compensate for this missing process (effectively making ice
 
 .. admonition:: **New in version 1.4!**
 
-   Since v1.4, OGGM can now calibrate :math:`A`
-   based on the consensus from [Farinotti_etal_2019]_ on any number
-   of glaciers. We recommend to use a large number of glaciers: OGGM's default
-   glacier directories are calibrated at the RGI region level. This
-   value is also used by the forward dynamical model for consistency,
-   according to the parameter `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
+    Since v1.4, OGGM can now calibrate :math:`A`
+    based on the consensus from [Farinotti_etal_2019]_ on any number
+    of glaciers. We recommend to use a large number of glaciers: OGGM's default
+    glacier directories are calibrated at the RGI region level. This
+    value is then also used by the forward dynamical model for consistency,
+    according to the parameter
+    `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
+
+    The pre-processed directories at level 3 to 5 are already calibrated to the
+    consensus estimate at the RGI region level, i.e. unless specified
+    otherwise, OGGM will use the pre-calibrated :math:`A` value for these glaciers.
 
 There is a way to calibrate :math:`A` for the ice thickness inversion
 procedure based on observations of ice thickness (see
 `this blog post about g2ti <https://oggm.org/2018/05/21/g2ti/>`_ for an example).
 At the global scale, a value in the range of [1.1-1.5] times the default value
 gives volume estimates close to [Farinotti_etal_2019]_. At regional scale, these
-values can differ, with a value closer to a factor 3 e.g. for the Alps. Note
+values can differ, with a value closer to a factor 3, for example for the Alps. Note
 that this depends on other variables as well, such as our estimates of 
-solid precipitation amounts (i.e: mass turnover). This makes things 
+solid precipitation amounts (i.e mass turnover). This makes things 
 complicated, as regions with overestimated solid precipitation can 
 be compensated by a higher :math:`A`, and the other way around.
 
 Finally, note that a change in :math:`A` has a very strong influence
-for values close to the default value, but this influences reduces to the
+for values close to the default value, but this influence reduces to the
 power of 1/5 for large values of A (in other words, there is a big
 difference between values of 1 to 1.3 times the default :math:`A`, but a
 comparatively small difference for values between 3 to 5 times the
@@ -76,12 +81,12 @@ default :math:`A`). This is best shown by this figure from
 Now, what you are probably asking yourself: **how to choose the "best A" for my application?**
 
 Sorry, but we don't know yet. We are working on it though! At the moment,
-what we recommend to do is to calibrate :math:`A` do that the regional 
+what we recommend to do is to calibrate :math:`A` so that the regional 
 (or even local) estimates match the volume consensus of 
 `Farinotti et al. (2019) <https://www.nature.com/articles/s41561-019-0300-3>`_
 using the :py:func:`workflow.calibrate_inversion_from_consensus` global
-task.
-
+task. This is what we do for the default pre-processed directories at the
+RGI region level, so that you don't have to worry about it.
 
 .. _pitfalls.numerics:
 
@@ -96,10 +101,10 @@ We now have fixed the most pressing issues.
 it in detail, for a summary:
 
 - the previous algorithm was flawed, but did not result in significant errors
-  at large scales.
+  at large scales
 - the new algorithm is faster and more likely to be stable
-- we don't guarantee stability in 100% of the cases, but when the model
-  becomes unstable it should stop.
+- we don't guarantee statibility in 100% of the cases, but when the model
+  becomes unstable it should stop
 
 
 The mass-balance model of OGGM is not calibrated with remote sensing data on individual glaciers

@@ -25,6 +25,7 @@ If you use these data, please cite `Maussion et al., 2019 <https://gmd.copernicu
     .. figure:: _static/assets_shapes.png
         :width: 100%
 
+
         Shapefile of OGGM's flowlines and widths for a subset of RGI region 15
 
 
@@ -32,9 +33,9 @@ RGI-TOPO
 --------
 
 The `RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ dataset
-provides a local topography map for each single glacier in the RGI. It was
-generated with OGGM, and can be used very easily from the OGGM-Shop (visit
-our :ref:`tutorials` if you are interested!).
+provides a local topography map for each single glacier in the RGI (currently version 6).
+It was generated with OGGM, and can be used very easily from the :ref:`shop` (visit
+our :ref:`tutorials` if you want to learn how to use them!).
 
     .. figure:: _static/malaspina_topo.png
         :width: 100%
