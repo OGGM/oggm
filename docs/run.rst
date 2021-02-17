@@ -6,7 +6,7 @@ Tutorials
 The OGGM tutorials are all available in the form of Jupyter Notebooks.
 They are constantly updated!
 
-You will find them online at: `oggm.org/tutorials <https://oggm.org/tutorials>`_
+You will find them online at: `https://oggm.org/tutorials <https://oggm.org/tutorials>`_
 
 To launch an interactive session on MyBinder and run the tutorials without
 having to install anything, simply click on this button:
