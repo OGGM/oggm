@@ -944,7 +944,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
         # Do our own interpolation
         if ref_df is None:
             # Use the the local calibration
-            msg = ('If `ref_df` is not provided, please put a list of ' 
+            msg = ('If `ref_df` is not provided, please put a list of '
                    '`ref_tstars.csv` and associated params '
                    '`ref_tstars_params.json` in the working directory. '
                    'Please see the documentation of local_t_star '

@@ -198,6 +198,7 @@ Command line interface (CLI)
 ============================
 
 These commands are available:
+
 - ``oggm_netrc_credentials``
 - ``oggm_prepro``
 - ``oggm_benchmark``
