@@ -42,4 +42,8 @@ How to issue an OGGM release.
 13. Update the docs. Login to https://readthedocs.org/projects/oggm/versions/
     and switch your new release tag (at the bottom) from "Inactive" to "Active".
     It should now build automatically.
-14. Issue the release announcement!
+14. Now the containers: run CI on https://github.com/OGGM/r2d to get the correct
+    on https://hub.docker.com/r/oggm/r2d/tags. Then update the tag on
+    https://github.com/OGGM/binder, in the master and stable branch. 
+    On https://hub.oggm.org, create a new environment as well.
+15. Issue the release announcement!
