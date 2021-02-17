@@ -29,6 +29,7 @@ Tools to set-up and run OGGM.
     workflow.init_glacier_directories
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
+    workflow.download_ref_tstars
     workflow.climate_tasks
     workflow.inversion_tasks
     workflow.merge_glacier_tasks
@@ -192,6 +193,21 @@ but might use multiprocessing internally.
     global_tasks.compile_fixed_geometry_mass_balance
     global_tasks.compile_climate_statistics
 
+
+Command line interface (CLI)
+============================
+
+These commands are available:
+
+- ``oggm_netrc_credentials``
+- ``oggm_prepro``
+- ``oggm_benchmark``
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    cli.prepro_levels.run_prepro_levels
 
 Classes
 =======

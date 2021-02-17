@@ -907,9 +907,19 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     """Compute the local t* and associated glacier-wide mu*.
 
     If ``tstar`` and ``bias`` are not provided, they will be interpolated from
-    the reference t* list.
+    the reference t* list (``ref_df``).
 
-    Note: the glacier wide mu* is here just for indication. It might be
+    If none of these are provided (the default), this list be obtained from
+    the current working directory (``ref_tstars.csv`` and associated params
+    ``ref_tstars_params.json``). These files can either be generated with a
+    call to ``compute_ref_t_stars`` if you know what you are doing, ot you
+    can obtain pre-preprocessed lists from our servers:
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/
+
+    The best way to fetch them is to use
+    :py:func:`oggm.workflow.download_ref_tstars`.
+
+    Note: the glacier wide mu* is output here just for indication. It might be
     different from the flowlines' mu* in some cases.
 
     Parameters
@@ -934,19 +944,20 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
         # Do our own interpolation
         if ref_df is None:
             # Use the the local calibration
+            msg = ('If `ref_df` is not provided, please put a list of '
+                   '`ref_tstars.csv` and associated params '
+                   '`ref_tstars_params.json` in the working directory. '
+                   'Please see the documentation of local_t_star '
+                   'for more information.')
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
             if not os.path.exists(fp):
-                raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           '`ref_tstars.csv` in the working '
-                                           'directory')
+                raise InvalidWorkflowError(msg)
             ref_df = pd.read_csv(fp)
 
             # Check that the params are fine
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json')
             if not os.path.exists(fp):
-                raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           '`ref_tstars_params.json` in the '
-                                           'working directory')
+                raise InvalidWorkflowError(msg)
             with open(fp, 'r') as fp:
                 ref_params = json.load(fp)
             for k, v in ref_params.items():

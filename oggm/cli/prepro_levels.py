@@ -79,7 +79,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False):
-    """Does the actual job.
+    """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
     ----------

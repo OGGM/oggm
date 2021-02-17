@@ -135,14 +135,14 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     # Should be iterable
     gdirs = utils.tolist(gdirs)
-
-    if len(gdirs) == 0:
+    ng = len(gdirs)
+    if ng == 0:
         log.workflow('Called entity task %s on 0 glaciers. Returning...',
                      task.__name__)
         return
 
     log.workflow('Execute entity task %s on %d glaciers',
-                 task.__name__, len(gdirs))
+                 task.__name__, ng)
 
     pc = _pickle_copier(task, kwargs)
 
@@ -150,10 +150,14 @@ def execute_entity_task(task, gdirs, **kwargs):
         if ogmpi.OGGM_MPI_COMM is not None:
             return ogmpi.mpi_master_spin_tasks(pc, gdirs)
 
-    if cfg.PARAMS['use_multiprocessing']:
+    if cfg.PARAMS['use_multiprocessing'] and ng > 1:
         mppool = init_mp_pool(cfg.CONFIG_MODIFIED)
         out = mppool.map(pc, gdirs, chunksize=1)
     else:
+        if ng > 3:
+            log.workflow('WARNING: you are trying to run an entity task on '
+                         '%d glaciers with multiprocessing turned off. OGGM '
+                         'will run faster with multiprocessing turned on.', ng)
         out = [pc(gdir) for gdir in gdirs]
 
     return out
