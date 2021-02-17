@@ -34,7 +34,7 @@ and model set-ups.
 The default directories have been generated with the default parameters
 of the current stable OGGM version (and a few alternative combinations).
 If you want to change some of these parameters, you *may* have to start a
-run from a lower processing level and re-run the processing tasks.
+run from a lower processing level and re-run the processsing tasks.
 Whether or not this is necessary depends on the stage of the workflow
 you'd like your computations to diverge from the
 defaults (this will become more clear a we provide example use cases below).
@@ -122,7 +122,7 @@ Users should choose the map border parameter depending
 on the expected glacier growth in their simulations. For simulations into
 the 21st century, a border value of 40 is
 sufficient, but 80 is safer in case temperature is stabilizing or cooling in
-certain regions / scenarios.
+certaion regions / scenarios.
 For runs into the Little Ice Age, a border value of 160 is recommended.
 
 Users should be aware that the amount of data to download isn't small,
@@ -167,18 +167,10 @@ Available pre-processed configurations
     unsure about which to use, or if you'd like to have more configurations
     to choose from!
 
-    To choose from a specific model configuration, use the ``prepro_base_url``
-    argument in your call to :py:func:`workflow.init_glacier_directories`,
-    and set it to one of the urls listed below.
-
-    See `this tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_
-    for an example.
-
-
 Default
 ^^^^^^^
 
-If not provided with a specific ``prepro_base_url`` argument,
+If not provided with a specific `prepro_base_url` argument,
 :py:func:`workflow.init_glacier_directories` will download the glacier
 directories from the default urls. Here is a summary of the default configuration:
 
@@ -192,6 +184,10 @@ directories from the default urls. Here is a summary of the default configuratio
   **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
   it's also the precalibrated paramaters that will be used for the dynamical run.
 - frontal ablation by calving (at inversion and for the dynamical runs) is switched off
+
+To see the code that generated these directories (for example if you want to
+make your own, visit :py:func:`cli.prepro_levels.run_prepro_levels`
+or this `file on github <https://github.com/OGGM/oggm/blob/master/oggm/cli/prepro_levels.py>`_).
 
 The urls used by OGGM per default are listed here:
 

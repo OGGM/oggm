@@ -387,7 +387,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
 @entity_task(log, writes=['climate_historical'])
 def historical_climate_qc(gdir):
-    """Check the "quality" of the baseline climate data and correct if needed.
+    """Check the "quality" of the basline climate data and correct if needed.
 
     This forces the climate data to have at least N months
     (``cfg.PARAMS['climate_qc_months']``) of melt per year
@@ -907,9 +907,19 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     """Compute the local t* and associated glacier-wide mu*.
 
     If ``tstar`` and ``bias`` are not provided, they will be interpolated from
-    the reference t* list.
+    the reference t* list (``ref_df``).
 
-    Note: the glacier wide mu* is here just for indication. It might be
+    If none of these are provided (the default), this list be obtained from
+    the current working directory (``ref_tstars.csv`` and associated params
+    ``ref_tstars_params.json``). These files can either be generated with a
+    call to ``compute_ref_t_stars`` if you know what you are doing, ot you
+    can obtain pre-preprocessed lists from our servers:
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/
+
+    The best way to fetch them is to use
+    :py:func:`oggm.workflow.download_ref_tstars`.
+
+    Note: the glacier wide mu* is output here just for indication. It might be
     different from the flowlines' mu* in some cases.
 
     Parameters
@@ -935,18 +945,22 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
         if ref_df is None:
             # Use the the local calibration
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv')
+
+            msg = ('If `ref_df` is not provided, please put a list of ' 
+                   '`ref_tstars.csv` and associated params '
+                   '`ref_tstars_params.json` in the working directory. '
+                   'Please see the documentation of local_t_star '
+                   'for more information.')
             if not os.path.exists(fp):
-                raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           '`ref_tstars.csv` in the working '
-                                           'directory')
+                raise InvalidWorkflowError(msg)
+
             ref_df = pd.read_csv(fp)
 
             # Check that the params are fine
             fp = os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json')
             if not os.path.exists(fp):
-                raise InvalidWorkflowError('If ref_df is not given, provide '
-                                           '`ref_tstars_params.json` in the '
-                                           'working directory')
+                raise InvalidWorkflowError(msg)
+
             with open(fp, 'r') as fp:
                 ref_params = json.load(fp)
             for k, v in ref_params.items():
@@ -1398,7 +1412,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
-@global_task(log)
+@global_task
 def compute_ref_t_stars(gdirs):
     """ Detects the best t* for the reference glaciers and writes them to disk
 
@@ -1416,6 +1430,9 @@ def compute_ref_t_stars(gdirs):
                                  '`run_mb_calibration` parameter to `True`.')
 
     log.info('Compute the reference t* and mu* for WGMS glaciers')
+
+    # Should be iterable
+    gdirs = utils.tolist(gdirs)
 
     # Reference glaciers only if in the list and period is good
     ref_gdirs = utils.get_ref_mb_glaciers(gdirs)
