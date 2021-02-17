@@ -63,6 +63,7 @@ glacier at :math:`t^*`. By construction, the flux is maximal at the equilibrium 
 zero at the glacier tongue.
 
 .. ipython:: python
+   :okwarning:
 
     @savefig example_plot_massflux.png width=100%
     example_plot_massflux()
@@ -107,6 +108,7 @@ step in OGGM is currently very simple, but provides nice looking maps:
 
 
 .. ipython:: python
+   :okwarning:
 
     tasks.catchment_area(gdir)
     @savefig plot_distributed_thickness.png width=80%

@@ -193,6 +193,10 @@ directories from the default urls. Here is a summary of the default configuratio
   it's also the precalibrated paramaters that will be used for the dynamical run.
 - frontal ablation by calving (at inversion and for the dynamical runs) is switched off
 
+To see the code that generated these directories (for example if you want to
+make your own, visit :py:func:`cli.prepro_levels.run_prepro_levels`
+or this `file on github <https://github.com/OGGM/oggm/blob/master/oggm/cli/prepro_levels.py>`_).
+
 The urls used by OGGM per default are listed here:
 
 `https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ + :

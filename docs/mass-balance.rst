@@ -91,6 +91,7 @@ recommend to use data from 1850 onwards.
 
 
 .. ipython:: python
+   :okwarning:
 
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
@@ -181,6 +182,7 @@ glacier geometry fixed at the RGI date** (e.g. 2003 for most glaciers in the
 European Alps).
 
 .. ipython:: python
+   :okwarning:
 
     @savefig plot_mu_ts.png width=100%
     example_plot_mu_ts()  # the code for these examples is posted below
@@ -201,6 +203,7 @@ were we have observations. We then compare the model output
 with the expected mass-balance and compute the model bias:
 
 .. ipython:: python
+   :okwarning:
 
     @savefig plot_bias_ts.png width=100%
     example_plot_bias_ts()  # the code for these examples is posted below

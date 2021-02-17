@@ -1,4 +1,4 @@
-Copyright (c) 2014-2020, OGGM e.V. and OGGM Contributors
+Copyright (c) 2014-2021, OGGM e.V. and OGGM Contributors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
