@@ -18,9 +18,10 @@ CLASSIFIERS = [
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ]
 
 DESCRIPTION = 'Open Global Glacier Model'
@@ -72,7 +73,7 @@ setup(
     # What does your project relate to?
     keywords=['geosciences', 'glaciers', 'climate', 'gis'],
     # We are a python 3 only shop
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     # Find packages automatically
     packages=find_packages(exclude=['docs']),
     # Include package data
