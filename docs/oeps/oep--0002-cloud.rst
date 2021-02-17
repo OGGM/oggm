@@ -52,8 +52,8 @@ list the most important ones:
 - `kubernetes`_ is the tool which does the job of scaling in the background.
   it needs to be installed on the cluster where JupyterHub is hosted, and
   somehow it works: when JupyterHub users come in, the cluster grows.
-  kubernetes is designed for cloud, I wonder if it's useful on HPC or not.
-- `Helm`_ is the tool which makes it easier to instal things on the kubernetes
+  Kubernetes is designed for cloud, I wonder if it's useful on HPC or not.
+- `Helm`_ is the tool which makes it easier to install things on the kubernetes
   cluster. It's not too relevant here.
 - `Dask`_ is an ecosystem of tools providing parallism tools to python. It is
   very cool, and sometimes a bit too fancy even.
@@ -85,7 +85,7 @@ Big Data
   `Copernicus Data Store <https://cds.climate.copernicus.eu>`_. Huge amounts
   of data are available on some storage (cloud or HPC), and data providers
   want the users to work on these data locally (via their browser) rather
-  then download them all. This is also the leitmotiv of the open
+  than download them all. This is also the leitmotiv of the open
   source project `Pangeo`_.
   OGGM is not really a "big data problem". We do however rely on and provide
   large amount of data, and we could imagine a cloud-workflow where all these
@@ -120,9 +120,9 @@ Environment control
   usual "flawed set-up" from the user side.
 
 Collaborative Workflows
-  The self-documenting notebooks are easy to share accross users, encouraging
-  team work. Another (rather vaue at this point) goal would be to allow
-  "mulitple users" environments where people can develop scripts and notebooks
+  The self-documenting notebooks are easy to share across users, encouraging
+  team work. Another (rather vague at this point) goal would be to allow
+  "multiple users" environments where people can develop scripts and notebooks
   collaboratively, but this is not top priority right now.
 
 
@@ -136,11 +136,11 @@ Status (03 Jul 2019)
   them on HPC with `Singularity <https://sylabs.io/docs/>`_. (2)
   `repo2docker images <https://github.com/OGGM/r2d>`_,
   which we generate for MyBinder and JupyterHub (both need a certain user
-  set-up which is best generated from repo2doker). They are not lightweight
+  set-up which is best generated from repo2docker). They are not lightweight
   at all (because of conda).
 - We have a 15k$ grant from Google (about 13k€) for cloud resources, to be used
   until June 2020. We plan to use this one year period as test phase to see if
-  this endeavor isworth pursuing.
+  this endeavor is worth pursuing.
 - We use MyBinder for `OGGM-Edu`_'s educational material and tutorials. It works
   very well. The only drawbacks are performance and the temporary nature of
   MyBinder environments. This is a real problem for multi-day workshops or
@@ -170,14 +170,14 @@ Big-picture roadmap
 -------------------
 
 Assuming that we want to achieve this goal (a running instance of OGGM
-in a JupyterHub server for reasearch applications), we can follow two main
+in a JupyterHub server for research applications), we can follow two main
 strategies:
 
 1. **Continue on cloud**. If we do so, we need pangeo and dask, and we need to
    re-engineer parts of OGGM to work with dask multiproc and with cloud
    buckets for the input data.
 2. **Continue on HPC**, once we have access to the big computer in Bremen. The
-   tools in the backround would be slightly different, but for the users it
+   tools in the background would be slightly different, but for the users it
    would be exact same: "I log in, I request resources, I work".
 
 The two strategies have many similarities, and are worth discussing.
@@ -197,9 +197,9 @@ anyway.
   (most importantly) dask.distributed for automated scaling on both HPC and
   cloud/kubernetes.
 - **build our docker images from pangeo-base instead**. This will come with
-  dask pre-installed and allow a typical `pip isntall` workfklow, i.e. we
+  dask pre-installed and allow a typical `pip install` workflow, i.e. we
   can build upon our dockerfiles.
-- **make hub.oggm.org point to these new images** -
+- **make hub.oggm.org point to these new images**
 
 **Data management and I/O**. This is the hardest part and the one which
 will be most different whether we use cloud or HPC resources.
@@ -212,10 +212,10 @@ will be most different whether we use cloud or HPC resources.
 - **Output on cloud**: probably the biggest issue on cloud, not easy to solve.
   Disk space is quite expensive and users can easily generate huge amounts
   of data with OGGM (we are not really optimizing for data volume currently).
-  I.e. we would have to provide tools to reduce the ouptut data amount, force
+  I.e. we would have to provide tools to reduce the output data amount, force
   the users to store their data elsewhere, etc. All that is not really
   attractive currently.
-- **Input/ouput on HPC**: I imagine something not so different from what we
+- **Input/output on HPC**: I imagine something not so different from what we
   have on HPC already.
 
 **User environment**. Some things which are nice to have.

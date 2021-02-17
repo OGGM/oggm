@@ -22,6 +22,7 @@ from oggm.core import climate, inversion, centerlines
 from oggm.shop import gcm_climate
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 from oggm.tests.funcs import get_test_dir, apply_test_ref_tstars
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
@@ -349,6 +350,49 @@ class TestMassBalanceModels:
         s = massbalance.fixed_geometry_mass_balance(gdir,
                                                     years=mbdf.index.values)
         assert_allclose(s, mbdf['MY_MB'])
+
+    def test_prcp_fac_update(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
+                                             check_calib_params=False)
+        # save old precipitation time series
+        prcp_old = mb_mod.prcp.copy()
+        prcp_fac_old = cfg.PARAMS['prcp_scaling_factor']
+        # basic checks
+        assert mb_mod.prcp_fac == prcp_fac_old
+        assert mb_mod._prcp_fac == prcp_fac_old
+
+        # increase prcp by factor of 10
+        factor = 10
+        mb_mod.prcp_fac = factor
+        assert mb_mod.prcp_fac == factor
+        assert mb_mod._prcp_fac == factor
+        prcp_new = mb_mod.prcp
+        assert_allclose(prcp_new, prcp_old * factor / prcp_fac_old)
+
+        # check if it gets back to the old prcp time series
+        mb_mod.prcp_fac = prcp_fac_old
+        assert mb_mod.prcp_fac == prcp_fac_old
+        assert mb_mod._prcp_fac == prcp_fac_old
+        assert_allclose(mb_mod.prcp, prcp_old)
+
+        with pytest.raises(InvalidParamsError):
+            mb_mod.prcp_fac = -100
+
+        # check if an error is raised if check_calib_params
+        # is true
+        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
+                                             check_calib_params=True)
+        with pytest.raises(InvalidWorkflowError):
+            mb_mod.prcp_fac = 10
+
+        # normally this should also be implemented for mu_star ...
+        # with pytest.raises(InvalidWorkflowError):
+        #    mb_mod.mu_star = 100
+
 
     @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
                                     massbalance.ConstantMassBalance,
@@ -2992,6 +3036,7 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
+    cfg.PARAMS['use_multiprocessing'] = True
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
@@ -3015,29 +3060,26 @@ class TestMergedHEF():
         workflow.inversion_tasks(gdirs)
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-        # store HEF
-        hef = [gd for gd in gdirs if gd.rgi_id == 'RGI50-11.00897']
-
         # merge, but with 0 buffer, should not do anything
-        merge0 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge0 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=0)
         assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
                                               merge0.read_pickle(
                                                   'model_flowlines')])[0]
-        gdirs += hef
 
         # merge, but with 50 buffer. overlapping glaciers should be excluded
-        merge1 = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        merge1 = workflow.merge_glacier_tasks(gdirs,
+                                              main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=50)
         assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
         assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
                                         merge1.read_pickle('model_flowlines')]
 
-        gdirs += hef
-
         # merge HEF and Vernagt, include Gepatsch but it should not be merged
-        gdir_merged = workflow.merge_glacier_tasks(gdirs, 'RGI50-11.00897',
+        gdir_merged = workflow.merge_glacier_tasks(gdirs,
+                                                   main_rgi_id='RGI50-11.00897',
                                                    glcdf=glcdf)
 
         # test flowlines
@@ -3058,8 +3100,6 @@ class TestMergedHEF():
         assert fls1[0].flows_to == fls1[-1]
         assert fls1[-1].flows_to.rgi_id == 'RGI50-11.00719_d01'
         assert fls1[-1].flows_to.flows_to.rgi_id == 'RGI50-11.00897'
-
-        gdirs += hef
 
         # run parameters
         years = 200  # arbitrary

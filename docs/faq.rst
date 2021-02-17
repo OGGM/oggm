@@ -59,7 +59,7 @@ or observations of past glacier change.
 Can I use OGGM to simulate long term glacier evolution?
 -------------------------------------------------------
 
-It depends what you mean by "long-term": at centenial time scales, probably,
+It depends what you mean by "long-term": at centennial time scales, probably,
 yes. At millenial time scales, maybe. At glacial time scales, probably not.
 The major issue we have to face with OGGM is that it uses a "glacier-centric"
 approach: it can simulate the mountain glaciers and ice-caps we know from
@@ -148,7 +148,7 @@ This happens when a glacier grows larger than the original map boundaries.
 We recommend to increase the glacier map in this case, by setting
 `cfg.PARAMS['border']` to a larger value, e.g. 100 or 200. The larger this
 value, the larger the glacier can grow (the drawback is that simulations
-become slowier and hungrier in memory because the number of grid points
+become slower and hungrier in memory because the number of grid points
 increases as well). We do not recommend to go larger than 250, however:
 for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.

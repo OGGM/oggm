@@ -5,7 +5,7 @@ Introduction
 We illustrate with an example how the OGGM workflow is applied to the
 Tasman Glacier in New Zealand (see figure below).
 Here we describe shortly the purpose of each processing step, while more
-details are provided in the other sections:
+details are provided in other sections:
 
 Preprocessing
   The glacier outlines are extracted from a reference dataset (`RGI`_)
@@ -37,10 +37,10 @@ Climate data and mass-balance
 
 Ice thickness inversion
   Using the mass-balance data computed above and relying on mass-conservation
-  considerations, an estimate of the ice flux along each glacier cross-section
-  can be computed, by making assumptions about the shape of the cross-section
-  (parabolic or rectangular) and using the physics of ice flow, the model
-  computes the thickness of the glacier along the flowlines and the total
+  considerations, an estimate of the ice flux along each glacier grid point cross-section
+  is computed by making assumptions about the shape of the cross-section
+  (parabolic, rectangular or trapezoid). Using the physics of ice flow and the shallow ice approximation, 
+  the model then computes the thickness of the glacier along the flowlines and the total
   volume of the glacier (**Fig. e**).
 
 Glacier evolution
@@ -54,7 +54,7 @@ Glacier evolution
 .. admonition:: **New in version 1.4!**
 
    Since v1.4, OGGM now has another way to compute flowlines via
-   **binned elevation bands** ([Huss_Farinotti_2012]_). See
+   **binned elevation bands** [Huss_Farinotti_2012]_. See
    :ref:`flowlines` for more details.
 
 .. figure:: _static/ex_workflow.png

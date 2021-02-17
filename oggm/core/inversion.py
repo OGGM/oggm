@@ -6,7 +6,7 @@ for flowline modelling. The major direction shift happens at the
 flowlines.width_correction step where the widths are computed to follow the
 altitude area distribution. This must not and should not be the case when
 the actual objective is to provide a glacier thickness map. For this,
-the geometrical width and some other criterias such as e.g. "all altitudes
+the geometrical width and some other criteria such as e.g. "all altitudes
 *in the current subcatchment* above the considered cross-section are
 contributing to the flux" might give more interpretable results.
 

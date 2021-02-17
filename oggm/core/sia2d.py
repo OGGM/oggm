@@ -181,7 +181,7 @@ class Model2D(object):
             raise FloatingPointError('NaN in numerical solution.')
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
-        """Run until an equuilibrium is reached (can take a while)."""
+        """Run until an equilibrium is reached (can take a while)."""
 
         ite = 0
         was_close_zero = 0

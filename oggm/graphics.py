@@ -112,7 +112,7 @@ def _plot_map(plotfunc):
     horizontal_colorbar : Boolean, optional, default=False
         Horizontal colorbar instead
     title : str, optional
-        If left to None, the plot decides wether it writes a title or not. Set
+        If left to None, the plot decides whether it writes a title or not. Set
         to '' for no title.
     title_comment : str, optional
         add something to the default title. Set to none to remove default

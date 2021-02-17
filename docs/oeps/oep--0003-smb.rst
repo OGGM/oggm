@@ -44,7 +44,7 @@ mm w.e. yr-1 K-1) is the same all over the glacier. There are good reasons
 to assume that this melt factor should be different for different surface
 conditions.
 
-One relatively simple way to deal with it woud be to define a new model
+One relatively simple way to deal with it would be to define a new model
 parameter, ``snow_melt_factor``, which defines a temperature
 sensitivity for snow as :math:`\mu^{*}_{Snow} = f \, \mu^{*}_{Ice}` with
 :math:`f` constant and somewhere between 0 and 1 (1 would be the current

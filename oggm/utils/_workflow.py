@@ -414,7 +414,7 @@ class entity_task(object):
     """
 
     def __init__(self, log, writes=[], fallback=None):
-        """Decorator syntax: ``@oggm_task(log, writes=['dem', 'outlines'])``
+        """Decorator syntax: ``@entity_task(log, writes=['dem', 'outlines'])``
 
         Parameters
         ----------
@@ -514,16 +514,110 @@ class entity_task(object):
         return _entity_task
 
 
-def global_task(task_func):
-    """
-    Decorator for common job-controlling logic.
+class global_task(object):
+    """Decorator for common job-controlling logic.
 
     Indicates that this task expects a list of all GlacierDirs as parameter
     instead of being called once per dir.
     """
 
-    task_func.__dict__['global_task'] = True
-    return task_func
+    def __init__(self, log):
+        """Decorator syntax: ``@global_task(log)``
+
+        Parameters
+        ----------
+        log: logger
+            module logger
+        """
+        self.log = log
+
+    def __call__(self, task_func):
+        """Decorate."""
+
+        @wraps(task_func)
+        def _global_task(gdirs, **kwargs):
+
+            # Should be iterable
+            gdirs = tolist(gdirs)
+
+            self.log.workflow('Applying global task %s on %s glaciers',
+                              task_func.__name__, len(gdirs))
+
+            # Run the task
+            return task_func(gdirs, **kwargs)
+
+        _global_task.__dict__['is_global_task'] = True
+        return _global_task
+
+
+def get_ref_mb_glaciers_candidates(rgi_version=None):
+    """Reads in the WGMS list of glaciers with available MB data.
+
+    Can be found afterwards (and extended) in cdf.DATA['RGIXX_ref_ids'].
+    """
+
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS['rgi_version']
+
+    if len(rgi_version) == 2:
+        # We might change this one day
+        rgi_version = rgi_version[:1]
+
+    key = 'RGI{}0_ref_ids'.format(rgi_version)
+
+    if key not in cfg.DATA:
+        flink, _ = get_wgms_files()
+        cfg.DATA[key] = flink['RGI{}0_ID'.format(rgi_version)].tolist()
+
+    return cfg.DATA[key]
+
+
+@global_task(log)
+def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
+    """Get the list of glaciers we have valid mass balance measurements for.
+
+    To be valid glaciers must have more than 5 years of measurements and
+    be land terminating. Therefore, the list depends on the time period of the
+    baseline climate data and this method selects them out of a list
+    of potential candidates (`gdirs` arg).
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of glaciers to check for valid reference mass balance data
+    y0 : int
+        override the default behavior which is to check the available
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
+    y1 : int
+        override the default behavior which is to check the available
+        climate data (or PARAMS['ref_mb_valid_window']) and decide
+
+    Returns
+    -------
+    ref_gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        list of those glaciers with valid reference mass balance data
+
+    See Also
+    --------
+    get_ref_mb_glaciers_candidates
+    """
+
+    # Get the links
+    ref_ids = get_ref_mb_glaciers_candidates(gdirs[0].rgi_version)
+
+    # We remove tidewater glaciers and glaciers with < 5 years
+    ref_gdirs = []
+    for g in gdirs:
+        if g.rgi_id not in ref_ids or g.is_tidewater:
+            continue
+        try:
+            mbdf = g.get_ref_mb_data(y0=y0, y1=y1)
+            if len(mbdf) >= 5:
+                ref_gdirs.append(g)
+        except RuntimeError as e:
+            if 'Please process some climate data before call' in str(e):
+                raise
+    return ref_gdirs
 
 
 @entity_task(log)
@@ -623,6 +717,7 @@ def _write_shape_to_disk(gdf, fpath, to_tar=False):
         os.remove(ff)
 
 
+@global_task(log)
 def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                filesuffix='', flowlines_output=False,
                                geometrical_widths_output=False,
@@ -815,6 +910,7 @@ class compile_to_netcdf(object):
         return _compile_to_netcdf
 
 
+@global_task(log)
 @compile_to_netcdf(log)
 def compile_run_output(gdirs, path=True, input_filesuffix='',
                        use_compression=True):
@@ -943,6 +1039,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     return ds
 
 
+@global_task(log)
 @compile_to_netcdf(log)
 def compile_climate_input(gdirs, path=True, filename='climate_historical',
                           input_filesuffix='', use_compression=True):
@@ -1074,6 +1171,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     return ds
 
 
+@global_task(log)
 def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
                      append=True):
     """Gathers the log output for the selected task(s)
@@ -1123,6 +1221,7 @@ def compile_task_log(gdirs, task_names=[], filesuffix='', path=True,
     return out
 
 
+@global_task(log)
 def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
                       append=True):
     """Gathers the time needed for the selected task(s) to run
@@ -1331,6 +1430,7 @@ def glacier_statistics(gdir, inversion_only=False):
     return d
 
 
+@global_task(log)
 def compile_glacier_statistics(gdirs, filesuffix='', path=True,
                                inversion_only=False):
     """Gather as much statistics as possible about a list of glaciers.
@@ -1367,6 +1467,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     return out
 
 
+@global_task(log)
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         path=True, csv=False,
                                         use_inversion_flowlines=True,
@@ -1555,6 +1656,7 @@ def climate_statistics(gdir, add_climate_period=1995):
     return d
 
 
+@global_task(log)
 def compile_climate_statistics(gdirs, filesuffix='', path=True,
                                add_climate_period=1995):
     """Gather as much statistics as possible about a list of glaciers.
@@ -3049,7 +3151,9 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
-                           filename='climate_historical', input_filesuffix=''):
+                           filename='climate_historical',
+                           input_filesuffix='',
+                           dem_source=None):
     """Creats a new GlacierDirectory if tributaries are merged to a glacier
 
     This function should be called after centerlines.intersect_downstream_lines
@@ -3069,6 +3173,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
         Baseline climate file
     input_filesuffix: str
         Filesuffix to the climate file
+    dem_source: str
+        the DEM source to use
     Returns
     -------
     merged : oggm.GlacierDirectory
@@ -3130,7 +3236,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     merged = GlacierDirectory(maindf.loc[idx].iloc[0])
 
     # run define_glacier_region to get a fitting DEM and proper grid
-    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0])
+    define_glacier_region(merged, entity=maindf.loc[idx].iloc[0],
+                          source=dem_source)
 
     # write gridded data and geometries for visualization
     merged_glacier_masks(merged, merged_geometry)

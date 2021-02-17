@@ -674,7 +674,7 @@ class TestIdealisedCases(unittest.TestCase):
 
     @pytest.mark.slow
     def test_varying_width(self):
-        """This test is for a flowline glacier of variying width, i.e with an
+        """This test is for a flowline glacier of varying width, i.e with an
          accumulation area twice as wide as the tongue."""
         # set do_plot = True to see the plots
 

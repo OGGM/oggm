@@ -1,7 +1,7 @@
 Ice dynamics
 ============
 
-The glaciers in OGGM are represented by a depth integrated flowline
+The glaciers in OGGM are represented by a depth-integrated flowline
 model. The equations for the isothermal shallow ice are solved along
 the glacier centerline, computed to represent best the flow of ice
 along the glacier (see for example `antarcticglaciers.org`_ for a general
@@ -40,7 +40,9 @@ basal shear stress :math:`\tau`:
 
     u = u_d + u_s = f_d h \tau^n + f_s \frac{\tau^n}{h}
 
-The second term is to account for basal sliding, see e.g. [Oerlemans_1997]_ or
+wehere u_d and u_s are respectively the speed of ice coming from its deformation and sliding
+(`n` is equal to 3). Thus, the first term is for ice deformation and the second term 
+is to account for basal sliding, see e.g. [Oerlemans_1997]_ or
 [Golledge_Levy_2011]_. It introduces an additional free parameter :math:`f_s`
 and will therefore be ignored in a first approach. The deformation parameter
 :math:`f_d` is better constrained and relates to Glen's
@@ -50,7 +52,7 @@ temperature‐dependent creep parameter :math:`A`:
 
     f_d = \frac{2 A}{n + 2}
 
-The basal shear stress :math:`\tau` depends e.g. on the geometry of the bed
+The basal shear stress :math:`\tau` depends for example on the geometry of the bed
 [Cuffey_Paterson_2010]_. Currently it is assumed to be
 equal to the driving stress :math:`\tau_d`:
 
@@ -58,8 +60,9 @@ equal to the driving stress :math:`\tau_d`:
 
     \tau_d = \alpha \rho g h
 
-where :math:`\alpha` is the slope of the flowline and :math:`\rho` the density
-of ice. Both the ``FluxBasedModel`` and the ``MUSCLSuperBeeModel`` solve
+where :math:`\alpha` is the slope of the flowline, :math:`\rho` the density
+of ice and `g` the Earth gravity acceleration.
+Both the ``FluxBasedModel`` and the ``MUSCLSuperBeeModel`` solve
 for these equations, but with different numerical schemes.
 
 
@@ -72,8 +75,8 @@ is not considered), but the shape will still have a considerable influence
 on glacier dynamics:
 
 - the width change as a result of mass transport will be different for
-  each shape, thus influencing the mass balance :math:`w \, \dot{m}`
-- with all other things held constant, a change in section area
+  each shape, thus influencing the mass-balance term :math:`w \, \dot{m}`.
+- with all other things held constant, a change in the cross-section area
   :math:`\partial S / \partial t` due to mass convergence/divergence
   will result in a different :math:`\partial h / \partial t` and thus in
   different shear stress computation at the next time step.
@@ -121,7 +124,7 @@ Parabolic
 
 
 Parabolic shape with one degree of freedom, which makes it particularly
-useful for the bed inversion: if :math:`S` and :math:`w` are known:
+useful for the bed inversion. If :math:`S` and :math:`w` are known:
 
 .. math::
 
@@ -130,7 +133,7 @@ useful for the bed inversion: if :math:`S` and :math:`w` are known:
 The parabola is defined by the bed-shape parameter
 :math:`P_s = 4 h / w^2` [1]_. Very small values of this parameter imply very
 `flat` shapes, unrealistically sensitive to changes in :math:`h`. For this
-reason, the default in OGGM is to use the mixed flowline model.
+reason, the default in OGGM is to use the mixed flowline model described below.
 
 .. [1] the local thickness :math:`y`  of the parabolic bed can be described by
     :math:`y = h − P_s x^2`. At :math:`x = w / 2`, :math:`y = 0` and
@@ -160,7 +163,7 @@ A combination of rectangular, trapezoidal and parabolic shapes.
 Numerics
 --------
 
-"Flux based" model
+"Flux-based" model
 ~~~~~~~~~~~~~~~~~~
 
 Most flowline models treat the volume conservation equation as a
@@ -194,7 +197,7 @@ MUSCLSuperBeeModel
 
 A shallow ice model with improved numerics ensuring mass-conservation in
 very steep walls [Jarosch_etal_2013]_. The model is currently used only as
-reference benchmark for the FluxBasedModel.
+reference benchmark for the "Flux-Based" model.
 
 
 Glacier tributaries
@@ -209,7 +212,7 @@ The main flowline and its tributaries are all modelled individually.
 At the end of a time step, the tributaries will transport mass to the branch
 they are flowing to. Numerically, this mass transport is
 handled by adding an element at the end of the flowline with the same
-properties (with, thickness...) as the last grid point, with the difference
+properties (width, thickness ...) as the last grid point, with the difference
 that the slope :math:`\alpha` is computed with respect to the altitude of
 the point they are flowing to. The ice flux is then computed as usual and
 transferred to the downlying branch.

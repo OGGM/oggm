@@ -61,17 +61,17 @@ Input/Output
     utils.get_rgi_intersects_region_file
     utils.get_rgi_intersects_entities
     utils.get_ref_mb_glaciers
-    utils.write_centerlines_to_shape
-    utils.compile_glacier_statistics
-    utils.compile_run_output
-    utils.compile_climate_input
-    utils.compile_task_log
-    utils.compile_task_time
-    utils.compile_fixed_geometry_mass_balance
-    utils.compile_climate_statistics
     utils.copy_to_basedir
     utils.gdir_to_tar
     utils.base_dir_to_tar
+    global_tasks.write_centerlines_to_shape
+    global_tasks.compile_glacier_statistics
+    global_tasks.compile_run_output
+    global_tasks.compile_climate_input
+    global_tasks.compile_task_log
+    global_tasks.compile_task_time
+    global_tasks.compile_fixed_geometry_mass_balance
+    global_tasks.compile_climate_statistics
 
 OGGM Shop
 =========
@@ -175,17 +175,23 @@ but might use multiprocessing internally.
     :toctree: generated/
     :nosignatures:
 
-    core.climate.compute_ref_t_stars
-    utils.compile_glacier_statistics
-    utils.compile_run_output
-    utils.compile_climate_input
-    utils.compile_task_log
-    utils.compile_task_time
-    utils.compile_fixed_geometry_mass_balance
-    utils.compile_climate_statistics
-    workflow.calibrate_inversion_from_consensus
-    workflow.match_regional_geodetic_mb
-    workflow.merge_glacier_tasks
+    global_tasks.gis_prepro_tasks
+    global_tasks.climate_tasks
+    global_tasks.inversion_tasks
+    global_tasks.calibrate_inversion_from_consensus
+    global_tasks.match_regional_geodetic_mb
+    global_tasks.merge_glacier_tasks
+    global_tasks.compute_ref_t_stars
+    global_tasks.get_ref_mb_glaciers
+    global_tasks.write_centerlines_to_shape
+    global_tasks.compile_run_output
+    global_tasks.compile_climate_input
+    global_tasks.compile_task_log
+    global_tasks.compile_task_time
+    global_tasks.compile_glacier_statistics
+    global_tasks.compile_fixed_geometry_mass_balance
+    global_tasks.compile_climate_statistics
+
 
 Classes
 =======
@@ -200,6 +206,10 @@ which are used and re-used across modules and tasks).
     GlacierDirectory
     Centerline
     Flowline
+    MassBalanceModel
+    FlowlineModel
+    FileModel
+
 
 .. _glacierdir:
 
@@ -260,7 +270,7 @@ Users usually don't have to care about *where* the data is located.
     fdem
     import xarray as xr
     @savefig plot_gdir_dem.png width=80%
-    xr.open_rasterio(fdem).plot(cmap='terrain')
+    xr.open_rasterio(fdem).plot(cmap='terrain');
 
 This persistence on disk allows for example to continue a workflow that has
 been previously interrupted. Initialising a GlacierDirectory from a non-empty
@@ -268,8 +278,11 @@ folder won't erase its content:
 
 .. ipython:: python
 
-    gdir = oggm.GlacierDirectory('RGI60-11.00897')
+    gdir = workflow.init_glacier_directories('RGI60-11.00897')[0]
     os.listdir(gdir.dir)  # the directory still contains the data
+
+For more information about how to use GlacierDirectories, visit our
+`tutorial on the topic <https://oggm.org/tutorials/notebooks/store_and_compress_glacierdirs.html>`_.
 
 
 .. include:: _generated/basenames.txt
@@ -384,8 +397,8 @@ model flowlines
    :py:class:`Flowline` for all simulations. These flowlines are created by
    :py:func:`init_present_time_glacier`, which combines information from
    several preprocessing steps, the downstream line and the bed inversion.
-   From a user prespective, especially if preprocessed directories are used,
-   these model flowlines are the most importent ones and further informations
+   From a user perspective, especially if preprocessed directories are used,
+   these model flowlines are the most important ones and further informations
    on the class interface and attributes are given below.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
@@ -417,7 +430,7 @@ including the model flowlines. This is achieved by choosing preprocessing level
     [fl.order for fl in fls]
 
 This glacier has three flowlines of type `MixedBedFlowline` provided as a list.
-And the flowlines are orderd by ascending Strahler numbers, where the last entry
+And the flowlines are ordered by ascending Strahler numbers, where the last entry
 in the list is always the longest and very often most relevant flowline of
 that glacier.
 

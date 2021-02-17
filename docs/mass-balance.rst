@@ -6,9 +6,9 @@ Mass-balance
 ============
 
 The mass-balance (MB) model implemented in OGGM is an extended version of the
-temperature index model presented by `Marzeion et al., (2012)`_.
+temperature-index model presented by `Marzeion et al., (2012)`_.
 While the equation governing the mass-balance is that of a traditional
-temperature index model, our special approach to calibration requires
+temperature-index model, our special approach to calibration requires
 that we spend some time describing it.
 
 .. note::
@@ -59,7 +59,7 @@ described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
 this downscaling to add any new information than already available at the
 original resolution, but this allows us to have an elevation-dependent dataset
 based on a presumably better climatology. The monthly anomalies are computed
-following [Harris_etal_2010]_ : we use standard anomalies for temperature and
+following [Harris_et_al_2010]_ : we use standard anomalies for temperature and
 scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
@@ -67,33 +67,36 @@ scaled (fractional) anomalies for precipitation.
 ERA5 and CERA-20C
 ~~~~~~~~~~~~~~~~~
 
-Since OGGM v1.4, users can also use reanalysis data from the ECMWF. OGGM
-can also use the
+Since OGGM v1.4, users can also use reanalysis data from the ECMWF, the
+European Centre for Medium-Range Weather Forecasts based in Reading, UK.
+OGGM can use the
 `ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
 `CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
 datasets as baseline. One can also apply a combination of both, for example
 by applying the CERA-20C anomalies to the reference ERA5 for example
-(useful only in certain circumstances).
+(useful only in some circumstances).
 
 HISTALP
 ~~~~~~~
 
 If required by the user, OGGM can also automatically
-download and use the data from the `HISTALP`_ dataset.
-
-.. _HISTALP: http://www.zamg.ac.at/histalp/
-
+download and use the data from the `HISTALP`_ dataset (available only 
+for the European Alps region, more details in [Chimani_et_al_2012]_.
 The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
 However, the data is considered spurious before 1850. Therefore, we
 recommend to use data from 1850 onwards.
+
+.. _HISTALP: http://www.zamg.ac.at/histalp/
+
+
 
 .. ipython:: python
 
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
 
-User-provided dataset
-~~~~~~~~~~~~~~~~~~~~~
+User-provided climate dataset
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can provide any other dataset to OGGM. See the `HISTALP_oetztal.nc` data
 file in the OGGM `sample-data`_ folder for an example format.
@@ -109,7 +112,8 @@ this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
 period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-Visit our online tutorials to see how this can be done.
+Visit our online tutorials to see how this can be done
+(`OGGM run with GCM tutorial <https://oggm.org/tutorials/notebooks/run_with_gcm.html>`_).
 
 
 Elevation dependency
@@ -121,11 +125,11 @@ of the glacier grid points. The default is to use a fixed lapse rate of
 also contains an optional algorithm which computes the local gradient by linear
 regression of the 9 surrounding grid points. This method requires that the
 near-surface temperature lapse-rates provided by the climate dataset are good
-(i.e.: in most of the cases, you should probably use the simple fixed gradient
+(i.e. in most cases, you should probably use the simple fixed gradient
 instead).
 
 
-Temperature index model
+Temperature-index model
 -----------------------
 
 The monthly mass-balance :math:`B_i` at elevation :math:`z`
@@ -140,7 +144,7 @@ the monthly temperature and :math:`T_{Melt}` is the monthly mean air
 temperature above which ice melt is assumed to occur (-1°C per default).
 Solid precipitation is computed out of the total precipitation. The fraction of
 solid precipitation is based on the monthly mean temperature: all solid below
-``temp_all_solid`` (default: 0°C) all liquid above ``temp_all_liq``
+``temp_all_solid`` (default: 0°C) and all liquid above ``temp_all_liq``
 (default: 2°C), linear change in between.
 
 The parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
@@ -171,7 +175,7 @@ observations of the annual specific mass-balance SMB. We use the `WGMS FoG`_
 
 For each of these glaciers, time-dependent "candidate" temperature sensitivities
 :math:`\mu (t)` are estimated by requiring that the average specific
-mass-balance :math:`B_{31}` is equal to zero. :math:`B_{31}` is computed
+mass-balance :math:`\overline{B_{31}}` is equal to zero. :math:`\overline{B_{31}}` is computed
 for a 31-year period centered around the year :math:`t` **and for a constant
 glacier geometry fixed at the RGI date** (e.g. 2003 for most glaciers in the
 European Alps).
@@ -184,7 +188,7 @@ European Alps).
 Around 1900, the climate was cold and wet. As a consequence, the
 temperature sensitivity required to maintain the 2003 glacier geometry is high.
 Inversely, the recent climate is warm and the glacier must have a small
-temperature sensitivity in order to preserve its geometry.
+temperature sensitivity in order to preserve its 2003 geometry.
 
 Note that these :math:`\mu (t)` are just
 hypothetical sensitivities necessary to maintain the glacier in equilibrium in
@@ -192,7 +196,7 @@ an average climate at the year :math:`t`. We call them "candidates", since one
 (or more) of them is likely to be close to the "real" sensitivity of the glacier.
 
 This is when the mass-balance observations come into play: each of these
-candidates can be used to compute the mass-balance during the period
+candidates is used to compute the mass-balance during the period
 were we have observations. We then compare the model output
 with the expected mass-balance and compute the model bias:
 
@@ -201,23 +205,23 @@ with the expected mass-balance and compute the model bias:
     @savefig plot_bias_ts.png width=100%
     example_plot_bias_ts()  # the code for these examples is posted below
 
-The bias is positive when :math:`\mu` is too low, and negative when :math:`\mu`
-is too high. Here, the bias crosses the zero line twice. All dates
+The residual bias is positive when :math:`\mu` is too low, and negative when :math:`\mu`
+is too high. Here, the residual bias crosses the zero line twice. The two dates where the zero line is crossed
 correspond to approximately the same :math:`\mu` (but not exactly,
 as precipitation and temperature both have an influence on it).
-These dates at which the :math:`\mu` candidates
-are close to the real :math:`\mu` are called :math:`t^*`
+These two dates at which the :math:`\mu` candidates
+are close to the "real" :math:`\mu` are called :math:`t^*`
 (the associated sensitivities :math:`\mu (t^*)` are called :math:`\mu^*`).
 For the next step, one :math:`t^*` is sufficient: we pick the one which
-corresponds to the smallest absolute bias.
+corresponds to the smallest absolute residual bias.
 
 At the glaciers where observations are available, this detour via the :math:`\mu`
 candidates is not necessary to find the correct :math:`\mu^*`. Indeed, the goal
 of these computations are in fact to find :math:`t^*`, **which is the actual
-value to be interpolated to glaciers where no observations are available**.
+value interpolated to glaciers where no observations are available**.
 
 The benefit of this approach is best shown with the results of a cross-validation
-study realized by `Marzeion et al., (2012)`_ (and confirmed by OGGM):
+study realized by `Marzeion et al., (2012)`_ and confirmed by OGGM:
 
 .. figure:: _static/mb_crossval_panel.png
     :width: 100%
@@ -243,7 +247,7 @@ This substantial improvement in model performance is due to several factors:
   compensated by all :math:`\mu (t)`, and therefore also by :math:`\mu^*`.
   In that sense, the calibration procedure can be seen as a empirically driven
   downscaling strategy: if a glacier is here, then the local climate (or the
-  glacier temperature sensitivity) *must* allow a glacier to be there. For
+  glacier temperature sensitivity) **must** allow a glacier to be there. For
   example, the effect of avalanches or a negative bias in precipitation input
   will have the same impact on calibration: :math:`\mu^*` should be reduced to
   take these effects into account, even though they are not resolved by
@@ -272,7 +276,7 @@ Regional calibration
 
    As of version 1.4, we now also offer to calibrate the mass-balance at the
    regional level (RGI regions) based on geodetic mass-balance products
-   ([Zemp_etal_2019]_ or [Hugonnet_etal_2020]_). This is done by correcting
+   ([Zemp_et_al_2019]_ or [Hugonnet_et_al_2020]_). This is done by correcting
    (shifting) the residual for each glacier (:math:`\epsilon` in the equation
    above) by a constant value so that the regional estimates match the
    observations. This is not applied per default, as it might lead to
@@ -284,18 +288,23 @@ Regional calibration
 References
 ----------
 
-.. [Harris_etal_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
+.. [Chimani_et_al_2012] Chimani, B., Matulla, C., Böhm, R., Hofstätter, M.:
+   A new high resolution absolute Temperature Grid for the Greater Alpine Region
+   back to 1780, Int. J. Climatol., 33(9), 2129–2141, DOI 10.1002/joc.3574, 2012.
+
+.. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
    623–642. https://doi.org/10.1002/joc.3711
 
-.. [Hugonnet_etal_2020] Hugonnet et al., accepted.
+.. [Hugonnet_et_al_2020] Hugonnet et al., accepted.
 
-.. [Zemp_etal_2019] Zemp, M., Huss, M., Thibert, E., Eckert, N., McNabb, R.,
+.. [Zemp_et_al_2019] Zemp, M., Huss, M., Thibert, E., Eckert, N., McNabb, R.,
    Huber, J., Barandun, M., Machguth, H., Nussbaumer, S. U., Gärtner-Roer, I.,
    Thomson, L., Paul, F., Maussion, F., Kutuzov, S. and Cogley, J. G.:
    Global glacier mass changes and their contributions to sea-level rise from
    1961 to 2016, Nature, 568(7752), 382–386, doi:10.1038/s41586-019-1071-0, 2019.
+
 
 Implementation details
 ----------------------

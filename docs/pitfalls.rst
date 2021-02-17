@@ -68,7 +68,7 @@ default :math:`A`). This is best shown by this figure from
 .. figure:: _static/global_volume_mau2019.png
     :width: 100%
 
-    Global volume estimates as a function of the multiplication factor
+    Global volume estimated as a function of the multiplication factor
     applied to the ice creep parameter A, with five different setups:
     defaults, with sliding velocity, with lateral drag, and with rectangular
     and parabolic bed shapes only (instead of the default mixed
@@ -101,7 +101,7 @@ We now have fixed the most pressing issues.
 it in detail, for a summary:
 
 - the previous algorithm was flawed, but did not result in significant errors
-  at large scales.
+  at large scales
 - the new algorithm is faster and more likely to be stable
 - we don't guarantee statibility in 100% of the cases, but when the model
   becomes unstable it should stop

@@ -67,9 +67,7 @@ LABEL_STRUCT = np.array([[0, 1, 0],
 
 
 class Centerline(object, metaclass=SuperclassMeta):
-    """A Centerline has geometrical and flow rooting properties.
-
-    It is instanciated and updated by _join_lines() exclusively
+    """Geometry (line and widths) and flow rooting properties, but no thickness
     """
 
     def __init__(self, line, dx=None, surface_h=None, orig_head=None,
@@ -477,7 +475,7 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     ----------
     lines : list of shapely.geometry.LineString instances
         The lines to filter out (in raster coordinates).
-    topo : the glacier topogaphy
+    topo : the glacier topography
     gdir : the glacier directory for simplicity
     min_slope: rad
 
@@ -945,7 +943,7 @@ def compute_downstream_line(gdir):
     """Computes the Flowline along the unglaciated downstream topography
 
     The idea is simple: starting from the glacier tail, compute all the routes
-    to all local minimas found at the domain edge. The cheapest is "The One".
+    to all local minima found at the domain edge. The cheapest is "The One".
 
     The rest of the job (merging centerlines + downstream into
     one single glacier is realized by
@@ -1058,7 +1056,7 @@ class HashablePoint(shpg.Point):
 
 
 def _parabolic_bed_from_topo(gdir, idl, interpolator):
-    """this returns the parabolic bedhape for all points on idl"""
+    """this returns the parabolic bedshape for all points on idl"""
 
     # Volume area scaling formula for the probable ice thickness
     h_mean = 0.034 * gdir.rgi_area_km2**0.375 * 1000
@@ -1229,7 +1227,7 @@ def compute_downstream_bedshape(gdir):
 def _mask_to_polygon(mask, gdir=None):
     """Converts a mask to a single polygon.
 
-    The mask should be a single entity with nunataks: I didnt test for more
+    The mask should be a single entity with nunataks: I didn't test for more
     than one "blob".
 
     Parameters
@@ -1376,7 +1374,7 @@ def _filter_small_slopes(hgt, dx, min_slope):
 
 
 def _filter_for_altitude_range(widths, wlines, topo):
-    """Some width lines have unrealistic lenght and go over the whole
+    """Some width lines have unrealistic length and go over the whole
     glacier. Filter them out."""
 
     # altitude range threshold (if range over the line > threshold, filter it)
