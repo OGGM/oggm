@@ -59,7 +59,7 @@ For more detailed information, we recommend to read the OGGM
 Using OGGM
 ^^^^^^^^^^
 
-How to use the model, with concrete python code examples.
+How to use the model, with concrete code examples and links to the tutorials.
 
 * :doc:`cloud`
 * :doc:`installing-oggm`

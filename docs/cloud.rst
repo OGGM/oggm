@@ -27,9 +27,10 @@ find this `introduction to interactive notebooks`_ quite useful.
     but not suitable for development work. Remember to download your notebooks
     at the end of a session if you want to keep them for later.
 
-If you want to use OGGM for more serious and permanent work, we recommend to
-either :ref:`install OGGM on your computer <installing.oggm>` or use
-:ref:`hub`, an online service similar to Binder but persistent and
-with access to more resources.
+    **If you want to use OGGM for more serious and permanent work**, we recommend to
+    either :ref:`install OGGM on your computer <installing.oggm>` or use
+    :ref:`hub`, an online service similar to Binder but persistent and
+    with access to more resources.
+
 
 .. _introduction to interactive notebooks: http://edu.oggm.org/en/latest/notebooks_howto.html
