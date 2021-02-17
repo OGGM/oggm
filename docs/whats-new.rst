@@ -4,10 +4,15 @@
 Version history
 ===============
 
-v1.4.0 (pre-release)
---------------------
+v1.4.0 (17.02.2021)
+-------------------
 
-.. admonition:: **New in version 1.4! (pre-release, Feb 07 2021)**
+This a new major update of the OGGM model. It it the result of one year
+of development, with several non-backwards compatible changes.
+
+We recommend all users to update to this version.
+
+.. admonition:: **Major new release 1.4!**
 
     There have been a large number of additions too long to be summarized,
     and the list below is far from complete (we have waited way too long for
@@ -26,6 +31,9 @@ v1.4.0 (pre-release)
          be readily used for projections
        - and much much more....
 
+
+**Note:** not all changes since v1.3.1 are documented below. We'll try to be
+better with documenting changes in the future.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -81,7 +89,6 @@ Breaking changes
   (:pull:`1069`). By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 - Several further important changes to be documented later in
   (:pull:`1099`). By `Fabien Maussion <https://github.com/fmaussion>`_.
-
 
 
 Enhancements
