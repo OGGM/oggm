@@ -102,27 +102,18 @@ it in detail, for a summary:
   becomes unstable it should stop.
 
 
-The mass-balance model of OGGM is not calibrated with remote sensing data on a glacier per glacier basis
-========================================================================================================
+The mass-balance model of OGGM is not calibrated with remote sensing data on individual glaciers
+================================================================================================
 
 Currently, the values for the mass-balance parameters such as the
 temperature sensitivity, the precipitation correction factor, etc. are
 calibrated based on the in-situ measurements provided by the WGMS
 (traditional mass-balance data). For more information about the procedure,
-see [Maussion_etal_2019]_ and our
-`performance monitoring website <https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html>`_.
-
-This, however, is not really "state of the art" anymore. Other recent
-studies by e.g. [Huss_Hock_2015]_ and [Zekollari_etal_2019]_
-also use geodetic mass-balance estimates
-to calibrate their model.
-
-We are looking for people to help us with this task: join us! See
-e.g. :ref:`oep0003` for a discussion document.
+see [Maussion_etal_2019]_ and :ref:`mass-balance`.
 
 .. admonition:: **New in version 1.4!**
 
-   Since v1.4, OGGM can now calibrate the mass-balance model at the regional
+   As of v1.4, OGGM can now also calibrate the mass-balance model at the regional
    level based on available estimates. See :py:func:`workflow.match_regional_geodetic_mb`
    for more info.
 
@@ -140,11 +131,3 @@ References
     F., Recinos, B., Rothenpieler, T., Vlug, A., Wild, C. T. and Marzeion, B.:
     The Open Global Glacier Model (OGGM) v1.1, Geosci. Model Dev., 12(3),
     909–931, doi:10.5194/gmd-12-909-2019, 2019.
-
-.. [Huss_Hock_2015] Huss, M. and Hock, R.: A new model for global glacier
-    change and sea-level rise, Front. Earth Sci., 3(September), 1–22,
-    doi:10.3389/feart.2015.00054, 2015.
-
-.. [Zekollari_etal_2019] Zekollari, H., Huss, M. and Farinotti, D.: Modelling
-    the future evolution of glaciers in the European Alps under the EURO-CORDEX
-    RCM ensemble, Cryosphere, 13(4), 1125–1146, doi:10.5194/tc-13-1125-2019, 2019.
