@@ -62,7 +62,7 @@ How does this work?
 ~~~~~~~~~~~~~~~~~~~
 
 We use a single compute node located in Bremen to welcome the hub users.
-Currently (we are still trying things out), each user gets enough CPUs and
+Currently---we are still trying things out---each user gets enough CPUs and
 enough RAM to run OGGM on several glaciers at once.
 This is not enough to do heavy work, but will get you through the exploratory
 phase or even small regional runs. Each user also gets a persistent 16Gb disk
@@ -70,8 +70,8 @@ to save output data, notebooks and scripts. The OGGM-specific input data
 (i.e. everything that is downloaded automatically between users, see
 :ref:`system settings <system-settings>`) is shared among
 users (the ``shared`` folder in your ``$HOME``). The first time you run a
-new glacier, OGGM will first check if the data are available in the ``shared`` folder,
-and if not it will download them for you and the other users.
+new glacier, OGGM will first check if the data is available in the ``shared`` folder,
+and if not it will download it for you and the other users.
 
 The environment you have access to has a recent version of OGGM installed in
 it (updated every few weeks). Starting with OGGM v1.4, we will also provide
@@ -92,7 +92,7 @@ You can execute this command in your JupyterHub terminal (`Launcher -> Start a t
 
 
 That will copy the notebooks into the ``tutorials`` folder
-in your home directory (on OGGM-Hub not your local machien).
+in your home directory (on OGGM-Hub, not your local machine).
 You can use a similar command to pull content from other repositories as well (e.g. the
 `OGGM-Edu notebooks <https://github.com/OGGM/oggm-edu-notebooks>`_).
 

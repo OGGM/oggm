@@ -144,13 +144,13 @@ Some explanations:
 OGGM workflow
 -------------
 
-For a step by step tutorial of the entire OGGM workflow, download and run
+For a step by step tutorial of the entire OGGM workflow, download
 the
 :download:`getting started <https://raw.githubusercontent.com/OGGM/tutorials/master/notebooks/getting_started.ipynb>`
-jupyter notebook (right-click -> "Save link as") using the following command
-(from the directory where you downloaded the tutorial):
+jupyter notebook (right-click -> "Save link as")  and run it using the following command
+(from the directory where you downloaded the tutorial)::
 
-    jupyter notebook getting_started.ipynb 
+    $ jupyter-notebook getting_started.ipynb
 
 
 Alternatively, you can try OGGM directly in your browser without having
@@ -162,4 +162,4 @@ OGGM tutorials
 
 Refer to our `tutorials`_ for real-world applications.
 
-.. _tutorials: https://oggm.org/tutorials/notebooks/welcome.html
+.. _tutorials: https://oggm.org/tutorials

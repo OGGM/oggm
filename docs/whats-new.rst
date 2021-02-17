@@ -16,12 +16,12 @@ v1.4.0 (pre-release)
        - new option to compute centerlines: "elevation band flowlines"
        - new option to calibrate OGGM mass-balance regionally to geodetic
          estimates
-       - new option to calibrate OGGM ice thickness to the Farinotti et al. (2019)
-         consensus
+       - new option to calibrate the creep parameter Glen A to match the ice
+         thickness to the Farinotti et al. (2019) consensus
        - users can now choose from a variety of pre-processed directories,
          including with new climate data (e.g. ERA5)
        - OGGM now has a calving parameterization (switched off per default)
-       - OGGM shop to the download ony the data you wish
+       - OGGM shop, to download several new input datasets
        - Historical runs ("spin-up") are now available per default and can
          be readily used for projections
        - and much much more....

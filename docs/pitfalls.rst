@@ -14,8 +14,8 @@ specific pitfalls in more details.
 The default ice dynamics parameter "Glen A" is roughly calibrated
 =================================================================
 
-Out-of-the box OGGM will use fixed values for the creep parameter
-:math:`A` and the sliding parameter :math:`f_s`:
+Out-of-the box, non-preprocessed OGGM will use fixed values for the creep
+parameter :math:`A` and the sliding parameter :math:`f_s`:
 
 .. ipython:: python
 
@@ -34,12 +34,17 @@ higher value to compensate for this missing process (effectively making ice
 
 .. admonition:: **New in version 1.4!**
 
-   Since v1.4, OGGM can now calibrate :math:`A`
-   based on the consensus from [Farinotti_etal_2019]_ on any number
-   of glaciers. We recommend to use a large number of glaciers: OGGM's default
-   glacier directories are calibrated at the RGI region level. This
-   value is the also used by the forward dynamical model for consistency,
-   according to the parameter `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
+    Since v1.4, OGGM can now calibrate :math:`A`
+    based on the consensus from [Farinotti_etal_2019]_ on any number
+    of glaciers. We recommend to use a large number of glaciers: OGGM's default
+    glacier directories are calibrated at the RGI region level. This
+    value is then also used by the forward dynamical model for consistency,
+    according to the parameter
+    `use_inversion_params_for_run <https://github.com/OGGM/oggm/blob/e60becbc112a4c7cb734c0de1604bb7bd2b9e1f2/oggm/params.cfg#L326>`_.
+
+    The pre-processed directories at level 3 to 5 are already calibrated to the
+    consensus estimate at the RGI region level, i.e. unless specified
+    otherwise, OGGM will use the pre-calibrated :math:`A` value for these glaciers.
 
 There is a way to calibrate :math:`A` for the ice thickness inversion
 procedure based on observations of ice thickness (see
@@ -80,8 +85,8 @@ what we recommend to do is to calibrate :math:`A` so that the regional
 (or even local) estimates match the volume consensus of 
 `Farinotti et al. (2019) <https://www.nature.com/articles/s41561-019-0300-3>`_
 using the :py:func:`workflow.calibrate_inversion_from_consensus` global
-task.
-
+task. This is what we do for the default pre-processed directories at the
+RGI region level, so that you don't have to worry about it.
 
 .. _pitfalls.numerics:
 

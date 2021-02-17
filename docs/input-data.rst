@@ -104,6 +104,7 @@ become. Here is an example with Hintereisferner in the Alps:
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_BorderSize')
 
 .. ipython:: python
+    :okwarning:
 
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
     for ax, border in zip(np.array(axs).flatten(), [10, 40, 80, 160]):
@@ -180,7 +181,8 @@ directories from the default urls. Here is a summary of the default configuratio
 - mass-balance parameters calibrated with the standard OGGM procedure. No calibration
   against geodetic MB (see options below for regional calibration)
 - ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
-  **at the RGI region level**, i.e. glacier estimates might differ
+  **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
+  it's also the precalibrated paramaters that will be used for the dynamical run.
 - frontal ablation by calving (at inversion and for the dynamical runs) is switched off
 
 The urls used by OGGM per default are listed here:
@@ -191,7 +193,8 @@ The urls used by OGGM per default are listed here:
 - `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for level 3 to 5
 
 If you are new to this, I recommend to explore these directories to familiarize yourself
-to their content. Of course, OGGM will know where to find the respective files
+to their content. Of course, when provided with an url such as above,
+OGGM will know where to find the respective files
 automatically, but is is good to understand how they are structured. The `summary` folder
 (`example <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/RGI62/b_080/L2/summary/>`_)
 folder contains diagnostic files which can be useful as well.

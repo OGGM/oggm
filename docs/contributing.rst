@@ -173,9 +173,9 @@ About the documentation
 -----------------------
 
 The documentation is written in **reStructuredText**, which is almost like writing
-in plain English, and built using `Sphinx <https://www.sphinx-doc.org/en/master//>`__. The
+in plain English, and built using `Sphinx <https://www.sphinx-doc.org/en/master>`_. The
 Sphinx documentation has an excellent `introduction to reST
-<https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`__.
+<https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_.
 Review the Sphinx docs to perform more
 complex changes to the documentation as well.
 
@@ -185,7 +185,7 @@ Some other important things to know about the docs:
   itself and the docs in this folder ``oggm/docs/``.
 
   The docstrings *should* provide a clear explanation of the usage of
-  individual functions (currently this is not the case everywhere, ufortunately),
+  individual functions (currently this is not the case everywhere, unfortunately),
   while the ``oggm/docs/`` folder consists of tutorial-like
   overviews per topic together with some other information (what's new,
   installation, etc).
@@ -248,7 +248,7 @@ just built::
 
     oggm/docs/_build/html/index.html
 
-If you performed some changes in the documentation or even created new pages/sections (the `.rst` files),
+If you performed some changes in the documentation or even created new pages/sections (the ``.rst`` files),
 you'll have the satisfaction of seeing your new and improved documentation!
 
 

@@ -175,9 +175,7 @@ Install OGGM itself
 First, choose which version of OGGM you would like to install:
 
 - **stable**: this is the latest version officially released and has a fixed
-  version number (e.g. v1.1). As of today (Feb 2021), we do *not* recommend to
-  install the stable version which is quite outdated. We are in the process
-  of releasing a new stable version soon(ish).
+  version number (e.g. v1.4).
 - **dev**: this is the development version. It might contain new
   features and bug fixes, but is also likely to continue to change until a
   new release is made. This is the recommended way if you want to use the
@@ -413,8 +411,8 @@ Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries
     $ pip install git+https://github.com/fmaussion/salem.git
     $ pip install git+https://github.com/retostauffer/python-colorspace.git
 
-Install OGGM and run tests
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install OGGM and run the tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Refer to `Install OGGM itself`_ above.
 
