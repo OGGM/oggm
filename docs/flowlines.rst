@@ -204,6 +204,12 @@ elevation-band flowline per glacier, while there can be several geometrical
 centerlines. The downstream lines are computed the same way for both the
 elevation-band and geometrical flowlines.
 
+    .. figure:: _static/flowchart_flowlines.png
+        :width: 100%
+
+        Flowchart illustrating the different ways to compute the flowlines
+        and at which point in the workflow they can be treated equivalently
+
 Both flowline types are available for download and for use in the OGGM
 framework. The plot below has been obtained from the
 `centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_.
