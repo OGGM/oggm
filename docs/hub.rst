@@ -62,8 +62,8 @@ How does this work?
 ~~~~~~~~~~~~~~~~~~~
 
 We use a single compute node located in Bremen to welcome the hub users.
-Currently---we are still trying things out---each user gets enough CPUs and
-enough RAM to run OGGM on several glaciers at once.
+Currently (we are still trying things out) each user gets enough CPUs (4) and
+enough RAM (8Gb) to run OGGM on several glaciers at once.
 This is not enough to do heavy work, but will get you through the exploratory
 phase or even small regional runs. Each user also gets a persistent 16Gb disk
 to save output data, notebooks and scripts. The OGGM-specific input data
@@ -73,10 +73,22 @@ users (the ``shared`` folder in your ``$HOME``). The first time you run a
 new glacier, OGGM will first check if the data is available in the ``shared`` folder,
 and if not it will download it for you and the other users.
 
-The environment you have access to has a recent version of OGGM installed in
-it (updated every few weeks). Starting with OGGM v1.4, we will also provide
-environments with a pinned OGGM version, which you will be able to choose
-when logging in.
+    .. figure:: _static/hub_envs.png
+        :width: 100%
+
+        Welcome screen of https://hub.oggm.org
+
+When logging in, you can choose between two environments:
+
+- ``oggm_latest``, with the latest OGGM installed from master (updated every few weeks)
+- ``oggm_vXXX`` (starting from OGGM v1.4), which are environments made with a pinned OGGM version
+
+These environments are restarted each time you log-out and log-in again
+(don't worry, your ``HOME`` and all it contains won't be erased!). This means
+that while you *can* install things in the root tree (e.g. with ``pip install``),
+it won't be there the next time you open your hub. If you have special
+requirements, please let us now so that we can add them, or install them in
+your ``HOME`` with ``pip install --user``.
 
 Accessing the tutorials (and other content) with nbgitpuller
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
