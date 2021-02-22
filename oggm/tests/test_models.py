@@ -948,7 +948,7 @@ class TestModelFlowlines():
         widths[-30:] = 10
 
         lambdas = bed_h*0.
-        is_trap = np.ones(len(lambdas), dtype=np.bool)
+        is_trap = np.ones(len(lambdas), dtype=bool)
 
         # tests
         thick = surface_h - bed_h
@@ -1043,7 +1043,7 @@ class TestModelFlowlines():
         area_m2 = map_dx * widths_m
         area_m2[thick == 0] = 0
 
-        is_trap = np.ones(len(lambdas), dtype=np.bool)
+        is_trap = np.ones(len(lambdas), dtype=bool)
 
         rec1 = TrapezoidalBedFlowline(line=line, dx=dx, map_dx=map_dx,
                                       surface_h=surface_h,
@@ -1173,7 +1173,7 @@ class TestModelFlowlines():
         area_m2 = map_dx * widths_m
         area_m2[thick == 0] = 0
 
-        is_trap = np.zeros(len(shapes), dtype=np.bool)
+        is_trap = np.zeros(len(shapes), dtype=bool)
 
         rec1 = ParabolicBedFlowline(line=line, dx=dx, map_dx=map_dx,
                                     surface_h=surface_h, bed_h=bed_h,
@@ -1253,7 +1253,7 @@ class TestModelFlowlines():
                                     surface_h=surface_h, bed_h=bed_h,
                                     bed_shape=shapes)
 
-        is_trap = np.ones(len(shapes), dtype=np.bool)
+        is_trap = np.ones(len(shapes), dtype=bool)
         is_trap[100:] = False
 
         section = section_trap.copy()
@@ -1769,7 +1769,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -1843,7 +1843,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -1881,7 +1881,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -1948,7 +1948,7 @@ class TestIdealisedInversion():
 
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.zeros(fl.nx).astype(bool)
 
         mb = LinearMassBalance(2500.)
 
@@ -1962,7 +1962,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2008,7 +2008,7 @@ class TestIdealisedInversion():
 
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.zeros(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.zeros(fl.nx).astype(bool)
 
         mb = LinearMassBalance(2500.)
 
@@ -2022,7 +2022,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=fl.surface_h[pg])
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2108,7 +2108,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2130,7 +2130,7 @@ class TestIdealisedInversion():
         fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
                                        cliff_height=100)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2143,7 +2143,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2168,7 +2168,7 @@ class TestIdealisedInversion():
         fls = dummy_constant_bed_cliff(map_dx=inversion_gdir.grid.dx,
                                        cliff_height=100)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2181,7 +2181,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2211,7 +2211,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2232,7 +2232,7 @@ class TestIdealisedInversion():
 
         fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2245,7 +2245,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2269,7 +2269,7 @@ class TestIdealisedInversion():
 
         fls = dummy_noisy_bed(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2282,7 +2282,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2313,7 +2313,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
 
         fls[0].set_flows_to(fls[1])
@@ -2338,7 +2338,7 @@ class TestIdealisedInversion():
 
         fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2352,7 +2352,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
 
         fls[0].set_flows_to(fls[1])
@@ -2379,7 +2379,7 @@ class TestIdealisedInversion():
 
         fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
         for fl in fls:
-            fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+            fl.is_rectangular = np.ones(fl.nx).astype(bool)
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb, y0=0.)
@@ -2393,7 +2393,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
 
         fls[0].set_flows_to(fls[1])
@@ -2431,7 +2431,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.ones(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
@@ -2462,7 +2462,7 @@ class TestIdealisedInversion():
             flo = centerlines.Centerline(line, dx=fl.dx,
                                          surface_h=sh)
             flo.widths = fl.widths[pg]
-            flo.is_rectangular = np.zeros(flo.nx).astype(np.bool)
+            flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 

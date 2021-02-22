@@ -1905,7 +1905,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
     fl = Centerline(line, dx=flowline_dx, surface_h=surface_h, map_dx=map_dx)
     fl.widths = widths_m / map_dx
-    fl.is_rectangular = np.ones(fl.nx).astype(np.bool)
+    fl.is_rectangular = np.ones(fl.nx).astype(bool)
     gdir.write_pickle([fl], 'inversion_flowlines')
 
     # Idealized map

@@ -278,8 +278,8 @@ def glacier_grid_params(gdir):
     uly = np.max(yy) + border * dx
     lry = np.min(yy) - border * dx
     # n pixels
-    nx = np.int((lrx - ulx) / dx)
-    ny = np.int((uly - lry) / dx)
+    nx = int((lrx - ulx) / dx)
+    ny = int((uly - lry) / dx)
 
     return utm_proj, nx, ny, ulx, uly, dx
 
@@ -629,7 +629,7 @@ def process_dem(gdir):
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
-        smoothed_dem = gaussian_blur(dem, np.int(gsize))
+        smoothed_dem = gaussian_blur(dem, int(gsize))
     else:
         smoothed_dem = dem.copy()
 
@@ -928,8 +928,8 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     # We want to convert the bins to ints but preserve their sum to 1000
     # Start with everything rounded down, then round up the numbers with the
     # highest fractional parts until the desired sum is reached.
-    hi = np.floor(h).astype(np.int)
-    hup = np.ceil(h).astype(np.int)
+    hi = np.floor(h).astype(int)
+    hup = np.ceil(h).astype(int)
     aso = np.argsort(hup - h)
     for i in aso:
         hi[i] = hup[i]

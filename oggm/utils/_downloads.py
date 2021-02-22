@@ -1368,7 +1368,7 @@ def tandem_zone(lon_ex, lat_ex):
     # For higher lats they are stored in steps of 2 and 4. My code below
     # is probably giving more files than needed but better safe than sorry
     lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
-                          dtype=np.int)
+                          dtype=int)
     zones = []
     for lat in lat_tiles:
         if abs(lat) < 60:
@@ -1380,7 +1380,7 @@ def tandem_zone(lon_ex, lat_ex):
         elif abs(lat) < 90:
             l0 = divmod(lon_ex[0], 4)[0] * 4
             l1 = divmod(lon_ex[1], 4)[0] * 4
-        lon_tiles = np.arange(l0, l1+1, dtype=np.int)
+        lon_tiles = np.arange(l0, l1+1, dtype=int)
         for lon in lon_tiles:
             zones.append(_tandem_path(lon, lat))
     return list(sorted(set(zones)))
@@ -1420,9 +1420,9 @@ def aw3d30_zone(lon_ex, lat_ex):
 
     # Files are one by one tiles, so lets loop over them
     lon_tiles = np.arange(np.floor(lon_ex[0]), np.ceil(lon_ex[1]+1e-9),
-                          dtype=np.int)
+                          dtype=int)
     lat_tiles = np.arange(np.floor(lat_ex[0]), np.ceil(lat_ex[1]+1e-9),
-                          dtype=np.int)
+                          dtype=int)
     zones = []
     for lon in lon_tiles:
         for lat in lat_tiles:
