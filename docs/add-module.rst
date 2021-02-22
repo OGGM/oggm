@@ -8,7 +8,7 @@ Thanks for helping us to make the model better!
 
 There are two ways to add a functionality to OGGM:
 
-1. The easiest (and recommended) way for small bugfixes or simple functionalities
+1. The easiest (and recommended) way for small bug fixes or simple functionalities
    is to add it directly to the main OGGM codebase. In this case, refer to
    the :ref:`contributing` page for how to do that.
 2. If your endeavor is a larger project (i.e. a fundamental change in the model
@@ -16,12 +16,12 @@ There are two ways to add a functionality to OGGM:
    there might be reasons (explained below) to use a different approach. This
    is what this page is for.
 
-Why would I add my model to the OGGM set of tools?
+Why would I add my model to the OGGM framework?
 ==================================================
 
 We envision OGGM as a **modular tool** to model glacier behavior. We do not
-want to force anyone towards a certain set-up or paramaterization that we chose.
-However, we believe that the OGGM capabilities could be useful to a
+want to force anyone towards a certain set-up or paramaterization that we choose.
+However, we believe that the OGGM capabilities are useful to a
 wide range of applications, and also to you.
 
 Finally, we strongly believe in **model intercomparisons**. Agreeing on a
@@ -35,10 +35,10 @@ Yes you can!
 
 Ideally, we would have your module added to the main codebase: this ensures
 consistency of the code and continuous testing. However, there are several
-reasons why making your own repository could be useful:
+reasons why making your own repository can be useful:
 
 - complying to OGGM's strict testing rules can be annoying, especially in the
-  early stages of development of a model
+  early stages of the development of a model
 - with you own repository you have full control on it's development while
   still being able to use the OGGM workflow and multiprocessing capabilities
 - with an external module the users who will use your model *will* have
