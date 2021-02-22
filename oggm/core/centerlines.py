@@ -701,7 +701,7 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
 
         # We take the middle of this area
         try:
-            ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+            ind_term = ind[np.round(len(ind) / 2.).astype(int)]
         except IndexError:
             # Sometimes the default perc is not large enough
             try:
@@ -711,7 +711,7 @@ def _get_terminus_coord(gdir, ext_yx, zoutline):
                 mini = np.min(zoutline)
                 ind = np.where((zoutline < plow) &
                                (zoutline < (mini + deltah)))[0]
-                ind_term = ind[np.round(len(ind) / 2.).astype(np.int)]
+                ind_term = ind[np.round(len(ind) / 2.).astype(int)]
             except IndexError:
                 # Last resort
                 ind_term = np.argmin(zoutline)
@@ -1392,7 +1392,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
                 dwl = shpg.LineString([dwl.interpolate(x, normalized=True)
                                        for x in np.linspace(0., 1., num=100)])
                 grouped = groupby(map(tuple, np.rint(dwl.coords)))
-                dwl = np.array([x[0] for x in grouped], dtype=np.int)
+                dwl = np.array([x[0] for x in grouped], dtype=int)
                 xc.extend(dwl[:, 0])
                 yc.extend(dwl[:, 1])
 
@@ -1821,7 +1821,7 @@ def catchment_width_geom(gdir):
             # This happens very rarely. Just pick the middle and
             # the correction task should do the rest
             log.info('({}) width filtering too strong.'.format(gdir.rgi_id))
-            fil_widths = np.ones(n) * widths[np.int(len(widths) / 2.)]
+            fil_widths = np.ones(n) * widths[int(len(widths) / 2.)]
 
         # Special treatment for tidewater glaciers
         if gdir.is_tidewater and fl.flows_to is None:

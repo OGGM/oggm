@@ -47,8 +47,8 @@ def read_svgcoords(svg_file):
         if c == '':
             continue
         c = c.split(',')
-        x.append(np.float(c[0]))
-        y.append(np.float(c[1]))
+        x.append(float(c[0]))
+        y.append(float(c[1]))
     x.append(x[0])
     y.append(y[0])
 
@@ -101,7 +101,7 @@ class TestGIS(unittest.TestCase):
 
         tdf = gdir.read_shapefile('outlines')
         myarea = tdf.geometry.area * 10**-6
-        np.testing.assert_allclose(myarea, np.float(tdf['Area']), rtol=1e-2)
+        np.testing.assert_allclose(myarea, float(tdf['Area']), rtol=1e-2)
         self.assertTrue(gdir.has_file('intersects'))
         np.testing.assert_array_equal(gdir.intersects_ids,
                                       ['RGI50-11.00846', 'RGI50-11.00950'])
@@ -780,8 +780,8 @@ class TestCenterlines(unittest.TestCase):
         nb = len(np.where(rest == 2)[0])
         nc = len(np.where(rest == 1)[0])
         nd = len(np.where(rest == 0)[0])
-        denom = np.float((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
-        hss = np.float(2.) * ((na*nd)-(nb*nc)) / denom
+        denom = float((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
+        hss = float(2.) * ((na*nd)-(nb*nc)) / denom
         if cfg.PARAMS['grid_dx_method'] == 'linear':
             self.assertTrue(hss > 0.53)
         if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
@@ -874,7 +874,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= gdir.grid.dx ** 2
         otherarea *= gdir.grid.dx ** 2
-        np.testing.assert_allclose(area * 10 ** -6, np.float(tdf['Area']),
+        np.testing.assert_allclose(area * 10 ** -6, float(tdf['Area']),
                                    rtol=1e-4)
 
         # Check for area distrib
@@ -888,7 +888,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         # Check that utility function is doing what is expected
         hh, ww = gdir.get_inversion_flowline_hw()
         new_area = np.sum(ww * cl.dx * gdir.grid.dx)
-        np.testing.assert_allclose(new_area * 10 ** -6, np.float(tdf['Area']))
+        np.testing.assert_allclose(new_area * 10 ** -6, float(tdf['Area']))
 
     def test_inversion(self):
 
@@ -1116,7 +1116,7 @@ class TestGeometry(unittest.TestCase):
         np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= (gdir.grid.dx) ** 2
         otherarea *= (gdir.grid.dx) ** 2
-        np.testing.assert_allclose(area * 10**-6, np.float(tdf['Area']),
+        np.testing.assert_allclose(area * 10**-6, float(tdf['Area']),
                                    rtol=1e-4)
 
         # Check for area distrib
@@ -1130,7 +1130,7 @@ class TestGeometry(unittest.TestCase):
         # Check that utility function is doing what is expected
         hh, ww = gdir.get_inversion_flowline_hw()
         new_area = np.sum(ww * cl.dx * gdir.grid.dx)
-        np.testing.assert_allclose(new_area * 10**-6, np.float(tdf['Area']))
+        np.testing.assert_allclose(new_area * 10**-6, float(tdf['Area']))
 
     def test_nodivides_correct_slope(self):
 
@@ -3847,7 +3847,7 @@ class TestPyGEM_compat(unittest.TestCase):
         area = np.asarray(data['area'])
         width = np.asarray(data['width'])
         thick = np.asarray(data['thick'])
-        elevation = np.asarray(data.index).astype(np.float)
+        elevation = np.asarray(data.index).astype(float)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
             dx_meter = area / width

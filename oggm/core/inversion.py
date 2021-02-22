@@ -835,7 +835,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     if smooth_radius != 0:
         if smooth_radius is None:
             smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
-        thick = gaussian_blur(thick, np.int(smooth_radius))
+        thick = gaussian_blur(thick, int(smooth_radius))
         thick = np.where(glacier_mask, thick, 0.)
 
     # Re-mask
@@ -939,7 +939,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     if smooth_radius != 0:
         if smooth_radius is None:
             smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
-        thick = gaussian_blur(thick, np.int(smooth_radius))
+        thick = gaussian_blur(thick, int(smooth_radius))
         thick = np.where(glacier_mask, thick, 0.)
 
     # Re-mask

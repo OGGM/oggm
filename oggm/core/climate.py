@@ -783,7 +783,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
 
     ny = len(years)
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
-    mb_per_mu = pd.Series(index=years, dtype=np.float)
+    mb_per_mu = pd.Series(index=years, dtype=float)
 
     if glacierwide:
         # The old (but fast) method to find t*
