@@ -40,7 +40,7 @@ reasons why making your own repository can be useful:
 - complying to OGGM's strict testing rules can be annoying, especially in the
   early stages of the development of a model
 - with you own repository you have full control on it's development while
-  still being able to use the OGGM workflow and multi-processing capabilities
+  still being able to use the OGGM workflow and multiprocessing capabilities
 - with an external module the users who will use your model *will* have
   to download it from here and you can make sure that correct attribution
   is made to your work, i.e. by specifying that using this module requires a
